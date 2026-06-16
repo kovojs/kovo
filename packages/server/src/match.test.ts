@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { route } from './route.js';
-import { findRouteAmbiguities, matchRoute } from './match.js';
+import { findRouteAmbiguities, matchRoute, normalizePathname } from './match.js';
 
 describe('server route matching', () => {
   it('normalizes trailing slashes before route matching with 308 metadata', () => {
@@ -49,6 +49,32 @@ describe('server route matching', () => {
 
     expect(matchRoute(routes, '/products/p1')).toBeUndefined();
     expect(matchRoute(routes, '/collections/c1')?.params).toEqual({ id: 'c1' });
+  });
+
+  // Security finding H5: a leading `//` or `/\` must never survive normalization,
+  // or it becomes a protocol-relative `Location` (unauthenticated open redirect).
+  it.each([
+    ['//evil.com/', '/evil.com'],
+    ['/\\evil.com/', '/evil.com'],
+    ['//evil.com//', '/evil.com'],
+    ['/\\/evil.com', '/evil.com'],
+  ])('collapses leading authority-forming slashes for %s', (input, expected) => {
+    const normalization = normalizePathname(input);
+
+    expect(normalization.pathname).toBe(expected);
+    expect(normalization.pathname.startsWith('//')).toBe(false);
+    expect(normalization.pathname.startsWith('/\\')).toBe(false);
+    expect(normalization.redirect).toEqual({ pathname: expected, status: 308 });
+    expect(normalization.redirect?.pathname.startsWith('//')).toBe(false);
+    expect(normalization.redirect?.pathname.startsWith('/\\')).toBe(false);
+  });
+
+  it('preserves canonical single-slash paths without an authority-collapse redirect', () => {
+    expect(normalizePathname('/products/p1')).toEqual({
+      inputPathname: '/products/p1',
+      pathname: '/products/p1',
+      trailingSlash: 'canonical',
+    });
   });
 
   it('reports FW228 ambiguities when two route patterns can match one pathname', () => {

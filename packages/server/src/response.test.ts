@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   isHeaderSource,
   readHeader,
+  respond,
+  routeOutcomeResponse,
   routeResponseToDocumentResponse,
   routeResponseToWebResponse,
   serverResponseToWebResponse,
@@ -88,6 +90,39 @@ describe('server response adapters', () => {
 
     expect(documentResponse.body).toBeInstanceOf(Uint8Array);
     expect(new TextDecoder().decode(documentResponse.body as Uint8Array)).toBe('page');
+  });
+
+  // Security finding M1: file/stream responses must default to nosniff so the
+  // browser does not sniff a sniffable/scriptable body type.
+  it('defaults file responses to X-Content-Type-Options: nosniff', () => {
+    const response = routeOutcomeResponse(
+      respond.file('%PDF-1.7', { contentType: 'application/pdf' }),
+      { method: 'GET' },
+    );
+
+    expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
+  });
+
+  it('defaults stream responses to X-Content-Type-Options: nosniff', () => {
+    const response = routeOutcomeResponse(
+      respond.stream('<svg/>', { contentType: 'image/svg+xml', disposition: 'inline' }),
+      { method: 'GET' },
+    );
+
+    expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
+  });
+
+  it('does not clobber an author-supplied X-Content-Type-Options header', () => {
+    const response = routeOutcomeResponse(
+      respond.file('payload', {
+        contentType: 'text/plain',
+        headers: { 'x-content-type-options': 'custom' },
+      }),
+      { method: 'GET' },
+    );
+
+    expect(response.headers['x-content-type-options']).toBe('custom');
+    expect(response.headers['X-Content-Type-Options']).toBeUndefined();
   });
 
   it('accepts concrete header sources without treating arbitrary objects as headers', () => {

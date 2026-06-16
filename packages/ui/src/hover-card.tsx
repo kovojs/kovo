@@ -6,6 +6,7 @@ import {
   hoverCardContentAttributes,
   hoverCardRootAttributes,
   hoverCardTriggerAttributes,
+  safeUrl,
   type ClassValue,
 } from '@jiso/headless-ui';
 
@@ -92,7 +93,10 @@ export const HoverCardTrigger = component('hover-card-trigger', {
         class={cn(hoverCardTriggerClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
-        href={props.disabled === true ? undefined : (props.href ?? '#')}
+        // SECURITY_FINDINGS.md H3: sanitize the caller href so a dangerous
+        // scheme is neutralized to the '#' fallback. Existing semantics kept:
+        // omit href when disabled, default to '#' when no href is supplied.
+        href={props.disabled === true ? undefined : safeUrl(props.href)}
         id={props.id}
         jiso-hover-card={attrs['jiso-hover-card']}
       >

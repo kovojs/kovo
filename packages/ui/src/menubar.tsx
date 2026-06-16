@@ -13,6 +13,7 @@ import {
   type MenubarItem as HeadlessMenubarItem,
   type TextDirection,
 } from '@jiso/headless-ui';
+import { escapeHtml } from '@jiso/server';
 
 export interface MenubarStateProps {
   activeValue?: string;
@@ -165,7 +166,7 @@ export const MenubarItem = component('menubar-item', {
         type="button"
         value={attrs.value}
       >
-        {props.children ?? props.itemLabel ?? props.itemValue}
+        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue ?? '')}
       </button>
     );
   },

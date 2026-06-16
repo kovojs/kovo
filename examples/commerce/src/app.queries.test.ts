@@ -9,6 +9,8 @@ import {
   htmlKeyTextMap,
   htmlKeyValues,
 } from '@jiso/test/html-fragment';
+import type { QueryDefinition } from '@jiso/server';
+
 import type { TouchGraph } from '@jiso/drizzle';
 import { morphStructuralTree } from '@jiso/runtime';
 
@@ -169,8 +171,19 @@ describe('commerce example', () => {
       items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
       nextCursor: null,
     });
-    await expect(Promise.resolve(orderHistoryQuery.load({}, context))).resolves.toEqual({
+    // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session
+    // user, so it only returns rows owned by the requesting user.
+    const customOrderContext = {
+      db,
+      request: { db, session: { id: 'u-custom-query', user: { id: 'u-custom-query' } } },
+      session: { id: 'u-custom-query', user: { id: 'u-custom-query' } },
+    };
+    await expect(Promise.resolve(orderHistoryQuery.load({}, customOrderContext))).resolves.toEqual({
       items: customOrders,
+    });
+    // A different session user sees none of those orders.
+    await expect(Promise.resolve(orderHistoryQuery.load({}, context))).resolves.toEqual({
+      items: [],
     });
   });
 
@@ -180,9 +193,14 @@ describe('commerce example', () => {
         createDb: createCommerceDb,
         queries: {
           cart: cartQuery,
-          orderHistory: orderHistoryQuery,
+          // orderHistory now carries an `authed` guard (SECURITY_FINDINGS.md M9); its narrowed
+          // request type is invariant, so cast to the bare QueryDefinition the harness accepts.
+          orderHistory: orderHistoryQuery as unknown as QueryDefinition,
           productGrid: productGridQuery,
         },
+        // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session
+        // user, so the harness must run as the user that owns the seeded orders.
+        request: { session: { id: 'u-custom-query', user: { id: 'u-custom-query' } } },
         setupDb(db) {
           // The harness does not await setupDb, so submit the seed as
           // fire-and-queue Drizzle statements via .execute(): that hands each
@@ -281,7 +299,9 @@ describe('commerce example', () => {
       },
     );
 
-    expect(htmlKeyTextMap(await renderOrderHistory(db))).toMatchObject({
+    // SECURITY (SECURITY_FINDINGS.md M9): renderOrderHistory is scoped to the
+    // session user, so it must be given the owning user id to surface the order.
+    expect(htmlKeyTextMap(await renderOrderHistory(db, 'u-direct'))).toMatchObject({
       'order-1': 'p1 x 2 - 2998',
     });
   });
@@ -348,7 +368,8 @@ describe('commerce example', () => {
       keyedListNode('order-history', ['order-1', 'order-draft']),
     );
 
-    expect(htmlKeyValues(await renderOrderHistory(db))).toContain('order-1');
+    // SECURITY (SECURITY_FINDINGS.md M9): scope to the owning session user.
+    expect(htmlKeyValues(await renderOrderHistory(db, 'u-direct'))).toContain('order-1');
     expect(reconciledHistory.children?.[0]?.key).toBe('order-1');
     expect(reconciledHistory.children?.[1]).toBe(optimisticOrder);
     expect(reconciledHistory.children?.[1]?.browserState).toEqual({

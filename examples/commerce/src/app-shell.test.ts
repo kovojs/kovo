@@ -218,7 +218,11 @@ describe('commerce app shell HTTP entry', () => {
       loginForm.set('next', '/cart');
       const login = await fetch(`${origin}/_m/auth/sign-in`, {
         body: loginForm,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'x-forwarded-for': '203.0.113.30',
+        },
         method: 'POST',
         redirect: 'manual',
       });
@@ -464,7 +468,11 @@ describe('commerce app shell HTTP entry', () => {
     failedForm.set('next', '/admin');
     const failedLogin = await fetch(`${origin}/_m/auth/sign-in`, {
       body: failedForm,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': '203.0.113.31',
+      },
       method: 'POST',
       redirect: 'manual',
     });
@@ -486,7 +494,11 @@ describe('commerce app shell HTTP entry', () => {
     memberLoginForm.set('next', '/admin');
     const memberLogin = await fetch(`${origin}/_m/auth/sign-in`, {
       body: memberLoginForm,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': '203.0.113.32',
+      },
       method: 'POST',
       redirect: 'manual',
     });
@@ -510,7 +522,11 @@ describe('commerce app shell HTTP entry', () => {
     loginForm.set('next', '/admin');
     const login = await fetch(`${origin}/_m/auth/sign-in`, {
       body: loginForm,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': '203.0.113.33',
+      },
       method: 'POST',
       redirect: 'manual',
     });
@@ -744,7 +760,8 @@ async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db'])
   const request = {
     authCsrfId: 'commerce-shell-login',
     db,
-    headers: new Headers(),
+    // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
+    headers: new Headers({ 'x-forwarded-for': '203.0.113.34' }),
   };
   const result = await runMutation(
     commerceSignIn,

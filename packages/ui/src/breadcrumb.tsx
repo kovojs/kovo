@@ -1,6 +1,6 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
-import { cn, separatorRootAttributes, type ClassValue } from '@jiso/headless-ui';
+import { cn, safeUrl, separatorRootAttributes, type ClassValue } from '@jiso/headless-ui';
 
 export interface BreadcrumbProps {
   children?: string;
@@ -58,7 +58,10 @@ export const BreadcrumbLink = component('breadcrumb-link', {
       <a
         aria-current={current ? 'page' : undefined}
         class={cn(current ? breadcrumbCurrentClassNames : breadcrumbLinkClassNames, props.class)}
-        href={current ? undefined : props.href}
+        // SECURITY_FINDINGS.md H3: route the caller href through safeUrl so a
+        // `javascript:`/`data:` scheme is neutralized; keep the existing
+        // undefined semantics (omit href entirely when there is none / current).
+        href={current || props.href === undefined ? undefined : safeUrl(props.href)}
       >
         {props.children}
       </a>

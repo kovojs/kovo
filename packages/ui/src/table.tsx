@@ -1,7 +1,7 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 import { cn, type ClassValue } from '@jiso/headless-ui';
-import { escapeAttribute } from '@jiso/server';
+import { escapeAttribute, escapeHtml } from '@jiso/server';
 
 export interface TableProps {
   caption?: string;
@@ -51,7 +51,7 @@ export const Table = component('table', {
           {props.caption === undefined ? (
             ''
           ) : (
-            <caption class={tableCaptionClassNames}>{props.caption}</caption>
+            <caption class={tableCaptionClassNames}>{escapeHtml(props.caption)}</caption>
           )}
           {props.children}
         </table>

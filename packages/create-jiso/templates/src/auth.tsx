@@ -1,5 +1,5 @@
 /** @jsxImportSource @jiso/server */
-import { csrfField, s, session, type CsrfValidationOptions } from '@jiso/server';
+import { csrfField, guards, s, session, type CsrfValidationOptions } from '@jiso/server';
 import {
   authed,
   betterAuthSession,
@@ -54,15 +54,58 @@ export const starterSession = session(
   }),
 );
 
+// SECURITY (SECURITY_FINDINGS.md M5): the CSRF token is HMAC(secret, sessionId), so
+// the secret is the only key material. Read it from the environment and fail closed
+// rather than shipping a known constant — `create-jiso` writes a fresh per-project
+// secret into .env at scaffold time, and deployments must set their own strong value.
+function readStarterCsrfSecret(): string {
+  const csrfSecret = process.env.JISO_CSRF_SECRET;
+
+  if (!csrfSecret || csrfSecret === 'replace-with-a-deployed-secret') {
+    throw new Error(
+      'Set JISO_CSRF_SECRET to a strong random value (e.g. `openssl rand -base64 32`).',
+    );
+  }
+
+  return csrfSecret;
+}
+
 export const starterAuthCsrf = {
   field: 'csrf',
-  secret: 'replace-with-a-deployed-secret',
+  secret: readStarterCsrfSecret(),
   sessionId(request: StarterAuthRequest) {
     return request.session?.id ?? request.authCsrfId ?? undefined;
   },
 } satisfies CsrfValidationOptions<StarterAuthRequest>;
 
 export const starterAdminGuard = role<StarterAuthRequest>('admin');
+
+// SECURITY (SECURITY_FINDINGS.md M7 + M3): brute-force / credential-stuffing guard for
+// the unauthenticated sign-in endpoint. The mutation guard only receives the request
+// (not the parsed body), so the submitted email is not available here; we instead key
+// on a stable per-client identifier derived from forwarding/IP headers. The default
+// `per: 'session'` keying would collapse all pre-session sign-in attempts into one
+// shared `'anonymous'` bucket, so we use `per: 'global'` with an explicit `key`.
+// Behind a proxy these headers are spoofable; replace with a trusted client identifier
+// (e.g. the proxy-validated client IP) before relying on this in production.
+function starterSignInRateLimitKey(request: StarterAuthRequest): string {
+  const headers = request.headers;
+  const forwardedFor = headers.get('x-forwarded-for');
+  const clientIp =
+    forwardedFor?.split(',')[0]?.trim() ||
+    headers.get('cf-connecting-ip') ||
+    headers.get('x-real-ip') ||
+    headers.get('fly-client-ip');
+
+  return clientIp ? `sign-in:${clientIp}` : 'sign-in:unknown-client';
+}
+
+export const starterSignInRateLimit = guards.rateLimit<StarterAuthRequest>({
+  key: starterSignInRateLimitKey,
+  max: 5,
+  per: 'global',
+  windowMs: 60_000,
+});
 
 export function createStarterAuth(auth: StarterBetterAuth) {
   const sessionProvider = betterAuthSession(auth, ({ session: authSession, user }) => ({
@@ -78,6 +121,9 @@ export function createStarterAuth(auth: StarterBetterAuth) {
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', StarterAuthRequest>(auth, {
     csrf: starterAuthCsrf,
     defaultRedirectTo: '/cart',
+    // SECURITY (SECURITY_FINDINGS.md M7): throttle sign-in attempts per client to blunt
+    // online password brute-force / credential stuffing.
+    guard: starterSignInRateLimit,
   });
 
   const signOut = betterAuthSignOutMutation<

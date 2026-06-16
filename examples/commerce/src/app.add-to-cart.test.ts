@@ -94,7 +94,8 @@ describe('commerce example', () => {
     });
 
     expect(htmlTextContent(await renderCartPage(db))).toContain('3 in stock');
-    expect(htmlKeyValues(await renderOrderHistory(db))).toContain('order-1');
+    // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session user.
+    expect(htmlKeyValues(await renderOrderHistory(db, 'u1'))).toContain('order-1');
   });
 
   it('handles enhanced addToCart through the same endpoint as fragment wire', async () => {
@@ -216,7 +217,8 @@ describe('commerce example', () => {
       }),
     ).toHaveLength(1);
     expect(htmlTextContent(response.body)).toContain('Only 2 available.');
-    expect(htmlKeyValues(await renderOrderHistory(db))).not.toContain('order-1');
+    // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session user.
+    expect(htmlKeyValues(await renderOrderHistory(db, 'u1'))).not.toContain('order-1');
   });
 
   it('handles enhanced addToCart failures as a rerendered form fragment', async () => {
@@ -262,6 +264,7 @@ describe('commerce example', () => {
       }),
     ).toHaveLength(1);
     expect(htmlTextContent(formFragment?.innerHtml ?? '')).toContain('Only 2 available.');
-    expect(htmlKeyValues(await renderOrderHistory(db))).not.toContain('order-1');
+    // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session user.
+    expect(htmlKeyValues(await renderOrderHistory(db, 'u1'))).not.toContain('order-1');
   });
 });

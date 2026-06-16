@@ -212,6 +212,38 @@ describe('server guard and session primitives', () => {
     ).resolves.toMatchObject({ error: { code: 'RATE_LIMITED' }, ok: false, status: 429 });
   });
 
+  // Security finding M3: default per:'session' keying must not silently collapse
+  // anonymous clients into one shared bucket.
+  it('rejects anonymous default-scoped rate limiting without an explicit key', () => {
+    const guard = guards.rateLimit<{ session?: { id?: string } }>({ max: 5 });
+
+    expect(() => guard({})).toThrow(/cannot derive a per-client key/);
+    expect(() => guard({ session: {} })).toThrow(/cannot derive a per-client key/);
+  });
+
+  it('allows anonymous rate limiting when an explicit key or per:global is supplied', () => {
+    const keyed = guards.rateLimit<{ ip: string; session?: { id?: string } }>({
+      key: (request) => request.ip,
+      max: 1,
+    });
+    const global = guards.rateLimit<{ session?: { id?: string } }>({ max: 1, per: 'global' });
+
+    expect(keyed({ ip: '203.0.113.1' })).toBe(true);
+    expect(keyed({ ip: '203.0.113.2' })).toBe(true);
+    expect(keyed({ ip: '203.0.113.1' })).toMatchObject({ code: 'RATE_LIMITED' });
+
+    expect(global({})).toBe(true);
+    expect(global({})).toMatchObject({ code: 'RATE_LIMITED' });
+  });
+
+  it('keys default-scoped rate limiting by the authenticated session id', () => {
+    const guard = guards.rateLimit<{ session?: { id?: string } }>({ max: 1, per: 'session' });
+
+    expect(guard({ session: { id: 's1' } })).toBe(true);
+    expect(guard({ session: { id: 's1' } })).toMatchObject({ code: 'RATE_LIMITED' });
+    expect(guard({ session: { id: 's2' } })).toBe(true);
+  });
+
   it('evicts oldest rate-limit keys when the key cap is reached', async () => {
     interface TenantRequest {
       session?: { id?: string };

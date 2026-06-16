@@ -1336,7 +1336,9 @@ export const CartTable = component('cart-table', {
         fileName: 'components/cart/cart-row.tsx',
         help: [
           'Would hoist children to: CartRow$slot_children',
-          'Blocked children: <span>{window.location.href}</span>',
+          // SECURITY_FINDINGS.md C1: static data-path text children are wrapped in escapeText(...)
+          // during lowering, so the blocked-children snippet shows the escaped form.
+          'Blocked children: <span>{escapeText(window.location.href)}</span>',
           'Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.',
         ].join('\n'),
         message: `${diagnosticDefinitions.FW230.message} CartRow`,

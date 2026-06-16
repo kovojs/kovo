@@ -62,3 +62,5 @@ export type {
   FloatingRect,
   FloatingSize,
 } from './positioning-fallback.js';
+
+export { safeUrl } from './safe-url.js';

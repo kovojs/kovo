@@ -6,20 +6,20 @@ export const commerceTouchGraph = {
       {
         "domain": "cart",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:334",
+        "site": "examples/commerce/src/app.ts:467",
         "via": "cart_items"
       },
       {
         "domain": "order",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:339",
+        "site": "examples/commerce/src/app.ts:472",
         "via": "orders"
       },
       {
         "domain": "product",
         "keys": "arg:productId",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:347",
+        "site": "examples/commerce/src/app.ts:480",
         "via": "products"
       }
     ],
@@ -32,7 +32,7 @@ export const commerceTouchGraph = {
         "domain": "order",
         "keys": "arg:data.object.id",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:435",
+        "site": "examples/commerce/src/app.ts:623",
         "via": "orders"
       }
     ],
@@ -45,7 +45,7 @@ export const commerceTouchGraph = {
         "domain": "attachment",
         "keys": "arg:orderId",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:385",
+        "site": "examples/commerce/src/app.ts:544",
         "via": "attachments"
       }
     ],

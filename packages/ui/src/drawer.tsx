@@ -9,6 +9,7 @@ import {
   dialogTriggerAttributes,
   type ClassValue,
 } from '@jiso/headless-ui';
+import { escapeHtml } from '@jiso/server';
 
 export type DrawerSide = 'top' | 'right' | 'bottom' | 'left';
 
@@ -92,7 +93,7 @@ export const Drawer = component('drawer', {
           disabled={triggerAttrs.disabled}
           type={triggerAttrs.type}
         >
-          {props.trigger ?? 'Open'}
+          {escapeHtml(props.trigger ?? 'Open')}
         </button>
         <dialog
           aria-describedby={contentAttrs['aria-describedby']}
@@ -106,13 +107,13 @@ export const Drawer = component('drawer', {
           <div aria-hidden="true" class="mx-auto h-1.5 w-12 rounded-full bg-neutral-300" />
           <header class="grid gap-1">
             <h2 class="text-base font-semibold" id={titleId}>
-              {props.title}
+              {escapeHtml(props.title)}
             </h2>
             {descriptionId === undefined ? (
               ''
             ) : (
               <p class="text-sm text-neutral-600" id={descriptionId}>
-                {props.description}
+                {escapeHtml(props.description ?? '')}
               </p>
             )}
           </header>
@@ -126,7 +127,7 @@ export const Drawer = component('drawer', {
             disabled={closeAttrs.disabled}
             type={closeAttrs.type}
           >
-            {props.closeLabel ?? 'Close'}
+            {escapeHtml(props.closeLabel ?? 'Close')}
           </button>
         </dialog>
       </div>

@@ -1,5 +1,6 @@
 // @jiso-ir — lowered from site/tutorial/steps/07-verification/src/components/order-history.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `node site/tutorial/run-steps.mjs --write`.
 /** @jsxImportSource @jiso/server */
+import { escapeText } from '@jiso/server';
 import { component } from '@jiso/core';
 
 import { orderHistoryQuery, type OrderHistoryResult } from '../queries.js';
@@ -18,7 +19,7 @@ export const OrderHistory = component('order-history', {
     <ol fw-c="order-history" fw-deps="orderHistory">
       {orderHistory.items.map((item) => (
         <li fw-key={item.id}>
-          {item.productId} x {item.qty} - {item.total}
+          {escapeText(item.productId)} x {escapeText(item.qty)} - {escapeText(item.total)}
         </li>
       ))}
     </ol>

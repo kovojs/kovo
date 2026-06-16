@@ -84,6 +84,10 @@ function commerceCases(): { input: AddToCartInput; state: CommerceState }[] {
           input: { productId, quantity },
           state: {
             cartItems: seeded === 0 ? [] : [{ productId: 'p1', qty: seeded, unitPrice: 1499 }],
+            // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is now scoped to the
+            // session user, so the seeded prior order must belong to the same user
+            // (`u-test`) to remain visible in the loaded shape; otherwise it is
+            // (correctly) filtered out and the case degenerates to the empty seed.
             orders:
               seeded === 0
                 ? []
@@ -93,7 +97,7 @@ function commerceCases(): { input: AddToCartInput; state: CommerceState }[] {
                       productId: 'p1',
                       qty: seeded,
                       total: 1499 * seeded,
-                      userId: 'u9',
+                      userId: 'u-test',
                     },
                   ],
             products: {
@@ -150,7 +154,13 @@ describe('commerce derived optimism — commuting diagrams (SPEC §10.5)', () =>
 
   it('orderHistory (INSERT × AGG push): commutes modulo placeholder columns', async () => {
     expect(
-      await assertCommutes(loadOrderHistory, orderHistoryTransform, orderHistoryProjection),
+      // SECURITY (SECURITY_FINDINGS.md M9): the loader is per-user, so bind it to the
+      // case's session user (`u-test`) — the same user the seeded/new orders belong to.
+      await assertCommutes(
+        (db) => loadOrderHistory(db, 'u-test'),
+        orderHistoryTransform,
+        orderHistoryProjection,
+      ),
     ).toBe(18);
   });
 

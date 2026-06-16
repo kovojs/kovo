@@ -928,3 +928,5 @@ export type {
   ToggleState,
   ToggleTriggerEvent,
 } from './primitives/index.js';
+
+export { safeUrl } from './lib/safe-url.js';

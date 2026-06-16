@@ -15,6 +15,7 @@ import {
   type ClassValue,
   type CommandItem as HeadlessCommandItem,
 } from '@jiso/headless-ui';
+import { escapeHtml } from '@jiso/server';
 
 export interface CommandStateProps {
   disabled?: boolean;
@@ -313,7 +314,7 @@ export const CommandItem = component('command-item', {
         type="button"
         value={attrs.value}
       >
-        {props.children ?? props.itemLabel ?? props.itemValue}
+        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue ?? '')}
       </button>
     );
   },
@@ -366,7 +367,7 @@ export const CommandValue = component('command-value', {
   render(props: CommandValueProps) {
     return (
       <span class={cn(commandValueClassNames(), props.class)} id={props.id}>
-        {commandValueText(props)}
+        {escapeHtml(commandValueText(props))}
       </span>
     );
   },

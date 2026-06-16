@@ -1,5 +1,6 @@
 // @jiso-ir — lowered from examples/commerce/src/components/product-grid.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @jiso/server */
+import { escapeText } from '@jiso/server';
 import { component } from '@jiso/core';
 import { csrfField } from '@jiso/server';
 
@@ -90,8 +91,8 @@ function renderProductCard(
 ): string {
   return (
     <article fw-key={item.id} class="rounded border border-slate-200 bg-white p-4">
-      <h2 class="font-semibold">{item.id}</h2>
-      <p>{item.stock} in stock</p>
+      <h2 class="font-semibold">{escapeText(item.id)}</h2>
+      <p>{escapeText(item.stock)} in stock</p>
       {options.readOnly ? '' : renderAddToCartForm(item, failure, request)}
     </article>
   );

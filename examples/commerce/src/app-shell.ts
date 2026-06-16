@@ -229,7 +229,9 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
             },
           ),
           {
-            render: () => renderOrderHistory(db),
+            // SECURITY (SECURITY_FINDINGS.md M9): scope order history to the
+            // authenticated session user resolved onto the mutation request.
+            render: () => renderOrderHistory(db, commerceRequest.session?.user?.id),
             stylesheets: commerceStylesheets,
             target: 'order-history',
           },

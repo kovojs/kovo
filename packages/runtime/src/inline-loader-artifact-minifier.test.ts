@@ -42,8 +42,11 @@ describe('inline loader minified artifact', () => {
     expect(inlineJisoLoaderInstallerSource).toContain(
       "el.getAttribute('fw-fragment-target')??el.id??el.getAttribute('fw-c')",
     );
+    // Security finding M10: the fragment-target lookup guards its querySelector
+    // calls so a malformed wire target degrades to "no target found" instead of
+    // throwing and aborting the apply pass.
     expect(inlineJisoLoaderInstallerSource).toContain(
-      "const ft=(target)=>doc.querySelector('[fw-c=\"'+target+'\"]')??doc.getElementById(target)??doc.querySelector('[fw-fragment-target=\"'+target+'\"]');",
+      "const ft=(target)=>{try{return(doc.querySelector('[fw-c=\"'+target+'\"]')??doc.getElementById(target)??doc.querySelector('[fw-fragment-target=\"'+target+'\"]'));}catch{return;}};",
     );
     expect(inlineJisoLoaderInstallerSource).toContain("getAttribute('fw-param-types')");
     expect(inlineJisoLoaderInstallerSource).not.toContain('DOMParser');

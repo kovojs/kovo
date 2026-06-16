@@ -103,9 +103,14 @@ export function lowerInlineAttributeDerives(
     }
   }
 
+  // SECURITY (SECURITY_FINDINGS.md C1): elements that receive a sole-child reactive binding are
+  // owned by the data-bind mechanism (the client updates them via textContent), so the C1
+  // text-escaping pass leaves their child alone and focuses on static interpolations.
+  const boundElementStarts = new Set<number>();
   for (const element of jsxElements(model)) {
     const binding = inlineTextBinding(element, model, knownQueries);
     if (binding) {
+      boundElementStarts.add(element.start);
       replacements.push({
         end: element.openingEnd - 1,
         replacement: ` data-bind="${escapeAttribute(binding)}"`,
@@ -117,6 +122,7 @@ export function lowerInlineAttributeDerives(
     const derive = inlineTextDerive(element, model, componentName);
     if (!derive) continue;
 
+    boundElementStarts.add(element.start);
     const exportName = nextExportName(derive.baseName, nameCounts);
     const stampName = `state.${exportName}`;
     recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives);
@@ -153,6 +159,8 @@ export function lowerInlineAttributeDerives(
     });
   }
 
+  const escapeApplied = escapeStaticTextInterpolations(model, replacements, boundElementStarts);
+
   if (replacements.length === 0) {
     return {
       prefix: '',
@@ -161,8 +169,22 @@ export function lowerInlineAttributeDerives(
     };
   }
 
-  const prefix = `import { derive } from '@jiso/runtime';\n\n${deriveExports.join('\n')}\n\n`;
-  if (deriveExports.length > 0) {
+  // Use the typed named-import facts (SPEC §5.2 parser boundary) rather than scanning raw source to
+  // decide whether escapeText is already imported (avoids a duplicate-binding SyntaxError when an
+  // author imported it manually). On a recompile escapeApplied is false, so the import is stable.
+  const alreadyImportsEscapeText = model.namedImports.some(
+    (entry) => entry.importedName === 'escapeText' && entry.moduleSpecifier === '@jiso/server',
+  );
+  const escapeImport =
+    escapeApplied && !alreadyImportsEscapeText
+      ? `import { escapeText } from '@jiso/server';\n`
+      : '';
+  const derivePrefix =
+    deriveExports.length > 0
+      ? `import { derive } from '@jiso/runtime';\n\n${deriveExports.join('\n')}\n\n`
+      : '';
+  const prefix = `${escapeImport}${derivePrefix}`;
+  if (prefix.length > 0) {
     const start = derivePrefixInsertionOffset(options.source);
     replacements.push({
       end: start,
@@ -176,6 +198,66 @@ export function lowerInlineAttributeDerives(
     replacements,
     stateDerives,
   };
+}
+
+// SECURITY (SECURITY_FINDINGS.md C1): the @jiso/server jsx runtime emits text children verbatim,
+// so an app-authored `{data.field}` text interpolation is a stored-XSS sink. During lowering we
+// wrap simple data-path text children in escapeText(...) (which mirrors renderJsxChildren's
+// null/undefined/boolean/array coercion and HTML-escapes scalar values) so generated components
+// are safe by default. Only sole property-access paths are wrapped — never nested JSX elements,
+// `.map()`, calls, ternaries, or already-escaped expressions — because solePropertyAccessPath is
+// defined only for `a.b`-style expressions. The wrap is idempotent under the fixpoint: its result
+// is a call expression, so on a recompile it has no solePropertyAccessPath and is never re-wrapped.
+function escapeStaticTextInterpolations(
+  model: ComponentModuleModel,
+  replacements: SourceReplacement[],
+  boundElementStarts: ReadonlySet<number>,
+): boolean {
+  const consumed = replacements.map((replacement) => ({
+    end: replacement.end,
+    start: replacement.start,
+  }));
+  let applied = false;
+
+  for (const element of jsxElements(model)) {
+    // Skip elements owned by the reactive data-bind mechanism (sole-child derived bindings or a
+    // hand-written data-bind/data-derive stamp): their text is updated client-side via textContent.
+    if (boundElementStarts.has(element.start)) continue;
+    if (
+      element.attributes.some(
+        (attribute) =>
+          attribute.name === 'data-bind' ||
+          attribute.name.startsWith('data-bind:') ||
+          attribute.name === 'data-derive' ||
+          attribute.name === 'data-derive-attr',
+      )
+    ) {
+      continue;
+    }
+
+    for (const container of element.childExpressionContainers) {
+      const expression = model.jsxExpressions.find(
+        (candidate) =>
+          candidate.containerStart === container.start && candidate.containerEnd === container.end,
+      );
+      // solePropertyAccessPath is defined only for `a.b`-style expressions, never for the
+      // escapeText(...) call we emit — so the wrap is inherently idempotent under the fixpoint and
+      // needs no raw-source `startsWith` check (which would violate the SPEC §5.2 parser boundary).
+      if (!expression || expression.solePropertyAccessPath === undefined) continue;
+      if (consumed.some((span) => container.start < span.end && span.start < container.end)) {
+        continue;
+      }
+
+      replacements.push({
+        end: container.end,
+        replacement: `{escapeText(${expression.expression})}`,
+        start: container.start,
+      });
+      applied = true;
+    }
+  }
+
+  return applied;
 }
 
 function inlineAttributeDerive(

@@ -41,7 +41,12 @@ import {
   type NoJsMutationRequest,
   type NoJsMutationResponse,
 } from './mutation-wire.js';
-import { mutationReplayContext, readMutationReplay, withMutationReplay } from './replay.js';
+import {
+  commitReservedMutationReplay,
+  mutationReplayContext,
+  readMutationReplay,
+  reserveMutationReplayBeforeRun,
+} from './replay.js';
 import {
   parseSchemaAsync,
   SchemaValidationError,
@@ -419,9 +424,22 @@ export async function renderMutationResponse<
     };
   }
 
-  const replay = mutationReplayContext(csrf, wireRequest);
+  // Security finding M4: reserve the replay record BEFORE running the handler
+  // (mirroring the webhook get→reserve→run order) so concurrent FW-Idem
+  // duplicates coalesce onto one handler execution. The replay scope folds in the
+  // mutation key (see mutationReplayContext) so the reservation is per-(session,
+  // mutation, idem).
+  const replay = mutationReplayContext(csrf, {
+    ...wireRequest,
+    mutationKey: definition.key,
+  });
   const replayed = await readMutationReplay(replay);
   if (replayed) return replayed;
+
+  const reservationResult = await reserveMutationReplayBeforeRun(replay);
+  if (reservationResult.kind === 'replayed') return reservationResult.response;
+  const reservation =
+    reservationResult.kind === 'reserved' ? reservationResult.reservation : undefined;
 
   let result: MutationResult<Value>;
   try {
@@ -432,6 +450,9 @@ export async function renderMutationResponse<
       runMutationOptions(wireRequest.csrf, wireRequest),
     );
   } catch (error) {
+    // The handler threw before producing a result; release the reservation so a
+    // retry can run, then surface the server-error fragment (never replayed).
+    reservation?.abort?.();
     reportServerError(wireRequest.onError, error, {
       mutationKey: definition.key,
       operation: 'mutation-handler',
@@ -443,6 +464,9 @@ export async function renderMutationResponse<
 
   if (!result.ok) {
     if (result.error.code === 'VALIDATION') {
+      // Pure schema validation failures are not replayable: abandon the
+      // reservation so a corrected retry runs the handler.
+      reservation?.abort?.();
       return {
         body: await renderFailureFragment(result, wireRequest),
         headers: {
@@ -453,7 +477,7 @@ export async function renderMutationResponse<
       };
     }
 
-    return withMutationReplay(replay, async () => ({
+    return commitReservedMutationReplay(reservation, async () => ({
       body: await renderFailureFragment(result, wireRequest),
       headers: {
         ...mutationWireResponseHeaders(wireRequest),
@@ -464,7 +488,7 @@ export async function renderMutationResponse<
   }
 
   const renderInput = mutationResponseInput(result, wireRequest.rawInput);
-  return withMutationReplay(replay, async () => {
+  return commitReservedMutationReplay(reservation, async () => {
     let queryChunks: string[];
     let fragmentChunks: string[];
     try {

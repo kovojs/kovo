@@ -9,6 +9,7 @@ import {
   dialogTriggerAttributes,
   type ClassValue,
 } from '@jiso/headless-ui';
+import { escapeHtml } from '@jiso/server';
 
 export type SheetSide = 'top' | 'right' | 'bottom' | 'left';
 export type DrawerSide = SheetSide;
@@ -96,7 +97,7 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
         disabled={triggerAttrs.disabled}
         type={triggerAttrs.type}
       >
-        {props.trigger ?? 'Open'}
+        {escapeHtml(props.trigger ?? 'Open')}
       </button>
       <dialog
         aria-describedby={contentAttrs['aria-describedby']}
@@ -109,13 +110,13 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
       >
         <header class="grid gap-1">
           <h2 class="text-base font-semibold" id={titleId}>
-            {props.title}
+            {escapeHtml(props.title)}
           </h2>
           {descriptionId === undefined ? (
             ''
           ) : (
             <p class="text-sm text-neutral-600" id={descriptionId}>
-              {props.description}
+              {escapeHtml(props.description ?? '')}
             </p>
           )}
         </header>
@@ -129,7 +130,7 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
           disabled={closeAttrs.disabled}
           type={closeAttrs.type}
         >
-          {props.closeLabel ?? 'Close'}
+          {escapeHtml(props.closeLabel ?? 'Close')}
         </button>
       </dialog>
     </div>

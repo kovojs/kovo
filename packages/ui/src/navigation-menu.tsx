@@ -1,5 +1,6 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
+import { escapeHtml } from '@jiso/server';
 import {
   cn,
   defineVariants,
@@ -226,7 +227,11 @@ export const NavigationMenuTrigger = component('navigation-menu-trigger', {
         type={attrs.type}
         value={attrs.value}
       >
-        {props.children ?? props.itemLabel ?? props.itemValue}
+        {/* SECURITY_FINDINGS.md C1: the @jiso/server JSX runtime renders text children
+            UNESCAPED. props.children is the composition slot (raw, may be pre-rendered
+            markup); itemLabel/itemValue are scalar text data props a caller fills from
+            data, so escape only that fallback to neutralize injected `<img onerror=...>`. */}
+        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}
       </button>
     );
   },
@@ -281,7 +286,12 @@ export const NavigationMenuLink = component('navigation-menu-link', {
         tabIndex={attrs.tabIndex}
         value={attrs.value}
       >
-        {props.children ?? props.itemLabel ?? props.itemValue}
+        {/*
+          SECURITY_FINDINGS.md C1: escape only the scalar itemLabel/itemValue
+          text data fallback (rendered unescaped by the JSX runtime); leave
+          props.children — the composition slot — raw.
+        */}
+        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}
       </a>
     );
   },

@@ -13,6 +13,7 @@ import {
   type ClassValue,
   type SelectItem as HeadlessSelectItem,
 } from '@jiso/headless-ui';
+import { escapeHtml } from '@jiso/server';
 
 export interface SelectStateProps {
   disabled?: boolean;
@@ -266,7 +267,7 @@ export const SelectItem = component('select-item', {
         role={attrs.role}
         value={attrs.value}
       >
-        {props.children ?? props.itemLabel ?? props.itemValue}
+        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue ?? '')}
       </div>
     );
   },
@@ -294,7 +295,7 @@ export const SelectValue = component('select-value', {
         data-placeholder={attrs['data-placeholder']}
         id={attrs.id}
       >
-        {selectValueText(props)}
+        {escapeHtml(selectValueText(props))}
       </span>
     );
   },

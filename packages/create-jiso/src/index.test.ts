@@ -45,6 +45,11 @@ describe('create-jiso starter', () => {
       'src/auth.tsx',
       'src/app.fixpoint.test.ts',
     ];
+    // SECURITY_FINDINGS.md M5: create-jiso also emits generated (non-template) files —
+    // a gitignored .env carrying a per-project random CSRF secret, a committed
+    // .env.example, and a .gitignore.
+    const generatedFiles = ['.env', '.env.example', '.gitignore'];
+    const expectedAllFiles = [...expectedFiles, ...generatedFiles];
 
     try {
       const templateUrl = new URL('../templates/', import.meta.url);
@@ -53,7 +58,7 @@ describe('create-jiso starter', () => {
       }
 
       const result = writeJisoProject(root, { name: 'My App' });
-      expect(result).toEqual({ files: expectedFiles, name: 'my-app', root });
+      expect(result).toEqual({ files: expectedAllFiles, name: 'my-app', root });
 
       for (const file of expectedFiles) {
         const source = readFileSync(join(root, file), 'utf8');
@@ -63,7 +68,7 @@ describe('create-jiso starter', () => {
 
       const project = createJisoProject({ name: 'My App' });
       expect(project.name).toBe('my-app');
-      expect(project.files.map((file) => file.path)).toEqual(expectedFiles);
+      expect(project.files.map((file) => file.path)).toEqual(expectedAllFiles);
 
       const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
         dependencies?: Record<string, string>;
@@ -302,8 +307,31 @@ describe('create-jiso starter', () => {
       });
 
       for (const file of project.files) {
+        // SECURITY_FINDINGS.md M5: .env carries a freshly generated per-project random
+        // secret, so its content is intentionally non-deterministic across calls and is
+        // asserted separately below.
+        if (file.path === '.env') continue;
         expect(readFileSync(join(root, file.path), 'utf8')).toBe(file.source);
       }
+
+      const envSource = readFileSync(join(root, '.env'), 'utf8');
+      const secretMatch = /^JISO_CSRF_SECRET=(.+)$/m.exec(envSource);
+      expect(secretMatch).not.toBeNull();
+      const writtenSecret = secretMatch?.[1] ?? '';
+      // A 32-byte base64url secret is 43 characters and never the shipped placeholder.
+      expect(writtenSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(writtenSecret).not.toBe('replace-with-a-deployed-secret');
+      // Each scaffold generates a distinct secret.
+      expect(writtenSecret).not.toBe(
+        /^JISO_CSRF_SECRET=(.+)$/m.exec(
+          project.files.find((file) => file.path === '.env')?.source ?? '',
+        )?.[1],
+      );
+
+      expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
+        'JISO_CSRF_SECRET=replace-with-a-deployed-secret',
+      );
+      expect(readFileSync(join(root, '.gitignore'), 'utf8')).toContain('.env');
 
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'example-shop',
@@ -644,7 +672,7 @@ describe('create-jiso starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 21 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 24 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });

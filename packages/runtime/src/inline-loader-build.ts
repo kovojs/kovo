@@ -189,10 +189,22 @@ function installInlineJisoLoader(im) {
         .filter(Boolean)
     )
   ];
-  const ft = (target) =>
-    doc.querySelector('[fw-c="' + target + '"]') ??
-    doc.getElementById(target) ??
-    doc.querySelector('[fw-fragment-target="' + target + '"]');
+  // SPEC.md §9.1 + security finding M10: fragment targets round-trip un-escaped
+  // wire data into CSS selectors, so a malformed target containing quote/bracket
+  // characters throws a SyntaxError that would abort the whole apply pass. Guard
+  // the lookups so a malformed selector degrades to "no target found" instead of
+  // throwing.
+  const ft = (target) => {
+    try {
+      return (
+        doc.querySelector('[fw-c="' + target + '"]') ??
+        doc.getElementById(target) ??
+        doc.querySelector('[fw-fragment-target="' + target + '"]')
+      );
+    } catch {
+      return;
+    }
+  };
   for (const el of qa(
     doc,
     'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
@@ -615,6 +627,14 @@ function compactInlineJisoLoaderInstallerLocalNames(source: string): string {
     ['current', 'cur'],
     ['segment', 'seg'],
     ['attribute', 'attr'],
+    // Installer-local helper names (not referenced by the parity-checked helper
+    // closures); compacting them reclaims gzip headroom for the M10 selector
+    // guard within the SPEC.md §4.4 4KB ceiling.
+    ['dispatch', 'dp'],
+    ['trigger', 'tg'],
+    ['crossing', 'cr'],
+    ['enterType', 'en'],
+    ['overType', 'ov'],
   ]);
   let compacted = source;
 

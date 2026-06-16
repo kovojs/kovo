@@ -952,16 +952,16 @@ export function betterAuthSignInEmailMutation<
           headers: request.headers,
         });
 
-        if (isBetterAuthCredentialFailureResponse(response)) {
+        const success = await resolveBetterAuthCredentialSuccess(response, context, {
+          redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
+          status: 'signed-in',
+        });
+
+        if (success === null) {
           return context.fail('INVALID_CREDENTIALS', {});
         }
 
-        forwardBetterAuthSetCookie(response.headers, context);
-
-        return {
-          redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
-          status: 'signed-in',
-        };
+        return success;
       } catch (error) {
         if (isBetterAuthCredentialFailureError(error)) {
           return context.fail('INVALID_CREDENTIALS', {});
@@ -1007,16 +1007,16 @@ export function betterAuthSignUpEmailMutation<
           headers: request.headers,
         });
 
-        if (isBetterAuthCredentialFailureResponse(response)) {
+        const success = await resolveBetterAuthCredentialSuccess(response, context, {
+          redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
+          status: 'signed-up',
+        });
+
+        if (success === null) {
           return context.fail('INVALID_CREDENTIALS', {});
         }
 
-        forwardBetterAuthSetCookie(response.headers, context);
-
-        return {
-          redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
-          status: 'signed-up',
-        };
+        return success;
       } catch (error) {
         if (isBetterAuthCredentialFailureError(error)) {
           return context.fail('INVALID_CREDENTIALS', {});
@@ -1088,6 +1088,92 @@ export function getBetterAuthSetCookie(headers: Headers): string[] {
 
 export function isBetterAuthCredentialFailureResponse(response: BetterAuthResponseLike): boolean {
   return isCredentialFailureStatus(response.status);
+}
+
+// SECURITY (SECURITY_FINDINGS.md M2): a credential sign-in/sign-up must be classified
+// by POSITIVE evidence of an established session, never by the mere absence of a
+// 400/401/403. Better Auth returns Response objects for 2FA-pending (`200` with a
+// `twoFactorRedirect` body and no session cookie), rate-limit (`429`), and transient
+// 5xx; none of those establish a session and must be treated as failures.
+function isSuccessStatus(status: number): boolean {
+  return status >= 200 && status < 300;
+}
+
+// A Set-Cookie that establishes a session sets a non-empty value and is not a
+// deletion (`Max-Age=0` / `Expires` in the past / empty value). Sign-out clears
+// cookies this way, so the same predicate cleanly distinguishes establish vs. clear.
+function isSessionEstablishingSetCookie(rawSetCookie: string): boolean {
+  const firstPair = rawSetCookie.split(';', 1)[0] ?? '';
+  const separatorIndex = firstPair.indexOf('=');
+  if (separatorIndex < 0) return false;
+
+  const value = firstPair.slice(separatorIndex + 1).trim();
+  if (value === '') return false;
+
+  const attributes = rawSetCookie.slice(firstPair.length).toLowerCase();
+  if (/(?:^|;)\s*max-age\s*=\s*0(?:\s*;|\s*$)/.test(attributes)) return false;
+  if (/(?:^|;)\s*max-age\s*=\s*-/.test(attributes)) return false;
+
+  return true;
+}
+
+function hasSessionEstablishingSetCookie(headers: Headers): boolean {
+  return getBetterAuthSetCookie(headers).some(isSessionEstablishingSetCookie);
+}
+
+interface BetterAuthCredentialResponseWithBody extends BetterAuthResponseLike {
+  clone?: () => { json?: () => Promise<unknown> };
+  json?: () => Promise<unknown>;
+}
+
+// Better Auth returns `200 { twoFactorRedirect: true, ... }` (no session cookie) when
+// a second factor is required. The framework has no 2FA UI, so this is treated as a
+// failure rather than redirecting into the protected area. The body is read from a
+// clone so the original Response stays consumable for cookie forwarding; non-Response
+// fakes (plain `{ headers, status }`) simply report "no two-factor body".
+async function isBetterAuthTwoFactorPendingResponse(
+  response: BetterAuthResponseLike,
+): Promise<boolean> {
+  const withBody = response as BetterAuthCredentialResponseWithBody;
+  const readJson = (() => {
+    if (typeof withBody.clone === 'function') {
+      const cloned = withBody.clone();
+      if (cloned && typeof cloned.json === 'function') return cloned.json.bind(cloned);
+    }
+    if (typeof withBody.json === 'function') return withBody.json.bind(withBody);
+    return undefined;
+  })();
+
+  if (!readJson) return false;
+
+  try {
+    const body = await readJson();
+    return (
+      typeof body === 'object' &&
+      body !== null &&
+      (body as Record<string, unknown>).twoFactorRedirect === true
+    );
+  } catch {
+    // A non-JSON or unreadable body cannot be a two-factor-pending payload.
+    return false;
+  }
+}
+
+// Resolve a credential response to a success value only when the session was
+// positively established; otherwise return null so the caller emits the declared
+// failure. See SECURITY_FINDINGS.md M2.
+async function resolveBetterAuthCredentialSuccess<Status extends string>(
+  response: BetterAuthResponseLike,
+  context: { setCookie?: (rawSetCookie: string) => void },
+  success: BetterAuthCredentialMutationValue<Status>,
+): Promise<BetterAuthCredentialMutationValue<Status> | null> {
+  if (!isSuccessStatus(response.status)) return null;
+  if (await isBetterAuthTwoFactorPendingResponse(response)) return null;
+  if (!hasSessionEstablishingSetCookie(response.headers)) return null;
+
+  forwardBetterAuthSetCookie(response.headers, context);
+
+  return success;
 }
 
 export function isBetterAuthCredentialFailureError(error: unknown): boolean {
@@ -1201,9 +1287,22 @@ function readNumericProperty(value: object, key: string): number | undefined {
   return typeof property === 'number' ? property : undefined;
 }
 
+// SECURITY (SECURITY_FINDINGS.md H4): the same-origin redirect guard must reject
+// authority-forming targets after backslash-normalization (browsers collapse `\`
+// to `/` when resolving http(s) URLs, so `/\evil.com` resolves cross-origin) and
+// reject ASCII control characters that can smuggle a CRLF / header-splitting
+// payload into the emitted `Location` response header.
+// eslint-disable-next-line no-control-regex -- intentional ASCII control-char class (U+0000 to U+001F, U+007F).
+const redirectControlCharPattern = /[\u0000-\u001f\u007f]/;
+
 function redirectPath(value: string | undefined, fallback: string): string {
-  if (!value) return fallback;
-  if (!value.startsWith('/') || value.startsWith('//')) return fallback;
+  if (typeof value !== 'string' || value === '') return fallback;
+  if (redirectControlCharPattern.test(value)) return fallback;
+
+  // Browsers treat backslashes as path separators when resolving http(s) URLs, so
+  // collapse them before checking for a protocol-relative (`//`) authority.
+  const collapsed = value.replace(/\\/g, '/');
+  if (!collapsed.startsWith('/') || collapsed.startsWith('//')) return fallback;
 
   return value;
 }

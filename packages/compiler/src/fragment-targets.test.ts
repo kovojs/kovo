@@ -66,7 +66,9 @@ export const CartRow = component('cart-row', {
         fileName: 'cart-row.tsx',
         message: `${fw303.message} priceList`,
         severity: fw303.severity,
-        start: { column: 20, line: 5 },
+        // SECURITY_FINDINGS.md C1: the escapeText import prepended for the escaped static text
+        // child (`priceList.version`) shifts the lowered-artifact diagnostic down one line.
+        start: { column: 20, line: 6 },
         length: 9,
       },
     ]);
@@ -125,13 +127,16 @@ export const CartTable = component('cart-table', {
         fileName: 'cart-row.tsx',
         help: [
           `${fw230.detailLabels.slotHoist} CartRow$slot_children`,
-          `${fw230.detailLabels.blockedChildren} <span>{window.location.href}</span>`,
+          `${fw230.detailLabels.blockedChildren} <span>{escapeText(window.location.href)}</span>`,
           fw230.help,
         ].join('\n'),
         message: `${fw230.message} CartRow`,
         severity: fw230.severity,
-        start: { column: 9, line: 12 },
-        length: 35,
+        // SECURITY_FINDINGS.md C1: the static text child is wrapped in escapeText(...) during
+        // lowering (and the escapeText import prepended), so the blocked-children snippet shows the
+        // escaped form and the diagnostic shifts down one line.
+        start: { column: 9, line: 13 },
+        length: 47,
       },
     ]);
   });

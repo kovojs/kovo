@@ -52,7 +52,15 @@ export function normalizePathname(pathname: string): PathnameNormalization {
   const absolutePathname = withoutSearchOrHash.startsWith('/')
     ? withoutSearchOrHash
     : `/${withoutSearchOrHash}`;
-  const normalized = absolutePathname === '/' ? '/' : absolutePathname.replace(/\/+$/, '') || '/';
+  // SPEC.md §6.3: collapse any leading authority-forming slash/backslash run to a
+  // single leading slash so the normalized pathname can never start with `//` or
+  // `/\`. Without this, a request to `//evil.com/` would normalize to `//evil.com`
+  // and be emitted verbatim as a protocol-relative `Location` 308 — an
+  // unauthenticated open redirect (security finding H5).
+  const authorityCollapsed = `/${absolutePathname.replace(/^[/\\]+/, '')}`;
+  const trailingTrimmed =
+    authorityCollapsed === '/' ? '/' : authorityCollapsed.replace(/\/+$/, '') || '/';
+  const normalized = trailingTrimmed;
 
   if (normalized === absolutePathname) {
     return {
@@ -62,6 +70,12 @@ export function normalizePathname(pathname: string): PathnameNormalization {
     };
   }
 
+  // The normalized form differs from the requested path because trailing slashes
+  // were stripped and/or a leading authority-forming run was collapsed. Either
+  // way, emit a 308 carrying the collapsed pathname so the browser never follows
+  // the original protocol-relative form. `trailingSlash` reflects only whether a
+  // trailing slash was removed.
+  const trailingSlashRemoved = trailingTrimmed !== authorityCollapsed;
   return {
     inputPathname,
     pathname: normalized,
@@ -69,7 +83,7 @@ export function normalizePathname(pathname: string): PathnameNormalization {
       pathname: normalized,
       status: 308,
     },
-    trailingSlash: 'removed',
+    trailingSlash: trailingSlashRemoved ? 'removed' : 'canonical',
   };
 }
 

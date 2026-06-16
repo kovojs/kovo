@@ -274,9 +274,19 @@ function routeResponseOutcome(
 }
 
 function routeOutcomeHeaders(outcome: RouteResponseOutcome): Record<string, string> {
+  // Security finding M1: file/stream bodies can carry a sniffable/scriptable
+  // content type (e.g. SVG-with-script served `inline`). Default to
+  // `X-Content-Type-Options: nosniff` so the browser honors the declared type
+  // instead of sniffing. Authors may override by setting the header explicitly
+  // (matched case-insensitively below).
+  const authorSetNosniff = outcome.headers
+    ? Object.keys(outcome.headers).some((name) => name.toLowerCase() === 'x-content-type-options')
+    : false;
+
   return {
     'Content-Disposition': outcome.contentDisposition,
     'Content-Type': outcome.contentType,
+    ...(authorSetNosniff ? {} : { 'X-Content-Type-Options': 'nosniff' }),
     ...(outcome.etag === undefined ? {} : { ETag: outcome.etag }),
     ...outcome.headers,
   };

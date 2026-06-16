@@ -1,5 +1,5 @@
-import { query, type QueryLoadContext } from '@jiso/server';
-import { gt, sum } from 'drizzle-orm';
+import { guards, query, type QueryLoadContext } from '@jiso/server';
+import { eq, gt, sum } from 'drizzle-orm';
 
 import type { CommerceDb } from './db.js';
 import { cart, order, product } from './domains.js';
@@ -31,9 +31,16 @@ export interface OrderHistoryResult {
 
 export interface CommerceQueryRequest {
   db: CommerceDb;
+  // SECURITY (SECURITY_FINDINGS.md M9): order-history reads are per-user, so the
+  // query request must be able to carry the authenticated session whose user id
+  // scopes the rows. Cart/product reads remain global (no session needed).
+  session?: { id?: string; user?: { id?: string } | null } | null;
 }
 
-type CommerceQueryLoadContext = QueryLoadContext<CommerceQueryRequest> & { db?: CommerceDb };
+type CommerceQueryLoadContext = QueryLoadContext<CommerceQueryRequest> & {
+  db?: CommerceDb;
+  session?: CommerceQueryRequest['session'];
+};
 
 export const cartQuery = query('cart', {
   async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<CartQueryResult> {
@@ -69,11 +76,20 @@ export const productGridQuery = query('productGrid', {
 });
 
 export const orderHistoryQuery = query('orderHistory', {
+  // SECURITY (SECURITY_FINDINGS.md M9): order history is per-user, so this read must
+  // require an authenticated session — the endpoint guard rejects unauthenticated
+  // callers, and the `load` below additionally scopes the rowset to that user's id
+  // so no caller can ever observe another user's orders.
+  guard: guards.authed<CommerceQueryRequest>(),
   async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<OrderHistoryResult> {
     const db = requireCommerceQueryDb(context);
+    const userId = requireCommerceQueryUserId(context);
     // No ORDER BY: orders are an append-only log, so the derived optimism can
     // push the newly-inserted order onto the end (a sort key with a placeholder
-    // id would make the insert position ambiguous → a §10.5 punt instead).
+    // id would make the insert position ambiguous → a §10.5 punt instead). The
+    // WHERE user_id = $userId clause keeps the rowset scoped to the session user
+    // (the static extractor reads this filtered shape directly — same pattern as
+    // productGrid's conditional WHERE).
     const items = await db
       .select({
         id: orders.id,
@@ -82,7 +98,8 @@ export const orderHistoryQuery = query('orderHistory', {
         total: orders.total,
         userId: orders.userId,
       })
-      .from(orders);
+      .from(orders)
+      .where(eq(orders.userId, userId));
     return { items: items };
   },
   reads: [order],
@@ -99,8 +116,15 @@ export async function loadProductGrid(
   return productGridQuery.load(input, { db, request: { db } });
 }
 
-export async function loadOrderHistory(db: CommerceDb): Promise<OrderHistoryResult> {
-  return orderHistoryQuery.load(undefined, { db, request: { db } });
+// SECURITY (SECURITY_FINDINGS.md M9): the order-history loader now requires the
+// authenticated user id so it can scope the read; callers thread the session user
+// id from the request.
+export async function loadOrderHistory(
+  db: CommerceDb,
+  userId: string,
+): Promise<OrderHistoryResult> {
+  const session = { id: userId, user: { id: userId } };
+  return orderHistoryQuery.load(undefined, { db, request: { db, session }, session });
 }
 
 function requireCommerceQueryDb(context?: CommerceQueryLoadContext): CommerceDb {
@@ -111,4 +135,16 @@ function requireCommerceQueryDb(context?: CommerceQueryLoadContext): CommerceDb 
   }
 
   return db;
+}
+
+function requireCommerceQueryUserId(context?: CommerceQueryLoadContext): string {
+  const userId = context?.session?.user?.id ?? context?.request?.session?.user?.id;
+
+  if (!userId) {
+    // Default-deny: order history is per-user and must never fall back to an
+    // unscoped read. A missing user id means the caller is unauthenticated.
+    throw new Error('orderHistory query requires an authenticated session user id');
+  }
+
+  return userId;
 }

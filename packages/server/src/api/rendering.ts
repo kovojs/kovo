@@ -7,7 +7,7 @@ export type {
   DeferredStreamOptions,
   DeferredStreamResponse,
 } from '../deferred-stream.js';
-export { escapeAttribute, escapeHtml } from '../html.js';
+export { escapeAttribute, escapeHtml, escapeText } from '../html.js';
 export {
   renderDeferredDocument,
   renderDocument,

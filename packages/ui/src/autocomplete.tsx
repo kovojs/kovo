@@ -12,6 +12,7 @@ import {
   type AutocompleteItem as HeadlessAutocompleteItem,
   type ClassValue,
 } from '@jiso/headless-ui';
+import { escapeHtml } from '@jiso/server';
 
 export interface AutocompleteStateProps {
   disabled?: boolean;
@@ -254,7 +255,7 @@ export const AutocompleteOption = component('autocomplete-option', {
         role={attrs.role}
         value={attrs.value}
       >
-        {props.children ?? props.itemLabel ?? props.itemValue}
+        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue ?? '')}
       </div>
     );
   },
@@ -284,7 +285,7 @@ export const AutocompleteValue = component('autocomplete-value', {
         data-placeholder={attrs['data-placeholder']}
         id={attrs.id}
       >
-        {autocompleteValueText(props)}
+        {escapeHtml(autocompleteValueText(props))}
       </span>
     );
   },

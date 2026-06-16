@@ -9,6 +9,7 @@ import {
   navigationIntentFromKey,
   nextTypeaheadState,
   openState,
+  safeUrl,
   type CollectionOrientation,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
@@ -245,7 +246,11 @@ export function navigationMenuLinkAttributes(
     tabIndex: navigationMenuItemHighlighted(options) && !disabled ? 0 : -1,
     value: options.itemValue,
     ...(disabled ? { 'aria-disabled': 'true' } : {}),
-    ...(disabled || options.href === undefined ? {} : { href: options.href }),
+    // SECURITY_FINDINGS.md H3: the caller href was previously spread verbatim
+    // and `escapeAttribute` does not neutralize schemes, so a `javascript:` href
+    // would render and execute on click. Route it through safeUrl. The href is
+    // still omitted entirely when disabled or absent (undefined semantics).
+    ...(disabled || options.href === undefined ? {} : { href: safeUrl(options.href) }),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.itemLabel === undefined ? {} : { label: options.itemLabel }),
   });

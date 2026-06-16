@@ -34,6 +34,8 @@ describe('route responses', () => {
         'Content-Disposition': 'attachment; filename="orders.csv"',
         'Content-Type': 'text/csv; charset=utf-8',
         ETag: '"orders-v1"',
+        // SECURITY_FINDINGS.md M1: file/stream outcomes default to nosniff.
+        'X-Content-Type-Options': 'nosniff',
       },
       status: 200,
     });

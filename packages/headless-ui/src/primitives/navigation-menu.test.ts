@@ -198,6 +198,22 @@ describe('headless-ui navigation-menu primitive', () => {
     expect(navigationMenuItemOpen({ itemValue: 'products', openValue: 'products' })).toBe(true);
   });
 
+  it('neutralizes a dangerous link href scheme via safeUrl (SECURITY_FINDINGS.md H3)', () => {
+    expect(
+      navigationMenuLinkAttributes({
+        href: 'javascript:alert(document.cookie)',
+        itemValue: 'evil',
+      }).href,
+    ).toBe('#');
+    // allowlisted/relative hrefs are preserved unchanged.
+    expect(
+      navigationMenuLinkAttributes({ href: 'https://example.com/a', itemValue: 'ok' }).href,
+    ).toBe('https://example.com/a');
+    expect(navigationMenuLinkAttributes({ href: '/cart', itemValue: 'cart' }).href).toBe('/cart');
+    // no href supplied → attribute omitted entirely (undefined semantics).
+    expect('href' in navigationMenuLinkAttributes({ itemValue: 'none' })).toBe(false);
+  });
+
   it('dispatches cancelable open and select details before committing state', () => {
     const seen: string[] = [];
     const openResult = setNavigationMenuOpenValue(

@@ -393,5 +393,18 @@ function rateLimitKey<Request extends SessionRequestLike>(
   if (options.key) return options.key(request);
   if (options.per === 'global') return 'global';
 
-  return request.session?.id ?? request.session?.user?.id ?? 'anonymous';
+  const sessionKey = request.session?.id ?? request.session?.user?.id;
+  if (sessionKey !== undefined) return sessionKey;
+
+  // Security finding M3: with default (`per:'session'`) keying and no session id,
+  // collapsing every anonymous client onto a single shared bucket lets one
+  // attacker 429-lock out all anonymous users. Refuse to silently fake per-client
+  // semantics — require an explicit key (e.g. client IP/fingerprint) or
+  // `per:'global'` for unauthenticated/public rate limiting.
+  throw new Error(
+    'guards.rateLimit cannot derive a per-client key: the request has no session id and ' +
+      "the default `per:'session'` scope would collapse all unauthenticated clients into one " +
+      'shared bucket. Supply an explicit `key` (for example the client IP) for public endpoints, ' +
+      "compose `guards.authed` before `rateLimit`, or set `per:'global'` to throttle all clients together.",
+  );
 }

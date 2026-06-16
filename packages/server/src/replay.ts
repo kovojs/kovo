@@ -17,6 +17,13 @@ export interface MutationReplayStore<
 export interface MutationReplayReservation<
   Response extends MutationReplayResponse = MutationReplayResponse,
 > {
+  /**
+   * Abandon the reservation without committing a result, releasing the pending
+   * record so a corrected retry can run (e.g. after a non-replayable validation
+   * failure). Optional for backward compatibility with stores predating
+   * security finding M4; callers must tolerate its absence.
+   */
+  abort?(): void;
   commit(response: Response): void;
 }
 
@@ -74,16 +81,29 @@ export function createMemoryMutationReplayStore<
       }
 
       let resolvePending: (response: Response) => void = () => undefined;
-      const pending = new Promise<Response>((resolve) => {
+      let rejectPending: (reason?: unknown) => void = () => undefined;
+      const pending = new Promise<Response>((resolve, reject) => {
         resolvePending = resolve;
+        rejectPending = reject;
       });
-      responses.set(key, {
+      // Swallow rejections so an aborted reservation with no awaiter never raises
+      // an unhandled-rejection warning; awaiting callers still observe the reject.
+      pending.catch(() => undefined);
+      const record: MutationReplayRecord<Response> = {
         expiresAt: Date.now() + ttlMs,
         pending,
         resolve: resolvePending,
-      });
+      };
+      responses.set(key, record);
 
       return {
+        abort() {
+          // Security finding M4: release the pending record so a corrected retry
+          // can run, and reject the pending promise so concurrent duplicates that
+          // raced onto this reservation fall back to running themselves.
+          if (responses.get(key) === record) responses.delete(key);
+          rejectPending(new MutationReplayAbortedError());
+        },
         commit(response) {
           const cloned = cloneMutationReplayResponse(response);
           responses.set(key, {
@@ -118,31 +138,100 @@ export function mutationReplayContext<Request, Response extends MutationReplayRe
   csrf: CsrfReplayScope<Request>,
   wireRequest: {
     idem?: string;
+    mutationKey?: string;
     replayStore?: MutationReplayStore<Response>;
     request: Request;
   },
 ): MutationReplayContext<Response> {
+  const sessionScope = mutationReplayScope(csrf, wireRequest.request);
   return {
     ...(wireRequest.idem === undefined ? {} : { idem: wireRequest.idem }),
     ...(wireRequest.replayStore === undefined ? {} : { replayStore: wireRequest.replayStore }),
-    scope: mutationReplayScope(csrf, wireRequest.request),
+    // Security finding M4: fold the mutation key into the replay scope so
+    // idempotency is per-(session, mutation, idem). Without this, one mutation's
+    // cached response/Set-Cookie could be replayed under a different mutation
+    // that happened to share a session and FW-Idem.
+    scope: composeMutationReplayScope(sessionScope, wireRequest.mutationKey),
   };
+}
+
+function composeMutationReplayScope(
+  sessionScope: string | null,
+  mutationKey: string | undefined,
+): string | null {
+  if (sessionScope === null) return null;
+  return mutationKey === undefined ? sessionScope : `${mutationKey}\0${sessionScope}`;
 }
 
 export async function readMutationReplay<Response extends MutationReplayResponse>(
   replay: MutationReplayContext<Response>,
 ): Promise<Response | undefined> {
   if (!replay.idem || !replay.scope) return undefined;
-  return replay.replayStore?.get(replay.scope, replay.idem);
+  try {
+    return await replay.replayStore?.get(replay.scope, replay.idem);
+  } catch (error) {
+    // A pending record this read joined was aborted (e.g. the in-flight request
+    // hit a non-replayable validation failure). Treat it as a miss so this
+    // request runs the handler itself.
+    if (error instanceof MutationReplayAbortedError) return undefined;
+    throw error;
+  }
 }
 
-export async function withMutationReplay<Response extends MutationReplayResponse>(
+/**
+ * Reserve a pending replay record BEFORE the handler runs (mirrors the webhook
+ * get→reserve→run order), so concurrent duplicates of the same
+ * (session, mutation, idem) coalesce onto one execution instead of double-running
+ * the handler (security finding M4). Returns either a `reservation` to commit the
+ * result under, or a `replayed` response when another in-flight request already
+ * holds the reservation (the reserve-returns-undefined race).
+ */
+export async function reserveMutationReplayBeforeRun<Response extends MutationReplayResponse>(
   replay: MutationReplayContext<Response>,
+): Promise<
+  | { kind: 'disabled' }
+  | { kind: 'replayed'; response: Response }
+  | { kind: 'reserved'; reservation: MutationReplayReservation<Response> }
+> {
+  if (!replay.idem || !replay.scope || !replay.replayStore) return { kind: 'disabled' };
+
+  const reservation = replay.replayStore.reserve(replay.scope, replay.idem);
+  if (reservation) return { kind: 'reserved', reservation };
+
+  // reserve() returned undefined: a concurrent request created the record between
+  // our get() miss and this reserve(). Await the now-present pending entry rather
+  // than re-running the handler. If that in-flight request aborts its reservation
+  // (e.g. a validation failure), the pending promise rejects — fall back to
+  // running ourselves rather than propagating the abort.
+  try {
+    const pending = await replay.replayStore.get(replay.scope, replay.idem);
+    if (pending) return { kind: 'replayed', response: pending };
+  } catch (error) {
+    if (!(error instanceof MutationReplayAbortedError)) throw error;
+  }
+
+  // The record vanished (expired/evicted/aborted) before we could read it; fall
+  // through to running without a reservation rather than dropping the request.
+  return { kind: 'disabled' };
+}
+
+export class MutationReplayAbortedError extends Error {
+  constructor() {
+    super('Mutation replay reservation aborted before commit.');
+    this.name = 'MutationReplayAbortedError';
+  }
+}
+
+/**
+ * Render under a reservation already created by `reserveMutationReplayBeforeRun`,
+ * committing the result so duplicate in-flight requests resolve to it.
+ */
+export async function commitReservedMutationReplay<Response extends MutationReplayResponse>(
+  reservation: MutationReplayReservation<Response> | undefined,
   render: () => Promise<Response>,
 ): Promise<Response> {
-  const reservation = reserveMutationReplay(replay);
   const response = await render();
-  commitMutationReplay(replay, response, reservation);
+  reservation?.commit(response);
   return response;
 }
 
@@ -153,27 +242,6 @@ type MutationReplayRecord<Response extends MutationReplayResponse> =
       pending: Promise<Response>;
       resolve(response: Response): void;
     };
-
-function commitMutationReplay<Response extends MutationReplayResponse>(
-  replay: MutationReplayContext<Response>,
-  response: Response,
-  reservation?: MutationReplayReservation<Response>,
-): void {
-  if (reservation) {
-    reservation.commit(response);
-  } else {
-    if (!replay.idem || !replay.scope) return;
-    replay.replayStore?.set(replay.scope, replay.idem, response);
-  }
-}
-
-function reserveMutationReplay<Response extends MutationReplayResponse>(
-  replay: MutationReplayContext<Response>,
-): MutationReplayReservation<Response> | undefined {
-  if (!replay.idem || !replay.scope) return undefined;
-
-  return replay.replayStore?.reserve(replay.scope, replay.idem);
-}
 
 function mutationReplayScope<Request>(
   csrf: CsrfReplayScope<Request>,

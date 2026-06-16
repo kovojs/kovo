@@ -4,7 +4,11 @@ import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { renderMutationResponse } from './mutation.js';
 import { query } from './query.js';
-import { createMemoryMutationReplayStore, type MutationReplayStore } from './replay.js';
+import {
+  createMemoryMutationReplayStore,
+  type MutationReplayResponse,
+  type MutationReplayStore,
+} from './replay.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
@@ -96,6 +100,188 @@ describe('server mutation response replay', () => {
       },
       status: 200,
     });
+  });
+
+  // Security finding M4: the reservation must be created BEFORE the handler runs,
+  // so a duplicate dispatched while the first handler is still in-flight coalesces
+  // onto the first execution instead of double-running the handler.
+  it('runs the handler once for concurrent duplicates dispatched mid-handler', async () => {
+    const cart = domain('cart');
+    const replayStore = createMemoryMutationReplayStore();
+    const handlerStarted = deferred();
+    const handlerRelease = deferred();
+    let writes = 0;
+    const cartQuery = query('cart', {
+      load: () => ({ count: writes }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      async handler(input) {
+        handlerStarted.resolve();
+        await handlerRelease.promise;
+        writes += 1;
+        return input;
+      },
+    });
+    const request = {
+      idem: 'idem_concurrent_handler',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { sessionId: 's1' },
+      targets: ['cart-badge'],
+    };
+
+    const first = renderMutationResponse(addToCart, request);
+    await handlerStarted.promise;
+    // Dispatch the duplicate while the first handler is still pending.
+    const second = renderMutationResponse(addToCart, request);
+    await Promise.resolve();
+
+    handlerRelease.resolve();
+    const [firstResponse, secondResponse] = await Promise.all([first, second]);
+
+    expect(writes).toBe(1);
+    expect(firstResponse).toEqual(secondResponse);
+    expect(firstResponse).toMatchObject({
+      body: '<fw-query name="cart">{"count":1}</fw-query>',
+      status: 200,
+    });
+  });
+
+  it('scopes replay records by mutation key so a sibling mutation does not replay another', async () => {
+    const cart = domain('cart');
+    const replayStore = createMemoryMutationReplayStore();
+    let addWrites = 0;
+    let removeWrites = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: { touches: [cart] },
+      handler(input) {
+        addWrites += 1;
+        return input;
+      },
+    });
+    const removeFromCart = mutation('cart/remove', {
+      input: s.object({ productId: s.string() }),
+      registry: { touches: [cart] },
+      handler(input) {
+        removeWrites += 1;
+        return input;
+      },
+    });
+    const baseRequest = {
+      idem: 'idem_shared',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+
+    await renderMutationResponse(addToCart, baseRequest);
+    // Same session + same FW-Idem but a different mutation: must NOT replay the
+    // add response; the remove handler must run on its own scope.
+    await renderMutationResponse(removeFromCart, baseRequest);
+
+    expect(addWrites).toBe(1);
+    expect(removeWrites).toBe(1);
+  });
+
+  it('does not double-run the handler for concurrent duplicates that race the reservation', async () => {
+    // Exercise the reserve()-returns-undefined race: the second request reserves
+    // before its own get() can observe the first, so it must await the pending
+    // entry rather than re-run the handler.
+    const cart = domain('cart');
+    const reserved = new Set<string>();
+    const records = new Map<string, MutationReplayResponse>();
+    const pendingResolvers = new Map<string, (response: MutationReplayResponse) => void>();
+    const replayStore: MutationReplayStore = {
+      get(scope, idem) {
+        const key = `${scope} ${idem}`;
+        return records.get(key);
+      },
+      reserve(scope, idem) {
+        const key = `${scope} ${idem}`;
+        if (reserved.has(key)) return undefined;
+        reserved.add(key);
+        let resolvePending: (response: MutationReplayResponse) => void = () => undefined;
+        const pending = new Promise<MutationReplayResponse>((resolve) => {
+          resolvePending = resolve;
+        });
+        records.set(key, pending as unknown as MutationReplayResponse);
+        pendingResolvers.set(key, resolvePending);
+        return {
+          commit(response) {
+            records.set(key, response);
+            pendingResolvers.get(key)?.(response);
+          },
+        };
+      },
+      set(scope, idem, response) {
+        records.set(`${scope} ${idem}`, response);
+      },
+    };
+    const handlerStarted = deferred();
+    const handlerRelease = deferred();
+    let writes = 0;
+    const cartQuery = query('cart', {
+      load: () => ({ count: writes }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: { queries: [cartQuery], touches: [cart] },
+      async handler(input) {
+        handlerStarted.resolve();
+        await handlerRelease.promise;
+        writes += 1;
+        return input;
+      },
+    });
+    const request = {
+      idem: 'idem_race',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+
+    const first = renderMutationResponse(addToCart, request);
+    await handlerStarted.promise;
+    const second = renderMutationResponse(addToCart, request);
+    await Promise.resolve();
+
+    handlerRelease.resolve();
+    const [firstResponse, secondResponse] = await Promise.all([first, second]);
+
+    expect(writes).toBe(1);
+    expect(firstResponse).toEqual(secondResponse);
+  });
+
+  it('does not replay a different request after a validation failure abandons the reservation', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let writes = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const base = { idem: 'idem_validation_abort', replayStore, request: { sessionId: 's1' } };
+
+    await expect(
+      renderMutationResponse(addToCart, { ...base, rawInput: { quantity: 1 } }),
+    ).resolves.toMatchObject({ status: 422 });
+    // A corrected retry under the same idem must run the handler (the failed
+    // reservation was abandoned, not committed).
+    await expect(
+      renderMutationResponse(addToCart, { ...base, rawInput: { productId: 'p1' } }),
+    ).resolves.toMatchObject({ status: 200 });
+
+    expect(writes).toBe(1);
   });
 
   it('replays duplicate requests while post-commit query rendering is pending', async () => {
