@@ -30,8 +30,11 @@ public package:
   is **public by default** and must be documented (JSDoc, ideally citing the SPEC §).
 - Mark a symbol `@internal` (JSDoc tag) when it is exported only for other in-repo
   packages, tests, or compiler-emitted code — never for app authors. `@internal`
-  symbols are stripped from the rolled-up `.d.ts` at build (plan Phase 3) and excluded
-  from the API reference.
+  symbols are excluded from the API reference, and the api-surface gate
+  (`scripts/api-surface-gate.mjs`) is what makes the tag binding: it fails when an
+  untagged, undocumented symbol becomes reachable from a published entry. (The
+  rolled-up `.d.ts` does not yet strip `@internal` — the gate, not the build, is the
+  enforcement.)
 - Prefer moving a cluster of internal exports behind a dedicated internal **subpath**
   (e.g. `@kovojs/server/internal`, `@kovojs/runtime/loader`) over scattering
   `@internal` tags on a flat barrel.
@@ -49,10 +52,32 @@ flags, exit codes), not an importable JS API. Such packages either omit `exports
 or expose only a small, documented, curated entry — never the argv dispatcher or
 transport internals.
 
+## Distribution: source in-repo, `dist` when published
+
+Public packages keep their top-level `exports`/`bin` pointing at `./src` so the
+workspace resolves source directly (plain `node`/`tsc`, example `vite build`s, the
+compiler's source reads — none of which honor a `development` export condition). The
+published tarball instead resolves a built `dist/` (JS + rolled-up `.d.ts`) via pnpm
+**`publishConfig`**: pnpm swaps a package's top-level `exports`/`bin` for its
+`publishConfig.exports`/`publishConfig.bin` at `pnpm pack`/`publish` time only, a
+`prepack` script builds `dist` (`vp pack <entries> --dts`), and `files: ["dist"]`
+limits the tarball. This was chosen over a live `exports` flip / `development`
+condition precisely because those break in-repo source resolution.
+
+`scripts/build-publish.mjs` is the generator: from each public package's top-level
+`exports`/`bin` it derives the build entries (every distinct `./src/<path>.ts(x)`)
+and the `publishConfig` (each `./src/<path>.ts(x)` → `{ types: ./dist/<path>.d.mts,
+default: ./dist/<path>.mjs }`; `bin` → `./dist/<path>.mjs`). Run `--write` to
+regenerate after changing a package's `exports`; the default mode builds and verifies
+every published target resolves to a built file.
+
 ## Enforcement
 
 - `scripts/public-packages.test.mjs` — every package classified; `private` flags match.
-- api-surface CI gate (plan Phase 3) — fails when an untagged symbol is reachable from
-  a published entry, or an `@internal` symbol leaks into a published `.d.ts`.
+- api-surface CI gate (`scripts/api-surface-gate.mjs`) — fails when an untagged,
+  undocumented symbol is reachable from a published entry (a ratchet against
+  `api-surface-baseline.json`).
+- `scripts/build-publish.mjs` (CI gate `pnpm run check:publish`) — builds each public
+  package and asserts every `publishConfig` target file exists under `dist/` (publish-readiness).
 - `site/scripts/api-ref.test.mjs` — the reference is generated from real sources for the
   documented set; undocumented public exports are flagged, never silently omitted.

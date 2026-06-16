@@ -1,6 +1,9 @@
 {
   "name": "@kovojs/test",
   "version": "0.1.0",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -16,6 +19,66 @@
     "./verifier-diagnostics": "./src/verifier-diagnostics.ts",
     "./verifier-sql": "./src/verifier-sql.ts",
     "./verifier": "./src/verifier.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./assertions": {
+        "types": "./dist/assertions.d.mts",
+        "default": "./dist/assertions.mjs"
+      },
+      "./headers": {
+        "types": "./dist/headers.d.mts",
+        "default": "./dist/headers.mjs"
+      },
+      "./harness-operations": {
+        "types": "./dist/harness-operations.d.mts",
+        "default": "./dist/harness-operations.mjs"
+      },
+      "./harness": {
+        "types": "./dist/harness.d.mts",
+        "default": "./dist/harness.mjs"
+      },
+      "./html-fragment": {
+        "types": "./dist/html-fragment.d.mts",
+        "default": "./dist/html-fragment.mjs"
+      },
+      "./page": {
+        "types": "./dist/page.d.mts",
+        "default": "./dist/page.mjs"
+      },
+      "./pglite": {
+        "types": "./dist/pglite.d.mts",
+        "default": "./dist/pglite.mjs"
+      },
+      "./sql-observer": {
+        "types": "./dist/sql-observer.d.mts",
+        "default": "./dist/sql-observer.mjs"
+      },
+      "./test-case": {
+        "types": "./dist/test-case.d.mts",
+        "default": "./dist/test-case.mjs"
+      },
+      "./verifier-diagnostics": {
+        "types": "./dist/verifier-diagnostics.d.mts",
+        "default": "./dist/verifier-diagnostics.mjs"
+      },
+      "./verifier-sql": {
+        "types": "./dist/verifier-sql.d.mts",
+        "default": "./dist/verifier-sql.mjs"
+      },
+      "./verifier": {
+        "types": "./dist/verifier.d.mts",
+        "default": "./dist/verifier.mjs"
+      }
+    }
+  },
+  "scripts": {
+    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/index.ts src/page.ts src/pglite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
+    "prepack": "pnpm run build:dist"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",

@@ -1,15 +1,28 @@
 {
   "name": "@kovojs/runtime",
   "version": "0.1.0",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
   },
   "scripts": {
     "build": "pnpm run build:inline-loader",
     "build:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts",
     "check": "pnpm run check:inline-loader",
-    "check:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts --check"
+    "check:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts --check",
+    "build:dist": "vp pack src/index.ts --dts",
+    "prepack": "pnpm run build:dist"
   },
   "dependencies": {
     "@kovojs/core": "workspace:*"

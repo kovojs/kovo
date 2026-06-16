@@ -44,7 +44,23 @@ are listed in the release notes.
 ## Distribution
 
 Published packages ship a built `dist/` (JavaScript + rolled-up `.d.ts`) — never raw
-`./src`. `@internal` symbols are stripped from the published type surface. Consuming
-Kovo therefore does not couple you to the monorepo's `tsconfig`. (In-repo development
-and tests resolve source directly; see `plans/api-cleanup.md` Phase 3 for the
-packaging mechanism.)
+`./src`. Consuming Kovo therefore does not couple you to the monorepo's `tsconfig` or
+`jsxImportSource`.
+
+The mechanism is pnpm **`publishConfig`**: each public package's top-level
+`exports`/`bin` point at `./src`, but a `publishConfig.exports`/`publishConfig.bin`
+points at `./dist`, and pnpm swaps them in at `pnpm pack`/`pnpm publish` time (a
+`prepack` script builds `dist` first via `vp pack … --dts`, and `files: ["dist"]`
+keeps the tarball to the build output). So the published tarball resolves `dist`
+while the in-repo workspace resolves `./src` exactly as during development.
+
+A live `exports` flip — or resolving source only behind a `development`/`source`
+export condition — was evaluated and **rejected**: many in-repo consumers resolve
+source via plain `node`/`tsc` (and example `vite build`s) that do not honor a
+`development` condition, so the workspace would break. `publishConfig` is the only
+mechanism that keeps source resolution unchanged in-repo while still shipping `dist`
+to consumers. The generator (`scripts/build-publish.mjs`) derives each package's
+build entries and `publishConfig` from its top-level `exports`/`bin`;
+`node scripts/build-publish.mjs` (the generator's default build+verify mode, run in CI
+as `pnpm run check:publish`) builds every public package and proves each published
+target resolves to a built file. See `plans/api-cleanup.md` Phase 3.

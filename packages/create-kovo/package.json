@@ -4,7 +4,19 @@
   "bin": {
     "create-kovo": "./src/index.ts"
   },
+  "files": [
+    "dist"
+  ],
   "type": "module",
+  "publishConfig": {
+    "bin": {
+      "create-kovo": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build:dist": "vp pack src/index.ts --dts",
+    "prepack": "pnpm run build:dist"
+  },
   "devDependencies": {
     "@kovojs/compiler": "workspace:*",
     "@kovojs/core": "workspace:*",
