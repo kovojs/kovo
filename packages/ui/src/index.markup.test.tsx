@@ -217,11 +217,8 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(Card.definition.render({ children: '<p>Total</p>' })).toContain(
       'data-style-src="card.tsx#root"',
     );
-    expect(Kbd.definition.render({ children: 'Ctrl K', class: 'uppercase' })).toContain(
-      '<kbd class="inline-flex h-5 min-w-5',
-    );
-    expect(Kbd.definition.render({ children: 'Ctrl K', class: 'uppercase' })).toContain(
-      'uppercase',
+    expect(Kbd.definition.render({ children: 'Ctrl K' })).toContain(
+      'data-style-src="kbd.tsx#root"',
     );
     expect(
       Alert.definition.render({

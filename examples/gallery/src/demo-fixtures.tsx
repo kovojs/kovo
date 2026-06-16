@@ -1600,6 +1600,15 @@ export function HoverCardDemo(): string {
 }
 
 export function KbdDemo(): string {
+  const kbdDemoStyles = style.create(
+    {
+      uppercase: {
+        textTransform: 'uppercase',
+      },
+    },
+    { namespace: 'galleryKbd', source: 'demo-fixtures.tsx' },
+  );
+
   return (
     <section data-gallery-demo="kbd">
       <p data-demo-summary="no-js">
@@ -1607,7 +1616,7 @@ export function KbdDemo(): string {
       </p>
       <div data-ui-demo="kbd">
         {Kbd.definition.render({ children: 'Ctrl' })}
-        {Kbd.definition.render({ children: 'K', class: 'uppercase' })}
+        {Kbd.definition.render({ children: 'K', style: kbdDemoStyles.uppercase })}
       </div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',

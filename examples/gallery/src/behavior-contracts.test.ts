@@ -404,7 +404,6 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'popover="manual"',
     'id="gallery-hover-card-content"',
   ],
-  '/components/kbd': ['<kbd class="inline-flex h-5 min-w-5', 'uppercase">K</kbd>'],
   '/components/menubar': [
     'aria-label="Document commands"',
     'role="menubar"',

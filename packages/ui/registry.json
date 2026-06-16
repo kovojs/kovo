@@ -471,7 +471,8 @@
       "files": ["src/kbd.tsx"],
       "exports": ["Kbd"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn"],
+        "@kovojs/headless-ui": [],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

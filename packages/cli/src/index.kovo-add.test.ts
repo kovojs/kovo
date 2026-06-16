@@ -247,7 +247,9 @@ describe('kovo add', () => {
       expect(dropdownMenu).toContain('export const DropdownMenu = component({');
       expect(dropdownMenu).toContain('export const dropdownMenuClassNames = defineVariants');
       expect(kbd).toContain('export const Kbd = component({');
-      expect(kbd).toContain('export const kbdClassNames =');
+      expect(kbd).toContain("import * as style from '@kovojs/style';");
+      expect(kbd).toContain('export const kbdStyles = style.create');
+      expect(kbd).toContain('style?: style.StyleInput');
       expect(menubar).toContain('export const Menubar = component({');
       expect(menubar).toContain('export const menubarClassNames = defineVariants');
       expect(navigationMenu).toContain('export const NavigationMenu = component({');

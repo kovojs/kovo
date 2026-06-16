@@ -970,9 +970,7 @@ describe('gallery demo fixtures', () => {
     expect(hoverCard.html).toContain('kovo-hover-card="gallery-hover-card-content"');
     expect(hoverCard.html).toContain('rounded-md border border-neutral-200 bg-white p-4');
 
-    expect(kbd.html).toContain('data-ui-demo="kbd"');
-    expect(kbd.html).toContain('<kbd class="inline-flex h-5 min-w-5');
-    expect(kbd.html).toContain('uppercase">K</kbd>');
+    expect(kbd.html).toMatchSnapshot('kbd demo html');
 
     expect(menubar.html).toContain('data-ui-demo="menubar"');
     expect(menubar.html).toContain('data-[state=open]:bg-neutral-100');

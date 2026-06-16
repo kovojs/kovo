@@ -53,7 +53,7 @@ export type {
   AutocompleteStateProps,
   AutocompleteValueProps,
 } from './autocomplete.js';
-export { Kbd, kbdClassNames, kbdClasses } from './kbd.js';
+export { Kbd, kbdClasses, kbdStyles } from './kbd.js';
 export type { KbdProps } from './kbd.js';
 export {
   CheckboxGroup,
