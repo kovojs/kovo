@@ -79,7 +79,7 @@ const URL_ATTRS = new Set(['action', 'href', 'src', 'formaction']);
 const OPAQUE_TAGS = new Set(['script', 'style', 'kovo-query']);
 
 /** Form field names that are pure wire mechanics, never user-facing semantics. */
-const VOLATILE_FIELD_NAMES = new Set(['csrf', 'kovo-idem', '_csrf']);
+const VOLATILE_FIELD_NAMES = new Set(['csrf', 'kovo-csrf', 'kovo-idem', '_csrf']);
 
 /** Elements rendered for their text/structure only; never recurse into raw text. */
 const RAW_TEXT_TAGS = new Set(['script', 'style']);
