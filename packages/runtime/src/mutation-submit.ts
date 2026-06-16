@@ -37,6 +37,7 @@ export type {
 } from './mutation-fetch.js';
 export type { EnhancedFormElementLike } from './mutation-form.js';
 
+/** @internal */
 export interface EnhancedMutationLoaderOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -63,6 +64,7 @@ interface EnhancedFormSubmitHooks {
   onAppliedQueries?: (queries: readonly string[]) => void;
 }
 
+/** @internal */
 export async function dispatchEnhancedFormSubmit(
   event: DelegatedEvent,
   options: EnhancedMutationLoaderOptions | undefined,
@@ -114,6 +116,7 @@ export async function dispatchEnhancedFormSubmit(
   return true;
 }
 
+/** @internal */
 export function isEnhancedSubmitEvent(
   event: DelegatedEvent,
   options: EnhancedMutationLoaderOptions | undefined,
@@ -123,6 +126,7 @@ export function isEnhancedSubmitEvent(
   return closestEnhancedMutationForm(event.target) !== null;
 }
 
+/** @internal */
 export interface EnhancedMutationSubmitOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -146,6 +150,7 @@ export interface EnhancedMutationSubmitOptions {
   store: QueryStore;
 }
 
+/** @internal */
 export async function submitEnhancedMutation(
   options: EnhancedMutationSubmitOptions,
 ): Promise<EnhancedMutationAppliedResult> {

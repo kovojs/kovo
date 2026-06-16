@@ -20,28 +20,34 @@ import {
 } from './mutation-submit.js';
 import type { QueryScriptLike } from './query-script-hydration.js';
 
+/** @internal */
 export interface LoaderLifecycleTarget extends ListenerTargetLike<DelegatedEvent> {}
 
+/** @internal */
 export interface LoaderRoot
   extends
     LoaderLifecycleTarget,
     OptionalQuerySelectorAllRootLike<EventElementLike | QueryScriptLike>,
     VisibilityStateLike {}
 
+/** @internal */
 export interface VisibleObserver {
   observe(element: EventElementLike): void;
   unobserve(element: EventElementLike): void;
 }
 
+/** @internal */
 export type VisibleObserverFactory = (
   callback: (entries: readonly VisibleObserverEntry[]) => void,
 ) => VisibleObserver;
 
+/** @internal */
 export interface VisibleObserverEntry {
   isIntersecting: boolean;
   target: EventElementLike;
 }
 
+/** @internal */
 export interface ExecutionTriggerOptions {
   importModule: ImportHandlerModule;
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
@@ -50,6 +56,7 @@ export interface ExecutionTriggerOptions {
   visibleObserver?: VisibleObserverFactory;
 }
 
+/** @internal */
 export interface DelegatedEventLifecycleOptions {
   enhancedMutations?: EnhancedMutationLoaderOptions;
   events: readonly string[];
@@ -60,6 +67,7 @@ export interface DelegatedEventLifecycleOptions {
   root: LoaderRoot;
 }
 
+/** @internal */
 export function addLoaderListener(
   target: LoaderLifecycleTarget,
   type: string,
@@ -73,6 +81,7 @@ export function addLoaderListener(
   });
 }
 
+/** @internal */
 export function installDelegatedEventLifecycle(
   options: DelegatedEventLifecycleOptions,
 ): () => void {
@@ -151,6 +160,7 @@ interface PointerCrossingNode extends EventTargetLike {
   contains?: (node: PointerCrossingNode | null) => boolean;
 }
 
+/** @internal */
 export function installExecutionTriggers(
   options: ExecutionTriggerOptions,
   islandSignalScope: IslandSignalScope,

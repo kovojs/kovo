@@ -5,11 +5,13 @@ import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { MutationChangeRecord } from './optimism.js';
 import { definedProps } from './defined-props.js';
 
+/** @internal */
 export interface EnhancedFormLike {
   action: string;
   method?: string;
 }
 
+/** @internal */
 export interface EnhancedMutationFetchOptions {
   body: unknown;
   headers: Record<string, string>;
@@ -18,11 +20,13 @@ export interface EnhancedMutationFetchOptions {
   onUploadProgress?: (progress: UploadProgress) => void;
 }
 
+/** @internal */
 export interface UploadProgress {
   loaded: number;
   total?: number;
 }
 
+/** @internal */
 export interface EnhancedMutationResponseLike {
   headers?: {
     get(name: string): string | null;
@@ -32,6 +36,7 @@ export interface EnhancedMutationResponseLike {
   text(): Promise<string>;
 }
 
+/** @internal */
 export type EnhancedMutationFetch = (
   url: string,
   options: EnhancedMutationFetchOptions,

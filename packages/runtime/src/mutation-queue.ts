@@ -1,5 +1,7 @@
+/** @internal */
 export type MutationTask<Value> = () => Promise<Value> | Value;
 
+/** @internal */
 export class MutationQueue {
   #tails = new Map<string, Promise<unknown>>();
 

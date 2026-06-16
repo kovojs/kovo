@@ -8,10 +8,12 @@ import {
   type ApplyMutationResponseChunksToRuntimeOptions,
 } from './apply-mutation-response.js';
 
+/** @internal */
 export type AppliedDeferredStreamResponseWithRoot = AppliedMutationResponseWithRoot & {
   chunks: AppliedMutationResponseWithRoot[];
 };
 
+/** @internal */
 export type AppliedDeferredStreamResponseToRuntime =
   | (AppliedMutationResponse & { chunks: AppliedMutationResponse[] })
   | AppliedDeferredStreamResponseWithRoot;
@@ -24,11 +26,13 @@ interface ApplyDeferredStreamResponseToRuntimeBaseOptions extends Omit<
   boundary?: string;
 }
 
+/** @internal */
 export type ApplyDeferredStreamResponseToRuntimeOptions =
   ApplyDeferredStreamResponseToRuntimeBaseOptions & {
     root?: MorphRoot | undefined;
   };
 
+/** @internal */
 export function applyDeferredStreamResponseToRuntime(
   options: ApplyDeferredStreamResponseToRuntimeOptions & { root: MorphRoot },
 ): AppliedDeferredStreamResponseWithRoot;

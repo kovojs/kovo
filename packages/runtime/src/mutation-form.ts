@@ -3,6 +3,7 @@ import type { EnhancedFormLike, UploadProgress } from './mutation-fetch.js';
 
 export const enhancedMutationFormSelector = 'form[enhance],form[data-enhance],form[data-mutation]';
 
+/** @internal */
 export interface EnhancedFormElementLike extends EventElementLike, EnhancedFormLike {
   submit?: () => void;
 }

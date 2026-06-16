@@ -9,11 +9,15 @@ import {
 } from './handler-context.js';
 import { applyStateBindings, supportsQueryBindings } from './query-bindings.js';
 
+/** @internal */
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
 
 export type { ElementParamValue, HandlerContext, IslandSignalScope } from './handler-context.js';
 
-/** A client event handler: receives the DOM `event` and a typed island `HandlerContext`. */
+/**
+ * A client event handler: receives the DOM `event` and a typed island `HandlerContext`.
+ * @internal
+ */
 export type ClientHandler<State = unknown, Params = Record<string, ElementParamValue>> = (
   event: Event,
   ctx: HandlerContext<State, Params>,
@@ -44,6 +48,7 @@ export function handler<State = unknown, Params = Record<string, ElementParamVal
 
 const delegatedStateQueues = new WeakMap<EventElementLike, Promise<void>>();
 
+/** @internal */
 export async function dispatchDelegatedEvent(
   event: DelegatedEvent,
   importModule: ImportHandlerModule,

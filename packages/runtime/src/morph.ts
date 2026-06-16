@@ -4,18 +4,22 @@ import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-t
 import { applyResponseFragments } from './response-fragment-apply.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
 
+/** @internal */
 export interface MorphTarget {
   appendHtml?(html: string): void;
   readHtml?(): string;
   replaceWithHtml(html: string): void;
 }
 
+/** @internal */
 export interface MorphRoot {
   findFragmentTarget(target: string): MorphTarget | null;
 }
 
+/** @internal */
 export type MorphFragment = (target: MorphTarget, html: string) => void;
 
+/** @internal */
 export class DomMorphTarget implements MorphTarget {
   constructor(public element: Element) {}
 
@@ -47,6 +51,7 @@ export class DomMorphTarget implements MorphTarget {
   }
 }
 
+/** @internal */
 export class DomMorphRoot implements MorphRoot {
   constructor(private readonly root: FragmentTargetRoot) {}
 
@@ -57,12 +62,15 @@ export class DomMorphRoot implements MorphRoot {
   }
 }
 
+/** @internal */
 export const keyedDomMorph: MorphFragment = (target, html) => {
   target.replaceWithHtml(html);
 };
 
+/** @internal */
 export type StructuralMorphKey = string | number;
 
+/** @internal */
 export interface StructuralMorphBrowserState {
   focused?: boolean;
   islandState?: unknown;
@@ -70,6 +78,12 @@ export interface StructuralMorphBrowserState {
   selection?: { direction?: 'backward' | 'forward' | 'none'; end: number; start: number };
 }
 
+/**
+ * One node in a browser-free structural tree: its `type`, optional `key`,
+ * `props`, `text`, `children`, and captured `browserState`. Used by the
+ * structural-morph reconciler (SPEC.md §9.1) and by hand-written conformance
+ * test helpers that assert keyed reuse across reorder.
+ */
 export interface StructuralMorphNode {
   browserState?: StructuralMorphBrowserState;
   children?: StructuralMorphNode[];
@@ -79,6 +93,7 @@ export interface StructuralMorphNode {
   type: string;
 }
 
+/** @internal */
 export function applyFragments(
   root: MorphRoot,
   fragments: readonly FragmentChunk[],
@@ -100,6 +115,7 @@ export function applyFragments(
  * the current tree is rewritten to the next tree shape while matching
  * sibling keys keep their object identity and browser-owned state across
  * insertion and reorder.
+ * @internal
  */
 export function morphStructuralTree(
   current: StructuralMorphNode,
@@ -117,6 +133,7 @@ export function morphStructuralTree(
   return current;
 }
 
+/** @internal */
 export function morphDomElement(current: Element, next: Element): Element {
   if (!canReuseDomElement(current, next)) {
     current.replaceWith(next);

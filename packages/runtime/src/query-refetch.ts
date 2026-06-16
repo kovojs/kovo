@@ -7,6 +7,7 @@ import { queryWireKey } from './query-store.js';
 import { readQueryChunks } from './wire-parser.js';
 import type { QueryChunk } from './wire-parser.js';
 
+/** @internal */
 export interface QueryRefetchOptions {
   fetch: QueryRefetchFetch;
   /**
@@ -18,6 +19,7 @@ export interface QueryRefetchOptions {
   urlForQuery?: (query: string) => string | undefined;
 }
 
+/** @internal */
 export interface QueryRefetchFetch {
   (
     url: string,
@@ -28,12 +30,14 @@ export interface QueryRefetchFetch {
   ): Promise<QueryRefetchResponse> | QueryRefetchResponse;
 }
 
+/** @internal */
 export interface QueryRefetchResponse {
   ok?: boolean;
   status?: number;
   text(): Promise<string> | string;
 }
 
+/** @internal */
 export interface RefetchQueriesOptions extends QueryRefetchOptions {
   applyQuery?: QueryApplyInterposition;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -42,6 +46,7 @@ export interface RefetchQueriesOptions extends QueryRefetchOptions {
   root?: unknown;
 }
 
+/** @internal */
 export interface RefetchedQueryResponse {
   fragments: [];
   queries: readonly string[];
@@ -63,6 +68,7 @@ interface AppliedRefetchedQueryBody extends RefetchedQueryResponse {
  *
  * @param options - The `queries` to refetch, the `queryStore`, a `fetch`, and apply/plan hooks.
  * @returns The applied query responses.
+ * @internal
  */
 export async function refetchQueries(
   options: RefetchQueriesOptions,
