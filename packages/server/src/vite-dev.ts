@@ -215,8 +215,7 @@ export function shouldHandleKovoAppShellViteRequest(
     routes: app.routes,
   });
 
-  if (match.kind === 'not-found') return false;
-  if (match.kind === 'route') return match.methodAllowed;
+  if (match.kind === 'not-found') return isHtmlNavigationRequest(request);
 
   return true;
 }
@@ -239,6 +238,15 @@ function isUnversionedKovoAppShellClientModuleRequest(url: URL): boolean {
   // During Vite dev, unversioned /c/ URLs must keep falling through to Vite's
   // asset/middleware stack instead of being claimed by app replay.
   return url.pathname.startsWith('/c/') && !url.searchParams.has('v');
+}
+
+function isHtmlNavigationRequest(request: IncomingMessage): boolean {
+  if (request.method !== undefined && request.method !== 'GET' && request.method !== 'HEAD') {
+    return false;
+  }
+
+  const accept = readHeader(request.headers, 'accept')?.toLowerCase() ?? '';
+  return accept.includes('text/html');
 }
 
 /**

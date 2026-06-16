@@ -16,7 +16,8 @@ test('role guard maps unauthorized sessions to a 403 response', async ({ page })
 
   const response = await page.goto('/admin');
   expect(response?.status()).toBe(403);
-  await expect(page.locator('body')).toHaveText('Forbidden');
+  await expect(page.getByRole('heading', { name: 'Access denied' })).toBeVisible();
+  await expect(page.locator('[data-forbidden-shell]')).toHaveText('Access deniedstatus:403');
   await expect(page.locator('[data-secret]')).toHaveCount(0);
 });
 

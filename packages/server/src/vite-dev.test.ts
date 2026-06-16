@@ -29,10 +29,17 @@ describe('server app shell Vite dev seam', () => {
     ).toBe(true);
     expect(
       shouldHandleKovoAppShellViteRequest(request('/products/p1', { method: 'POST' }), app),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldHandleKovoAppShellViteRequest(request('/_m/cart/add', { method: 'POST' }), app),
     ).toBe(true);
+    expect(
+      shouldHandleKovoAppShellViteRequest(
+        request('/missing', { headers: { accept: 'text/html' } }),
+        app,
+      ),
+    ).toBe(true);
+    expect(shouldHandleKovoAppShellViteRequest(request('/missing'), app)).toBe(false);
     expect(shouldHandleKovoAppShellViteRequest(request('/c/dev.client.js?v=r7'), app)).toBe(true);
     expect(shouldHandleKovoAppShellViteRequest(request('/c/dev.client.js'), app)).toBe(false);
     expect(shouldHandleKovoAppShellViteRequest(request('/src/styles.css'), app)).toBe(false);

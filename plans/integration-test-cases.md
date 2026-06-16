@@ -118,19 +118,21 @@ integration harness uniquely proves.
     inline loader script, initial `kovo-query` before the `[kovo-deps]` consumer, rendered body, and
     a full-document semantic snapshot. Proving command:
     `pnpm exec playwright test document-shell.spec.ts custom-document-template.spec.ts http-methods.spec.ts asset-serving.spec.ts client-module-versioning.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
-- [ ] `custom-document-template` / `custom-document-template.spec.ts`: an app document template can
+- [x] `custom-document-template` / `custom-document-template.spec.ts`: an app document template can
       wrap assembled parts but cannot drop loader, query scripts, or body content.
   - SPEC refs: §9.5 request shell.
   - Assertions: custom chrome renders; core assembled parts still present; interaction still works.
-  - Partial evidence: `tests/integration/fixtures/custom-document-template` and
+  - Evidence: `tests/integration/fixtures/custom-document-template` and
     `tests/integration/specs/custom-document-template.spec.ts` verify a custom template wrapping
     assembled `parts.head`, `parts.queryScripts`, and `parts.body`; the response keeps the inline
     loader, custom chrome, body content, and a client handler runs through the preserved loader.
+    `packages/server/src/document.test.ts` verifies malformed `DocumentTemplate` /
+    `DeferredDocumentTemplate` output now rejects omission of `parts.head`, `parts.body`, and
+    non-empty `parts.queryScripts[*]`.
     Proving command:
-    `pnpm exec playwright test document-shell.spec.ts custom-document-template.spec.ts http-methods.spec.ts asset-serving.spec.ts client-module-versioning.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
-  - Gap: left unchecked because the current `DocumentTemplate` API returns an arbitrary string and
-    does not enforce that `parts.head`, `parts.queryScripts`, or `parts.body` are retained; route
-    rendering also has no app-level mechanism to populate non-empty `parts.queryScripts`.
+    `pnpm exec vitest run packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-dev.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app.test.ts packages/server/src/route.test.ts packages/server/src/route-query-guards.test.ts`
+    and
+    `pnpm exec playwright test tests/integration/specs/custom-document-template.spec.ts tests/integration/specs/http-methods.spec.ts tests/integration/specs/not-found-error-shells.spec.ts tests/integration/specs/forbidden-route.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [x] `asset-serving` / `asset-serving.spec.ts`: built `/assets/*` files are served with immutable
       cache headers while app routes still dispatch through the Kovo handler.
   - SPEC refs: §9.5 request shell, `plans/integration-test-suite.md` serve path.
@@ -150,26 +152,29 @@ integration harness uniquely proves.
     headers, successful first-interaction import, and semantic snapshot normalization. Proving
     commands: `pnpm exec vitest run packages/test/src/integration/semantic-snapshot.test.ts` and
     `pnpm exec playwright test document-shell.spec.ts custom-document-template.spec.ts http-methods.spec.ts asset-serving.spec.ts client-module-versioning.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
-- [ ] `http-methods` / `http-methods.spec.ts`: page routes answer GET/HEAD, reject unsupported
+- [x] `http-methods` / `http-methods.spec.ts`: page routes answer GET/HEAD, reject unsupported
       methods with 405, and mutation POSTs are owned by `/_m/`.
   - SPEC refs: §9.5 request shell.
   - Assertions: direct HTTP requests check status/method behavior; browser route still renders.
-  - Partial evidence: `tests/integration/fixtures/http-methods` and
+  - Evidence: `packages/server/src/vite-dev.test.ts` verifies Vite dev request ownership now claims
+    matched page paths even for disallowed methods, while unknown non-navigation paths still fall
+    through. `tests/integration/fixtures/http-methods` and
     `tests/integration/specs/http-methods.spec.ts` verify GET and HEAD route responses, browser
-    route rendering, and mutation POST ownership under `/_m/methods/record`. Proving command:
-    `pnpm exec playwright test document-shell.spec.ts custom-document-template.spec.ts http-methods.spec.ts asset-serving.spec.ts client-module-versioning.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
-  - Gap: left unchecked because the current fixture server uses the Vite dev ownership filter from
-    `shouldHandleKovoAppShellViteRequest`, which intentionally lets disallowed route methods fall
-    through to Vite; `POST /` returns Vite 404 instead of the app-shell 405 even though core shell
-    dispatch records the 405 behavior.
-- [ ] `not-found-error-shells` / `not-found-error-shells.spec.ts`: missing routes, `notFound()`, and
+    route rendering, mutation POST ownership under `/_m/methods/record`, and page-path `POST /`
+    returning app-shell 405 with `Allow: GET, HEAD`. Proving commands: the focused vitest and
+    Playwright commands recorded under `custom-document-template`.
+- [x] `not-found-error-shells` / `not-found-error-shells.spec.ts`: missing routes, `notFound()`, and
       unexpected page errors render the configured safe shells with correct status.
   - SPEC refs: §6.4 `notFound()`, §9.2 unexpected failures, §9.5 error shells.
   - Assertions: 404/500 status; no internal stack text; custom shell semantic snapshot.
-  - Gap: not implemented in this slice because current app-shell support is partial: missing routes
-    can use configured 404 shells, but route-returned `notFound()` is converted to a plain 404 body
-    before document-shell rendering, and route page/render exceptions return the fallback
-    `Internal Server Error` response instead of the configured 500 shell.
+  - Evidence: `packages/server/src/app-document.test.ts` verifies route-returned `notFound()`,
+    route failures, and forbidden guard failures are routed through configured app error shells.
+    `packages/server/src/vite-dev.test.ts` verifies HTML navigation misses are claimed by the app
+    shell without claiming asset-like misses. `tests/integration/fixtures/not-found-error-shells`
+    and `tests/integration/specs/not-found-error-shells.spec.ts` verify missing routes and
+    route-returned `notFound()` render the configured 404 shell, and unexpected route errors render
+    the configured 500 shell without leaking the private error message. Proving commands: the
+    focused vitest and Playwright commands recorded under `custom-document-template`.
 
 ## Mutation wire and forms
 
@@ -597,14 +602,17 @@ integration harness uniquely proves.
     `data-error-code="UNAUTHORIZED"` fragment and leaves `guarded_counter.count = 0`, while the
     signed-in submit morphs the count and updates server truth to 1. Proving command: the Slice I
     Playwright command recorded under `query-args-search`.
-- [ ] `forbidden-route` / `forbidden-route.spec.ts`: authenticated-but-unauthorized route access renders
+- [x] `forbidden-route` / `forbidden-route.spec.ts`: authenticated-but-unauthorized route access renders
       the configured 403 shell with status 403.
   - SPEC refs: §6.5 route/query guard failures, §9.5 error shells.
   - Assertions: status 403; no protected data; semantic snapshot of shell.
-  - Gap: `tests/integration/specs/forbidden-route.spec.ts` was added and the same Playwright command
-    passed on 2026-06-16 for role-based 403/default body and authorized access, but the current app
-    route guard path does not wire `createApp({ errorShells.forbidden })` into guard rendering, so the
-    configured-shell claim remains unchecked.
+  - Evidence: `packages/server/src/app-document.test.ts` verifies route guard forbidden failures are
+    rendered through `createApp({ errorShells.forbidden })` without protected content. Updated
+    `tests/integration/fixtures/forbidden-route` and
+    `tests/integration/specs/forbidden-route.spec.ts` verify authenticated-but-unauthorized access
+    returns status 403 with the configured shell and no `[data-secret]`, while an admin session
+    reaches the guarded page. Proving commands: the focused vitest and Playwright commands recorded
+    under `custom-document-template`.
 - [x] `session-provider-once` / `session-provider-once.spec.ts`: request shell resolves
       `sessionProvider` once before route/query/mutation guards.
   - SPEC refs: §6.5 sessions, §9.5 request shell.

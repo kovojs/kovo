@@ -30,6 +30,13 @@ const adminRoute = route('/admin', {
 
 export default defineFixture({
   app: createApp<AuthSession>({
+    errorShells: {
+      forbidden: ({ status }) => ({
+        body: `<main data-forbidden-shell><h1>Access denied</h1><p>status:${status}</p></main>`,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status,
+      }),
+    },
     routes: [adminRoute],
     sessionProvider: (request) => readSessionCookie(request),
   }),
