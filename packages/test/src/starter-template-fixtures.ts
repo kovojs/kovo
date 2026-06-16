@@ -664,10 +664,6 @@ export async function executeStarterClientTemplate(
       deferredApplications.push(options);
       return { applied: true };
     },
-    applyDeferredStreamResponseToDom(options: unknown) {
-      deferredApplications.push(options);
-      return { applied: true };
-    },
     createQueryStore() {
       return queryStore;
     },

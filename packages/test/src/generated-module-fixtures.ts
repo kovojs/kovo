@@ -323,7 +323,7 @@ export class GeneratedFixtureMorphRoot {
 
 export interface GeneratedRuntimeModule {
   applyCompiledQueryUpdatePlan?: unknown;
-  applyDeferredStreamResponseToDom?: (options: unknown) => unknown;
+  applyDeferredStreamResponseToRuntime?: (options: unknown) => unknown;
   createQueryStore?: () => unknown;
   derive?: unknown;
   handler?: unknown;
@@ -1107,7 +1107,7 @@ export function generatedBootstrapDeferredBehaviorFact(
   bootstrapRuntime: Required<
     Pick<
       GeneratedRuntimeModule,
-      'applyDeferredStreamResponseToDom' | 'createQueryStore' | 'installKovoLoader'
+      'applyDeferredStreamResponseToRuntime' | 'createQueryStore' | 'installKovoLoader'
     >
   >,
 ): GeneratedBootstrapDeferredBehaviorFact {
@@ -1364,7 +1364,7 @@ export function executeGeneratedBootstrapModule(
   runtime: Required<
     Pick<
       GeneratedRuntimeModule,
-      'applyDeferredStreamResponseToDom' | 'createQueryStore' | 'installKovoLoader'
+      'applyDeferredStreamResponseToRuntime' | 'createQueryStore' | 'installKovoLoader'
     >
   >,
 ): ExecuteGeneratedBootstrapModuleResult {
@@ -1388,9 +1388,9 @@ export function executeGeneratedBootstrapModule(
     planModules,
     runtime: {
       ...runtime,
-      applyDeferredStreamResponseToDom(options: unknown) {
+      applyDeferredStreamResponseToRuntime(options: unknown) {
         deferredApplications.push(options);
-        return runtime.applyDeferredStreamResponseToDom(options);
+        return runtime.applyDeferredStreamResponseToRuntime(options);
       },
       createQueryStore() {
         return store;

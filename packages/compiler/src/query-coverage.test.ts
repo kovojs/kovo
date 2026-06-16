@@ -635,7 +635,7 @@ export const CartBadge = component('cart-badge', {
 
     expect(bootstrap.fileName).toBe('generated/app.client.js');
     expect(bootstrap.source).toContain(
-      "import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';",
+      "import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';",
     );
     expect(bootstrap.source).toContain(
       'import { CartBadge$queryUpdatePlans } from "../components/cart/cart-badge.client.js";',
@@ -651,7 +651,7 @@ export const CartBadge = component('cart-badge', {
     expect(bootstrap.source).toContain('enhancedMutations: {');
     expect(bootstrap.source).toContain('queryPlans,');
     expect(bootstrap.source).toContain('export function applyKovoDeferredStreamResponse');
-    expect(bootstrap.source).toContain('return applyDeferredStreamResponseToDom({');
+    expect(bootstrap.source).toContain('return applyDeferredStreamResponseToRuntime({');
     expect(bootstrap.source).toContain('queryPlans,');
     expect(bootstrap.source).toContain('store,');
   });

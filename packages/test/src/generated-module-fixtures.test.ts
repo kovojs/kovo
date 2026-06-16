@@ -775,7 +775,7 @@ export function renderSource() {
   it('projects generated bootstrap deferred application into structured facts', () => {
     const store = {};
     const bootstrapRuntime = {
-      applyDeferredStreamResponseToDom(options: unknown) {
+      applyDeferredStreamResponseToRuntime(options: unknown) {
         const { body, root } = options as {
           body: string;
           root: {
@@ -803,12 +803,12 @@ export function renderSource() {
         {
           emitQueryPlanBootstrapModule: () => ({
             source: `
-import { installKovoLoader, createQueryStore, applyDeferredStreamResponseToDom } from '@kovojs/runtime';
+import { installKovoLoader, createQueryStore, applyDeferredStreamResponseToRuntime } from '@kovojs/runtime';
 import { CartBadge$queryUpdatePlans } from '../components/cart-badge.client.js';
 const queryStore = createQueryStore();
 installKovoLoader({ queryStore, enhancedMutations: { queryPlans: CartBadge$queryUpdatePlans, store: queryStore } });
 export function applyKovoDeferredStreamResponse(body, options) {
-  return applyDeferredStreamResponseToDom({ body, root: options.root });
+  return applyDeferredStreamResponseToRuntime({ body, root: options.root });
 }
 `,
           }),
@@ -1004,7 +1004,7 @@ export function applyKovoDeferredStreamResponse(body, options) {
 
   it('executes generated bootstrap modules with captured loader and deferred hooks', () => {
     const runtime = {
-      applyDeferredStreamResponseToDom(options: unknown) {
+      applyDeferredStreamResponseToRuntime(options: unknown) {
         return { applied: options };
       },
       createQueryStore() {
@@ -1016,12 +1016,12 @@ export function applyKovoDeferredStreamResponse(body, options) {
     };
     const fixture = executeGeneratedBootstrapModule(
       `
-import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 import { Cart$queryUpdatePlans } from '../components/cart.client.js';
 const queryStore = createQueryStore();
 installKovoLoader({ enhancedMutations: { queryPlans: Cart$queryUpdatePlans, store: queryStore }, queryStore });
 export function applyKovoDeferredStreamResponse(body, options) {
-  return applyDeferredStreamResponseToDom({ body, root: options.root, store: queryStore });
+  return applyDeferredStreamResponseToRuntime({ body, root: options.root, store: queryStore });
 }
 `,
       {

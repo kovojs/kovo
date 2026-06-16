@@ -148,7 +148,7 @@ describe('@kovojs/test starter template fixtures', () => {
 
   it('executes the starter browser client template and records loader behavior', async () => {
     const fixture = await executeStarterClientTemplate(`
-import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 
 const store = createQueryStore();
 const queryPlans = {};
@@ -178,7 +178,7 @@ installKovoLoader({
 });
 
 export function applyKovoDeferredStreamResponse(body) {
-  return applyDeferredStreamResponseToDom({ body, root, store });
+  return applyDeferredStreamResponseToRuntime({ body, root, store });
 }
 `);
 
@@ -222,7 +222,7 @@ export function applyKovoDeferredStreamResponse(body) {
   it('projects starter browser client behavior into kovo-check facts', async () => {
     await expect(
       starterClientTemplateBehaviorFact(`
-import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 
 const store = createQueryStore();
 const queryPlans = {};
@@ -253,7 +253,7 @@ installKovoLoader({
 });
 
 export function applyKovoDeferredStreamResponse(body, options = {}) {
-  return applyDeferredStreamResponseToDom({ body, root, store, queryPlans, ...options });
+  return applyDeferredStreamResponseToRuntime({ body, root, store, queryPlans, ...options });
 }
 `),
     ).resolves.toEqual({
@@ -379,7 +379,7 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
     };
     const appSource = "export const App = component('starter-app', { render: () => <main /> });";
     const clientSource = `
-import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 
 const store = createQueryStore();
 const queryPlans = {};
@@ -410,7 +410,7 @@ installKovoLoader({
 });
 
 export function applyKovoDeferredStreamResponse(body, options = {}) {
-  return applyDeferredStreamResponseToDom({ body, root, store, queryPlans, ...options });
+  return applyDeferredStreamResponseToRuntime({ body, root, store, queryPlans, ...options });
 }
 `;
 

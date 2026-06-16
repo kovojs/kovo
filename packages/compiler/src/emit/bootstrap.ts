@@ -32,7 +32,7 @@ export function emitQueryPlanBootstrapModule(
     fileName,
     kind: 'client',
     source: `${compilerIrHeader}
-import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 ${imports ? `${imports}\n` : ''}
 const store = createQueryStore();
 const queryPlans = {
@@ -52,7 +52,7 @@ installKovoLoader({
 });
 
 export function applyKovoDeferredStreamResponse(body, options = {}) {
-  return applyDeferredStreamResponseToDom({
+  return applyDeferredStreamResponseToRuntime({
     body,
     ...(options.boundary ? { boundary: options.boundary } : {}),
     ...(options.morph ? { morph: options.morph } : {}),

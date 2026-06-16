@@ -405,7 +405,7 @@ function renderEntry(entry) {
   return lines.join('\n');
 }
 
-function renderPage(pkg, entries) {
+function renderPage(pkg, entries, entryRel) {
   const groups = [
     { entries: entries.filter((entry) => groupOf(entry.kind) === 'Functions'), title: 'Functions' },
     {
@@ -426,7 +426,7 @@ function renderPage(pkg, entries) {
     '',
     `# ${pkg.name}`,
     '',
-    `Generated from \`packages/${pkg.dir}/src/index.ts\` — ${entries.length} exports, ${documented} documented. Do not edit by hand.`,
+    `Generated from \`${entryRel}\` — ${entries.length} exports, ${documented} documented. Do not edit by hand.`,
     '',
     ...groups.flatMap((group) => [
       `## ${group.title}`,
@@ -438,10 +438,39 @@ function renderPage(pkg, entries) {
     .replace(/\n{3,}/g, '\n\n');
 }
 
+/**
+ * Resolve a package's documented entry from its real `package.json` `exports["."]`
+ * target — never a hard-coded `src/index.ts`, which silently misdocuments packages
+ * whose published `.` entry is a different file (e.g. `@kovojs/drizzle` ships
+ * `src/runtime.ts`). api-ref reads TypeScript source, so when conditional exports
+ * are introduced (plan Phase 3) the `source`/`development` condition is preferred
+ * over the built `dist` target.
+ */
+function resolvePackageEntry(pkg) {
+  const pkgJsonPath = path.join(repoRoot, 'packages', pkg.dir, 'package.json');
+  if (!existsSync(pkgJsonPath)) {
+    throw new Error(
+      `api-ref: package.json missing for ${pkg.name}: ${path.relative(repoRoot, pkgJsonPath)}`,
+    );
+  }
+  const pkgJson = JSON.parse(ts.sys.readFile(pkgJsonPath) ?? '{}');
+  const dot = pkgJson.exports?.['.'];
+  const target =
+    typeof dot === 'string'
+      ? dot
+      : dot && typeof dot === 'object'
+        ? (dot.source ?? dot.development ?? dot.import ?? dot.default)
+        : undefined;
+  if (typeof target !== 'string') {
+    throw new Error(`api-ref: ${pkg.name} has no resolvable "." export in package.json`);
+  }
+  const absPath = path.join(repoRoot, 'packages', pkg.dir, target);
+  return { absPath, repoRelative: path.relative(repoRoot, absPath) };
+}
+
 export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/api') } = {}) {
-  const entryFiles = PACKAGES.map((pkg) =>
-    path.join(repoRoot, 'packages', pkg.dir, 'src/index.ts'),
-  );
+  const resolvedEntries = PACKAGES.map((pkg) => resolvePackageEntry(pkg));
+  const entryFiles = resolvedEntries.map((entry) => entry.absPath);
   for (const file of entryFiles) {
     if (!existsSync(file)) {
       throw new Error(`api-ref: package entry point missing: ${path.relative(repoRoot, file)}`);
@@ -475,7 +504,11 @@ export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/a
     if (entries.length === 0) {
       throw new Error(`api-ref: ${pkg.name} has no exports — wrong entry point?`);
     }
-    await writeFile(path.join(outDir, `${pkg.slug}.md`), `${renderPage(pkg, entries)}\n`, 'utf8');
+    await writeFile(
+      path.join(outDir, `${pkg.slug}.md`),
+      `${renderPage(pkg, entries, resolvedEntries[index].repoRelative)}\n`,
+      'utf8',
+    );
     report.push({
       documented: entries.filter((entry) => entry.doc !== '').length,
       exports: entries.length,

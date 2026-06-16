@@ -118,7 +118,7 @@ the starter's `client.ts` wires it for programmatic use:
 
 ```ts
 import {
-  applyDeferredStreamResponseToDom,
+  applyDeferredStreamResponseToRuntime,
   createQueryStore,
   installKovoLoader,
 } from '@kovojs/runtime';
@@ -126,7 +126,7 @@ import {
 const store = createQueryStore();
 installKovoLoader({ importModule: (s) => import(s), root: document, queryStore: store });
 
-applyDeferredStreamResponseToDom({
+applyDeferredStreamResponseToRuntime({
   body, // the streamed document text
   root: document,
   store, // <kovo-query> chunks land here and run their update plans
