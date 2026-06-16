@@ -369,6 +369,24 @@ borrowing its concrete API/spike detail.
   - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/create-kovo/src/index.test.ts`,
     `pnpm --filter create-kovo run build:dist`, `pnpm exec tsc --noEmit`, and `git diff --check` pass
     after integration.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/alert.tsx` now uses `@kovojs/style`, exports
+    `alertStyles`, accepts `style?: style.StyleInput`, and drops `defineVariants`/`cn` plus the `class`
+    escape hatch. `packages/ui/src/alert.stylex.test.tsx` snapshots default/variant StyleX output,
+    exported style groups, and author-last overrides.
+  - Evidence (partial, 2026-06-16): `packages/ui/registry.json` records Alert's copied-source
+    dependency on `@kovojs/style`; `packages/cli/src/index.kovo-add.test.ts` asserts copied `alert.tsx`
+    contains StyleX imports, `alertStyles`, and typed `style` overrides. The gallery Alert visual
+    fixture and `examples/gallery/src/__snapshots__/demo-fixtures.test.ts.snap` are refreshed with
+    `kv-alert-*` classes and `data-style-src`.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/ui/src/alert.stylex.test.tsx
+    packages/ui/src/badge.stylex.test.tsx packages/ui/src/copy-in.test.ts
+    packages/cli/src/index.kovo-add.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest --run
+    src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.axe.browser.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.visual.browser.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
+    `pnpm exec tsc --noEmit`, and `git diff --check` pass.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

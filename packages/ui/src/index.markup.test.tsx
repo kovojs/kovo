@@ -230,9 +230,9 @@ describe('@kovojs/ui styled package foundation', () => {
         title: 'Billing issue',
         variant: 'danger',
       }),
-    ).toContain('role="alert"><strong class="font-medium">Billing issue</strong>');
+    ).toContain('role="alert"');
     expect(Alert.definition.render({ children: 'Saved.', variant: 'success' })).toContain(
-      'border-emerald-200 bg-emerald-50',
+      'role="status"',
     );
     const skeletonOverride = style.create(
       { root: { height: 16, width: 128 } },

@@ -258,8 +258,6 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   '/components/alert': [
     'role="status"',
     'role="alert"',
-    'border-emerald-200 bg-emerald-50',
-    'border-red-200 bg-red-50',
   ],
   '/components/alert-dialog': [
     'command="show-modal"',

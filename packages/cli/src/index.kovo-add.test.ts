@@ -214,7 +214,9 @@ describe('kovo add', () => {
       const toast = readFileSync(join(outDir, 'toast.tsx'), 'utf8');
       const toolbar = readFileSync(join(outDir, 'toolbar.tsx'), 'utf8');
       expect(alert).toContain('export const Alert = component({');
-      expect(alert).toContain('export const alertClassNames = defineVariants');
+      expect(alert).toContain("import * as style from '@kovojs/style';");
+      expect(alert).toContain('export const alertStyles =');
+      expect(alert).toContain('style?: style.StyleInput');
       expect(autocomplete).toContain('export const Autocomplete = component({');
       expect(autocomplete).toContain('export const autocompleteClassNames = defineVariants');
       expect(badge).toContain('export const Badge = component({');

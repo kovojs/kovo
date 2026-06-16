@@ -69,7 +69,8 @@
       "files": ["src/alert.tsx"],
       "exports": ["Alert"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants"],
+        "@kovojs/headless-ui": [],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

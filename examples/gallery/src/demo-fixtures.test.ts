@@ -895,11 +895,7 @@ describe('gallery demo fixtures', () => {
     const toggleGroup = findFixture('/components/toggle-group');
     const toolbar = findFixture('/components/toolbar');
 
-    expect(alert.html).toContain('data-ui-demo="alert"');
-    expect(alert.html).toContain('role="status"');
-    expect(alert.html).toContain('border-emerald-200 bg-emerald-50');
-    expect(alert.html).toContain('role="alert"');
-    expect(alert.html).toContain('border-red-200 bg-red-50');
+    expect(alert.html).toMatchSnapshot('alert demo html');
 
     expect(button.html).toContain('data-ui-demo="button"');
     expect(button.html).toContain('id="gallery-button-form" data-gallery-form="button"');

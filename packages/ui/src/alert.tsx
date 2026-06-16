@@ -1,42 +1,82 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, defineVariants, type ClassValue } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
 
 export type AlertVariant = 'info' | 'success' | 'warning' | 'danger';
 
 export interface AlertProps {
   children?: string;
-  class?: ClassValue;
   role?: 'alert' | 'status';
+  style?: style.StyleInput;
   title?: string;
   variant?: AlertVariant;
 }
 
-export const alertClassNames = defineVariants({
-  base: 'grid gap-1 rounded-lg border p-4 text-sm',
-  variants: {
-    variant: {
-      danger: 'border-red-200 bg-red-50 text-red-950',
-      info: 'border-sky-200 bg-sky-50 text-sky-950',
-      success: 'border-emerald-200 bg-emerald-50 text-emerald-950',
-      warning: 'border-amber-200 bg-amber-50 text-amber-950',
+const base = style.create(
+  {
+    root: {
+      borderRadius: 8,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      display: 'grid',
+      fontSize: 14,
+      gap: 4,
+      padding: 16,
+    },
+    title: {
+      fontWeight: 500,
     },
   },
-  defaultVariants: {
-    variant: 'info',
-  },
-});
+  { namespace: 'alert', source: 'alert.tsx' },
+);
 
-export const alertClasses = alertClassNames.classes;
+const variants = style.create(
+  {
+    danger: {
+      backgroundColor: '#fef2f2',
+      borderColor: '#fecaca',
+      color: '#450a0a',
+    },
+    info: {
+      backgroundColor: '#f0f9ff',
+      borderColor: '#bae6fd',
+      color: '#082f49',
+    },
+    success: {
+      backgroundColor: '#ecfdf5',
+      borderColor: '#a7f3d0',
+      color: '#022c22',
+    },
+    warning: {
+      backgroundColor: '#fffbeb',
+      borderColor: '#fde68a',
+      color: '#451a03',
+    },
+  },
+  { namespace: 'alertVariant', source: 'alert.tsx' },
+);
+
+export const alertStyles = {
+  base,
+  variants,
+} as const;
+
+export const alertClasses = [
+  style.attrs(base.root, variants.info).class ?? '',
+  style.attrs(variants.success).class ?? '',
+  style.attrs(variants.warning).class ?? '',
+  style.attrs(variants.danger).class ?? '',
+  style.attrs(base.title).class ?? '',
+] as const;
 
 export const Alert = component({
   render(props: AlertProps) {
+    const attrs = style.attrs(base.root, variants[props.variant ?? 'info'], props.style);
+    const titleAttrs = style.attrs(base.title);
+
     return (
-      <div
-        class={cn(alertClassNames({ variant: props.variant }), props.class)}
-        role={props.role ?? 'status'}
-      >
-        {props.title === undefined ? '' : <strong class="font-medium">{props.title}</strong>}
+      <div {...attrs} role={props.role ?? 'status'}>
+        {props.title === undefined ? '' : <strong {...titleAttrs}>{props.title}</strong>}
         <div>{props.children}</div>
       </div>
     );

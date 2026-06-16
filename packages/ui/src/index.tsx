@@ -26,7 +26,7 @@ export {
   checkboxInputClasses,
 } from './checkbox.js';
 export type { CheckboxProps } from './checkbox.js';
-export { Alert, alertClassNames, alertClasses } from './alert.js';
+export { Alert, alertClasses, alertStyles } from './alert.js';
 export type { AlertProps, AlertVariant } from './alert.js';
 export {
   Autocomplete,
