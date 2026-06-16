@@ -41,7 +41,7 @@ export const buttonClassNames = defineVariants({
 
 export const buttonClasses = buttonClassNames.classes;
 
-export const Button = component('button', {
+export const Button = component({
   render(props: ButtonProps) {
     return (
       <button

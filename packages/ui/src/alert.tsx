@@ -29,7 +29,7 @@ export const alertClassNames = defineVariants({
 
 export const alertClasses = alertClassNames.classes;
 
-export const Alert = component('alert', {
+export const Alert = component({
   render(props: AlertProps) {
     return (
       <div

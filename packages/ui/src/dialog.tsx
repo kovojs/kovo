@@ -76,7 +76,7 @@ function dialogState(props: DialogStateProps) {
   };
 }
 
-export const Dialog = component('dialog', {
+export const Dialog = component({
   render(props: DialogProps) {
     const attrs = dialogRootAttributes(dialogState(props));
 
@@ -93,7 +93,7 @@ export const Dialog = component('dialog', {
   },
 });
 
-export const DialogTrigger = component('dialog-trigger', {
+export const DialogTrigger = component({
   render(props: DialogTriggerProps) {
     const attrs = dialogTriggerAttributes({
       ...dialogState(props),
@@ -120,7 +120,7 @@ export const DialogTrigger = component('dialog-trigger', {
   },
 });
 
-export const DialogContent = component('dialog-content', {
+export const DialogContent = component({
   render(props: DialogContentProps) {
     const attrs = dialogContentAttributes({
       ...dialogState(props),
@@ -146,7 +146,7 @@ export const DialogContent = component('dialog-content', {
   },
 });
 
-export const DialogClose = component('dialog-close', {
+export const DialogClose = component({
   render(props: DialogCloseProps) {
     const attrs = dialogCloseAttributes({
       ...dialogState(props),

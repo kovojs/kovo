@@ -57,7 +57,7 @@ export const avatarClasses = avatarClassNames.classes;
 export const avatarImageClasses = avatarImageClassNames.classes;
 export const avatarFallbackClasses = avatarFallbackClassNames.classes;
 
-export const Avatar = component('avatar', {
+export const Avatar = component({
   render(props: AvatarProps) {
     const attrs = avatarRootAttributes({
       ...(props.label === undefined ? {} : { label: props.label }),
@@ -79,7 +79,7 @@ export const Avatar = component('avatar', {
   },
 });
 
-export const AvatarImage = component('avatar-image', {
+export const AvatarImage = component({
   render(props: AvatarImageProps) {
     const attrs = avatarImageAttributes({
       alt: props.alt,
@@ -109,7 +109,7 @@ export const AvatarImage = component('avatar-image', {
   },
 });
 
-export const AvatarFallback = component('avatar-fallback', {
+export const AvatarFallback = component({
   render(props: AvatarFallbackProps) {
     const attrs = avatarFallbackAttributes({
       ...(props.delayMs === undefined ? {} : { delayMs: props.delayMs }),

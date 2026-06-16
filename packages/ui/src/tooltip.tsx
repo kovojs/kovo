@@ -59,7 +59,7 @@ function tooltipState(props: TooltipStateProps) {
   };
 }
 
-export const Tooltip = component('tooltip', {
+export const Tooltip = component({
   render(props: TooltipProps) {
     const attrs = tooltipRootAttributes(tooltipState(props));
 
@@ -76,7 +76,7 @@ export const Tooltip = component('tooltip', {
   },
 });
 
-export const TooltipTrigger = component('tooltip-trigger', {
+export const TooltipTrigger = component({
   render(props: TooltipTriggerProps) {
     const attrs = tooltipTriggerAttributes({
       ...tooltipState(props),
@@ -100,7 +100,7 @@ export const TooltipTrigger = component('tooltip-trigger', {
   },
 });
 
-export const TooltipContent = component('tooltip-content', {
+export const TooltipContent = component({
   render(props: TooltipContentProps) {
     const attrs = tooltipContentAttributes({
       ...tooltipState(props),

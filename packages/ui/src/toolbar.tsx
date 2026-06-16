@@ -61,7 +61,7 @@ export const toolbarClasses = toolbarClassNames.classes;
 export const toolbarItemClasses = toolbarItemClassNames.classes;
 export const toolbarButtonClasses = toolbarButtonClassNames.classes;
 
-export const Toolbar = component('toolbar', {
+export const Toolbar = component({
   render(props: ToolbarProps) {
     const attrs = toolbarRootAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -95,7 +95,7 @@ export const Toolbar = component('toolbar', {
   },
 });
 
-export const ToolbarItem = component('toolbar-item', {
+export const ToolbarItem = component({
   render(props: ToolbarItemProps) {
     const attrs = toolbarItemAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -121,7 +121,7 @@ export const ToolbarItem = component('toolbar-item', {
   },
 });
 
-export const ToolbarButton = component('toolbar-button', {
+export const ToolbarButton = component({
   render(props: ToolbarButtonProps) {
     const attrs = toolbarButtonAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),

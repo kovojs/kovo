@@ -17,7 +17,7 @@ export const progressClassNames = defineVariants({
 
 export const progressClasses = progressClassNames.classes;
 
-export const Progress = component('progress', {
+export const Progress = component({
   render(props: ProgressProps) {
     const attrs = progressRootAttributes({
       ...(props.max === undefined ? {} : { max: props.max }),

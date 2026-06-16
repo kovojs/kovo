@@ -21,7 +21,7 @@ export const separatorClassNames = defineVariants({
 
 export const separatorClasses = separatorClassNames.classes;
 
-export const Separator = component('separator', {
+export const Separator = component({
   render(props: SeparatorProps) {
     const attrs = separatorRootAttributes({
       ...(props.decorative === undefined ? {} : { decorative: props.decorative }),

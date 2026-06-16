@@ -59,7 +59,7 @@ function disclosureState(props: DisclosureStateProps) {
   };
 }
 
-export const Disclosure = component('disclosure', {
+export const Disclosure = component({
   render(props: DisclosureProps) {
     const attrs = disclosureRootAttributes(disclosureState(props));
 
@@ -76,7 +76,7 @@ export const Disclosure = component('disclosure', {
   },
 });
 
-export const DisclosureTrigger = component('disclosure-trigger', {
+export const DisclosureTrigger = component({
   render(props: DisclosureTriggerProps) {
     const attrs = disclosureTriggerAttributes({
       ...disclosureState(props),
@@ -100,7 +100,7 @@ export const DisclosureTrigger = component('disclosure-trigger', {
   },
 });
 
-export const DisclosureContent = component('disclosure-content', {
+export const DisclosureContent = component({
   render(props: DisclosureContentProps) {
     const attrs = disclosureContentAttributes({
       ...disclosureState(props),

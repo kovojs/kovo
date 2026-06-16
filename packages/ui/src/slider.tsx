@@ -86,7 +86,7 @@ export const sliderTrackClasses = sliderTrackClassNames.classes;
 export const sliderRangeClasses = sliderRangeClassNames.classes;
 export const sliderThumbClasses = sliderThumbClassNames.classes;
 
-export const Slider = component('slider', {
+export const Slider = component({
   render(props: SliderProps) {
     const attrs = sliderRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -119,7 +119,7 @@ export const Slider = component('slider', {
   },
 });
 
-export const SliderInput = component('slider-input', {
+export const SliderInput = component({
   render(props: SliderInputProps) {
     const attrs = sliderInputAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
@@ -171,7 +171,7 @@ export const SliderInput = component('slider-input', {
   },
 });
 
-export const SliderTrack = component('slider-track', {
+export const SliderTrack = component({
   render(props: SliderPartProps) {
     const attrs = sliderTrackAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -207,7 +207,7 @@ export const SliderTrack = component('slider-track', {
   },
 });
 
-export const SliderRange = component('slider-range', {
+export const SliderRange = component({
   render(props: SliderPartProps) {
     const attrs = sliderRangeAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -243,7 +243,7 @@ export const SliderRange = component('slider-range', {
   },
 });
 
-export const SliderThumb = component('slider-thumb', {
+export const SliderThumb = component({
   render(props: SliderThumbProps) {
     const attrs = sliderThumbAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),

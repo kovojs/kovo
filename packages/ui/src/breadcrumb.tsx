@@ -34,7 +34,7 @@ export const breadcrumbClasses = [
   breadcrumbSeparatorClassNames,
 ] as const;
 
-export const Breadcrumb = component('breadcrumb', {
+export const Breadcrumb = component({
   render(props: BreadcrumbProps) {
     return (
       <nav aria-label={props.label ?? 'Breadcrumb'} class={cn(breadcrumbClassNames, props.class)}>
@@ -44,13 +44,13 @@ export const Breadcrumb = component('breadcrumb', {
   },
 });
 
-export const BreadcrumbItem = component('breadcrumb-item', {
+export const BreadcrumbItem = component({
   render(props: BreadcrumbPartProps) {
     return <li class={cn(breadcrumbItemClassNames, props.class)}>{props.children}</li>;
   },
 });
 
-export const BreadcrumbLink = component('breadcrumb-link', {
+export const BreadcrumbLink = component({
   render(props: BreadcrumbLinkProps) {
     const current = props.current === true;
 
@@ -69,7 +69,7 @@ export const BreadcrumbLink = component('breadcrumb-link', {
   },
 });
 
-export const BreadcrumbSeparator = component('breadcrumb-separator', {
+export const BreadcrumbSeparator = component({
   render(props: BreadcrumbPartProps) {
     const attrs = separatorRootAttributes();
 

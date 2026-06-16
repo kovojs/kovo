@@ -84,7 +84,7 @@ export const radioGroupItemClasses = radioGroupItemClassNames.classes;
 export const radioGroupRadioClasses = radioGroupRadioClassNames.classes;
 export const radioGroupLabelClasses = radioGroupLabelClassNames.classes;
 
-export const RadioGroup = component('radio-group', {
+export const RadioGroup = component({
   render(props: RadioGroupProps) {
     const attrs = radioGroupRootAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
@@ -124,7 +124,7 @@ export const RadioGroup = component('radio-group', {
   },
 });
 
-export const RadioGroupItem = component('radio-group-item', {
+export const RadioGroupItem = component({
   render(props: RadioGroupItemProps) {
     const attrs = radioGroupItemAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),
@@ -155,7 +155,7 @@ export const RadioGroupItem = component('radio-group-item', {
   },
 });
 
-export const RadioGroupRadio = component('radio-group-radio', {
+export const RadioGroupRadio = component({
   render(props: RadioGroupRadioProps) {
     const attrs = radioGroupRadioAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),
@@ -193,7 +193,7 @@ export const RadioGroupRadio = component('radio-group-radio', {
   },
 });
 
-export const RadioGroupLabel = component('radio-group-label', {
+export const RadioGroupLabel = component({
   render(props: RadioGroupLabelProps) {
     const attrs = radioGroupLabelAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),

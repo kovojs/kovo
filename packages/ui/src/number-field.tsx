@@ -71,7 +71,7 @@ export const numberFieldControlClasses = numberFieldControlClassNames.classes;
 export const numberFieldInputClasses = numberFieldInputClassNames.classes;
 export const numberFieldButtonClasses = numberFieldButtonClassNames.classes;
 
-export const NumberField = component('number-field', {
+export const NumberField = component({
   render(props: NumberFieldProps) {
     const attrs = numberFieldRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -99,7 +99,7 @@ export const NumberField = component('number-field', {
   },
 });
 
-export const NumberFieldControl = component('number-field-control', {
+export const NumberFieldControl = component({
   render(props: NumberFieldProps) {
     const attrs = numberFieldRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -127,7 +127,7 @@ export const NumberFieldControl = component('number-field-control', {
   },
 });
 
-export const NumberFieldInput = component('number-field-input', {
+export const NumberFieldInput = component({
   render(props: NumberFieldInputProps) {
     const attrs = numberFieldInputAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
@@ -171,7 +171,7 @@ export const NumberFieldInput = component('number-field-input', {
   },
 });
 
-export const NumberFieldDecrement = component('number-field-decrement', {
+export const NumberFieldDecrement = component({
   render(props: NumberFieldButtonProps) {
     const attrs = numberFieldDecrementAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -206,7 +206,7 @@ export const NumberFieldDecrement = component('number-field-decrement', {
   },
 });
 
-export const NumberFieldIncrement = component('number-field-increment', {
+export const NumberFieldIncrement = component({
   render(props: NumberFieldButtonProps) {
     const attrs = numberFieldIncrementAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

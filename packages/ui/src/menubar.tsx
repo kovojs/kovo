@@ -96,7 +96,7 @@ export const menubarSubmenuClasses = menubarSubmenuClassNames.classes;
 export const menubarGroupClasses = menubarGroupClassNames.classes;
 export const menubarSeparatorClasses = menubarSeparatorClassNames.classes;
 
-export const Menubar = component('menubar', {
+export const Menubar = component({
   render(props: MenubarProps) {
     const attrs = menubarRootAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -131,7 +131,7 @@ export const Menubar = component('menubar', {
   },
 });
 
-export const MenubarItem = component('menubar-item', {
+export const MenubarItem = component({
   render(props: MenubarItemProps) {
     const attrs = menubarItemAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -172,7 +172,7 @@ export const MenubarItem = component('menubar-item', {
   },
 });
 
-export const MenubarSubmenu = component('menubar-submenu', {
+export const MenubarSubmenu = component({
   render(props: MenubarSubmenuProps) {
     const attrs = menubarSubmenuAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -204,7 +204,7 @@ export const MenubarSubmenu = component('menubar-submenu', {
   },
 });
 
-export const MenubarGroup = component('menubar-group', {
+export const MenubarGroup = component({
   render(props: MenubarGroupProps) {
     const attrs = menubarGroupAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -233,7 +233,7 @@ export const MenubarGroup = component('menubar-group', {
   },
 });
 
-export const MenubarSeparator = component('menubar-separator', {
+export const MenubarSeparator = component({
   render(props: MenubarSeparatorProps) {
     const attrs = menubarSeparatorAttributes(props.id === undefined ? {} : { id: props.id });
 

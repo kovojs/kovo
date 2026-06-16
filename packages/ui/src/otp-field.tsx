@@ -69,7 +69,7 @@ export const otpFieldGroupClasses = otpFieldGroupClassNames.classes;
 export const otpFieldHiddenInputClasses = otpFieldHiddenInputClassNames.classes;
 export const otpFieldInputClasses = otpFieldInputClassNames.classes;
 
-export const OtpField = component('otp-field', {
+export const OtpField = component({
   render(props: OtpFieldProps) {
     const attrs = otpFieldRootAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
@@ -107,13 +107,13 @@ export const OtpField = component('otp-field', {
   },
 });
 
-export const OtpFieldGroup = component('otp-field-group', {
+export const OtpFieldGroup = component({
   render(props: { children?: string; class?: ClassValue }) {
     return <div class={cn(otpFieldGroupClassNames(), props.class)}>{props.children}</div>;
   },
 });
 
-export const OtpFieldHiddenInput = component('otp-field-hidden-input', {
+export const OtpFieldHiddenInput = component({
   render(props: OtpFieldHiddenInputProps) {
     const attrs = otpFieldHiddenInputAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -155,7 +155,7 @@ export const OtpFieldHiddenInput = component('otp-field-hidden-input', {
   },
 });
 
-export const OtpFieldInput = component('otp-field-input', {
+export const OtpFieldInput = component({
   render(props: OtpFieldInputProps) {
     const attrs = otpFieldInputAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

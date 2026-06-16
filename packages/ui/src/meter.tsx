@@ -21,7 +21,7 @@ export const meterClassNames = defineVariants({
 
 export const meterClasses = meterClassNames.classes;
 
-export const Meter = component('meter', {
+export const Meter = component({
   render(props: MeterProps) {
     const attrs = meterRootAttributes({
       ...(props.high === undefined ? {} : { high: props.high }),

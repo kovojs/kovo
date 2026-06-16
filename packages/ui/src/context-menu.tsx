@@ -101,7 +101,7 @@ export const contextMenuItemClasses = contextMenuItemClassNames.classes;
 export const contextMenuGroupClasses = contextMenuGroupClassNames.classes;
 export const contextMenuSeparatorClasses = contextMenuSeparatorClassNames.classes;
 
-export const ContextMenu = component('context-menu', {
+export const ContextMenu = component({
   render(props: ContextMenuProps) {
     const attrs = contextMenuRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -125,7 +125,7 @@ export const ContextMenu = component('context-menu', {
   },
 });
 
-export const ContextMenuTrigger = component('context-menu-trigger', {
+export const ContextMenuTrigger = component({
   render(props: ContextMenuTriggerProps) {
     const attrs = contextMenuTriggerAttributes({
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
@@ -159,7 +159,7 @@ export const ContextMenuTrigger = component('context-menu-trigger', {
   },
 });
 
-export const ContextMenuContent = component('context-menu-content', {
+export const ContextMenuContent = component({
   render(props: ContextMenuContentProps) {
     const attrs = contextMenuContentAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -190,7 +190,7 @@ export const ContextMenuContent = component('context-menu-content', {
   },
 });
 
-export const ContextMenuItem = component('context-menu-item', {
+export const ContextMenuItem = component({
   render(props: ContextMenuItemProps) {
     const attrs = contextMenuItemAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -224,7 +224,7 @@ export const ContextMenuItem = component('context-menu-item', {
   },
 });
 
-export const ContextMenuGroup = component('context-menu-group', {
+export const ContextMenuGroup = component({
   render(props: ContextMenuGroupProps) {
     const attrs = contextMenuGroupAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -251,7 +251,7 @@ export const ContextMenuGroup = component('context-menu-group', {
   },
 });
 
-export const ContextMenuSeparator = component('context-menu-separator', {
+export const ContextMenuSeparator = component({
   render(props: ContextMenuSeparatorProps) {
     const attrs = contextMenuSeparatorAttributes(props.id === undefined ? {} : { id: props.id });
 

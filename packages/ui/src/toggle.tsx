@@ -29,7 +29,7 @@ export const toggleClassNames = defineVariants({
 
 export const toggleClasses = toggleClassNames.classes;
 
-export const Toggle = component('toggle', {
+export const Toggle = component({
   render(props: ToggleProps) {
     const attrs = toggleRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

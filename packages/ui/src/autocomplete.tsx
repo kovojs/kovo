@@ -96,7 +96,7 @@ export const autocompleteListClasses = autocompleteListClassNames.classes;
 export const autocompleteOptionClasses = autocompleteOptionClassNames.classes;
 export const autocompleteValueClasses = autocompleteValueClassNames.classes;
 
-export const Autocomplete = component('autocomplete', {
+export const Autocomplete = component({
   render(props: AutocompleteProps) {
     const attrs = autocompleteRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -130,7 +130,7 @@ export const Autocomplete = component('autocomplete', {
   },
 });
 
-export const AutocompleteInput = component('autocomplete-input', {
+export const AutocompleteInput = component({
   render(props: AutocompleteInputProps) {
     const attrs = autocompleteInputAttributes({
       ...(props.autocomplete === undefined ? {} : { autocomplete: props.autocomplete }),
@@ -183,7 +183,7 @@ export const AutocompleteInput = component('autocomplete-input', {
   },
 });
 
-export const AutocompleteList = component('autocomplete-list', {
+export const AutocompleteList = component({
   render(props: AutocompleteListProps) {
     const attrs = autocompleteListAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -221,7 +221,7 @@ export const AutocompleteList = component('autocomplete-list', {
   },
 });
 
-export const AutocompleteOption = component('autocomplete-option', {
+export const AutocompleteOption = component({
   render(props: AutocompleteOptionProps) {
     const attrs = autocompleteOptionAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -261,7 +261,7 @@ export const AutocompleteOption = component('autocomplete-option', {
   },
 });
 
-export const AutocompleteValue = component('autocomplete-value', {
+export const AutocompleteValue = component({
   render(props: AutocompleteValueProps) {
     const attrs = autocompleteValueAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

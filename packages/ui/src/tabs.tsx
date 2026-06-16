@@ -83,7 +83,7 @@ export const tabsListClasses = tabsListClassNames.classes;
 export const tabsTriggerClasses = tabsTriggerClassNames.classes;
 export const tabsPanelClasses = tabsPanelClassNames.classes;
 
-export const Tabs = component('tabs', {
+export const Tabs = component({
   render(props: TabsProps) {
     const attrs = tabsRootAttributes({
       ...(props.activationMode === undefined ? {} : { activationMode: props.activationMode }),
@@ -110,7 +110,7 @@ export const Tabs = component('tabs', {
   },
 });
 
-export const TabsList = component('tabs-list', {
+export const TabsList = component({
   render(props: TabsListProps) {
     const attrs = tabsListAttributes({
       ...(props.activationMode === undefined ? {} : { activationMode: props.activationMode }),
@@ -146,7 +146,7 @@ export const TabsList = component('tabs-list', {
   },
 });
 
-export const TabsTrigger = component('tabs-trigger', {
+export const TabsTrigger = component({
   render(props: TabsTriggerProps) {
     const attrs = tabsTriggerAttributes({
       ...(props.activationMode === undefined ? {} : { activationMode: props.activationMode }),
@@ -183,7 +183,7 @@ export const TabsTrigger = component('tabs-trigger', {
   },
 });
 
-export const TabsPanel = component('tabs-panel', {
+export const TabsPanel = component({
   render(props: TabsPanelProps) {
     const attrs = tabsPanelAttributes({
       ...(props.activationMode === undefined ? {} : { activationMode: props.activationMode }),

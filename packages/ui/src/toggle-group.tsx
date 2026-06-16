@@ -69,7 +69,7 @@ export const toggleGroupClasses = toggleGroupClassNames.classes;
 export const toggleGroupItemClasses = toggleGroupItemClassNames.classes;
 export const toggleGroupButtonClasses = toggleGroupButtonClassNames.classes;
 
-export const ToggleGroup = component('toggle-group', {
+export const ToggleGroup = component({
   render(props: ToggleGroupProps) {
     const attrs = toggleGroupRootAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -103,7 +103,7 @@ export const ToggleGroup = component('toggle-group', {
   },
 });
 
-export const ToggleGroupItem = component('toggle-group-item', {
+export const ToggleGroupItem = component({
   render(props: ToggleGroupItemProps) {
     const attrs = toggleGroupItemAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -133,7 +133,7 @@ export const ToggleGroupItem = component('toggle-group-item', {
   },
 });
 
-export const ToggleGroupButton = component('toggle-group-button', {
+export const ToggleGroupButton = component({
   render(props: ToggleGroupButtonProps) {
     const attrs = toggleGroupButtonAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),

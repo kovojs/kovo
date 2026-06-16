@@ -150,7 +150,7 @@ export const commandCloseClasses = commandCloseClassNames.classes;
 export const commandEmptyClasses = commandEmptyClassNames.classes;
 export const commandValueClasses = commandValueClassNames.classes;
 
-export const Command = component('command', {
+export const Command = component({
   render(props: CommandProps) {
     const attrs = commandRootAttributes(toCommandState(props));
 
@@ -169,7 +169,7 @@ export const Command = component('command', {
   },
 });
 
-export const CommandTrigger = component('command-trigger', {
+export const CommandTrigger = component({
   render(props: CommandTriggerProps) {
     const attrs = commandTriggerAttributes({
       ...toCommandState(props),
@@ -199,7 +199,7 @@ export const CommandTrigger = component('command-trigger', {
   },
 });
 
-export const CommandDialog = component('command-dialog', {
+export const CommandDialog = component({
   render(props: CommandDialogProps) {
     const attrs = commandDialogAttributes({
       ...toCommandState(props),
@@ -225,7 +225,7 @@ export const CommandDialog = component('command-dialog', {
   },
 });
 
-export const CommandInput = component('command-input', {
+export const CommandInput = component({
   render(props: CommandInputProps) {
     const attrs = commandInputAttributes({
       ...(props.autocomplete === undefined ? {} : { autocomplete: props.autocomplete }),
@@ -265,7 +265,7 @@ export const CommandInput = component('command-input', {
   },
 });
 
-export const CommandListbox = component('command-listbox', {
+export const CommandListbox = component({
   render(props: CommandListboxProps) {
     const attrs = commandListboxAttributes({
       ...toCommandState(props),
@@ -289,7 +289,7 @@ export const CommandListbox = component('command-listbox', {
   },
 });
 
-export const CommandItem = component('command-item', {
+export const CommandItem = component({
   render(props: CommandItemProps) {
     const attrs = commandItemAttributes({
       ...toCommandState(props),
@@ -320,7 +320,7 @@ export const CommandItem = component('command-item', {
   },
 });
 
-export const CommandClose = component('command-close', {
+export const CommandClose = component({
   render(props: CommandCloseProps) {
     const attrs = commandCloseAttributes({
       ...toCommandState(props),
@@ -343,7 +343,7 @@ export const CommandClose = component('command-close', {
   },
 });
 
-export const CommandEmpty = component('command-empty', {
+export const CommandEmpty = component({
   render(props: CommandEmptyProps) {
     const attrs = commandEmptyAttributes({
       ...toCommandState(props),
@@ -363,7 +363,7 @@ export const CommandEmpty = component('command-empty', {
   },
 });
 
-export const CommandValue = component('command-value', {
+export const CommandValue = component({
   render(props: CommandValueProps) {
     return (
       <span class={cn(commandValueClassNames(), props.class)} id={props.id}>

@@ -26,7 +26,7 @@ export const badgeClassNames = defineVariants({
 
 export const badgeClasses = badgeClassNames.classes;
 
-export const Badge = component('badge', {
+export const Badge = component({
   render(props: BadgeProps) {
     return (
       <span class={cn(badgeClassNames({ variant: props.variant }), props.class)}>

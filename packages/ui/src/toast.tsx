@@ -92,7 +92,7 @@ export const toastDescriptionClasses = toastDescriptionClassNames.classes;
 export const toastActionClasses = toastActionClassNames.classes;
 export const toastCloseClasses = toastCloseClassNames.classes;
 
-export const ToastViewport = component('toast-viewport', {
+export const ToastViewport = component({
   render(props: ToastViewportProps) {
     const attrs = toastViewportAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -117,7 +117,7 @@ export const ToastViewport = component('toast-viewport', {
   },
 });
 
-export const Toast = component('toast', {
+export const Toast = component({
   render(props: ToastProps) {
     const attrs = toastRootAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
@@ -149,7 +149,7 @@ export const Toast = component('toast', {
   },
 });
 
-export const ToastTitle = component('toast-title', {
+export const ToastTitle = component({
   render(props: ToastPartProps) {
     const attrs = toastTitleAttributes(props.id === undefined ? {} : { id: props.id });
 
@@ -165,7 +165,7 @@ export const ToastTitle = component('toast-title', {
   },
 });
 
-export const ToastDescription = component('toast-description', {
+export const ToastDescription = component({
   render(props: ToastPartProps) {
     const attrs = toastDescriptionAttributes(props.id === undefined ? {} : { id: props.id });
 
@@ -181,7 +181,7 @@ export const ToastDescription = component('toast-description', {
   },
 });
 
-export const ToastAction = component('toast-action', {
+export const ToastAction = component({
   render(props: ToastActionProps) {
     const attrs = toastActionAttributes({
       ...(props.actionValue === undefined ? {} : { actionValue: props.actionValue }),
@@ -210,7 +210,7 @@ export const ToastAction = component('toast-action', {
   },
 });
 
-export const ToastClose = component('toast-close', {
+export const ToastClose = component({
   render(props: ToastCloseProps) {
     const attrs = toastCloseAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

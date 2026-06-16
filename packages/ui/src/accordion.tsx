@@ -98,7 +98,7 @@ function accordionItemState(props: AccordionItemProps) {
   };
 }
 
-export const Accordion = component('accordion', {
+export const Accordion = component({
   render(props: AccordionProps) {
     const attrs = accordionRootAttributes(accordionState(props));
 
@@ -115,7 +115,7 @@ export const Accordion = component('accordion', {
   },
 });
 
-export const AccordionItem = component('accordion-item', {
+export const AccordionItem = component({
   render(props: AccordionItemProps) {
     const attrs = accordionItemAttributes(accordionItemState(props));
 
@@ -132,7 +132,7 @@ export const AccordionItem = component('accordion-item', {
   },
 });
 
-export const AccordionHeader = component('accordion-header', {
+export const AccordionHeader = component({
   render(props: AccordionHeaderProps) {
     const attrs = accordionHeaderAttributes({
       ...accordionItemState(props),
@@ -153,7 +153,7 @@ export const AccordionHeader = component('accordion-header', {
   },
 });
 
-export const AccordionTrigger = component('accordion-trigger', {
+export const AccordionTrigger = component({
   render(props: AccordionTriggerProps) {
     const attrs = accordionTriggerAttributes({
       ...accordionItemState(props),
@@ -178,7 +178,7 @@ export const AccordionTrigger = component('accordion-trigger', {
   },
 });
 
-export const AccordionContent = component('accordion-content', {
+export const AccordionContent = component({
   render(props: AccordionContentProps) {
     const attrs = accordionContentAttributes({
       ...accordionItemState(props),

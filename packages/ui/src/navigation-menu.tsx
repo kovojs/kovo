@@ -125,7 +125,7 @@ export const navigationMenuLinkClasses = navigationMenuLinkClassNames.classes;
 export const navigationMenuViewportClasses = navigationMenuViewportClassNames.classes;
 export const navigationMenuIndicatorClasses = navigationMenuIndicatorClassNames.classes;
 
-export const NavigationMenu = component('navigation-menu', {
+export const NavigationMenu = component({
   render(props: NavigationMenuProps) {
     const attrs = navigationMenuRootAttributes({
       ...toNavigationState(props),
@@ -154,7 +154,7 @@ export const NavigationMenu = component('navigation-menu', {
   },
 });
 
-export const NavigationMenuList = component('navigation-menu-list', {
+export const NavigationMenuList = component({
   render(props: NavigationMenuListProps) {
     const attrs = navigationMenuListAttributes({
       ...toNavigationState(props),
@@ -177,7 +177,7 @@ export const NavigationMenuList = component('navigation-menu-list', {
   },
 });
 
-export const NavigationMenuItem = component('navigation-menu-item', {
+export const NavigationMenuItem = component({
   render(props: NavigationMenuItemProps) {
     const attrs = navigationMenuItemAttributes({
       ...toNavigationState(props),
@@ -201,7 +201,7 @@ export const NavigationMenuItem = component('navigation-menu-item', {
   },
 });
 
-export const NavigationMenuTrigger = component('navigation-menu-trigger', {
+export const NavigationMenuTrigger = component({
   render(props: NavigationMenuTriggerProps) {
     const attrs = navigationMenuTriggerAttributes({
       ...toNavigationState(props),
@@ -237,7 +237,7 @@ export const NavigationMenuTrigger = component('navigation-menu-trigger', {
   },
 });
 
-export const NavigationMenuContent = component('navigation-menu-content', {
+export const NavigationMenuContent = component({
   render(props: NavigationMenuContentProps) {
     const attrs = navigationMenuContentAttributes({
       ...toNavigationState(props),
@@ -263,7 +263,7 @@ export const NavigationMenuContent = component('navigation-menu-content', {
   },
 });
 
-export const NavigationMenuLink = component('navigation-menu-link', {
+export const NavigationMenuLink = component({
   render(props: NavigationMenuLinkProps) {
     const attrs = navigationMenuLinkAttributes({
       ...toNavigationState(props),
@@ -297,7 +297,7 @@ export const NavigationMenuLink = component('navigation-menu-link', {
   },
 });
 
-export const NavigationMenuViewport = component('navigation-menu-viewport', {
+export const NavigationMenuViewport = component({
   render(props: NavigationMenuPartProps) {
     const attrs = navigationMenuViewportAttributes(toNavigationState(props));
 
@@ -315,7 +315,7 @@ export const NavigationMenuViewport = component('navigation-menu-viewport', {
   },
 });
 
-export const NavigationMenuIndicator = component('navigation-menu-indicator', {
+export const NavigationMenuIndicator = component({
   render(props: NavigationMenuPartProps) {
     const attrs = navigationMenuIndicatorAttributes(toNavigationState(props));
 

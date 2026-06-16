@@ -92,7 +92,7 @@ function alertDialogState(props: AlertDialogStateProps) {
   };
 }
 
-export const AlertDialog = component('alert-dialog', {
+export const AlertDialog = component({
   render(props: AlertDialogProps) {
     const attrs = alertDialogRootAttributes(alertDialogState(props));
 
@@ -109,7 +109,7 @@ export const AlertDialog = component('alert-dialog', {
   },
 });
 
-export const AlertDialogTrigger = component('alert-dialog-trigger', {
+export const AlertDialogTrigger = component({
   render(props: AlertDialogTriggerProps) {
     const attrs = alertDialogTriggerAttributes({
       ...alertDialogState(props),
@@ -136,7 +136,7 @@ export const AlertDialogTrigger = component('alert-dialog-trigger', {
   },
 });
 
-export const AlertDialogContent = component('alert-dialog-content', {
+export const AlertDialogContent = component({
   render(props: AlertDialogContentProps) {
     const attrs = alertDialogContentAttributes({
       ...alertDialogState(props),
@@ -162,7 +162,7 @@ export const AlertDialogContent = component('alert-dialog-content', {
   },
 });
 
-export const AlertDialogCancel = component('alert-dialog-cancel', {
+export const AlertDialogCancel = component({
   render(props: AlertDialogCancelProps) {
     const attrs = alertDialogCancelAttributes({
       ...alertDialogState(props),
@@ -189,7 +189,7 @@ export const AlertDialogCancel = component('alert-dialog-cancel', {
   },
 });
 
-export const AlertDialogAction = component('alert-dialog-action', {
+export const AlertDialogAction = component({
   render(props: AlertDialogActionProps) {
     const attrs = alertDialogActionAttributes({
       ...alertDialogState(props),

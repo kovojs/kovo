@@ -30,7 +30,7 @@ export const switchInputClassNames = defineVariants({
 export const switchClasses = switchClassNames.classes;
 export const switchInputClasses = switchInputClassNames.classes;
 
-export const Switch = component('switch', {
+export const Switch = component({
   render(props: SwitchProps) {
     const attrs = switchRootAttributes({
       checked: props.checked ?? false,

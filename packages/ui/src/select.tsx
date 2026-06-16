@@ -101,7 +101,7 @@ export const selectContentClasses = selectContentClassNames.classes;
 export const selectItemClasses = selectItemClassNames.classes;
 export const selectValueClasses = selectValueClassNames.classes;
 
-export const Select = component('select', {
+export const Select = component({
   render(props: SelectProps) {
     const attrs = selectRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -133,7 +133,7 @@ export const Select = component('select', {
   },
 });
 
-export const SelectTrigger = component('select-trigger', {
+export const SelectTrigger = component({
   render(props: SelectTriggerProps) {
     const attrs = selectTriggerAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
@@ -177,7 +177,7 @@ export const SelectTrigger = component('select-trigger', {
   },
 });
 
-export const SelectHiddenInput = component('select-hidden-input', {
+export const SelectHiddenInput = component({
   render(props: SelectHiddenInputProps) {
     const attrs = selectHiddenInputAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -200,7 +200,7 @@ export const SelectHiddenInput = component('select-hidden-input', {
   },
 });
 
-export const SelectContent = component('select-content', {
+export const SelectContent = component({
   render(props: SelectContentProps) {
     const attrs = selectContentAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -236,7 +236,7 @@ export const SelectContent = component('select-content', {
   },
 });
 
-export const SelectItem = component('select-item', {
+export const SelectItem = component({
   render(props: SelectItemProps) {
     const attrs = selectItemAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -273,7 +273,7 @@ export const SelectItem = component('select-item', {
   },
 });
 
-export const SelectValue = component('select-value', {
+export const SelectValue = component({
   render(props: SelectValueProps) {
     const attrs = selectValueAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

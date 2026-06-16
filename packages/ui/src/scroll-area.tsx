@@ -88,7 +88,7 @@ export const scrollAreaScrollbarClasses = scrollAreaScrollbarClassNames.classes;
 export const scrollAreaThumbClasses = scrollAreaThumbClassNames.classes;
 export const scrollAreaCornerClasses = scrollAreaCornerClassNames.classes;
 
-export const ScrollArea = component('scroll-area', {
+export const ScrollArea = component({
   render(props: ScrollAreaProps) {
     const attrs = scrollAreaRootAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),
@@ -111,7 +111,7 @@ export const ScrollArea = component('scroll-area', {
   },
 });
 
-export const ScrollAreaViewport = component('scroll-area-viewport', {
+export const ScrollAreaViewport = component({
   render(props: ScrollAreaViewportProps) {
     const attrs = scrollAreaViewportAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
@@ -146,7 +146,7 @@ export const ScrollAreaViewport = component('scroll-area-viewport', {
   },
 });
 
-export const ScrollAreaScrollbar = component('scroll-area-scrollbar', {
+export const ScrollAreaScrollbar = component({
   render(props: ScrollAreaScrollbarProps) {
     const attrs = scrollAreaScrollbarAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),
@@ -177,7 +177,7 @@ export const ScrollAreaScrollbar = component('scroll-area-scrollbar', {
   },
 });
 
-export const ScrollAreaThumb = component('scroll-area-thumb', {
+export const ScrollAreaThumb = component({
   render(props: ScrollAreaThumbProps) {
     const attrs = scrollAreaThumbAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),
@@ -206,7 +206,7 @@ export const ScrollAreaThumb = component('scroll-area-thumb', {
   },
 });
 
-export const ScrollAreaCorner = component('scroll-area-corner', {
+export const ScrollAreaCorner = component({
   render(props: ScrollAreaCornerProps) {
     const attrs = scrollAreaCornerAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),

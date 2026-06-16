@@ -45,7 +45,7 @@ export const drawerContentClassNames = defineVariants({
 
 export const drawerContentClasses = drawerContentClassNames.classes;
 
-export const Drawer = component('drawer', {
+export const Drawer = component({
   render(props: DrawerProps) {
     const open = props.open === true;
     const side = props.side ?? 'bottom';

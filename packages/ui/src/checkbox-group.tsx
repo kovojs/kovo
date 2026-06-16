@@ -85,7 +85,7 @@ export const checkboxGroupItemClasses = checkboxGroupItemClassNames.classes;
 export const checkboxGroupControlClasses = checkboxGroupControlClassNames.classes;
 export const checkboxGroupLabelClasses = checkboxGroupLabelClassNames.classes;
 
-export const CheckboxGroup = component('checkbox-group', {
+export const CheckboxGroup = component({
   render(props: CheckboxGroupProps) {
     const attrs = checkboxGroupRootAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -126,7 +126,7 @@ export const CheckboxGroup = component('checkbox-group', {
   },
 });
 
-export const CheckboxGroupItem = component('checkbox-group-item', {
+export const CheckboxGroupItem = component({
   render(props: CheckboxGroupItemProps) {
     const attrs = checkboxGroupItemAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -158,7 +158,7 @@ export const CheckboxGroupItem = component('checkbox-group-item', {
   },
 });
 
-export const CheckboxGroupControl = component('checkbox-group-control', {
+export const CheckboxGroupControl = component({
   render(props: CheckboxGroupControlProps) {
     const attrs = checkboxGroupControlAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),
@@ -197,7 +197,7 @@ export const CheckboxGroupControl = component('checkbox-group-control', {
   },
 });
 
-export const CheckboxGroupLabel = component('checkbox-group-label', {
+export const CheckboxGroupLabel = component({
   render(props: CheckboxGroupLabelProps) {
     const attrs = checkboxGroupLabelAttributes({
       ...(props.activeValue === undefined ? {} : { activeValue: props.activeValue }),

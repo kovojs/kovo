@@ -59,7 +59,7 @@ function popoverState(props: PopoverStateProps) {
   };
 }
 
-export const Popover = component('popover', {
+export const Popover = component({
   render(props: PopoverProps) {
     const attrs = popoverRootAttributes(popoverState(props));
 
@@ -76,7 +76,7 @@ export const Popover = component('popover', {
   },
 });
 
-export const PopoverTrigger = component('popover-trigger', {
+export const PopoverTrigger = component({
   render(props: PopoverTriggerProps) {
     const attrs = popoverTriggerAttributes({
       ...popoverState(props),
@@ -102,7 +102,7 @@ export const PopoverTrigger = component('popover-trigger', {
   },
 });
 
-export const PopoverContent = component('popover-content', {
+export const PopoverContent = component({
   render(props: PopoverContentProps) {
     const attrs = popoverContentAttributes({
       ...popoverState(props),

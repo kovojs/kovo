@@ -57,9 +57,17 @@ function parseImports(source) {
   return results;
 }
 
-/** Exported `component('name', …)` declarations in a component file. */
+/** Convert an exported component binding to its derived DOM leaf name. */
+function bindingToLeafName(binding) {
+  return binding
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
+}
+
+/** Exported `component({ … })` definitions in a component file. */
 function parseExportedComponents(source) {
-  const re = /export const (\w+) = component\(/g;
+  const re = /export const (\w+) = component\s*\(\s*\{/g;
   const names = [];
   let match;
   while ((match = re.exec(source)) !== null) names.push(match[1]);
@@ -79,6 +87,8 @@ for (const file of files) {
   const name = file.replace(/\.tsx$/, '');
   const source = readFileSync(path.join(srcDir, file), 'utf8');
   const imports = parseImports(source);
+  const exportedComponents = parseExportedComponents(source);
+  const exportedLeafNames = new Set(exportedComponents.map(bindingToLeafName));
 
   const headlessUiSymbols = new Set();
   const serverSymbols = new Set();
@@ -107,11 +117,21 @@ for (const file of files) {
     // Non-@kovojs (e.g. type-only TS lib) imports are not tracked here.
   }
 
+  if (!exportedComponents.length) {
+    findings.push(`${file}: does not export any component({ ... }) definitions`);
+  } else if (!exportedLeafNames.has(name)) {
+    findings.push(
+      `${file}: registry name "${name}" is not derived from an exported component binding (${sorted(
+        exportedComponents,
+      ).join(', ')})`,
+    );
+  }
+
   components.push({
     name,
-    title: parseExportedComponents(source)[0] ?? name,
+    title: exportedComponents[0] ?? name,
     files: [`src/${file}`],
-    exports: parseExportedComponents(source),
+    exports: exportedComponents,
     dependencies: {
       '@kovojs/headless-ui': sorted(headlessUiSymbols),
       ...(coreSymbols.size ? { '@kovojs/core': sorted(coreSymbols) } : {}),

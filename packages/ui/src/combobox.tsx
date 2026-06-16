@@ -94,7 +94,7 @@ export const comboboxListboxClasses = comboboxListboxClassNames.classes;
 export const comboboxOptionClasses = comboboxOptionClassNames.classes;
 export const comboboxValueClasses = comboboxValueClassNames.classes;
 
-export const Combobox = component('combobox', {
+export const Combobox = component({
   render(props: ComboboxProps) {
     const attrs = comboboxRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -127,7 +127,7 @@ export const Combobox = component('combobox', {
   },
 });
 
-export const ComboboxInput = component('combobox-input', {
+export const ComboboxInput = component({
   render(props: ComboboxInputProps) {
     const attrs = comboboxInputAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
@@ -177,7 +177,7 @@ export const ComboboxInput = component('combobox-input', {
   },
 });
 
-export const ComboboxListbox = component('combobox-listbox', {
+export const ComboboxListbox = component({
   render(props: ComboboxListboxProps) {
     const attrs = comboboxListboxAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -214,7 +214,7 @@ export const ComboboxListbox = component('combobox-listbox', {
   },
 });
 
-export const ComboboxOption = component('combobox-option', {
+export const ComboboxOption = component({
   render(props: ComboboxOptionProps) {
     const attrs = comboboxOptionAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -252,7 +252,7 @@ export const ComboboxOption = component('combobox-option', {
   },
 });
 
-export const ComboboxValue = component('combobox-value', {
+export const ComboboxValue = component({
   render(props: ComboboxValueProps) {
     const attrs = comboboxValueAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

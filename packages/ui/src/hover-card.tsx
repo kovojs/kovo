@@ -61,7 +61,7 @@ function hoverCardState(props: HoverCardStateProps) {
   };
 }
 
-export const HoverCard = component('hover-card', {
+export const HoverCard = component({
   render(props: HoverCardProps) {
     const attrs = hoverCardRootAttributes(hoverCardState(props));
 
@@ -78,7 +78,7 @@ export const HoverCard = component('hover-card', {
   },
 });
 
-export const HoverCardTrigger = component('hover-card-trigger', {
+export const HoverCardTrigger = component({
   render(props: HoverCardTriggerProps) {
     const attrs = hoverCardTriggerAttributes({
       ...hoverCardState(props),
@@ -106,7 +106,7 @@ export const HoverCardTrigger = component('hover-card-trigger', {
   },
 });
 
-export const HoverCardContent = component('hover-card-content', {
+export const HoverCardContent = component({
   render(props: HoverCardContentProps) {
     const attrs = hoverCardContentAttributes({
       ...hoverCardState(props),

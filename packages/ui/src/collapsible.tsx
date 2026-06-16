@@ -59,7 +59,7 @@ function collapsibleState(props: CollapsibleStateProps) {
   };
 }
 
-export const Collapsible = component('collapsible', {
+export const Collapsible = component({
   render(props: CollapsibleProps) {
     const attrs = collapsibleRootAttributes(collapsibleState(props));
 
@@ -77,7 +77,7 @@ export const Collapsible = component('collapsible', {
   },
 });
 
-export const CollapsibleTrigger = component('collapsible-trigger', {
+export const CollapsibleTrigger = component({
   render(props: CollapsibleTriggerProps) {
     const attrs = collapsibleTriggerAttributes({
       ...collapsibleState(props),
@@ -99,7 +99,7 @@ export const CollapsibleTrigger = component('collapsible-trigger', {
   },
 });
 
-export const CollapsibleContent = component('collapsible-content', {
+export const CollapsibleContent = component({
   render(props: CollapsibleContentProps) {
     const attrs = collapsibleContentAttributes({
       ...collapsibleState(props),

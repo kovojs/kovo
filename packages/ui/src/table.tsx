@@ -43,7 +43,7 @@ export const tableClasses = [
   tableCaptionClassNames,
 ] as const;
 
-export const Table = component('table', {
+export const Table = component({
   render(props: TableProps) {
     return (
       <div class={cn(tableWrapperClassNames, props.wrapperClass)}>
@@ -60,25 +60,25 @@ export const Table = component('table', {
   },
 });
 
-export const TableHead = component('table-head', {
+export const TableHead = component({
   render(props: TableSectionProps) {
     return tablePart('thead', { class: cn(tableHeadClassNames, props.class) }, props.children);
   },
 });
 
-export const TableBody = component('table-body', {
+export const TableBody = component({
   render(props: TableSectionProps) {
     return tablePart('tbody', { class: cn(tableBodyClassNames, props.class) }, props.children);
   },
 });
 
-export const TableRow = component('table-row', {
+export const TableRow = component({
   render(props: TableSectionProps) {
     return tablePart('tr', { class: cn(tableRowClassNames, props.class) }, props.children);
   },
 });
 
-export const TableHeaderCell = component('table-header-cell', {
+export const TableHeaderCell = component({
   render(props: TableCellProps) {
     return tablePart(
       'th',
@@ -92,7 +92,7 @@ export const TableHeaderCell = component('table-header-cell', {
   },
 });
 
-export const TableCell = component('table-cell', {
+export const TableCell = component({
   render(props: TableCellProps) {
     return tablePart(
       'td',

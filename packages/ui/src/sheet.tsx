@@ -137,13 +137,13 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
   );
 }
 
-export const Sheet = component('sheet', {
+export const Sheet = component({
   render(props: SheetProps) {
     return renderDialogPanel(props, 'right');
   },
 });
 
-export const Drawer = component('drawer', {
+export const Drawer = component({
   render(props: DrawerProps) {
     return renderDialogPanel(props, 'bottom');
   },

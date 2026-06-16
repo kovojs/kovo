@@ -99,7 +99,7 @@ export const dropdownMenuItemClasses = dropdownMenuItemClassNames.classes;
 export const dropdownMenuGroupClasses = dropdownMenuGroupClassNames.classes;
 export const dropdownMenuSeparatorClasses = dropdownMenuSeparatorClassNames.classes;
 
-export const DropdownMenu = component('dropdown-menu', {
+export const DropdownMenu = component({
   render(props: DropdownMenuProps) {
     const attrs = dropdownMenuRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -122,7 +122,7 @@ export const DropdownMenu = component('dropdown-menu', {
   },
 });
 
-export const DropdownMenuTrigger = component('dropdown-menu-trigger', {
+export const DropdownMenuTrigger = component({
   render(props: DropdownMenuTriggerProps) {
     const attrs = dropdownMenuTriggerAttributes({
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
@@ -153,7 +153,7 @@ export const DropdownMenuTrigger = component('dropdown-menu-trigger', {
   },
 });
 
-export const DropdownMenuContent = component('dropdown-menu-content', {
+export const DropdownMenuContent = component({
   render(props: DropdownMenuContentProps) {
     const attrs = dropdownMenuContentAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -181,7 +181,7 @@ export const DropdownMenuContent = component('dropdown-menu-content', {
   },
 });
 
-export const DropdownMenuItem = component('dropdown-menu-item', {
+export const DropdownMenuItem = component({
   render(props: DropdownMenuItemProps) {
     const attrs = dropdownMenuItemAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -214,7 +214,7 @@ export const DropdownMenuItem = component('dropdown-menu-item', {
   },
 });
 
-export const DropdownMenuGroup = component('dropdown-menu-group', {
+export const DropdownMenuGroup = component({
   render(props: DropdownMenuGroupProps) {
     const attrs = dropdownMenuGroupAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -240,7 +240,7 @@ export const DropdownMenuGroup = component('dropdown-menu-group', {
   },
 });
 
-export const DropdownMenuSeparator = component('dropdown-menu-separator', {
+export const DropdownMenuSeparator = component({
   render(props: DropdownMenuSeparatorProps) {
     const attrs = dropdownMenuSeparatorAttributes(props.id === undefined ? {} : { id: props.id });
 

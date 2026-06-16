@@ -36,7 +36,7 @@ export const checkboxInputClassNames = defineVariants({
 export const checkboxClasses = checkboxClassNames.classes;
 export const checkboxInputClasses = checkboxInputClassNames.classes;
 
-export const Checkbox = component('checkbox', {
+export const Checkbox = component({
   render(props: CheckboxProps) {
     const attrs = checkboxRootAttributes({
       checked: props.checked ?? false,

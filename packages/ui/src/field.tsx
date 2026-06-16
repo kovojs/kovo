@@ -168,7 +168,7 @@ export const fieldErrorClasses = fieldErrorClassNames.classes;
 export const fieldsetClasses = fieldsetClassNames.classes;
 export const fieldsetLegendClasses = fieldsetLegendClassNames.classes;
 
-export const Field = component('field', {
+export const Field = component({
   render(props: FieldProps) {
     const attrs = fieldRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -191,7 +191,7 @@ export const Field = component('field', {
   },
 });
 
-export const FieldLabel = component('field-label', {
+export const FieldLabel = component({
   render(props: FieldLabelProps) {
     const attrs = fieldLabelAttributes({
       ...(props.controlId === undefined ? {} : { controlId: props.controlId }),
@@ -216,7 +216,7 @@ export const FieldLabel = component('field-label', {
   },
 });
 
-export const FieldControl = component('field-control', {
+export const FieldControl = component({
   render(props: FieldControlProps) {
     const attrs = fieldControlAttributes({
       ...(props.autoComplete === undefined ? {} : { autoComplete: props.autoComplete }),
@@ -260,7 +260,7 @@ export const FieldControl = component('field-control', {
   },
 });
 
-export const FieldTextarea = component('field-textarea', {
+export const FieldTextarea = component({
   render(props: FieldTextareaProps) {
     const attrs = fieldControlAttributes({
       ...(props.autoComplete === undefined ? {} : { autoComplete: props.autoComplete }),
@@ -303,7 +303,7 @@ export const FieldTextarea = component('field-textarea', {
   },
 });
 
-export const FieldSelect = component('field-select', {
+export const FieldSelect = component({
   render(props: FieldSelectProps) {
     const attrs = fieldControlAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
@@ -337,7 +337,7 @@ export const FieldSelect = component('field-select', {
   },
 });
 
-export const FieldSelectOption = component('field-select-option', {
+export const FieldSelectOption = component({
   render(props: FieldSelectOptionProps) {
     return (
       <option
@@ -352,7 +352,7 @@ export const FieldSelectOption = component('field-select-option', {
   },
 });
 
-export const FieldDescription = component('field-description', {
+export const FieldDescription = component({
   render(props: FieldMessageProps) {
     const attrs = fieldDescriptionAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -377,7 +377,7 @@ export const FieldDescription = component('field-description', {
   },
 });
 
-export const FieldError = component('field-error', {
+export const FieldError = component({
   render(props: FieldMessageProps) {
     const attrs = fieldErrorAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
@@ -403,7 +403,7 @@ export const FieldError = component('field-error', {
   },
 });
 
-export const Fieldset = component('fieldset', {
+export const Fieldset = component({
   render(props: FieldsetProps) {
     const attrs = fieldsetRootAttributes({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
@@ -435,7 +435,7 @@ export const Fieldset = component('fieldset', {
   },
 });
 
-export const FieldsetLegend = component('fieldset-legend', {
+export const FieldsetLegend = component({
   render(props: FieldsetLegendProps) {
     const attrs = fieldsetLegendAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
