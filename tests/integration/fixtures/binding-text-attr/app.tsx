@@ -50,6 +50,7 @@ const homeRoute = route('/', {
     const card = await readCard(request.db);
     const rendered = await renderCard(request.db);
     return `${renderQueryScript({ name: 'card', value: card })}
+    <script type="module" src="/client.ts"></script>
     <main>
       <kovo-fragment target="binding-card">${rendered}</kovo-fragment>
       ${renderStateIsland()}

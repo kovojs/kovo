@@ -478,7 +478,7 @@ function elementBelongsToQueryKey(
   if (!queryKey) return true;
 
   const closestQueryHost = element.closest?.('[kovo-deps]');
-  if (!closestQueryHost) return false;
+  if (!closestQueryHost) return true;
 
   return readDeps(closestQueryHost.getAttribute('kovo-deps')).includes(queryKey);
 }

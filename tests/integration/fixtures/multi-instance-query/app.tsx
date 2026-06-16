@@ -72,6 +72,7 @@ const homeRoute = route('/', {
 
     return `${renderQueryScript({ key: 'product:p1', name: 'product', value: p1.value })}
     ${renderQueryScript({ key: 'product:p2', name: 'product', value: p2.value })}
+    <script type="module" src="/client.ts"></script>
     <main>
       <kovo-fragment target="product-p1">${await renderCard(request.db, 'p1')}</kovo-fragment>
       <kovo-fragment target="product-p2">${await renderCard(request.db, 'p2')}</kovo-fragment>

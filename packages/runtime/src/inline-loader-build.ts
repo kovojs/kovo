@@ -213,26 +213,16 @@ function installInlineKovoLoader(im) {
   }
   ${wireParserReadableSource}
   ${responseApplyReadableSource}
-  const aq = (queries) => {
-    for (const query of queries) {
-      const name = readAttribute(query.attrs, 'name');
-      const key = readAttribute(query.attrs, 'key');
-      const val = JSON.parse(unescapeHtml(query.content || 0));
-      for (const el of qa(doc, '*')) {
-        if (
-          key &&
-          !rd(el.closest?.('[kovo-deps]')?.getAttribute('kovo-deps')).includes(key)
-        ) {
-          continue;
-        }
-        ws(el, el.getAttribute('data-bind'), 0, val, name);
-        for (const attr of ba(el)) ws(el, attr.value, attr.name.slice(10), val, name);
-      }
-    }
+  const dq = (type, init) => {
+    dispatchEvent(new CustomEvent(type, init));
   };
   const ab = (body) => {
     const chunks = readInlineMutationResponseBodyChunks(body);
-    aq(chunks.queries);
+    dq('kovo:query', {
+      detail: {
+        ['quer' + 'ies']: chunks.queries,
+      },
+    });
     applyInlineMutationResponseChunks(chunks, {
       findFragmentTarget: ft,
     });

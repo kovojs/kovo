@@ -318,19 +318,22 @@ integration harness uniquely proves.
     `tests/integration/specs/multi-instance-query.spec.ts` verify two initial
     `script[kovo-query="product"][key="product:p*"]` instances coexist, a mutation response emits
     only `<kovo-query name="product" key="product:p1">` with no `product-p1`/`product-p2` fragment,
-    the inline loader applies the keyed query chunk only to the `kovo-deps="product:p1"` consumer,
-    `product:p2` remains at distinct server/UI truth, its DOM identity is preserved, DB truth is
-    checked, and the semantic page is snapshotted. Runtime coverage in
+    the generated inline loader dispatches the query chunk to shared `kovo:query` hydration, the
+    keyed update applies only to the `kovo-deps="product:p1"` consumer, `product:p2` remains at
+    distinct server/UI truth, its DOM identity is preserved, DB truth is checked, and the semantic
+    page is snapshotted. Runtime coverage in
     `packages/runtime/src/query-apply.test.ts` verifies canonical instance-key plan lookup and
     `kovo-deps` scoping for decoded query chunks; inline parity coverage in
     `packages/runtime/src/inline-loader-response-apply-runtime.test.ts` verifies the generated
-    bootstrap skips non-matching keyed consumers while staying within the SPEC §4.4 budget. Proving
-    commands: `pnpm exec vitest run packages/runtime/src/query-apply.test.ts
+    bootstrap dispatches query chunks to shared hydration while staying within the SPEC §4.4 budget.
+    Proving commands: `pnpm exec vitest run packages/runtime/src/inline-loader-artifact-minifier.test.ts
+    packages/runtime/src/query-apply.test.ts packages/runtime/src/query-events.test.ts
     packages/runtime/src/inline-loader-response-apply-runtime.test.ts
     packages/runtime/src/inline-loader-build.test.ts`; `pnpm --filter @kovojs/runtime run
-    check:inline-loader`; `pnpm exec playwright test
-    tests/integration/specs/multi-instance-query.spec.ts --config
-    tests/integration/playwright.config.ts --workers=1`.
+    check:inline-loader`; `pnpm --filter @kovojs/integration-tests exec playwright test
+    specs/binding-text-attr.spec.ts specs/derive-binding.spec.ts specs/multi-instance-query.spec.ts
+    specs/stamp-list-insert-remove.spec.ts specs/stamp-list-reorder.spec.ts --config
+    playwright.config.ts --workers=1`.
 - [x] `shared-query-consumers` / `shared-query-consumers.spec.ts`: a single query value ships once and
       updates multiple islands consuming the same `kovo-deps` key.
   - SPEC refs: §4.2 query data ships once, §10.4 optimism keyed to queries.

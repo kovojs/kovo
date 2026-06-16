@@ -1,6 +1,7 @@
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
 import { createQueryStore } from './index.js';
 import type { InlineSourceInstall } from './inline-loader-test-utils.js';
+import { applyInlineQueryEventToRuntime } from './query-events.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 interface InlineResponseApplyAssertions {
@@ -75,7 +76,9 @@ export async function expectInlineResponseApplyParity(
   const originals = {
     DOMParser: globalRecord.DOMParser,
     FormData: globalRecord.FormData,
+    CustomEvent: globalRecord.CustomEvent,
     addEventListener: globalRecord.addEventListener,
+    dispatchEvent: globalRecord.dispatchEvent,
     document: globalRecord.document,
     fetch: globalRecord.fetch,
     importModule: globalRecord.__kovoInlineImport,
@@ -138,7 +141,7 @@ export async function expectInlineResponseApplyParity(
       attributes: [{ name: 'data-bind:aria-label', value: 'product.stock' }],
       textContent: '',
       closest(selector: string) {
-        return selector === '[kovo-deps]' ? scopedDeps('product>p1') : null;
+        return selector === '[kovo-deps]' ? scopedDeps('product:product>p1') : null;
       },
       getAttribute(name: string) {
         return name === 'data-bind' ? null : null;
@@ -181,8 +184,21 @@ export async function expectInlineResponseApplyParity(
     globalRecord.FormData = function FormData() {
       return {};
     };
+    globalRecord.CustomEvent = class CustomEvent {
+      detail: unknown;
+      type: string;
+
+      constructor(type: string, init: { detail?: unknown } = {}) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    };
     globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
       listeners.set(type, listener);
+    };
+    globalRecord.dispatchEvent = (event: { type: string }) => {
+      listeners.get(event.type)?.(event);
+      return true;
     };
     globalRecord.document = {
       getElementById(id: string) {
@@ -196,6 +212,9 @@ export async function expectInlineResponseApplyParity(
         return null;
       },
       querySelectorAll(selector: string) {
+        if (selector === '[data-bind]') {
+          return inlineBindings.filter((binding) => binding.getAttribute('data-bind') !== null);
+        }
         if (selector === '*') return inlineBindings;
         return selector === '[kovo-deps]' ? [] : [];
       },
@@ -210,6 +229,12 @@ export async function expectInlineResponseApplyParity(
       vi.fn(async () => ({})),
       globalRecord,
     );
+    listeners.set('kovo:query', (event) => {
+      applyInlineQueryEventToRuntime(event, {
+        root: globalRecord.document,
+        store: createQueryStore(),
+      });
+    });
     listeners.get('submit')?.({
       preventDefault: vi.fn(),
       target: {
@@ -257,9 +282,11 @@ export async function expectInlineResponseApplyParity(
     });
   } finally {
     Object.assign(globalRecord, {
+      CustomEvent: originals.CustomEvent,
       DOMParser: originals.DOMParser,
       FormData: originals.FormData,
       addEventListener: originals.addEventListener,
+      dispatchEvent: originals.dispatchEvent,
       document: originals.document,
       fetch: originals.fetch,
     });

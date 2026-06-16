@@ -70,7 +70,10 @@ describe('inline loader minified artifact', () => {
       'const dq=(type,init)=>{dispatchEvent(new CustomEvent(type,init));};',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body),{dispatchQueryEvent:dq,findFragmentTarget:ft,});',
+      "dq('kovo:query',{detail:{['quer'+'ies']:chunks.qs,},});",
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'applyInlineMutationResponseChunks(chunks,{findFragmentTarget:ft,});',
     );
     expect(inlineKovoLoaderInstallerSource).toContain('function m(c,n)');
     expect(inlineKovoLoaderInstallerSource).toContain(
@@ -81,7 +84,7 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('innerHTML=html');
     expect(inlineKovoLoaderInstallerSource).not.toContain('applyResponseChunks');
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'detail:{queries:chunks.queries.map((query)=>({attrs:query.attrs,content:query.content})),}',
+      "detail:{['quer'+'ies']:chunks.qs,}",
     );
   });
 });
