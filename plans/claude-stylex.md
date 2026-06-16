@@ -182,6 +182,18 @@ borrowing its concrete API/spike detail.
       `@layer`/priority buckets, not single-file source order** (splitting invariant (b) — hard to
       retrofit). _Evidence:_ `pnpm --filter @kovojs/style test`; a fixture proving two atoms in separate
       files resolve correctly regardless of link order.
+  - Evidence (partial, 2026-06-16): `packages/style` added as `@kovojs/style` with TS-native
+    `create`/`attrs`/`props`/`defineVars`/`createTheme`/`raw`/`firstThatWorks`/`keyframes`,
+    provenance-prefixed atoms, `data-style-src`, and priority-layer CSS emission.
+  - Evidence (partial, 2026-06-16): `pnpm --filter @kovojs/style test` covers property-level last-wins
+    merge, raw inline escape serialization, readable atomic class generation, `@layer` priority buckets,
+    cross-file priority order, typed token vars, and theme override classes.
+  - Evidence (partial, 2026-06-16): `pnpm exec tsc --noEmit`,
+    `pnpm exec vitest --run scripts/public-packages.test.mjs`, and
+    `pnpm --filter @kovojs/style run build:dist` pass for the new package and package registration.
+  - [ ] Port the broader upstream StyleX shared/runtime fixture set before checking Phase 1 complete.
+  - [ ] Replace the current curated priority-property subset with the full forked
+    `property-priorities` table before checking Phase 1 complete.
 - [ ] **Phase 2 — Compiler integration + readable output.** Re-home the extraction transform in
       `packages/compiler`; emit provenance-prefixed classes + `data-style-src`; **build and persist the
       rule→usage attribution map** (atom → referencing module/route/fragment/package, splitting invariant

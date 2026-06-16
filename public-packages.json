@@ -63,12 +63,23 @@
       "kind": "library"
     },
     {
+      "name": "@kovojs/style",
+      "dir": "style",
+      "visibility": "public",
+      "kind": "library",
+      "apiRef": {
+        "order": 6,
+        "slug": "style",
+        "description": "StyleX-inspired typed styling: atomic style objects, attrs/props merging, CSS variables, and theme classes."
+      }
+    },
+    {
       "name": "@kovojs/better-auth",
       "dir": "better-auth",
       "visibility": "public",
       "kind": "library",
       "apiRef": {
-        "order": 6,
+        "order": 7,
         "slug": "better-auth",
         "description": "Better Auth adapter: typed session/sign-in/up/out mutations, authed/role guards, and the redirect-protocol mount."
       }
@@ -79,7 +90,7 @@
       "visibility": "public",
       "kind": "build-tool",
       "apiRef": {
-        "order": 7,
+        "order": 8,
         "slug": "compiler",
         "description": "Build/codegen surface: app-graph derivation, component compilation, fixpoint/render-equivalence assertions, and the Vite plugin."
       }
@@ -90,7 +101,7 @@
       "visibility": "public",
       "kind": "cli",
       "apiRef": {
-        "order": 8,
+        "order": 9,
         "slug": "cli",
         "description": "Programmatic verifiers behind the kovo CLI: kovoCheck and kovoExplain over the compiler's app graph."
       }
