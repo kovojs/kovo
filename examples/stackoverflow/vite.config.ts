@@ -7,11 +7,28 @@ export const soViteConfig = defineConfig({
   build: {
     manifest: true,
     rollupOptions: {
+      // The in-browser backend's public exports (installBackend/vote) are only
+      // referenced by string from `on:*` attributes, so nothing in the module
+      // graph imports them; keep entry signatures so they are not treeshaken.
+      preserveEntrySignatures: 'strict',
       input: {
         tailwind: 'src/styles.css',
+        // The in-browser backend (PGlite + the interactive Kovo app) bundled as a
+        // browser entry; the static export references its hashed URL so the export
+        // can serve its own mutation POSTs. See browser-backend.ts.
+        'browser-backend': 'src/browser-backend.ts',
       },
       output: {
+        // PGlite's Emscripten/Node glue reads a few `process.*` fields at module
+        // eval time. Define a minimal browser `process` before any chunk runs so
+        // the in-browser backend bundle loads in a sandboxed iframe.
+        banner:
+          'globalThis.process=globalThis.process||{env:{NODE_ENV:"production"},argv:[],platform:"browser",type:"renderer",version:"",versions:{},cwd:function(){return"/"},nextTick:function(f){queueMicrotask(f)},binding:function(){return{}}};',
         assetFileNames: 'assets/[name][extname]',
+        // Stable entry name so the static export can reference the in-browser
+        // backend at a fixed URL (`/assets/browser-backend.js`) without manifest
+        // plumbing. (PGlite's own wasm/data chunks keep their default names.)
+        entryFileNames: 'assets/[name].js',
       },
     },
   },

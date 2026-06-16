@@ -14,6 +14,29 @@ export function score(value: number): string {
   );
 }
 
+// SPEC.md §9.5 / KV229: an exportable upvote island. A static export's documents
+// cannot reference a server `/_m/*` endpoint, so this is NOT an enhance form — it
+// is an `on:click` handler (browser-backend.ts#vote) that runs the real voteUp
+// mutation against the in-browser PGlite and morphs the re-rendered region back
+// in. `data-question-id` carries the vote target to the handler.
+const VOTE_HANDLER = '/assets/browser-backend.js#vote';
+
+export function voteButton(questionId: string, value: number): string {
+  return (
+    <button
+      type="button"
+      on:click={VOTE_HANDLER}
+      data-question-id={questionId}
+      aria-label="Upvote"
+      class="flex w-12 shrink-0 flex-col items-center rounded-md py-1 text-slate-500 hover:bg-orange-50 hover:text-orange-600"
+    >
+      <span class="text-xs leading-none">&#9650;</span>
+      <span class="text-base font-semibold tabular-nums text-slate-700">{value}</span>
+      <span class="text-[10px] uppercase tracking-wide">votes</span>
+    </button>
+  );
+}
+
 export function renderSoShell(body: string): string {
   return (
     <div class="min-h-screen bg-slate-50 text-slate-900">
