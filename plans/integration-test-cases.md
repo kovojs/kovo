@@ -507,19 +507,40 @@ integration harness uniquely proves.
   - Assertions: direct request receives 308; canonical route renders once followed.
   - Evidence: same Playwright command passed on 2026-06-16; `tests/integration/specs/trailing-slash-308.spec.ts`
     asserts direct 308 `Location` and followed canonical route rendering.
-- [ ] `speculation-rules-opt-in` / `speculation-rules-opt-in.spec.ts`: only routes declaring prefetch
+- [x] `speculation-rules-opt-in` / `speculation-rules-opt-in.spec.ts`: only routes declaring prefetch
       emit speculation rules, and routes default to no speculation script.
   - SPEC refs: §8 Speculation Rules.
   - Assertions: opted-in page includes one `type="speculationrules"` script; default page does not.
-- [ ] `view-transition-names` / `view-transition-names.spec.ts`: matching route templates emit stable
+  - Evidence: added `tests/integration/fixtures/speculation-rules-opt-in/app.tsx` and
+    `tests/integration/specs/speculation-rules-opt-in.spec.ts`; the default route renders with no
+    speculation script, while the opted-in route emits exactly one `type="speculationrules"` tag
+    containing the route-owned conservative prerender URLs. Proving command:
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/speculation-rules-opt-in.spec.ts specs/view-transition-names.spec.ts specs/bfcache-hygiene.spec.ts --config playwright.config.ts --workers=1`.
+- [x] `view-transition-names` / `view-transition-names.spec.ts`: matching route templates emit stable
       `view-transition-name` props for cross-document transitions.
   - SPEC refs: §8 View Transitions, KV239.
   - Assertions: source/destination pages expose matching names; duplicate static names remain a
     compiler test outside this browser case.
+  - Evidence: added `tests/integration/fixtures/view-transition-names/` and
+    `tests/integration/specs/view-transition-names.spec.ts`; the catalog and detail route documents
+    both emit matching static `view-transition-name` CSS (`product-photo`, `product-title`) through
+    the public fixture compiler/render path, and the browser navigation preserves those emitted
+    names on both sides of the document load. Proving command: same Playwright command recorded
+    under `speculation-rules-opt-in`.
 - [ ] `bfcache-hygiene` / `bfcache-hygiene.spec.ts`: navigating away/back does not rely on unload and
       refetch/optimistic state resumes from server truth.
   - SPEC refs: §8 bfcache hygiene, §9.3 refetch.
   - Assertions: `pageshow.persisted` when supported; no stale pending optimism after back.
+  - Partial evidence: added `tests/integration/fixtures/bfcache-hygiene/app.tsx` and
+    `tests/integration/specs/bfcache-hygiene.spec.ts`; the public inline-loader route path
+    registers no `unload`/`beforeunload` listeners during page boot and enhanced mutation fetches
+    carry `keepalive: true`, both verified in-browser via init-script instrumentation. Proving
+    command: same Playwright command recorded under `speculation-rules-opt-in`.
+  - Gap: left unchecked because the public app/render path still ships the minified inline loader
+    from `packages/runtime/src/inline-loader.ts`, which does not currently emit the runtime
+    package's `pagehide` optimism cleanup or focus/visibility typed-read refetch lifecycle hooks;
+    without those browser-path hooks there is no honest integration proof yet for
+    `pageshow.persisted` recovery or stale-optimism discard after Back/Forward navigation.
 
 ## Auth, guards, sessions, and authorization audits
 
