@@ -87,7 +87,15 @@ export interface ComponentExplain {
   name: string;
   platformSubstitutions?: readonly PlatformSubstitutionExplain[];
   queries?: readonly string[];
+  styleRules?: readonly StyleRuleExplain[];
   triggers?: readonly TriggerExplain[];
+}
+
+/** @internal */
+export interface StyleRuleExplain {
+  className: string;
+  source: string;
+  styleRef: string;
 }
 
 /** @internal */

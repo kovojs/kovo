@@ -29,7 +29,7 @@ export interface CompileComponentOptions {
  */
 export type ComponentGraphFact = Pick<
   ComponentExplain,
-  'disambiguatedDomName' | 'domName' | 'fragments' | 'name' | 'queries'
+  'disambiguatedDomName' | 'domName' | 'fragments' | 'name' | 'queries' | 'styleRules'
 >;
 
 /**

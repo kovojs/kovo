@@ -16,6 +16,7 @@ import type {
   RegistryGraphInput,
   RegistryTypeFactOptions,
 } from './types.js';
+import type { StyleRuleUsage } from './css.js';
 
 /**
  * Derive an app-level component/registry graph from the per-component facts produced by
@@ -79,6 +80,7 @@ export function componentGraphFact(
   domName: string,
   model: ComponentModuleModel,
   fragmentTargets: readonly string[],
+  styleRuleUsages: readonly StyleRuleUsage[] = [],
 ): ComponentGraphFact {
   const queries = componentQueryNames(model);
 
@@ -87,6 +89,15 @@ export function componentGraphFact(
     ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
     name: componentName,
     ...(queries.length === 0 ? {} : { queries }),
+    ...(styleRuleUsages.length === 0
+      ? {}
+      : {
+          styleRules: styleRuleUsages.map(({ className, source, styleRef }) => ({
+            className,
+            source,
+            styleRef,
+          })),
+        }),
   };
 }
 

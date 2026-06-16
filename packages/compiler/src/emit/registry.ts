@@ -51,6 +51,7 @@ export function emitRegistryModule(options: EmitRegistryModuleOptions): string {
     ...(options.registryFacts?.components ?? []),
   ]);
   const stylesheetLines = options.cssAssets.map(componentStylesheetLine).join('\n');
+  const styleRuleLines = options.cssAssets.flatMap(componentStyleRuleLines).join('\n');
   const queryRegistryLines = registryTypeFactLines(options.registryFacts?.queries);
   const mutationRegistryLines = registryTypeFactLines(options.registryFacts?.mutations);
   const routeRegistryLines = routeRegistryFactLines(options.registryFacts?.routes);
@@ -80,6 +81,10 @@ ${queryUpdatePlanLines}
 
 export interface ComponentStylesheets {
 ${stylesheetLines}
+}
+
+export interface ComponentStyleRules {
+${styleRuleLines}
 }
 
 export interface ComponentRegistry {
@@ -138,6 +143,21 @@ function componentStylesheetLine(asset: ComponentCssAsset): string {
       ? 'readonly []'
       : `readonly [${asset.fragmentTargets.map((target) => `'${target}'`).join(', ')}]`;
   return `  '${asset.componentName}': { href: '${asset.href}'; sourceFileName: '${asset.sourceFileName}'; fragmentTargets: ${fragmentTargets}; };`;
+}
+
+function componentStyleRuleLines(asset: ComponentCssAsset): string[] {
+  return (asset.styleRuleUsages ?? [])
+    .slice()
+    .sort(
+      (left, right) =>
+        left.className.localeCompare(right.className) ||
+        left.styleRef.localeCompare(right.styleRef) ||
+        left.source.localeCompare(right.source),
+    )
+    .map(
+      (usage) =>
+        `  '${usage.className}': { component: '${asset.componentName}'; source: '${usage.source}'; styleRef: '${usage.styleRef}'; moduleFileName: '${usage.moduleFileName}'; };`,
+    );
 }
 
 function registryTypeFactLines(facts: RegistryTypeFacts | undefined): string {

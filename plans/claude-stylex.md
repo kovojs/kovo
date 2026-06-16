@@ -222,8 +222,16 @@ borrowing its concrete API/spike detail.
     `pnpm exec tsc --noEmit`, and `pnpm --filter @kovojs/compiler run build:dist` pass.
   - [ ] Extend compiler lowering beyond the static subset to reactive style-object toggles before
     checking Phase 2/3 complete.
-  - [ ] Persist attribution into an emitted inspectable artifact and teach `kovo explain component` to
+  - [x] Persist attribution into an emitted inspectable artifact and teach `kovo explain component` to
     resolve classes before checking Phase 2 complete.
+    - Evidence (2026-06-16): `packages/compiler/src/emit/registry.ts` emits
+      `ComponentStyleRules`, `packages/compiler/src/style.test.ts` asserts registry persistence and
+      component graph `styleRules`, and `packages/cli/src/index.kovo-explain.test.ts` asserts
+      `STYLE class=... source=... style-ref=...` output.
+    - Evidence (2026-06-16): `pnpm exec vitest --run packages/compiler/src/style.test.ts
+      packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-explain.test.ts`,
+      `pnpm exec tsc --noEmit`, `pnpm --filter @kovojs/core run build:dist`,
+      `pnpm --filter @kovojs/compiler run build:dist`, and `pnpm --filter kovo run build:dist` pass.
 - [ ] **Phase 3 — Fixpoint + reactive + merge integration.** Fixpoint fixture (compile(IR) ≡ IR);
       §4.9 classifier accepts style-object toggles; §4.7 atomic-aware class merge. _Evidence:_ fixpoint CI
       green; a reactive `state`-driven style toggle updates via §4.8 with no `setAttribute`.

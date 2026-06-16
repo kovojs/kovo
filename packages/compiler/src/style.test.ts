@@ -43,6 +43,21 @@ export const Button = component({
         }),
       ]),
     );
+    expect(result.componentGraphFacts[0]?.styleRules).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          className: expect.stringMatching(/^kv-button-bg-/),
+          source: 'button.tsx#root',
+          styleRef: 'base.root',
+        }),
+      ]),
+    );
+    expect(result.files.find((file) => file.kind === 'registry')?.source).toContain(
+      'export interface ComponentStyleRules',
+    );
+    expect(result.files.find((file) => file.kind === 'registry')?.source).toContain(
+      "source: 'button.tsx#root'; styleRef: 'base.root'; moduleFileName: 'components/button.tsx';",
+    );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 

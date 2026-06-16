@@ -1245,6 +1245,17 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
       lines.push(`effective-dom-name: ${component.disambiguatedDomName}`);
     }
 
+    for (const rule of component.styleRules ?? []) {
+      lines.push(
+        [
+          'STYLE',
+          `class=${rule.className}`,
+          `source=${rule.source}`,
+          `style-ref=${rule.styleRef}`,
+        ].join(' '),
+      );
+    }
+
     for (const handler of component.handlers ?? []) {
       lines.push(
         [
