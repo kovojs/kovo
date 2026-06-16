@@ -1,18 +1,23 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   tabsListAttributes,
   tabsPanelAttributes,
   tabsRootAttributes,
   tabsTriggerAttributes,
-  type ClassValue,
   type CollectionOrientation,
   type TabsActivationMode,
   type TabsItem,
   type TextDirection,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface TabsStyleOverrides {
+  list?: style.StyleInput;
+  panel?: style.StyleInput;
+  root?: style.StyleInput;
+  trigger?: style.StyleInput;
+}
 
 export interface TabsStateProps {
   activationMode?: TabsActivationMode;
@@ -27,61 +32,124 @@ export interface TabsStateProps {
 
 export interface TabsProps extends TabsStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: TabsStyleOverrides;
 }
 
 export interface TabsListProps extends TabsStateProps {
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
+  styles?: TabsStyleOverrides;
 }
 
 export interface TabsTriggerProps extends TabsStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
   panelId?: string;
+  styles?: TabsStyleOverrides;
 }
 
 export interface TabsPanelProps extends TabsStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: TabsStyleOverrides;
   triggerId?: string;
 }
 
-export const tabsClassNames = defineVariants({
-  base: 'w-full text-neutral-950 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const tabsStyles = style.create(
+  {
+    list: {
+      alignItems: 'center',
+      backgroundColor: '#f5f5f5',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      columnGap: 4,
+      display: 'inline-flex',
+      height: 40,
+      padding: 4,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-orientation=vertical]': {
+        flexDirection: 'column',
+        height: 'auto',
+        rowGap: 4,
+      },
+    },
+    panel: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#404040',
+      fontSize: 14,
+      marginTop: 12,
+      padding: 16,
+      '[data-state=inactive]': {
+        display: 'none',
+      },
+      ':focus-visible': {
+        outlineColor: '#a3a3a3',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      width: '100%',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    trigger: {
+      alignItems: 'center',
+      backgroundColor: 'transparent',
+      borderRadius: 4,
+      color: '#525252',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 32,
+      justifyContent: 'center',
+      paddingInline: 12,
+      transitionProperty: 'background-color, color, box-shadow',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-state=active]': {
+        backgroundColor: '#ffffff',
+        boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+        color: '#0a0a0a',
+      },
+      ':disabled': {
+        pointerEvents: 'none',
+      },
+      ':focus-visible': {
+        outlineColor: '#a3a3a3',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+  },
+  { namespace: 'tabs', source: 'tabs.tsx' },
+);
 
-export const tabsListClassNames = defineVariants({
-  base: 'inline-flex h-10 items-center gap-1 rounded-md border border-neutral-200 bg-neutral-100 p-1 data-[orientation=vertical]:h-auto data-[orientation=vertical]:flex-col data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const tabsTriggerClassNames = defineVariants({
-  base: 'inline-flex h-8 items-center justify-center rounded px-3 text-sm font-medium text-neutral-600 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none data-[state=active]:bg-white data-[state=active]:text-neutral-950 data-[state=active]:shadow-sm data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const tabsPanelClassNames = defineVariants({
-  base: 'mt-3 rounded-md border border-neutral-200 bg-white p-4 text-sm text-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400',
-  variants: {},
-});
-
-export const tabsClasses = tabsClassNames.classes;
-export const tabsListClasses = tabsListClassNames.classes;
-export const tabsTriggerClasses = tabsTriggerClassNames.classes;
-export const tabsPanelClasses = tabsPanelClassNames.classes;
+export const tabsClasses = [style.attrs(tabsStyles.root).class ?? ''] as const;
+export const tabsListClasses = [style.attrs(tabsStyles.list).class ?? ''] as const;
+export const tabsTriggerClasses = [style.attrs(tabsStyles.trigger).class ?? ''] as const;
+export const tabsPanelClasses = [style.attrs(tabsStyles.panel).class ?? ''] as const;
 
 export const Tabs = component({
   render(props: TabsProps) {
@@ -96,10 +164,11 @@ export const Tabs = component({
       ...(props.orientation === undefined ? {} : { orientation: props.orientation }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(tabsStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(tabsClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         id={attrs.id}
@@ -126,15 +195,16 @@ export const TabsList = component({
       ...(props.orientation === undefined ? {} : { orientation: props.orientation }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(tabsStyles.list, props.styles?.list);
 
     return (
       <div
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-label={attrs['aria-label']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-orientation={attrs['aria-orientation']}
-        class={cn(tabsListClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         id={attrs.id}
@@ -162,12 +232,13 @@ export const TabsTrigger = component({
       ...(props.panelId === undefined ? {} : { panelId: props.panelId }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(tabsStyles.trigger, props.styles?.trigger);
 
     return (
       <button
+        {...styleAttrs}
         aria-controls={attrs['aria-controls']}
         aria-selected={attrs['aria-selected']}
-        class={cn(tabsTriggerClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
@@ -199,11 +270,12 @@ export const TabsPanel = component({
       ...(props.triggerId === undefined ? {} : { triggerId: props.triggerId }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(tabsStyles.panel, props.styles?.panel);
 
     return (
       <section
+        {...styleAttrs}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(tabsPanelClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}

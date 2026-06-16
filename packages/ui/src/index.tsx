@@ -473,20 +473,18 @@ export {
   TabsList,
   TabsPanel,
   TabsTrigger,
-  tabsClassNames,
   tabsClasses,
-  tabsListClassNames,
   tabsListClasses,
-  tabsPanelClassNames,
   tabsPanelClasses,
-  tabsTriggerClassNames,
   tabsTriggerClasses,
+  tabsStyles,
 } from './tabs.js';
 export type {
   TabsListProps,
   TabsPanelProps,
   TabsProps,
   TabsStateProps,
+  TabsStyleOverrides,
   TabsTriggerProps,
 } from './tabs.js';
 export { Toggle, toggleClassNames, toggleClasses } from './toggle.js';

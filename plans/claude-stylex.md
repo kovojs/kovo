@@ -295,8 +295,22 @@ borrowing its concrete API/spike detail.
       packages/ui/src/copy-in.test.ts packages/cli/src/index.kovo-add.test.ts`,
       `node packages/ui/scripts/build-registry.mjs`, and `pnpm exec tsc --noEmit` pass.
   - [ ] Compare Model V and Model L Button surfaces and record the final recommendation.
-  - [ ] Rewrite one interactive multi-slot component (`Select`/`Dialog`/`Tabs`) to StyleX slot override
-        objects and run the relevant axe/browser gates.
+  - [x] Rewrite one interactive multi-slot component to StyleX slot override objects.
+    - Evidence (2026-06-16): `packages/ui/src/tabs.tsx` now imports `@kovojs/style`, replaces
+      `defineVariants`/`cn` with `tabsStyles = style.create(...)`, keeps the headless
+      `tabs*Attributes(...)` semantics, and exposes `styles?: TabsStyleOverrides` for root/list/
+      trigger/panel slot overrides.
+    - Evidence (2026-06-16): `packages/style/src/index.ts` supports bracket selector suffixes such as
+      `[data-state=active]` so StyleX-authored headless state styles can attach to generated `data-*`
+      attrs; `packages/style/src/index.test.ts` covers this extraction behavior.
+    - Evidence (2026-06-16): `packages/ui/src/tabs.stylex.test.tsx` proves StyleX-rendered `kv-*`
+      slot classes, headless ARIA/data attributes, hidden inactive panels, and per-slot author-last
+      override objects.
+    - Evidence (2026-06-16): `pnpm exec vitest --run packages/style/src/index.test.ts
+      packages/ui/src/tabs.stylex.test.tsx packages/ui/src/copy-in.test.ts
+      packages/cli/src/index.kovo-add.test.ts`, `node packages/ui/scripts/build-registry.mjs`, and
+      `pnpm exec tsc --noEmit` pass.
+  - [ ] Run the relevant browser/axe gates for the StyleX multi-slot component.
 - [ ] **Phase 5 — Replace Tailwind across starters/examples/docs.** Migrate gallery, commerce, crm,
       stackoverflow, docs site, and `create-kovo` starter; remove Tailwind deps + `@source` safelists;
       decide `@scope` retirement. _Evidence:_ `rg -i tailwind` returns only historical/plan references;

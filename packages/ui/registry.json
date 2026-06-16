@@ -800,10 +800,7 @@
       "exports": ["Tabs", "TabsList", "TabsTrigger", "TabsPanel"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
           "CollectionOrientation",
-          "defineVariants",
           "TabsActivationMode",
           "TabsItem",
           "tabsListAttributes",
@@ -812,6 +809,7 @@
           "tabsTriggerAttributes",
           "TextDirection"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

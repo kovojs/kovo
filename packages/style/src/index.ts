@@ -291,9 +291,7 @@ export function raw(style: InlineStyle): readonly [null, InlineStyle] {
 }
 
 /** Returns the first supplied CSS value list; the compiler may lower this further. */
-export function firstThatWorks<T extends StylePrimitive>(
-  ...values: readonly T[]
-): readonly T[] {
+export function firstThatWorks<T extends StylePrimitive>(...values: readonly T[]): readonly T[] {
   return values;
 }
 
@@ -359,7 +357,7 @@ function compileObject(styleObject: StyleObject, context: CompileContext): Atomi
             atRules: [...context.atRules, property],
           }),
         );
-      } else if (property.startsWith(':') || property.startsWith('::')) {
+      } else if (isSelectorSuffix(property)) {
         rules.push(
           ...compileObject(value, {
             ...context,
@@ -463,7 +461,8 @@ function mergeStyleInput(style: StyleInput, state: MergeState): void {
   }
   if (isCompiledStyle(style)) {
     const styleSource = style[STYLE_SRC];
-    if (typeof styleSource === 'string' && styleSource.length > 0) state.styleSources.push(styleSource);
+    if (typeof styleSource === 'string' && styleSource.length > 0)
+      state.styleSources.push(styleSource);
     const cssMarker = style[CSS_MARKER];
     if (typeof cssMarker === 'string' && cssMarker.length > 0) state.styleSources.push(cssMarker);
     for (const [property, className] of Object.entries(style)) {
@@ -497,7 +496,9 @@ function serializeInlineStyle(style: InlineStyle): string {
 }
 
 function isCompiledStyle(value: unknown): value is CompiledStyle {
-  return Boolean(value && typeof value === 'object' && (value as Record<string, unknown>)[CSS_MARKER]);
+  return Boolean(
+    value && typeof value === 'object' && (value as Record<string, unknown>)[CSS_MARKER],
+  );
 }
 
 function isStyleOrFalsy(value: unknown): value is Style {
@@ -505,11 +506,17 @@ function isStyleOrFalsy(value: unknown): value is Style {
 }
 
 function isInlineStyle(value: unknown): value is InlineStyle {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value) && !isCompiledStyle(value));
+  return Boolean(
+    value && typeof value === 'object' && !Array.isArray(value) && !isCompiledStyle(value),
+  );
 }
 
 function isNestedStyle(value: CssValue | StyleObject): value is StyleObject {
   return Boolean(value && typeof value === 'object');
+}
+
+function isSelectorSuffix(property: string): boolean {
+  return property.startsWith(':') || property.startsWith('::') || property.startsWith('[');
 }
 
 function compareRules(left: AtomicRule, right: AtomicRule): number {
@@ -539,10 +546,12 @@ function toKebabCase(value: string): string {
 }
 
 function slug(value: string): string {
-  return toKebabCase(value)
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'style';
+  return (
+    toKebabCase(value)
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || 'style'
+  );
 }
 
 function hash(value: string): string {

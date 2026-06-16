@@ -91,6 +91,7 @@ describe('kovo add', () => {
           'slider',
           'switch',
           'table',
+          'tabs',
           'toggle',
           'toggle-group',
           'toast',
@@ -170,6 +171,9 @@ describe('kovo add', () => {
         `ADD table path=${JSON.stringify(join(outDir, 'table.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD tabs path=${JSON.stringify(join(outDir, 'tabs.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD toggle path=${JSON.stringify(join(outDir, 'toggle.tsx'))} source=tsx`,
       );
       expect(output).toContain(
@@ -204,6 +208,7 @@ describe('kovo add', () => {
       const slider = readFileSync(join(outDir, 'slider.tsx'), 'utf8');
       const switchSource = readFileSync(join(outDir, 'switch.tsx'), 'utf8');
       const table = readFileSync(join(outDir, 'table.tsx'), 'utf8');
+      const tabs = readFileSync(join(outDir, 'tabs.tsx'), 'utf8');
       const toggle = readFileSync(join(outDir, 'toggle.tsx'), 'utf8');
       const toggleGroup = readFileSync(join(outDir, 'toggle-group.tsx'), 'utf8');
       const toast = readFileSync(join(outDir, 'toast.tsx'), 'utf8');
@@ -255,6 +260,9 @@ describe('kovo add', () => {
       expect(switchSource).toContain('export const switchClassNames = defineVariants');
       expect(table).toContain('export const Table = component({');
       expect(table).toContain('export const TableHead = component({');
+      expect(tabs).toContain("import * as style from '@kovojs/style';");
+      expect(tabs).toContain('export const tabsStyles = style.create');
+      expect(tabs).toContain('styles?: TabsStyleOverrides');
       expect(toggle).toContain('export const Toggle = component({');
       expect(toggle).toContain('export const toggleClassNames = defineVariants');
       expect(toggleGroup).toContain('export const ToggleGroup = component({');

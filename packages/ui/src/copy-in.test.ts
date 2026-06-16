@@ -48,6 +48,7 @@ function linkKovoDep(nodeModules: string, pkg: string): void {
 const COMPONENTS = [
   { file: 'button.tsx', label: 'static (no headless behavior)' },
   { file: 'select.tsx', label: 'headless behavior (attributes + escapeHtml)' },
+  { file: 'tabs.tsx', label: 'multi-slot StyleX overrides' },
 ];
 
 describe('@kovojs/ui copy-in model', () => {

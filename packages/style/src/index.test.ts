@@ -78,13 +78,36 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(compiled.css).toContain('@media (min-width: 40rem)');
   });
 
+  it('emits data-attribute selector suffixes for headless component state', () => {
+    const compiled = createAtomicStyles(
+      {
+        root: {
+          color: 'gray',
+          '[data-state=active]': {
+            color: 'black',
+          },
+        },
+      },
+      { namespace: 'tabs', source: 'tabs.tsx' },
+    );
+
+    expect(compiled.styles.root.__rules).toHaveLength(2);
+    expect(compiled.css).toContain('.kv-tabs-fg-');
+    expect(compiled.css).toContain('[data-state=active]{color:black}');
+  });
+
   it('keeps priority buckets independent of file/link order', () => {
     const firstFile = createAtomicStyles({ root: { paddingInline: 12 } }, { namespace: 'a' });
     const secondFile = createAtomicStyles({ root: { padding: 8 } }, { namespace: 'b' });
-    const css = emitAtomicCss([...(secondFile.styles.root.__rules ?? []), ...(firstFile.styles.root.__rules ?? [])]);
+    const css = emitAtomicCss([
+      ...(secondFile.styles.root.__rules ?? []),
+      ...(firstFile.styles.root.__rules ?? []),
+    ]);
 
     expect(getPriority('padding')).toBeLessThan(getPriority('paddingInline'));
-    expect(css.indexOf('@layer kovo-style.1000')).toBeLessThan(css.indexOf('@layer kovo-style.2000'));
+    expect(css.indexOf('@layer kovo-style.1000')).toBeLessThan(
+      css.indexOf('@layer kovo-style.2000'),
+    );
   });
 
   it('uses the full upstream property-priority table', () => {
@@ -108,7 +131,10 @@ describe('@kovojs/style phase 1 runtime fork', () => {
       { namespace: 'ui', source: 'button.tokens.ts' },
     );
     const theme = createTheme(tokens, { accent: '#16a34a' }, { namespace: 'success' });
-    const styles = create({ root: { backgroundColor: tokens.accent, color: tokens.onAccent } }, { namespace: 'button' });
+    const styles = create(
+      { root: { backgroundColor: tokens.accent, color: tokens.onAccent } },
+      { namespace: 'button' },
+    );
 
     expect(tokens.accent).toBe('var(--kovo-ui-accent)');
     expect(theme.className).toMatch(/^kv-success-theme-[a-z0-9]+$/);
