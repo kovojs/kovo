@@ -16,15 +16,14 @@
     "@kovojs/better-auth": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/runtime": "workspace:*",
-    "@kovojs/server": "workspace:*"
+    "@kovojs/server": "workspace:*",
+    "@kovojs/style": "workspace:*"
   },
   "devDependencies": {
     "@kovojs/compiler": "workspace:*",
-    "@tailwindcss/vite": "^4.1.0",
     "@types/node": "^25.0.0",
     "@typescript/native-preview": "^7.0.0-dev.20260610.1",
     "kovo": "workspace:*",
-    "tailwindcss": "^4.1.0",
     "typescript": "^6.0.0",
     "vite": "^8.0.16",
     "vite-plus": "^0.1.24",

@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { csrfField, guards, s, session, type CsrfValidationOptions } from '@kovojs/server';
+import * as style from '@kovojs/style';
 import {
   authed,
   betterAuthSession,
@@ -149,6 +150,59 @@ export interface LoginFormOptions {
   request?: StarterAuthRequest;
 }
 
+const authStyles = style.create(
+  {
+    error: {
+      color: '#b91c1c',
+      fontSize: 14,
+    },
+    field: {
+      display: 'grid',
+      fontSize: 14,
+      fontWeight: 500,
+      color: '#334155',
+      rowGap: 4,
+    },
+    form: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e2e8f0',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      display: 'grid',
+      padding: 24,
+      rowGap: 16,
+    },
+    input: {
+      borderColor: '#cbd5e1',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      paddingBlock: 8,
+      paddingInline: 12,
+    },
+    primaryAction: {
+      backgroundColor: '#0f8b8d',
+      borderRadius: 6,
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: 500,
+      paddingBlock: 8,
+      paddingInline: 16,
+    },
+    secondaryAction: {
+      color: '#0f8b8d',
+      fontSize: 14,
+      fontWeight: 500,
+    },
+  },
+  { namespace: 'starterAuth', source: 'src/auth.tsx' },
+);
+
+export const starterAuthStyleCss = style.emitAtomicCss(
+  Object.values(authStyles).flatMap((entry) => entry.__rules ?? []),
+);
+
 // SPEC.md section 6.3 and section 9.1: the auth recipe keeps credential flows
 // as ordinary mutation forms. Browsers without JS post directly to /_m/*; the
 // `enhance` attribute only upgrades the same form to the fragment wire.
@@ -159,24 +213,24 @@ export function renderLoginForm(options: LoginFormOptions = {}): string {
       action="/_m/auth/sign-in"
       enhance
       data-mutation="auth/sign-in"
-      class="grid gap-4 rounded border border-slate-200 bg-white p-6"
+      {...style.attrs(authStyles.form)}
     >
       {options.request ? csrfField(options.request, starterAuthCsrf) : ''}
       <input type="hidden" name="next" value={options.next ?? '/cart'} />
-      <label class="grid gap-1 text-sm font-medium text-slate-700">
+      <label {...style.attrs(authStyles.field)}>
         <span>Email</span>
         <input
-          class="rounded border border-slate-300 px-3 py-2"
+          {...style.attrs(authStyles.input)}
           name="email"
           type="email"
           autocomplete="email"
           required
         />
       </label>
-      <label class="grid gap-1 text-sm font-medium text-slate-700">
+      <label {...style.attrs(authStyles.field)}>
         <span>Password</span>
         <input
-          class="rounded border border-slate-300 px-3 py-2"
+          {...style.attrs(authStyles.input)}
           name="password"
           type="password"
           autocomplete="current-password"
@@ -184,13 +238,17 @@ export function renderLoginForm(options: LoginFormOptions = {}): string {
         />
       </label>
       {options.failure === 'INVALID_CREDENTIALS' ? (
-        <output role="alert" data-error-code="INVALID_CREDENTIALS" class="text-sm text-red-700">
+        <output
+          role="alert"
+          data-error-code="INVALID_CREDENTIALS"
+          {...style.attrs(authStyles.error)}
+        >
           Invalid email or password.
         </output>
       ) : (
         ''
       )}
-      <button class="rounded bg-kovo-accent px-4 py-2 text-sm font-medium text-white" type="submit">
+      <button {...style.attrs(authStyles.primaryAction)} type="submit">
         Sign in
       </button>
     </form>
@@ -204,10 +262,9 @@ export function renderLogoutForm(request: StarterAuthRequest): string {
       action="/_m/auth/sign-out"
       enhance
       data-mutation="auth/sign-out"
-      class="inline"
     >
       {csrfField(request, starterAuthCsrf)}
-      <button class="text-sm font-medium text-kovo-accent" type="submit">
+      <button {...style.attrs(authStyles.secondaryAction)} type="submit">
         Sign out
       </button>
     </form>

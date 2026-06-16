@@ -84,15 +84,16 @@ describe('create-kovo starter', () => {
         '@kovojs/core': 'workspace:*',
         '@kovojs/runtime': 'workspace:*',
         '@kovojs/server': 'workspace:*',
+        '@kovojs/style': 'workspace:*',
       });
       expect(packageJson.devDependencies).toMatchObject({
         '@kovojs/compiler': 'workspace:*',
-        '@tailwindcss/vite': '^4.1.0',
         '@types/node': '^25.0.0',
         kovo: 'workspace:*',
-        tailwindcss: '^4.1.0',
         vite: '^8.0.16',
       });
+      expect(packageJson.devDependencies).not.toHaveProperty('@tailwindcss/vite');
+      expect(packageJson.devDependencies).not.toHaveProperty('tailwindcss');
       expect(packageJson.scripts).toMatchObject({
         check: 'vp check',
         dev: 'vp dev',
@@ -195,12 +196,19 @@ describe('create-kovo starter', () => {
       );
       const appSource = readFileSync(join(root, 'src/app.tsx'), 'utf8');
       expect(appSource).toContain('@jsxImportSource @kovojs/server');
+      expect(appSource).toContain("import * as style from '@kovojs/style';");
+      expect(appSource).toContain('style.create(');
+      expect(appSource).toContain('style.attrs(appStyles.root)');
+      expect(appSource).toContain('starterAppStyleCss');
       expect(appSource).toContain('<main');
       expect(appSource).toContain('on:click="/c/starter.client.js?v=starter-r7#Starter$announce"');
+      expect(appSource).not.toContain('mx-auto');
+      expect(appSource).not.toContain('text-kovo-accent');
       expect(appSource).not.toMatch(/render:\s*\(\)\s*=>\s*['"`]</);
       const appShellSource = readFileSync(join(root, 'src/app-shell.ts'), 'utf8');
       expect(appShellSource).toContain("from '@kovojs/server/app-shell/client-modules'");
       expect(appShellSource).toContain("from '@kovojs/server/app-shell/core'");
+      expect(appShellSource).toContain('criticalCss: starterAppStyleCss');
       expect(appShellSource).toContain("route('/',");
       expect(appShellSource).toContain('createRequestHandler(app)');
       expect(appShellSource).toContain("path: '/c/starter.client.js'");
@@ -216,6 +224,10 @@ describe('create-kovo starter', () => {
       expect(appShellTestSource).toContain('assertStaticExportManifestUsesDirectoryIndexDocuments');
       const authSource = readFileSync(join(root, 'src/auth.tsx'), 'utf8');
       expect(authSource).toContain("from '@kovojs/better-auth'");
+      expect(authSource).toContain("import * as style from '@kovojs/style';");
+      expect(authSource).toContain('style.create(');
+      expect(authSource).toContain('style.attrs(authStyles.form)');
+      expect(authSource).toContain('starterAuthStyleCss');
       expect(authSource).toContain('betterAuthSession');
       expect(authSource).toContain('betterAuthSignInEmailMutation');
       expect(authSource).toContain('betterAuthSignOutMutation');
@@ -228,9 +240,13 @@ describe('create-kovo starter', () => {
       expect(authSource).toContain('csrfField(options.request, starterAuthCsrf)');
       expect(authSource).toContain('csrfField(request, starterAuthCsrf)');
       expect(authSource).not.toContain('@better-auth/client');
+      expect(authSource).not.toContain('border-slate-200');
+      expect(authSource).not.toContain('bg-kovo-accent');
       expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).toContain(
-        '@source "./**/*.{ts,tsx,html}";',
+        '@layer kovo-starter-base',
       );
+      expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).not.toContain('@source');
+      expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).not.toContain('tailwindcss');
       const indexSource = readFileSync(join(root, 'index.html'), 'utf8');
       expect(indexSource).toContain('/src/styles.css');
       expect(indexSource).toContain('Build-only Vite asset entry');
@@ -241,6 +257,8 @@ describe('create-kovo starter', () => {
       expect(viteConfig).toContain('starterSharedAppShellDevPlugin()');
       expect(viteConfig).toContain("server.ssrLoadModule('@kovojs/server/app-shell/vite')");
       expect(viteConfig).toContain('kovoAppShellViteDevPlugin');
+      expect(viteConfig).not.toContain('@tailwindcss/vite');
+      expect(viteConfig).not.toContain('tailwindcss()');
       expect(viteConfig).not.toContain('kovoAppShellViteSsrDevPlugin');
       expect(viteConfig).toContain('earlyHints: false');
       expect(viteConfig).toContain("name: 'kovo-starter-app-shell-dev'");
@@ -346,7 +364,7 @@ describe('create-kovo starter', () => {
     }
   });
 
-  it('builds generated starter CSS with static and safelisted Tailwind utilities', () => {
+  it('builds generated starter CSS without Tailwind setup', () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-build-'));
@@ -364,9 +382,10 @@ describe('create-kovo starter', () => {
       expect(cssFile).toBeTypeOf('string');
       const css = readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8');
 
-      expect(css).toContain('.text-kovo-accent');
-      expect(css).toContain('.bg-emerald-50');
-      expect(css).toContain('.border-emerald-200');
+      expect(css).toContain('@layer kovo-starter-base');
+      expect(css).toContain('font-synthesis:none');
+      expect(css).not.toContain('tailwindcss');
+      expect(css).not.toContain('@source');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -413,7 +432,7 @@ describe('create-kovo starter', () => {
     }
   });
 
-  it('runs the generated starter app-shell request and export proof', () => {
+  it('runs the generated starter app-shell request, export, and fixpoint proof', () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-app-shell-'));
@@ -422,10 +441,14 @@ describe('create-kovo starter', () => {
       writeKovoProject(root, { name: 'App Shell Proof' });
       linkStarterBuildDependencies(root);
 
-      execFileSync(resolveBin('vitest'), ['--run', 'src/app-shell.test.ts'], {
-        cwd: root,
-        stdio: 'pipe',
-      });
+      execFileSync(
+        resolveBin('vitest'),
+        ['--run', 'src/app-shell.test.ts', 'src/app.fixpoint.test.ts'],
+        {
+          cwd: root,
+          stdio: 'pipe',
+        },
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -466,7 +489,8 @@ describe('create-kovo starter', () => {
       expect(moduleBody).toContain('export function Starter$announce');
 
       const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
-      expect(sourceCss).toContain('tailwindcss v');
+      expect(sourceCss).toContain('@layer kovo-starter-base');
+      expect(sourceCss).not.toContain('tailwindcss');
 
       const sourceEntry = await fetchTextWhenReady(`${origin}/index.html`, output);
       expect(sourceEntry).toContain('Build-only Vite asset entry');
@@ -511,7 +535,8 @@ describe('create-kovo starter', () => {
         expect(moduleBody).toContain('export function Starter$announce');
 
         const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
-        expect(sourceCss).toContain('tailwindcss v');
+        expect(sourceCss).toContain('@layer kovo-starter-base');
+        expect(sourceCss).not.toContain('tailwindcss');
       } finally {
         await stopProcess(serveServer);
         rmSync(root, { force: true, recursive: true });
@@ -547,15 +572,17 @@ describe('create-kovo starter', () => {
         expect(output).toContain('starter-export/v1\nhtml=1\nclient-modules=1\nassets=1\n');
         expect(output).toContain('manifest-html=1\nmanifest-client-modules=1\nmanifest-assets=1\n');
         expect(distIndex).toContain(`href="/assets/${cssFile}"`);
+        expect(distIndex).toContain('<style data-kovo-critical-href="/assets/');
+        expect(distIndex).toContain('kv-starter-app-');
         expect(distIndex).toContain(
           'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
         );
         expect(distIndex).not.toContain('/src/styles.css');
         expect(distIndex).not.toContain('/src/client.ts');
         expect(distIndex).not.toContain('Build-only Vite asset entry');
-        expect(readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8')).toContain(
-          '.text-kovo-accent',
-        );
+        const exportedCss = readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8');
+        expect(exportedCss).toContain('@layer kovo-starter-base');
+        expect(exportedCss).not.toContain('tailwindcss');
         expect(readFileSync(join(root, 'dist/c/starter.client.js'), 'utf8')).toContain(
           'Starter$announce',
         );
@@ -584,13 +611,15 @@ describe('create-kovo starter', () => {
 
         expect(previewOutput()).toContain('starter-static-preview/v1');
         expect(previewDocument).toContain(`href="/assets/${cssFile}"`);
+        expect(previewDocument).toContain('kv-starter-app-');
         expect(previewDocument).toContain(
           'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
         );
         expect(previewDocument).not.toContain('/src/styles.css');
 
         const previewCss = await fetchTextWhenReady(`${origin}/assets/${cssFile}`, previewOutput);
-        expect(previewCss).toContain('.text-kovo-accent');
+        expect(previewCss).toContain('@layer kovo-starter-base');
+        expect(previewCss).not.toContain('tailwindcss');
 
         const previewClientModule = await fetchTextWhenReady(
           `${origin}/c/starter.client.js?v=starter-r7`,
@@ -750,13 +779,11 @@ function linkStarterBuildDependencies(root: string): void {
   const nodeModules = join(root, 'node_modules');
   const nodeModulesBin = join(nodeModules, '.bin');
   mkdirSync(join(nodeModules, '@kovojs'), { recursive: true });
-  mkdirSync(join(nodeModules, '@tailwindcss'), { recursive: true });
   mkdirSync(join(nodeModules, '@types'), { recursive: true });
   mkdirSync(nodeModulesBin, { recursive: true });
 
   symlinkSync(join(resolveDependencyRoot('vite-plus'), 'bin/vp'), join(nodeModulesBin, 'vp'));
   symlinkSync(resolveDependencyRoot('@types/node'), join(nodeModules, '@types/node'));
-  symlinkSync(resolveDependencyRoot('@tailwindcss/vite'), join(nodeModules, '@tailwindcss/vite'));
   symlinkSync(
     resolveDependencyRoot('@kovojs/better-auth'),
     join(nodeModules, '@kovojs/better-auth'),
@@ -765,8 +792,8 @@ function linkStarterBuildDependencies(root: string): void {
   symlinkSync(resolveDependencyRoot('@kovojs/core'), join(nodeModules, '@kovojs/core'));
   symlinkSync(resolveDependencyRoot('@kovojs/runtime'), join(nodeModules, '@kovojs/runtime'));
   symlinkSync(resolveDependencyRoot('@kovojs/server'), join(nodeModules, '@kovojs/server'));
+  symlinkSync(resolveDependencyRoot('@kovojs/style'), join(nodeModules, '@kovojs/style'));
   symlinkSync(resolveDependencyRoot('kovo'), join(nodeModules, 'kovo'));
-  symlinkSync(resolveDependencyRoot('tailwindcss'), join(nodeModules, 'tailwindcss'));
   symlinkSync(resolveDependencyRoot('vite'), join(nodeModules, 'vite'));
   symlinkSync(resolveDependencyRoot('vitest'), join(nodeModules, 'vitest'));
   symlinkSync(resolveDependencyRoot('vite-plus'), join(nodeModules, 'vite-plus'));

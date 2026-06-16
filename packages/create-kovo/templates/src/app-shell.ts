@@ -1,7 +1,7 @@
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
 import { route } from '@kovojs/server';
-import { App } from './app.js';
+import { App, starterAppStyleCss } from './app.js';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
 const starterStylesheetHref = process.env.KOVO_STARTER_STYLESHEET_HREF ?? '/src/styles.css';
@@ -33,7 +33,7 @@ export const homeRoute = route('/', {
   page() {
     return App.definition.render();
   },
-  stylesheets: [starterStylesheetHref],
+  stylesheets: [{ href: starterStylesheetHref, criticalCss: starterAppStyleCss }],
 });
 
 export const app = createApp({

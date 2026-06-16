@@ -1,10 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  plugins: [tailwindcss(), starterSharedAppShellDevPlugin()],
+  plugins: [starterSharedAppShellDevPlugin()],
   build: {
     manifest: true,
   },

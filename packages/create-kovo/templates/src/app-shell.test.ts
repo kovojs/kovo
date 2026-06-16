@@ -161,7 +161,8 @@ describe('starter app shell', () => {
         sourceAssetResponse.status,
         formatDevServerFailure(sourceAssetBody, devServerError),
       ).toBe(200);
-      expect(sourceAssetBody).toContain('tailwindcss v');
+      expect(sourceAssetBody).toContain('@layer kovo-starter-base');
+      expect(sourceAssetBody).not.toContain('tailwindcss');
     } finally {
       await new Promise<void>((resolve, reject) => {
         if (!httpServer.listening) {
