@@ -59,8 +59,11 @@ describe('@kovojs/drizzle runtime surface', () => {
       './static': './src/static.ts',
     });
     expect(drizzleDeriveSource()).not.toContain('ts-morph');
-    expect(packageJson.dependencies?.['ts-morph']).toBeUndefined();
-    expect(packageJson.devDependencies?.['ts-morph']).toBe('^28.0.0');
+    // api-cleanup Phase 6: `./static` is a published, app-build-consumed entry that
+    // imports ts-morph, so ts-morph must be a real dependency (not a devDep) — while
+    // the runtime/derive entrypoints below stay ts-morph-free.
+    expect(packageJson.dependencies?.['ts-morph']).toBe('^28.0.0');
+    expect(packageJson.devDependencies?.['ts-morph']).toBeUndefined();
     expect(runtimeSource).not.toContain('ts-morph');
     expect(runtimeSource).not.toContain('./index.js');
     expect(runtimeSource).not.toContain('./static.js');
