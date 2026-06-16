@@ -17,13 +17,14 @@ mutations). So browsing the examples shows dead UIs.
 
 The static-export-in-iframe framing was wrong. **Serve each example as a regular full-stack Node
 server** (its existing `scripts/serve.mjs` running the interactive `createApp` handler over PGlite),
-where mutations round-trip natively. The apps only *looked* inert because the docs embedded them as
+where mutations round-trip natively. The apps only _looked_ inert because the docs embedded them as
 static exports. So the work is: (1) register each app's mutations into the served app + author the UI
 as the framework's native `enhance` server-action forms (POST `/_m/*`, inline loader morphs the
 fragment wire — NO islands, NO KV229, since the page is served dynamically), (2) make the Node server
 deploy-ready (production serve + Dockerfile / host config). DB stays PGlite-in-Node (works perfectly).
 
 ### Superseded earlier exploration (do NOT resurrect)
+
 - **In-browser PGlite backend / on:click islands / KV229 dodges / Vite-bundling PGlite** — abandoned.
   The Phase 0 work proved the mechanism but the user wants regular serving, not static-export hacks.
 - **PGlite on Cloudflare Workers** — spiked and rejected: PGlite's universal build takes a Node path
@@ -31,13 +32,14 @@ deploy-ready (production serve + Dockerfile / host config). DB stays PGlite-in-N
   Emscripten-glue failures. Not production-clean. Node host chosen instead.
 
 Key facts proven in research:
+
 - `handleAppRequest(app, request: Request): Promise<Response>` / `createRequestHandler(app)` are
   Web-Fetch-portable (packages/server: app-request.ts, app-dispatch.ts, mutation.ts). Node bits
-  (`toNodeHandler`, vite-*, static-export CLI) are excluded from the browser bundle.
+  (`toNodeHandler`, vite-\*, static-export CLI) are excluded from the browser bundle.
 - PGlite + `drizzle-orm/pglite` run in-browser (WASM); example DBs already `new PGlite()`.
 - Static export supports extra files via the `assets` option; client modules referenced via
   modulepreload + the inline loader's `import()`. Iframe sandbox is `allow-scripts
-  allow-same-origin` (SW-registerable; fetch-patch trivially works).
+allow-same-origin` (SW-registerable; fetch-patch trivially works).
 - Inline loader on fetch failure sets `data-error-code=NETWORK_ERROR` (today's inert behavior).
 
 ## Checklist
@@ -62,7 +64,9 @@ Key facts proven in research:
     `kovo-fragment-target` host from server truth; the island applies the wire by replacing the
     matching `[kovo-fragment-target]` element's outerHTML (event delegation keeps new nodes live).
   - **on:load** pre-warm island boots PGlite before first click (wired via createApp `renderRoute`).
+
 ### REVISED phases (Node-server direction)
+
 - [x] **Phase R1 — StackOverflow served + interactive.** DONE 2026-06-16 (commit 53ebf658). Vote/ask/
       answer authored as native `enhance` forms over the interactive app; served via Node serve.mjs +
       PGlite. Proof: `interactive-app.test.ts` (3 mutation round-trips) + 25 SO tests green +
@@ -89,9 +93,10 @@ Key facts proven in research:
       re-render from server truth.
 - [ ] **Phase R4 — Deploy-ready.** A production serve path per app (build assets + serve built output,
       not Vite dev middleware) + a Dockerfile / host config so each app deploys to a Node host. `vp
-      check`, per-app tests, gzip/format gates green.
+check`, per-app tests, gzip/format gates green.
 
 ## Open risks (Node-server direction)
+
 - Production serve: `serve.mjs` runs Vite in middleware (dev) mode; need a build+serve-static path for
   deploy. Verify the app-shell can serve built assets without the Vite dev plugin.
 - CSRF: enhance forms need either `csrf:false` (demo) or a real session + `csrfField`. Commerce already

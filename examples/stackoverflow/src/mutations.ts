@@ -63,6 +63,9 @@ export async function voteUp(
 // invalidated queries (by key) and the inferred touches come from the extracted
 // touch graph (wired in app.ts).
 
+// SPEC.md §6.4: this is a no-auth public demo with no server session to protect,
+// so the mutations opt out of CSRF (`csrf: false`) — the enhance forms can POST
+// without a token. A real app would keep CSRF on and render `csrfField`.
 export const postQuestionMutation = mutation('postQuestion', {
   input: s.object({
     id: s.string(),
@@ -70,6 +73,7 @@ export const postQuestionMutation = mutation('postQuestion', {
     body: s.string(),
     authorId: s.string(),
   }),
+  csrf: false,
   registry: { touches: [question] },
   handler: postQuestion,
 });
@@ -81,6 +85,7 @@ export const postAnswerMutation = mutation('postAnswer', {
     body: s.string(),
     authorId: s.string(),
   }),
+  csrf: false,
   registry: { touches: [answer, question] },
   handler: postAnswer,
 });
@@ -91,6 +96,7 @@ export const voteUpMutation = mutation('voteUp', {
     targetId: s.string(),
     userId: s.string(),
   }),
+  csrf: false,
   registry: { touches: [vote, question] },
   handler: voteUp,
 });

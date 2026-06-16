@@ -8,6 +8,7 @@
     "dev": "vp dev",
     "emit-graph": "node scripts/emit-graph.mjs",
     "start": "node scripts/serve.mjs",
+    "serve:prod": "vp build && node scripts/serve.mjs",
     "static": "vp run export",
     "test": "vitest --run"
   },

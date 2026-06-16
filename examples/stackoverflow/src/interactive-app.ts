@@ -1,7 +1,10 @@
 import { route, s } from '@kovojs/server';
-import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
+import {
+  createApp,
+  createRequestHandler,
+  type RequestHandler,
+} from '@kovojs/server/app-shell/core';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
-import type { RequestHandler } from '@kovojs/server';
 import { asc, eq } from 'drizzle-orm';
 
 import {
@@ -17,11 +20,7 @@ import {
 } from './components/question-detail.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
-import {
-  postAnswerMutation,
-  postQuestionMutation,
-  voteUpMutation,
-} from './mutations.js';
+import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';
 import { questionList, questionScore } from './queries.js';
 import { answers, questions } from './schema.js';
 
@@ -168,11 +167,10 @@ export async function buildSoInteractiveApp(
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
     queries: [questionList, questionScore],
     mutationResponse({ key, rawInput }) {
-      // SPEC.md §6.4: CSRF guards cross-origin form posts against a server
-      // session. This is a no-auth public demo with no session to protect —
-      // disable it so the forms post freely.
-      const csrf = false;
-
+      // CSRF is disabled on the mutation definitions themselves (csrf: false in
+      // mutations.ts — a no-auth demo). Here we only pick which fragment regions
+      // to re-render from server truth.
+      //
       // No per-fragment `stylesheets`: the page already loaded the app
       // stylesheet, and a fragment-leading <link> would become the morph root and
       // replace the region with a bare <link>. The re-rendered region reuses the
@@ -201,7 +199,7 @@ export async function buildSoInteractiveApp(
         if (questionId) fragmentRenderers.push(detailRenderer(questionId));
       }
 
-      return fragmentRenderers.length > 0 ? { csrf, fragmentRenderers } : { csrf };
+      return fragmentRenderers.length > 0 ? { fragmentRenderers } : undefined;
     },
     routes: [
       route('/', {

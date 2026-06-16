@@ -76,7 +76,12 @@ describe('stackoverflow interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'postAnswer',
-      { id: 'a-test-1', questionId: question.id, body: 'A fresh demo answer.', authorId: 'demo-viewer' },
+      {
+        id: 'a-test-1',
+        questionId: question.id,
+        body: 'A fresh demo answer.',
+        authorId: 'demo-viewer',
+      },
       QUESTION_DETAIL_TARGET,
     );
 
@@ -97,7 +102,12 @@ describe('stackoverflow interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'postQuestion',
-      { id: 'q-test-1', title: 'How do I demo Kovo?', body: 'Asking for a friend.', authorId: 'demo-viewer' },
+      {
+        id: 'q-test-1',
+        title: 'How do I demo Kovo?',
+        body: 'Asking for a friend.',
+        authorId: 'demo-viewer',
+      },
       QUESTION_LIST_TARGET,
     );
 
