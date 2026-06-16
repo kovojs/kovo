@@ -13,8 +13,15 @@
 # Run:    docker run -e EXAMPLE=commerce -e PORT=8080 -p 8080:8080 kovo-examples
 FROM node:24-slim
 
-# git is occasionally needed by install scripts; corepack pins pnpm per
-# package.json "packageManager".
+# The Rust `vp` (vite-plus) binary initializes its HTTPS client from the SYSTEM CA
+# trust store at both build and serve time; Debian -slim images ship without it, so
+# install ca-certificates or `vp build`/serve panics with "No CA certificates were
+# loaded from the system". Kept as an early layer so it caches across source edits.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+# corepack pins pnpm per package.json "packageManager".
 RUN corepack enable
 
 WORKDIR /app
