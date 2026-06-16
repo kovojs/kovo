@@ -65,6 +65,48 @@ describe('server app shell document assembly', () => {
     expect(document.html).toContain('<body data-shell><main>Account</main></body>');
   });
 
+  it('rejects document templates that drop assembled shell contracts', () => {
+    expect(() =>
+      renderDocument({
+        body: '<main>Account</main>',
+        template() {
+          return '<!doctype html><html><head></head><body></body></html>';
+        },
+      }),
+    ).toThrow('DocumentTemplate omitted required assembled document part(s): parts.head, parts.body.');
+
+    expect(() =>
+      renderDeferredDocument({
+        body: '<main>Deferred</main>',
+        chunks: [],
+        template({ parts }) {
+          return {
+            closeHtml: '</body></html>',
+            shell: `<!doctype html><html><head>${parts.head}</head><body>`,
+          };
+        },
+      }),
+    ).toThrow('DeferredDocumentTemplate omitted required assembled document part(s): parts.body.');
+
+    expect(() =>
+      renderDocument({
+        body: '<main>Account</main>',
+        queries: [{ name: 'account', value: { userId: 'u1' } }],
+        template({ parts }) {
+          return [
+            '<!doctype html>',
+            '<html>',
+            `<head>${parts.head}</head>`,
+            `<body>${parts.body}</body>`,
+            '</html>',
+          ].join('');
+        },
+      }),
+    ).toThrow(
+      'DocumentTemplate omitted required assembled document part(s): parts.queryScripts[0].',
+    );
+  });
+
   it('wraps successful html route responses and preserves non-html outcomes', () => {
     expect(
       renderRouteDocumentResponse(

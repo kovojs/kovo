@@ -32,10 +32,9 @@ test('routes GET and HEAD while reserving mutation POST for /_m/', async ({
   await expect(page.getByRole('heading', { name: 'HTTP Methods' })).toBeVisible();
 });
 
-test.skip(
-  'page-path POST returns the app-shell 405 response',
-  // Current fixture serving uses the Vite dev ownership filter, which lets
-  // disallowed route methods fall through to Vite instead of dispatching the
-  // app-shell 405 from SPEC.md §9.5.
-  async () => {},
-);
+test('page-path POST returns the app-shell 405 response', async ({ request }) => {
+  const response = await request.post('/');
+  expect(response.status()).toBe(405);
+  expect(response.headers().allow).toBe('GET, HEAD');
+  expect(await response.text()).toBe('Method Not Allowed');
+});
