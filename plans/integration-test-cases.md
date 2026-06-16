@@ -417,18 +417,29 @@ integration harness uniquely proves.
   - Evidence: added `tests/integration/fixtures/details-disclosure/app.tsx` and
     `tests/integration/specs/details-disclosure.spec.ts`; passed
     `pnpm --filter @kovojs/integration-tests exec playwright test specs/morph-focus-caret.spec.ts specs/fragment-append.spec.ts specs/dialog-invoker.spec.ts specs/details-disclosure.spec.ts --config playwright.config.ts`.
-- [ ] `primitive-as-child` / `primitive-as-child.spec.ts`: primitive attrs merge into an author-owned
+- [x] `primitive-as-child` / `primitive-as-child.spec.ts`: primitive attrs merge into an author-owned
       element through `asChild`/attrs-function lowering.
   - SPEC refs: §4.6 primitive composition.
   - Assertions: one emitted element; merged class/style/ARIA/handler attrs; semantic snapshot.
+  - Evidence: added `tests/integration/fixtures/primitive-as-child/app.tsx`,
+    `tests/integration/fixtures/primitive-as-child/card.tsx`, and
+    `tests/integration/specs/primitive-as-child.spec.ts`; passed
+    `pnpm exec playwright test tests/integration/specs/primitive-as-child.spec.ts --config tests/integration/playwright.config.ts`.
 - [ ] `primitive-id-author-wins` / `primitive-id-author-wins.spec.ts`: when an author id wins, primitive
       IDREFs are rewired to the surviving id.
   - SPEC refs: §4.6 merge rules, §6.2 IDREFs.
   - Assertions: runtime relationship works; snapshot shows final id/IDREF values.
+  - Gap: a focused fixture probe using plain primitive attrs records left the authored dialog closed
+    after trigger activation, so the current integration/compiler path is not yet rewriting the
+    cross-element `commandfor`/`aria-controls` IDREFs needed by SPEC.md §4.6.
 - [ ] `primitive-state-attrs` / `primitive-state-attrs.spec.ts`: primitive-owned `data-state` updates
       on interaction and author static overrides do not break runtime state.
   - SPEC refs: §4.6 merge rules, §12.1 accessibility conformance.
   - Assertions: `data-state`/ARIA state terminal values; axe-clean terminal state if axe helper lands.
+  - Gap: the integration fixture path can lower stateless primitive `asChild` merges, but the
+    attempted stateful primitive-composition probe hit unsupported fixture/compiler edges before the
+    browser assertions ran, so this remains open pending a supported stateful primitive integration
+    surface.
 
 ## Composition, slots, and component identity
 

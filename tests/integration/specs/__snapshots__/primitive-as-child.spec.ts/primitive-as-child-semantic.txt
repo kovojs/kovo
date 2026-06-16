@@ -1,0 +1,5 @@
+<section kovo-c="primitive-as-child-card">
+  <button aria-controls="as-child-panel" aria-label="Primitive help" class="primitive-trigger primitive-base author-trigger author-base" data-state="closed" on:click="/client.ts#author /client.ts#primitive" role="button" type="submit">
+    "Open account"
+  <div id="as-child-panel">
+    "Merged panel"
