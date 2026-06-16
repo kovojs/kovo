@@ -5,58 +5,24 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
 
+import { documentedPackages } from '../../scripts/public-packages.mjs';
+
 /**
  * Generated API reference (plan W6): one markdown page per app-facing package,
  * emitted from the real TypeScript sources so the docs cannot drift silently.
  * Undocumented exports are flagged, never omitted (plan exit criterion 4).
  * Output is deterministic: no timestamps, no absolute paths.
+ *
+ * The set of documented packages is NOT hard-coded here: it is read from the
+ * repo-root `public-packages.json` manifest (plan api-cleanup Phase 2), the same
+ * source the api-surface CI gate consults, so docs and enforcement cannot diverge.
  */
 
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 
-const PACKAGES = [
-  {
-    description:
-      'Component model, diagnostics registry, routes, queries, forms, storage, and webhook verifiers.',
-    dir: 'core',
-    name: '@kovojs/core',
-    order: 1,
-    slug: 'core',
-  },
-  {
-    description:
-      'Schemas and validation, guards and sessions, the request lifecycle, route matching, rendering, and streaming.',
-    dir: 'server',
-    name: '@kovojs/server',
-    order: 2,
-    slug: 'server',
-  },
-  {
-    description:
-      'Client runtime: the Kovo loader, delegated events, island signals, morphing, the query store, and optimistic mutations.',
-    dir: 'runtime',
-    name: '@kovojs/runtime',
-    order: 3,
-    slug: 'runtime',
-  },
-  {
-    description:
-      'Test harness: PGlite-backed databases, db verification against the touch graph, and mutation/property testing.',
-    dir: 'test',
-    name: '@kovojs/test',
-    order: 4,
-    slug: 'test',
-  },
-  {
-    description:
-      'Drizzle adapter: table annotations, touch-graph extraction from queries, and invalidation registry derivation.',
-    dir: 'drizzle',
-    name: '@kovojs/drizzle',
-    order: 5,
-    slug: 'drizzle',
-  },
-];
+// Documented packages come from the public-packages.json manifest (sorted by order).
+const PACKAGES = documentedPackages();
 
 const UNDOCUMENTED = '*Undocumented.*';
 const MAX_SIGNATURE_LINES = 40;

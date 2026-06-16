@@ -1,6 +1,6 @@
 # API Surface Cleanup — Execution Plan
 
-**Status:** open (2 / 23 slices closed — Phase 1 done)
+**Status:** open (4 / 23 slices closed — Phases 1–2 done)
 **Findings source:** 2026-06-15 multi-agent API audit (memory `api-surface-audit`). The audit holds the per-finding what/why/`file:line` evidence and mature-framework contrasts; this file is the compact execution ledger — one checkbox per coherent slice, sequenced by leverage and dependency.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -55,12 +55,14 @@ Mark `- [x]` only when this session verifies the cited proving command for the e
 
 ## Phase 2 — Public-surface source of truth (cheap, gates enforcement)
 
-- [ ] **Add a repo-root `publicPackages` manifest** encoding the classification table above, consumed by `api-ref.mjs` (replacing its hand-edited 5-element array, `api-ref.mjs:18-59`) and by the Phase 3 CI gate.
+- [x] **Add a repo-root `publicPackages` manifest** encoding the classification table above, consumed by `api-ref.mjs` (replacing its hand-edited 5-element array, `api-ref.mjs:18-59`) and by the Phase 3 CI gate.
   - Done = one machine-readable manifest is the single source; `api-ref.mjs` imports it; a test asserts every package is classified and every non-public package sets `private:true`.
   - Prove: `node --test site/scripts/api-ref.test.mjs`
-- [ ] **Adopt the `@public`/`@internal` tag convention** — document it in `rules/` (what is public surface, how subpaths are tagged, that `export *` is banned on public barrels). Mark the private packages `private:true` (`@kovojs/ui`, new `@kovojs/conformance-fixtures`). Do NOT mark `@kovojs/compiler` private.
+  - Evidence 2026-06-15: `public-packages.json` (repo root) classifies all 11 packages (visibility/kind, + `apiRef` order/slug/description for the documented 5). `scripts/public-packages.mjs` exposes `loadPublicPackages`/`publicPackages`/`privatePackages`/`documentedPackages`. `api-ref.mjs` now does `const PACKAGES = documentedPackages()` (hand-edited array deleted). `scripts/public-packages.test.mjs` asserts every `packages/*` is classified exactly once, names match, private→`private:true`, public→not-private, and the documented set is well-formed. Prove ran green: `pnpm exec vitest run scripts/public-packages.test.mjs site/scripts/api-ref.test.mjs` (13 passed; api-ref still emits core/server/runtime/test/drizzle in order).
+- [x] **Adopt the `@public`/`@internal` tag convention** — document it in `rules/` (what is public surface, how subpaths are tagged, that `export *` is banned on public barrels). Mark the private packages `private:true` (`@kovojs/ui`, new `@kovojs/conformance-fixtures`). Do NOT mark `@kovojs/compiler` private.
   - Done = `rules/api-surface.md` exists; private packages set `private:true`; `vp check` green.
   - Prove: `pnpm run check`
+  - Evidence 2026-06-15: `rules/api-surface.md` documents the manifest-as-source-of-truth, `@public`/`@internal` defaults, the no-`export *`-on-public-barrels rule, and bins-are-not-importable. `@kovojs/ui` now sets `"private": true` (workspace consumers unaffected — confirmed `pnpm install` clean). `@kovojs/conformance-fixtures` does not exist yet (created in Phase 5; it will be added to the manifest as private then). `@kovojs/compiler` deliberately left public. Prove ran green: `pnpm run check` exit 0 (format + typecheck + typecheck-examples).
 
 ---
 

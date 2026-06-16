@@ -1,0 +1,96 @@
+{
+  "$comment": "Single source of truth for which Kovo packages are PUBLIC (safe for outside consumers to depend on) vs PRIVATE (repo-internal, no external consumer should import them). Consumed by site/scripts/api-ref.mjs and the api-surface CI gate (scripts/api-surface-gate). See rules/api-surface.md and plans/api-cleanup.md. `kind`: library = importable package; build-tool = consumed by an app's build/codegen step; cli = run as a bin; starter = shadcn-style copy-in (not a versioned dep). `apiRef` (order/slug/description) marks packages whose public surface is rendered into the generated API reference.",
+  "packages": [
+    {
+      "name": "@kovojs/core",
+      "dir": "core",
+      "visibility": "public",
+      "kind": "library",
+      "apiRef": {
+        "order": 1,
+        "slug": "core",
+        "description": "Component model, diagnostics registry, routes, queries, forms, storage, and webhook verifiers."
+      }
+    },
+    {
+      "name": "@kovojs/server",
+      "dir": "server",
+      "visibility": "public",
+      "kind": "library",
+      "apiRef": {
+        "order": 2,
+        "slug": "server",
+        "description": "Schemas and validation, guards and sessions, the request lifecycle, route matching, rendering, and streaming."
+      }
+    },
+    {
+      "name": "@kovojs/runtime",
+      "dir": "runtime",
+      "visibility": "public",
+      "kind": "library",
+      "apiRef": {
+        "order": 3,
+        "slug": "runtime",
+        "description": "Client runtime: the Kovo loader, delegated events, island signals, morphing, the query store, and optimistic mutations."
+      }
+    },
+    {
+      "name": "@kovojs/test",
+      "dir": "test",
+      "visibility": "public",
+      "kind": "library",
+      "apiRef": {
+        "order": 4,
+        "slug": "test",
+        "description": "Test harness: PGlite-backed databases, db verification against the touch graph, and mutation/property testing."
+      }
+    },
+    {
+      "name": "@kovojs/drizzle",
+      "dir": "drizzle",
+      "visibility": "public",
+      "kind": "library",
+      "apiRef": {
+        "order": 5,
+        "slug": "drizzle",
+        "description": "Drizzle adapter: table annotations, touch-graph extraction from queries, and invalidation registry derivation."
+      }
+    },
+    {
+      "name": "@kovojs/headless-ui",
+      "dir": "headless-ui",
+      "visibility": "public",
+      "kind": "library"
+    },
+    {
+      "name": "@kovojs/better-auth",
+      "dir": "better-auth",
+      "visibility": "public",
+      "kind": "library"
+    },
+    {
+      "name": "@kovojs/compiler",
+      "dir": "compiler",
+      "visibility": "public",
+      "kind": "build-tool"
+    },
+    {
+      "name": "kovo",
+      "dir": "cli",
+      "visibility": "public",
+      "kind": "cli"
+    },
+    {
+      "name": "create-kovo",
+      "dir": "create-kovo",
+      "visibility": "public",
+      "kind": "cli"
+    },
+    {
+      "name": "@kovojs/ui",
+      "dir": "ui",
+      "visibility": "private",
+      "kind": "starter"
+    }
+  ]
+}
