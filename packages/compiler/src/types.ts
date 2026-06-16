@@ -26,7 +26,10 @@ export interface CompileComponentOptions {
  * @internal Per-component graph fact (name, queries, fragment targets) the compiler derives
  * and {@link deriveAppGraph} merges. Lowered-IR fact shape; in-repo use only (SPEC.md §5.2).
  */
-export type ComponentGraphFact = Pick<ComponentExplain, 'fragments' | 'name' | 'queries'>;
+export type ComponentGraphFact = Pick<
+  ComponentExplain,
+  'disambiguatedDomName' | 'domName' | 'fragments' | 'name' | 'queries'
+>;
 
 /**
  * @internal A component's fragment-target fact (target name + props type) used when building

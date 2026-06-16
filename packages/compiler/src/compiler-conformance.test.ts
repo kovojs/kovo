@@ -71,6 +71,7 @@ describe('compiler conformance corpus', () => {
           "clientExports": [],
           "componentGraphFacts": [
             {
+              "domName": "reference-shell",
               "name": "components/reference-shell/reference-shell",
               "queries": [
                 "account",
@@ -111,6 +112,7 @@ describe('compiler conformance corpus', () => {
           "clientExports": [],
           "componentGraphFacts": [
             {
+              "domName": "cart-badge",
               "fragments": [
                 "components/cart-badge/cart-badge",
               ],
@@ -154,6 +156,7 @@ describe('compiler conformance corpus', () => {
           "clientExports": [],
           "componentGraphFacts": [
             {
+              "domName": "order-history",
               "fragments": [
                 "components/order-history/order-history",
               ],
@@ -197,6 +200,7 @@ describe('compiler conformance corpus', () => {
           "clientExports": [],
           "componentGraphFacts": [
             {
+              "domName": "product-grid",
               "fragments": [
                 "components/product-grid/product-grid",
               ],
@@ -240,6 +244,7 @@ describe('compiler conformance corpus', () => {
           "clientExports": [],
           "componentGraphFacts": [
             {
+              "domName": "cart-badge",
               "fragments": [
                 "conformance/generated/cart-badge/cart-badge",
               ],

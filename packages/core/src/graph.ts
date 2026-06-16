@@ -80,6 +80,8 @@ export interface PackageComponentPrefixExplain {
 export interface ComponentExplain {
   attributeMerges?: readonly AttributeMergeExplain[];
   derives?: readonly DeriveExplain[];
+  disambiguatedDomName?: string;
+  domName?: string;
   fragments?: readonly string[];
   handlers?: readonly HandlerExplain[];
   name: string;

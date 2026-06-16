@@ -123,7 +123,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const fragmentTargetFacts = findFragmentTargetFacts(componentNames.registryKey, model);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
   const componentGraphFacts = [
-    componentGraphFact(componentNames.registryKey, model, fragmentTargets),
+    componentGraphFact(componentNames.registryKey, componentNames.domName, model, fragmentTargets),
   ];
   const cssAssets = cssSource
     ? [

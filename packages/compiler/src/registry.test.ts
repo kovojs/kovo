@@ -193,6 +193,7 @@ export const ProductGrid = component({
 
     expect(cartBadge.componentGraphFacts).toEqual([
       {
+        domName: 'cart-badge',
         fragments: ['components/cart/cart-badge/cart-badge'],
         name: 'components/cart/cart-badge/cart-badge',
         queries: ['cart'],
@@ -213,11 +214,13 @@ export const ProductGrid = component({
 
     expect(derived.graph.components).toEqual([
       {
+        domName: 'cart-badge',
         fragments: ['components/cart/cart-badge/cart-badge'],
         name: 'components/cart/cart-badge/cart-badge',
         queries: ['cart'],
       },
       {
+        domName: 'product-grid',
         name: 'components/products/product-grid/product-grid',
         queries: ['productGrid'],
       },
@@ -235,6 +238,34 @@ export const ProductGrid = component({
       },
       routes: ['/cart'],
     });
+  });
+
+  it('marks duplicate DOM leaves with stable registry-key disambiguation facts', () => {
+    const derived = deriveAppGraph({
+      graph: {
+        components: [
+          { domName: 'root', name: 'accordion/root', queries: ['accordion'] },
+          { domName: 'root', name: 'tabs/root', queries: ['tabs'] },
+          { domName: 'menu', name: 'menu/root', queries: ['menu'] },
+        ],
+      },
+    });
+
+    expect(derived.graph.components).toEqual([
+      {
+        disambiguatedDomName: 'accordion/root',
+        domName: 'root',
+        name: 'accordion/root',
+        queries: ['accordion'],
+      },
+      {
+        disambiguatedDomName: 'tabs/root',
+        domName: 'root',
+        name: 'tabs/root',
+        queries: ['tabs'],
+      },
+      { domName: 'menu', name: 'menu/root', queries: ['menu'] },
+    ]);
   });
 
   it('reports KV228 for exact duplicate route facts before registry route dedupe', () => {

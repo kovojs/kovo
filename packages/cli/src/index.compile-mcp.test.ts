@@ -75,7 +75,8 @@ describe('compile/v1 and kovo mcp', () => {
       {
         "componentGraphFacts": [
           {
-            "name": "CartBadge",
+            "domName": "cart-badge",
+            "name": "cart-badge/cart-badge",
           },
         ],
         "diagnostics": [],
@@ -91,7 +92,7 @@ describe('compile/v1 and kovo mcp', () => {
             "kind": "client",
           },
           {
-            "byteLength": 656,
+            "byteLength": 953,
             "fileName": "generated/registries.d.ts",
             "kind": "registry",
           },

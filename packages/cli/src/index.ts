@@ -1240,6 +1240,10 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     if (provenance) lines.push(provenance);
     lines.push(`queries: ${list(component.queries)}`);
     lines.push(`fragments: ${list(component.fragments)}`);
+    if (component.domName) lines.push(`dom-name: ${component.domName}`);
+    if (component.disambiguatedDomName) {
+      lines.push(`effective-dom-name: ${component.disambiguatedDomName}`);
+    }
 
     for (const handler of component.handlers ?? []) {
       lines.push(
@@ -1786,7 +1790,11 @@ function findComponentExplain(
   target: string,
 ): ComponentExplain | undefined {
   return components?.find(
-    (component) => component.name === target || componentWireName(component.name) === target,
+    (component) =>
+      component.name === target ||
+      component.domName === target ||
+      component.disambiguatedDomName === target ||
+      componentWireName(component.name) === target,
   );
 }
 

@@ -145,8 +145,13 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     `packages/compiler/src/graph.ts` thread those values through CSS, stamps, graph facts, and
     fragment-target facts. `pnpm --filter @kovojs/compiler exec vitest run` and
     `pnpm --filter @kovojs/compiler exec tsc --noEmit` passed on 2026-06-16.
-  - Gap: stable per-page DOM-leaf collision disambiguation/reporting and descriptor injection remain
-    open.
+  - Evidence: `packages/compiler/src/graph.ts` now carries `domName` in component graph facts and
+    annotates duplicate DOM leaves with stable registry-key `disambiguatedDomName` facts during graph
+    composition; `packages/cli/src/index.ts` prints those facts in `kovo explain component`.
+    `pnpm --filter @kovojs/compiler exec vitest run`, `pnpm --filter kovo exec vitest run`, `pnpm
+    exec vp run build`, and `node tests/kovo-check.node.mjs` passed on 2026-06-16.
+  - Gap: the compiler still does not rewrite served page HTML/CSS to the disambiguated `kovo-c` in a
+    per-rendered-page composition pass.
 - [x] **Registry/type codegen** (registry `.d.ts` emission + `validate/component-names.ts`).
   - Emit `FragmentTargets` and a name→component map keyed off derived names; KV237/KV238 key on the
     derived (namespaced) key. Update `componentNameRegistration` to source the derived name.
@@ -175,6 +180,14 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
   - [ ] Auto-disambiguation reporting: when the DOM-leaf collision pass rewrites a `kovo-c`, surface
     it in `kovo explain component` (no error, but it must be inspectable — a silent wire-name change is
     exactly what the "no silent caps" discipline forbids).
+    - Evidence: graph-level reporting plumbing exists: `ComponentExplain` accepts `domName` and
+      `disambiguatedDomName`, `deriveAppGraph` derives stable registry-key disambiguation facts for
+      duplicate DOM leaves, and `kovo explain component` prints `dom-name:` /
+      `effective-dom-name:`. Verified by `packages/compiler/src/registry.test.ts`,
+      `packages/cli/src/index.kovo-explain.test.ts`, `pnpm --filter @kovojs/compiler exec vitest run`,
+      `pnpm --filter kovo exec vitest run`, and `node tests/kovo-check.node.mjs` on 2026-06-16.
+    - Gap: still no page-level rewrite pass that changes the actual emitted `kovo-c`, so this remains
+      open.
   - [ ] New diagnostic: a derived name that **changed** vs. the last emitted registry fact (wire names
     are deploy-load-bearing; a silent change breaks morph identity for in-flight clients). Decide
     severity (warn vs. error) and whether it gates only when fragmentTarget/cross-build matters.

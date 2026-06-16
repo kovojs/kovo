@@ -370,6 +370,7 @@ export const CartTable = component({
 
     expect(result.componentGraphFacts).toEqual([
       {
+        domName: 'cart-table',
         name: 'cart-row/cart-table',
         queries: ['cart'],
       },

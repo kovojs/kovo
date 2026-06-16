@@ -31,12 +31,13 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.packageComponentPrefixes ?? []),
     ...(options.packageComponentPrefixes ?? []),
   ];
+  const components = disambiguateComponentDomNames([
+    ...(options.graph?.components ?? []),
+    ...(options.components ?? []).flatMap((component) => component.componentGraphFacts),
+  ]);
   const graph: RegistryGraphInput = {
     ...options.graph,
-    components: [
-      ...(options.graph?.components ?? []),
-      ...(options.components ?? []).flatMap((component) => component.componentGraphFacts),
-    ],
+    components,
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
   };
 
@@ -75,12 +76,14 @@ export function findFragmentTargetFacts(
  */
 export function componentGraphFact(
   componentName: string,
+  domName: string,
   model: ComponentModuleModel,
   fragmentTargets: readonly string[],
 ): ComponentGraphFact {
   const queries = componentQueryNames(model);
 
   return {
+    domName,
     ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
     name: componentName,
     ...(queries.length === 0 ? {} : { queries }),
@@ -157,6 +160,28 @@ function deriveComponentFactsFromGraph(graph: RegistryGraphInput): string[] {
   return [...new Set((graph.components ?? []).map((component) => component.name))].sort((left, right) =>
     left.localeCompare(right),
   );
+}
+
+function disambiguateComponentDomNames(
+  components: readonly ComponentGraphFact[],
+): ComponentGraphFact[] {
+  const counts = new Map<string, number>();
+  for (const component of components) {
+    const domName = component.domName;
+    if (!domName) continue;
+    counts.set(domName, (counts.get(domName) ?? 0) + 1);
+  }
+
+  return components.map((component) => {
+    const domName = component.domName;
+    if (!domName || (counts.get(domName) ?? 0) < 2) return component;
+    if (component.disambiguatedDomName === component.name) return component;
+
+    return {
+      ...component,
+      disambiguatedDomName: component.name,
+    };
+  });
 }
 
 function deriveFragmentTargetsFromGraph(graph: RegistryGraphInput): string[] {

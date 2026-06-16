@@ -37,6 +37,8 @@ describe('kovo explain', () => {
                   target: 'button[data-bind:disabled]',
                 },
               ],
+              disambiguatedDomName: 'components/cart/cart-badge/cart-badge',
+              domName: 'cart-badge',
               fragments: ['cart-badge'],
               handlers: [
                 {
@@ -79,6 +81,8 @@ describe('kovo explain', () => {
         'COMPONENT CartBadge',
         'queries: cart',
         'fragments: cart-badge',
+        'dom-name: cart-badge',
+        'effective-dom-name: components/cart/cart-badge/cart-badge',
         'HANDLER click export=CartBadge$button_click ref=/c/cart-badge.client.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-',
         'SUBSTITUTION dialog tag=button event=click target=cart-drawer action=show-modal',
         'DERIVE CartBadge$isEmpty inputs=cart ref=/c/cart-badge.client.js#CartBadge$isEmpty target=button[data-bind:disabled]',

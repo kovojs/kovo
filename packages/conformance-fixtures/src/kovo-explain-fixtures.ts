@@ -82,6 +82,8 @@ export interface KovoExplainEndpointAssertionFact {
 
 export interface KovoExplainComponentAssertionFact {
   derives: KovoExplainComponentDeriveFact[];
+  disambiguatedDomName?: string;
+  domName?: string;
   exitCode: number;
   fragments: string[];
   handlers: KovoExplainComponentHandlerFact[];
@@ -302,9 +304,13 @@ export function kovoExplainComponentAssertionFact(
   result: KovoExplainResultLike,
 ): KovoExplainComponentAssertionFact {
   const parsed = parseKovoExplainOutput(result.output);
+  const disambiguatedDomName = optionalField(parsed, 'effective-dom-name');
+  const domName = optionalField(parsed, 'dom-name');
 
   return {
     derives: kovoExplainComponentDeriveFacts(result.output),
+    ...(disambiguatedDomName === undefined ? {} : { disambiguatedDomName }),
+    ...(domName === undefined ? {} : { domName }),
     exitCode: result.exitCode,
     fragments: listField(parsed, 'fragments'),
     handlers: kovoExplainComponentHandlerFacts(result.output),

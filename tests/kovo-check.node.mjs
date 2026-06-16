@@ -2051,6 +2051,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   });
   assert.deepEqual(fact.componentGraphFacts, [
     {
+      domName: 'cart-badge',
       name: 'cart-badge/cart-badge',
       queries: ['cart'],
     },
@@ -3342,6 +3343,7 @@ export const CartRow = component({
   });
   assert.deepEqual(result.componentGraphFacts, [
     {
+      domName: 'cart-row',
       fragments: ['cart-row/cart-row'],
       name: 'cart-row/cart-row',
     },
