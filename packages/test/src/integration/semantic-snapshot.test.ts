@@ -33,6 +33,18 @@ describe('semanticSnapshot', () => {
     expect(semanticSnapshot(asset)).toBe('<img src="/assets/logo.*.png">');
   });
 
+  it('normalizes versioned handler refs kept in on attributes', () => {
+    const html =
+      '<button on:click="/c/cart-add.client.js?v=9f3ad21c#add /assets/legacy.4f8a9c1b.js#run">Add</button>';
+
+    expect(semanticSnapshot(html, { keepAttrs: ['on:click'] })).toBe(
+      [
+        '<button on:click="/c/cart-add.client.js?v=*#add /assets/legacy.*.js#run">',
+        '  "Add"',
+      ].join('\n'),
+    );
+  });
+
   it('keeps accessibility attributes and role/name', () => {
     const html =
       '<button role="switch" aria-checked="true" aria-label="Toggle" class="btn">on</button>';
