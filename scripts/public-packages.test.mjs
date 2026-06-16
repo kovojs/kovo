@@ -20,11 +20,13 @@ import {
 
 function workspacePackageDirs() {
   const packagesDir = path.join(repoRoot, 'packages');
-  return readdirSync(packagesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    // node_modules (a pnpm hoisting artifact) and dot-dirs are not workspace packages.
-    .filter((entry) => entry.name !== 'node_modules' && !entry.name.startsWith('.'))
-    .map((entry) => entry.name);
+  return (
+    readdirSync(packagesDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      // node_modules (a pnpm hoisting artifact) and dot-dirs are not workspace packages.
+      .filter((entry) => entry.name !== 'node_modules' && !entry.name.startsWith('.'))
+      .map((entry) => entry.name)
+  );
 }
 
 function packageJson(dir) {
