@@ -1,6 +1,6 @@
 # API Surface Cleanup — Execution Plan
 
-**Status:** open (4 / 23 slices closed — Phases 1–2 done)
+**Status:** open (6 / 24 slices closed — Phases 1–2 done; Phase 3 enforcement+stability done, dist-exports flip carved out as a separate slice)
 **Findings source:** 2026-06-15 multi-agent API audit (memory `api-surface-audit`). The audit holds the per-finding what/why/`file:line` evidence and mature-framework contrasts; this file is the compact execution ledger — one checkbox per coherent slice, sequenced by leverage and dependency.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -68,15 +68,19 @@ Mark `- [x]` only when this session verifies the cited proving command for the e
 
 ## Phase 3 — Build & distribution pipeline (gating prerequisite)
 
-- [ ] **Build `dist` JS + rolled-up `.d.ts` per public package; point `exports`/`types` at `dist`; add `files` allowlist; keep raw source behind a `development`/`source` condition.** Decouples adopters from the monorepo's strict tsconfig + `jsxImportSource`.
+- [~] **Build `dist` JS + rolled-up `.d.ts` per public package; point `exports`/`types` at `dist`; add `files` allowlist; keep raw source behind a `development`/`source` condition.** Decouples adopters from the monorepo's strict tsconfig + `jsxImportSource`.
   - Done = each public package emits `dist` + a single rolled-up `.d.ts`; `exports`/`types` resolve to `dist`; `files` limits the publish tarball; the workspace still resolves source via the `development` condition; `pnpm run check:build` green.
   - Prove: `pnpm run check:build`
-- [ ] **Move public packages to a real `0.x` line + publish `STABILITY.md`** with a SemVer + deprecation-cycle policy and an `experimental_`/`@experimental` convention for unfrozen surface. (`0.0.0` today says "nothing promised" but nothing states it.)
+  - PARTIAL / DEFERRED 2026-06-15 (investigated; live `exports` flip intentionally NOT done yet). Findings: a build already exists (`vp pack`, `vite.config.ts:162` `dts:true`) emitting `dist/<pkg>/src/index.mjs` + `.d.mts`, but it (a) only covers `packages/*/src/index.ts` + server app-shell — NOT the subpath surfaces (drizzle `derive`/`static`, headless-ui `primitives/*`, test `*-fixtures`, etc.), and (b) builds `dist/drizzle/src/index.mjs` from `index.ts` though drizzle's real `.` is `runtime.ts`. The whole workspace is source-coupled (NodeNext `exports`→`src`; the compiler reads source; some example tests run real `vite build`). So flipping live `exports`→`dist` safely first requires: expand `pack.entry` to every public export target (matching each `exports` map), add `customConditions:["development"]` to tsconfigs + `resolve.conditions:['development']` to the vite configs so in-repo dev **and** production builds keep resolving source, then conditional `{development:src, types/default:dist}` exports + `files`. That is a large, separable packaging slice; tracked as its own item below. It does NOT block Phases 4–8 (they operate on source + the gate/manifest, both landed).
+  - [ ] **(carved-out) Complete the publish build + flip `exports` to dist.** Expand `vp pack` entry coverage to all public export targets; fix the drizzle entry; add `development` conditions (tsconfig `customConditions` + vite `resolve.conditions`); conditional exports + `files`. Prove: `pnpm run check:build` + every example `vite build` + `pnpm run test:p10-perf` (imports `dist/`) green.
+- [x] **Move public packages to a real `0.x` line + publish `STABILITY.md`** with a SemVer + deprecation-cycle policy and an `experimental_`/`@experimental` convention for unfrozen surface. (`0.0.0` today says "nothing promised" but nothing states it.)
   - Done = `STABILITY.md` defines public surface + deprecation cadence; public packages versioned `0.x`.
   - Prove: link-check + `pnpm run check`
-- [ ] **CI gate: fail on untagged-reachable or leaked-`@internal` symbols** — api-extractor (or a custom `.d.ts` checker) driven by the `publicPackages` manifest. This is what makes the boundary binding rather than conventional.
+  - Evidence 2026-06-15: `STABILITY.md` defines what is public (manifest + documented-not-`@internal`), the `0.x` SemVer rule (minor may break until 1.0), the `experimental_`/`@experimental` exemption, the deprecation cycle, and the dist/`@internal`-stripped distribution promise. The 10 public packages bumped `0.0.0`→`0.1.0` (private `@kovojs/ui` + examples/conformance stay `0.0.0`). Prove: `pnpm run check` exit 0.
+- [x] **CI gate: fail on untagged-reachable or leaked-`@internal` symbols** — api-extractor (or a custom `.d.ts` checker) driven by the `publicPackages` manifest. This is what makes the boundary binding rather than conventional.
   - Done = a deliberately-leaked `@internal` symbol and a deliberately-untagged public export both fail the gate in a fixture; the gate runs in `acceptance`.
   - Prove: `pnpm run acceptance` (gate step)
+  - Evidence 2026-06-15: `scripts/api-surface-gate.mjs` enumerates every symbol reachable from each public package's `exports` map (resolved to source) via the TS checker and flags those neither documented nor `@internal`. Repo starts with **3957** such exports (quantifies the audit's systemic finding), so the gate is a RATCHET against `api-surface-baseline.json` — fails only on NEW leaks; Phases 4–8 shrink the baseline (regenerate with `--write`). Wired into `acceptance` as `pnpm run check:api-surface` (`package.json`). `scripts/api-surface-gate.test.mjs` proves the ratchet flags a new leak and recognizes a fixed one, and that the baseline stays in sync. Prove ran green: gate exit 0; `pnpm exec vitest run scripts/api-surface-gate.test.mjs` (3 passed).
 
 ---
 
