@@ -40,7 +40,13 @@ import { validatePackageComponentPrefixes } from './validate/package-prefixes.js
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { extractKovoStyles } from './style.js';
-import type { CompileComponentOptions, CompileResult, StateDeriveFact } from './types.js';
+import type {
+  CompileComponentOptions,
+  CompileResult,
+  QueryUpdateCoverageFact,
+  QueryUpdatePlanFact,
+  StateDeriveFact,
+} from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
 
 /**
@@ -79,12 +85,27 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const componentName = inferComponentName(options.fileName, originalModel);
   const componentNames = deriveComponentNames(options.fileName, firstComponentModel(originalModel));
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
-  const structuralLowering = lowerStructuralJsx(originalState.model, componentName, compileOptions);
+  const styleExtraction = extractKovoStyles(
+    options.fileName,
+    options.source,
+    originalModel,
+    componentName,
+    compileOptions,
+  );
+  const structuralLowering = lowerStructuralJsx(originalState.model, componentName, {
+    ...compileOptions,
+    skipInlineAttributeDeriveSpans: styleExtraction.handledSpans,
+  });
   const platformLowering = platformBehaviorLowering(originalState.model);
   const hrefReplacements = navigationHrefLowering(originalState.model);
   const modelPatch = applyModelPatchPass(
     originalState,
-    [...structuralLowering.replacements, ...platformLowering.replacements, ...hrefReplacements],
+    [
+      ...structuralLowering.replacements,
+      ...platformLowering.replacements,
+      ...hrefReplacements,
+      ...styleExtraction.replacements,
+    ],
     parseComponentModuleModel,
     { prefix: structuralLowering.prefix },
   );
@@ -93,8 +114,15 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const validationOffsetMap = modelPatch.sourceOffsetMap;
   const model = modelPatch.state.model;
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
-  const queryUpdatePlans = collectQueryUpdatePlans(model, componentName);
-  const updateCoverage = collectQueryUpdateCoverage(model, compileOptions, componentName);
+  const queryUpdatePlans = mergeQueryUpdatePlans([
+    ...collectQueryUpdatePlans(model, componentName),
+    ...styleExtraction.queryUpdatePlans,
+  ]);
+  const updateCoverage = mergeStyleUpdateCoverage(
+    collectQueryUpdateCoverage(model, compileOptions, componentName),
+    styleExtraction.updateCoverage,
+    styleExtraction.handledSpans,
+  );
   const packagePrefixDiagnostics = validatePackageComponentPrefixes(
     compileOptions.packageComponentPrefixes,
     options.fileName,
@@ -110,12 +138,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     updateCoverage,
   });
   const fileNames = compileArtifactFileNames(options.fileName);
-  const styleExtraction = extractKovoStyles(options.fileName, source, model);
+  const stateDerives = [...structuralLowering.stateDerives, ...styleExtraction.stateDerives];
 
   const clientSource = emitClientModule(
     handlers,
     queryUpdatePlans,
-    structuralLowering.stateDerives,
+    stateDerives,
     componentName,
   );
   const clientHref = clientModuleUrl(options.fileName, clientModuleVersion(clientSource));
@@ -158,8 +186,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const serverRenderReplacements = [
     ...serverRenderLowering(versionedHandlers, model, componentNames.domName),
     ...componentDescriptorNameAssignments(model, componentNames.registryKey),
-    ...versionStateDeriveReferences(model, structuralLowering.stateDerives, clientHref),
-    ...styleExtraction.replacements,
+    ...versionStateDeriveReferences(model, stateDerives, clientHref),
   ];
   const serverRenderedSource = applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements);
   const serverModule = emitServerModule(serverRenderedSource);
@@ -194,7 +221,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ],
     clientExports: [
       ...versionedHandlers.map((handler) => handler.exportName),
-      ...structuralLowering.stateDerives.map((derive) => derive.exportName),
+      ...stateDerives.map((derive) => derive.exportName),
     ],
     handlerExports: versionedHandlers.map((handler) => handler.exportName),
     loweredSource: serverRenderedSource,
@@ -258,6 +285,86 @@ function versionStateDeriveReferences(
   }
 
   return replacements;
+}
+
+function mergeQueryUpdatePlans(
+  plans: readonly QueryUpdatePlanFact[],
+): QueryUpdatePlanFact[] {
+  const byQuery = new Map<string, QueryUpdatePlanFact[]>();
+  for (const plan of plans) {
+    byQuery.set(plan.query, [...(byQuery.get(plan.query) ?? []), plan]);
+  }
+
+  return [...byQuery.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([query, queryPlans]) => ({
+      componentName: queryPlans[0]?.componentName ?? 'Component',
+      query,
+      paths: [...new Set(queryPlans.flatMap((plan) => plan.paths))].sort(),
+      ...(queryPlans.some((plan) => (plan.derives?.length ?? 0) > 0)
+        ? {
+            derives: dedupeByKey(
+              queryPlans.flatMap((plan) => [...(plan.derives ?? [])]),
+              (derive) => derive.exportName,
+            ).sort((left, right) => left.name.localeCompare(right.name)),
+          }
+        : {}),
+      ...(queryPlans.some((plan) => (plan.stamps?.length ?? 0) > 0)
+        ? {
+            stamps: dedupeByKey(
+              queryPlans.flatMap((plan) => [...(plan.stamps ?? [])]),
+              (stamp) => `${stamp.attr}\0${stamp.selector}\0${stamp.derive.exportName}`,
+            ).sort((left, right) => left.attr.localeCompare(right.attr)),
+          }
+        : {}),
+      ...(queryPlans.some((plan) => (plan.templateStamps?.length ?? 0) > 0)
+        ? {
+            templateStamps: dedupeByKey(
+              queryPlans.flatMap((plan) => [...(plan.templateStamps ?? [])]),
+              (stamp) => `${stamp.key}\0${stamp.selector}\0${stamp.list}`,
+            ).sort((left, right) => left.list.localeCompare(right.list)),
+          }
+        : {}),
+    }));
+}
+
+function mergeStyleUpdateCoverage(
+  coverage: readonly QueryUpdateCoverageFact[],
+  styleCoverage: readonly QueryUpdateCoverageFact[],
+  handledSpans: readonly { length: number; start: number }[],
+): QueryUpdateCoverageFact[] {
+  if (styleCoverage.length === 0) return [...coverage];
+
+  return [
+    ...coverage.filter((fact) => {
+      const sourceSpan = fact.sourceSpan;
+      return (
+        fact.status !== 'UNHANDLED' ||
+        !sourceSpan ||
+        !handledSpans.some((span) => containsSourceSpan(span, sourceSpan))
+      );
+    }),
+    ...styleCoverage,
+  ];
+}
+
+function containsSourceSpan(
+  outer: { length: number; start: number },
+  inner: { length: number; start: number },
+): boolean {
+  return inner.start >= outer.start && inner.start + inner.length <= outer.start + outer.length;
+}
+
+function dedupeByKey<Value>(values: readonly Value[], keyFor: (value: Value) => string): Value[] {
+  const seen = new Set<string>();
+  const deduped: Value[] = [];
+  for (const value of values) {
+    const key = keyFor(value);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(value);
+  }
+  return deduped;
 }
 
 /**

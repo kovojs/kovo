@@ -37,7 +37,9 @@ import {
 type StructuralJsxLoweringOptions = Pick<
   CompileComponentOptions,
   'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts' | 'source'
->;
+> & {
+  skipInlineAttributeDeriveSpans?: readonly { length: number; start: number }[];
+};
 
 interface InlineAttributeDerive {
   attribute: JsxAttributeModel;
@@ -302,6 +304,7 @@ function lowerInlineAttributeDerivesInIr(
       .map((attribute) => {
         if (!attribute.source || !('name' in attribute.source)) return null;
         if (attribute.source.name === 'viewTransitionName') return null;
+        if (inlineAttributeDeriveSkippedBySpan(attribute.source, options)) return null;
         return inlineAttributeDerive(attribute.source, element, componentName, knownQueries);
       })
       .filter((derive): derive is InlineAttributeDerive => derive !== null);
@@ -875,6 +878,23 @@ function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean 
     name.startsWith('data-bind:') ||
     name.startsWith('data-p-') ||
     name.startsWith('kovo-')
+  );
+}
+
+function inlineAttributeDeriveSkippedBySpan(
+  attribute: JsxAttributeModel,
+  options: StructuralJsxLoweringOptions,
+): boolean {
+  if (attribute.expressionStart === undefined || attribute.expressionEnd === undefined) {
+    return false;
+  }
+
+  return (options.skipInlineAttributeDeriveSpans ?? []).some(
+    (span) =>
+      attribute.expressionStart !== undefined &&
+      attribute.expressionEnd !== undefined &&
+      attribute.expressionStart >= span.start &&
+      attribute.expressionEnd <= span.start + span.length,
   );
 }
 

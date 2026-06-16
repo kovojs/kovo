@@ -96,4 +96,133 @@ export const Button = component({
       'data-style-src="button.tsx#root; button.override.tsx#danger"',
     );
   });
+
+  it('lowers state-driven style object toggles through versioned state derives', () => {
+    const result = compileComponentModule({
+      fileName: 'components/badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const base = style.create({
+  root: {
+    backgroundColor: 'black',
+    color: 'white',
+  },
+}, { namespace: 'badge', source: 'badge.tsx' });
+
+const motion = style.create({
+  bounce: {
+    backgroundColor: 'red',
+  },
+}, { namespace: 'badgeMotion', source: 'badge.motion.tsx' });
+
+export const Badge = component({
+  state: () => ({ bouncing: false }),
+  render: (_queries, state) => (
+    <button style={[base.root, state.bouncing ? motion.bounce : null]}>Cart</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(serverSource).toContain('class={((state.bouncing))');
+    expect(serverSource).toContain('kv-badge-fg-');
+    expect(serverSource).toContain('kv-badge-motion-bg-');
+    expect(serverSource).toContain('data-bind:class="/c/components/badge.client.js?v=');
+    expect(serverSource).toContain('#Badge$style_class_derive');
+    expect(serverSource).not.toContain('style={[base.root');
+    expect(clientSource).toContain(
+      'export const Badge$style_class_derive = derive(["state"], (state) =>',
+    );
+    expect(clientSource).toContain('state.bouncing');
+    expect(result.clientExports).toContain('Badge$style_class_derive');
+    expect(result.queryUpdatePlans).toEqual([]);
+    expect(result.updateCoverage).toContainEqual(
+      {
+        componentName: 'Badge',
+        detail: 'style-object toggle',
+        position: 'attribute',
+        query: 'state.bouncing',
+        source: 'state',
+        status: 'plan',
+      },
+    );
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('lowers query-driven style object toggles through compiled attribute stamps', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart-button.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const buttonStates = style.create({
+  empty: {
+    backgroundColor: 'gray',
+    color: 'white',
+  },
+  ready: {
+    backgroundColor: 'green',
+    color: 'white',
+  },
+}, { namespace: 'cartButton', source: 'cart-button.tsx' });
+
+export const CartButton = component({
+  queries: { cart: true },
+  render: ({ cart }) => (
+    <button style={cart.count > 0 ? buttonStates.ready : buttonStates.empty}>Cart</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(serverSource).toContain(
+      'data-derive="cart.CartButton$style_class_derive" data-derive-attr="class"',
+    );
+    expect(serverSource).not.toContain('style={cart.count');
+    expect(clientSource).toContain(
+      'export const CartButton$style_class_derive = derive(["cart"], (cart) =>',
+    );
+    expect(clientSource).toContain('cart.count > 0');
+    expect(clientSource).toContain(
+      'stamps: [{ attr: "class", selector: "[data-derive=\\"cart.CartButton$style_class_derive\\"]"',
+    );
+    expect(result.queryUpdatePlans).toEqual([
+      {
+        componentName: 'CartButton',
+        paths: [],
+        query: 'cart',
+        stamps: [
+          expect.objectContaining({
+            attr: 'class',
+            derive: expect.objectContaining({
+              exportName: 'CartButton$style_class_derive',
+              input: 'cart',
+            }),
+            selector: '[data-derive="cart.CartButton$style_class_derive"]',
+          }),
+        ],
+      },
+    ]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'CartButton',
+        detail: 'style-object toggle',
+        position: 'attribute',
+        query: 'cart.count',
+        status: 'plan',
+      },
+    ]);
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
 });
