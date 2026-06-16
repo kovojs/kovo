@@ -1,66 +1,66 @@
 export {
-  createJisoAppShellDevDiagnosticLedger,
-  jisoAppShellViteDevPlugin,
-  renderJisoAppShellViteDevDiagnosticResponse,
-  shouldHandleJisoAppShellViteRequest,
+  createKovoAppShellDevDiagnosticLedger,
+  kovoAppShellViteDevPlugin,
+  renderKovoAppShellViteDevDiagnosticResponse,
+  shouldHandleKovoAppShellViteRequest,
 } from '../../vite-dev.js';
 export {
-  createJisoAppShellViteBuild,
-  createJisoAppShellViteBuildFromBundle,
-  createJisoAppShellViteBuildFromManifestFile,
+  createKovoAppShellViteBuild,
+  createKovoAppShellViteBuildFromBundle,
+  createKovoAppShellViteBuildFromManifestFile,
 } from '../../vite-build.js';
-export { jisoAppShellViteManifestFile } from '../../vite-build-assets.js';
+export { kovoAppShellViteManifestFile } from '../../vite-build-assets.js';
 export {
-  exportJisoAppShellViteBuild,
-  exportJisoAppShellViteBuildWithManifest,
-  staticExportInventoryForJisoAppShellViteBuild,
-  staticExportManifestForJisoAppShellViteBuild,
+  exportKovoAppShellViteBuild,
+  exportKovoAppShellViteBuildWithManifest,
+  staticExportInventoryForKovoAppShellViteBuild,
+  staticExportManifestForKovoAppShellViteBuild,
 } from '../../vite-static-export-build.js';
 export {
-  exportJisoAppShellViteBuildFromManifestFile,
-  exportJisoAppShellViteBuildWithManifestFromManifestFile,
-  staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
-  staticExportManifestForJisoAppShellViteBuildFromManifestFile,
+  exportKovoAppShellViteBuildFromManifestFile,
+  exportKovoAppShellViteBuildWithManifestFromManifestFile,
+  staticExportInventoryForKovoAppShellViteBuildFromManifestFile,
+  staticExportManifestForKovoAppShellViteBuildFromManifestFile,
 } from '../../vite-static-export-manifest-file.js';
-export { jisoAppShellViteManifestStylesheetHrefFromFile } from '../../vite-manifest.js';
-export { jisoAppShellVitePlugin } from '../../vite-plugin.js';
+export { kovoAppShellViteManifestStylesheetHrefFromFile } from '../../vite-manifest.js';
+export { kovoAppShellVitePlugin } from '../../vite-plugin.js';
 export type {
-  JisoAppShellBuildAsset,
-  JisoAppShellRouteEntryMap,
-  JisoAppShellViteManifest,
-  JisoAppShellViteManifestChunk,
-  JisoAppShellViteManifestHintOptions,
-  JisoAppShellViteOutputAsset,
-  JisoAppShellViteOutputBundle,
-  JisoAppShellViteOutputChunk,
+  KovoAppShellBuildAsset,
+  KovoAppShellRouteEntryMap,
+  KovoAppShellViteManifest,
+  KovoAppShellViteManifestChunk,
+  KovoAppShellViteManifestHintOptions,
+  KovoAppShellViteOutputAsset,
+  KovoAppShellViteOutputBundle,
+  KovoAppShellViteOutputChunk,
 } from '../../vite-manifest.js';
 export type {
-  JisoAppShellBuild,
-  JisoAppShellBuiltClientModule,
-  JisoAppShellCompiledClientModule,
-  JisoAppShellRouteBuildHints,
-  JisoAppShellViteBuildOptions,
-  JisoAppShellViteBundleBuildOptions,
-  JisoAppShellViteManifestFileBuildOptions,
-  JisoAppShellVitePluginBuildOptions,
+  KovoAppShellBuild,
+  KovoAppShellBuiltClientModule,
+  KovoAppShellCompiledClientModule,
+  KovoAppShellRouteBuildHints,
+  KovoAppShellViteBuildOptions,
+  KovoAppShellViteBundleBuildOptions,
+  KovoAppShellViteManifestFileBuildOptions,
+  KovoAppShellVitePluginBuildOptions,
 } from '../../vite-build.js';
-export type { JisoAppShellViteBuildOutput } from '../../vite-build-output.js';
+export type { KovoAppShellViteBuildOutput } from '../../vite-build-output.js';
 export type {
-  JisoAppShellViteBuildStaticExportInventoryOptions,
-  JisoAppShellViteBuildStaticExportOptions,
-  JisoAppShellVitePluginStaticExportOptions,
-  JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
-  JisoAppShellViteManifestFileBuildStaticExportOptions,
+  KovoAppShellViteBuildStaticExportInventoryOptions,
+  KovoAppShellViteBuildStaticExportOptions,
+  KovoAppShellVitePluginStaticExportOptions,
+  KovoAppShellViteManifestFileBuildStaticExportInventoryOptions,
+  KovoAppShellViteManifestFileBuildStaticExportOptions,
 } from '../../vite-static-export-options.js';
-export type { JisoAppShellViteStaticExportWithManifestResult } from '../../vite-static-export-result.js';
+export type { KovoAppShellViteStaticExportWithManifestResult } from '../../vite-static-export-result.js';
 export type {
-  JisoAppShellDevDiagnosticLedger,
-  JisoAppShellDevDiagnosticRecord,
-  JisoAppShellDevModuleDiagnostics,
-  JisoAppShellViteDevServer,
-  JisoAppShellViteDevModuleServer,
-  JisoAppShellViteDevPlugin,
-  JisoAppShellViteDevPluginOptions,
-  JisoAppShellViteMiddleware,
+  KovoAppShellDevDiagnosticLedger,
+  KovoAppShellDevDiagnosticRecord,
+  KovoAppShellDevModuleDiagnostics,
+  KovoAppShellViteDevServer,
+  KovoAppShellViteDevModuleServer,
+  KovoAppShellViteDevPlugin,
+  KovoAppShellViteDevPluginOptions,
+  KovoAppShellViteMiddleware,
 } from '../../vite-dev.js';
-export type { JisoAppShellVitePlugin, JisoAppShellVitePluginOptions } from '../../vite-plugin.js';
+export type { KovoAppShellVitePlugin, KovoAppShellVitePluginOptions } from '../../vite-plugin.js';

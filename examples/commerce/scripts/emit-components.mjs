@@ -15,14 +15,14 @@ registerHooks({
 });
 
 const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
-  await import('@jiso/compiler');
+  await import('@kovojs/compiler');
 
 // Compiles the authored TSX components (src/components/*.tsx) through
-// @jiso/compiler and commits the lowered IR modules to src/generated/ — the
+// @kovojs/compiler and commits the lowered IR modules to src/generated/ — the
 // SPEC.md section 3 pipeline with the section 5.2.3 fixpoint gate and committed
 // lowered-source freshness applied to every component. The app imports the
 // committed IR at runtime, so served HTML carries the compiler-derived stamps
-// (fw-c, fw-deps, data-bind — SPEC.md sections 4.2 and 4.8) instead of
+// (kovo-c, kovo-deps, data-bind — SPEC.md sections 4.2 and 4.8) instead of
 // hand-written ones. `--check` verifies the committed IR is not stale.
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -38,7 +38,7 @@ for (const name of componentNames) {
   // SPEC.md section 4.8: stamps are derived, never required in sugar.
   assert.doesNotMatch(
     source,
-    /(?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+)=/,
+    /(?:data-bind|kovo-deps|kovo-c|kovo-state|data-p-[\w-]+)=/,
     `${fileName} hand-writes stamps`,
   );
 
@@ -57,13 +57,13 @@ for (const name of componentNames) {
   const lowered = result.loweredSource;
   assert.ok(lowered, `${fileName} produced no lowered render source`);
 
-  const generated = `// @jiso-ir — lowered from ${fileName} by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.\n${lowered}`;
+  const generated = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.\n${lowered}`;
 
   if (process.argv.includes('--check')) {
     assert.equal(
       readFileSync(generatedPath, 'utf8'),
       generated,
-      `generated ${name}.tsx is stale; run \`pnpm --filter @jiso/example-commerce run emit-components\``,
+      `generated ${name}.tsx is stale; run \`pnpm --filter @kovojs/example-commerce run emit-components\``,
     );
   } else {
     writeFileSync(generatedPath, generated);

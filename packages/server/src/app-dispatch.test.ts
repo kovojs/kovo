@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { endpoint } from './endpoint.js';
@@ -134,11 +134,11 @@ describe('server app matched dispatch boundary', () => {
 });
 
 function matchedAppRequest(
-  app: JisoApp,
+  app: KovoApp,
   request: Request,
 ): {
-  app: JisoApp;
-  match: ShellDispatchMatch<JisoApp['routes'][number], JisoApp['endpoints'][number]>;
+  app: KovoApp;
+  match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>;
   request: Request;
   url: URL;
 } {

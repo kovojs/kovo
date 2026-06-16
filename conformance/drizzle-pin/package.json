@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/conformance-drizzle-pin",
+  "name": "@kovojs/conformance-drizzle-pin",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
     "test": "vitest --run"
   },
   "dependencies": {
-    "@jiso/drizzle": "workspace:*"
+    "@kovojs/drizzle": "workspace:*"
   },
   "devDependencies": {
     "drizzle-orm": "0.45.2",

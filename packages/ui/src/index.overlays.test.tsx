@@ -62,7 +62,7 @@ import {
   toastTitleClasses,
 } from './index.js';
 
-describe('@jiso/ui styled package foundation', () => {
+describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless toast primitive as styled live-region markup', () => {
     const toast = Toast.definition.render({
       children: `${ToastTitle.definition.render({
@@ -218,7 +218,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(ContextMenuTrigger.name).toBe('context-menu-trigger');
     expect(ContextMenuContent.name).toBe('context-menu-content');
     expect(ContextMenuItem.name).toBe('context-menu-item');
-    expect(context).toContain('jiso-context-menu="row-menu"');
+    expect(context).toContain('kovo-context-menu="row-menu"');
     expect(context).toContain('aria-haspopup="menu"');
     expect(context).toContain('data-anchor-x="24" data-anchor-y="32"');
     expect(context).toContain('role="menu" tabIndex="-1"');

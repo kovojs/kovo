@@ -5,14 +5,14 @@ import { describe, expect, it } from 'vitest';
 import { packageComponentPrefixFactFromPackageManifest } from './package-prefix.js';
 
 describe('package component prefix manifest discovery', () => {
-  it('discovers the @jiso/headless-ui prefix from its package metadata', () => {
+  it('discovers the @kovojs/headless-ui prefix from its package metadata', () => {
     const manifest = JSON.parse(
       readFileSync(new URL('../../headless-ui/package.json', import.meta.url), 'utf8'),
     ) as unknown;
 
     expect(packageComponentPrefixFactFromPackageManifest(manifest)).toEqual({
-      packageName: '@jiso/headless-ui',
-      prefix: 'jiso-',
+      packageName: '@kovojs/headless-ui',
+      prefix: 'kovo-',
     });
   });
 
@@ -20,7 +20,7 @@ describe('package component prefix manifest discovery', () => {
     expect(
       packageComponentPrefixFactFromPackageManifest(
         {
-          jiso: { prefix: 'acme-' },
+          kovo: { prefix: 'acme-' },
           name: '@acme/primitives',
         },
         { effectivePrefix: 'acme-primitives-' },
@@ -44,9 +44,9 @@ describe('package component prefix manifest discovery', () => {
     });
   });
 
-  it('emits a missing-prefix fact when a package has jiso metadata without a prefix', () => {
+  it('emits a missing-prefix fact when a package has kovo metadata without a prefix', () => {
     expect(
-      packageComponentPrefixFactFromPackageManifest({ jiso: {}, name: '@bad/prefix' }),
+      packageComponentPrefixFactFromPackageManifest({ kovo: {}, name: '@bad/prefix' }),
     ).toEqual({
       packageName: '@bad/prefix',
       prefix: null,

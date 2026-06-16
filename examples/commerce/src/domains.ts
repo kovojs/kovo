@@ -1,4 +1,4 @@
-import { domain } from '@jiso/server';
+import { domain } from '@kovojs/server';
 
 // SPEC.md section 10.1: domains are the invalidation currency. They live in a
 // leaf module so TSX component modules can import their queries without

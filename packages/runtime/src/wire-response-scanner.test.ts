@@ -26,9 +26,9 @@ describe('wire response scanner', () => {
 
   it('decodes the server-runtime HTML entity contract for wire text', () => {
     // SPEC section 2 Constitution #4: mutation/query wire traffic must stay readable HTML.
-    expect(unescapeHtml('&lt;fw-query name=&quot;cart&quot; key=&apos;cart:1&#39;&gt;&amp;')).toBe(
-      '<fw-query name="cart" key=\'cart:1\'>&',
-    );
+    expect(
+      unescapeHtml('&lt;kovo-query name=&quot;cart&quot; key=&apos;cart:1&#39;&gt;&amp;'),
+    ).toBe('<kovo-query name="cart" key=\'cart:1\'>&');
   });
 
   it('decodes apostrophe entities in chunk attributes', () => {
@@ -65,10 +65,10 @@ describe('wire response scanner', () => {
     expect(
       readMutationResponseElementChunks(
         [
-          '<fw-query name="cart">{"count":1}</fw-query>',
-          '<fw-query name="stale">{"count":2}',
-          '<fw-fragment target="cart"><cart-badge>1</cart-badge></fw-fragment>',
-          '<fw-fragment target="stale"><span>stale</span>',
+          '<kovo-query name="cart">{"count":1}</kovo-query>',
+          '<kovo-query name="stale">{"count":2}',
+          '<kovo-fragment target="cart"><cart-badge>1</cart-badge></kovo-fragment>',
+          '<kovo-fragment target="stale"><span>stale</span>',
         ].join(''),
         {
           onMalformedFragment: malformedFragment,
@@ -103,10 +103,10 @@ describe('wire response scanner', () => {
     expect(
       readInlineMutationResponseBodyChunks(
         [
-          '<fw-query name="cart" key="cart&gt;1">{&quot;count&quot;:1}</fw-query>',
-          '<fw-query>{"ignored":true}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
-          '<fw-fragment target="cart-list" mode="append"><li>p1</li></fw-fragment>',
+          '<kovo-query name="cart" key="cart&gt;1">{&quot;count&quot;:1}</kovo-query>',
+          '<kovo-query>{"ignored":true}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
+          '<kovo-fragment target="cart-list" mode="append"><li>p1</li></kovo-fragment>',
         ].join(''),
       ),
     ).toEqual({
@@ -135,12 +135,12 @@ describe('wire response scanner', () => {
     // SPEC.md §4.4/§9.1 (v1-cleanup item 3): the inline bootstrap and the
     // modular runtime collapse their scan + fragment-decode skeleton onto
     // readMutationResponseBodyCore. The core decodes fragments once and returns
-    // fw-query chunks UNDECODED so the inline reader can defer JSON decode to the
+    // kovo-query chunks UNDECODED so the inline reader can defer JSON decode to the
     // modular runtime under the SPEC.md §4.4 4KB gzip budget.
     const body = [
-      '<fw-query name="cart">{"count":1}</fw-query>',
-      '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
-      '<fw-fragment mode="append"><li>missing target</li></fw-fragment>',
+      '<kovo-query name="cart">{"count":1}</kovo-query>',
+      '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
+      '<kovo-fragment mode="append"><li>missing target</li></kovo-fragment>',
     ].join('');
 
     const core = readMutationResponseBodyCore(body);
@@ -173,8 +173,8 @@ describe('wire response scanner', () => {
     // options straight to the canonical element scanner.
     const core = readMutationResponseBodyCore(
       [
-        '<fw-query name="cart">{"count":1}',
-        '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge>',
+        '<kovo-query name="cart">{"count":1}',
+        '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge>',
       ].join(''),
       {
         onMalformedFragment: malformedFragment,
@@ -195,7 +195,7 @@ describe('wire response scanner', () => {
       { attrs: ' mode="append"', content: '<li>missing target</li>' },
     ];
     const body = elements
-      .map((chunk) => `<fw-fragment${chunk.attrs}>${chunk.content}</fw-fragment>`)
+      .map((chunk) => `<kovo-fragment${chunk.attrs}>${chunk.content}</kovo-fragment>`)
       .join('');
 
     // SPEC.md §4.4/§9.1: the extracted inline parser and modular mutation-body
@@ -212,16 +212,16 @@ describe('wire response scanner', () => {
     );
   });
 
-  it('keeps nested fw-fragment chunks inside the parent fragment content', () => {
+  it('keeps nested kovo-fragment chunks inside the parent fragment content', () => {
     // SPEC.md §9.1: fragment wire chunks may carry HTML that itself contains
-    // inert fw-fragment markup; shared scanning must not split that parent.
+    // inert kovo-fragment markup; shared scanning must not split that parent.
     const chunks = readElementChunks(
       [
-        '<fw-fragment target="cart">',
-        '<section><fw-fragment target="nested"><span>nested</span></fw-fragment></section>',
-        '</fw-fragment>',
+        '<kovo-fragment target="cart">',
+        '<section><kovo-fragment target="nested"><span>nested</span></kovo-fragment></section>',
+        '</kovo-fragment>',
       ].join(''),
-      'fw-fragment',
+      'kovo-fragment',
       { nested: true },
     );
 
@@ -229,7 +229,7 @@ describe('wire response scanner', () => {
       {
         attrs: ' target="cart"',
         content:
-          '<section><fw-fragment target="nested"><span>nested</span></fw-fragment></section>',
+          '<section><kovo-fragment target="nested"><span>nested</span></kovo-fragment></section>',
         end: expect.any(Number),
         start: expect.any(Number),
       },

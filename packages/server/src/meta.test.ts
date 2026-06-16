@@ -117,7 +117,7 @@ describe('server route meta and i18n hints', () => {
     expect(() => t(en, 'missing' as 'cartCount')).toThrow('Missing i18n message: missing');
     expect(renderPageHints({ i18n: en })).toEqual({
       earlyHints: {},
-      html: '<script type="application/json" fw-i18n locale="en-US">{"cartCount":"Cart has {count} items","unsafe":"Use \\u003cstrong>server text\\u003c/strong>"}</script>',
+      html: '<script type="application/json" kovo-i18n locale="en-US">{"cartCount":"Cart has {count} items","unsafe":"Use \\u003cstrong>server text\\u003c/strong>"}</script>',
     });
   });
 });

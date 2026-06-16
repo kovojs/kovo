@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { diagnosticDefinitions } from '@jiso/core';
-import { csrfField, csrfToken, domain, mutation, query, s } from '@jiso/server';
+import { diagnosticDefinitions } from '@kovojs/core';
+import { csrfField, csrfToken, domain, mutation, query, s } from '@kovojs/server';
 
-import { createJisoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './harness.js';
 import { createDbVerifier } from './verifier.js';
 import {
   createVerificationFakeDb,
   verificationLayerBehaviorFact,
-  verificationLayerFwCheckDiagnosticsFact,
+  verificationLayerKovoCheckDiagnosticsFact,
 } from './verification-fixtures.js';
 
-describe('@jiso/test verification fixtures', () => {
+describe('@kovojs/test verification fixtures', () => {
   it('provides a fake DB fixture for verifier and harness tests', () => {
     const db = createVerificationFakeDb();
 
@@ -25,7 +25,7 @@ describe('@jiso/test verification fixtures', () => {
     await expect(
       verificationLayerBehaviorFact({
         createDbVerifier,
-        createJisoTestHarness,
+        createKovoTestHarness,
         csrfField,
         csrfToken,
         diagnosticDefinitions,
@@ -42,33 +42,33 @@ describe('@jiso/test verification fixtures', () => {
         validResult: { changes: [], ok: true, rerunQueries: [], value: 'p1' },
       },
       diagnosticMessages: {
-        FW402: 'Write touched an undeclared domain.',
-        FW404: 'Write to unmapped table.',
-        FW407: 'Query read from undeclared domain.',
-        FW408: 'Declared row key differs from observed row predicate.',
-        FW410: 'Query result shape failed declared output schema.',
-        FW411: 'Query read set includes an exempt table.',
+        KV402: 'Write touched an undeclared domain.',
+        KV404: 'Write to unmapped table.',
+        KV407: 'Query read from undeclared domain.',
+        KV408: 'Declared row key differs from observed row predicate.',
+        KV410: 'Query result shape failed declared output schema.',
+        KV411: 'Query read set includes an exempt table.',
       },
       failures: {
-        exemptRawSql: 'FW411 Query read set includes an exempt table: audit_log',
-        exemptRead: 'FW411 Query read set includes an exempt table: audit_log',
+        exemptRawSql: 'KV411 Query read set includes an exempt table: audit_log',
+        exemptRead: 'KV411 Query read set includes an exempt table: audit_log',
         invalidOutput:
-          'FW410 Query result shape failed declared output schema: product/list Expected string',
-        missingNestedRead: 'FW407 Query read from undeclared domain: price, price',
+          'KV410 Query result shape failed declared output schema: product/list Expected string',
+        missingNestedRead: 'KV407 Query read from undeclared domain: price, price',
         rowKey:
-          'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
-        selectSubqueryMissingRead: 'FW407 Query read from undeclared domain: price',
-        undeclaredRead: 'FW407 Query read from undeclared domain: product',
-        unmappedWrite: 'FW404 Write to unmapped table: unknown_table',
-        writeOutsideGraph: 'FW402 Write touched an undeclared domain: audit',
+          'KV408 Declared row key differs from observed row predicate: products expected id observed sku',
+        selectSubqueryMissingRead: 'KV407 Query read from undeclared domain: price',
+        undeclaredRead: 'KV407 Query read from undeclared domain: product',
+        unmappedWrite: 'KV404 Write to unmapped table: unknown_table',
+        writeOutsideGraph: 'KV402 Write touched an undeclared domain: audit',
       },
       harness: {
         validOutputQuery: { count: 2 },
         writeMutation: { changes: [], ok: true, rerunQueries: [], value: 'p1' },
       },
       pglite: {
-        rawMutationFailure: 'FW402 Write touched an undeclared domain: audit',
-        transactionFailure: 'FW402 Write touched an undeclared domain: audit',
+        rawMutationFailure: 'KV402 Write touched an undeclared domain: audit',
+        transactionFailure: 'KV402 Write touched an undeclared domain: audit',
       },
       sql: {
         compoundRowKeyCovered: true,
@@ -94,10 +94,10 @@ describe('@jiso/test verification fixtures', () => {
     });
   });
 
-  it('projects fw-check verification diagnostics into a structured public fact', () => {
-    const fact = verificationLayerFwCheckDiagnosticsFact({
+  it('projects kovo-check verification diagnostics into a structured public fact', () => {
+    const fact = verificationLayerKovoCheckDiagnosticsFact({
       diagnosticDefinitions,
-      fwCheck(graph) {
+      kovoCheck(graph) {
         const diagnostics = [
           ...(Array.isArray(graph.diagnostics) ? graph.diagnostics : []),
           ...(Array.isArray(graph.verificationDiagnostics) ? graph.verificationDiagnostics : []),
@@ -105,7 +105,7 @@ describe('@jiso/test verification fixtures', () => {
         return {
           exitCode: diagnostics.length > 0 ? 1 : 0,
           output: [
-            'fw-check/v1',
+            'kovo-check/v1',
             ...(diagnostics.length > 0 ? [] : ['OK']),
             ...diagnostics.map((diagnostic) => {
               const site =
@@ -121,36 +121,36 @@ describe('@jiso/test verification fixtures', () => {
     });
 
     expect(fact.verificationDiagnosticMessages).toMatchObject({
-      FW402: 'Write touched an undeclared domain.',
-      FW403: 'Declared domain was never observed written.',
-      FW404: 'Write to unmapped table.',
-      FW405: 'Conditional write branch was never executed under instrumentation.',
-      FW407: 'Query read from undeclared domain.',
-      FW408: 'Declared row key differs from observed row predicate.',
-      FW410: 'Query result shape failed declared output schema.',
-      FW411: 'Query read set includes an exempt table.',
+      KV402: 'Write touched an undeclared domain.',
+      KV403: 'Declared domain was never observed written.',
+      KV404: 'Write to unmapped table.',
+      KV405: 'Conditional write branch was never executed under instrumentation.',
+      KV407: 'Query read from undeclared domain.',
+      KV408: 'Declared row key differs from observed row predicate.',
+      KV410: 'Query result shape failed declared output schema.',
+      KV411: 'Query read set includes an exempt table.',
     });
     expect(fact.verificationDiagnostics).toMatchObject({
       diagnostics: [
-        { code: 'FW410', severity: 'ERROR', target: 'cart.queries.ts:5' },
-        { code: 'FW302', severity: 'ERROR', target: 'cart-badge.tsx:3:23' },
-        { code: 'FW405', severity: 'ERROR', target: 'cart.domain.ts:2' },
-        { code: 'FW402', severity: 'ERROR', target: 'domain:test' },
-        { code: 'FW403', severity: 'ERROR', target: 'domain:test' },
-        { code: 'FW404', severity: 'ERROR', target: 'domain:test' },
-        { code: 'FW407', severity: 'ERROR', target: 'cart.queries.ts:7' },
-        { code: 'FW408', severity: 'ERROR', target: 'product.domain.ts:9' },
-        { code: 'FW410', severity: 'ERROR', target: 'cart.queries.ts:11' },
+        { code: 'KV410', severity: 'ERROR', target: 'cart.queries.ts:5' },
+        { code: 'KV302', severity: 'ERROR', target: 'cart-badge.tsx:3:23' },
+        { code: 'KV405', severity: 'ERROR', target: 'cart.domain.ts:2' },
+        { code: 'KV402', severity: 'ERROR', target: 'domain:test' },
+        { code: 'KV403', severity: 'ERROR', target: 'domain:test' },
+        { code: 'KV404', severity: 'ERROR', target: 'domain:test' },
+        { code: 'KV407', severity: 'ERROR', target: 'cart.queries.ts:7' },
+        { code: 'KV408', severity: 'ERROR', target: 'product.domain.ts:9' },
+        { code: 'KV410', severity: 'ERROR', target: 'cart.queries.ts:11' },
       ],
       exitCode: 1,
       status: 'issues',
-      version: 'fw-check/v1',
+      version: 'kovo-check/v1',
     });
     expect(fact.exemptTableDiagnostic).toMatchObject({
-      diagnostics: [{ code: 'FW411', severity: 'ERROR', target: 'cart.queries.ts:9' }],
+      diagnostics: [{ code: 'KV411', severity: 'ERROR', target: 'cart.queries.ts:9' }],
       exitCode: 1,
       status: 'issues',
-      version: 'fw-check/v1',
+      version: 'kovo-check/v1',
     });
   });
 });

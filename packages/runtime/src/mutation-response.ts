@@ -14,12 +14,12 @@ export function readMutationChangeHeader(
   response: MutationResponseHeaderLike,
   onError?: RuntimeErrorReporter,
 ): MutationChangeRecord[] {
-  const value = response.headers?.get('FW-Changes') ?? response.headers?.get('fw-changes');
+  const value = response.headers?.get('Kovo-Changes') ?? response.headers?.get('kovo-changes');
   if (!value) return [];
 
   const parsed = parseJsonValue(value);
   if (!parsed.ok) {
-    reportMalformedJson(onError, 'FW-Changes header', parsed.error);
+    reportMalformedJson(onError, 'Kovo-Changes header', parsed.error);
     return [];
   }
   if (!Array.isArray(parsed.value)) return [];
@@ -33,13 +33,13 @@ export function readMutationChangeHeader(
 export function isMutationBroadcastMessage(value: unknown): value is {
   body: string;
   changes: MutationChangeRecord[];
-  type: 'jiso:mutation-response';
+  type: 'kovo:mutation-response';
 } {
   return (
     typeof value === 'object' &&
     value !== null &&
     'type' in value &&
-    value.type === 'jiso:mutation-response' &&
+    value.type === 'kovo:mutation-response' &&
     'body' in value &&
     typeof value.body === 'string' &&
     'changes' in value &&
@@ -72,7 +72,7 @@ export function sanitizeMutationChangeRecord(value: unknown): MutationChangeReco
 let generatedMutationIdemCounter = 0;
 
 export function createMutationIdem(): string {
-  // SPEC.md §9.1: enhanced mutation requests carry stable FW-Idem metadata.
+  // SPEC.md §9.1: enhanced mutation requests carry stable Kovo-Idem metadata.
   // Browser crypto is preferred; this fallback only needs per-tab uniqueness.
   return (
     globalThis.crypto?.randomUUID?.() ??

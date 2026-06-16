@@ -30,7 +30,7 @@ describe('vite-fixtures', () => {
           next();
         });
       },
-      name: 'jiso',
+      name: 'kovo',
       transform() {
         return {
           code: `export function renderSource() { return '<button on:click="/c/card.client.js?v=1234abcd#Card$click" data-p-id="{product.id}">Add</button>'; }`,
@@ -40,7 +40,7 @@ describe('vite-fixtures', () => {
     };
 
     const middlewareFact = vitePluginMiddlewareFact(plugin, { root: '/repo' });
-    expect(middlewareFact.pluginName).toBe('jiso');
+    expect(middlewareFact.pluginName).toBe('kovo');
 
     expect(
       viteTransformElementFact(plugin, {
@@ -88,7 +88,7 @@ describe('vite-fixtures', () => {
   });
 
   it('runs a red/green Vite build fixture and returns structured build facts', async () => {
-    const binDir = await mkdtemp(join(tmpdir(), 'jiso-vite-fixture-bin-'));
+    const binDir = await mkdtemp(join(tmpdir(), 'kovo-vite-fixture-bin-'));
     const vpExecutable = join(binDir, 'vp.mjs');
     await writeFile(
       vpExecutable,
@@ -97,7 +97,7 @@ describe('vite-fixtures', () => {
         "import { mkdir, readFile, writeFile } from 'node:fs/promises';",
         "const source = await readFile('routes/card.tsx', 'utf8');",
         "if (source.includes('RED')) {",
-        "  console.error('Jiso Vite transform failed with 1 error diagnostic.');",
+        "  console.error('Kovo Vite transform failed with 1 error diagnostic.');",
         '  process.exit(1);',
         '}',
         "await mkdir('dist/assets', { recursive: true });",
@@ -121,12 +121,12 @@ describe('vite-fixtures', () => {
       }),
     ).resolves.toEqual({
       greenDistEntries: ['assets', 'index.html'],
-      redOutput: expect.stringContaining('Jiso Vite transform failed'),
+      redOutput: expect.stringContaining('Kovo Vite transform failed'),
     });
   });
 
   it('projects the production emit contract and generated handler middleware into one fact', async () => {
-    const binDir = await mkdtemp(join(tmpdir(), 'jiso-prod-emit-fixture-bin-'));
+    const binDir = await mkdtemp(join(tmpdir(), 'kovo-prod-emit-fixture-bin-'));
     const prodEmitExecutable = join(binDir, 'prod-emit.mjs');
     await writeFile(
       prodEmitExecutable,
@@ -151,7 +151,7 @@ describe('vite-fixtures', () => {
           next();
         });
       },
-      name: 'jiso',
+      name: 'kovo',
       transform() {
         return {
           code: `export function renderSource() { return '<button on:click="/c/routes/products/product-card.client.js?v=1234abcd#ProductCard$button_click" data-p-id="{product.id}">Add</button>'; }`,
@@ -188,7 +188,7 @@ describe('vite-fixtures', () => {
         nextCallsAfterStale: 1,
         statusCode: 200,
       },
-      pluginName: 'jiso',
+      pluginName: 'kovo',
       prodEmit: {
         stderr: '',
         stdoutLines: ['prod-emit-check/v1', 'OK'],

@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { propertyTest } from '@jiso/test/assertions';
+import { propertyTest } from '@kovojs/test/assertions';
 import {
-  fwFragmentFacts,
-  fwResponseBodyFact,
+  kovoFragmentFacts,
+  kovoResponseBodyFact,
   htmlElementFacts,
   htmlFormFieldsByName,
   htmlFormFacts,
   htmlKeyValues,
   htmlTextContent,
-} from '@jiso/test/html-fragment';
+} from '@kovojs/test/html-fragment';
 
 import {
   addToCartOptimistic,
@@ -113,13 +113,13 @@ describe('commerce example', () => {
         { productId: 'p1', quantity: 2 },
         { db, session: { id: 's-enhanced-success', user: { id: 'u1' } } },
         {
-          'FW-Fragment': 'true',
-          'FW-Targets': 'cart-badge,product-grid,order-history',
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'cart-badge,product-grid,order-history',
         },
       ),
     ).resolves.toMatchObject({
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       },
       status: 200,
     });
@@ -128,12 +128,12 @@ describe('commerce example', () => {
       { productId: 'p2', quantity: 1 },
       { db, session: { id: 's-enhanced-success-2', user: { id: 'u1' } } },
       {
-        'FW-Fragment': 'true',
-        'FW-Targets': 'cart-badge,product-grid,order-history',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'cart-badge,product-grid,order-history',
       },
     );
 
-    const responseFact = fwResponseBodyFact(response.body);
+    const responseFact = kovoResponseBodyFact(response.body);
     expect(responseFact.queryNames).toEqual(['cart', 'productGrid', 'orderHistory']);
     expect(responseFact.fragmentTargets).toEqual(['cart-badge', 'product-grid', 'order-history']);
     expect(responseFact.fragments.flatMap((fragment) => fragment.stylesheetHrefs)).toEqual([
@@ -158,18 +158,18 @@ describe('commerce example', () => {
         session: { id: 's-enhanced-boundary', user: { id: 'u1' } },
       },
       {
-        'FW-Fragment': 'true',
-        'FW-Targets': 'cart-badge,product-grid,order-history',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'cart-badge,product-grid,order-history',
       },
     );
 
     expect(response).toMatchObject({
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       },
       status: 200,
     });
-    const responseFact = fwResponseBodyFact(response.body);
+    const responseFact = kovoResponseBodyFact(response.body);
     expect(
       responseFact.fragments.filter((fragment) => fragment.target === 'product-grid'),
     ).toMatchObject([
@@ -227,18 +227,18 @@ describe('commerce example', () => {
       { productId: 'p2', quantity: 3 },
       { db, session: { id: 's-enhanced-fail', user: { id: 'u1' } } },
       {
-        'FW-Fragment': 'true',
-        'FW-Targets': 'product-form:p2',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'product-form:p2',
       },
     );
 
     expect(response).toMatchObject({
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       },
       status: 422,
     });
-    const [formFragment] = fwFragmentFacts(response.body, 'product-form:p2');
+    const [formFragment] = kovoFragmentFacts(response.body, 'product-form:p2');
     expect(formFragment).toMatchObject({
       stylesheetHrefs: ['/assets/tailwind.css'],
       target: 'product-form:p2',
@@ -254,7 +254,7 @@ describe('commerce example', () => {
     ]);
     expect(
       htmlElementFacts(formFragment?.innerHtml ?? '', {
-        attrs: { 'fw-fragment-target': 'product-form:p2' },
+        attrs: { 'kovo-fragment-target': 'product-form:p2' },
       }),
     ).toHaveLength(1);
     expect(

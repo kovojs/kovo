@@ -155,7 +155,7 @@ describe('mutation CSRF enforcement', () => {
       get() {
         getCalls += 1;
         return {
-          body: '<fw-query name="cart">{"count":999}</fw-query>',
+          body: '<kovo-query name="cart">{"count":999}</kovo-query>',
           headers: {},
           status: 200,
         };

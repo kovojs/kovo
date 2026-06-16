@@ -1,4 +1,4 @@
-export type { DiagnosticCode } from '@jiso/core';
+export type { DiagnosticCode } from '@kovojs/core';
 export { applyDeferredStreamResponseToRuntime } from './apply-deferred-stream.js';
 export type {
   AppliedDeferredStreamResponseToRuntime,
@@ -16,9 +16,9 @@ export type { ElementParamValue, HandlerContext, IslandSignalScope } from './han
 export { dispatchDelegatedEvent, handler } from './handlers.js';
 export type { ClientHandler, ImportHandlerModule } from './handlers.js';
 export {
-  createInlineJisoLoaderSource,
-  installInlineJisoLoader,
-  jisoLoaderSource,
+  createInlineKovoLoaderSource,
+  installInlineKovoLoader,
+  kovoLoaderSource,
 } from './inline-loader.js';
 export type {
   LoaderLifecycleTarget,
@@ -27,8 +27,8 @@ export type {
   VisibleObserverEntry,
   VisibleObserverFactory,
 } from './loader-lifecycle.js';
-export { installJisoLoader } from './loader.js';
-export type { JisoLoader, JisoLoaderOptions } from './loader.js';
+export { installKovoLoader } from './loader.js';
+export type { KovoLoader, KovoLoaderOptions } from './loader.js';
 export {
   applyFragments,
   DomMorphRoot,

@@ -1,10 +1,10 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from './index.js';
 
-const fw211 = diagnosticDefinitions.FW211;
-const fw212 = diagnosticDefinitions.FW212;
+const kv211 = diagnosticDefinitions.KV211;
+const kv212 = diagnosticDefinitions.KV212;
 
 describe('execution trigger validation', () => {
   it('accepts known delegated events and declared execution triggers', () => {
@@ -17,7 +17,7 @@ export const ExecutionTriggers = component('execution-triggers', {
       <button on:click="/c/cart.client.js#Cart$add">Add</button>
       <search-index on:idle="/c/search.client.js#Search$warm"></search-index>
       <sales-chart on:visible="/c/chart.client.js#SalesChart$mount"></sales-chart>
-      {/* FW211: stock ticker intentionally starts at parse for market-open pages. */}
+      {/* KV211: stock ticker intentionally starts at parse for market-open pages. */}
       <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
     </section>
   ),
@@ -28,7 +28,7 @@ export const ExecutionTriggers = component('execution-triggers', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('reports FW211 and FW212 for unjustified eager execution and unknown triggers', () => {
+  it('reports KV211 and KV212 for unjustified eager execution and unknown triggers', () => {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
       source: `
@@ -45,19 +45,19 @@ export const ExecutionTriggers = component('execution-triggers', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW211',
+        code: 'KV211',
         fileName: 'execution-triggers.tsx',
         length: 7,
-        message: `${fw211.message} on:load`,
-        severity: fw211.severity,
+        message: `${kv211.message} on:load`,
+        severity: kv211.severity,
         start: { column: 21, line: 5 },
       },
       {
-        code: 'FW212',
+        code: 'KV212',
         fileName: 'execution-triggers.tsx',
         length: 8,
-        message: `${fw212.message} on:media`,
-        severity: fw212.severity,
+        message: `${kv212.message} on:media`,
+        severity: kv212.severity,
         start: { column: 21, line: 6 },
       },
     ]);
@@ -99,14 +99,14 @@ export const ExecutionTriggers = component('execution-triggers', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('requires FW211 justification to be attached to the eager trigger', () => {
+  it('requires KV211 justification to be attached to the eager trigger', () => {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
       source: `
 export const ExecutionTriggers = component('execution-triggers', {
   render: () => (
     <section>
-      {/* FW211: this explains another trigger. */}
+      {/* KV211: this explains another trigger. */}
       <button on:click="/c/cart.client.js#Cart$add">Add</button>
       <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
     </section>
@@ -117,24 +117,24 @@ export const ExecutionTriggers = component('execution-triggers', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW211',
+        code: 'KV211',
         fileName: 'execution-triggers.tsx',
         length: 7,
-        message: `${fw211.message} on:load`,
-        severity: fw211.severity,
+        message: `${kv211.message} on:load`,
+        severity: kv211.severity,
         start: { column: 21, line: 7 },
       },
     ]);
   });
 
-  it('does not attach FW211 justification from inside a preceding element', () => {
+  it('does not attach KV211 justification from inside a preceding element', () => {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
       source: `
 export const ExecutionTriggers = component('execution-triggers', {
   render: () => (
     <section>
-      <p>{/* FW211: paragraph text explains something else. */}</p>
+      <p>{/* KV211: paragraph text explains something else. */}</p>
       <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
     </section>
   ),
@@ -144,11 +144,11 @@ export const ExecutionTriggers = component('execution-triggers', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW211',
+        code: 'KV211',
         fileName: 'execution-triggers.tsx',
         length: 7,
-        message: `${fw211.message} on:load`,
-        severity: fw211.severity,
+        message: `${kv211.message} on:load`,
+        severity: kv211.severity,
         start: { column: 21, line: 6 },
       },
     ]);

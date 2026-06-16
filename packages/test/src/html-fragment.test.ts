@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   documentQueryScriptBehaviorFact,
   fragmentHtml,
-  fwFragmentFacts,
-  fwQueryFacts,
-  fwQueryJsonValues,
-  fwResponseBodyFact,
+  kovoFragmentFacts,
+  kovoQueryFacts,
+  kovoQueryJsonValues,
+  kovoResponseBodyFact,
   htmlDocumentFacts,
   htmlDocumentRegions,
   htmlElementCount,
@@ -22,30 +22,30 @@ import {
   htmlLinkHrefs,
   htmlMainMarkerFact,
   htmlTextContent,
-} from '@jiso/test/html-fragment';
+} from '@kovojs/test/html-fragment';
 
-describe('@jiso/test html fragment seam', () => {
+describe('@kovojs/test html fragment seam', () => {
   it('extracts explicit fragments without constructing a harness page assertion', () => {
     expect(
       fragmentHtml(
-        '<main><fw-fragment target="cart-badge"><span>1</span></fw-fragment></main>',
+        '<main><kovo-fragment target="cart-badge"><span>1</span></kovo-fragment></main>',
         'cart-badge',
       ),
     ).toBe('<span>1</span>');
   });
 
-  it('extracts SPEC §9.1 runtime targets by id and fw-fragment-target only', () => {
+  it('extracts SPEC §9.1 runtime targets by id and kovo-fragment-target only', () => {
     const html = [
-      '<section fw-c="cart-badge"><span>ignored</span></section>',
+      '<section kovo-c="cart-badge"><span>ignored</span></section>',
       '<section id="cart-badge"><span>1</span></section>',
-      '<aside fw-fragment-target="cart-summary"><span>2</span></aside>',
+      '<aside kovo-fragment-target="cart-summary"><span>2</span></aside>',
     ].join('');
 
     expect(fragmentHtml(html, 'cart-badge')).toBe(
       '<section id="cart-badge"><span>1</span></section>',
     );
     expect(fragmentHtml(html, 'cart-summary')).toBe(
-      '<aside fw-fragment-target="cart-summary"><span>2</span></aside>',
+      '<aside kovo-fragment-target="cart-summary"><span>2</span></aside>',
     );
     expect(fragmentHtml(html, 'missing-target')).toBe('');
   });
@@ -53,30 +53,30 @@ describe('@jiso/test html fragment seam', () => {
   it('extracts explicitly wrapped fragments with normal HTML attribute variants', () => {
     expect(
       fragmentHtml(
-        "<fw-fragment strategy='morph' target='cart-badge'><cart-badge><span>1</span></cart-badge></fw-fragment>",
+        "<kovo-fragment strategy='morph' target='cart-badge'><cart-badge><span>1</span></cart-badge></kovo-fragment>",
         'cart-badge',
       ),
     ).toBe('<cart-badge><span>1</span></cart-badge>');
   });
 
-  it('extracts explicitly wrapped fragments with nested fw-fragment children', () => {
+  it('extracts explicitly wrapped fragments with nested kovo-fragment children', () => {
     expect(
       fragmentHtml(
         [
-          '<fw-fragment target="cart-badge">',
-          '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
-          '</fw-fragment>',
+          '<kovo-fragment target="cart-badge">',
+          '<cart-badge><span>1</span><kovo-fragment target="nested"><span>nested</span></kovo-fragment></cart-badge>',
+          '</kovo-fragment>',
         ].join(''),
         'cart-badge',
       ),
     ).toBe(
-      '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+      '<cart-badge><span>1</span><kovo-fragment target="nested"><span>nested</span></kovo-fragment></cart-badge>',
     );
   });
 
-  it('does not resolve fragments by fw-c stamps or same-tag fw-deps elements', () => {
+  it('does not resolve fragments by kovo-c stamps or same-tag kovo-deps elements', () => {
     const html =
-      '<section fw-c=\'cart-badge\'><span>1</span></section><cart-form fw-deps="cart"><button>Add</button></cart-form>';
+      '<section kovo-c=\'cart-badge\'><span>1</span></section><cart-form kovo-deps="cart"><button>Add</button></cart-form>';
 
     expect(fragmentHtml(html, 'cart-badge')).toBe('');
     expect(fragmentHtml(html, 'cart-form')).toBe('');
@@ -97,8 +97,8 @@ describe('@jiso/test html fragment seam', () => {
       '<section id="cart-badge"><section class="inner"><span>1</span></section><p>done</p></section>',
     ],
     [
-      'fw-fragment-target targets contain nested same-tag children',
-      '<article fw-fragment-target="cart-badge"><article class="inner"><span>1</span></article><p>done</p></article>',
+      'kovo-fragment-target targets contain nested same-tag children',
+      '<article kovo-fragment-target="cart-badge"><article class="inner"><span>1</span></article><p>done</p></article>',
     ],
   ])('extracts fragment targets when %s', (_name, html) => {
     expect(fragmentHtml(html, 'cart-badge')).toBe(html);
@@ -168,7 +168,7 @@ describe('@jiso/test html fragment seam', () => {
       '<meta name="description" content="Ready cart">',
       '<link rel="modulepreload" href="/c/app.js">',
       '<link rel="stylesheet" href="/assets/tailwind.css">',
-      '<script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart"}</script>',
+      '<script type="application/json" kovo-i18n locale="en-US">{"cartLabel":"Cart"}</script>',
       '</head><body class="min-h-dvh"><main>Sign in <strong>ready</strong></main></body></html>',
     ].join('');
 
@@ -176,7 +176,7 @@ describe('@jiso/test html fragment seam', () => {
       bodyAttrs: { class: 'min-h-dvh' },
       jsonScripts: [
         {
-          attrs: { 'fw-i18n': '', locale: 'en-US', type: 'application/json' },
+          attrs: { 'kovo-i18n': '', locale: 'en-US', type: 'application/json' },
           json: { cartLabel: 'Cart' },
           rawJson: '{"cartLabel":"Cart"}',
         },
@@ -189,7 +189,7 @@ describe('@jiso/test html fragment seam', () => {
       text: 'Sign in ready',
       title: 'Cart & Checkout',
     });
-    expect(htmlJsonScriptFacts(html, { 'fw-i18n': true }).map((script) => script.json)).toEqual([
+    expect(htmlJsonScriptFacts(html, { 'kovo-i18n': true }).map((script) => script.json)).toEqual([
       { cartLabel: 'Cart' },
     ]);
   });
@@ -221,9 +221,9 @@ describe('@jiso/test html fragment seam', () => {
     );
   });
 
-  it('projects document query-script behavior without local fw-check HTML mechanics', () => {
+  it('projects document query-script behavior without local kovo-check HTML mechanics', () => {
     const queryScript =
-      '<script type="application/json" fw-query="cart" key="cart:c1">{"html":"\\u003c/script>"}</script>';
+      '<script type="application/json" kovo-query="cart" key="cart:c1">{"html":"\\u003c/script>"}</script>';
     const document = [
       '<!doctype html><html><head>',
       queryScript,
@@ -242,7 +242,7 @@ describe('@jiso/test html fragment seam', () => {
       documentQueryScripts: [
         {
           attrs: {
-            'fw-query': 'cart',
+            'kovo-query': 'cart',
             key: 'cart:c1',
             type: 'application/json',
           },
@@ -252,7 +252,7 @@ describe('@jiso/test html fragment seam', () => {
       headQueryScripts: [
         {
           attrs: {
-            'fw-query': 'cart',
+            'kovo-query': 'cart',
             key: 'cart:c1',
             type: 'application/json',
           },
@@ -264,13 +264,13 @@ describe('@jiso/test html fragment seam', () => {
     });
   });
 
-  it('projects static export main marker facts without local fw-check HTML mechanics', () => {
+  it('projects static export main marker facts without local kovo-check HTML mechanics', () => {
     expect(
       htmlMainMarkerFact(
-        '<!doctype html><html><body><main data-fw-check-export="cli">Ready</main></body></html>',
+        '<!doctype html><html><body><main data-kovo-check-export="cli">Ready</main></body></html>',
       ),
     ).toEqual({
-      attribute: 'data-fw-check-export',
+      attribute: 'data-kovo-check-export',
       mainCount: 1,
       marker: 'cli',
     });
@@ -282,7 +282,7 @@ describe('@jiso/test html fragment seam', () => {
       marker: 'checkout',
     });
     expect(htmlMainMarkerFact('<section>No main</section>')).toEqual({
-      attribute: 'data-fw-check-export',
+      attribute: 'data-kovo-check-export',
       mainCount: 0,
       marker: undefined,
     });
@@ -290,53 +290,53 @@ describe('@jiso/test html fragment seam', () => {
 
   it('returns structured framework query facts for element and script carriers', () => {
     const html = [
-      '<fw-query name="cart" key="cart:c1" version="7">{"count":2}</fw-query>',
-      '<script type="application/json" fw-query="productGrid">{"items":[{"id":"p1"}]}</script>',
+      '<kovo-query name="cart" key="cart:c1" version="7">{"count":2}</kovo-query>',
+      '<script type="application/json" kovo-query="productGrid">{"items":[{"id":"p1"}]}</script>',
     ].join('');
 
-    expect(fwQueryFacts(html)).toEqual([
+    expect(kovoQueryFacts(html)).toEqual([
       {
         attrs: {
           key: 'cart:c1',
           name: 'cart',
           version: '7',
         },
-        html: '<fw-query name="cart" key="cart:c1" version="7">{"count":2}</fw-query>',
+        html: '<kovo-query name="cart" key="cart:c1" version="7">{"count":2}</kovo-query>',
         json: { count: 2 },
         name: 'cart',
         rawJson: '{"count":2}',
-        tag: 'fw-query',
+        tag: 'kovo-query',
       },
       {
         attrs: {
-          'fw-query': 'productGrid',
+          'kovo-query': 'productGrid',
           type: 'application/json',
         },
-        html: '<script type="application/json" fw-query="productGrid">{"items":[{"id":"p1"}]}</script>',
+        html: '<script type="application/json" kovo-query="productGrid">{"items":[{"id":"p1"}]}</script>',
         json: { items: [{ id: 'p1' }] },
         name: 'productGrid',
         rawJson: '{"items":[{"id":"p1"}]}',
         tag: 'script',
       },
     ]);
-    expect(fwQueryFacts(html, 'cart').map((fact) => fact.json)).toEqual([{ count: 2 }]);
+    expect(kovoQueryFacts(html, 'cart').map((fact) => fact.json)).toEqual([{ count: 2 }]);
   });
 
   it('keeps adjacent inline and JSON scripts as separate raw-text facts', () => {
     const html = [
       '<head>',
       '<script>const closing = "</" + "script>";</script>',
-      '<script type="application/json" fw-query="cart">{"count":2}</script>',
+      '<script type="application/json" kovo-query="cart">{"count":2}</script>',
       '</head>',
     ].join('');
 
     expect(htmlElementFacts(html, { tag: 'script' }).map((script) => script.attrs)).toEqual([
       {},
-      { 'fw-query': 'cart', type: 'application/json' },
+      { 'kovo-query': 'cart', type: 'application/json' },
     ]);
-    expect(fwQueryFacts(html, 'cart')).toMatchObject([
+    expect(kovoQueryFacts(html, 'cart')).toMatchObject([
       {
-        attrs: { 'fw-query': 'cart', type: 'application/json' },
+        attrs: { 'kovo-query': 'cart', type: 'application/json' },
         json: { count: 2 },
         name: 'cart',
         rawJson: '{"count":2}',
@@ -347,26 +347,26 @@ describe('@jiso/test html fragment seam', () => {
 
   it('returns structured framework fragment facts with nested stylesheet hints', () => {
     const html = [
-      '<fw-fragment target="cart-badge"><cart-badge><span>2</span></cart-badge></fw-fragment>',
-      '<fw-fragment target="product-grid" error-boundary="product-grid">',
+      '<kovo-fragment target="cart-badge"><cart-badge><span>2</span></cart-badge></kovo-fragment>',
+      '<kovo-fragment target="product-grid" error-boundary="product-grid">',
       '<link rel="stylesheet" href="/assets/tailwind.css">',
-      '<section><article fw-key="p1">Mug</article></section>',
-      '</fw-fragment>',
+      '<section><article kovo-key="p1">Mug</article></section>',
+      '</kovo-fragment>',
     ].join('');
 
-    expect(fwFragmentFacts(html).map((fact) => fact.target)).toEqual([
+    expect(kovoFragmentFacts(html).map((fact) => fact.target)).toEqual([
       'cart-badge',
       'product-grid',
     ]);
-    expect(fwFragmentFacts(html, 'product-grid')).toEqual([
+    expect(kovoFragmentFacts(html, 'product-grid')).toEqual([
       {
         attrs: {
           'error-boundary': 'product-grid',
           target: 'product-grid',
         },
-        html: '<fw-fragment target="product-grid" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section><article fw-key="p1">Mug</article></section></fw-fragment>',
+        html: '<kovo-fragment target="product-grid" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section><article kovo-key="p1">Mug</article></section></kovo-fragment>',
         innerHtml:
-          '<link rel="stylesheet" href="/assets/tailwind.css"><section><article fw-key="p1">Mug</article></section>',
+          '<link rel="stylesheet" href="/assets/tailwind.css"><section><article kovo-key="p1">Mug</article></section>',
         stylesheetHrefs: ['/assets/tailwind.css'],
         target: 'product-grid',
       },
@@ -375,16 +375,16 @@ describe('@jiso/test html fragment seam', () => {
 
   it('summarizes framework response bodies without commerce-local fixture parsing', () => {
     const html = [
-      '<fw-query name="cart">{"count":2}</fw-query>',
-      '<fw-query name="productGrid">{"items":[{"id":"p1"}]}</fw-query>',
-      '<fw-fragment target="cart-badge"><cart-badge><span>2</span></cart-badge></fw-fragment>',
-      '<fw-fragment target="product-grid">',
+      '<kovo-query name="cart">{"count":2}</kovo-query>',
+      '<kovo-query name="productGrid">{"items":[{"id":"p1"}]}</kovo-query>',
+      '<kovo-fragment target="cart-badge"><cart-badge><span>2</span></cart-badge></kovo-fragment>',
+      '<kovo-fragment target="product-grid">',
       '<link rel="stylesheet" href="/assets/tailwind.css">',
-      '<section><article fw-key="p1">Mug</article></section>',
-      '</fw-fragment>',
+      '<section><article kovo-key="p1">Mug</article></section>',
+      '</kovo-fragment>',
     ].join('');
 
-    expect(fwResponseBodyFact(html)).toMatchObject({
+    expect(kovoResponseBodyFact(html)).toMatchObject({
       fragmentTargets: ['cart-badge', 'product-grid'],
       keyValues: ['p1'],
       queryJsonByName: {
@@ -397,8 +397,8 @@ describe('@jiso/test html fragment seam', () => {
         'product-grid': ['/assets/tailwind.css'],
       },
     });
-    expect(fwQueryJsonValues(html, 'cart')).toEqual([{ count: 2 }]);
-    expect(fwQueryJsonValues(html, 'missing')).toEqual([]);
+    expect(kovoQueryJsonValues(html, 'cart')).toEqual([{ count: 2 }]);
+    expect(kovoQueryJsonValues(html, 'missing')).toEqual([]);
   });
 
   it('returns structured form facts with named controls', () => {
@@ -491,8 +491,8 @@ describe('@jiso/test html fragment seam', () => {
   it('returns keyed framework element facts with normalized text', () => {
     const html = [
       '<section>',
-      '<article fw-key="p1"><h2>Coffee &amp; mug</h2><span>3 in stock</span></article>',
-      '<article fw-key="p2"><span>Tea</span><span>&#36;25</span></article>',
+      '<article kovo-key="p1"><h2>Coffee &amp; mug</h2><span>3 in stock</span></article>',
+      '<article kovo-key="p2"><span>Tea</span><span>&#36;25</span></article>',
       '</section>',
     ].join('');
 
@@ -508,7 +508,7 @@ describe('@jiso/test html fragment seam', () => {
         text: 'Tea$25',
       },
     ]);
-    expect(htmlKeyFacts('<li fw-key="order-1">Order</li>', 'order-1')).toMatchObject([
+    expect(htmlKeyFacts('<li kovo-key="order-1">Order</li>', 'order-1')).toMatchObject([
       { key: 'order-1', text: 'Order' },
     ]);
     expect(htmlKeyValues(html)).toEqual(['p1', 'p2']);

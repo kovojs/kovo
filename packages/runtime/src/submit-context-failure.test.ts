@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { form, type FormFailure, type Route } from '@jiso/core';
+import { form, type FormFailure, type Route } from '@kovojs/core';
 
 import { createQueryStore, createSubmitContext } from './index.js';
 import { FakeMorphRoot } from './runtime-test-fakes.js';
 
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface RouteRegistry {
     '/cart': Route<'/cart'>;
     '/catalog': Route<'/catalog', {}, { max: number; sort: string }>;
@@ -36,7 +36,7 @@ describe('submit context failure parsing', () => {
     const fetch = vi.fn(async () => ({
       status: 422,
       async text() {
-        return '<fw-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>';
+        return '<kovo-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>';
       },
     }));
     const ctx = createSubmitContext({ fetch, root, store });
@@ -58,7 +58,7 @@ describe('submit context failure parsing', () => {
     ]);
   });
 
-  it('parses fw-error mutation failures with shared tag-close attribute scanning', async () => {
+  it('parses kovo-error mutation failures with shared tag-close attribute scanning', async () => {
     const addToCart = form<
       'cart/add',
       { productId: string; quantity: number },
@@ -70,7 +70,7 @@ describe('submit context failure parsing', () => {
     const fetch = vi.fn(async () => ({
       status: 422,
       async text() {
-        return '<fw-error data-debug="quantity > stock">{"code":"OUT_OF_STOCK","data":{"availableQuantity":0}}</fw-error>';
+        return '<kovo-error data-debug="quantity > stock">{"code":"OUT_OF_STOCK","data":{"availableQuantity":0}}</kovo-error>';
       },
     }));
     const ctx = createSubmitContext({ fetch, root, store });
@@ -98,7 +98,7 @@ describe('submit context failure parsing', () => {
     const fetch = vi.fn(async () => ({
       status: 422,
       async text() {
-        return '<fw-fragment target="error"><output role="alert" data-debug="quantity > stock" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>';
+        return '<kovo-fragment target="error"><output role="alert" data-debug="quantity > stock" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>';
       },
     }));
     const ctx = createSubmitContext({ fetch, root, store });
@@ -126,7 +126,7 @@ describe('submit context failure parsing', () => {
     const fetch = vi.fn(async () => ({
       status: 422,
       async text() {
-        return '<fw-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></fw-fragment>';
+        return '<kovo-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>';
       },
     }));
     const ctx = createSubmitContext({ fetch, root, store });
@@ -154,7 +154,7 @@ describe('submit context failure parsing', () => {
     const fetch = vi.fn(async () => ({
       status: 422,
       async text() {
-        return '<fw-fragment target="product-form:p1"><output role="alert" data-debug="quantity > min" data-error-path="quantity">Expected number &gt;= 1</output></fw-fragment>';
+        return '<kovo-fragment target="product-form:p1"><output role="alert" data-debug="quantity > min" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>';
       },
     }));
     const ctx = createSubmitContext({ fetch, root, store });

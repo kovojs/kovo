@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/core",
+  "name": "@kovojs/core",
   "version": "0.0.0",
   "type": "module",
   "exports": {

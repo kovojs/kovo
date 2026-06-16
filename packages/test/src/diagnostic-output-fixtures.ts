@@ -32,12 +32,12 @@ export interface ViteLoweredEventDiagnosticFact {
   summary: string;
 }
 
-const viteDiagnosticSummaryPrefix = 'Jiso Vite transform failed';
+const viteDiagnosticSummaryPrefix = 'Kovo Vite transform failed';
 
 export function viteDiagnosticMessageFactsFromOutput(output: string): ViteDiagnosticMessageFacts {
   const diagnosticStart = output.indexOf(viteDiagnosticSummaryPrefix);
   if (diagnosticStart === -1) {
-    throw new Error('Vite diagnostic output includes Jiso transform summary');
+    throw new Error('Vite diagnostic output includes Kovo transform summary');
   }
 
   return viteDiagnosticMessageFacts(output.slice(diagnosticStart).trim());

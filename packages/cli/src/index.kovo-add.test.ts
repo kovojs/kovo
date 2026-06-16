@@ -1,0 +1,366 @@
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { compileComponentModule } from '@kovojs/compiler';
+import { describe, expect, it, vi } from 'vitest';
+
+import { main } from './index.js';
+import { availableAddComponents, vendoredUiComponents } from './add-catalog.js';
+
+describe('kovo add', () => {
+  it('keeps the vendored UI catalog synchronized with @kovojs/ui package source', () => {
+    expect(availableAddComponents()).toBe(
+      'accordion, alert, alert-dialog, autocomplete, avatar, badge, breadcrumb, button, card, checkbox, checkbox-group, collapsible, combobox, command, context-menu, dialog, disclosure, drawer, dropdown-menu, field, hover-card, kbd, menubar, meter, navigation-menu, number-field, otp-field, popover, progress, radio-group, scroll-area, select, separator, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar, tooltip',
+    );
+
+    const manifest = JSON.parse(
+      readFileSync(new URL('../../ui/package.json', import.meta.url), 'utf8'),
+    ) as { exports: Record<string, string>; kovo: { vendoredSource: boolean }; name: string };
+    const cliManifest = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as {
+      dependencies: Record<string, string>;
+    };
+    const exportedComponents = Object.keys(manifest.exports)
+      .filter((subpath) => subpath !== '.')
+      .map((subpath) => subpath.slice(2))
+      .sort();
+
+    expect(cliManifest.dependencies['@kovojs/ui']).toBe('workspace:*');
+    expect(manifest.name).toBe('@kovojs/ui');
+    expect(manifest.kovo.vendoredSource).toBe(true);
+    expect(Object.keys(vendoredUiComponents).sort()).toEqual(exportedComponents);
+
+    for (const [name, entry] of Object.entries(vendoredUiComponents)) {
+      expect(entry.fileName).toBe(`${name}.tsx`);
+      expect(entry.source).toBe(
+        readFileSync(new URL(`../../ui/src/${name}.tsx`, import.meta.url), 'utf8'),
+      );
+      expect(entry.source).toContain("import { component } from '@kovojs/core';");
+      expect(entry.source).toContain(`component('${name}'`);
+      expect(entry.source).not.toContain('@kovojs/ui');
+      expect(entry.source).not.toContain('kovo-c=');
+      expect(entry.source).not.toContain('data-bind=');
+    }
+  });
+
+  it('compiles vendored catalog entries as app-authored TSX without KV235', () => {
+    for (const [name, entry] of Object.entries(vendoredUiComponents)) {
+      const result = compileComponentModule({
+        fileName: `src/components/ui/${entry.fileName}`,
+        source: entry.source,
+      });
+
+      expect(result.diagnostics, name).not.toContainEqual(
+        expect.objectContaining({ code: 'KV235' }),
+      );
+      expect(result.diagnostics, name).toEqual([]);
+    }
+  });
+
+  it('vendors package-synchronized components as TSX app source', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
+    const outDir = join(root, 'src/components/ui');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(
+        main([
+          'add',
+          'alert',
+          'autocomplete',
+          'badge',
+          'breadcrumb',
+          'button',
+          'card',
+          'checkbox',
+          'checkbox-group',
+          'combobox',
+          'command',
+          'context-menu',
+          'dropdown-menu',
+          'kbd',
+          'menubar',
+          'navigation-menu',
+          'radio-group',
+          'select',
+          'sheet',
+          'skeleton',
+          'slider',
+          'switch',
+          'table',
+          'toggle',
+          'toggle-group',
+          'toast',
+          'toolbar',
+          '--out',
+          outDir,
+        ]),
+      ).toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('kovo-add/v1\n');
+      expect(output).toContain(
+        `ADD alert path=${JSON.stringify(join(outDir, 'alert.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD autocomplete path=${JSON.stringify(join(outDir, 'autocomplete.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD badge path=${JSON.stringify(join(outDir, 'badge.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD breadcrumb path=${JSON.stringify(join(outDir, 'breadcrumb.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD button path=${JSON.stringify(join(outDir, 'button.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD card path=${JSON.stringify(join(outDir, 'card.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD checkbox path=${JSON.stringify(join(outDir, 'checkbox.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD checkbox-group path=${JSON.stringify(join(outDir, 'checkbox-group.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD combobox path=${JSON.stringify(join(outDir, 'combobox.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD command path=${JSON.stringify(join(outDir, 'command.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD context-menu path=${JSON.stringify(join(outDir, 'context-menu.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD dropdown-menu path=${JSON.stringify(join(outDir, 'dropdown-menu.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD kbd path=${JSON.stringify(join(outDir, 'kbd.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD menubar path=${JSON.stringify(join(outDir, 'menubar.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD navigation-menu path=${JSON.stringify(join(outDir, 'navigation-menu.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD radio-group path=${JSON.stringify(join(outDir, 'radio-group.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD select path=${JSON.stringify(join(outDir, 'select.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD sheet path=${JSON.stringify(join(outDir, 'sheet.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD skeleton path=${JSON.stringify(join(outDir, 'skeleton.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD slider path=${JSON.stringify(join(outDir, 'slider.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD switch path=${JSON.stringify(join(outDir, 'switch.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD table path=${JSON.stringify(join(outDir, 'table.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD toggle path=${JSON.stringify(join(outDir, 'toggle.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD toggle-group path=${JSON.stringify(join(outDir, 'toggle-group.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD toast path=${JSON.stringify(join(outDir, 'toast.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD toolbar path=${JSON.stringify(join(outDir, 'toolbar.tsx'))} source=tsx`,
+      );
+
+      const alert = readFileSync(join(outDir, 'alert.tsx'), 'utf8');
+      const autocomplete = readFileSync(join(outDir, 'autocomplete.tsx'), 'utf8');
+      const badge = readFileSync(join(outDir, 'badge.tsx'), 'utf8');
+      const breadcrumb = readFileSync(join(outDir, 'breadcrumb.tsx'), 'utf8');
+      const button = readFileSync(join(outDir, 'button.tsx'), 'utf8');
+      const card = readFileSync(join(outDir, 'card.tsx'), 'utf8');
+      const checkbox = readFileSync(join(outDir, 'checkbox.tsx'), 'utf8');
+      const checkboxGroup = readFileSync(join(outDir, 'checkbox-group.tsx'), 'utf8');
+      const combobox = readFileSync(join(outDir, 'combobox.tsx'), 'utf8');
+      const command = readFileSync(join(outDir, 'command.tsx'), 'utf8');
+      const contextMenu = readFileSync(join(outDir, 'context-menu.tsx'), 'utf8');
+      const dropdownMenu = readFileSync(join(outDir, 'dropdown-menu.tsx'), 'utf8');
+      const kbd = readFileSync(join(outDir, 'kbd.tsx'), 'utf8');
+      const menubar = readFileSync(join(outDir, 'menubar.tsx'), 'utf8');
+      const navigationMenu = readFileSync(join(outDir, 'navigation-menu.tsx'), 'utf8');
+      const radioGroup = readFileSync(join(outDir, 'radio-group.tsx'), 'utf8');
+      const select = readFileSync(join(outDir, 'select.tsx'), 'utf8');
+      const sheet = readFileSync(join(outDir, 'sheet.tsx'), 'utf8');
+      const skeleton = readFileSync(join(outDir, 'skeleton.tsx'), 'utf8');
+      const slider = readFileSync(join(outDir, 'slider.tsx'), 'utf8');
+      const switchSource = readFileSync(join(outDir, 'switch.tsx'), 'utf8');
+      const table = readFileSync(join(outDir, 'table.tsx'), 'utf8');
+      const toggle = readFileSync(join(outDir, 'toggle.tsx'), 'utf8');
+      const toggleGroup = readFileSync(join(outDir, 'toggle-group.tsx'), 'utf8');
+      const toast = readFileSync(join(outDir, 'toast.tsx'), 'utf8');
+      const toolbar = readFileSync(join(outDir, 'toolbar.tsx'), 'utf8');
+      expect(alert).toContain("export const Alert = component('alert'");
+      expect(alert).toContain('export const alertClassNames = defineVariants');
+      expect(autocomplete).toContain("export const Autocomplete = component('autocomplete'");
+      expect(autocomplete).toContain('export const autocompleteClassNames = defineVariants');
+      expect(badge).toContain("export const Badge = component('badge'");
+      expect(badge).toContain('export const badgeClassNames = defineVariants');
+      expect(breadcrumb).toContain("export const Breadcrumb = component('breadcrumb'");
+      expect(breadcrumb).toContain('export const breadcrumbClasses =');
+      expect(button).toContain("import { component } from '@kovojs/core';");
+      expect(button).toContain("export const Button = component('button'");
+      expect(button).toContain('export const buttonClassNames = defineVariants');
+      expect(card).toContain("export const Card = component('card'");
+      expect(card).toContain('export const cardClassNames =');
+      expect(checkbox).toContain("export const Checkbox = component('checkbox'");
+      expect(checkbox).toContain('export const checkboxClassNames = defineVariants');
+      expect(checkboxGroup).toContain("export const CheckboxGroup = component('checkbox-group'");
+      expect(checkboxGroup).toContain('export const checkboxGroupClassNames = defineVariants');
+      expect(combobox).toContain("export const Combobox = component('combobox'");
+      expect(combobox).toContain('export const comboboxClassNames = defineVariants');
+      expect(command).toContain("export const Command = component('command'");
+      expect(command).toContain('export const commandClassNames = defineVariants');
+      expect(contextMenu).toContain("export const ContextMenu = component('context-menu'");
+      expect(contextMenu).toContain('export const contextMenuClassNames = defineVariants');
+      expect(dropdownMenu).toContain("export const DropdownMenu = component('dropdown-menu'");
+      expect(dropdownMenu).toContain('export const dropdownMenuClassNames = defineVariants');
+      expect(kbd).toContain("export const Kbd = component('kbd'");
+      expect(kbd).toContain('export const kbdClassNames =');
+      expect(menubar).toContain("export const Menubar = component('menubar'");
+      expect(menubar).toContain('export const menubarClassNames = defineVariants');
+      expect(navigationMenu).toContain("export const NavigationMenu = component('navigation-menu'");
+      expect(navigationMenu).toContain('export const navigationMenuClassNames = defineVariants');
+      expect(radioGroup).toContain("export const RadioGroup = component('radio-group'");
+      expect(radioGroup).toContain('export const radioGroupClassNames = defineVariants');
+      expect(select).toContain("export const Select = component('select'");
+      expect(select).toContain('export const selectClassNames = defineVariants');
+      expect(sheet).toContain("export const Sheet = component('sheet'");
+      expect(sheet).toContain('export const sheetContentClassNames = defineVariants');
+      expect(skeleton).toContain("export const Skeleton = component('skeleton'");
+      expect(skeleton).toContain('export const skeletonClassNames =');
+      expect(slider).toContain("export const Slider = component('slider'");
+      expect(slider).toContain('export const sliderClassNames = defineVariants');
+      expect(switchSource).toContain("export const Switch = component('switch'");
+      expect(switchSource).toContain('export const switchClassNames = defineVariants');
+      expect(table).toContain("export const Table = component('table'");
+      expect(table).toContain("export const TableHead = component('table-head'");
+      expect(toggle).toContain("export const Toggle = component('toggle'");
+      expect(toggle).toContain('export const toggleClassNames = defineVariants');
+      expect(toggleGroup).toContain("export const ToggleGroup = component('toggle-group'");
+      expect(toggleGroup).toContain('export const toggleGroupClassNames = defineVariants');
+      expect(toast).toContain("export const Toast = component('toast'");
+      expect(toast).toContain('export const toastClassNames = defineVariants');
+      expect(toolbar).toContain("export const Toolbar = component('toolbar'");
+      expect(toolbar).toContain('export const toolbarClassNames = defineVariants');
+      const vendoredSource = [
+        alert,
+        autocomplete,
+        badge,
+        breadcrumb,
+        button,
+        card,
+        checkbox,
+        checkboxGroup,
+        combobox,
+        command,
+        contextMenu,
+        dropdownMenu,
+        kbd,
+        menubar,
+        navigationMenu,
+        radioGroup,
+        select,
+        sheet,
+        skeleton,
+        slider,
+        switchSource,
+        table,
+        toggle,
+        toggleGroup,
+        toast,
+        toolbar,
+      ].join('\n');
+      expect(vendoredSource).not.toContain('@kovojs/ui');
+      expect(vendoredSource).not.toContain('kovo-c=');
+      expect(vendoredSource).not.toContain('data-bind=');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('is idempotent when the vendored component is already current', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
+    const outDir = join(root, 'ui');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['add', 'button', '--out', outDir])).toBe(0);
+      stdout.mockClear();
+
+      expect(main(['add', 'button', '--out', outDir])).toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `SKIP button path=${JSON.stringify(join(outDir, 'button.tsx'))} reason=already-current`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses unknown components with stable output', () => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['add', 'calendar'])).toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
+        'kovo: unknown component "calendar". available: accordion, alert, alert-dialog, autocomplete, avatar, badge, breadcrumb, button, card, checkbox, checkbox-group, collapsible, combobox, command, context-menu, dialog, disclosure, drawer, dropdown-menu, field, hover-card, kbd, menubar, meter, navigation-menu, number-field, otp-field, popover, progress, radio-group, scroll-area, select, separator, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar, tooltip.\n',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
+
+  it('refuses to overwrite app-owned component files', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
+    const outDir = join(root, 'ui');
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, 'button.tsx'), 'export const Button = "local";\n', 'utf8');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['add', 'button', '--out', outDir])).toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
+        `kovo-add/v1\nERROR button path=${JSON.stringify(join(outDir, 'button.tsx'))} reason=would-overwrite\n`,
+      );
+      expect(readFileSync(join(outDir, 'button.tsx'), 'utf8')).toBe(
+        'export const Button = "local";\n',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+});

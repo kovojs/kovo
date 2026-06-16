@@ -1,37 +1,37 @@
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 import type { StaticExportAssetInput, StaticExportOptions } from './static-export-types.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {
-  createJisoAppShellViteBuildFromManifestFile,
-  type JisoAppShellBuild,
-  type JisoAppShellCompiledClientModule,
+  createKovoAppShellViteBuildFromManifestFile,
+  type KovoAppShellBuild,
+  type KovoAppShellCompiledClientModule,
 } from './vite-build.js';
 import {
-  jisoAppShellViteBuildStaticExportAssets,
-  jisoAppShellViteManifestFile,
+  kovoAppShellViteBuildStaticExportAssets,
+  kovoAppShellViteManifestFile,
 } from './vite-build-assets.js';
-import type { JisoAppShellRouteEntryMap } from './vite-manifest.js';
+import type { KovoAppShellRouteEntryMap } from './vite-manifest.js';
 
-export interface JisoAppShellVitePluginStaticExportOptions extends Omit<
-  JisoAppShellViteBuildStaticExportOptions,
+export interface KovoAppShellVitePluginStaticExportOptions extends Omit<
+  KovoAppShellViteBuildStaticExportOptions,
   'distDir'
 > {
   distDir?: never;
 }
 
-export interface JisoAppShellViteBuildOutputStaticExportOptions extends Omit<
-  JisoAppShellViteBuildStaticExportOptions,
+export interface KovoAppShellViteBuildOutputStaticExportOptions extends Omit<
+  KovoAppShellViteBuildStaticExportOptions,
   'distDir'
 > {
   distDir?: never;
 }
 
-export interface JisoAppShellViteBuildOutputStaticExportPlan {
+export interface KovoAppShellViteBuildOutputStaticExportPlan {
   assets: StaticExportAssetInput[];
   options: StaticExportOptions;
 }
 
-export interface JisoAppShellViteBuildStaticExportOptions extends Omit<
+export interface KovoAppShellViteBuildStaticExportOptions extends Omit<
   StaticExportOptions,
   'assets'
 > {
@@ -39,47 +39,47 @@ export interface JisoAppShellViteBuildStaticExportOptions extends Omit<
   distDir: string | URL;
 }
 
-export interface JisoAppShellViteBuildStaticExportInventoryOptions extends Omit<
-  JisoAppShellViteBuildStaticExportOptions,
+export interface KovoAppShellViteBuildStaticExportInventoryOptions extends Omit<
+  KovoAppShellViteBuildStaticExportOptions,
   'outDir'
 > {
   outDir?: never;
 }
 
-export interface JisoAppShellViteManifestFileBuildStaticExportOptions extends Omit<
-  JisoAppShellViteBuildStaticExportOptions,
+export interface KovoAppShellViteManifestFileBuildStaticExportOptions extends Omit<
+  KovoAppShellViteBuildStaticExportOptions,
   'distDir'
 > {
-  app: JisoApp;
+  app: KovoApp;
   base?: string;
-  clientModules?: readonly JisoAppShellCompiledClientModule[];
+  clientModules?: readonly KovoAppShellCompiledClientModule[];
   distDir: string | URL;
   manifestFile?: string | URL;
-  routeEntryMap?: JisoAppShellRouteEntryMap;
+  routeEntryMap?: KovoAppShellRouteEntryMap;
 }
 
-export interface JisoAppShellViteManifestFileBuildStaticExportInventoryOptions extends Omit<
-  JisoAppShellViteManifestFileBuildStaticExportOptions,
+export interface KovoAppShellViteManifestFileBuildStaticExportInventoryOptions extends Omit<
+  KovoAppShellViteManifestFileBuildStaticExportOptions,
   'outDir'
 > {
   outDir?: never;
 }
 
-export async function createJisoAppShellViteStaticExportBuildFromManifestFile(
-  options: JisoAppShellViteManifestFileBuildStaticExportOptions,
-): Promise<JisoAppShellBuild> {
-  return await createJisoAppShellViteBuildFromManifestFile({
+export async function createKovoAppShellViteStaticExportBuildFromManifestFile(
+  options: KovoAppShellViteManifestFileBuildStaticExportOptions,
+): Promise<KovoAppShellBuild> {
+  return await createKovoAppShellViteBuildFromManifestFile({
     app: options.app,
     ...(options.base === undefined ? {} : { base: options.base }),
     ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
-    manifestFile: options.manifestFile ?? jisoAppShellViteManifestFile(options.distDir),
+    manifestFile: options.manifestFile ?? kovoAppShellViteManifestFile(options.distDir),
     ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
   });
 }
 
-export function jisoAppShellViteBuildWriteStaticExportOptions(
-  build: JisoAppShellBuild,
-  options: JisoAppShellViteBuildStaticExportOptions,
+export function kovoAppShellViteBuildWriteStaticExportOptions(
+  build: KovoAppShellBuild,
+  options: KovoAppShellViteBuildStaticExportOptions,
 ): StaticExportOptions {
   const { assets, distDir, ...exportOptions } = options;
 
@@ -87,16 +87,16 @@ export function jisoAppShellViteBuildWriteStaticExportOptions(
     ...exportOptions,
     // SPEC §9.5: Vite-backed export replays the built app shell and publishes
     // the immutable manifest assets referenced by the generated document.
-    assets: jisoAppShellViteBuildStaticExportAssets(build, {
+    assets: kovoAppShellViteBuildStaticExportAssets(build, {
       ...(assets === undefined ? {} : { assets }),
       distDir,
     }),
   };
 }
 
-export function jisoAppShellViteBuildDryRunStaticExportOptions(
-  build: JisoAppShellBuild,
-  options: JisoAppShellViteBuildStaticExportInventoryOptions,
+export function kovoAppShellViteBuildDryRunStaticExportOptions(
+  build: KovoAppShellBuild,
+  options: KovoAppShellViteBuildStaticExportInventoryOptions,
 ): StaticExportOptions {
   assertViteStaticExportInventoryOptions(options);
   const { assets, distDir, ...exportOptions } = options;
@@ -105,21 +105,21 @@ export function jisoAppShellViteBuildDryRunStaticExportOptions(
     ...exportOptions,
     // SPEC §9.5: inventory/manifest queries inspect the same replay plan as a
     // write export while intentionally leaving output path selection unset.
-    assets: jisoAppShellViteBuildStaticExportAssets(build, {
+    assets: kovoAppShellViteBuildStaticExportAssets(build, {
       ...(assets === undefined ? {} : { assets }),
       distDir,
     }),
   };
 }
 
-export function jisoAppShellViteBuildOutputStaticExportPlan(
-  build: Pick<JisoAppShellBuild, 'assets'>,
-  options: JisoAppShellViteBuildOutputStaticExportOptions,
+export function kovoAppShellViteBuildOutputStaticExportPlan(
+  build: Pick<KovoAppShellBuild, 'assets'>,
+  options: KovoAppShellViteBuildOutputStaticExportOptions,
   distDir: string | URL,
-): JisoAppShellViteBuildOutputStaticExportPlan {
+): KovoAppShellViteBuildOutputStaticExportPlan {
   assertViteBuildOutputStaticExportOptions(options);
   const { assets, ...exportOptions } = options;
-  const staticExportAssets = jisoAppShellViteBuildStaticExportAssets(build, {
+  const staticExportAssets = kovoAppShellViteBuildStaticExportAssets(build, {
     ...(assets === undefined ? {} : { assets }),
     distDir,
   });
@@ -135,9 +135,9 @@ export function jisoAppShellViteBuildOutputStaticExportPlan(
   };
 }
 
-export function jisoAppShellViteManifestFileWriteStaticExportOptions(
-  options: JisoAppShellViteManifestFileBuildStaticExportOptions,
-): JisoAppShellViteBuildStaticExportOptions {
+export function kovoAppShellViteManifestFileWriteStaticExportOptions(
+  options: KovoAppShellViteManifestFileBuildStaticExportOptions,
+): KovoAppShellViteBuildStaticExportOptions {
   const {
     app: _app,
     base: _base,
@@ -150,9 +150,9 @@ export function jisoAppShellViteManifestFileWriteStaticExportOptions(
   return exportOptions;
 }
 
-export function jisoAppShellViteManifestFileDryRunStaticExportOptions(
-  options: JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
-): JisoAppShellViteBuildStaticExportInventoryOptions {
+export function kovoAppShellViteManifestFileDryRunStaticExportOptions(
+  options: KovoAppShellViteManifestFileBuildStaticExportInventoryOptions,
+): KovoAppShellViteBuildStaticExportInventoryOptions {
   assertViteStaticExportInventoryOptions(options);
   const {
     app: _app,
@@ -174,7 +174,7 @@ function assertViteStaticExportInventoryOptions(options: object): void {
       'vite-static-export',
       [
         'Vite app-shell static export inventory/manifest tasks are dry runs and must not receive outDir.',
-        'Use exportJisoAppShellViteBuild() or exportJisoAppShellViteBuildFromManifestFile() to write files.',
+        'Use exportKovoAppShellViteBuild() or exportKovoAppShellViteBuildFromManifestFile() to write files.',
       ].join(' '),
     ),
   ]);

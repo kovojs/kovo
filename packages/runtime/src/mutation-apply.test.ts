@@ -45,8 +45,8 @@ describe('enhanced mutation response apply orchestration', () => {
       applyOptions({ broadcast, root, store }),
       fetchedMutation(
         [
-          '<fw-query name="cart">{"count":2}</fw-query>',
-          '<fw-fragment target="cart-badge"><span>2</span></fw-fragment>',
+          '<kovo-query name="cart">{"count":2}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><span>2</span></kovo-fragment>',
         ].join(''),
         {
           changes: [{ domain: 'cart', keys: ['cart:1'] }],
@@ -70,8 +70,8 @@ describe('enhanced mutation response apply orchestration', () => {
     });
     expect(broadcast.publish).toHaveBeenCalledWith(
       [
-        '<fw-query name="cart">{"count":2}</fw-query>',
-        '<fw-fragment target="cart-badge"><span>2</span></fw-fragment>',
+        '<kovo-query name="cart">{"count":2}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><span>2</span></kovo-fragment>',
       ].join(''),
       [{ domain: 'cart', keys: ['cart:1'] }],
     );
@@ -84,7 +84,7 @@ describe('enhanced mutation response apply orchestration', () => {
 
     const applied = applyFetchedEnhancedMutationResponseToRuntime(
       applyOptions({ broadcast, root }),
-      fetchedMutation('<fw-fragment target="cart-form"><form>Invalid</form></fw-fragment>', {
+      fetchedMutation('<kovo-fragment target="cart-form"><form>Invalid</form></kovo-fragment>', {
         response: { ok: false, status: 422, text: async () => '' },
       }),
     );
@@ -115,8 +115,8 @@ describe('enhanced mutation response apply orchestration', () => {
       }),
       fetchedMutation(
         [
-          '<fw-query name="cart">{"count":1}</fw-query>',
-          '<fw-fragment target="cart-badge"><span>server</span></fw-fragment>',
+          '<kovo-query name="cart">{"count":1}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><span>server</span></kovo-fragment>',
         ].join(''),
       ),
       {

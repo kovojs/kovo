@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { storageBodyToBytes } from '@jiso/core';
-import { htmlElementFacts, htmlFormFieldsByName, htmlFormFacts } from '@jiso/test/html-fragment';
+import { storageBodyToBytes } from '@kovojs/core';
+import { htmlElementFacts, htmlFormFieldsByName, htmlFormFacts } from '@kovojs/test/html-fragment';
 
 import {
   attachmentDownloadRoute,
@@ -41,7 +41,7 @@ describe('commerce example', () => {
         'data-mutation': 'order/receipt',
         enctype: 'multipart/form-data',
         enhance: '',
-        'fw-deps': 'order',
+        'kovo-deps': 'order',
         method: 'post',
       },
       method: 'post',
@@ -51,7 +51,7 @@ describe('commerce example', () => {
       attrs: { accept: 'application/pdf,image/png', type: 'file' },
     });
     expect(
-      htmlElementFacts(form, { attrs: { 'fw-upload-progress': true }, tag: 'progress' }),
+      htmlElementFacts(form, { attrs: { 'kovo-upload-progress': true }, tag: 'progress' }),
     ).toMatchObject([{ attrs: { max: '100', value: '0' } }]);
     expect(
       htmlFormFacts(html).some((pageForm) => pageForm.attrs['data-mutation'] === 'order/receipt'),
@@ -175,7 +175,7 @@ describe('commerce example', () => {
       },
     ]);
     expect(first.response.status).toBe(200);
-    expect(first.response.headers.get('FW-Changes')).toBe(
+    expect(first.response.headers.get('Kovo-Changes')).toBe(
       '[{"domain":"order","keys":["order-paid-1"]}]',
     );
     expect(await readOrders(db)).toEqual([

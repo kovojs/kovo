@@ -1,7 +1,7 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
-import { disclosureTriggerClick as _disclosureTriggerClick } from '@jiso/headless-ui/primitives';
+import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/headless-ui/primitives';
 
 export const GalleryDisclosureDemo$button_click = handler((event, ctx) => {
   const result = _disclosureTriggerClick(Object(event), { open: ctx.state.open });

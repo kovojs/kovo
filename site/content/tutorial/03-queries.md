@@ -17,7 +17,7 @@ the invalidation graph trades in, so they come first:
 
 {{snippet:03-queries/src/domains.ts#domains}}
 
-In the `@jiso/drizzle` path, domains come from schema annotations on real tables, and the read
+In the `@kovojs/drizzle` path, domains come from schema annotations on real tables, and the read
 sets below are extracted from the query ASTs — the JOIN is the declaration. The tutorial uses a
 plain in-memory store so every moving part stays visible:
 
@@ -41,13 +41,13 @@ The cart badge consumes the cart query. Your TSX says only that:
 
 {{snippet:03-queries/src/components/cart-badge.tsx#cart-badge}}
 
-The product list is keyed. You author `fw-key` yourself, because item identity is an app-level
+The product list is keyed. You author `kovo-key` yourself, because item identity is an app-level
 fact shared by the morph layer (the runtime's DOM patcher), template stamps, and optimistic
 reordering:
 
 {{snippet:03-queries/src/components/product-list.tsx#product-list}}
 
-The compiler derives the runtime wiring from these declarations: `queries:` becomes an `fw-deps`
+The compiler derives the runtime wiring from these declarations: `queries:` becomes an `kovo-deps`
 stamp on each island, and `{cart.count}` becomes a typed `data-bind` path. Binding paths
 type-check against the query's inferred shape — rename `count` and every referencing template
 goes red; bind through a nullable segment without `?.` and you get a compile error. The step's
@@ -79,8 +79,8 @@ writes — and the form-shaped contract they ride in on.
 
 Domains as invalidation currency: SPEC §10.1. Derived downstream surfaces and read-set
 extraction: SPEC §10.2. Read set as the entire registration: Constitution #2 (no API requires
-global knowledge at a local site). Derived `fw-deps`/`data-bind` stamps and binding type-check:
-SPEC §4.8; binding through a nullable segment without `?.` is **FW227**. `fw-key` shared by morph
+global knowledge at a local site). Derived `kovo-deps`/`data-bind` stamps and binding type-check:
+SPEC §4.8; binding through a nullable segment without `?.` is **KV227**. `kovo-key` shared by morph
 and optimistic reordering: SPEC §4.8, §13.2. Data shipped once as shared truth: SPEC §4.2.
 
 </details>

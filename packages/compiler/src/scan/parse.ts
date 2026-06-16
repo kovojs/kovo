@@ -1459,7 +1459,7 @@ function jsxCommentModel(
   const text = source.slice(start, end);
   if (!/^\{\s*\/\*[\s\S]*\*\/\s*\}$/.test(text)) return null;
 
-  // SPEC §5.2: the parser is the source-text boundary, so the FW codes a comment justifies are
+  // SPEC §5.2: the parser is the source-text boundary, so the KV codes a comment justifies are
   // extracted here into a typed fact (`justifiedDiagnostics`). Post-parse validators consume that
   // fact instead of re-scanning the raw comment text for diagnostic codes.
   const justifiedDiagnostics = parseJustifiedDiagnostics(text);
@@ -1475,7 +1475,7 @@ function jsxCommentModel(
 
 function parseJustifiedDiagnostics(commentText: string): string[] {
   const codes = new Set<string>();
-  for (const match of commentText.matchAll(/FW\d{3}/g)) codes.add(match[0]);
+  for (const match of commentText.matchAll(/KV\d{3}/g)) codes.add(match[0]);
   return [...codes];
 }
 

@@ -1,10 +1,10 @@
-import type { AlgebraicQueryShape, SymbolicEffect } from '@jiso/core';
+import type { AlgebraicQueryShape, SymbolicEffect } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { deriveOptimistic } from './derive.js';
 
 // SPEC.md §10.5 Stage 3 — the deriver's own unit surface. The cross-package
-// "deriver produces the shared contract fixtures" check lives in @jiso/test
+// "deriver produces the shared contract fixtures" check lives in @kovojs/test
 // (which owns the fixtures and the commuting-diagram suite); here we pin the
 // per-rule positive cases and the §10.5 PUNT list inline.
 

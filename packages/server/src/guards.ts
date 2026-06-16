@@ -1,4 +1,4 @@
-import type { Redirect as CoreRedirect } from '@jiso/core';
+import type { Redirect as CoreRedirect } from '@kovojs/core';
 import type { ServerErrorHandler } from './diagnostics.js';
 import type { ServerResponseBase } from './response.js';
 import type { Schema } from './schema.js';
@@ -115,7 +115,7 @@ const defaultRateLimitMaxKeys = 10_000;
  * query, or mutation (SPEC §6.5).
  *
  * @example
- * import { guards, route, type SessionRequestLike } from '@jiso/server';
+ * import { guards, route, type SessionRequestLike } from '@kovojs/server';
  *
  * interface AppRequest extends SessionRequestLike {}
  *
@@ -192,7 +192,7 @@ export const guards = {
  * @param schema - A `Schema` describing the session shape.
  * @returns A `SessionDefinition` with `parse`, `provider`, and the `schema`.
  * @example
- * import { s, session } from '@jiso/server';
+ * import { s, session } from '@kovojs/server';
  *
  * export const appSession = session(
  *   s.object({ userId: s.string() }),
@@ -357,7 +357,7 @@ function defaultOnUnauthenticated<Request>(
 }
 
 function loginLocationWithNext(loginPath: string, next: string): string {
-  const base = 'https://jiso.local';
+  const base = 'https://kovo.local';
   const url = new URL(loginPath, base);
   url.searchParams.set('next', next);
 

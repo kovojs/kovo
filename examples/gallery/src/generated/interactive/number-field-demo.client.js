@@ -1,12 +1,12 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   numberFieldDecrementClick as _numberFieldDecrementClick,
   numberFieldIncrementClick as _numberFieldIncrementClick,
   numberFieldInput as _numberFieldInput,
   numberFieldKeyDown as _numberFieldKeyDown,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryNumberFieldDemo$button_click = handler((event, ctx) => {
   const result = _numberFieldDecrementClick(Object(event), {

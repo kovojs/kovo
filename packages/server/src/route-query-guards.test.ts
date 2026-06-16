@@ -49,7 +49,7 @@ describe('route and query guard responses', () => {
       },
       reads: [domain('user')],
     });
-    const request = { headers: new Headers({ cookie: 'jiso_session=s1' }) };
+    const request = { headers: new Headers({ cookie: 'kovo_session=s1' }) };
 
     await expect(
       renderRoutePageResponse(adminRoute, {}, request, (value) => `<main>${value}</main>`, {
@@ -66,15 +66,15 @@ describe('route and query guard responses', () => {
         sessionProvider,
       }),
     ).resolves.toEqual({
-      body: '<fw-query name="account">{"userId":"u1"}</fw-query>',
+      body: '<kovo-query name="account">{"userId":"u1"}</kovo-query>',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
     });
     expect(events).toEqual([
-      'provider:jiso_session=s1',
+      'provider:kovo_session=s1',
       'route-guard:u1',
       'page:u1',
-      'provider:jiso_session=s1',
+      'provider:kovo_session=s1',
       'query-guard:u1',
     ]);
   });
@@ -115,7 +115,7 @@ describe('route and query guard responses', () => {
       },
     });
     const request = {
-      headers: new Headers({ cookie: 'jiso_session=s1' }),
+      headers: new Headers({ cookie: 'kovo_session=s1' }),
       readCookie() {
         return this.headers.get('cookie');
       },
@@ -125,7 +125,7 @@ describe('route and query guard responses', () => {
       renderRoutePageResponse(inspectedRoute, {}, request, JSON.stringify, { sessionProvider }),
     ).resolves.toEqual({
       body: JSON.stringify({
-        cookie: 'jiso_session=s1',
+        cookie: 'kovo_session=s1',
         descriptor: {
           configurable: true,
           enumerable: true,

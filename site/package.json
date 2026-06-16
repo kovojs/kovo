@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/site",
+  "name": "@kovojs/site",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,15 +14,15 @@
     "test": "vitest --run"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*",
-    "@jiso/runtime": "workspace:*",
-    "@jiso/server": "workspace:*"
+    "@kovojs/core": "workspace:*",
+    "@kovojs/runtime": "workspace:*",
+    "@kovojs/server": "workspace:*"
   },
   "devDependencies": {
-    "@jiso/compiler": "workspace:*",
-    "@jiso/test": "workspace:*",
+    "@kovojs/compiler": "workspace:*",
+    "@kovojs/test": "workspace:*",
     "@tailwindcss/vite": "^4.3.0",
-    "fw": "workspace:*",
+    "kovo": "workspace:*",
     "marked": "^16.0.0",
     "shiki": "^3.0.0",
     "tailwindcss": "^4.3.0",

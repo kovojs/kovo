@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { diagnosticsForObservations } from '@jiso/test/verifier-diagnostics';
+import { diagnosticsForObservations } from '@kovojs/test/verifier-diagnostics';
 import { expectedDiagnosticMessage } from './test-fixtures.js';
 
-describe('@jiso/test verifier diagnostics', () => {
+describe('@kovojs/test verifier diagnostics', () => {
   it('reports unobserved conditional branches before unobserved domains', () => {
     expect(
       diagnosticsForObservations(
@@ -43,16 +43,16 @@ describe('@jiso/test verifier diagnostics', () => {
     ).toEqual([
       {
         branch: 'stock-reserve',
-        code: 'FW405',
+        code: 'KV405',
         domain: 'product',
-        message: expectedDiagnosticMessage('FW405'),
+        message: expectedDiagnosticMessage('KV405'),
         severity: 'warn',
         site: 'cart.domain.ts:2',
       },
       {
-        code: 'FW403',
+        code: 'KV403',
         domain: 'product',
-        message: expectedDiagnosticMessage('FW403'),
+        message: expectedDiagnosticMessage('KV403'),
         severity: 'warn',
       },
     ]);

@@ -43,11 +43,11 @@ describe('headless-ui hover-card primitive', () => {
 
     expect(hoverCardTriggerAttributes({ contentId: 'profile-card', open: true })).toEqual({
       'data-state': 'open',
-      'jiso-hover-card': 'profile-card',
+      'kovo-hover-card': 'profile-card',
     });
     expect(hoverCardTriggerAttributes({ contentId: 'profile-card', open: false })).toEqual({
       'data-state': 'closed',
-      'jiso-hover-card': 'profile-card',
+      'kovo-hover-card': 'profile-card',
     });
     expect(
       hoverCardTriggerAttributes({ contentId: 'profile-card', disabled: true, open: false }),

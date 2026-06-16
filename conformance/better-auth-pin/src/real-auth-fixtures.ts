@@ -111,7 +111,7 @@ export function futureWebAuthnPlugin(): BetterAuthPlugin {
 
 export function betterAuthSchemaSourceFixture(tables: readonly string[]): string {
   return [
-    "import { jiso } from '@jiso/drizzle';",
+    "import { kovo } from '@kovojs/drizzle';",
     "import { pgTable } from 'drizzle-orm/pg-core';",
     '',
     ...[...tables].sort().map((table) => `export const ${table} = pgTable('${table}', {});`),

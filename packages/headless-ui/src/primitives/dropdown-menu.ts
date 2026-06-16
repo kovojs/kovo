@@ -348,7 +348,7 @@ export function dropdownMenuTypeahead(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -369,7 +369,7 @@ export function dropdownMenuTriggerClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -389,7 +389,7 @@ export function dropdownMenuTriggerKeyDown(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -410,7 +410,7 @@ export function dropdownMenuItemClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -430,7 +430,7 @@ export function dropdownMenuItemKeyDown(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.

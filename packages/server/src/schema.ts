@@ -1,4 +1,4 @@
-import type { StorageCapability, StorageObjectInfo } from '@jiso/core';
+import type { StorageCapability, StorageObjectInfo } from '@kovojs/core';
 
 /** A validator that parses unknown input into a typed value (throwing `SchemaValidationError` on failure). */
 export interface Schema<T> {
@@ -39,7 +39,7 @@ export class SchemaValidationError extends Error {
  * schema validates JSON and form submissions (SPEC §6.3).
  *
  * @example
- * import { s } from '@jiso/server';
+ * import { s } from '@kovojs/server';
  *
  * const input = s.object({
  *   productId: s.string(),

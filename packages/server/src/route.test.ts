@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { redirect } from '@jiso/core';
+import { redirect } from '@kovojs/core';
 
 import { renderPageHints } from './hints.js';
 import { meta } from './meta.js';

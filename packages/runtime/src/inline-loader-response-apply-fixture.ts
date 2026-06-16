@@ -17,15 +17,15 @@ export async function expectInlineResponseApplyParity(
 
   // SPEC.md §4.4: the bootstrap may stay tiny, but its wire effects must match the runtime path.
   const body = [
-    '<fw-query name="cart" key="cart:c1">{"count":1}</fw-query>',
-    '<fw-query name="productGrid">{"products":[{"id":"p1"}]}</fw-query>',
-    '<fw-query name="product" key="product&gt;p1">{&quot;stock&quot;:7}</fw-query>',
-    '<fw-query name="malformed">{</fw-query>',
-    '<fw-query name="empty"></fw-query>',
-    '<fw-query>{"ignored":true}</fw-query>',
-    '<fw-fragment target="cart-badge" mode="append"><cart-badge>1<fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge></fw-fragment>',
-    '<fw-fragment target="cart-list" mode="append"><li>p1</li></fw-fragment>',
-    '<fw-fragment target="cart-summary" mode="append"><section fw-c="cart-summary">summary</section></fw-fragment>',
+    '<kovo-query name="cart" key="cart:c1">{"count":1}</kovo-query>',
+    '<kovo-query name="productGrid">{"products":[{"id":"p1"}]}</kovo-query>',
+    '<kovo-query name="product" key="product&gt;p1">{&quot;stock&quot;:7}</kovo-query>',
+    '<kovo-query name="malformed">{</kovo-query>',
+    '<kovo-query name="empty"></kovo-query>',
+    '<kovo-query>{"ignored":true}</kovo-query>',
+    '<kovo-fragment target="cart-badge" mode="append"><cart-badge>1<kovo-fragment target="nested"><span>nested</span></kovo-fragment></cart-badge></kovo-fragment>',
+    '<kovo-fragment target="cart-list" mode="append"><li>p1</li></kovo-fragment>',
+    '<kovo-fragment target="cart-summary" mode="append"><section kovo-c="cart-summary">summary</section></kovo-fragment>',
   ].join('');
   const modularTargets = new Map([
     [
@@ -84,7 +84,7 @@ export async function expectInlineResponseApplyParity(
     dispatchEvent: globalRecord.dispatchEvent,
     document: globalRecord.document,
     fetch: globalRecord.fetch,
-    importModule: globalRecord.__jisoInlineImport,
+    importModule: globalRecord.__kovoInlineImport,
   };
   const listeners = new Map<string, (event: unknown) => void>();
   const dispatched: InlineQueryEvent[] = [];
@@ -154,13 +154,13 @@ export async function expectInlineResponseApplyParity(
         return inlineTargets.get(id) ?? null;
       },
       querySelector(selector: string) {
-        if (selector === '[fw-c="cart-summary"]') {
+        if (selector === '[kovo-c="cart-summary"]') {
           return inlineTargets.get('cart-summary') ?? null;
         }
         return null;
       },
       querySelectorAll(selector: string) {
-        return selector === '[fw-deps]' ? [] : [];
+        return selector === '[kovo-deps]' ? [] : [];
       },
     };
     globalRecord.fetch = vi.fn(async () => ({
@@ -222,13 +222,13 @@ export async function expectInlineResponseApplyParity(
       appliedFragments: ['cart-badge', 'cart-list', 'cart-summary'],
       fragments: [
         {
-          html: '<cart-badge>1<fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+          html: '<cart-badge>1<kovo-fragment target="nested"><span>nested</span></kovo-fragment></cart-badge>',
           mode: 'append',
           target: 'cart-badge',
         },
         { html: '<li>p1</li>', mode: 'append', target: 'cart-list' },
         {
-          html: '<section fw-c="cart-summary">summary</section>',
+          html: '<section kovo-c="cart-summary">summary</section>',
           mode: 'append',
           target: 'cart-summary',
         },
@@ -246,9 +246,9 @@ export async function expectInlineResponseApplyParity(
       fetch: originals.fetch,
     });
     if (originals.importModule === undefined) {
-      delete globalRecord.__jisoInlineImport;
+      delete globalRecord.__kovoInlineImport;
     } else {
-      globalRecord.__jisoInlineImport = originals.importModule;
+      globalRecord.__kovoInlineImport = originals.importModule;
     }
   }
 }

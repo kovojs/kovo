@@ -1,4 +1,4 @@
-import type { JsonValue } from '@jiso/core';
+import type { JsonValue } from '@kovojs/core';
 
 import { parseJsonValue } from './json.js';
 import { readElementChunks } from './wire-response-scanner.js';
@@ -8,7 +8,7 @@ import { readAttribute, unescapeHtml } from './wire-html.js';
 export function parseMutationFailure(body: string): JsonValue {
   // SPEC.md §9.2: enhanced form failures travel as mutation wire HTML, so
   // quoted tag delimiters in attributes must follow the shared wire parser.
-  const errorChunk = readElementChunks(body, 'fw-error')[0];
+  const errorChunk = readElementChunks(body, 'kovo-error')[0];
   if (errorChunk) return parseJsonOrUnknown(unescapeHtml(errorChunk.content));
 
   const outputFailure = parseFailureOutputChunks(readElementChunks(body, 'output'));

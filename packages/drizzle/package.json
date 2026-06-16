@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/drizzle",
+  "name": "@kovojs/drizzle",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -8,7 +8,7 @@
     "./static": "./src/static.ts"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*"
+    "@kovojs/core": "workspace:*"
   },
   "devDependencies": {
     "drizzle-orm": "0.45.2",

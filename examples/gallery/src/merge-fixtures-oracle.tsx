@@ -1,10 +1,10 @@
-/** @jsxImportSource @jiso/server */
+/** @jsxImportSource @kovojs/server */
 import {
   mergePrimitiveAndAuthorAttributes,
   type MergeableAttribute,
   type MergeableAttributeValue,
-} from '@jiso/compiler';
-import * as primitiveExports from '@jiso/headless-ui/primitives';
+} from '@kovojs/compiler';
+import * as primitiveExports from '@kovojs/headless-ui/primitives';
 
 export { primitiveExports };
 
@@ -13,7 +13,7 @@ export type AttributeRecord = Readonly<Record<string, AttributeValue>>;
 
 export interface MergeDiagnostic {
   attr: string;
-  code: 'FW231' | 'FW232' | 'FW233';
+  code: 'KV231' | 'KV232' | 'KV233';
   message: string;
 }
 
@@ -30,9 +30,9 @@ export const idrefAttributes = new Set([
   'aria-owns',
   'commandfor',
   'for',
-  'jiso-context-menu',
-  'jiso-hover-card',
-  'jiso-tooltip',
+  'kovo-context-menu',
+  'kovo-hover-card',
+  'kovo-tooltip',
   'popovertarget',
 ]);
 
@@ -679,15 +679,15 @@ function galleryMergeDiagnostic(
 ): MergeDiagnostic {
   const attr = compilerMessage.slice(compilerMessage.lastIndexOf(' ') + 1);
 
-  if (code === 'FW231') {
+  if (code === 'KV231') {
     return {
       attr,
       code,
-      message: `Unmergeable primitive ${fw231ConflictKind(attr)} conflict per SPEC.md section 4.6`,
+      message: `Unmergeable primitive ${kv231ConflictKind(attr)} conflict per SPEC.md section 4.6`,
     };
   }
 
-  if (code === 'FW233') {
+  if (code === 'KV233') {
     return {
       attr,
       code,
@@ -705,9 +705,9 @@ function galleryMergeDiagnostic(
   };
 }
 
-function fw231ConflictKind(attr: string): string {
+function kv231ConflictKind(attr: string): string {
   if (attr.startsWith('data-p-')) return 'handler-param';
-  if (attr === 'fw-c' || attr === 'fw-state') return 'island';
+  if (attr === 'kovo-c' || attr === 'kovo-state') return 'island';
   return 'IDREF';
 }
 

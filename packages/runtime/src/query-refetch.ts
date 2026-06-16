@@ -77,7 +77,7 @@ export async function refetchQueries(
       const response = await options.fetch(url, {
         headers: {
           Accept: 'text/html',
-          'FW-Fragment': 'true',
+          'Kovo-Fragment': 'true',
         },
         method: 'GET',
       });

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import type { ComponentExplain, FwCheckInput, FwExplainInput } from '@jiso/core';
+import type { ComponentExplain, KovoCheckInput, KovoExplainInput } from '@kovojs/core';
 
 import { projectJsonFile } from './source-fixtures.ts';
 import {
@@ -13,65 +13,65 @@ import {
   type TouchGraphProvenanceFact,
 } from './touch-graph-fixtures.ts';
 import {
-  fwCheckOkAssertionFact,
-  fwCheckCoverageAssertionFacts,
-  fwCheckDiagnosticAssertionFacts,
-  type FwCheckCoverageAssertionFact,
-  type FwCheckDiagnosticAssertionFact,
-  type FwCheckOkAssertionFact,
-  type FwCheckResultLike,
-} from './fw-check-fixtures.ts';
+  kovoCheckOkAssertionFact,
+  kovoCheckCoverageAssertionFacts,
+  kovoCheckDiagnosticAssertionFacts,
+  type KovoCheckCoverageAssertionFact,
+  type KovoCheckDiagnosticAssertionFact,
+  type KovoCheckOkAssertionFact,
+  type KovoCheckResultLike,
+} from './kovo-check-fixtures.ts';
 import {
-  fwExplainMutationAssertionFact,
-  fwExplainMutationQueryMatrixFact,
-  fwExplainQueryAssertionFact,
-  type FwExplainMutationAssertionFact,
-  type FwExplainMutationQueryMatrixFact,
-  type FwExplainQueryAssertionFact,
-  type FwExplainResultLike,
-} from './fw-explain-fixtures.ts';
+  kovoExplainMutationAssertionFact,
+  kovoExplainMutationQueryMatrixFact,
+  kovoExplainQueryAssertionFact,
+  type KovoExplainMutationAssertionFact,
+  type KovoExplainMutationQueryMatrixFact,
+  type KovoExplainQueryAssertionFact,
+  type KovoExplainResultLike,
+} from './kovo-explain-fixtures.ts';
 
 const execFileAsync = promisify(execFile);
 
-export interface JisoGraphComponentFact {
+export interface KovoGraphComponentFact {
   fragments?: readonly string[];
   name: string;
   queries?: readonly string[];
 }
 
-export interface JisoGraphMutationFact {
+export interface KovoGraphMutationFact {
   invalidates?: readonly string[];
   key: string;
   writes?: readonly string[];
 }
 
-export interface JisoGraphOptimisticFact {
+export interface KovoGraphOptimisticFact {
   mutation: string;
   query: string;
   status: string;
 }
 
-export interface JisoGraphPageFact {
+export interface KovoGraphPageFact {
   queries?: readonly string[];
   route: string;
   [key: string]: unknown;
 }
 
-export interface JisoGraphQueryFact {
+export interface KovoGraphQueryFact {
   domains?: readonly string[];
   query: string;
 }
 
-export interface JisoGraphFixture {
-  components?: readonly JisoGraphComponentFact[];
-  mutations?: readonly JisoGraphMutationFact[];
-  optimistic?: readonly JisoGraphOptimisticFact[];
-  pages?: readonly JisoGraphPageFact[];
-  queries?: readonly JisoGraphQueryFact[];
+export interface KovoGraphFixture {
+  components?: readonly KovoGraphComponentFact[];
+  mutations?: readonly KovoGraphMutationFact[];
+  optimistic?: readonly KovoGraphOptimisticFact[];
+  pages?: readonly KovoGraphPageFact[];
+  queries?: readonly KovoGraphQueryFact[];
   touchGraph?: TouchGraphFixture;
 }
 
-export type ProjectGraphFixture = JisoGraphFixture & Record<string, unknown>;
+export type ProjectGraphFixture = KovoGraphFixture & Record<string, unknown>;
 
 export interface GraphQueryConsumerFact {
   consumers: string[];
@@ -91,7 +91,7 @@ export interface GraphStaticBehaviorFact {
   domains: string[];
   invalidations: Record<string, string[]>;
   mutations: string[];
-  optimistic: JisoGraphOptimisticFact[];
+  optimistic: KovoGraphOptimisticFact[];
   routes: string[];
   touchGraphKeys: string[];
 }
@@ -139,7 +139,7 @@ export interface GeneratedGraphArtifactHonestySummaryFact {
 
 export interface GeneratedGraphArtifactAcceptanceFact {
   authoredGraphMatchesArtifact?: boolean;
-  fwCheck: FwCheckOkAssertionFact;
+  kovoCheck: KovoCheckOkAssertionFact;
   staticBehavior: GraphStaticBehaviorFact;
   summary: GeneratedGraphArtifactHonestySummaryFact;
 }
@@ -149,7 +149,7 @@ export interface GeneratedGraphArtifactAcceptanceEvidenceFact {
   emitCheck: {
     clean: boolean;
   };
-  fwCheck: FwCheckOkAssertionFact;
+  kovoCheck: KovoCheckOkAssertionFact;
   invalidations: Record<string, string[]>;
   staticBehavior: GraphStaticBehaviorFact;
   touchGraph: {
@@ -165,7 +165,7 @@ export interface GeneratedGraphArtifactAcceptanceEvidenceFact {
 export interface GeneratedGraphArtifactAcceptanceChecklistFact {
   authoredGraphMatchesArtifact?: boolean;
   emitCheckClean: boolean;
-  fwCheckOk: boolean;
+  kovoCheckOk: boolean;
   invalidationKeys: string[];
   staticBehavior: GraphStaticBehaviorFact;
   touchGraph: {
@@ -186,14 +186,14 @@ export interface GeneratedGraphArtifactAcceptanceProjectFact<T extends ProjectGr
 
 export interface GeneratedGraphArtifactAcceptanceProjectOptions<T extends ProjectGraphFixture> {
   artifactPath: string;
-  authoredGraph?: JisoGraphFixture;
+  authoredGraph?: KovoGraphFixture;
   emitCheck: {
     args?: readonly string[];
     command: string;
     cwd?: string;
     env?: Record<string, string | undefined>;
   };
-  fwCheck: (graph: T) => FwCheckOkAssertionFact | FwCheckResultLike;
+  kovoCheck: (graph: T) => KovoCheckOkAssertionFact | KovoCheckResultLike;
   rootPath: string;
 }
 
@@ -211,16 +211,16 @@ export interface CommerceGraphCompilerRegistryFact {
 }
 
 export interface CommerceGraphBehaviorFact {
-  cartAddExplain: FwExplainMutationAssertionFact;
-  cartQueryExplain: FwExplainQueryAssertionFact;
+  cartAddExplain: KovoExplainMutationAssertionFact;
+  cartQueryExplain: KovoExplainQueryAssertionFact;
   componentGraphFacts: readonly unknown[];
   coverage: {
-    coverage: FwCheckCoverageAssertionFact[];
-    diagnostics: FwCheckDiagnosticAssertionFact[];
+    coverage: KovoCheckCoverageAssertionFact[];
+    diagnostics: KovoCheckDiagnosticAssertionFact[];
   };
-  fwCheck: FwCheckOkAssertionFact;
-  matrix: FwExplainMutationQueryMatrixFact;
-  orderReceiptExplain: FwExplainMutationAssertionFact;
+  kovoCheck: KovoCheckOkAssertionFact;
+  matrix: KovoExplainMutationQueryMatrixFact;
+  orderReceiptExplain: KovoExplainMutationAssertionFact;
   registryFacts: unknown;
   staticBehavior: GraphStaticBehaviorFact;
   touchGraphKeys: string[];
@@ -234,40 +234,40 @@ export interface CommerceGraphBehaviorOptions<T extends ProjectGraphFixture> {
   deriveAppGraph: (options: {
     components: readonly CommerceGraphCompilerComponentFact[];
     graph: Pick<
-      FwExplainInput,
+      KovoExplainInput,
       'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
     >;
   }) => CommerceGraphCompilerRegistryFact;
-  fwCheck: (graph: FwCheckInput, options?: { family?: 'all' }) => FwCheckResultLike;
-  fwExplain: (
-    graph: FwExplainInput,
+  kovoCheck: (graph: KovoCheckInput, options?: { family?: 'all' }) => KovoCheckResultLike;
+  kovoExplain: (
+    graph: KovoExplainInput,
     options:
       | { kind: 'mutation'; optimistic?: boolean; target: string }
       | { kind: 'query'; target: string },
-  ) => FwExplainResultLike;
-  graph: T & FwExplainInput;
+  ) => KovoExplainResultLike;
+  graph: T & KovoExplainInput;
 }
 
-export function graphPageFact(graph: JisoGraphFixture, route: string): JisoGraphPageFact {
+export function graphPageFact(graph: KovoGraphFixture, route: string): KovoGraphPageFact {
   const page = graph.pages?.find((item) => item.route === route);
   if (!page) throw new Error(`Graph includes page route ${route}`);
   return page;
 }
 
-export function graphMutationFact(graph: JisoGraphFixture, key: string): JisoGraphMutationFact {
+export function graphMutationFact(graph: KovoGraphFixture, key: string): KovoGraphMutationFact {
   const mutation = graph.mutations?.find((item) => item.key === key);
   if (!mutation) throw new Error(`Graph includes mutation ${key}`);
   return mutation;
 }
 
-export function graphFragmentTargetForQuery(graph: JisoGraphFixture, query: string): string {
+export function graphFragmentTargetForQuery(graph: KovoGraphFixture, query: string): string {
   const component = graph.components?.find((item) => item.queries?.includes(query));
   const fragment = component?.fragments?.[0];
   if (!fragment) throw new Error(`Graph includes a fragment target for query ${query}`);
   return fragment;
 }
 
-export function graphComponentTargetFacts(graph: JisoGraphFixture): GraphComponentTargetFact[] {
+export function graphComponentTargetFacts(graph: KovoGraphFixture): GraphComponentTargetFact[] {
   return (graph.components ?? []).map((component) => ({
     fragments: [...(component.fragments ?? [])],
     name: component.name,
@@ -275,19 +275,19 @@ export function graphComponentTargetFacts(graph: JisoGraphFixture): GraphCompone
   }));
 }
 
-export function graphMutationKeys(graph: JisoGraphFixture): string[] {
+export function graphMutationKeys(graph: KovoGraphFixture): string[] {
   return (graph.mutations ?? [])
     .map((mutation) => mutation.key)
     .sort((left, right) => left.localeCompare(right));
 }
 
-export function graphRouteFacts(graph: JisoGraphFixture): string[] {
+export function graphRouteFacts(graph: KovoGraphFixture): string[] {
   return (graph.pages ?? [])
     .map((page) => page.route)
     .sort((left, right) => left.localeCompare(right));
 }
 
-export function graphDomainFacts(graph: JisoGraphFixture): string[] {
+export function graphDomainFacts(graph: KovoGraphFixture): string[] {
   const domains = new Set<string>();
 
   for (const query of graph.queries ?? []) {
@@ -303,7 +303,7 @@ export function graphDomainFacts(graph: JisoGraphFixture): string[] {
 }
 
 export function graphTouchGraphKeys(
-  graph: JisoGraphFixture,
+  graph: KovoGraphFixture,
   onlyKeys?: readonly string[],
 ): string[] {
   const allowed = onlyKeys === undefined ? undefined : new Set(onlyKeys);
@@ -313,7 +313,7 @@ export function graphTouchGraphKeys(
     .sort((left, right) => left.localeCompare(right));
 }
 
-export function graphQueryConsumers(graph: JisoGraphFixture): GraphQueryConsumerFact[] {
+export function graphQueryConsumers(graph: KovoGraphFixture): GraphQueryConsumerFact[] {
   return (graph.queries ?? []).map((query) => {
     const consumers = [
       ...(graph.components ?? [])
@@ -328,11 +328,11 @@ export function graphQueryConsumers(graph: JisoGraphFixture): GraphQueryConsumer
   });
 }
 
-export function graphQueryConsumerMap(graph: JisoGraphFixture): Map<string, string[]> {
+export function graphQueryConsumerMap(graph: KovoGraphFixture): Map<string, string[]> {
   return new Map(graphQueryConsumers(graph).map((fact) => [fact.query, fact.consumers]));
 }
 
-export function graphInvalidatedQueries(graph: JisoGraphFixture, mutationKey: string): string[] {
+export function graphInvalidatedQueries(graph: KovoGraphFixture, mutationKey: string): string[] {
   const mutation = graphMutationFact(graph, mutationKey);
   const invalidatedDomains = new Set(mutation.invalidates ?? []);
 
@@ -343,7 +343,7 @@ export function graphInvalidatedQueries(graph: JisoGraphFixture, mutationKey: st
 }
 
 export function graphMutationUpdateConsumers(
-  graph: JisoGraphFixture,
+  graph: KovoGraphFixture,
   mutationKey: string,
 ): GraphQueryConsumerFact[] {
   const consumersByQuery = graphQueryConsumerMap(graph);
@@ -354,7 +354,7 @@ export function graphMutationUpdateConsumers(
   }));
 }
 
-export function graphInvalidatedByQueries(graph: JisoGraphFixture): Map<string, string[]> {
+export function graphInvalidatedByQueries(graph: KovoGraphFixture): Map<string, string[]> {
   const invalidatedBy = new Map(
     (graph.queries ?? []).map((query) => [query.query, [] as string[]]),
   );
@@ -368,7 +368,7 @@ export function graphInvalidatedByQueries(graph: JisoGraphFixture): Map<string, 
   return invalidatedBy;
 }
 
-export function graphOptimisticStatusMatrix(graph: JisoGraphFixture): GraphInvalidationMatrix {
+export function graphOptimisticStatusMatrix(graph: KovoGraphFixture): GraphInvalidationMatrix {
   const statusByMutationQuery = new Map(
     (graph.optimistic ?? []).map((entry) => [`${entry.mutation}\0${entry.query}`, entry.status]),
   );
@@ -389,9 +389,9 @@ export function graphOptimisticStatusMatrix(graph: JisoGraphFixture): GraphInval
   return matrix;
 }
 
-export function graphOptimisticFacts(graph: JisoGraphFixture): JisoGraphOptimisticFact[] {
+export function graphOptimisticFacts(graph: KovoGraphFixture): KovoGraphOptimisticFact[] {
   // Project to the declared coverage shape (mutation/query/status). v2 derivation
-  // metadata lives in graph.json for `fw explain --optimistic`; this fact is the
+  // metadata lives in graph.json for `kovo explain --optimistic`; this fact is the
   // status-only coverage snapshot, so it stays stable across v1/v2 (SPEC.md §10.6).
   return [...(graph.optimistic ?? [])]
     .map((entry) => ({ mutation: entry.mutation, query: entry.query, status: entry.status }))
@@ -400,7 +400,7 @@ export function graphOptimisticFacts(graph: JisoGraphFixture): JisoGraphOptimist
     );
 }
 
-export function graphInvalidationFacts(graph: JisoGraphFixture): Record<string, string[]> {
+export function graphInvalidationFacts(graph: KovoGraphFixture): Record<string, string[]> {
   const invalidations: Record<string, string[]> = {};
 
   for (const mutation of graph.mutations ?? []) {
@@ -411,7 +411,7 @@ export function graphInvalidationFacts(graph: JisoGraphFixture): Record<string, 
   return invalidations;
 }
 
-export function graphStaticBehaviorFact(graph: JisoGraphFixture): GraphStaticBehaviorFact {
+export function graphStaticBehaviorFact(graph: KovoGraphFixture): GraphStaticBehaviorFact {
   return {
     components: graphComponentTargetFacts(graph),
     domains: graphDomainFacts(graph),
@@ -426,19 +426,19 @@ export function graphStaticBehaviorFact(graph: JisoGraphFixture): GraphStaticBeh
 export function commerceGraphBehaviorFact<T extends ProjectGraphFixture>(
   options: CommerceGraphBehaviorOptions<T>,
 ): CommerceGraphBehaviorFact {
-  const cartQueryExplain = options.fwExplain(options.graph, { kind: 'query', target: 'cart' });
-  const cartAddExplain = options.fwExplain(options.graph, {
+  const cartQueryExplain = options.kovoExplain(options.graph, { kind: 'query', target: 'cart' });
+  const cartAddExplain = options.kovoExplain(options.graph, {
     kind: 'mutation',
     optimistic: true,
     target: 'cart/add',
   });
-  const orderReceiptExplain = options.fwExplain(options.graph, {
+  const orderReceiptExplain = options.kovoExplain(options.graph, {
     kind: 'mutation',
     optimistic: true,
     target: 'order/receipt',
   });
   const invalidatedBy = graphInvalidatedByQueries(options.graph);
-  const coverageCheck = options.fwCheck(
+  const coverageCheck = options.kovoCheck(
     {
       mutations: [{ key: 'cart/add', writes: ['cart'] }],
       optimistic: [{ mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' }],
@@ -484,17 +484,17 @@ export const CartBadge = component('cart-badge', {
   });
 
   return {
-    cartAddExplain: fwExplainMutationAssertionFact(cartAddExplain),
-    cartQueryExplain: fwExplainQueryAssertionFact(cartQueryExplain),
+    cartAddExplain: kovoExplainMutationAssertionFact(cartAddExplain),
+    cartQueryExplain: kovoExplainQueryAssertionFact(cartQueryExplain),
     componentGraphFacts: cartBadge.componentGraphFacts,
     coverage: {
-      coverage: fwCheckCoverageAssertionFacts(coverageCheck.output),
-      diagnostics: fwCheckDiagnosticAssertionFacts(coverageCheck.output),
+      coverage: kovoCheckCoverageAssertionFacts(coverageCheck.output),
+      diagnostics: kovoCheckDiagnosticAssertionFacts(coverageCheck.output),
     },
-    fwCheck: fwCheckOkAssertionFact(options.fwCheck(options.graph)),
-    matrix: fwExplainMutationQueryMatrixFact({
+    kovoCheck: kovoCheckOkAssertionFact(options.kovoCheck(options.graph)),
+    matrix: kovoExplainMutationQueryMatrixFact({
       explainMutation: (mutationKey) =>
-        options.fwExplain(options.graph, {
+        options.kovoExplain(options.graph, {
           kind: 'mutation',
           optimistic: true,
           target: mutationKey,
@@ -502,7 +502,7 @@ export const CartBadge = component('cart-badge', {
       graph: options.graph,
       invalidatedBy,
     }),
-    orderReceiptExplain: fwExplainMutationAssertionFact(orderReceiptExplain),
+    orderReceiptExplain: kovoExplainMutationAssertionFact(orderReceiptExplain),
     registryFacts: registry.registryFacts,
     staticBehavior: graphStaticBehaviorFact(options.graph),
     touchGraphKeys: graphTouchGraphKeys(options.graph, [
@@ -515,7 +515,7 @@ export const CartBadge = component('cart-badge', {
 
 export function generatedGraphArtifactHonestyFact(options: {
   emitCheck: GeneratedGraphEmitCheckResult;
-  graph: JisoGraphFixture;
+  graph: KovoGraphFixture;
   provenance: TouchGraphProvenanceFact;
 }): GeneratedGraphArtifactHonestyFact {
   return {
@@ -534,7 +534,7 @@ export function generatedGraphArtifactHonestyFact(options: {
 
 export function generatedGraphArtifactHonestySummaryFact(options: {
   emitCheck: GeneratedGraphEmitCheckResult;
-  graph: JisoGraphFixture;
+  graph: KovoGraphFixture;
   provenance: TouchGraphProvenanceFact;
 }): GeneratedGraphArtifactHonestySummaryFact {
   const summarizedEntries: Record<string, GeneratedGraphTouchEntrySummaryFact> = Object.fromEntries(
@@ -571,10 +571,10 @@ export function generatedGraphArtifactHonestySummaryFact(options: {
 }
 
 export function generatedGraphArtifactAcceptanceFact(options: {
-  artifactGraph: JisoGraphFixture;
-  authoredGraph?: JisoGraphFixture;
+  artifactGraph: KovoGraphFixture;
+  authoredGraph?: KovoGraphFixture;
   emitCheck: GeneratedGraphEmitCheckResult;
-  fwCheck: FwCheckOkAssertionFact;
+  kovoCheck: KovoCheckOkAssertionFact;
   provenance: TouchGraphProvenanceFact;
 }): GeneratedGraphArtifactAcceptanceFact {
   return {
@@ -584,7 +584,7 @@ export function generatedGraphArtifactAcceptanceFact(options: {
             stableGraphJson(options.artifactGraph) === stableGraphJson(options.authoredGraph),
         }
       : {}),
-    fwCheck: options.fwCheck,
+    kovoCheck: options.kovoCheck,
     staticBehavior: graphStaticBehaviorFact(options.artifactGraph),
     summary: generatedGraphArtifactHonestySummaryFact({
       emitCheck: options.emitCheck,
@@ -602,7 +602,7 @@ export function generatedGraphArtifactAcceptanceEvidenceFact(
       ? { authoredGraphMatchesArtifact: fact.authoredGraphMatchesArtifact }
       : {}),
     emitCheck: fact.summary.emitCheck,
-    fwCheck: fact.fwCheck,
+    kovoCheck: fact.kovoCheck,
     invalidations: fact.summary.invalidations,
     staticBehavior: fact.staticBehavior,
     touchGraph: {
@@ -628,7 +628,7 @@ export function generatedGraphArtifactAcceptanceChecklistFact(
       ? { authoredGraphMatchesArtifact: evidence.authoredGraphMatchesArtifact }
       : {}),
     emitCheckClean: evidence.emitCheck.clean,
-    fwCheckOk: evidence.fwCheck.status === 'ok' && evidence.fwCheck.issueCount === 0,
+    kovoCheckOk: evidence.kovoCheck.status === 'ok' && evidence.kovoCheck.issueCount === 0,
     invalidationKeys: Object.keys(evidence.invalidations).sort((left, right) =>
       left.localeCompare(right),
     ),
@@ -665,9 +665,9 @@ export async function generatedGraphArtifactAcceptanceProjectFact<
       ...(options.emitCheck.env !== undefined ? { env: options.emitCheck.env } : {}),
     },
   );
-  const fwCheckResult = options.fwCheck(artifactGraph);
-  const fwCheck =
-    'issueCount' in fwCheckResult ? fwCheckResult : fwCheckOkAssertionFact(fwCheckResult);
+  const kovoCheckResult = options.kovoCheck(artifactGraph);
+  const kovoCheck =
+    'issueCount' in kovoCheckResult ? kovoCheckResult : kovoCheckOkAssertionFact(kovoCheckResult);
   const provenance = await touchGraphProvenanceFact(
     options.rootPath,
     artifactGraph.touchGraph ?? {},
@@ -679,7 +679,7 @@ export async function generatedGraphArtifactAcceptanceProjectFact<
       stderr: String(emitCheck.stderr),
       stdout: String(emitCheck.stdout),
     },
-    fwCheck,
+    kovoCheck,
     provenance,
   });
 

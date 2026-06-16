@@ -3,7 +3,7 @@ import {
   type SessionProvider,
   endpointMatches,
   runEndpoint,
-} from '@jiso/server';
+} from '@kovojs/server';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { betterAuthSession, mount } from './index.js';
 import {
@@ -19,7 +19,7 @@ import {
 describe('betterAuthSession', () => {
   it('maps a Better Auth-like session into the app session provider seam', async () => {
     const auth = new FakeBetterAuth();
-    const headers = new Headers({ cookie: 'jiso_session=s1' });
+    const headers = new Headers({ cookie: 'kovo_session=s1' });
     const provider = betterAuthSession(auth, mapSession);
 
     await expect(provider({ headers })).resolves.toEqual({

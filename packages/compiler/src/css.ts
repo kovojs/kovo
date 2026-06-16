@@ -49,7 +49,7 @@ export function scopeComponentCss(
   options: ScopeComponentCssOptions = {},
 ): ScopedCssResult {
   const trimmed = css.trim();
-  const nestedHostSelectors = options.nestedHostSelectors ?? ['[fw-c]'];
+  const nestedHostSelectors = options.nestedHostSelectors ?? ['[kovo-c]'];
 
   return {
     fallback: prefixCssSelectors(hostSelector, trimmed, nestedHostSelectors),
@@ -121,7 +121,7 @@ export function emitCssModule(componentName: string, model: ComponentModuleModel
 
   const scopedCss = scopeComponentCss(componentHostSelector(componentName, model), css);
 
-  return `${cssIrHeader}\n/* @jiso-scope-fallback */\n${formatFallbackCss(scopedCss.fallback)}\n\n${scopedCss.scoped}`;
+  return `${cssIrHeader}\n/* @kovojs-scope-fallback */\n${formatFallbackCss(scopedCss.fallback)}\n\n${scopedCss.scoped}`;
 }
 
 function normalizeAssetPath(fileName: string): string {
@@ -347,5 +347,5 @@ function componentHostSelector(componentName: string, model: ComponentModuleMode
   const hostName = explicitName ?? kebabCase(componentName);
   const renderedHost = componentRenderHostElement(model)?.tag ?? null;
 
-  return renderedHost === hostName ? hostName : `[fw-c="${escapeAttribute(hostName)}"]`;
+  return renderedHost === hostName ? hostName : `[kovo-c="${escapeAttribute(hostName)}"]`;
 }

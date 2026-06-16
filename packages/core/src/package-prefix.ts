@@ -11,10 +11,10 @@ export function packageComponentPrefixFactFromPackageManifest(
 ): PackageComponentPrefixExplain | null {
   if (!isRecord(manifest) || typeof manifest.name !== 'string') return null;
 
-  const jiso = isRecord(manifest.jiso) ? manifest.jiso : null;
-  if (!jiso && !options.requirePrefix) return null;
+  const kovo = isRecord(manifest.kovo) ? manifest.kovo : null;
+  if (!kovo && !options.requirePrefix) return null;
 
-  const prefix = jiso && typeof jiso.prefix === 'string' ? jiso.prefix : null;
+  const prefix = kovo && typeof kovo.prefix === 'string' ? kovo.prefix : null;
   return {
     ...(options.effectivePrefix === undefined ? {} : { effectivePrefix: options.effectivePrefix }),
     packageName: manifest.name,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { cookiePair } from '@jiso/test/headers';
-import { htmlFormFacts } from '@jiso/test/html-fragment';
-import { csrfToken, runMutation } from '@jiso/server';
+import { cookiePair } from '@kovojs/test/headers';
+import { htmlFormFacts } from '@kovojs/test/html-fragment';
+import { csrfToken, runMutation } from '@kovojs/server';
 
 import {
   addToCart,
@@ -107,7 +107,7 @@ describe('commerce example', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/admin',
-        'Set-Cookie': ['jiso_commerce_session=session-u1; Path=/; HttpOnly; SameSite=Lax'],
+        'Set-Cookie': ['kovo_commerce_session=session-u1; Path=/; HttpOnly; SameSite=Lax'],
       },
       status: 303,
     });
@@ -127,7 +127,7 @@ describe('commerce example', () => {
     });
 
     const authedRequest = {
-      ...commerceAuthRequest('jiso_commerce_session=session-u1'),
+      ...commerceAuthRequest('kovo_commerce_session=session-u1'),
       session: {
         id: 'session-u1',
         user: { id: 'u1', roles: ['admin', 'member'] as const },
@@ -141,7 +141,7 @@ describe('commerce example', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/login',
-        'Set-Cookie': ['jiso_commerce_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'],
+        'Set-Cookie': ['kovo_commerce_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'],
       },
       status: 303,
     });

@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/conformance-webhook-spike",
+  "name": "@kovojs/conformance-webhook-spike",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,8 +7,8 @@
     "test": "vitest --run src/index.test.ts"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*",
-    "@jiso/server": "workspace:*"
+    "@kovojs/core": "workspace:*",
+    "@kovojs/server": "workspace:*"
   },
   "devDependencies": {
     "vitest": "4.1.8"

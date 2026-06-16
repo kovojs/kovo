@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   tooltipEscapeKeyDown as _tooltipEscapeKeyDown,
@@ -7,7 +7,7 @@ import {
   tooltipTriggerFocus as _tooltipTriggerFocus,
   tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter,
   tooltipTriggerPointerLeave as _tooltipTriggerPointerLeave,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryTooltipDemo$button_blur = handler((event, ctx) => {
   const result = _tooltipTriggerBlur(Object(event), { open: ctx.state.open });

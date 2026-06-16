@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   commandCloseClick as _commandCloseClick,
@@ -8,7 +8,7 @@ import {
   commandItemClick as _commandItemClick,
   commandKeyDown as _commandKeyDown,
   commandTriggerClick as _commandTriggerClick,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryCommandDemo$button_click = handler((event, ctx) => {
   const result = _commandTriggerClick(Object(event), { open: ctx.state.open });

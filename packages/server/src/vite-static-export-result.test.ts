@@ -5,7 +5,7 @@ import {
   assertStaticExportManifestUsesDirectoryIndexDocuments,
   staticExportManifest,
 } from './static-export-result.js';
-import { jisoAppShellViteStaticExportWithManifest } from './vite-static-export-result.js';
+import { kovoAppShellViteStaticExportWithManifest } from './vite-static-export-result.js';
 
 function staticExportResult(path: string): StaticExportResult {
   return {
@@ -28,7 +28,7 @@ describe('server app shell Vite static export result boundary', () => {
     const result = staticExportResult('/index.html');
 
     await expect(
-      jisoAppShellViteStaticExportWithManifest({
+      kovoAppShellViteStaticExportWithManifest({
         async dryRun() {
           return result;
         },
@@ -62,7 +62,7 @@ describe('server app shell Vite static export result boundary', () => {
 
   it('rejects write results that drift from the dry-run manifest', async () => {
     await expect(
-      jisoAppShellViteStaticExportWithManifest({
+      kovoAppShellViteStaticExportWithManifest({
         async dryRun() {
           return staticExportResult('/index.html');
         },
@@ -85,7 +85,7 @@ describe('server app shell Vite static export result boundary', () => {
     );
 
     await expect(
-      jisoAppShellViteStaticExportWithManifest({
+      kovoAppShellViteStaticExportWithManifest({
         async dryRun() {
           return flatResult;
         },

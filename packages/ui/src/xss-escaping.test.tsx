@@ -9,7 +9,7 @@ import { SelectItem, SelectValue } from './select.js';
 import { Drawer, Sheet } from './sheet.js';
 import { Table } from './table.js';
 
-// SECURITY_FINDINGS.md C1: the @jiso/server JSX runtime emits text children verbatim
+// SECURITY_FINDINGS.md C1: the @kovojs/server JSX runtime emits text children verbatim
 // (only attributes are escaped). Apps pass these scalar text props in attribute position
 // (e.g. itemLabel={user.name}), which the framework does not escape, so the component must
 // HTML-escape any scalar text prop it renders as element children. Composition slots
@@ -19,7 +19,7 @@ const ESCAPED = '&lt;img src=x onerror=alert(1)&gt;';
 // A child slot whose content is intentional pre-composed markup must pass through unchanged.
 const RAW_CHILD = '<strong>composed</strong>';
 
-describe('@jiso/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => {
+describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => {
   it('escapes AutocompleteOption itemLabel/itemValue but passes children through raw', () => {
     const escaped = AutocompleteOption.definition.render({
       itemLabel: PAYLOAD,

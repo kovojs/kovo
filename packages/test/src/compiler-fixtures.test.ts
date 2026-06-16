@@ -5,19 +5,19 @@ import {
   compilerDiagnosticFacts,
   compilerDiagnosticMessageFacts,
   compilerGeneratedQueryShapeFact,
-  compilerLoweredIrFwCheckBehaviorFact,
+  compilerLoweredIrKovoCheckBehaviorFact,
   compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
   compilerValidationBehaviorFact,
 } from './compiler-fixtures.js';
 
-describe('@jiso/test compiler fixture facts', () => {
+describe('@kovojs/test compiler fixture facts', () => {
   it('projects diagnostics without source-offset pins', () => {
     expect(
       compilerDiagnosticFacts(
         [
           {
-            code: 'FW311',
+            code: 'KV311',
             fileName: 'components/cart.tsx',
             length: 12,
             message: 'missing update coverage',
@@ -25,16 +25,16 @@ describe('@jiso/test compiler fixture facts', () => {
             start: { column: 5, line: 9 },
           },
           {
-            code: 'FW210',
+            code: 'KV210',
             message: 'lint',
             severity: 'lint',
           },
         ],
-        ['FW311'],
+        ['KV311'],
       ),
     ).toEqual([
       {
-        code: 'FW311',
+        code: 'KV311',
         fileName: 'components/cart.tsx',
         message: 'missing update coverage',
         severity: 'warn',
@@ -71,14 +71,14 @@ describe('@jiso/test compiler fixture facts', () => {
     expect(
       compilerDiagnosticMessageFacts([
         {
-          code: 'FW302',
+          code: 'KV302',
           fileName: 'cart.tsx',
           message: 'data-bind path is not present in the declared query shape. cart.count',
           severity: 'error',
           start: { column: 5, line: 9 },
         },
         {
-          code: 'FW227',
+          code: 'KV227',
           help: 'Use ?.',
           message: 'Binding path traverses a nullable segment without ?.',
           severity: 'error',
@@ -86,11 +86,11 @@ describe('@jiso/test compiler fixture facts', () => {
       ]),
     ).toEqual([
       {
-        code: 'FW302',
+        code: 'KV302',
         message: 'data-bind path is not present in the declared query shape. cart.count',
       },
       {
-        code: 'FW227',
+        code: 'KV227',
         help: 'Use ?.',
         message: 'Binding path traverses a nullable segment without ?.',
       },
@@ -223,7 +223,7 @@ describe('@jiso/test compiler fixture facts', () => {
     ]);
   });
 
-  it('owns the data-bind query-shape fixture assembly for fw-check', () => {
+  it('owns the data-bind query-shape fixture assembly for kovo-check', () => {
     const compiledSources: string[] = [];
     const fact = compilerDataBindBehaviorFact({
       compileComponentModule({ queryShapeFacts, source }) {
@@ -235,7 +235,7 @@ describe('@jiso/test compiler fixture facts', () => {
             return {
               diagnostics: [
                 {
-                  code: 'FW302',
+                  code: 'KV302',
                   message: 'data-bind path is not present in the declared query shape. cart.count',
                   severity: 'error',
                 },
@@ -278,7 +278,7 @@ describe('@jiso/test compiler fixture facts', () => {
           return {
             diagnostics: [
               {
-                code: 'FW302',
+                code: 'KV302',
                 message: 'data-bind path is not present in the declared query shape. cart.items',
                 severity: 'error',
               },
@@ -291,7 +291,7 @@ describe('@jiso/test compiler fixture facts', () => {
           return {
             diagnostics: [
               {
-                code: 'FW227',
+                code: 'KV227',
                 help: 'Fixes: use optional traversal.\nSPEC §4.8 requires explicit null handling.',
                 message:
                   'Binding path traverses a nullable segment without ?. product.review.rating (segment: review)',
@@ -305,10 +305,10 @@ describe('@jiso/test compiler fixture facts', () => {
         return { diagnostics: [], queryUpdatePlans: [] };
       },
       diagnosticDefinitions: {
-        FW227: {
+        KV227: {
           help: 'Fixes: use optional traversal.\nSPEC §4.8 requires explicit null handling.',
         },
-        FW302: { message: 'data-bind path is not present in the declared query shape.' },
+        KV302: { message: 'data-bind path is not present in the declared query shape.' },
       },
       queryShapesFromFacts(facts) {
         return Object.fromEntries(facts.map((entry) => [entry.query, entry.shape]));
@@ -351,20 +351,20 @@ describe('@jiso/test compiler fixture facts', () => {
     ]);
     expect(fact.staleGeneratedShapeDiagnostics).toEqual([
       {
-        code: 'FW302',
+        code: 'KV302',
         message: 'data-bind path is not present in the declared query shape. cart.count',
       },
     ]);
     expect(fact.invalidListStampDiagnostics).toEqual([
       {
-        code: 'FW302',
+        code: 'KV302',
         message: 'data-bind path is not present in the declared query shape. cart.items',
       },
     ]);
     expect(fact.optionalNullablePathDiagnostics).toEqual([]);
     expect(fact.unsafeNullablePathDiagnostics).toEqual([
       {
-        code: 'FW227',
+        code: 'KV227',
         help: 'Fixes: use optional traversal.\nSPEC §4.8 requires explicit null handling.',
         message:
           'Binding path traverses a nullable segment without ?. product.review.rating (segment: review)',
@@ -372,7 +372,7 @@ describe('@jiso/test compiler fixture facts', () => {
     ]);
   });
 
-  it('owns reusable compiler validation fixture assembly for fw-check', () => {
+  it('owns reusable compiler validation fixture assembly for kovo-check', () => {
     const compiled: Array<{ fileName: string; hasCartRowRegistry: boolean; source: string }> = [];
     const fact = compilerValidationBehaviorFact({
       compileComponentModule({ fileName, registryFacts, source }) {
@@ -386,19 +386,19 @@ describe('@jiso/test compiler fixture facts', () => {
           return {
             diagnostics: [
               {
-                code: 'FW221',
+                code: 'KV221',
                 fileName,
                 message: 'IDREF references an id not present in component scope. missing-label',
                 severity: 'error',
               },
               {
-                code: 'FW221',
+                code: 'KV221',
                 fileName,
                 message: 'IDREF references an id not present in component scope. missing-help',
                 severity: 'error',
               },
               {
-                code: 'FW221',
+                code: 'KV221',
                 fileName,
                 message: 'IDREF references an id not present in component scope. missing-popover',
                 severity: 'error',
@@ -411,7 +411,7 @@ describe('@jiso/test compiler fixture facts', () => {
           return {
             diagnostics: [
               {
-                code: 'FW224',
+                code: 'KV224',
                 fileName,
                 message:
                   'Static id appears in a repeatable component or duplicate page composition. duplicate id="cart-title"',
@@ -425,7 +425,7 @@ describe('@jiso/test compiler fixture facts', () => {
           return {
             diagnostics: [
               {
-                code: 'FW224',
+                code: 'KV224',
                 fileName,
                 message:
                   'Static id appears in a repeatable component or duplicate page composition. repeatable id="cart-row"',
@@ -439,14 +439,14 @@ describe('@jiso/test compiler fixture facts', () => {
           return {
             diagnostics: [
               {
-                code: 'FW225',
+                code: 'KV225',
                 fileName,
                 message:
                   'JSX nesting violates the HTML content model. <div> cannot appear inside <p>',
                 severity: 'error',
               },
               {
-                code: 'FW225',
+                code: 'KV225',
                 fileName,
                 message:
                   'JSX nesting violates the HTML content model. <tr> must be inside a table section or table',
@@ -460,13 +460,13 @@ describe('@jiso/test compiler fixture facts', () => {
           return {
             diagnostics: [
               {
-                code: 'FW211',
+                code: 'KV211',
                 fileName,
                 message: 'on:load eager trigger requires a justification comment. on:load',
                 severity: 'lint',
               },
               {
-                code: 'FW212',
+                code: 'KV212',
                 fileName,
                 message: 'Unknown on:* event or execution trigger name. on:media',
                 severity: 'lint',
@@ -479,17 +479,17 @@ describe('@jiso/test compiler fixture facts', () => {
           return {
             diagnostics: [
               {
-                code: 'FW226',
+                code: 'KV226',
                 fileName,
                 message:
-                  'fw-deps or fw-c names an unknown query instance or component. fw-c="unknown-component"',
+                  'kovo-deps or kovo-c names an unknown query instance or component. kovo-c="unknown-component"',
                 severity: 'error',
               },
               {
-                code: 'FW226',
+                code: 'KV226',
                 fileName,
                 message:
-                  'fw-deps or fw-c names an unknown query instance or component. fw-deps="missingQuery:p1"',
+                  'kovo-deps or kovo-c names an unknown query instance or component. kovo-deps="missingQuery:p1"',
                 severity: 'error',
               },
             ],
@@ -499,14 +499,14 @@ describe('@jiso/test compiler fixture facts', () => {
         return { diagnostics: [] };
       },
       diagnosticDefinitions: {
-        FW211: { message: 'on:load eager trigger requires a justification comment.' },
-        FW212: { message: 'Unknown on:* event or execution trigger name.' },
-        FW221: { message: 'IDREF references an id not present in component scope.' },
-        FW224: {
+        KV211: { message: 'on:load eager trigger requires a justification comment.' },
+        KV212: { message: 'Unknown on:* event or execution trigger name.' },
+        KV221: { message: 'IDREF references an id not present in component scope.' },
+        KV224: {
           message: 'Static id appears in a repeatable component or duplicate page composition.',
         },
-        FW225: { message: 'JSX nesting violates the HTML content model.' },
-        FW226: { message: 'fw-deps or fw-c names an unknown query instance or component.' },
+        KV225: { message: 'JSX nesting violates the HTML content model.' },
+        KV226: { message: 'kovo-deps or kovo-c names an unknown query instance or component.' },
       },
     });
 
@@ -530,27 +530,27 @@ describe('@jiso/test compiler fixture facts', () => {
     expect(fact.validResidualStampDiagnostics).toEqual([]);
     expect(fact.invalidIdrefDiagnostics).toHaveLength(3);
     expect(fact.invalidStaticIdDiagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      'FW224',
-      'FW224',
+      'KV224',
+      'KV224',
     ]);
     expect(fact.invalidContentModelDiagnostics).toHaveLength(2);
     expect(fact.invalidExecutionTriggerDiagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      'FW211',
-      'FW212',
+      'KV211',
+      'KV212',
     ]);
     expect(fact.invalidResidualStampDiagnostics).toHaveLength(2);
   });
 
-  it('projects app-authored lowered IR through compiler and fw-check facts', () => {
+  it('projects app-authored lowered IR through compiler and kovo-check facts', () => {
     const compiledSources: string[] = [];
-    const fact = compilerLoweredIrFwCheckBehaviorFact({
+    const fact = compilerLoweredIrKovoCheckBehaviorFact({
       compileComponentModule({ fileName, source }) {
         compiledSources.push(`${fileName}:${source.includes('data-bind="cart.count"')}`);
 
         return {
           diagnostics: [
             {
-              code: 'FW235',
+              code: 'KV235',
               fileName,
               message:
                 'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
@@ -560,12 +560,12 @@ describe('@jiso/test compiler fixture facts', () => {
           ],
         };
       },
-      fwCheck({ diagnostics }) {
+      kovoCheck({ diagnostics }) {
         const diagnostic = diagnostics[0];
 
         return {
           exitCode: 1,
-          output: `fw-check/v1\nERROR ${diagnostic?.code} ${diagnostic?.site}:4:25 ${diagnostic?.message}\n`,
+          output: `kovo-check/v1\nERROR ${diagnostic?.code} ${diagnostic?.site}:4:25 ${diagnostic?.message}\n`,
         };
       },
     });
@@ -574,18 +574,18 @@ describe('@jiso/test compiler fixture facts', () => {
     expect(fact).toEqual({
       compilerDiagnostics: [
         {
-          code: 'FW235',
+          code: 'KV235',
           fileName: 'cart-badge.tsx',
           message:
             'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
           severity: 'error',
         },
       ],
-      fwCheck: {
+      kovoCheck: {
         coverage: [],
         diagnostics: [
           {
-            code: 'FW235',
+            code: 'KV235',
             message:
               'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
             properties: {},
@@ -595,23 +595,23 @@ describe('@jiso/test compiler fixture facts', () => {
         ],
         exitCode: 1,
         status: 'issues',
-        version: 'fw-check/v1',
+        version: 'kovo-check/v1',
       },
       sourceFileName: 'cart-badge.tsx',
       specSection: 'SPEC §5.2',
     });
   });
 
-  it('fails loudly when the lowered IR fixture stops producing FW235', () => {
+  it('fails loudly when the lowered IR fixture stops producing KV235', () => {
     expect(() =>
-      compilerLoweredIrFwCheckBehaviorFact({
+      compilerLoweredIrKovoCheckBehaviorFact({
         compileComponentModule() {
           return { diagnostics: [] };
         },
-        fwCheck() {
-          return { exitCode: 0, output: 'fw-check/v1\nOK\n' };
+        kovoCheck() {
+          return { exitCode: 0, output: 'kovo-check/v1\nOK\n' };
         },
       }),
-    ).toThrow('Expected exactly one FW235 diagnostic; found 0');
+    ).toThrow('Expected exactly one KV235 diagnostic; found 0');
   });
 });

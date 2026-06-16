@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/hover-card-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/hover-card-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryHoverCardDemo$section_data_state_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
@@ -18,7 +18,7 @@ export const GalleryHoverCardDemo$output_text_derive = derive(['state'], (state:
   state.open ? 'open' : 'closed',
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   hoverCardContentAttributes,
   hoverCardContentPointerEnter as _hoverCardContentPointerEnter,
@@ -30,11 +30,11 @@ import {
   hoverCardTriggerAttributes,
   hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
   hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/hover-card.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/hover-card.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS = 'relative inline-block text-sm text-neutral-950 data-[disabled]:opacity-50';
 const TRIGGER_CLASS =
@@ -47,7 +47,7 @@ export interface GalleryHoverCardDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryHoverCardDemoState) => {
@@ -59,21 +59,21 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
         class={ROOT_CLASS}
         data-gallery-interactive="hover-card"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$section_data_state_derive"
-        fw-c="gallery-hover-card-demo"
-        fw-state='{"open":false}'
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$section_data_state_derive"
+        kovo-c="gallery-hover-card-demo"
+        kovo-state='{"open":false}'
       >
         <a
           {...hoverCardTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$a_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_data_state_derive"
           href="#hover-card-demo"
-          on:blur="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$a_blur"
-          on:focus="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$a_focus"
-          on:keydown="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$a_keydown"
-          on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$a_pointerenter"
-          on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$a_pointerleave"
+          on:blur="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_blur"
+          on:focus="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_focus"
+          on:keydown="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_keydown"
+          on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_pointerenter"
+          on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_pointerleave"
         >
           Ada Lovelace
         </a>
@@ -81,17 +81,17 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
           {...hoverCardContentAttributes({ contentId, open: state.open })}
           class={CONTENT_CLASS}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$aside_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$aside_data_state_derive"
           hidden={!state.open}
-          data-bind:hidden="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$aside_hidden_derive"
-          on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$aside_pointerenter"
-          on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$aside_pointerleave"
+          data-bind:hidden="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$aside_hidden_derive"
+          on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$aside_pointerenter"
+          on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$aside_pointerleave"
         >
           First programmer and analytical engine collaborator.
         </aside>
         <output
           data-demo-state="hover-card-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=10414d41#GalleryHoverCardDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

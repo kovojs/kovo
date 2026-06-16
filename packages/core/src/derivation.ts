@@ -221,7 +221,7 @@ export interface PatchProgram {
 /**
  * §10.5 PUNT list. A punt is *derivation metadata*, never optimistic coverage: it
  * explains why a pair still needs a hand-written transform or `'await-fragment'`,
- * and is rendered inline by `fw explain --optimistic` (e.g. `PUNTED (Opaque:
+ * and is rendered inline by `kovo explain --optimistic` (e.g. `PUNTED (Opaque:
  * compute_discount)`). The `code` set mirrors the SPEC PUNT list one-for-one.
  */
 export type PuntReason =
@@ -259,13 +259,13 @@ export function punt(reason: PuntReason): DerivationResult {
 }
 
 /**
- * Human-readable punt label for `fw explain --optimistic` (SPEC.md §10.6 example
+ * Human-readable punt label for `kovo explain --optimistic` (SPEC.md §10.6 example
  * `PUNTED (Opaque: compute_discount)`). Surfaces wrap this as `PUNTED (<label>)`.
  */
 export function puntReasonLabel(reason: PuntReason): string {
   switch (reason.code) {
     case 'interprocedural':
-      return `interprocedural FW406: ${reason.site}`;
+      return `interprocedural KV406: ${reason.site}`;
     case 'membership-entry':
       return `membership entry: ${reason.field}`;
     case 'no-row-witness':

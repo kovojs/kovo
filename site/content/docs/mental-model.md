@@ -1,14 +1,14 @@
 ---
-title: Thinking in Jiso
-description: Build a cart badge that updates itself, and learn how Jiso turns components into self-describing HTML along the way.
+title: Thinking in Kovo
+description: Build a cart badge that updates itself, and learn how Kovo turns components into self-describing HTML along the way.
 order: 3
 ---
 
-# Thinking in Jiso
+# Thinking in Kovo
 
-The fastest way to understand Jiso is to build one small thing and watch what happens to it. We'll
+The fastest way to understand Kovo is to build one small thing and watch what happens to it. We'll
 make a cart badge — the little "Cart: 3" counter in a header — that updates when you add an item,
-without you writing any code to connect the two. By the end you'll know how Jiso thinks, and the
+without you writing any code to connect the two. By the end you'll know how Kovo thinks, and the
 rest of the docs will read like footnotes.
 
 ## Step 1: declare the data once
@@ -16,7 +16,7 @@ rest of the docs will read like footnotes.
 A query is a named read. You say what it loads and which parts of your data it depends on:
 
 ```ts
-import { query } from '@jiso/server';
+import { query } from '@kovojs/server';
 import { cart } from './domains.js';
 
 export const cartQuery = query('cart', {
@@ -32,7 +32,7 @@ you'll never write the code that makes that happen.
 ## Step 2: a component declares what it reads
 
 ```tsx
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import { cartQuery } from './queries.js';
 
 export const CartBadge = component('cart-badge', {
@@ -53,21 +53,21 @@ anything. The component just says "I read `cart`," and uses the value.
 Here's what that component becomes when it renders:
 
 ```html
-<cart-badge fw-deps="cart">Cart: <span data-bind="cart.count">3</span></cart-badge>
+<cart-badge kovo-deps="cart">Cart: <span data-bind="cart.count">3</span></cart-badge>
 
-<script type="application/json" fw-query="cart">
+<script type="application/json" kovo-query="cart">
   { "count": 3 }
 </script>
 ```
 
 The compiler derived two things and stamped them into the HTML:
 
-- `fw-deps="cart"` says this element depends on the `cart` query. When a mutation changes the cart,
+- `kovo-deps="cart"` says this element depends on the `cart` query. When a mutation changes the cart,
   this is what asks for fresh data.
 - `data-bind="cart.count"` says this element shows `cart.count`. When the value changes, the loader
   writes the new number here.
 
-The query value ships once, as JSON in a `<script>` tag. Open View Source on any Jiso page and you
+The query value ships once, as JSON in a `<script>` tag. Open View Source on any Kovo page and you
 can read its entire data story — what data is on the page, and which elements depend on it. You
 didn't write any of these attributes; the compiler did, and if one ever drifted out of sync with
 your code, the build would fail before a user saw it.
@@ -77,7 +77,7 @@ your code, the build would fail before a user saw it.
 Now add an item. A mutation is a typed write:
 
 ```ts
-import { mutation, s } from '@jiso/server';
+import { mutation, s } from '@kovojs/server';
 
 export const addToCart = mutation('cart/add', {
   input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
@@ -99,12 +99,12 @@ dependencies follow.
 
 ## The four ideas behind that loop
 
-Everything else in Jiso is a consequence of four choices.
+Everything else in Kovo is a consequence of four choices.
 
 ### Components compile; they don't hydrate
 
 Other frameworks ship a runtime that re-runs your components in the browser to "hydrate" the HTML.
-Jiso doesn't. The HTML already carries everything it needs as attributes, and a 4KB loader handles
+Kovo doesn't. The HTML already carries everything it needs as attributes, and a 4KB loader handles
 events globally. Until you interact with something, zero component JavaScript loads. The handler for
 a button is right there in the markup:
 
@@ -118,14 +118,14 @@ reading an attribute, not stepping through a framework.
 
 ### Navigation is the browser's job
 
-Jiso is a multi-page app. A `<Link to="/products/:id" params={{ id }}>` compiles to a plain
+Kovo is a multi-page app. A `<Link to="/products/:id" params={{ id }}>` compiles to a plain
 `<a href="/products/p1">`. You get typed links — rename a route and every link to it turns red —
 with no router running in the browser. Every navigation is a real navigation, sped up with
 prerendering and cross-document View Transitions where the browser supports them.
 
 ### Interactions use the lowest layer that works
 
-Not every button needs JavaScript. Jiso ranks interactions and uses the cheapest one that does the
+Not every button needs JavaScript. Kovo ranks interactions and uses the cheapest one that does the
 job:
 
 | Layer | What it is                                                | JavaScript shipped               |
@@ -141,7 +141,7 @@ the layer; the compiler proves which one applies.
 ### The server is always right
 
 Optimistic updates are throwaway sketches. You predict a result, show it instantly, and when the
-server's real answer arrives, Jiso morphs the authoritative version in. There's no client cache to
+server's real answer arrives, Kovo morphs the authoritative version in. There's no client cache to
 keep consistent and no reconciliation protocol — the server's HTML wins, every time.
 
 ## What the compiler emits
@@ -153,8 +153,8 @@ compiler produces the middle; the browser runs the right:
 AUTHORING                 COMPILED IR                   RUNTIME
 cart.tsx          ──►     cart.server.js        ──►     Self-describing HTML
 (JSX, inline              (render fns, queries)         • on:click="/c/cart.js#Cart$remove"
- closures)                cart.client.js                • <script fw-query="cart"> JSON
-                          (named handler exports)       • fw-deps="cart" stamps
+ closures)                cart.client.js                • <script kovo-query="cart"> JSON
+                          (named handler exports)       • kovo-deps="cart" stamps
 ```
 
 The emitted code is plain and readable, and compiling it again is a no-op — you can eject any
@@ -171,7 +171,7 @@ build.
 <details>
 <summary>Spec references</summary>
 
-Architecture overview: SPEC §3. Component model and the `fw-deps`/`data-bind` stamps: SPEC §4.1,
+Architecture overview: SPEC §3. Component model and the `kovo-deps`/`data-bind` stamps: SPEC §4.1,
 §4.8. Handlers and the loader: SPEC §4.3, §4.4. Navigation and typed links: SPEC §6.4, §8. The
 interaction ladder (L0–L3): SPEC §7. Queries, domains, and the touch graph: SPEC §10.1–10.3.
 Server-truth reconciliation: SPEC §2 (design test 5). Compiler output as authorable IR: SPEC §5.2.

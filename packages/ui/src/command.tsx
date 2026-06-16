@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   cn,
   commandCloseAttributes,
@@ -14,8 +14,8 @@ import {
   defineVariants,
   type ClassValue,
   type CommandItem as HeadlessCommandItem,
-} from '@jiso/headless-ui';
-import { escapeHtml } from '@jiso/server';
+} from '@kovojs/headless-ui';
+import { escapeHtml } from '@kovojs/server';
 
 export interface CommandStateProps {
   disabled?: boolean;

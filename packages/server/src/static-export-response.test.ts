@@ -22,7 +22,7 @@ describe('server static export replay response boundary', () => {
     });
   });
 
-  it('raises FW229 for non-HTML route document responses', async () => {
+  it('raises KV229 for non-HTML route document responses', async () => {
     await expect(
       readStaticExportReplayedResponse({
         kind: 'route-document',
@@ -33,10 +33,10 @@ describe('server static export replay response boundary', () => {
         routePath: '/docs',
       }),
     ).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining(
             "successful HTML route documents; '/docs' returned status 200",
           ),
@@ -63,7 +63,7 @@ describe('server static export replay response boundary', () => {
     });
   });
 
-  it('raises FW229 for client module responses that are not JavaScript', async () => {
+  it('raises KV229 for client module responses that are not JavaScript', async () => {
     await expect(
       readStaticExportReplayedResponse({
         href: '/c/docs.client.js?v=build',
@@ -74,10 +74,10 @@ describe('server static export replay response boundary', () => {
         }),
       }),
     ).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining("cannot copy client module '/c/docs.client.js?v=build'"),
           routePath: '/c/docs.client.js',
         },

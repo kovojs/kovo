@@ -1,4 +1,4 @@
-export const jisoHeadlessUiPrefix = 'jiso-' as const;
+export const kovoHeadlessUiPrefix = 'kovo-' as const;
 
 export {
   getPrimitivePlatformAudit,
@@ -28,9 +28,9 @@ export {
   dispatchCancelableChange,
   findTypeaheadMatch,
   computeFloatingPosition,
-  jisoUiTailwindThemeCss,
-  jisoUiTokenSheet,
-  jisoUiTokenSheetCss,
+  kovoUiTailwindThemeCss,
+  kovoUiTokenSheet,
+  kovoUiTokenSheetCss,
   mergeDataAttributes,
   moveCollectionIndex,
   navigationIntentFromKey,
@@ -54,12 +54,12 @@ export type {
   FloatingPositionOptions,
   FloatingRect,
   FloatingSize,
-  JisoUiTailwindThemeProperty,
-  JisoUiTokenCategory,
-  JisoUiTokenDefinition,
-  JisoUiTokenMode,
-  JisoUiTokenName,
-  JisoUiTokenProperty,
+  KovoUiTailwindThemeProperty,
+  KovoUiTokenCategory,
+  KovoUiTokenDefinition,
+  KovoUiTokenMode,
+  KovoUiTokenName,
+  KovoUiTokenProperty,
   MoveOptions,
   NavigationIntent,
   NavigationItem,

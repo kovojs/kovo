@@ -1,12 +1,12 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   selectItemClick as _selectItemClick,
   selectKeyDown as _selectKeyDown,
   selectMove as _selectMove,
   selectTriggerClick as _selectTriggerClick,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GallerySelectDemo$button_click = handler((event, ctx) => {
   const result = _selectTriggerClick(Object(event), {

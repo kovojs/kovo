@@ -1,6 +1,6 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
-import { escapeHtml } from '@jiso/server';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { escapeHtml } from '@kovojs/server';
 import {
   cn,
   defineVariants,
@@ -16,7 +16,7 @@ import {
   type CollectionOrientation,
   type NavigationMenuItem as HeadlessNavigationMenuItem,
   type TextDirection,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface NavigationMenuStateProps {
   activeValue?: string;
@@ -227,7 +227,7 @@ export const NavigationMenuTrigger = component('navigation-menu-trigger', {
         type={attrs.type}
         value={attrs.value}
       >
-        {/* SECURITY_FINDINGS.md C1: the @jiso/server JSX runtime renders text children
+        {/* SECURITY_FINDINGS.md C1: the @kovojs/server JSX runtime renders text children
             UNESCAPED. props.children is the composition slot (raw, may be pre-rendered
             markup); itemLabel/itemValue are scalar text data props a caller fills from
             data, so escape only that fallback to neutralize injected `<img onerror=...>`. */}

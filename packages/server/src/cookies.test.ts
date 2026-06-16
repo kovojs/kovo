@@ -5,7 +5,7 @@ import { serializeCookie, validateRawSetCookie } from './cookies.js';
 describe('cookie header helpers', () => {
   it('serializes structured Set-Cookie values', () => {
     expect(
-      serializeCookie('jiso_csrf', 'c1', {
+      serializeCookie('kovo_csrf', 'c1', {
         domain: 'example.test',
         expires: new Date('2026-01-02T03:04:05Z'),
         httpOnly: true,
@@ -15,7 +15,7 @@ describe('cookie header helpers', () => {
         secure: true,
       }),
     ).toBe(
-      'jiso_csrf=c1; Max-Age=60; Domain=example.test; Path=/; Expires=Fri, 02 Jan 2026 03:04:05 GMT; HttpOnly; Secure; SameSite=Strict',
+      'kovo_csrf=c1; Max-Age=60; Domain=example.test; Path=/; Expires=Fri, 02 Jan 2026 03:04:05 GMT; HttpOnly; Secure; SameSite=Strict',
     );
   });
 

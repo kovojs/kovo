@@ -55,7 +55,7 @@ describe('query endpoints', () => {
         ]),
       }),
     ).resolves.toEqual({
-      body: '<fw-query name="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</fw-query>',
+      body: '<kovo-query name="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
     });
@@ -100,7 +100,7 @@ describe('query endpoints', () => {
         search: new URLSearchParams([['id', 'p1']]),
       }),
     ).resolves.toEqual({
-      body: '<fw-query name="product:p1">{"id":"p1","name":"Mug"}</fw-query>',
+      body: '<kovo-query name="product:p1">{"id":"p1","name":"Mug"}</kovo-query>',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
     });

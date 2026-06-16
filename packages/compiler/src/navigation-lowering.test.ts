@@ -205,7 +205,7 @@ export const ProductLinks = component('product-links', {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.files[0]?.source).toContain(
-      '<a className="product-link" href={target} fw-c="product-links">Product</a>',
+      '<a className="product-link" href={target} kovo-c="product-links">Product</a>',
     );
     expect(result.files[0]?.source).not.toContain('<Link');
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -231,13 +231,13 @@ export const ProductLinks = component('product-links', {
 
     expect(result.diagnostics).toEqual([]);
     expect(serverSource).toContain('const sample = \'<Link to="/missing">Missing</Link>\'');
-    // SPEC.md section 4.2: the lowered native <a> host also receives the derived fw-c stamp.
-    expect(serverSource).toContain('<a href="/products/p%201" fw-c="product-links">Product</a>');
+    // SPEC.md section 4.2: the lowered native <a> host also receives the derived kovo-c stamp.
+    expect(serverSource).toContain('<a href="/products/p%201" kovo-c="product-links">Product</a>');
     expect(serverSource).not.toContain('<Link to="/products/:id"');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('lowers static href calls to literal anchor hrefs before FW220 validation', () => {
+  it('lowers static href calls to literal anchor hrefs before KV220 validation', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',
       registryFacts: {
@@ -314,7 +314,7 @@ export const ProductLinks = component('product-links', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('reports FW220 for literal navigation targets outside the route table', () => {
+  it('reports KV220 for literal navigation targets outside the route table', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',
       registryFacts: {
@@ -334,7 +334,7 @@ export const ProductLinks = component('product-links', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW220',
+        code: 'KV220',
         fileName: 'product-links.tsx',
         message: 'Literal href or form action matches no declared route. /product/p1',
         severity: 'error',
@@ -342,7 +342,7 @@ export const ProductLinks = component('product-links', {
         length: 18,
       },
       {
-        code: 'FW220',
+        code: 'KV220',
         fileName: 'product-links.tsx',
         message: 'Literal href or form action matches no declared route. /checkout',
         severity: 'error',
@@ -373,7 +373,7 @@ export const ProductLinks = component('product-links', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW220',
+        code: 'KV220',
         fileName: 'product-links.tsx',
         message: 'Literal href or form action matches no declared route. /docs/v1x0/intro',
         severity: 'error',

@@ -25,7 +25,7 @@ import {
   s,
   stylesheetsForTargets,
   t,
-} from '@jiso/server';
+} from '@kovojs/server';
 import { createQueryStore, submitEnhancedMutation } from '../../runtime/src/index.ts';
 
 import {
@@ -81,7 +81,7 @@ const commerceStylesheetRuntime = {
   stylesheetsForTargets,
 };
 
-describe('@jiso/test server fixture facts', () => {
+describe('@kovojs/test server fixture facts', () => {
   it('projects page-hint speculation rules through public server APIs', () => {
     expect(serverPageHintsBehaviorFact({ renderPageHints })).toEqual({
       deduplicatedRules: {
@@ -108,10 +108,10 @@ describe('@jiso/test server fixture facts', () => {
         },
       },
       fragmentResponse: {
-        body: '<fw-query name="cart" key="cart:c1">{"cartId":"c1"}</fw-query>',
+        body: '<kovo-query name="cart" key="cart:c1">{"cartId":"c1"}</kovo-query>',
         headers: {
-          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'FW-Changes': '[{"domain":"cart"}]',
+          'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Changes': '[{"domain":"cart"}]',
         },
         status: 200,
       },
@@ -132,7 +132,7 @@ describe('@jiso/test server fixture facts', () => {
 
     expect(fact.query).toEqual({
       endpoint: {
-        body: '<fw-query name="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</fw-query>',
+        body: '<kovo-query name="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
         status: 200,
       },
@@ -228,18 +228,18 @@ describe('@jiso/test server fixture facts', () => {
           rel: 'stylesheet',
         },
         sectionAttrs: { class: 'border-slate-200' },
-        tags: ['main', 'fw-defer', 'fw-fragment', 'link', 'section'],
+        tags: ['main', 'kovo-defer', 'kovo-fragment', 'link', 'section'],
       },
       failure: {
-        body: '<fw-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/tailwind.css"><form class="border-slate-200"><output role="alert">Only 0 left.</output></form></fw-fragment>',
-        headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+        body: '<kovo-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/tailwind.css"><form class="border-slate-200"><output role="alert">Only 0 left.</output></form></kovo-fragment>',
+        headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
         status: 422,
       },
       pageHints: {
         earlyHints: {
           Link: '</assets/tailwind.css>; rel=preload; as=style',
         },
-        html: '<style data-jiso-critical-href="/assets/tailwind.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/tailwind.css"><link rel="stylesheet" href="/assets/recommendations.css">',
+        html: '<style data-kovo-critical-href="/assets/tailwind.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/tailwind.css"><link rel="stylesheet" href="/assets/recommendations.css">',
       },
       selectedStylesheets: [
         {
@@ -269,7 +269,7 @@ describe('@jiso/test server fixture facts', () => {
           i18n: ['en-US:cartLabel,productStock'],
           meta: {
             description: 'Browse products and checkout with 0 verifiable cart item.',
-            title: 'Jiso Commerce (0)',
+            title: 'Kovo Commerce (0)',
           },
           modulepreloads: [],
           prefetch: false,
@@ -284,7 +284,7 @@ describe('@jiso/test server fixture facts', () => {
       i18n: ['en-US:cartLabel,productStock'],
       meta: {
         description: 'Browse products and checkout with 0 verifiable cart item.',
-        title: 'Jiso Commerce (0)',
+        title: 'Kovo Commerce (0)',
       },
       modulepreloads: [],
       prefetch: false,
@@ -306,10 +306,10 @@ describe('@jiso/test server fixture facts', () => {
       rendered: {
         earlyHints: {},
         html: [
-          '<title>Jiso Commerce (1)</title>',
+          '<title>Kovo Commerce (1)</title>',
           '<meta name="description" content="Browse products and checkout with 1 verifiable cart item.">',
           '<meta property="og:description" content="Browse products and checkout with 1 verifiable cart item.">',
-          '<script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
+          '<script type="application/json" kovo-i18n locale="en-US">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
         ].join(''),
       },
       translation: 'Cart (1)',
@@ -364,10 +364,10 @@ describe('@jiso/test server fixture facts', () => {
     expect(fact.upload.pendingDuringResponse).toBe('');
     expect(fact.upload.pendingAfterSubmit).toBeNull();
     expect(fact.fragmentFailure).toEqual({
-      body: '<fw-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section role="alert">fragment failed</section></fw-fragment>',
+      body: '<kovo-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section role="alert">fragment failed</section></kovo-fragment>',
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Changes': '[]',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Changes': '[]',
       },
       status: 200,
     });

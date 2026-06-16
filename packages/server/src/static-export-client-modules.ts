@@ -30,7 +30,7 @@ export async function replayStaticExportClientModuleArtifacts({
       throw new StaticExportError([
         staticExportDiagnostic(
           artifact.path,
-          `FW229 static export found multiple client module versions for '${artifact.path}' with different response snapshots. Static hosts serve query-string variants from the same file path, so export documents must reference one immutable version per /c/ path.`,
+          `KV229 static export found multiple client module versions for '${artifact.path}' with different response snapshots. Static hosts serve query-string variants from the same file path, so export documents must reference one immutable version per /c/ path.`,
         ),
       ]);
     }

@@ -105,7 +105,7 @@ const textEncoder = new TextEncoder();
  * @param options - Secret(s), header name, encoding, payload derivation, and tolerance.
  * @returns An `HmacSignatureVerifier` with an async `verify`.
  * @example
- * import { hmacSignature } from '@jiso/core';
+ * import { hmacSignature } from '@kovojs/core';
  *
  * export const verifier = hmacSignature({
  *   encoding: 'hex',
@@ -147,7 +147,7 @@ export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerif
  * @param verify - Predicate over the raw request returning whether it is authentic.
  * @returns A `CustomWebhookVerifier`.
  * @example
- * import { customVerifier, type WebhookHeaders } from '@jiso/core';
+ * import { customVerifier, type WebhookHeaders } from '@kovojs/core';
  *
  * function tokenFrom(headers: WebhookHeaders): string | undefined {
  *   if ('get' in headers && typeof headers.get === 'function') {
@@ -183,7 +183,7 @@ export function customVerifier(
  * @param options - The Stripe webhook signing secret(s).
  * @returns An `HmacSignatureVerifier` configured for Stripe.
  * @example
- * import { stripeSignature } from '@jiso/core';
+ * import { stripeSignature } from '@kovojs/core';
  *
  * export const verifier = stripeSignature({ secret: 'whsec_test' });
  */
@@ -214,7 +214,7 @@ export function stripeSignature(options: StripeSignatureOptions): HmacSignatureV
  * @param options - The Standard Webhooks signing secret(s).
  * @returns An `HmacSignatureVerifier` configured for Standard Webhooks.
  * @example
- * import { standardWebhooks } from '@jiso/core';
+ * import { standardWebhooks } from '@kovojs/core';
  *
  * export const verifier = standardWebhooks({ secret: 'whsec_test' });
  */

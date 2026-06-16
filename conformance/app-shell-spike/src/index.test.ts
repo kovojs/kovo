@@ -419,9 +419,9 @@ function chunksToStream(chunks: string[]): ReadableStream<Uint8Array> {
 }
 
 function deferredFixtureChunks(body: string): [string, string] {
-  const boundaryIndex = body.indexOf('--jiso-boundary');
+  const boundaryIndex = body.indexOf('--kovo-boundary');
   if (boundaryIndex === -1) {
-    throw new Error('Deferred fixture is missing the jiso boundary');
+    throw new Error('Deferred fixture is missing the kovo boundary');
   }
 
   return [body.slice(0, boundaryIndex), body.slice(boundaryIndex)];

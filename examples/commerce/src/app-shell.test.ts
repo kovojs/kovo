@@ -10,13 +10,13 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer as createViteServer } from 'vite';
 
-import { csrfToken, runMutation } from '@jiso/server';
-import { isJisoApp } from '@jiso/server/app-shell/core';
-import { exportStaticApp } from '@jiso/server/app-shell/static-export';
-import { cookiePair, firstSetCookiePair } from '@jiso/test/headers';
+import { csrfToken, runMutation } from '@kovojs/server';
+import { isKovoApp } from '@kovojs/server/app-shell/core';
+import { exportStaticApp } from '@kovojs/server/app-shell/static-export';
+import { cookiePair, firstSetCookiePair } from '@kovojs/test/headers';
 import {
-  fwFragmentFacts,
-  fwQueryJsonValues,
+  kovoFragmentFacts,
+  kovoQueryJsonValues,
   htmlDocumentFacts,
   htmlElementCount,
   htmlElementFacts,
@@ -24,7 +24,7 @@ import {
   htmlFormFacts,
   htmlFormFields,
   htmlLinkHrefs,
-} from '@jiso/test/html-fragment';
+} from '@kovojs/test/html-fragment';
 
 import {
   commerceAuthCsrf,
@@ -70,7 +70,7 @@ describe('commerce app shell HTTP entry', () => {
       static: 'vp run export',
     });
     expect(
-      viteConfig.plugins?.some((plugin) => plugin.name === 'jiso-commerce-app-shell-dev-loader'),
+      viteConfig.plugins?.some((plugin) => plugin.name === 'kovo-commerce-app-shell-dev-loader'),
     ).toBe(true);
     expect(viteConfig.run?.tasks?.serve?.command).toBe('node scripts/serve.mjs');
     expect(viteConfig.run?.tasks?.export?.command).toBe('node scripts/export-static.mjs');
@@ -85,28 +85,28 @@ describe('commerce app shell HTTP entry', () => {
     ]);
 
     const viteConfigSource = await readFile(path.join(commerceRoot, 'vite.config.ts'), 'utf8');
-    expect(viteConfigSource).toContain("server.ssrLoadModule('@jiso/server/app-shell/vite')");
-    expect(viteConfigSource).not.toContain("server.ssrLoadModule('@jiso/server')");
+    expect(viteConfigSource).toContain("server.ssrLoadModule('@kovojs/server/app-shell/vite')");
+    expect(viteConfigSource).not.toContain("server.ssrLoadModule('@kovojs/server')");
 
     const exportScriptSource = await readFile(
       path.join(commerceRoot, 'scripts/export-static.mjs'),
       'utf8',
     );
-    expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/core')");
-    expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/vite')");
-    expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/static-export')");
-    expect(exportScriptSource).toContain('isJisoApp');
-    expect(exportScriptSource).toContain('exportJisoAppShellViteBuildWithManifestFromManifestFile');
-    expect(exportScriptSource).not.toContain('function isJisoApp');
+    expect(exportScriptSource).toContain("ssrLoadModule('@kovojs/server/app-shell/core')");
+    expect(exportScriptSource).toContain("ssrLoadModule('@kovojs/server/app-shell/vite')");
+    expect(exportScriptSource).toContain("ssrLoadModule('@kovojs/server/app-shell/static-export')");
+    expect(exportScriptSource).toContain('isKovoApp');
+    expect(exportScriptSource).toContain('exportKovoAppShellViteBuildWithManifestFromManifestFile');
+    expect(exportScriptSource).not.toContain('function isKovoApp');
     expect(exportScriptSource).not.toContain('commerceStaticExportShell?.app');
-    expect(exportScriptSource).not.toContain("ssrLoadModule('@jiso/server')");
+    expect(exportScriptSource).not.toContain("ssrLoadModule('@kovojs/server')");
 
     const appShellSource = await readFile(path.join(commerceRoot, 'src/app-shell.ts'), 'utf8');
-    expect(appShellSource).toContain("from '@jiso/server/app-shell/client-modules'");
-    expect(appShellSource).toContain("from '@jiso/server/app-shell/core'");
-    expect(appShellSource).toContain("from '@jiso/server/app-shell/node'");
+    expect(appShellSource).toContain("from '@kovojs/server/app-shell/client-modules'");
+    expect(appShellSource).toContain("from '@kovojs/server/app-shell/core'");
+    expect(appShellSource).toContain("from '@kovojs/server/app-shell/node'");
     const rootImport = appShellSource.match(
-      /import \{(?<imports>[\s\S]*?)\} from '@jiso\/server';/,
+      /import \{(?<imports>[\s\S]*?)\} from '@kovojs\/server';/,
     );
     expect(rootImport?.groups?.imports).not.toMatch(
       /\b(createApp|createRequestHandler|createMemoryVersionedClientModuleRegistry|toNodeHandler)\b/,
@@ -125,9 +125,9 @@ describe('commerce app shell HTTP entry', () => {
         },
       },
       async ssrLoadModule(id) {
-        expect(id).toBe('@jiso/server/app-shell/vite');
+        expect(id).toBe('@kovojs/server/app-shell/vite');
         return {
-          jisoAppShellViteDevPlugin(options: unknown) {
+          kovoAppShellViteDevPlugin(options: unknown) {
             delegatedOptions.push(options);
             return {
               configureServer(server: unknown) {
@@ -142,10 +142,10 @@ describe('commerce app shell HTTP entry', () => {
       },
     });
 
-    expect(plugin.name).toBe('jiso-commerce-app-shell-dev-loader');
+    expect(plugin.name).toBe('kovo-commerce-app-shell-dev-loader');
     expect(delegatedOptions).toEqual([
       {
-        name: 'jiso-commerce-app-shell-dev',
+        name: 'kovo-commerce-app-shell-dev',
         nodeHandlerExportName: 'commerceNodeHandler',
         order: 'post',
       },
@@ -206,7 +206,7 @@ describe('commerce app shell HTTP entry', () => {
       const query = await fetch(`${origin}/_q/cart`);
       const queryBody = await query.text();
       expect(query.status, formatDevServerFailure(queryBody, devServerError)).toBe(200);
-      expect(fwQueryJsonValues(queryBody, 'cart')).toEqual([{ count: 0 }]);
+      expect(kovoQueryJsonValues(queryBody, 'cart')).toEqual([{ count: 0 }]);
 
       const loginForm = new URLSearchParams();
       loginForm.set(
@@ -249,15 +249,15 @@ describe('commerce app shell HTTP entry', () => {
         headers: {
           cookie: sessionCookie,
           'Content-Type': 'application/x-www-form-urlencoded',
-          'FW-Fragment': 'true',
-          'FW-Targets': 'cart-badge',
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'cart-badge',
         },
         method: 'POST',
       });
       const mutationBody = await mutation.text();
 
       expect(mutation.status, formatDevServerFailure(mutationBody, devServerError)).toBe(200);
-      expect(fwFragmentFacts(mutationBody, 'cart-badge')).toHaveLength(1);
+      expect(kovoFragmentFacts(mutationBody, 'cart-badge')).toHaveLength(1);
 
       const webhookBody = JSON.stringify({
         data: {
@@ -283,7 +283,7 @@ describe('commerce app shell HTTP entry', () => {
       const webhookResponseBody = await webhook.text();
 
       expect(webhook.status, formatDevServerFailure(webhookResponseBody, devServerError)).toBe(200);
-      expect(webhook.headers.get('fw-changes')).toBe(
+      expect(webhook.headers.get('kovo-changes')).toBe(
         '[{"domain":"order","keys":["order-dev-http-1"]}]',
       );
       expect(webhookResponseBody).toBe('ok');
@@ -337,7 +337,7 @@ describe('commerce app shell HTTP entry', () => {
         expect(moduleBody).toContain('export function Commerce$markReady');
 
         const queryBody = await fetchTextWhenReady(`${origin}/_q/cart`, output);
-        expect(fwQueryJsonValues(queryBody, 'cart')).toEqual([{ count: 0 }]);
+        expect(kovoQueryJsonValues(queryBody, 'cart')).toEqual([{ count: 0 }]);
 
         const stylesheetBody = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
         expect(stylesheetBody).toContain('tailwindcss v');
@@ -372,11 +372,11 @@ describe('commerce app shell HTTP entry', () => {
     expect(document.headers.get('link')).toContain('</assets/tailwind.css>; rel=preload; as=style');
     expect(html).toContain('<!doctype html>');
     expectCommerceShellDocument(html);
-    expect(fwFragmentFacts(html, 'cart-badge')).toHaveLength(1);
+    expect(kovoFragmentFacts(html, 'cart-badge')).toHaveLength(1);
 
     const query = await fetch(`${origin}/_q/cart`);
     expect(query.status).toBe(200);
-    expect(fwQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 0 }]);
+    expect(kovoQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 0 }]);
 
     const clientModule = await fetch(`${origin}${commerceClientModuleHref}`);
     expect(clientModule.status).toBe(200);
@@ -406,20 +406,20 @@ describe('commerce app shell HTTP entry', () => {
       headers: {
         cookie: sessionCookie,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'FW-Fragment': 'true',
-        'FW-Targets': 'cart-badge,product-grid,order-history',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'cart-badge,product-grid,order-history',
       },
       method: 'POST',
     });
     const enhancedBody = await enhanced.text();
 
     expect(enhanced.status, enhancedBody).toBe(200);
-    expect(enhanced.headers.get('content-type')).toBe('text/vnd.jiso.fragment+html; charset=utf-8');
-    expect(enhanced.headers.get('fw-changes')).toBe(
+    expect(enhanced.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
+    expect(enhanced.headers.get('kovo-changes')).toBe(
       '[{"domain":"cart"},{"domain":"order"},{"domain":"product","keys":["p1"]}]',
     );
-    expect(fwQueryJsonValues(enhancedBody, 'cart')).toEqual([{ count: 2 }]);
-    expect(fwFragmentFacts(enhancedBody).map((fragment) => fragment.target)).toEqual([
+    expect(kovoQueryJsonValues(enhancedBody, 'cart')).toEqual([{ count: 2 }]);
+    expect(kovoFragmentFacts(enhancedBody).map((fragment) => fragment.target)).toEqual([
       'cart-badge',
       'product-grid',
       'order-history',
@@ -447,7 +447,7 @@ describe('commerce app shell HTTP entry', () => {
       headers: { cookie: sessionCookie },
     });
     expect(query.status).toBe(200);
-    expect(fwQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 3 }]);
+    expect(kovoQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 3 }]);
   });
 
   it('dispatches shell login and logout mutations before guarded admin routes', async () => {
@@ -506,7 +506,7 @@ describe('commerce app shell HTTP entry', () => {
 
     expect(memberLogin.status).toBe(303);
     expect(memberLogin.headers.get('location')).toBe('/admin');
-    expect(memberSessionCookie).toBe('jiso_commerce_session=session-u2');
+    expect(memberSessionCookie).toBe('kovo_commerce_session=session-u2');
 
     const memberAdmin = await fetch(`${origin}/admin`, {
       headers: { cookie: memberSessionCookie },
@@ -534,7 +534,7 @@ describe('commerce app shell HTTP entry', () => {
 
     expect(login.status).toBe(303);
     expect(login.headers.get('location')).toBe('/admin');
-    expect(sessionCookie).toBe('jiso_commerce_session=session-u1');
+    expect(sessionCookie).toBe('kovo_commerce_session=session-u1');
 
     const admin = await fetch(`${origin}/admin`, {
       headers: { cookie: sessionCookie },
@@ -581,27 +581,27 @@ describe('commerce app shell HTTP entry', () => {
 
   it('exports the public commerce shell while the dynamic session shell stays non-exportable', async () => {
     await expect(exportStaticApp(createCommerceAppShell().app)).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
-          code: 'FW229',
+          code: 'KV229',
           routePath: '/cart',
         }),
       ]),
     });
 
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-commerce-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-commerce-export-'));
     try {
       const shell = createCommerceStaticExportShell();
-      expect(isJisoApp(shell.app)).toBe(true);
+      expect(isKovoApp(shell.app)).toBe(true);
       expect(
-        isJisoApp({
+        isKovoApp({
           ...shell.app,
           renderRoute: '<main>compat</main>',
         }),
       ).toBe(false);
       expect(
-        isJisoApp({
+        isKovoApp({
           ...shell.app,
           clientModules: {
             resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
@@ -649,7 +649,7 @@ describe('commerce app shell HTTP entry', () => {
   for (const exportCommand of commerceExportCommands()) {
     it(`wires ${exportCommand.label} to the public commerce shell static output`, async () => {
       const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
-      const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-commerce-export-'));
+      const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-commerce-export-'));
 
       try {
         const result = await execFileResult(exportCommand.command, exportCommand.args(outDir), {
@@ -693,7 +693,7 @@ describe('commerce app shell HTTP entry', () => {
         await expect(access(path.join(outDir, 'login.html'))).rejects.toThrow();
 
         const loginHtml = await readFile(path.join(outDir, 'login', 'index.html'), 'utf8');
-        expect(htmlDocumentFacts(loginHtml).title).toBe('Jiso Commerce Sign In');
+        expect(htmlDocumentFacts(loginHtml).title).toBe('Kovo Commerce Sign In');
         expect(htmlDocumentFacts(loginHtml).text).toContain(
           'Sign in is available on the dynamic commerce server.',
         );

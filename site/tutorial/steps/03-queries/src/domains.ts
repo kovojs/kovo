@@ -1,4 +1,4 @@
-import { domain } from '@jiso/server';
+import { domain } from '@kovojs/server';
 
 // Tutorial step 03 (chapter 3): domains are the invalidation currency
 // (SPEC.md section 10.1). They live in a leaf module so component modules can

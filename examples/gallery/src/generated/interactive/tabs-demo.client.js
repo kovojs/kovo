@@ -1,10 +1,10 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   tabsKeyDown as _tabsKeyDown,
   tabsTriggerClick as _tabsTriggerClick,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryTabsDemo$section_keydown = handler((event, ctx) => {
   const result = _tabsKeyDown(Object(event), {

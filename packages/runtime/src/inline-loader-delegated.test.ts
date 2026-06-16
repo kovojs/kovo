@@ -17,8 +17,8 @@ describe('inline loader delegated handlers', () => {
         'data-p-item-id': 'i_42',
         'data-p-missing-type': 'kept-as-string',
         'data-p-quantity': '2',
-        'fw-param-types': 'quantity:number featured:boolean missingType',
-        'fw-state': '{"count":1}',
+        'kovo-param-types': 'quantity:number featured:boolean missingType',
+        'kovo-state': '{"count":1}',
         'on:click': '/c/cart.js#add /c/cart.js#finish',
       };
       const expectedCalls = [
@@ -83,7 +83,7 @@ describe('inline loader delegated handlers', () => {
 
         expect(importModule).toHaveBeenCalledWith('/c/cart.js');
         expect(calls).toEqual(expectedCalls);
-        expect(element.getAttribute('fw-state')).toBe('{"count":2,"done":true}');
+        expect(element.getAttribute('kovo-state')).toBe('{"count":2,"done":true}');
       };
       const modularElement = new FakeElement(attrs);
       const inlineElement = new FakeElement(attrs);
@@ -102,7 +102,7 @@ describe('inline loader delegated handlers', () => {
     async (_name, installSource) => {
       const host = new FakeStatefulBindingElement({
         'data-bind:data-state': 'state.status',
-        'fw-state': '{"count":1,"status":"idle"}',
+        'kovo-state': '{"count":1,"status":"idle"}',
         'on:click': '/c/cart.js#add /c/cart.js#finish',
       });
       const count = new FakeStatefulBindingElement(
@@ -131,7 +131,7 @@ describe('inline loader delegated handlers', () => {
         { parent: host },
       );
       const nestedHost = new FakeStatefulBindingElement(
-        { 'fw-state': '{"count":100}' },
+        { 'kovo-state': '{"count":100}' },
         { parent: host },
       );
       const nestedCount = new FakeStatefulBindingElement(
@@ -162,7 +162,7 @@ describe('inline loader delegated handlers', () => {
 
       await dispatchInlineDelegatedClick(host, importModule, installSource);
 
-      expect(host.getAttribute('fw-state')).toBe('{"count":2,"status":"open","label":"Ready"}');
+      expect(host.getAttribute('kovo-state')).toBe('{"count":2,"status":"open","label":"Ready"}');
       expect(host.getAttribute('data-state')).toBe('open');
       expect(count.textContent).toBe('2');
       expect(input.getAttribute('value')).toBe('2');
@@ -177,7 +177,7 @@ describe('inline loader delegated handlers', () => {
     'keeps inline indeterminate checkbox properties in parity through %s',
     async (_name, installSource) => {
       const host = new FakeStatefulBindingElement({
-        'fw-state': '{"checked":"indeterminate"}',
+        'kovo-state': '{"checked":"indeterminate"}',
         'on:click': '/c/checkbox.js#toggle',
       });
       const input = new FakeStatefulBindingElement(
@@ -193,7 +193,7 @@ describe('inline loader delegated handlers', () => {
       const originals = {
         addEventListener: globalRecord.addEventListener,
         document: globalRecord.document,
-        importModule: globalRecord.__jisoInlineImport,
+        importModule: globalRecord.__kovoInlineImport,
       };
       const listeners = new Map<string, (event: unknown) => Promise<void>>();
       const importModule = vi.fn(async () => ({
@@ -233,7 +233,7 @@ describe('inline loader delegated handlers', () => {
           type: 'click',
         });
 
-        expect(host.getAttribute('fw-state')).toBe('{"checked":true}');
+        expect(host.getAttribute('kovo-state')).toBe('{"checked":true}');
         expect(input.getAttribute('indeterminate')).toBeNull();
         expect(input.indeterminate).toBe(false);
       } finally {
@@ -242,9 +242,9 @@ describe('inline loader delegated handlers', () => {
           document: originals.document,
         });
         if (originals.importModule === undefined) {
-          delete globalRecord.__jisoInlineImport;
+          delete globalRecord.__kovoInlineImport;
         } else {
-          globalRecord.__jisoInlineImport = originals.importModule;
+          globalRecord.__kovoInlineImport = originals.importModule;
         }
       }
     },
@@ -288,7 +288,7 @@ describe('inline loader delegated handlers', () => {
       const originals = {
         addEventListener: globalRecord.addEventListener,
         document: globalRecord.document,
-        importModule: globalRecord.__jisoInlineImport,
+        importModule: globalRecord.__kovoInlineImport,
       };
       const listeners = new Map<string, (event: unknown) => Promise<void>>();
       const handlerUrl = `data:text/javascript,${encodeURIComponent('export const present = true;')}#missing`;
@@ -335,9 +335,9 @@ describe('inline loader delegated handlers', () => {
           document: originals.document,
         });
         if (originals.importModule === undefined) {
-          delete globalRecord.__jisoInlineImport;
+          delete globalRecord.__kovoInlineImport;
         } else {
-          globalRecord.__jisoInlineImport = originals.importModule;
+          globalRecord.__kovoInlineImport = originals.importModule;
         }
       }
     },

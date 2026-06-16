@@ -11,7 +11,9 @@ describe('parsed mutation response wire apply', () => {
 
     store.subscribe('product', plan, 'p1');
     const applied = applyMutationResponseChunksToRuntime(
-      readMutationResponseBodyChunks('<fw-query name="product" key="p1">{"stock":4}</fw-query>'),
+      readMutationResponseBodyChunks(
+        '<kovo-query name="product" key="p1">{"stock":4}</kovo-query>',
+      ),
       { store },
     );
 
@@ -26,12 +28,12 @@ describe('parsed mutation response wire apply', () => {
     });
   });
 
-  it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
+  it('accepts escaped JSON from text/html-compatible kovo-query chunks', () => {
     const store = createQueryStore();
 
     applyMutationResponseChunksToRuntime(
       readMutationResponseBodyChunks(
-        '<fw-query name="cart">{&quot;count&quot;:4,&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}</fw-query>',
+        '<kovo-query name="cart">{&quot;count&quot;:4,&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}</kovo-query>',
       ),
       { store },
     );
@@ -42,8 +44,8 @@ describe('parsed mutation response wire apply', () => {
   it('accepts single-quoted chunk attributes', () => {
     const store = createQueryStore();
     const body = [
-      "<fw-query name='cart' key='cart:c1'>{\"count\":4}</fw-query>",
-      "<fw-fragment target='cart-list' mode='append'><li>p1</li></fw-fragment>",
+      "<kovo-query name='cart' key='cart:c1'>{\"count\":4}</kovo-query>",
+      "<kovo-fragment target='cart-list' mode='append'><li>p1</li></kovo-fragment>",
     ].join('');
     const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       store,
@@ -60,7 +62,7 @@ describe('parsed mutation response wire apply', () => {
     const store = createQueryStore();
     const applied = applyMutationResponseChunksToRuntime(
       readMutationResponseBodyChunks(
-        '<fw-query name="product" key="product>p1">{"stock":7}</fw-query>',
+        '<kovo-query name="product" key="product>p1">{"stock":7}</kovo-query>',
       ),
       { store },
     );
@@ -81,9 +83,9 @@ describe('parsed mutation response wire apply', () => {
     // SPEC.md §9.1 keeps query and fragment chunks in one response body; the
     // store-only runtime path should still parse both through the shared reader.
     const body = [
-      '<fw-query name="cart">{</fw-query>',
-      '<fw-query name="inventory">{"available":true}</fw-query>',
-      '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge>',
+      '<kovo-query name="cart">{</kovo-query>',
+      '<kovo-query name="inventory">{"available":true}</kovo-query>',
+      '<kovo-fragment target="cart-badge"><cart-badge>Ready</cart-badge>',
     ].join('\n');
     const applied = applyMutationResponseChunksToRuntime(
       readMutationResponseBodyChunks(body, onError),
@@ -98,17 +100,17 @@ describe('parsed mutation response wire apply', () => {
     expect(store.get('inventory')).toEqual({ available: true });
     expect(onError).toHaveBeenCalledTimes(2);
     expect(onError.mock.calls.map(([error]) => String(error.message))).toEqual([
-      expect.stringContaining('Malformed JSON in fw-query cart'),
-      expect.stringContaining('Malformed fw-fragment chunk'),
+      expect.stringContaining('Malformed JSON in kovo-query cart'),
+      expect.stringContaining('Malformed kovo-fragment chunk'),
     ]);
   });
 
   it('skips malformed mutation query chunks and continues applying valid chunks', () => {
     const store = createQueryStore();
     const body = [
-      '<fw-query name="cart">{</fw-query>',
-      '<fw-query name="inventory">{"available":true}</fw-query>',
-      '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
+      '<kovo-query name="cart">{</kovo-query>',
+      '<kovo-query name="inventory">{"available":true}</kovo-query>',
+      '<kovo-fragment target="cart-badge"><cart-badge>Ready</cart-badge></kovo-fragment>',
     ].join('\n');
     const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       store,
@@ -122,12 +124,12 @@ describe('parsed mutation response wire apply', () => {
     });
   });
 
-  it('keeps nested fw-fragment children inside their parent fragment chunk', () => {
+  it('keeps nested kovo-fragment children inside their parent fragment chunk', () => {
     const store = createQueryStore();
     const body = [
-      '<fw-fragment target="cart-badge">',
-      '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
-      '</fw-fragment>',
+      '<kovo-fragment target="cart-badge">',
+      '<cart-badge><span>1</span><kovo-fragment target="nested"><span>nested</span></kovo-fragment></cart-badge>',
+      '</kovo-fragment>',
     ].join('');
     const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       store,
@@ -136,7 +138,7 @@ describe('parsed mutation response wire apply', () => {
     expect(applied).toEqual({
       fragments: [
         {
-          html: '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+          html: '<cart-badge><span>1</span><kovo-fragment target="nested"><span>nested</span></kovo-fragment></cart-badge>',
           target: 'cart-badge',
         },
       ],

@@ -13,13 +13,13 @@ properties in CI:
   renaming a route path is a compile error at every consumer.
 - **Interactivity is declared, not shipped.** The popover costs zero JavaScript; the island's
   handler is a named export the markup points at, loaded on first interaction.
-- **Data is declared once.** Queries own their read sets; `fw-deps` and `data-bind` are derived
+- **Data is declared once.** Queries own their read sets; `kovo-deps` and `data-bind` are derived
   stamps; the page ships each query value exactly once.
 - **Writes are schema-validated, transactional, CSRF-protected POSTs** whose no-JS form is the
   contract and whose enhanced wire is readable in the Network panel.
 - **Invalidation is derived from declared touches**, optimism is exhaustiveness-checked per
   invalidated query, and the prediction is property-tested against the real handler.
-- **The behavior surface is machine-checkable:** `fw check` is green, `fw explain` answers intent
+- **The behavior surface is machine-checkable:** `kovo check` is green, `kovo explain` answers intent
   questions mechanically, observed writes are verified against declared touches, and the whole
   thing is pinned to the reference commerce app's committed graph.
 
@@ -29,13 +29,13 @@ No browser test exists anywhere in the tutorial.
 
 Every code block you read came from a checked-in step state under `site/tutorial/steps/`, and
 `node site/tutorial/run-steps.mjs` gates all of them in CI: each step typechecks against the
-workspace packages, every component compiles through `@jiso/compiler` with zero errors plus the
+workspace packages, every component compiles through `@kovojs/compiler` with zero errors plus the
 fixpoint and render-equivalence asserts, committed lowered IR is checked for staleness, and every
 step's tests run. An API change that breaks a chapter turns this tutorial red in the same PR.
 
-## Deploy a Jiso app
+## Deploy a Kovo app
 
-A Jiso app is a server-rendered MPA with a stateless v1 server: any Node host that can run the
+A Kovo app is a server-rendered MPA with a stateless v1 server: any Node host that can run the
 request handler can run the app, and the emitted client modules under `/c/` are immutable,
 versioned static assets. Old documents keep resolving their handler refs after a deploy, so a
 still-open tab never 404s on first interaction. Static export covers content-shaped sites — this
@@ -45,7 +45,7 @@ documentation site is one, exported with no server. The full hosting matrix live
 ## Where to go next
 
 - The [guides](/guides/) go deeper on each subsystem you touched — queries, mutations, optimistic
-  updates, streaming, testing, styling, and reading `fw check` output.
+  updates, streaming, testing, styling, and reading `kovo check` output.
 - [Compiler internals](/guides/compiler-internals/) is the home for "what does my TSX compile
   to", with real captured lowerings.
 - The [specification](/spec/) is the normative source for every behavior this tutorial taught.

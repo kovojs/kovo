@@ -9,19 +9,19 @@ describe('rootless deferred stream runtime apply', () => {
     const onError = vi.fn();
     const beforeApplyQueries = vi.fn();
 
-    // SPEC.md §9.1: deferred stream parts carry the same fw-query/fw-fragment
+    // SPEC.md §9.1: deferred stream parts carry the same kovo-query/kovo-fragment
     // mutation vocabulary, so rootless stream apply still uses the mutation
     // response parser and decoded runtime apply primitive.
     const applied = applyDeferredStreamResponseToRuntime({
       beforeApplyQueries,
       body: [
-        '--jiso-boundary',
-        '<fw-query name="cart">{</fw-query>',
-        '<fw-query name="inventory">{"available":true}</fw-query>',
-        '<fw-fragment target="inventory"><section>ready</section></fw-fragment>',
-        '--jiso-boundary',
-        '<fw-query name="reviews">{"total":2}</fw-query>',
-        '--jiso-boundary--',
+        '--kovo-boundary',
+        '<kovo-query name="cart">{</kovo-query>',
+        '<kovo-query name="inventory">{"available":true}</kovo-query>',
+        '<kovo-fragment target="inventory"><section>ready</section></kovo-fragment>',
+        '--kovo-boundary',
+        '<kovo-query name="reviews">{"total":2}</kovo-query>',
+        '--kovo-boundary--',
       ].join('\n'),
       onError,
       root: undefined,
@@ -51,7 +51,9 @@ describe('rootless deferred stream runtime apply', () => {
     expect(beforeApplyQueries).toHaveBeenNthCalledWith(2, [
       { name: 'reviews', value: { total: 2 } },
     ]);
-    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed JSON in kovo-query cart',
+    );
   });
 
   it('keeps rootless deferred streams on the hook-aware runtime apply path', () => {
@@ -69,13 +71,13 @@ describe('rootless deferred stream runtime apply', () => {
       },
       beforeApplyQueries,
       body: [
-        '--jiso-boundary',
-        '<fw-query name="cart">{"count":1}</fw-query>',
-        '<fw-fragment target="cart-badge"><span>badge</span></fw-fragment>',
-        '--jiso-boundary',
-        '<fw-query name="cart" key="cart:primary">{"count":2}</fw-query>',
-        '<fw-fragment target="cart-total"><span>total</span></fw-fragment>',
-        '--jiso-boundary--',
+        '--kovo-boundary',
+        '<kovo-query name="cart">{"count":1}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><span>badge</span></kovo-fragment>',
+        '--kovo-boundary',
+        '<kovo-query name="cart" key="cart:primary">{"count":2}</kovo-query>',
+        '<kovo-fragment target="cart-total"><span>total</span></kovo-fragment>',
+        '--kovo-boundary--',
       ].join('\n'),
       morph,
       root: undefined,

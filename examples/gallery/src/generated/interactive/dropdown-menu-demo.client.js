@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   dropdownMenuFocusElement as _dropdownMenuFocusElement,
@@ -10,7 +10,7 @@ import {
   dropdownMenuTriggerClick as _dropdownMenuTriggerClick,
   dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown,
   dropdownMenuTypeahead as _dropdownMenuTypeahead,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryDropdownMenuDemo$button_click = handler((event, ctx) => {
   const result = _dropdownMenuTriggerClick(Object(event), {

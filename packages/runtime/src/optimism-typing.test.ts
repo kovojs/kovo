@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { form } from '@jiso/core';
+import { form } from '@kovojs/core';
 
 import { type OptimisticFor } from './optimism.js';
 
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface InvalidationSets {
     'cart/add': 'cart' | 'productGrid';
   }

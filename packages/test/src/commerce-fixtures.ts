@@ -1,15 +1,15 @@
-import { createJisoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './harness.js';
 import {
-  fwExplainListField,
-  fwExplainOptimisticStatuses,
-  fwExplainUpdateConsumerMap,
-  fwExplainUpdateConsumers,
-  type FwExplainResultLike,
-  type FwExplainUpdateConsumerFact,
-} from './fw-explain-fixtures.js';
-import { graphFragmentTargetForQuery, type JisoGraphFixture } from './graph-fixtures.js';
-import { fwResponseBodyFact } from './html-fragment.js';
-import type { QueryDefinition } from '@jiso/server';
+  kovoExplainListField,
+  kovoExplainOptimisticStatuses,
+  kovoExplainUpdateConsumerMap,
+  kovoExplainUpdateConsumers,
+  type KovoExplainResultLike,
+  type KovoExplainUpdateConsumerFact,
+} from './kovo-explain-fixtures.js';
+import { graphFragmentTargetForQuery, type KovoGraphFixture } from './graph-fixtures.js';
+import { kovoResponseBodyFact } from './html-fragment.js';
+import type { QueryDefinition } from '@kovojs/server';
 import type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
 
 export interface CommerceFixtureFile {
@@ -19,16 +19,16 @@ export interface CommerceFixtureFile {
   type: string;
 }
 
-export interface CommerceMutationQueryAcceptanceOptions<Db, Graph extends JisoGraphFixture> {
+export interface CommerceMutationQueryAcceptanceOptions<Db, Graph extends KovoGraphFixture> {
   addToCart: unknown;
   commerceCsrf: unknown;
   commerceCsrfInput: (input: unknown, request: any) => unknown;
   commerceTouchGraph: Record<string, unknown>;
   createDb: () => Db;
-  fwExplain: (
+  kovoExplain: (
     graph: Graph,
     options: { kind: 'mutation'; optimistic?: boolean; target: string },
-  ) => FwExplainResultLike;
+  ) => KovoExplainResultLike;
   graph: Graph;
   receiptFile?: CommerceFixtureFile;
   submitAddToCart: (
@@ -58,19 +58,19 @@ export interface CommerceMutationQueryAcceptanceFact {
     diagnostics: readonly DbVerificationDiagnostic[];
     invalidates: string[];
     result: Record<string, unknown>;
-    updateConsumers: FwExplainUpdateConsumerFact[];
+    updateConsumers: KovoExplainUpdateConsumerFact[];
     updateQueries: string[];
   };
 }
 
 export interface CommerceUpdateIntentOptions<Graph> {
-  fwExplain: (
+  kovoExplain: (
     graph: Graph,
     options:
       | { kind: 'mutation'; optimistic?: boolean; target: string }
       | { kind: 'page'; target: string }
       | { kind: 'query'; target: string },
-  ) => FwExplainResultLike;
+  ) => KovoExplainResultLike;
   graph: Graph;
   mutation: string;
   page: string;
@@ -130,7 +130,7 @@ export async function commerceDeclaredQueriesHarnessFact<Db, QueryName extends s
   // harness DB seam and keeps verifier diagnostics attached to each observed query.
   const db = options.createDb();
   await options.setupDb?.(db);
-  const harness = createJisoTestHarness({
+  const harness = createKovoTestHarness({
     db,
     touchGraph: {},
     ...(options.request === undefined ? {} : { request: options.request }),
@@ -168,21 +168,21 @@ export function commerceUpdateIntentFact<Graph>(
 ): CommerceUpdateIntentFact {
   // SPEC.md §10.4/§16.5: mutation update intent must mechanically cover every
   // query consumer affected on the page instead of relying on duplicated test logic.
-  const mutation = options.fwExplain(options.graph, {
+  const mutation = options.kovoExplain(options.graph, {
     kind: 'mutation',
     target: options.mutation,
   });
-  const page = options.fwExplain(options.graph, { kind: 'page', target: options.page });
-  const updateConsumers = fwExplainUpdateConsumerMap(mutation.output);
-  const pageQueries = fwExplainListField(page.output, 'queries');
+  const page = options.kovoExplain(options.graph, { kind: 'page', target: options.page });
+  const updateConsumers = kovoExplainUpdateConsumerMap(mutation.output);
+  const pageQueries = kovoExplainListField(page.output, 'queries');
   const componentConsumersByQuery: Record<string, string[]> = {};
   const updateConsumersByQuery: Record<string, string[]> = {};
   const missingComponentConsumers: string[] = [];
   const missingPageConsumers: string[] = [];
 
   for (const query of pageQueries) {
-    const queryExplain = options.fwExplain(options.graph, { kind: 'query', target: query });
-    const queryConsumers = fwExplainListField(queryExplain.output, 'consumers');
+    const queryExplain = options.kovoExplain(options.graph, { kind: 'query', target: query });
+    const queryConsumers = kovoExplainListField(queryExplain.output, 'consumers');
     const componentConsumers = queryConsumers.filter((consumer) =>
       consumer.startsWith('component:'),
     );
@@ -227,7 +227,7 @@ export async function commerceHarnessQueryFact<Db>(
     ...(options.request === undefined ? {} : { request: options.request }),
     ...(options.verification === undefined ? {} : { verification: options.verification }),
   };
-  const harness = createJisoTestHarness(harnessOptions);
+  const harness = createKovoTestHarness(harnessOptions);
   const result = await harness.query(options.query, options.input);
 
   return {
@@ -237,31 +237,31 @@ export async function commerceHarnessQueryFact<Db>(
   };
 }
 
-export async function commerceMutationQueryAcceptanceFact<Db, Graph extends JisoGraphFixture>(
+export async function commerceMutationQueryAcceptanceFact<Db, Graph extends KovoGraphFixture>(
   options: CommerceMutationQueryAcceptanceOptions<Db, Graph>,
 ): Promise<CommerceMutationQueryAcceptanceFact> {
   // SPEC.md §10.4/§11.2/§16.5: commerce mutation/query acceptance is proven
   // through public graph explanations, harness verification, and fragment wire facts.
-  const addToCartExplanation = options.fwExplain(options.graph, {
+  const addToCartExplanation = options.kovoExplain(options.graph, {
     kind: 'mutation',
     optimistic: true,
     target: 'cart/add',
   });
-  const uploadReceiptExplanation = options.fwExplain(options.graph, {
+  const uploadReceiptExplanation = options.kovoExplain(options.graph, {
     kind: 'mutation',
     optimistic: true,
     target: 'order/receipt',
   });
   const addToCartUpdateQueries = [
-    ...fwExplainUpdateConsumerMap(addToCartExplanation.output).keys(),
+    ...kovoExplainUpdateConsumerMap(addToCartExplanation.output).keys(),
   ];
   const uploadReceiptUpdateQueries = [
-    ...fwExplainUpdateConsumerMap(uploadReceiptExplanation.output).keys(),
+    ...kovoExplainUpdateConsumerMap(uploadReceiptExplanation.output).keys(),
   ];
-  const optimisticStatuses = fwExplainOptimisticStatuses(addToCartExplanation.output);
+  const optimisticStatuses = kovoExplainOptimisticStatuses(addToCartExplanation.output);
 
   const db = options.createDb();
-  const harness = createJisoTestHarness({
+  const harness = createKovoTestHarness({
     db,
     request: {
       session: { id: 's-commerce-acceptance', user: { id: 'u1' } },
@@ -280,7 +280,7 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Jiso
   };
   verifiedDb.transaction = (run) => run(verifiedDb);
 
-  const receiptHarness = createJisoTestHarness({
+  const receiptHarness = createKovoTestHarness({
     db: options.createDb(),
     request: {
       session: { id: 's-commerce-receipt', user: { id: 'u1' } },
@@ -324,13 +324,13 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Jiso
     { productId: 'p2', quantity: 1 },
     { db: verifiedDb, session: { id: 's-commerce-acceptance-2', user: { id: 'u1' } } },
     {
-      'FW-Fragment': 'true',
-      'FW-Targets': addToCartUpdateQueries
+      'Kovo-Fragment': 'true',
+      'Kovo-Targets': addToCartUpdateQueries
         .map((query) => graphFragmentTargetForQuery(options.graph, query))
         .join(','),
     },
   );
-  const responseFact = fwResponseBodyFact(response.body);
+  const responseFact = kovoResponseBodyFact(response.body);
 
   return {
     addToCart: {
@@ -353,9 +353,9 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Jiso
     optimisticStatuses,
     uploadReceipt: {
       diagnostics: receiptHarness.verificationDiagnostics(),
-      invalidates: fwExplainListField(uploadReceiptExplanation.output, 'invalidates'),
+      invalidates: kovoExplainListField(uploadReceiptExplanation.output, 'invalidates'),
       result: uploadReceiptResult as unknown as Record<string, unknown>,
-      updateConsumers: fwExplainUpdateConsumers(uploadReceiptExplanation.output),
+      updateConsumers: kovoExplainUpdateConsumers(uploadReceiptExplanation.output),
       updateQueries: uploadReceiptUpdateQueries,
     },
   };

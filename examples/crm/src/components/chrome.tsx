@@ -1,4 +1,4 @@
-/** @jsxImportSource @jiso/server */
+/** @jsxImportSource @kovojs/server */
 
 // Shared page chrome for the CRM example UI. The app-shell wraps each page()
 // return in the document <html>/<head> (with the stylesheet), so these helpers

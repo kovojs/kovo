@@ -1,17 +1,17 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   meterRootAttributes,
   meterValueState as _meterValueState,
   type MeterDataState,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/meter.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/meter.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
-// METER_CLASS is the styled gauge; the wrapper/label/button have no @jiso/ui
-// counterpart, so they use the @jiso/ui button base (packages/ui/src/button.tsx)
+// METER_CLASS is the styled gauge; the wrapper/label/button have no @kovojs/ui
+// counterpart, so they use the @kovojs/ui button base (packages/ui/src/button.tsx)
 // and sensible layout utilities.
 const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
 const METER_CLASS =
@@ -25,7 +25,7 @@ export interface GalleryMeterDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryMeterDemo = component('gallery-meter-demo', {
   state: () => ({ dataState: 'suboptimum' as MeterDataState, value: 72 }),
   render: (_queries: Record<string, never>, state: GalleryMeterDemoState) => {

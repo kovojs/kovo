@@ -65,7 +65,7 @@ export function hoverCardTriggerAttributes(
     ...(enabledContentId === undefined
       ? {}
       : {
-          'jiso-hover-card': enabledContentId,
+          'kovo-hover-card': enabledContentId,
         }),
   });
 }
@@ -100,7 +100,7 @@ export function setHoverCardOpen(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -116,7 +116,7 @@ export function hoverCardTriggerPointerEnter(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -132,7 +132,7 @@ export function hoverCardTriggerPointerLeave(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -148,7 +148,7 @@ export function hoverCardTriggerFocus(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -164,7 +164,7 @@ export function hoverCardTriggerBlur(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -180,7 +180,7 @@ export function hoverCardContentPointerEnter(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -196,7 +196,7 @@ export function hoverCardContentPointerLeave(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -212,7 +212,7 @@ export function hoverCardContentFocus(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -228,7 +228,7 @@ export function hoverCardContentBlur(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.

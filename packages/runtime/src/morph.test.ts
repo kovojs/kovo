@@ -31,12 +31,12 @@ describe('fragment morph runtime', () => {
 
   it('appends fragment chunks when the wire mode is append', () => {
     const root = new FakeMorphRoot();
-    root.targets.set('product-grid', new FakeMorphTarget('<article fw-key="p1"></article>'));
+    root.targets.set('product-grid', new FakeMorphTarget('<article kovo-key="p1"></article>'));
     const store = createQueryStore();
 
     const result = applyMutationResponseChunksToRuntime(
       readMutationResponseBodyChunks(
-        '<fw-fragment target="product-grid" mode="append"><article fw-key="p2"></article></fw-fragment>',
+        '<kovo-fragment target="product-grid" mode="append"><article kovo-key="p2"></article></kovo-fragment>',
       ),
       {
         root,
@@ -46,14 +46,14 @@ describe('fragment morph runtime', () => {
 
     expect(result.fragments).toEqual([
       {
-        html: '<article fw-key="p2"></article>',
+        html: '<article kovo-key="p2"></article>',
         mode: 'append',
         target: 'product-grid',
       },
     ]);
     expect(result.appliedFragments).toEqual(['product-grid']);
     expect(root.targets.get('product-grid')?.html).toBe(
-      '<article fw-key="p1"></article><article fw-key="p2"></article>',
+      '<article kovo-key="p1"></article><article kovo-key="p2"></article>',
     );
   });
 });
@@ -130,7 +130,7 @@ describe('structural morph runtime', () => {
 
     const result = morphStructuralTree(current, next);
 
-    // SPEC.md §4.8/§13.2: fw-key is the shared keyed identity contract for
+    // SPEC.md §4.8/§13.2: kovo-key is the shared keyed identity contract for
     // stamps, morph, and optimistic reordering.
     expect(result).toEqual(next);
     expect(result.children?.[0]).toBe(second);

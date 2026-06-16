@@ -172,7 +172,7 @@ export function toggleAlertDialog(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -194,7 +194,7 @@ export function alertDialogTriggerClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -216,7 +216,7 @@ export function alertDialogCancelClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -238,7 +238,7 @@ export function alertDialogActionClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -259,7 +259,7 @@ export function alertDialogCancel(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.

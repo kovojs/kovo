@@ -42,9 +42,9 @@ export const ProductCard = component('product-card', {
     });
 
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
-    // SPEC.md section 4.2: the native <img> host also receives the derived fw-c stamp.
+    // SPEC.md section 4.2: the native <img> host also receives the derived kovo-c stamp.
     expect(result.files[0]?.source).toContain(
-      '<img src="/p1.png" style="view-transition-name: product-p1-image" fw-c="product-card" />',
+      '<img src="/p1.png" style="view-transition-name: product-p1-image" kovo-c="product-card" />',
     );
     expect(result.files[2]?.source).toContain("'product-p1-image': unknown;");
   });
@@ -61,9 +61,9 @@ export const ProductCard = component('product-card', {
     const serverSource = result.files[0]?.source ?? '';
 
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
-    // SPEC.md section 4.2: the native <img> host also receives the derived fw-c stamp.
+    // SPEC.md section 4.2: the native <img> host also receives the derived kovo-c stamp.
     expect(serverSource).toContain(
-      '<img style="opacity: .8; view-transition-name: product-p1-image" src="/p1.png" fw-c="product-card" />',
+      '<img style="opacity: .8; view-transition-name: product-p1-image" src="/p1.png" kovo-c="product-card" />',
     );
     expect(serverSource.match(/\sstyle=/g)).toHaveLength(1);
     expect(serverSource).not.toContain('viewTransitionName=');
@@ -81,7 +81,7 @@ export const ProductCard = component('product-card', {
     const serverSource = result.files[0]?.source ?? '';
 
     expect(serverSource).toContain(
-      '<img alt="Product" style="opacity: .8; view-transition-name: product-p1-image" src="/p1.png" fw-c="product-card" />',
+      '<img alt="Product" style="opacity: .8; view-transition-name: product-p1-image" src="/p1.png" kovo-c="product-card" />',
     );
     expect(serverSource).not.toContain('viewTransitionName=');
   });
@@ -101,7 +101,7 @@ export const ProductCard = component('product-card', {
 
     expect(result.viewTransitions).toEqual([]);
     expect(serverSource).toContain(
-      '<img data-derive="product.ProductCard$img_style_derive" data-derive-attr="style" src="/p1.png" fw-c="product-card" fw-deps="product" />',
+      '<img data-derive="product.ProductCard$img_style_derive" data-derive-attr="style" src="/p1.png" kovo-c="product-card" kovo-deps="product" />',
     );
     expect(clientSource).toContain(
       'export const ProductCard$img_style_derive = derive(["product"], (product) => `view-transition-name: ${product.slug}`);',
@@ -111,7 +111,7 @@ export const ProductCard = component('product-card', {
     ]);
     expect(serverSource).not.toContain('viewTransitionName=');
     expect(serverSource).not.toContain('style="viewTransitionName');
-    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'FW311' }));
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
@@ -129,7 +129,7 @@ export const ProductCard = component('product-card', {
     const clientSource = result.files[1]?.source ?? '';
 
     expect(serverSource).toContain(
-      '<img style="opacity: .8" data-derive="product.ProductCard$img_style_derive" data-derive-attr="style" src="/p1.png" fw-c="product-card" fw-deps="product" />',
+      '<img style="opacity: .8" data-derive="product.ProductCard$img_style_derive" data-derive-attr="style" src="/p1.png" kovo-c="product-card" kovo-deps="product" />',
     );
     expect(clientSource).toContain(
       'export const ProductCard$img_style_derive = derive(["product"], (product) => `opacity: .8; view-transition-name: ${product.slug}`);',
@@ -138,7 +138,7 @@ export const ProductCard = component('product-card', {
     expect(result.queryUpdatePlans[0]?.stamps).toEqual([
       expect.objectContaining({ attr: 'style' }),
     ]);
-    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'FW311' }));
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
   });
 
   it('ignores view transition attribute text inside strings and comments', () => {
@@ -158,9 +158,9 @@ export const ProductCard = component('product-card', {
 
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
     expect(serverSource).toContain('const sample = \'<img viewTransitionName="not-real" />\'');
-    // SPEC.md section 4.2: the native <img> host also receives the derived fw-c stamp.
+    // SPEC.md section 4.2: the native <img> host also receives the derived kovo-c stamp.
     expect(serverSource).toContain(
-      '<img src="/p1.png" style="view-transition-name: product-p1-image" fw-c="product-card" />',
+      '<img src="/p1.png" style="view-transition-name: product-p1-image" kovo-c="product-card" />',
     );
     expect(serverSource).not.toContain('viewTransitionName="product-p1-image"');
     expect(() => assertFixpoint(result)).not.toThrow();

@@ -1,5 +1,5 @@
 import { inspect, isDeepStrictEqual } from 'node:util';
-import type { InferSchema, MutationDefinition, MutationResult, Schema } from '@jiso/server';
+import type { InferSchema, MutationDefinition, MutationResult, Schema } from '@kovojs/server';
 
 /** An expected mutation failure: a code, or a code with an expected payload. */
 export type MutationErrorExpectation<
@@ -85,7 +85,7 @@ export function assertMutationError<
  * @param options - The `predict`, `apply`, `cases`, and optional `shape` projection.
  * @returns A `PropertyTestResult` with the number of cases run.
  * @example
- * import { propertyTest } from '@jiso/test';
+ * import { propertyTest } from '@kovojs/test';
  *
  * type Cart = { count: number };
  *

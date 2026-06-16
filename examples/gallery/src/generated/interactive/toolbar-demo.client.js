@@ -1,7 +1,7 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
-import { toolbarKeyDown as _toolbarKeyDown } from '@jiso/headless-ui/primitives';
+import { toolbarKeyDown as _toolbarKeyDown } from '@kovojs/headless-ui/primitives';
 
 export const GalleryToolbarDemo$div_keydown = handler((event, ctx) => {
   const result = _toolbarKeyDown(Object(event), {

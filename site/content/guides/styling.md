@@ -6,9 +6,9 @@ order: 4
 
 # Styling with Tailwind
 
-You style a Jiso app with Tailwind, the way you'd style any Tailwind app — with one rule that earns
+You style a Kovo app with Tailwind, the way you'd style any Tailwind app — with one rule that earns
 its keep here: every class that can appear in served HTML has to be statically discoverable at build
-time. The reason is that Jiso produces HTML in places your browser build never runs: SSR pages,
+time. The reason is that Kovo produces HTML in places your browser build never runs: SSR pages,
 mutation fragments, and deferred streams. This guide shows how to keep classes discoverable, and how
 every render path declares the stylesheets it needs so nothing arrives unstyled.
 
@@ -24,8 +24,8 @@ The starter wires Tailwind through Vite+ and declares its sources in `src/styles
 @source inline("bg-emerald-50 text-emerald-700 border-emerald-200 bg-amber-50 text-amber-700 border-amber-200");
 
 @theme {
-  --color-jiso-ink: #17202a;
-  --color-jiso-accent: #0f8b8d;
+  --color-kovo-ink: #17202a;
+  --color-kovo-accent: #0f8b8d;
 }
 ```
 
@@ -38,11 +38,11 @@ The starter wires Tailwind through Vite+ and declares its sources in `src/styles
 ## Why discoverability matters here
 
 In an SPA, a missing utility class shows up the first time a component renders client-side, in
-development. In Jiso, HTML is produced three ways that never execute in your browser build:
+development. In Kovo, HTML is produced three ways that never execute in your browser build:
 
 1. **SSR pages** — the full-page render.
-2. **Mutation fragments** — `<fw-fragment>` chunks the server sends after a write.
-3. **Deferred streams** — `<fw-defer>` content that streams in after the shell.
+2. **Mutation fragments** — `<kovo-fragment>` chunks the server sends after a write.
+3. **Deferred streams** — `<kovo-defer>` content that streams in after the shell.
 
 All three reference the same generated stylesheet. If a class only ever appears in a fragment the
 server renders after a mutation — an error state, say — and Tailwind never saw it, the fragment
@@ -54,7 +54,7 @@ scan.
 ```tsx
 function ProductCard({ item }: { item: { id: string; stock: number } }) {
   return (
-    <article fw-key={item.id} class="rounded border border-slate-200 bg-white p-4">
+    <article kovo-key={item.id} class="rounded border border-slate-200 bg-white p-4">
       <h2 class="font-semibold">{item.id}</h2>
       <p>{item.stock} in stock</p>
     </article>
@@ -88,18 +88,18 @@ coverage — declare it once in the safelist:
 
 The safelist is greppable, reviewed, and lives next to the `@theme` tokens.
 
-This fits how Jiso binds dynamic state in the first place: prefer a `data-state` attribute or a
+This fits how Kovo binds dynamic state in the first place: prefer a `data-state` attribute or a
 `[hidden]` toggle driven by a derive, and style states with CSS selectors, instead of swapping class
 strings at runtime. The update-plan grammar pushes you toward this anyway.
 
 ## Declare stylesheets for pages
 
-Jiso owns the framework CSS contract. An emitted page lists its required stylesheet assets once, and
+Kovo owns the framework CSS contract. An emitted page lists its required stylesheet assets once, and
 the same hints serve full-page renders, mutation fragments, and deferred fragments. The commerce app
 declares its stylesheets as part of its page hints:
 
 ```ts
-import { renderPageHints } from '@jiso/server';
+import { renderPageHints } from '@kovojs/server';
 
 export const commerceStylesheets = ['/assets/tailwind.css'] as const;
 
@@ -136,11 +136,11 @@ return renderMutationEndpointResponse(addToCart, {
 Deferred chunks do the same — this is the commerce app's streamed product grid:
 
 ```ts
-import { renderDeferredStream } from '@jiso/server';
+import { renderDeferredStream } from '@kovojs/server';
 
 renderDeferredStream({
   shell:
-    '<!doctype html><html><body><main><fw-defer target="product-grid" state="pending"></fw-defer>',
+    '<!doctype html><html><body><main><kovo-defer target="product-grid" state="pending"></kovo-defer>',
   chunks: [
     {
       queries: [{ name: 'productGrid', value: productGrid }],
@@ -160,10 +160,10 @@ renderDeferredStream({
 The streamed chunk arrives as a fragment whose first child is its stylesheet link:
 
 ```html
-<fw-fragment target="product-grid"
+<kovo-fragment target="product-grid"
   ><link rel="stylesheet" href="/assets/tailwind.css" />
-  <section fw-c="product-grid" fw-deps="product">…</section>
-</fw-fragment>
+  <section kovo-c="product-grid" kovo-deps="product">…</section>
+</kovo-fragment>
 ```
 
 Stylesheet assets are deduped by `href` within each response, in page order, and a re-referenced
@@ -175,7 +175,7 @@ exactly the assets a fragment response needs from a build manifest whose entries
 ## Co-located component CSS
 
 For component CSS that isn't Tailwind, the compiler extracts co-located rules, wraps them in
-`@scope` keyed to the component's host (the dashed tag or the `[fw-c=…]` stamp), donut-scopes nested
+`@scope` keyed to the component's host (the dashed tag or the `[kovo-c=…]` stamp), donut-scopes nested
 islands out, emits a tag-prefixed fallback for older engines, and dedupes assets in page order —
 preserving fragment-target metadata so late fragments can request their styles. Scoping comes from
 the compiler rather than shadow DOM, because shadow boundaries break IDREF wiring, form

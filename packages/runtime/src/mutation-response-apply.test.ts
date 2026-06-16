@@ -15,8 +15,8 @@ describe('decoded mutation response apply', () => {
 
     store.subscribe('cart', plan);
     const body = [
-      '<fw-query name="cart">{"count":3}</fw-query>',
-      '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
+      '<kovo-query name="cart">{"count":3}</kovo-query>',
+      '<kovo-fragment target="cart-badge"><cart-badge>3</cart-badge></kovo-fragment>',
     ].join('\n');
     const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       store,
@@ -41,8 +41,8 @@ describe('decoded mutation response apply', () => {
     store.subscribe('reviews', unkeyedPlan);
 
     const body = [
-      '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</fw-query>',
-      '<fw-query name="reviews" key="product:p2">{"items":[{"id":"r2"}]}</fw-query>',
+      '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</kovo-query>',
+      '<kovo-query name="reviews" key="product:p2">{"items":[{"id":"r2"}]}</kovo-query>',
     ].join('\n');
     applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       store,
@@ -99,8 +99,8 @@ describe('decoded mutation response apply', () => {
     const beforeApplyQueries = vi.fn();
 
     // SPEC.md §9.1: store-only mutation responses and runtime apply consume the
-    // same fw-query wire chunks, so interposed values must not drift by entrypoint.
-    const body = '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>';
+    // same kovo-query wire chunks, so interposed values must not drift by entrypoint.
+    const body = '<kovo-query name="cart" key="cart:c1">{"count":6}</kovo-query>';
     const applied = applyMutationResponseBodyToRuntime({
       applyQuery(query) {
         store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
@@ -125,8 +125,8 @@ describe('decoded mutation response apply', () => {
     // SPEC.md §9.1: mutation response bodies use one wire vocabulary, but
     // fragment morphing only belongs to runtime callers with an actual root.
     const body = [
-      '<fw-query name="cart">{"count":8}</fw-query>',
-      '<fw-fragment target="cart-badge"><cart-badge>8</cart-badge></fw-fragment>',
+      '<kovo-query name="cart">{"count":8}</kovo-query>',
+      '<kovo-fragment target="cart-badge"><cart-badge>8</cart-badge></kovo-fragment>',
     ].join('\n');
     const applied = applyMutationResponseBodyToRuntime({
       body,
@@ -160,8 +160,8 @@ describe('decoded mutation response apply', () => {
     // query-bound DOM from the shared mutation vocabulary without requiring a
     // morph root for returned fragments.
     const body = [
-      '<fw-query name="cart">{"count":9}</fw-query>',
-      '<fw-fragment target="cart-badge"><cart-badge>9</cart-badge></fw-fragment>',
+      '<kovo-query name="cart">{"count":9}</kovo-query>',
+      '<kovo-fragment target="cart-badge"><cart-badge>9</cart-badge></kovo-fragment>',
     ].join('\n');
     const applied = applyMutationResponseBodyToRuntime({
       body,
@@ -194,9 +194,9 @@ describe('decoded mutation response apply', () => {
         if ((query.value as { count: number }).count === 1) throw hookError;
       },
       body: [
-        '<fw-query name="cart">{"count":1}</fw-query>',
-        '<fw-query name="cart">{"count":2}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+        '<kovo-query name="cart">{"count":1}</kovo-query>',
+        '<kovo-query name="cart">{"count":2}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
       ].join(''),
       onError,
       root,

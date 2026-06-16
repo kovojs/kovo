@@ -3,7 +3,7 @@ import type {
   EndpointMethod,
   EndpointMount,
   WebhookVerifier,
-} from '@jiso/core';
+} from '@kovojs/core';
 import type { ChangeRecord } from './change-record.js';
 import type { Domain } from './domain.js';
 import {
@@ -138,7 +138,7 @@ export interface WebhookRunResult<Input = unknown, Value = unknown> {
  * @param definition - The `path`, `verify`, `input` schema, and `handler` (plus optional idempotency/transaction).
  * @returns A `WebhookDeclaration` (a verified `EndpointDeclaration`).
  * @example
- * import { domain, webhook, s } from '@jiso/server';
+ * import { domain, webhook, s } from '@kovojs/server';
  *
  * const order = domain('order');
  *
@@ -512,12 +512,12 @@ function webhookSuccessHeaders(
   return {
     'Content-Type': 'text/plain; charset=utf-8',
     ...webhookResponseHeaders(idem),
-    ...(changes.length === 0 ? {} : { 'FW-Changes': webhookChangeHeader(changes) }),
+    ...(changes.length === 0 ? {} : { 'Kovo-Changes': webhookChangeHeader(changes) }),
   };
 }
 
 function webhookResponseHeaders(idem: string | undefined): Record<string, string> {
-  return idem === undefined ? {} : { 'FW-Idem': idem };
+  return idem === undefined ? {} : { 'Kovo-Idem': idem };
 }
 
 function webhookChangeHeader(changes: readonly ChangeRecord[]): string {

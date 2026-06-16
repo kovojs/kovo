@@ -5,10 +5,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import * as serverAppShellClientModules from '@jiso/server/app-shell/client-modules';
-import * as serverAppShellCore from '@jiso/server/app-shell/core';
-import * as serverAppShellStaticExport from '@jiso/server/app-shell/static-export';
-import * as serverAppShellVite from '@jiso/server/app-shell/vite';
+import * as serverAppShellClientModules from '@kovojs/server/app-shell/client-modules';
+import * as serverAppShellCore from '@kovojs/server/app-shell/core';
+import * as serverAppShellStaticExport from '@kovojs/server/app-shell/static-export';
+import * as serverAppShellVite from '@kovojs/server/app-shell/vite';
 import { describe, expect, it } from 'vitest';
 
 import { createSiteDistApp, siteDocumentRouteEntries } from './app-shell.mjs';
@@ -19,7 +19,7 @@ const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 
 describe('site app-shell export adoption', () => {
   it('serves generated docs HTML through the app shell before static export copies modules', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-site-export-'));
     const distDir = path.join(root, 'dist-source');
     const publicDir = path.join(root, 'public');
     const outDir = path.join(root, 'dist-out');
@@ -52,7 +52,7 @@ describe('site app-shell export adoption', () => {
       '<!doctype html><html><body><h1>Stale</h1></body></html>',
     );
     await writeFile(
-      path.join(distDir, '.jiso-site-routes.json'),
+      path.join(distDir, '.kovo-site-routes.json'),
       `${JSON.stringify({ routes: ['/docs/installation/', '/'] })}\n`,
     );
     await writeFile(
@@ -74,9 +74,9 @@ describe('site app-shell export adoption', () => {
       '/',
     ]);
     const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
-    expect(serverAppShellCore.isJisoApp(app)).toBe(true);
+    expect(serverAppShellCore.isKovoApp(app)).toBe(true);
     expect(
-      serverAppShellCore.isJisoApp({
+      serverAppShellCore.isKovoApp({
         ...app,
         clientModules: {
           resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
@@ -84,14 +84,14 @@ describe('site app-shell export adoption', () => {
       }),
     ).toBe(false);
     const handler = serverApi.createRequestHandler(app);
-    const shellResponse = await handler(new Request('https://jiso.test/'));
+    const shellResponse = await handler(new Request('https://kovo.test/'));
     const shellHtml = await shellResponse.text();
     const searchModuleHref = shellHtml.match(/\/c\/search\.js\?v=site-r7-[a-f0-9]+/)?.[0];
     const themeModuleHref = shellHtml.match(/\/c\/theme\.js\?v=site-r7-[a-f0-9]+/)?.[0];
     const codeModuleHref = shellHtml.match(/\/c\/code\.js\?v=site-r7-[a-f0-9]+/)?.[0];
 
     expect(shellResponse.status).toBe(200);
-    await expect(handler(new Request('https://jiso.test/stale'))).resolves.toMatchObject({
+    await expect(handler(new Request('https://kovo.test/stale'))).resolves.toMatchObject({
       status: 404,
     });
     expect(shellHtml).not.toContain('<!doctype html><html lang=');
@@ -106,7 +106,7 @@ describe('site app-shell export adoption', () => {
     expect(shellHtml).toContain('Docs mention /c/theme.js as a static-host path.');
     expect(shellHtml).toContain('on:click="&#47;c/example-only.js#copy"');
     await expect(
-      handler(new Request(`https://jiso.test${searchModuleHref}`)).then((response) =>
+      handler(new Request(`https://kovo.test${searchModuleHref}`)).then((response) =>
         response.text(),
       ),
     ).resolves.toBe('export function open() { document.body.dataset.search = "open"; }\n');
@@ -156,7 +156,7 @@ describe('site app-shell export adoption', () => {
   });
 
   it('serves folded gallery client modules with concrete static support imports', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-gallery-modules-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-site-export-gallery-modules-'));
     const distDir = path.join(root, 'dist-source');
     const publicDir = path.join(root, 'public');
     const outDir = path.join(root, 'dist-out');
@@ -167,7 +167,7 @@ describe('site app-shell export adoption', () => {
       path.join(distDir, 'gallery', 'components', 'toggle', 'index.html'),
       [
         '<!doctype html><html><head>',
-        '<link rel="modulepreload" href="/c/examples/gallery/src/generated/jiso-runtime.client.js">',
+        '<link rel="modulepreload" href="/c/examples/gallery/src/generated/kovo-runtime.client.js">',
         '<link rel="modulepreload" href="/c/packages/headless-ui/src/primitives/index.js">',
         '<link rel="modulepreload" href="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js">',
         '</head><body>',
@@ -179,11 +179,11 @@ describe('site app-shell export adoption', () => {
     const serverApi = { ...serverAppShellClientModules, ...serverAppShellCore };
     const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
     const handler = serverApi.createRequestHandler(app);
-    const response = await handler(new Request('https://jiso.test/gallery/components/toggle'));
+    const response = await handler(new Request('https://kovo.test/gallery/components/toggle'));
     const html = await response.text();
     const runtimeHref =
       html.match(
-        /\/c\/examples\/gallery\/src\/generated\/jiso-runtime\.client\.js\?v=[a-f0-9]+/,
+        /\/c\/examples\/gallery\/src\/generated\/kovo-runtime\.client\.js\?v=[a-f0-9]+/,
       )?.[0] ?? '';
     const primitivesHref =
       html.match(/\/c\/packages\/headless-ui\/src\/primitives\/index\.js\?v=[a-f0-9]+/)?.[0] ?? '';
@@ -201,14 +201,14 @@ describe('site app-shell export adoption', () => {
     expect(html).toContain(`<link rel="modulepreload" href="${toggleHref}">`);
     expect(html).toContain(`on:click="${toggleHref}#GalleryToggleDemo$button_click"`);
 
-    const toggleModule = await handler(new Request(`https://jiso.test${toggleHref}`)).then(
+    const toggleModule = await handler(new Request(`https://kovo.test${toggleHref}`)).then(
       (moduleResponse) => moduleResponse.text(),
     );
-    const primitivesModule = await handler(new Request(`https://jiso.test${primitivesHref}`)).then(
+    const primitivesModule = await handler(new Request(`https://kovo.test${primitivesHref}`)).then(
       (moduleResponse) => moduleResponse.text(),
     );
-    expect(toggleModule).not.toContain('@jiso/runtime');
-    expect(toggleModule).not.toContain('@jiso/headless-ui/primitives');
+    expect(toggleModule).not.toContain('@kovojs/runtime');
+    expect(toggleModule).not.toContain('@kovojs/headless-ui/primitives');
     expect(toggleModule).toContain(`from '${runtimeHref}';`);
     expect(toggleModule).toContain(`from '${primitivesHref}';`);
     expect(primitivesModule).toContain("from './toggle.js';");
@@ -231,12 +231,12 @@ describe('site app-shell export adoption', () => {
     expect(result.clientModules.map((artifact) => artifact.path)).toContain(
       '/c/examples/gallery/src/generated/interactive/toggle-demo.client.js',
     );
-    expect(exportedToggleModule).not.toContain('@jiso/runtime');
-    expect(exportedToggleModule).not.toContain('@jiso/headless-ui/primitives');
+    expect(exportedToggleModule).not.toContain('@kovojs/runtime');
+    expect(exportedToggleModule).not.toContain('@kovojs/headless-ui/primitives');
   });
 
   it('exports docs HTML when the public client module directory is absent', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-no-client-modules-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-site-export-no-client-modules-'));
     const distDir = path.join(root, 'dist-source');
     const publicDir = path.join(root, 'public');
     const outDir = path.join(root, 'dist-out');
@@ -251,7 +251,7 @@ describe('site app-shell export adoption', () => {
       '<!doctype html><html><body><h1>Installation</h1></body></html>',
     );
     await writeFile(
-      path.join(distDir, '.jiso-site-routes.json'),
+      path.join(distDir, '.kovo-site-routes.json'),
       `${JSON.stringify({ routes: ['/', '/docs/installation'] })}\n`,
     );
 
@@ -273,7 +273,7 @@ describe('site app-shell export adoption', () => {
   });
 
   it('rejects incomplete server APIs before docs routes bind to the app-shell boundary', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-server-api-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-site-export-server-api-'));
     const distDir = path.join(root, 'dist-source');
     const publicDir = path.join(root, 'public');
 
@@ -293,12 +293,12 @@ describe('site app-shell export adoption', () => {
         },
       }),
     ).rejects.toThrow(
-      'site app shell: server API must provide focused @jiso/server app-shell authoring exports. Missing exports: createMemoryVersionedClientModuleRegistry, respond. SPEC §9.5 docs export must replay through createApp(), route(), respond(), and the client-module registry.',
+      'site app shell: server API must provide focused @kovojs/server app-shell authoring exports. Missing exports: createMemoryVersionedClientModuleRegistry, respond. SPEC §9.5 docs export must replay through createApp(), route(), respond(), and the client-module registry.',
     );
   });
 
   it('loads the docs app shell and server package through Vite SSR for export', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-source-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-site-export-source-'));
     const cssDistDir = path.join(root, 'dist-css');
     const distDir = path.join(root, 'dist-source');
     const publicDir = path.join(root, 'public');
@@ -332,7 +332,7 @@ describe('site app-shell export adoption', () => {
       '<!doctype html><html><body><h1>Installation</h1></body></html>',
     );
     await writeFile(
-      path.join(distDir, '.jiso-site-routes.json'),
+      path.join(distDir, '.kovo-site-routes.json'),
       `${JSON.stringify({ routes: ['/docs/installation/', '/'] })}\n`,
     );
     await writeFile(
@@ -346,37 +346,37 @@ describe('site app-shell export adoption', () => {
         async close() {},
         async ssrLoadModule(id) {
           loadedModuleIds.push(id);
-          if (id === '@jiso/server/app-shell/client-modules') {
+          if (id === '@kovojs/server/app-shell/client-modules') {
             return serverAppShellClientModules;
           }
-          if (id === '@jiso/server/app-shell/core') {
+          if (id === '@kovojs/server/app-shell/core') {
             return serverAppShellCore;
           }
-          if (id === '@jiso/server/app-shell/static-export') {
+          if (id === '@kovojs/server/app-shell/static-export') {
             return serverAppShellStaticExport;
           }
-          if (id === '@jiso/server/app-shell/vite') {
+          if (id === '@kovojs/server/app-shell/vite') {
             return {
               ...serverAppShellVite,
-              async jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile, options) {
+              async kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile, options) {
                 stylesheetManifestFiles.push(manifestFile);
-                return await serverAppShellVite.jisoAppShellViteManifestStylesheetHrefFromFile(
+                return await serverAppShellVite.kovoAppShellViteManifestStylesheetHrefFromFile(
                   manifestFile,
                   options,
                 );
               },
-              async exportJisoAppShellViteBuildWithManifestFromManifestFile(options) {
+              async exportKovoAppShellViteBuildWithManifestFromManifestFile(options) {
                 combinedExportManifestFiles.push(options.manifestFile);
-                return await serverAppShellVite.exportJisoAppShellViteBuildWithManifestFromManifestFile(
+                return await serverAppShellVite.exportKovoAppShellViteBuildWithManifestFromManifestFile(
                   options,
                 );
               },
             };
           }
-          if (id === '@jiso/server/app-shell') {
+          if (id === '@kovojs/server/app-shell') {
             throw new Error('docs export must load focused app-shell subpaths');
           }
-          if (id === '@jiso/server') {
+          if (id === '@kovojs/server') {
             throw new Error('docs export must not load the root server package');
           }
           if (id === '/scripts/app-shell.mjs') return { createSiteDistApp };
@@ -390,24 +390,24 @@ describe('site app-shell export adoption', () => {
 
     expect(exportScript).toContain('formatStaticExportDiagnostics');
     expect(exportScript).toContain('isStaticExportDiagnosticError');
-    expect(exportScript).toContain('exportJisoAppShellViteBuildWithManifestFromManifestFile');
-    expect(exportScript).toContain('jisoAppShellViteManifestStylesheetHrefFromFile');
+    expect(exportScript).toContain('exportKovoAppShellViteBuildWithManifestFromManifestFile');
+    expect(exportScript).toContain('kovoAppShellViteManifestStylesheetHrefFromFile');
     expect(exportScript).not.toContain('assertStaticExportManifestMatchesResult');
     expect(exportScript).not.toContain(
-      'staticExportManifestForJisoAppShellViteBuildFromManifestFile',
+      'staticExportManifestForKovoAppShellViteBuildFromManifestFile',
     );
     expect(exportScript).not.toContain('function formatStaticExportDiagnostic');
     expect(exportScript).not.toContain('function isStaticExportDiagnostic');
-    expect(exportScript).not.toContain('jisoAppShellViteManifestStylesheetHrefsFromFile');
+    expect(exportScript).not.toContain('kovoAppShellViteManifestStylesheetHrefsFromFile');
     await expect(
       readFile(path.join(siteRoot, 'scripts/app-shell.mjs'), 'utf8'),
     ).resolves.not.toContain('api/app-shell/index.mjs');
     expect(loadedModuleIds).toEqual([
       '/scripts/app-shell.mjs',
-      '@jiso/server/app-shell/client-modules',
-      '@jiso/server/app-shell/core',
-      '@jiso/server/app-shell/static-export',
-      '@jiso/server/app-shell/vite',
+      '@kovojs/server/app-shell/client-modules',
+      '@kovojs/server/app-shell/core',
+      '@kovojs/server/app-shell/static-export',
+      '@kovojs/server/app-shell/vite',
     ]);
     expect(stylesheetManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
     expect(combinedExportManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
@@ -430,7 +430,7 @@ describe('site app-shell export adoption', () => {
   });
 
   it('runs the docs site export command against the shell-backed static output', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-command-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-site-export-command-'));
     const cssDistDir = path.join(root, 'dist-css');
     const distDir = path.join(root, 'dist-source');
     const publicDir = path.join(root, 'public');
@@ -460,7 +460,7 @@ describe('site app-shell export adoption', () => {
       '<!doctype html><html><body><h1>Installation</h1></body></html>',
     );
     await writeFile(
-      path.join(distDir, '.jiso-site-routes.json'),
+      path.join(distDir, '.kovo-site-routes.json'),
       `${JSON.stringify({ routes: ['/docs/installation/', '/'] })}\n`,
     );
     await writeFile(
@@ -517,14 +517,14 @@ describe('site app-shell export adoption', () => {
   });
 
   it('fails docs route-manifest mistakes before app-shell export replay', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-manifest-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-site-export-manifest-'));
     const distDir = path.join(root, 'dist-source');
     const publicDir = path.join(root, 'public');
 
     await mkdir(distDir, { recursive: true });
     await mkdir(path.join(publicDir, 'c'), { recursive: true });
     await writeFile(
-      path.join(distDir, '.jiso-site-routes.json'),
+      path.join(distDir, '.kovo-site-routes.json'),
       `${JSON.stringify({ routes: ['/', '/missing'] })}\n`,
     );
     await writeFile(
@@ -533,7 +533,7 @@ describe('site app-shell export adoption', () => {
     );
 
     expect(() => siteDocumentRouteEntries(distDir)).toThrow(
-      ".jiso-site-routes.json declares '/missing'",
+      ".kovo-site-routes.json declares '/missing'",
     );
     await expect(
       createSiteDistApp({
@@ -541,6 +541,6 @@ describe('site app-shell export adoption', () => {
         publicDir,
         server: { ...serverAppShellClientModules, ...serverAppShellCore },
       }),
-    ).rejects.toThrow(".jiso-site-routes.json declares '/missing'");
+    ).rejects.toThrow(".kovo-site-routes.json declares '/missing'");
   });
 });

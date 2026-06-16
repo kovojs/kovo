@@ -7,7 +7,7 @@ This is a spike artifact, not the `webhook()` primitive implementation. It model
 1. Capture the request body once as raw bytes.
 2. Verify `stripe-signature` over those exact bytes with `stripeSignature()`.
 3. Parse the provider payload loosely only after verification.
-4. Look up replay by provider event id in the existing FW-Idem store.
+4. Look up replay by provider event id in the existing Kovo-Idem store.
 5. Run the handler in a transaction-shaped context.
 6. Emit the unified change record after commit.
 7. Commit the provider event id response so redelivery replays without re-running the handler.
@@ -22,6 +22,6 @@ This is a spike artifact, not the `webhook()` primitive implementation. It model
 
 ## Caveats
 
-- This does not add the `webhook()` API, compiler extraction, `fw explain endpoint <name>` detail output, or static FW330 enforcement.
+- This does not add the `webhook()` API, compiler extraction, `kovo explain endpoint <name>` detail output, or static KV330 enforcement.
 - The raw-body proof is bounded to a single in-memory byte capture. It rules out accidental double consumption/re-serialization for webhook dispatch, but it is not a streaming HMAC implementation.
 - The test uses an in-memory replay store. A production provider-event store should use the same reserve/commit semantics with a durable unique key on `(scope, event_id)`.

@@ -437,7 +437,7 @@ export function autocompleteMove(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -463,7 +463,7 @@ export function autocompleteInput(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -484,7 +484,7 @@ export function autocompleteOptionClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.

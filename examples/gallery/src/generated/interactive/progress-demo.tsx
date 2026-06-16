@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/progress-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/progress-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryProgressDemo$progress_aria_valuetext_derive = derive(['state'], (state: any) =>
   state.value === null ? 'Upload pending' : `${state.value} percent uploaded`,
@@ -18,15 +18,15 @@ export const GalleryProgressDemo$output_text_derive = derive(['state'], (state: 
   state.value === null ? 'pending' : `${state.value}%`,
 );
 
-import { component } from '@jiso/core';
-import { progressRootAttributes } from '@jiso/headless-ui/primitives';
+import { component } from '@kovojs/core';
+import { progressRootAttributes } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/progress.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/progress.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
-// PROGRESS_CLASS is the styled bar; the wrapper/label/buttons have no @jiso/ui
-// counterpart, so they use the @jiso/ui button base (packages/ui/src/button.tsx)
+// PROGRESS_CLASS is the styled bar; the wrapper/label/buttons have no @kovojs/ui
+// counterpart, so they use the @kovojs/ui button base (packages/ui/src/button.tsx)
 // and sensible layout utilities.
 const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
 const PROGRESS_CLASS =
@@ -39,7 +39,7 @@ export interface GalleryProgressDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryProgressDemo = component('gallery-progress-demo', {
   state: () => ({ value: 40 }),
   render: (_queries: Record<string, never>, state: GalleryProgressDemoState) => {
@@ -49,8 +49,8 @@ export const GalleryProgressDemo = component('gallery-progress-demo', {
       <section
         class={ROOT_CLASS}
         data-gallery-interactive="progress"
-        fw-c="gallery-progress-demo"
-        fw-state='{"value":40}'
+        kovo-c="gallery-progress-demo"
+        kovo-state='{"value":40}'
       >
         <label for="gallery-progress-value">Upload progress</label>
         <progress
@@ -58,37 +58,37 @@ export const GalleryProgressDemo = component('gallery-progress-demo', {
           aria-valuetext={
             state.value === null ? 'Upload pending' : `${state.value} percent uploaded`
           }
-          data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=76c68ca6#GalleryProgressDemo$progress_aria_valuetext_derive"
+          data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_aria_valuetext_derive"
           class={PROGRESS_CLASS}
           data-state={
             state.value === null ? 'indeterminate' : state.value === 100 ? 'complete' : 'loading'
           }
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=76c68ca6#GalleryProgressDemo$progress_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_data_state_derive"
           data-value={state.value === null ? undefined : String(state.value)}
-          data-bind:data-value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=76c68ca6#GalleryProgressDemo$progress_data_value_derive"
+          data-bind:data-value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_data_value_derive"
           id="gallery-progress-value"
           value={state.value === null ? undefined : state.value}
-          data-bind:value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=76c68ca6#GalleryProgressDemo$progress_value_derive"
+          data-bind:value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_value_derive"
         />
         <div class="inline-flex gap-2">
           <button
             type="button"
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=76c68ca6#GalleryProgressDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$button_click"
           >
             Complete upload
           </button>
           <button
             type="button"
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=76c68ca6#GalleryProgressDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$button_click_2"
           >
             Mark pending
           </button>
         </div>
         <output
           data-demo-state="progress-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=76c68ca6#GalleryProgressDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$output_text_derive"
         >
           {state.value === null ? 'pending' : `${state.value}%`}
         </output>

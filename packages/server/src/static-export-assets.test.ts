@@ -33,10 +33,10 @@ describe('server static export', () => {
         ],
       }),
     ).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining('Static asset sources must be filesystem paths'),
           routePath: '/assets/app.css',
         },
@@ -46,8 +46,8 @@ describe('server static export', () => {
   });
 
   it('copies configured static assets with exact bytes and represented headers', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
-    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-assets-'));
     try {
       const cssSource = path.join(sourceDir, 'app.css');
       const iconSource = path.join(sourceDir, 'icon.bin');
@@ -149,10 +149,10 @@ describe('server static export', () => {
         ],
       }),
     ).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining(
             "static asset '/assets/app.css' because it conflicts with static asset '/assets/app.css'",
           ),
@@ -163,8 +163,8 @@ describe('server static export', () => {
   });
 
   it('rejects unsafe static asset output paths before copying', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
-    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-assets-'));
     try {
       const source = path.join(sourceDir, 'app.css');
       await writeFile(source, 'body {}\n', 'utf8');
@@ -178,10 +178,10 @@ describe('server static export', () => {
           outDir,
         }),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining('unsafe static asset path segment'),
             routePath: '%2e%2e',
           },
@@ -195,8 +195,8 @@ describe('server static export', () => {
   });
 
   it('rejects static asset output conflicts with generated export files', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
-    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-assets-'));
     try {
       const source = path.join(sourceDir, 'index.html');
       await writeFile(source, '<p>asset</p>', 'utf8');
@@ -210,10 +210,10 @@ describe('server static export', () => {
           outDir,
         }),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining(
               "static asset '/index.html' because it conflicts with route document '/index.html'",
             ),
@@ -229,8 +229,8 @@ describe('server static export', () => {
   });
 
   it('rejects duplicate static asset output paths', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
-    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-assets-'));
     try {
       const firstSource = path.join(sourceDir, 'first.css');
       const secondSource = path.join(sourceDir, 'second.css');
@@ -249,10 +249,10 @@ describe('server static export', () => {
           outDir,
         }),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining(
               "static asset '/assets/app.css' because it conflicts with static asset '/assets/app.css'",
             ),
@@ -268,8 +268,8 @@ describe('server static export', () => {
   });
 
   it('rejects unreadable static asset sources before writing generated files', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
-    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-assets-'));
     try {
       const missingSource = path.join(sourceDir, 'missing.css');
       const app = createApp({
@@ -282,10 +282,10 @@ describe('server static export', () => {
           outDir,
         }),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining('is not a readable file'),
             routePath: '/assets/missing.css',
           },

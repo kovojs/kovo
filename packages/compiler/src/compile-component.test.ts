@@ -5,7 +5,7 @@ import { renderEquivalenceCheck } from './emit/server.js';
 import { compileFixture } from './test-support.js';
 
 const cartBadgeSource = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
@@ -64,7 +64,7 @@ describe('compileComponentModule', () => {
     const result = compileFixture({
       fileName: 'components/cart/cart-badge.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
@@ -86,12 +86,12 @@ export const CartBadge = component('cart-badge', {
     ]);
     expect(css?.source).toBe(
       [
-        '/* @jiso-ir */',
-        '/* @jiso-scope-fallback */',
-        'cart-badge button:not([fw-c]):not([fw-c] *) { color: teal; }',
-        'cart-badge .count:not([fw-c]):not([fw-c] *) { font-weight: 700; }',
+        '/* @kovojs-ir */',
+        '/* @kovojs-scope-fallback */',
+        'cart-badge button:not([kovo-c]):not([kovo-c] *) { color: teal; }',
+        'cart-badge .count:not([kovo-c]):not([kovo-c] *) { font-weight: 700; }',
         '',
-        '@scope (cart-badge) to (:scope [fw-c]) {',
+        '@scope (cart-badge) to (:scope [kovo-c]) {',
         '  button { color: teal; }',
         '      .count { font-weight: 700; }',
         '}',
@@ -101,7 +101,7 @@ export const CartBadge = component('cart-badge', {
     expect(result.cssAssets).toEqual([
       {
         componentName: 'CartBadge',
-        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [fw-c])'),
+        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
         fragmentTargets: ['cart-badge'],
         href: '/assets/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
@@ -148,7 +148,7 @@ export const CartBadge = component('cart-badge', {
   it('executes generated renderSource for render-equivalence checks', () => {
     const expected = '<cart-badge>u0032</cart-badge>';
     const executableSource = [
-      '// @jiso-ir',
+      '// @kovojs-ir',
       'function renderSource() {',
       '  return `<cart-badge>\\u0032</cart-badge>`;',
       '}',
@@ -169,26 +169,26 @@ export const CartBadge = component('cart-badge', {
     });
   });
 
-  it('scopes native-host component CSS to the fw-c identity stamp', () => {
+  it('scopes native-host component CSS to the kovo-c identity stamp', () => {
     const result = compileFixture({
       fileName: 'components/cart/cart-row.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartRow = component('cart-row', {
   styles: \`
     td { padding: 0.5rem; }
   \`,
-  render: () => <tr fw-c="cart-row"><td>p1</td></tr>,
+  render: () => <tr kovo-c="cart-row"><td>p1</td></tr>,
 });
 `,
     });
 
     expect(result.filesByKind.css?.source).toContain(
-      '@scope ([fw-c="cart-row"]) to (:scope [fw-c])',
+      '@scope ([kovo-c="cart-row"]) to (:scope [kovo-c])',
     );
     expect(result.filesByKind.css?.source).toContain(
-      '[fw-c="cart-row"] td:not([fw-c]):not([fw-c] *) { padding: 0.5rem; }',
+      '[kovo-c="cart-row"] td:not([kovo-c]):not([kovo-c] *) { padding: 0.5rem; }',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -197,7 +197,7 @@ export const CartRow = component('cart-row', {
     const result = compileFixture({
       fileName: 'components/cart/cart-badge.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   css: \`
@@ -206,16 +206,16 @@ export const CartBadge = component('cart-badge', {
   render: () => {
     const sample = '<cart-badge></cart-badge>';
     // <also-not-the-host></also-not-the-host>
-    return <section fw-c="cart-badge"><button>1</button></section>;
+    return <section kovo-c="cart-badge"><button>1</button></section>;
   },
 });
 `,
     });
 
     const cssSource = result.filesByKind.css?.source ?? '';
-    expect(cssSource).toContain('@scope ([fw-c="cart-badge"]) to (:scope [fw-c])');
+    expect(cssSource).toContain('@scope ([kovo-c="cart-badge"]) to (:scope [kovo-c])');
     expect(cssSource).toContain(
-      '[fw-c="cart-badge"] button:not([fw-c]):not([fw-c] *) { color: teal; }',
+      '[kovo-c="cart-badge"] button:not([kovo-c]):not([kovo-c] *) { color: teal; }',
     );
     expect(cssSource).not.toContain('@scope (cart-badge)');
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -225,7 +225,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   render: () => {
@@ -252,7 +252,7 @@ export const CartBadge = component('cart-badge', {
     expect(registry).toMatch(/export interface MutationRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface RouteRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface InvalidationSets \{\n\n\}/);
-    expect(registry).toContain(`declare module '@jiso/core' {
+    expect(registry).toContain(`declare module '@kovojs/core' {
   interface FragmentTargets {
   'cart-badge': {};
   }
@@ -285,26 +285,26 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('reports FW235 for app-authored string-rendered component modules', () => {
+  it('reports KV235 for app-authored string-rendered component modules', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
 export const CartBadge = component('cart-badge', {
   queries: { cart: cartQuery },
-  render: ({ cart }) => \`<cart-badge fw-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
+  render: ({ cart }) => \`<cart-badge kovo-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
 });
 `,
     });
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW235',
+        code: 'KV235',
         fileName: 'cart-badge.tsx',
         help: [
-          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
           'TSX equivalent direction: render with JSX, for example `render: (...) => (<cart-badge>...</cart-badge>)`, and use typed expressions such as `{cart.count}` instead of data-bind strings.',
         ].join('\n'),
-        length: 91,
+        length: 93,
         message:
           'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
         severity: 'error',
@@ -313,7 +313,7 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
-  it('reports FW235 for app-authored renderSource modules from the parser model', () => {
+  it('reports KV235 for app-authored renderSource modules from the parser model', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.server.ts',
       source: `
@@ -325,10 +325,10 @@ export function renderSource() {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW235',
+        code: 'KV235',
         fileName: 'cart-badge.server.ts',
         help: [
-          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
           'TSX equivalent direction: render with JSX, for example `render: (...) => (<cart-badge>...</cart-badge>)`, and use typed expressions such as `{cart.count}` instead of data-bind strings.',
         ].join('\n'),
         length: 41,
@@ -340,7 +340,7 @@ export function renderSource() {
     ]);
   });
 
-  it('reports FW235 for tagless app-authored string-rendered component modules', () => {
+  it('reports KV235 for tagless app-authored string-rendered component modules', () => {
     const result = compileComponentModule({
       fileName: 'total-display.tsx',
       source: `
@@ -352,10 +352,10 @@ export const TotalDisplay = component('total-display', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW235',
+        code: 'KV235',
         fileName: 'total-display.tsx',
         help: [
-          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
           'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.',
         ].join('\n'),
         length: 13,
@@ -367,7 +367,7 @@ export const TotalDisplay = component('total-display', {
     ]);
   });
 
-  it('reports FW235 for tagless app-authored renderSource modules', () => {
+  it('reports KV235 for tagless app-authored renderSource modules', () => {
     const result = compileComponentModule({
       fileName: 'total-display.server.ts',
       source: `
@@ -379,10 +379,10 @@ export function renderSource() {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW235',
+        code: 'KV235',
         fileName: 'total-display.server.ts',
         help: [
-          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
           'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.',
         ].join('\n'),
         length: 10,
@@ -394,11 +394,11 @@ export function renderSource() {
     ]);
   });
 
-  it('reports FW235 for app-authored compiler IR through the header fast path', () => {
+  it('reports KV235 for app-authored compiler IR through the header fast path', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.server.js',
       source: [
-        '// @jiso-ir',
+        '// @kovojs-ir',
         'export function renderSource() {',
         '  return `<cart-badge><span>2</span></cart-badge>`;',
         '}',
@@ -408,13 +408,13 @@ export function renderSource() {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW235',
+        code: 'KV235',
         fileName: 'cart-badge.server.js',
         help: [
-          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
           'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.',
         ].join('\n'),
-        length: 11,
+        length: 13,
         message:
           'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
         severity: 'error',
@@ -426,7 +426,7 @@ export function renderSource() {
         fileName: 'cart-badge.server.js',
         kind: 'server',
         source: [
-          '// @jiso-ir',
+          '// @kovojs-ir',
           'export function renderSource() {',
           '  return `<cart-badge><span>2</span></cart-badge>`;',
           '}',

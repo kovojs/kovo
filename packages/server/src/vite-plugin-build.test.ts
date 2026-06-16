@@ -6,23 +6,23 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
 import { route } from './route.js';
-import { writeJisoAppShellVitePluginBuild } from './vite-plugin-build.js';
-import type { JisoAppShellBuild } from './vite-build.js';
-import type { JisoAppShellViteBuildOutput } from './vite-build-output.js';
+import { writeKovoAppShellVitePluginBuild } from './vite-plugin-build.js';
+import type { KovoAppShellBuild } from './vite-build.js';
+import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
 
 describe('server app shell Vite plugin build boundary', () => {
   it('writes plugin build output and static export through the shared Vite build helper', async () => {
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-plugin-build-helper-dist-'));
-    const exportDir = await mkdtemp(join(tmpdir(), 'jiso-vite-plugin-build-helper-export-'));
-    const built: JisoAppShellBuild[] = [];
-    const outputs: JisoAppShellViteBuildOutput[] = [];
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-plugin-build-helper-dist-'));
+    const exportDir = await mkdtemp(join(tmpdir(), 'kovo-vite-plugin-build-helper-export-'));
+    const built: KovoAppShellBuild[] = [];
+    const outputs: KovoAppShellViteBuildOutput[] = [];
 
     try {
       await mkdir(join(outDir, 'assets'), { recursive: true });
       await writeFile(join(outDir, 'assets/cart.css'), '.cart{display:grid}');
       await writeFile(join(outDir, 'assets/cart.js'), 'export const cartAsset = true;');
 
-      const result = await writeJisoAppShellVitePluginBuild({
+      const result = await writeKovoAppShellVitePluginBuild({
         app: createApp({
           routes: [
             route('/cart', {

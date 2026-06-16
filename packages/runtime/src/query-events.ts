@@ -62,10 +62,10 @@ export function installInlineQueryEventHydration(
     }
   };
 
-  options.target.addEventListener('jiso:query', listener);
+  options.target.addEventListener('kovo:query', listener);
 
   return () => {
-    options.target.removeEventListener?.('jiso:query', listener);
+    options.target.removeEventListener?.('kovo:query', listener);
   };
 }
 

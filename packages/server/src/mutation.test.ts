@@ -186,8 +186,8 @@ describe('server mutation lifecycle', () => {
     const signIn = mutation('auth/sign-in', {
       input: s.object({ email: s.string() }),
       handler(input, _request, context) {
-        context.setCookie?.('jiso_session=s1; Path=/; HttpOnly; SameSite=Lax');
-        context.setCookie?.('jiso_csrf', 'c1', {
+        context.setCookie?.('kovo_session=s1; Path=/; HttpOnly; SameSite=Lax');
+        context.setCookie?.('kovo_csrf', 'c1', {
           httpOnly: true,
           path: '/',
           sameSite: 'strict',
@@ -206,11 +206,11 @@ describe('server mutation lifecycle', () => {
     ).resolves.toEqual({
       body: '',
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Changes': '[]',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Changes': '[]',
         'Set-Cookie': [
-          'jiso_session=s1; Path=/; HttpOnly; SameSite=Lax',
-          'jiso_csrf=c1; Path=/; HttpOnly; Secure; SameSite=Strict',
+          'kovo_session=s1; Path=/; HttpOnly; SameSite=Lax',
+          'kovo_csrf=c1; Path=/; HttpOnly; Secure; SameSite=Strict',
         ],
       },
       status: 200,
@@ -221,7 +221,7 @@ describe('server mutation lifecycle', () => {
     const signOut = mutation('auth/sign-out', {
       input: s.object({}),
       handler(_input, _request, context) {
-        context.setCookie?.('jiso_session=; Path=/; Max-Age=0; HttpOnly');
+        context.setCookie?.('kovo_session=; Path=/; Max-Age=0; HttpOnly');
         return 'signed-out';
       },
     });
@@ -237,7 +237,7 @@ describe('server mutation lifecycle', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/login',
-        'Set-Cookie': ['jiso_session=; Path=/; Max-Age=0; HttpOnly'],
+        'Set-Cookie': ['kovo_session=; Path=/; Max-Age=0; HttpOnly'],
       },
       status: 303,
     });
@@ -250,7 +250,7 @@ describe('server mutation lifecycle', () => {
       },
       input: s.object({ email: s.string() }),
       handler(_input, _request, context) {
-        context.setCookie?.('jiso_session=s1; Path=/; HttpOnly');
+        context.setCookie?.('kovo_session=s1; Path=/; HttpOnly');
         return context.fail('INVALID_CREDENTIALS', {});
       },
     });
@@ -261,8 +261,8 @@ describe('server mutation lifecycle', () => {
         request: {},
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="error"><output role="alert" data-error-code="INVALID_CREDENTIALS">{}</output></fw-fragment>',
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      body: '<kovo-fragment target="error"><output role="alert" data-error-code="INVALID_CREDENTIALS">{}</output></kovo-fragment>',
+      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
       status: 422,
     });
   });
@@ -329,7 +329,7 @@ describe('server mutation lifecycle', () => {
         request: {},
       }),
     ).resolves.toMatchObject({
-      body: '<fw-query name="cart">{"count":2}</fw-query>',
+      body: '<kovo-query name="cart">{"count":2}</kovo-query>',
       status: 200,
     });
   });
@@ -368,7 +368,7 @@ describe('server mutation lifecycle', () => {
         request: { session: { cartId: 'c1' } },
       }),
     ).resolves.toMatchObject({
-      body: '<fw-query name="cart" key="cart:c1">{"cartId":"c1"}</fw-query>',
+      body: '<kovo-query name="cart" key="cart:c1">{"cartId":"c1"}</kovo-query>',
       status: 200,
     });
   });

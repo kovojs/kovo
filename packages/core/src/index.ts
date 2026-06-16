@@ -40,8 +40,8 @@ export type {
   EndpointExplain,
   EventPayloadFact,
   FixpointCheck,
-  FwCheckInput,
-  FwExplainInput,
+  KovoCheckInput,
+  KovoExplainInput,
   GraphInputValidationError,
   HandlerExplain,
   MutationExplain,
@@ -67,7 +67,7 @@ export type {
   UpdateCoverageFact,
   VerificationDiagnosticFact,
 } from './graph.js';
-export { validateFwExplainInput } from './graph.js';
+export { validateKovoExplainInput } from './graph.js';
 export type { PackageComponentPrefixManifestOptions } from './package-prefix.js';
 export { packageComponentPrefixFactFromPackageManifest } from './package-prefix.js';
 export type {
@@ -160,13 +160,13 @@ export interface Component<Name extends string, Definition extends ComponentDefi
  * the custom-element tag the compiler lowers `render` into; queries and state
  * are passed to `render` at runtime. Authored components are plain TSX — the
  * compiler derives stamps, bindings, and the client module, so you never write
- * `data-bind`/`fw-*` attributes by hand (SPEC §4.1).
+ * `data-bind`/`kovo-*` attributes by hand (SPEC §4.1).
  *
  * @param name - Custom-element tag name; also the component's identity in the registry.
  * @param definition - `render` plus optional `queries`, `state`, and `fragmentTarget`.
  * @returns A `Component` descriptor the compiler lowers and the server renders.
  * @example
- * import { component } from '@jiso/core';
+ * import { component } from '@kovojs/core';
  *
  * type CounterState = { count: number };
  *
@@ -298,14 +298,14 @@ type RouteGetFormArgs<Definition> = keyof RouteParams<Definition> extends never
 /**
  * Declare a route descriptor: a typed path plus its param/search shapes. This
  * is the registry-level seed used for typed links (`href`, `Link`, `redirect`);
- * to also attach a server page handler, use `route` from `@jiso/server`, which
+ * to also attach a server page handler, use `route` from `@kovojs/server`, which
  * extends this with `page`, guards, and meta (SPEC §6.4).
  *
  * @param path - URL pattern; `:name` segments become typed params.
  * @param options - Optional `params`/`search` shapes and `prefetch` policy.
  * @returns A `Route` descriptor keyed by `path`.
  * @example
- * import { route } from '@jiso/core';
+ * import { route } from '@kovojs/core';
  *
  * export const productRoute = route('/products/:id', {
  *   params: { id: '' },
@@ -329,7 +329,7 @@ export function route<
  * @param options - `params` for the path segments and optional `search`.
  * @returns The encoded URL string.
  * @example
- * import { href } from '@jiso/core';
+ * import { href } from '@kovojs/core';
  *
  * const url: string = href('/products/:id', { params: { id: 'p1' } });
  */
@@ -357,7 +357,7 @@ export interface LinkDescriptor {
  * @param options - `params` for the path segments and optional `search`.
  * @returns A `LinkDescriptor` carrying the resolved `href`.
  * @example
- * import { Link } from '@jiso/core';
+ * import { Link } from '@kovojs/core';
  *
  * const link = Link('/products/:id', { params: { id: 'p1' } });
  * const anchor = `<a href="${link.href}">View</a>`;
@@ -383,7 +383,7 @@ export interface Redirect {
  * @param options - `params` for the path segments and optional `search`.
  * @returns A `Redirect` with `status: 303` and the resolved `location`.
  * @example
- * import { redirect } from '@jiso/core';
+ * import { redirect } from '@kovojs/core';
  *
  * const toProduct = redirect('/products/:id', { params: { id: 'p1' } });
  * // toProduct.status === 303
@@ -424,12 +424,12 @@ function searchValueToString(value: JsonValue): string {
 /**
  * Reference a registered query by key for component bindings. This is the
  * client-facing query handle (just `{ key }`); the server-side query with a
- * loader and read set is `query` from `@jiso/server` (SPEC §10.2).
+ * loader and read set is `query` from `@kovojs/server` (SPEC §10.2).
  *
  * @param key - A registered query key.
  * @returns A typed `Query` handle whose `result` reflects the registry entry.
  * @example
- * import { query } from '@jiso/core';
+ * import { query } from '@kovojs/core';
  *
  * export const cart = query('cart');
  */
@@ -584,7 +584,7 @@ function getRouteForm<const Path extends RegistryKey<RouteRegistry>>(
  * with typed `input(name)` accessors for the route's search fields (SPEC §6.3).
  *
  * @example
- * import { form } from '@jiso/core';
+ * import { form } from '@kovojs/core';
  *
  * export const addToCart = form('cart/add');
  * export const search = form.get('/products');
@@ -618,13 +618,13 @@ export interface FragmentTargetPatch<Target extends string, Props> {
 /**
  * Address a server-rendered fragment target for a wire patch, pairing the
  * target name with its typed props. The mutation wire replaces the live
- * `<fw-fragment target="…">` with freshly rendered HTML (SPEC §9.1).
+ * `<kovo-fragment target="…">` with freshly rendered HTML (SPEC §9.1).
  *
  * @param target - A registered fragment-target name.
  * @param props - The props that target's renderer expects.
  * @returns A `FragmentTargetPatch` carrying the target and props.
  * @example
- * import { fragmentTarget } from '@jiso/core';
+ * import { fragmentTarget } from '@kovojs/core';
  *
  * const patch = fragmentTarget('product-form', {});
  * // patch.target === 'product-form'
@@ -664,7 +664,7 @@ export interface EventOptions<Payload extends JsonValue = JsonValue> {
  * @param options - Optional `serverFactKeys` naming server-provided payload fields.
  * @returns An `EventDefinition` whose `payload` type is `Payload`.
  * @example
- * import { event } from '@jiso/core';
+ * import { event } from '@kovojs/core';
  *
  * export const itemAdded = event<'item-added', { id: string }>('item-added');
  */

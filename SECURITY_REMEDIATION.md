@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-15
 **Finding:** `SECURITY_FINDINGS.md` **C1 (Critical)** — _No default HTML output encoding: text interpolations are emitted unescaped at every layer (systemic stored/reflected XSS)._
-**Status:** Remediated. Verified green on `check` (typecheck + lint + format), the full unit suite (2479 tests), `check:build`, `check:inline-loader`, `prod-emit-check`, and the fixpoint (`check:fw`).
+**Status:** Remediated. Verified green on `check` (typecheck + lint + format), the full unit suite (2479 tests), `check:build`, `check:inline-loader`, `prod-emit-check`, and the fixpoint (`check:kovo`).
 
 This document covers C1 in depth. The complementary reactive-DOM XSS sinks identified by the same root-cause analysis — **H1** (compiled reactive list-stamp `innerHTML`) and **H2** (reactive attribute binding to URL attributes) — are part of the same output-encoding story and are summarized in §7. The remaining findings (H3–H5, M1–M10) are listed in the appendix.
 
@@ -10,7 +10,7 @@ This document covers C1 in depth. The complementary reactive-DOM XSS sinks ident
 
 ## 1. The vulnerability
 
-The Jiso server JSX runtime renders component trees to HTML strings. `renderJsxChildren` (`packages/server/src/jsx-runtime.ts`) inserted text children **verbatim** (`String(children)`); only _attributes_ were escaped. The compiler — the framework's lowering/validation layer — never injected escaping for text interpolations either. So any app-authored `{data.field}` rendered as JSX text, and any `@jiso/ui` scalar text prop (`title`, `description`, option `itemLabel`/`itemValue`, …), reached the browser unescaped:
+The Kovo server JSX runtime renders component trees to HTML strings. `renderJsxChildren` (`packages/server/src/jsx-runtime.ts`) inserted text children **verbatim** (`String(children)`); only _attributes_ were escaped. The compiler — the framework's lowering/validation layer — never injected escaping for text interpolations either. So any app-authored `{data.field}` rendered as JSX text, and any `@kovojs/ui` scalar text prop (`title`, `description`, option `itemLabel`/`itemValue`, …), reached the browser unescaped:
 
 - in the **initial SSR document** the browser parses on load, and
 - in **fragment updates** re-injected via `innerHTML` / `insertAdjacentHTML` / morph (`packages/runtime/src/{response-fragment-apply,morph}.ts`), which execute `<img src=x onerror=…>` / `<svg onload=…>`.
@@ -28,7 +28,7 @@ Crucially, the framework also enforces a **render-equivalence fixpoint** (`rende
 The chosen approach satisfies both constraints and is **safe-by-default for the framework's actual authoring model** (all app components are compiled):
 
 1. **The compiler escapes static data-path text interpolations** during lowering — `{product.name}` → `{escapeText(product.name)}`. App authors are safe by default with no source change.
-2. **`@jiso/ui` library components escape their own scalar text props** — these bypass the compiler (the app passes them in attribute position, e.g. `itemLabel={user.name}`), so the component must escape what it renders as a text child.
+2. **`@kovojs/ui` library components escape their own scalar text props** — these bypass the compiler (the app passes them in attribute position, e.g. `itemLabel={user.name}`), so the component must escape what it renders as a text child.
 3. **`table.tsx`** routes its hand-rolled `tablePart` concat through escaping.
 
 The runtime contract (`jsx()` → `string`) is unchanged; zero test-assertion churn from the contract.
@@ -47,7 +47,7 @@ export function escapeText(value: unknown): string {
 }
 ```
 
-It **mirrors `renderJsxChildren`'s coercion exactly** — `null`/`undefined`/`boolean` → `''`, arrays flatten, everything else `String(...)` — then HTML-escapes scalar values. This guarantees byte-identical output to the unescaped path for values without HTML metacharacters (so it does not change render-equivalence semantics or existing snapshots), while neutralizing `& < >` for attacker/DB strings. Exported from `@jiso/server` via `packages/server/src/api/rendering.ts`.
+It **mirrors `renderJsxChildren`'s coercion exactly** — `null`/`undefined`/`boolean` → `''`, arrays flatten, everything else `String(...)` — then HTML-escapes scalar values. This guarantees byte-identical output to the unescaped path for values without HTML metacharacters (so it does not change render-equivalence semantics or existing snapshots), while neutralizing `& < >` for attacker/DB strings. Exported from `@kovojs/server` via `packages/server/src/api/rendering.ts`.
 
 ### 3.2 Compiler lowering — `packages/compiler/src/lower/inline-derives.ts`
 
@@ -62,7 +62,7 @@ It **mirrors `renderJsxChildren`'s coercion exactly** — `null`/`undefined`/`bo
 
 The `escapeText` import is added via the same prefix-insertion mechanism as the existing `derive` import, gated on whether escaping was applied and on the **typed** `model.namedImports` facts (not a raw-source scan) to avoid a duplicate-binding `SyntaxError` if an author imported `escapeText` manually.
 
-### 3.3 `@jiso/ui` scalar text props
+### 3.3 `@kovojs/ui` scalar text props
 
 Library components escape the data-derived scalar props they render as children, leaving `{props.children}` composition slots raw (those are escaped at the app call site by the compiler). Pattern: `{props.children ?? escapeHtml(props.itemLabel ?? props.itemValue ?? '')}` and `{escapeHtml(valueTextHelper(props))}`. Applied to `autocomplete`, `combobox`, `command`, `select`, `menubar`, `drawer`, `sheet`, `navigation-menu`, and `table` (caption). `dialog.tsx` and `field.tsx` needed no change — they only render `{props.children}` slots, which the app-site compiler escaping covers.
 
@@ -72,7 +72,7 @@ Library components escape the data-derived scalar props they render as children,
 
 - **Render-equivalence holds.** The escaping is added in `lowerInlineAttributeDerives`, whose output is the _common base_ (`modelPatch.state.source`) that both the equivalence "expected" (authored-lowered) and "actual" (server-stamped) sides derive from. Both sides carry the `escapeText` wraps, so they remain equal modulo framework stamps — no normalization change was required.
 - **Fixpoint idempotency holds.** Recompiling a generated module must reproduce it. `escapeText(item.x)` is a **call expression**, so it has no `solePropertyAccessPath` and is never re-wrapped; and because no new wraps are applied on recompile, the `escapeText` import is not re-added. This is structural, not a `startsWith` guard.
-- **SPEC §5.2 parser boundary respected.** Idempotency and import-detection use typed parser facts (`solePropertyAccessPath`, `model.namedImports`), never raw-source `startsWith`/regex `.test()` — the framework's `tests/fw-check.node.mjs` meta-lint enforces this and is green.
+- **SPEC §5.2 parser boundary respected.** Idempotency and import-detection use typed parser facts (`solePropertyAccessPath`, `model.namedImports`), never raw-source `startsWith`/regex `.test()` — the framework's `tests/kovo-check.node.mjs` meta-lint enforces this and is green.
 
 ---
 
@@ -81,7 +81,7 @@ Library components escape the data-derived scalar props they render as children,
 **Covered (safe-by-default):**
 
 - App-authored `{obj.field}` text children (sole and mixed position) in any compiled component — escaped by the compiler.
-- All `@jiso/ui` scalar text props and table cells/caption — escaped by the library / app-site compiler escaping.
+- All `@kovojs/ui` scalar text props and table cells/caption — escaped by the library / app-site compiler escaping.
 - Initial SSR render _and_ fragment-update render (both go through the same escaped lowered output).
 
 **Residual (documented, lower-severity):**
@@ -94,9 +94,9 @@ Library components escape the data-derived scalar props they render as children,
 
 ## 6. Verification
 
-- **New regression tests:** `packages/compiler/src/text-escaping.test.ts` (static data-path escaped end-to-end; nested elements/calls/attributes untouched; fixpoint idempotency) and `packages/ui/src/xss-escaping.test.tsx` (every scalar text prop escapes an `<img onerror>` payload; `children` slots pass through). Updated diagnostic-expectation tests (`fragment-targets`, `fw-check.node.mjs`) reflect the escaped lowered artifact.
+- **New regression tests:** `packages/compiler/src/text-escaping.test.ts` (static data-path escaped end-to-end; nested elements/calls/attributes untouched; fixpoint idempotency) and `packages/ui/src/xss-escaping.test.tsx` (every scalar text prop escapes an `<img onerror>` payload; `children` slots pass through). Updated diagnostic-expectation tests (`fragment-targets`, `kovo-check.node.mjs`) reflect the escaped lowered artifact.
 - **Regenerated committed artifacts:** `examples/commerce/src/generated/*` and `site/tutorial/steps/*/src/generated/*` now show `escapeText(...)` (e.g. `order-history.tsx`: `{escapeText(item.productId)} x {escapeText(item.qty)} - {escapeText(item.total)}`).
-- **Gates green:** `pnpm run check` (0 errors), `pnpm run test` (2479 passed), `pnpm run check:build`, `pnpm run check:inline-loader`, `prod-emit-check`, `pnpm run check:fw` (fixpoint + render-equivalence).
+- **Gates green:** `pnpm run check` (0 errors), `pnpm run test` (2479 passed), `pnpm run check:build`, `pnpm run check:inline-loader`, `prod-emit-check`, `pnpm run check:kovo` (fixpoint + render-equivalence).
 
 ---
 
@@ -117,7 +117,7 @@ The C1 analysis identified two further default-on XSS sinks on the _client_ code
 - `packages/compiler/src/emit/client.ts` — H1 list-stamp `esc(...)`.
 - `packages/runtime/src/query-bindings.ts` — H2 URL-scheme guard in `setBoundAttribute`.
 - `packages/ui/src/{autocomplete,combobox,command,select,menubar,drawer,sheet,table,navigation-menu}.tsx` — scalar text-prop escaping.
-- Tests: `packages/compiler/src/text-escaping.test.ts`, `packages/ui/src/xss-escaping.test.tsx`, plus expectation updates in `fragment-targets.test.ts`, `state-bindings.test.ts`, `query-coverage.test.ts`, `query-bindings.test.ts`, `tests/fw-check.node.mjs`.
+- Tests: `packages/compiler/src/text-escaping.test.ts`, `packages/ui/src/xss-escaping.test.tsx`, plus expectation updates in `fragment-targets.test.ts`, `state-bindings.test.ts`, `query-coverage.test.ts`, `query-bindings.test.ts`, `tests/kovo-check.node.mjs`.
 - Regenerated: `examples/commerce/src/generated/*`, `site/tutorial/steps/*/src/generated/*`.
 
 ---
@@ -135,16 +135,16 @@ The C1 analysis identified two further default-on XSS sinks on the _client_ code
 
 | Finding                                                             | Fix location                                                                                                                                                   |
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **H3** — `@jiso/ui` anchor `href` scheme injection                  | `packages/headless-ui/src/lib/safe-url.ts` (new allowlist helper) routed through `breadcrumb`/`hover-card`/`navigation-menu` + `navigationMenuLinkAttributes`. |
+| **H3** — `@kovojs/ui` anchor `href` scheme injection                | `packages/headless-ui/src/lib/safe-url.ts` (new allowlist helper) routed through `breadcrumb`/`hover-card`/`navigation-menu` + `navigationMenuLinkAttributes`. |
 | **H4** — `redirectPath` backslash open-redirect                     | `packages/better-auth/src/index.ts` — reject backslash-authority + control chars.                                                                              |
 | **H5** — `normalizePathname` `//` open-redirect                     | `packages/server/src/match.ts` — collapse leading authority slashes.                                                                                           |
 | **M1** — missing `nosniff` on file/stream                           | `packages/server/src/response.ts`.                                                                                                                             |
 | **M2** — auth success-by-absence                                    | `packages/better-auth/src/index.ts` — positive 2xx + session-cookie + non-2FA check.                                                                           |
 | **M3** — shared `anonymous` rate-limit bucket                       | `packages/server/src/guards.ts` — throw when session-less keying lacks a `key`.                                                                                |
 | **M4** — idempotency reserve-after-handler                          | `packages/server/src/{mutation,replay}.ts` — reserve before run + per-mutation-key scope.                                                                      |
-| **M5** — hardcoded scaffolder CSRF secret                           | `packages/create-jiso/{src/index.ts,templates/src/auth.tsx}` — env-read + generated `.env` random secret.                                                      |
+| **M5** — hardcoded scaffolder CSRF secret                           | `packages/create-kovo/{src/index.ts,templates/src/auth.tsx}` — env-read + generated `.env` random secret.                                                      |
 | **M6** — static login-CSRF token                                    | `examples/commerce/src/{app.ts,app-shell.ts}` — Origin/Sec-Fetch-Site same-origin guard.                                                                       |
-| **M7** — no sign-in brute-force throttle                            | commerce + create-jiso template `guards.rateLimit`.                                                                                                            |
+| **M7** — no sign-in brute-force throttle                            | commerce + create-kovo template `guards.rateLimit`.                                                                                                            |
 | **M8** — unscoped receipt storage key                               | `examples/commerce/src/app.ts` — `receipts/${uuid}/${sanitized}` namespacing.                                                                                  |
 | **M9** — webhook write trust + CSV injection + unscoped order query | `examples/commerce/src/{app.ts,queries.ts}` — secret from env, productId/userId validation, formula-prefix neutralization, per-user scoping.                   |
 | **M10** — inline-loader selector injection                          | `packages/runtime/src/inline-loader-build.ts` — try/catch guard around fragment-target `querySelector`.                                                        |

@@ -22,7 +22,7 @@ export interface ReadSite {
 }
 
 export interface UnresolvedWriteSite {
-  code: 'FW404' | 'FW406';
+  code: 'KV404' | 'KV406';
   domain?: string;
   message: string;
   site: string;
@@ -36,7 +36,7 @@ export interface TouchGraphEntry {
 
 export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 
-export interface FwCheckInput {
+export interface KovoCheckInput {
   diagnostics?: readonly StaticDiagnosticFact[];
   endpoints?: readonly EndpointExplain[];
   eventPayloads?: readonly EventPayloadFact[];
@@ -55,7 +55,7 @@ export interface FwCheckInput {
   verificationDiagnostics?: readonly VerificationDiagnosticFact[];
 }
 
-export interface FwExplainInput extends FwCheckInput {
+export interface KovoExplainInput extends KovoCheckInput {
   components?: readonly ComponentExplain[];
   mutations?: readonly MutationExplain[];
   packageComponentPrefixes?: readonly PackageComponentPrefixExplain[];
@@ -286,7 +286,7 @@ const arrayFields = [
   'verificationDiagnostics',
 ] as const;
 
-export function validateFwExplainInput(input: unknown): GraphInputValidationError[] {
+export function validateKovoExplainInput(input: unknown): GraphInputValidationError[] {
   const errors: GraphInputValidationError[] = [];
   if (!isRecord(input)) {
     return [{ message: 'input JSON must be an object', path: '$' }];

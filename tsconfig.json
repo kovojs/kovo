@@ -19,5 +19,5 @@
     "verbatimModuleSyntax": true
   },
   "include": ["packages/**/*.ts", "vite.config.ts"],
-  "exclude": ["packages/create-jiso/templates/**"]
+  "exclude": ["packages/create-kovo/templates/**"]
 }

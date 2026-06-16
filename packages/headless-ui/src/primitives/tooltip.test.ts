@@ -36,11 +36,11 @@ describe('headless-ui tooltip primitive', () => {
     expect(tooltipTriggerAttributes({ contentId: 'pricing-tip', open: true })).toEqual({
       'aria-describedby': 'pricing-tip',
       'data-state': 'open',
-      'jiso-tooltip': 'pricing-tip',
+      'kovo-tooltip': 'pricing-tip',
     });
     expect(tooltipTriggerAttributes({ contentId: 'pricing-tip', open: false })).toEqual({
       'data-state': 'closed',
-      'jiso-tooltip': 'pricing-tip',
+      'kovo-tooltip': 'pricing-tip',
     });
     expect(
       tooltipTriggerAttributes({ contentId: 'pricing-tip', disabled: true, open: false }),

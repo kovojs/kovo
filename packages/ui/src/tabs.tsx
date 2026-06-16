@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   cn,
   defineVariants,
@@ -12,7 +12,7 @@ import {
   type TabsActivationMode,
   type TabsItem,
   type TextDirection,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface TabsStateProps {
   activationMode?: TabsActivationMode;

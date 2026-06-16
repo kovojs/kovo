@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   alertDialogActionAttributes,
   alertDialogCancelAttributes,
@@ -10,7 +10,7 @@ import {
   defineVariants,
   type AlertDialogActionIntent,
   type ClassValue,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface AlertDialogStateProps {
   disabled?: boolean;

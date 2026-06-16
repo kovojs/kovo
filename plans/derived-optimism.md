@@ -12,18 +12,18 @@ named punts — superseding hand-written transforms pair by pair. Live queries
 ## Architecture (as built)
 
 - **Shared IR contract** (`packages/core/src/derivation.ts`, exported from
-  `@jiso/core`): `SymbolicValue`/`SymbolicEffect` (Stage 1),
+  `@kovojs/core`): `SymbolicValue`/`SymbolicEffect` (Stage 1),
   `AlgebraicQueryShape`/`Rowset`/`AlgebraicField` incl. `cursor` (Stage 2),
   `PatchProgram`/`PatchOp` (Stage 3), `DerivationResult`, `PuntReason` +
   `puntReasonLabel`, and a pure reference interpreter `applyPatchProgram`.
-- **Source-agnostic deriver** (`@jiso/drizzle/derive` `deriveOptimistic`): pushes
+- **Source-agnostic deriver** (`@kovojs/drizzle/derive` `deriveOptimistic`): pushes
   effects through a shape → patch program or named punt. The Drizzle extractor and
   the commerce hand-authored facts drive the _same_ rules.
-- **Drizzle populators** (`@jiso/drizzle/static`
+- **Drizzle populators** (`@kovojs/drizzle/static`
   `extractSymbolicEffectsFromProject` / `extractAlgebraicShapesFromProject`):
   project-mode ts-morph, reusing the existing write/predicate/table/column/opaque
   extraction; conservative (anything untraceable ⇒ Opaque/punt).
-- **Codegen** (`@jiso/drizzle/derive` `serializeDerivedOptimistic`/`lowerTransform`):
+- **Codegen** (`@kovojs/drizzle/derive` `serializeDerivedOptimistic`/`lowerTransform`):
   PatchProgram → committed `(current,$input)=>Value` transforms in an
   `OptimisticFor`-shaped plan, DO-NOT-EDIT header, override precedence.
 - Commerce is not Drizzle-backed (custom `CommerceDb`), so it authors its
@@ -33,7 +33,7 @@ named punts — superseding hand-written transforms pair by pair. Live queries
 ## Checklist (all verified this session)
 
 - [x] **Phase 0 — IR contract + fixtures.** `core/derivation.ts` + interpreter +
-      `@jiso/test/derivation-fixtures` canonical contract. Evidence:
+      `@kovojs/test/derivation-fixtures` canonical contract. Evidence:
       `packages/core/src/derivation.test.ts`, `packages/test/src/derivation-fixtures.test.ts`.
 - [x] **Phase 1 — Write → symbolic row-effects (Stage 1).** `extractSymbolicEffectsFromProject`
       (Param/Const/ColRef/Arith/Opaque values; eq-key match else Opaque punt; UPSERT).
@@ -49,11 +49,11 @@ named punts — superseding hand-written transforms pair by pair. Live queries
 - [x] **Phase 4 — Runtime integration.** Derived transforms ride the unchanged
       `OptimisticRebaser` (snapshot→apply→rebase→settle→discard) with proven parity
       to hand-written; INSERT×AGG placeholder reconcile. No IR fork needed (`tempId`/`now`
-      added to `@jiso/runtime`). Evidence: `packages/runtime/src/optimism-derived.test.ts`.
-- [x] **Phase 5 — Diagnostics & explain.** `OptimisticCoverage.status += 'derived'` + separate `derivation` metadata; `fw explain --optimistic` reports `derived` and
-      `OPTIMISTIC-PUNT <q>: <reason>`; summary gains `derived=`/`PUNTED=`; FW310 fires only
-      when uncovered (punt ≠ coverage); MCP inherits via fwCheck/fwExplain. Evidence:
-      `packages/cli/src/index.fw-explain.test.ts`, `packages/test/src/fw-explain-fixtures.ts`.
+      added to `@kovojs/runtime`). Evidence: `packages/runtime/src/optimism-derived.test.ts`.
+- [x] **Phase 5 — Diagnostics & explain.** `OptimisticCoverage.status += 'derived'` + separate `derivation` metadata; `kovo explain --optimistic` reports `derived` and
+      `OPTIMISTIC-PUNT <q>: <reason>`; summary gains `derived=`/`PUNTED=`; KV310 fires only
+      when uncovered (punt ≠ coverage); MCP inherits via kovoCheck/kovoExplain. Evidence:
+      `packages/cli/src/index.kovo-explain.test.ts`, `packages/test/src/kovo-explain-fixtures.ts`.
 - [x] **Phase 6 — Soundness commuting-diagram suite.** `patch(clientShape(s),i) ≡
 clientShape(apply(effect,s,i))` for all 3 commerce derived pairs (real loaders +
       effect) and a Drizzle grammar matrix over **real Postgres (pglite)**; broken-derivation
@@ -63,12 +63,12 @@ clientShape(apply(effect,s,i))` for all 3 commerce derived pairs (real loaders +
       `generated/optimistic/cart-add.ts` emitted + committed (`emit-graph --check` gated).
       Full shape-grammar coverage: all 3 cart/add pairs `derived` (cart INSERT×SUM,
       productGrid UPDATE keyed-scalar guarded, orderHistory INSERT×AGG push), **zero
-      unhandled FW310, zero punts**. Evidence: `examples/commerce/src/source-truth.test.ts`,
+      unhandled KV310, zero punts**. Evidence: `examples/commerce/src/source-truth.test.ts`,
       `app.add-to-cart.test.ts`, commerce typecheck against `OptimisticFor`.
 - [x] **Phase 8 — Conformance & acceptance.** Derivation subset proven against real
-      `drizzle-orm` Postgres surfaces in `conformance/drizzle-pin` (raw-SQL/FW406 punt
+      `drizzle-orm` Postgres surfaces in `conformance/drizzle-pin` (raw-SQL/KV406 punt
       with named reason); `pnpm run acceptance` **EXIT=0** (check, test, test:browser,
-      check:build, test:p10-perf, test:conformance, check:fw all green).
+      check:build, test:p10-perf, test:conformance, check:kovo all green).
 
 ## Acceptance (all hold)
 
@@ -77,15 +77,15 @@ clientShape(apply(effect,s,i))` for all 3 commerce derived pairs (real loaders +
 - [x] `generated/optimistic/*.ts` emitted, committed, typecheck against `OptimisticFor`,
       override precedence proven.
 - [x] Derived transforms run through the unchanged `OptimisticRebaser` with proven parity.
-- [x] `fw check optimistic` / `fw explain --optimistic` report `derived` and named
-      `PUNTED` reasons without treating punts as coverage; FW310 semantics updated; MCP parity.
+- [x] `kovo check optimistic` / `kovo explain --optimistic` report `derived` and named
+      `PUNTED` reasons without treating punts as coverage; KV310 semantics updated; MCP parity.
 - [x] Commuting-diagram property suite green in acceptance over the pinned Postgres subset.
-- [x] Commerce migrated to derivation with full shape-grammar coverage, zero unhandled FW310.
+- [x] Commerce migrated to derivation with full shape-grammar coverage, zero unhandled KV310.
 - [x] `conformance/drizzle-pin` proves the subset; `pnpm run acceptance` EXIT=0.
 
 ## Non-Goals (unchanged)
 
-- Live queries (L4), `<fw-live>`, SSE, the in-process/Redis bus; CDC adapter; full
+- Live queries (L4), `<kovo-live>`, SSE, the in-process/Redis bus; CDC adapter; full
   runtime read/write tracking (v3); SQLite/MySQL derivation. Owned by a future
   `plans/live-queries.md` / CDC plan.
 

@@ -10,7 +10,7 @@ class FakeTargetRoot {
 
   querySelectorAll(selector: string): Iterable<FakeTargetElement> {
     this.queries += 1;
-    return selector === '[fw-deps]' ? this.elements : [];
+    return selector === '[kovo-deps]' ? this.elements : [];
   }
 }
 
@@ -32,30 +32,30 @@ class FakeTargetElement {
 }
 
 describe('mutation targets', () => {
-  it('collects live DOM FW-Targets in first-seen order with dedupe and nullish id fallback', () => {
+  it('collects live DOM Kovo-Targets in first-seen order with dedupe and nullish id fallback', () => {
     const root = new FakeTargetRoot([
       new FakeTargetElement(
-        { 'fw-deps': 'cart', 'fw-fragment-target': null },
+        { 'kovo-deps': 'cart', 'kovo-fragment-target': null },
         { id: 'cart-badge' },
       ),
       new FakeTargetElement({
-        'fw-deps': 'inventory stock',
-        'fw-fragment-target': 'inventory',
+        'kovo-deps': 'inventory stock',
+        'kovo-fragment-target': 'inventory',
       }),
       new FakeTargetElement({
-        'fw-deps': 'inventory stock',
-        'fw-fragment-target': 'inventory',
+        'kovo-deps': 'inventory stock',
+        'kovo-fragment-target': 'inventory',
       }),
-      new FakeTargetElement({ 'fw-deps': 'debug', 'fw-fragment-target': '' }, { id: 'debug' }),
+      new FakeTargetElement({ 'kovo-deps': 'debug', 'kovo-fragment-target': '' }, { id: 'debug' }),
       new FakeTargetElement({
-        'fw-deps': ' , ',
-        'fw-fragment-target': 'empty-deps',
+        'kovo-deps': ' , ',
+        'kovo-fragment-target': 'empty-deps',
       }),
-      new FakeTargetElement({ 'fw-c': 'cart-summary', 'fw-deps': 'cart summary' }),
-      new FakeTargetElement({ 'fw-deps': 'ignored' }),
+      new FakeTargetElement({ 'kovo-c': 'cart-summary', 'kovo-deps': 'cart summary' }),
+      new FakeTargetElement({ 'kovo-deps': 'ignored' }),
     ]);
 
-    // SPEC.md §9.1: enhanced mutations send FW-Targets from live fw-deps DOM
+    // SPEC.md §9.1: enhanced mutations send Kovo-Targets from live kovo-deps DOM
     // stamps, including component stamps when no explicit target/id exists.
     expect(readLiveTargets(root)).toEqual([
       'cart-badge=cart',
@@ -70,14 +70,14 @@ describe('mutation targets', () => {
 
   it('reads one live target snapshot for enhanced mutation request headers', () => {
     const root = new FakeTargetRoot([
-      new FakeTargetElement({ 'fw-deps': 'cart', 'fw-fragment-target': null }, { id: 'cart' }),
-      new FakeTargetElement({ 'fw-deps': 'reviews', 'fw-fragment-target': 'reviews:p1' }),
+      new FakeTargetElement({ 'kovo-deps': 'cart', 'kovo-fragment-target': null }, { id: 'cart' }),
+      new FakeTargetElement({ 'kovo-deps': 'reviews', 'kovo-fragment-target': 'reviews:p1' }),
     ]);
 
     const snapshot = readLiveTargetSnapshot(root);
 
     // SPEC.md §9.1: the enhanced mutation request and returned metadata use one
-    // live FW-Targets snapshot, not separate compatibility serialization passes.
+    // live Kovo-Targets snapshot, not separate compatibility serialization passes.
     expect(snapshot).toEqual({
       header: 'cart=cart; reviews:p1=reviews',
       targets: ['cart=cart', 'reviews:p1=reviews'],

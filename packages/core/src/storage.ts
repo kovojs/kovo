@@ -100,7 +100,7 @@ interface FileSystemMetadataRecord {
 }
 
 const textEncoder = new TextEncoder();
-const sidecarSuffix = '.jiso-storage.json';
+const sidecarSuffix = '.kovo-storage.json';
 
 /**
  * Create an in-memory object store implementing `StorageCapability`. Useful for
@@ -109,7 +109,7 @@ const sidecarSuffix = '.jiso-storage.json';
  * @param options - Optional `now` clock for deterministic `lastModified` values.
  * @returns A `StorageCapability` backed by a `Map`.
  * @example
- * import { createMemoryStorage } from '@jiso/core';
+ * import { createMemoryStorage } from '@kovojs/core';
  *
  * const storage = createMemoryStorage();
  * await storage.put('avatars/1.png', new Uint8Array([1, 2, 3]));
@@ -164,7 +164,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
  * @param options - The `root` directory under which objects are stored.
  * @returns A `StorageCapability` backed by the filesystem.
  * @example
- * import { createFileSystemStorage } from '@jiso/core';
+ * import { createFileSystemStorage } from '@kovojs/core';
  *
  * const storage = createFileSystemStorage({ root: './uploads' });
  */
@@ -293,7 +293,7 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
  * @param key - The raw object key.
  * @returns The normalized key.
  * @example
- * import { normalizeStorageKey } from '@jiso/core';
+ * import { normalizeStorageKey } from '@kovojs/core';
  *
  * const key: string = normalizeStorageKey('/avatars//1.png');
  */
@@ -317,7 +317,7 @@ export function normalizeStorageKey(key: string): string {
  * @param body - The storage body to read.
  * @returns The body's bytes as a `Uint8Array`.
  * @example
- * import { storageBodyToBytes } from '@jiso/core';
+ * import { storageBodyToBytes } from '@kovojs/core';
  *
  * const bytes: Uint8Array = await storageBodyToBytes('hello');
  */
@@ -429,7 +429,7 @@ function isNotFoundError(error: unknown): boolean {
 }
 
 function storageEtag(key: string, size: number, lastModified: Date): string {
-  return `"jiso-${encodeURIComponent(key)}-${size}-${lastModified.getTime()}"`;
+  return `"kovo-${encodeURIComponent(key)}-${size}-${lastModified.getTime()}"`;
 }
 
 function copyInfo(info: StorageObjectInfo): StorageObjectInfo {

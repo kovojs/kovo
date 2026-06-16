@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { diagnosticDefinitions } from '@jiso/core';
-import { isJisoApp } from './app-guards.js';
+import { diagnosticDefinitions } from '@kovojs/core';
+import { isKovoApp } from './app-guards.js';
 import { createRequestHandler } from './app.js';
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 import {
   renderDiagnosticDocument,
   type DiagnosticDocumentDiagnostic,
@@ -12,28 +12,28 @@ import { readHeader, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
 import { renderFragmentWireHtml } from './wire-html.js';
 
-export interface JisoAppShellViteDevServer {
+export interface KovoAppShellViteDevServer {
   middlewares: {
-    use(handler: JisoAppShellViteMiddleware): void;
+    use(handler: KovoAppShellViteMiddleware): void;
   };
 }
 
-export interface JisoAppShellViteDevModuleServer extends JisoAppShellViteDevServer {
+export interface KovoAppShellViteDevModuleServer extends KovoAppShellViteDevServer {
   ssrLoadModule(id: string): Promise<Record<string, unknown>>;
 }
 
-export type JisoAppShellViteMiddleware = (
+export type KovoAppShellViteMiddleware = (
   request: IncomingMessage,
   response: ServerResponse,
   next: (error?: unknown) => void,
 ) => void;
 
-export interface JisoAppShellViteDevPlugin {
-  configureServer(server: JisoAppShellViteDevModuleServer): void | (() => void);
+export interface KovoAppShellViteDevPlugin {
+  configureServer(server: KovoAppShellViteDevModuleServer): void | (() => void);
   name: string;
 }
 
-export interface JisoAppShellViteDevPluginOptions {
+export interface KovoAppShellViteDevPluginOptions {
   appExportName?: string;
   /**
    * Defaults to true. Set to false when a dev middleware stack cannot safely
@@ -48,30 +48,30 @@ export interface JisoAppShellViteDevPluginOptions {
    */
   nodeHandlerExportName?: string;
   order?: 'pre' | 'post';
-  shouldHandleRequest?: (request: IncomingMessage, app: JisoApp) => boolean;
+  shouldHandleRequest?: (request: IncomingMessage, app: KovoApp) => boolean;
 }
 
-export interface JisoAppShellDevModuleDiagnostics {
+export interface KovoAppShellDevModuleDiagnostics {
   diagnostics: readonly DiagnosticDocumentDiagnostic[];
   fileName: string;
   moduleHrefs?: readonly string[];
   source?: string;
 }
 
-export interface JisoAppShellDevDiagnosticRecord {
+export interface KovoAppShellDevDiagnosticRecord {
   diagnostics: readonly DiagnosticDocumentDiagnostic[];
   fileName: string;
   moduleHrefs?: readonly string[];
   source?: string;
 }
 
-export interface JisoAppShellDevDiagnosticLedger {
-  diagnosticsForModuleHref(href: string): JisoAppShellDevDiagnosticRecord | undefined;
-  recordModuleDiagnostics(record: JisoAppShellDevModuleDiagnostics): void;
+export interface KovoAppShellDevDiagnosticLedger {
+  diagnosticsForModuleHref(href: string): KovoAppShellDevDiagnosticRecord | undefined;
+  recordModuleDiagnostics(record: KovoAppShellDevModuleDiagnostics): void;
 }
 
-export function createJisoAppShellDevDiagnosticLedger(): JisoAppShellDevDiagnosticLedger {
-  const moduleRecords = new Map<string, JisoAppShellDevDiagnosticRecord>();
+export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnosticLedger {
+  const moduleRecords = new Map<string, KovoAppShellDevDiagnosticRecord>();
   const hrefToFileName = new Map<string, string>();
 
   return {
@@ -85,7 +85,7 @@ export function createJisoAppShellDevDiagnosticLedger(): JisoAppShellDevDiagnost
 
       if (!record.diagnostics.some(isErrorDiagnostic)) return;
 
-      const nextRecord: JisoAppShellDevDiagnosticRecord = {
+      const nextRecord: KovoAppShellDevDiagnosticRecord = {
         diagnostics: record.diagnostics,
         fileName,
         ...(record.moduleHrefs === undefined ? {} : { moduleHrefs: record.moduleHrefs }),
@@ -100,18 +100,18 @@ export function createJisoAppShellDevDiagnosticLedger(): JisoAppShellDevDiagnost
   };
 }
 
-export function jisoAppShellViteDevPlugin(
-  options: JisoAppShellViteDevPluginOptions = {},
-): JisoAppShellViteDevPlugin {
+export function kovoAppShellViteDevPlugin(
+  options: KovoAppShellViteDevPluginOptions = {},
+): KovoAppShellViteDevPlugin {
   const moduleId = options.moduleId ?? '/src/app-shell.ts';
   const appExportName = options.appExportName ?? 'default';
 
-  const install = (server: JisoAppShellViteDevModuleServer) => {
+  const install = (server: KovoAppShellViteDevModuleServer) => {
     server.middlewares.use((request, response, next) => {
       Promise.resolve(server.ssrLoadModule(moduleId))
         .then((module) => {
-          const app = readJisoAppShellViteDevApp(module, appExportName, moduleId);
-          const shouldHandle = shouldHandleJisoAppShellViteDevRequest(
+          const app = readKovoAppShellViteDevApp(module, appExportName, moduleId);
+          const shouldHandle = shouldHandleKovoAppShellViteDevRequest(
             request,
             app,
             options.shouldHandleRequest,
@@ -121,7 +121,7 @@ export function jisoAppShellViteDevPlugin(
             return;
           }
 
-          return readJisoAppShellViteDevNodeHandler(
+          return readKovoAppShellViteDevNodeHandler(
             module,
             app,
             options,
@@ -138,18 +138,18 @@ export function jisoAppShellViteDevPlugin(
       if (options.order === 'post') return () => install(server);
       install(server);
     },
-    name: options.name ?? 'jiso-app-shell-dev',
+    name: options.name ?? 'kovo-app-shell-dev',
   };
 }
 
-export function shouldHandleJisoAppShellViteRequest(
+export function shouldHandleKovoAppShellViteRequest(
   request: IncomingMessage,
-  app: JisoApp,
+  app: KovoApp,
 ): boolean {
   if (!request.url) return false;
 
-  const url = new URL(request.url, 'http://jiso.local');
-  if (isUnversionedJisoAppShellClientModuleRequest(url)) return false;
+  const url = new URL(request.url, 'http://kovo.local');
+  if (isUnversionedKovoAppShellClientModuleRequest(url)) return false;
 
   const match = matchShellDispatch({
     endpoints: app.endpoints,
@@ -164,34 +164,34 @@ export function shouldHandleJisoAppShellViteRequest(
   return true;
 }
 
-function shouldHandleJisoAppShellViteDevRequest(
+function shouldHandleKovoAppShellViteDevRequest(
   request: IncomingMessage,
-  app: JisoApp,
-  shouldHandleRequest: JisoAppShellViteDevPluginOptions['shouldHandleRequest'],
+  app: KovoApp,
+  shouldHandleRequest: KovoAppShellViteDevPluginOptions['shouldHandleRequest'],
 ): boolean {
   if (!request.url) return false;
 
-  const url = new URL(request.url, 'http://jiso.local');
-  if (isUnversionedJisoAppShellClientModuleRequest(url)) return false;
+  const url = new URL(request.url, 'http://kovo.local');
+  if (isUnversionedKovoAppShellClientModuleRequest(url)) return false;
 
-  return shouldHandleRequest?.(request, app) ?? shouldHandleJisoAppShellViteRequest(request, app);
+  return shouldHandleRequest?.(request, app) ?? shouldHandleKovoAppShellViteRequest(request, app);
 }
 
-function isUnversionedJisoAppShellClientModuleRequest(url: URL): boolean {
+function isUnversionedKovoAppShellClientModuleRequest(url: URL): boolean {
   // SPEC §9.5 reserves immutable app-shell client modules as /c/<module>?v=.
   // During Vite dev, unversioned /c/ URLs must keep falling through to Vite's
   // asset/middleware stack instead of being claimed by app replay.
   return url.pathname.startsWith('/c/') && !url.searchParams.has('v');
 }
 
-export function renderJisoAppShellViteDevDiagnosticResponse(
-  app: JisoApp,
+export function renderKovoAppShellViteDevDiagnosticResponse(
+  app: KovoApp,
   request: IncomingMessage,
-  diagnostics: JisoAppShellDevDiagnosticLedger | undefined,
+  diagnostics: KovoAppShellDevDiagnosticLedger | undefined,
 ): RoutePageResponse | undefined {
   if (!diagnostics) return undefined;
 
-  const url = new URL(request.url ?? '/', 'http://jiso.local');
+  const url = new URL(request.url ?? '/', 'http://kovo.local');
   const match = matchShellDispatch({
     endpoints: app.endpoints,
     ...(request.method === undefined ? {} : { method: request.method }),
@@ -203,7 +203,7 @@ export function renderJisoAppShellViteDevDiagnosticResponse(
     if (!record) return undefined;
 
     const document = renderDiagnosticDocumentForRecord(record);
-    if (readHeader(request.headers, 'FW-Fragment')?.toLowerCase() !== 'true') return document;
+    if (readHeader(request.headers, 'Kovo-Fragment')?.toLowerCase() !== 'true') return document;
 
     return {
       body: renderFragmentWireHtml({
@@ -211,7 +211,7 @@ export function renderJisoAppShellViteDevDiagnosticResponse(
         target: firstMutationDiagnosticTarget(request.headers),
       }),
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       },
       status: 500,
     };
@@ -232,7 +232,7 @@ export function renderJisoAppShellViteDevDiagnosticResponse(
 }
 
 function renderDiagnosticDocumentForRecord(
-  record: JisoAppShellDevDiagnosticRecord,
+  record: KovoAppShellDevDiagnosticRecord,
 ): RoutePageResponse & { body: string } {
   return renderDiagnosticDocument({
     diagnostics: record.diagnostics,
@@ -244,7 +244,7 @@ function renderDiagnosticDocumentForRecord(
 
 function firstMutationDiagnosticTarget(headers: IncomingMessage['headers']): string {
   return (
-    (readHeader(headers, 'FW-Targets') ?? '')
+    (readHeader(headers, 'Kovo-Targets') ?? '')
       .split(/[;,]/)
       .map((target) => target.trim())
       .map((target) => target.split('=')[0]?.trim() ?? '')
@@ -254,7 +254,7 @@ function firstMutationDiagnosticTarget(headers: IncomingMessage['headers']): str
 
 function clearModuleRecord(
   fileName: string,
-  moduleRecords: Map<string, JisoAppShellDevDiagnosticRecord>,
+  moduleRecords: Map<string, KovoAppShellDevDiagnosticRecord>,
   hrefToFileName: Map<string, string>,
 ): void {
   const existing = moduleRecords.get(fileName);
@@ -266,7 +266,7 @@ function clearModuleRecord(
   }
 }
 
-function moduleDiagnosticHrefs(record: JisoAppShellDevDiagnosticRecord): string[] {
+function moduleDiagnosticHrefs(record: KovoAppShellDevDiagnosticRecord): string[] {
   return [
     ...new Set([...clientModuleHrefsForSourceFile(record.fileName), ...(record.moduleHrefs ?? [])]),
   ];
@@ -280,7 +280,7 @@ function clientModuleHrefsForSourceFile(fileName: string): string[] {
 }
 
 function normalizedModuleHref(href: string): string {
-  const url = new URL(href, 'http://jiso.local');
+  const url = new URL(href, 'http://kovo.local');
   return slashPath(url.pathname);
 }
 
@@ -288,27 +288,27 @@ function isErrorDiagnostic(diagnostic: DiagnosticDocumentDiagnostic): boolean {
   return diagnosticDefinitions[diagnostic.code].severity === 'error';
 }
 
-function readJisoAppShellViteDevApp(
+function readKovoAppShellViteDevApp(
   module: Record<string, unknown>,
   exportName: string,
   moduleId: string,
-): JisoApp {
+): KovoApp {
   const app = module[exportName];
-  if (isJisoApp(app)) return app;
+  if (isKovoApp(app)) return app;
 
-  throw new Error(`${moduleId} must export ${exportName} as a Jiso app for Vite dev.`);
+  throw new Error(`${moduleId} must export ${exportName} as a Kovo app for Vite dev.`);
 }
 
-function readJisoAppShellViteDevNodeHandler(
+function readKovoAppShellViteDevNodeHandler(
   module: Record<string, unknown>,
-  app: JisoApp,
-  options: JisoAppShellViteDevPluginOptions,
+  app: KovoApp,
+  options: KovoAppShellViteDevPluginOptions,
   exportName: string | undefined,
   moduleId: string,
-): JisoAppShellViteMiddleware {
+): KovoAppShellViteMiddleware {
   if (exportName !== undefined) {
     const handler = module[exportName];
-    if (isJisoAppShellViteDevNodeHandler(handler)) {
+    if (isKovoAppShellViteDevNodeHandler(handler)) {
       return (request, response, next) => {
         Promise.resolve(handler(request, response)).catch(next);
       };
@@ -325,7 +325,7 @@ function readJisoAppShellViteDevNodeHandler(
   return (request, response) => nodeHandler(request, response);
 }
 
-function isJisoAppShellViteDevNodeHandler(value: unknown): value is NodeRequestHandler {
+function isKovoAppShellViteDevNodeHandler(value: unknown): value is NodeRequestHandler {
   // SPEC §9.5 keeps the public handler currency as Request -> Response; this
   // optional dev hook is only for the adapter edge and must be a Node handler.
   return typeof value === 'function' && value.length >= 2;

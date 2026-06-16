@@ -371,7 +371,7 @@ export function menubarTypeahead(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -392,7 +392,7 @@ export function menubarSubmenuTriggerClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -409,7 +409,7 @@ export function menubarItemPointerEnter(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -430,7 +430,7 @@ export function menubarItemClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -450,7 +450,7 @@ export function menubarItemKeyDown(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.

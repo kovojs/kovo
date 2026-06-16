@@ -1,40 +1,40 @@
 import type { IncomingMessage } from 'node:http';
-import { isJisoApp } from './app-guards.js';
+import { isKovoApp } from './app-guards.js';
 import { createRequestHandler } from './app.js';
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 import { toNodeHandler, writeWebResponseToNode } from './node.js';
 import { routeResponseToWebResponse } from './response.js';
 import {
-  renderJisoAppShellViteDevDiagnosticResponse,
-  shouldHandleJisoAppShellViteRequest,
-  type JisoAppShellDevDiagnosticLedger,
-  type JisoAppShellViteDevServer,
+  renderKovoAppShellViteDevDiagnosticResponse,
+  shouldHandleKovoAppShellViteRequest,
+  type KovoAppShellDevDiagnosticLedger,
+  type KovoAppShellViteDevServer,
 } from './vite-dev.js';
-import type { JisoAppShellViteOutputBundle } from './vite-manifest.js';
-import type { JisoAppShellVitePluginBuildOptions } from './vite-build.js';
-import type { JisoAppShellViteOutputOptions } from './vite-build-output.js';
-import { writeJisoAppShellVitePluginBuild } from './vite-plugin-build.js';
+import type { KovoAppShellViteOutputBundle } from './vite-manifest.js';
+import type { KovoAppShellVitePluginBuildOptions } from './vite-build.js';
+import type { KovoAppShellViteOutputOptions } from './vite-build-output.js';
+import { writeKovoAppShellVitePluginBuild } from './vite-plugin-build.js';
 
-export interface JisoAppShellVitePlugin {
-  configureServer(server: JisoAppShellViteDevServer): void;
-  name: 'jiso-app-shell';
+export interface KovoAppShellVitePlugin {
+  configureServer(server: KovoAppShellViteDevServer): void;
+  name: 'kovo-app-shell';
   writeBundle?(
-    options: JisoAppShellViteOutputOptions,
-    bundle: JisoAppShellViteOutputBundle,
+    options: KovoAppShellViteOutputOptions,
+    bundle: KovoAppShellViteOutputBundle,
   ): Promise<void>;
 }
 
-export interface JisoAppShellVitePluginOptions {
-  build?: JisoAppShellVitePluginBuildOptions;
-  devDiagnostics?: JisoAppShellDevDiagnosticLedger;
-  shouldHandleRequest?: (request: IncomingMessage, app: JisoApp) => boolean;
+export interface KovoAppShellVitePluginOptions {
+  build?: KovoAppShellVitePluginBuildOptions;
+  devDiagnostics?: KovoAppShellDevDiagnosticLedger;
+  shouldHandleRequest?: (request: IncomingMessage, app: KovoApp) => boolean;
 }
 
-export function jisoAppShellVitePlugin(
-  app: JisoApp,
-  options: JisoAppShellVitePluginOptions = {},
-): JisoAppShellVitePlugin {
-  assertJisoAppShellVitePluginApp(app);
+export function kovoAppShellVitePlugin(
+  app: KovoApp,
+  options: KovoAppShellVitePluginOptions = {},
+): KovoAppShellVitePlugin {
+  assertKovoAppShellVitePluginApp(app);
   const requestHandler = createRequestHandler(app);
   const nodeHandler = toNodeHandler(requestHandler);
 
@@ -43,13 +43,13 @@ export function jisoAppShellVitePlugin(
       server.middlewares.use((request, response, next) => {
         const shouldHandle =
           options.shouldHandleRequest?.(request, app) ??
-          shouldHandleJisoAppShellViteRequest(request, app);
+          shouldHandleKovoAppShellViteRequest(request, app);
         if (!shouldHandle) {
           next();
           return;
         }
 
-        const diagnosticResponse = renderJisoAppShellViteDevDiagnosticResponse(
+        const diagnosticResponse = renderKovoAppShellViteDevDiagnosticResponse(
           app,
           request,
           options.devDiagnostics,
@@ -68,14 +68,14 @@ export function jisoAppShellVitePlugin(
         Promise.resolve(nodeHandler(request, response)).catch(next);
       });
     },
-    name: 'jiso-app-shell',
+    name: 'kovo-app-shell',
     ...(options.build
       ? {
           async writeBundle(outputOptions, bundle) {
             const buildOptions = options.build;
             if (!buildOptions) return;
 
-            await writeJisoAppShellVitePluginBuild({
+            await writeKovoAppShellVitePluginBuild({
               app,
               buildOptions,
               bundle,
@@ -87,10 +87,10 @@ export function jisoAppShellVitePlugin(
   };
 }
 
-function assertJisoAppShellVitePluginApp(app: JisoApp): void {
-  if (isJisoApp(app)) return;
+function assertKovoAppShellVitePluginApp(app: KovoApp): void {
+  if (isKovoApp(app)) return;
 
   throw new TypeError(
-    'jisoAppShellVitePlugin() requires a Jiso app aggregate. SPEC §9.5 Vite dev/build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
+    'kovoAppShellVitePlugin() requires a Kovo app aggregate. SPEC §9.5 Vite dev/build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
   );
 }

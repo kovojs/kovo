@@ -51,7 +51,7 @@ describe('reference app shell HTTP entry', () => {
       const loginPage = await fetch(`${origin}/login?next=/admin`);
       const loginPageBody = await loginPage.text();
       expect(loginPage.status, formatDevServerFailure(loginPageBody, devServerError)).toBe(200);
-      expect(loginPageBody).toContain('<title>Jiso Reference Sign In</title>');
+      expect(loginPageBody).toContain('<title>Kovo Reference Sign In</title>');
       expect(loginPageBody).toContain('action="/_m/auth/sign-in"');
       const loginCsrf = hiddenInputValue(loginPageBody, 'csrf');
 
@@ -109,7 +109,7 @@ describe('reference app shell HTTP entry', () => {
       expect(output).toContain('diagnostics=0');
 
       const html = await readFile(path.join(distDir, 'index.html'), 'utf8');
-      expect(html).toContain('<title>Jiso Reference Public Shell</title>');
+      expect(html).toContain('<title>Kovo Reference Public Shell</title>');
       expect(html).toContain('data-reference-public-shell');
       expect(html).toContain('/c/reference.client.js?v=reference-r7');
 
@@ -121,7 +121,7 @@ describe('reference app shell HTTP entry', () => {
   });
 
   it('keeps reference static export failures from creating partial output', async () => {
-    const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-reference-export-'));
+    const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-reference-export-'));
     const outDir = path.join(tmpDir, 'dist');
 
     try {
@@ -137,7 +137,7 @@ describe('reference app shell HTTP entry', () => {
 
       expect(result.status, output).toBe(1);
       expect(output).toContain('reference-export/v1');
-      expect(output).toContain('ERROR FW229 route=/login');
+      expect(output).toContain('ERROR KV229 route=/login');
       await expect(readdir(outDir)).rejects.toThrow();
     } finally {
       await rm(tmpDir, { force: true, recursive: true });
@@ -158,7 +158,7 @@ describe('reference app shell HTTP entry', () => {
     const loginPage = await fetch(`${origin}/login?next=/admin`);
     const loginPageBody = await loginPage.text();
     expect(loginPage.status, loginPageBody).toBe(200);
-    expect(loginPageBody).toContain('<title>Jiso Reference Sign In</title>');
+    expect(loginPageBody).toContain('<title>Kovo Reference Sign In</title>');
     expect(loginPageBody).toContain('action="/_m/auth/sign-in"');
     expect(loginPageBody).toContain('name="next" value="/admin"');
     const loginCsrf = hiddenInputValue(loginPageBody, 'csrf');
@@ -194,7 +194,7 @@ describe('reference app shell HTTP entry', () => {
 
     expect(login.status).toBe(303);
     expect(login.headers.get('location')).toBe('/admin');
-    expect(sessionCookie).toBe('jiso_reference_session=session-u1');
+    expect(sessionCookie).toBe('kovo_reference_session=session-u1');
 
     const account = await fetch(`${origin}/account`, {
       headers: { cookie: sessionCookie },

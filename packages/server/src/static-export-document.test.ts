@@ -18,7 +18,7 @@ describe('server static export document boundary', () => {
         status: 200,
       });
     };
-    const context = { handler, origin: 'https://jiso.local/root?ignored=1' };
+    const context = { handler, origin: 'https://kovo.local/root?ignored=1' };
 
     await expect(
       replayStaticExportRouteDocumentArtifact({
@@ -37,13 +37,13 @@ describe('server static export document boundary', () => {
     expect(seen).toEqual(['GET /docs/intro']);
   });
 
-  it('raises FW229 when synthetic route replay reaches a non-document boundary', async () => {
+  it('raises KV229 when synthetic route replay reaches a non-document boundary', async () => {
     const handler: RequestHandler = async () =>
       new Response('Method Not Allowed', {
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
         status: 405,
       });
-    const context = { handler, origin: 'https://jiso.local' };
+    const context = { handler, origin: 'https://kovo.local' };
 
     await expect(
       replayStaticExportRouteDocumentArtifact({
@@ -51,10 +51,10 @@ describe('server static export document boundary', () => {
         routePath: '/private',
       }),
     ).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining(
             "successful HTML route documents; '/private' returned status 405",
           ),

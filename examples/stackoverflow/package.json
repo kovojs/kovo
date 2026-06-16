@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/example-stackoverflow",
+  "name": "@kovojs/example-stackoverflow",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,16 +13,16 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
-    "@jiso/core": "workspace:*",
-    "@jiso/drizzle": "workspace:*",
-    "@jiso/runtime": "workspace:*",
-    "@jiso/server": "workspace:*",
+    "@kovojs/core": "workspace:*",
+    "@kovojs/drizzle": "workspace:*",
+    "@kovojs/runtime": "workspace:*",
+    "@kovojs/server": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
-    "@jiso/test": "workspace:*",
+    "@kovojs/test": "workspace:*",
     "@tailwindcss/vite": "^4.3.0",
-    "fw": "workspace:*",
+    "kovo": "workspace:*",
     "tailwindcss": "^4.3.0",
     "vite": "8.0.16",
     "vite-plus": "^0.1.24",

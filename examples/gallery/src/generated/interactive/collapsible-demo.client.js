@@ -1,7 +1,7 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
-import { collapsibleTriggerClick as _collapsibleTriggerClick } from '@jiso/headless-ui/primitives';
+import { collapsibleTriggerClick as _collapsibleTriggerClick } from '@kovojs/headless-ui/primitives';
 
 export const GalleryCollapsibleDemo$summary_click = handler((event, ctx) => {
   const result = _collapsibleTriggerClick(Object(event), { open: ctx.state.open });

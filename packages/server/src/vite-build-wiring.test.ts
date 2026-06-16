@@ -7,14 +7,14 @@ import { createApp, createRequestHandler } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import {
-  createJisoAppShellViteBuild,
-  createJisoAppShellViteBuildFromBundle,
-  createJisoAppShellViteBuildFromManifestFile,
-  jisoAppShellVitePlugin,
-  type JisoAppShellBuild,
-  type JisoAppShellViteBuildOutput,
+  createKovoAppShellViteBuild,
+  createKovoAppShellViteBuildFromBundle,
+  createKovoAppShellViteBuildFromManifestFile,
+  kovoAppShellVitePlugin,
+  type KovoAppShellBuild,
+  type KovoAppShellViteBuildOutput,
 } from './api/app-shell/vite.js';
-import { writeJisoAppShellViteBuildOutput } from './vite-build-output.js';
+import { writeKovoAppShellViteBuildOutput } from './vite-build-output.js';
 
 describe('server app shell Vite plugin', () => {
   it('wires build manifest hints and compiled client modules through the app shell', async () => {
@@ -26,7 +26,7 @@ describe('server app shell Vite plugin', () => {
       },
       stylesheets: ['/assets/manual.css'],
     });
-    const build = createJisoAppShellViteBuild({
+    const build = createKovoAppShellViteBuild({
       app: createApp({ clientModules: registry, routes: [cartRoute] }),
       clientModules: [
         {
@@ -103,7 +103,7 @@ describe('server app shell Vite plugin', () => {
         return '<main>Account</main>';
       },
     });
-    const build = createJisoAppShellViteBuild({
+    const build = createKovoAppShellViteBuild({
       app: createApp({ routes: [accountRoute] }),
       manifest: {
         '_shared.js': {
@@ -141,7 +141,7 @@ describe('server app shell Vite plugin', () => {
 
   it('rejects stale route-entry maps through the Vite build helper', () => {
     expect(() =>
-      createJisoAppShellViteBuild({
+      createKovoAppShellViteBuild({
         app: createApp({ routes: [route('/cart', {})] }),
         manifest: {
           'src/account.client.ts': {
@@ -155,9 +155,9 @@ describe('server app shell Vite plugin', () => {
     ).toThrow('App shell route build entry does not match an app route: /account');
   });
 
-  it('blocks FW228 route-table diagnostics through the Vite build helper', () => {
+  it('blocks KV228 route-table diagnostics through the Vite build helper', () => {
     expect(() =>
-      createJisoAppShellViteBuild({
+      createKovoAppShellViteBuild({
         app: createApp({
           routes: [route('/products/:id', {}), route('/products/new', {})],
         }),
@@ -171,12 +171,12 @@ describe('server app shell Vite plugin', () => {
         },
       }),
     ).toThrow(
-      "FW228 Ambiguous route table: '/products/:id' and '/products/new' can both match canonical request path '/products/new'.",
+      "KV228 Ambiguous route table: '/products/:id' and '/products/new' can both match canonical request path '/products/new'.",
     );
   });
 
   it('creates a build from a Vite output bundle manifest', () => {
-    const build = createJisoAppShellViteBuildFromBundle({
+    const build = createKovoAppShellViteBuildFromBundle({
       app: createApp({ routes: [route('/cart', {})] }),
       bundle: {
         '.vite/manifest.json': {
@@ -211,7 +211,7 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('creates a Vite app-shell build directly from a manifest file', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-file-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-manifest-file-'));
 
     try {
       await mkdir(join(distDir, '.vite'), { recursive: true });
@@ -225,7 +225,7 @@ describe('server app shell Vite plugin', () => {
         }),
       );
 
-      const build = await createJisoAppShellViteBuildFromManifestFile({
+      const build = await createKovoAppShellViteBuildFromManifestFile({
         app: createApp({ routes: [route('/cart', {})] }),
         manifestFile: join(distDir, '.vite/manifest.json'),
         routeEntryMap: {
@@ -252,7 +252,7 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('applies Vite base paths to build route hints and asset planning', () => {
-    const build = createJisoAppShellViteBuild({
+    const build = createKovoAppShellViteBuild({
       app: createApp({ routes: [route('/cart', {})] }),
       base: '/shop/',
       manifest: {
@@ -282,10 +282,10 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('emits compiled app-shell client modules into the Vite output tree', async () => {
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-client-modules-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-client-modules-'));
 
     try {
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({ routes: [route('/', {})] }),
         clientModules: [
           {
@@ -296,7 +296,7 @@ describe('server app shell Vite plugin', () => {
         ],
       });
 
-      await expect(writeJisoAppShellViteBuildOutput(build, { outDir })).resolves.toEqual({
+      await expect(writeKovoAppShellViteBuildOutput(build, { outDir })).resolves.toEqual({
         clientModuleOutputPlan: [
           {
             path: '/c/cart.client.js',
@@ -323,10 +323,10 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('emits app-shell build output from the Vite plugin writeBundle hook', async () => {
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-plugin-build-'));
-    const built: JisoAppShellBuild[] = [];
-    const outputs: JisoAppShellViteBuildOutput[] = [];
-    const plugin = jisoAppShellVitePlugin(createApp({ routes: [route('/cart', {})] }), {
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-plugin-build-'));
+    const built: KovoAppShellBuild[] = [];
+    const outputs: KovoAppShellViteBuildOutput[] = [];
+    const plugin = kovoAppShellVitePlugin(createApp({ routes: [route('/cart', {})] }), {
       build: {
         clientModules: [
           {

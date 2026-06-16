@@ -1,5 +1,5 @@
 import { createRequestHandler } from './app.js';
-import type { JisoApp, RequestHandler } from './app-types.js';
+import type { KovoApp, RequestHandler } from './app-types.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
 export interface StaticExportReplayContext {
@@ -8,7 +8,7 @@ export interface StaticExportReplayContext {
 }
 
 export interface StaticExportReplayContextOptions {
-  app: JisoApp;
+  app: KovoApp;
   origin?: string;
 }
 
@@ -23,7 +23,7 @@ export function createStaticExportReplayContext({
 }
 
 function staticExportReplayOrigin(origin: string | undefined): string {
-  if (origin === undefined) return 'https://jiso.local';
+  if (origin === undefined) return 'https://kovo.local';
 
   let url: URL;
   try {
@@ -48,7 +48,7 @@ function invalidStaticExportOrigin(origin: string): StaticExportError {
   return new StaticExportError([
     staticExportDiagnostic(
       'origin',
-      `FW229 static export refused origin '${origin}'. SPEC §9.5 synthetic replay origin must be an absolute http(s) origin without a path, search, or hash.`,
+      `KV229 static export refused origin '${origin}'. SPEC §9.5 synthetic replay origin must be an absolute http(s) origin without a path, search, or hash.`,
     ),
   ]);
 }

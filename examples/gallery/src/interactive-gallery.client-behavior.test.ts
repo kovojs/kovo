@@ -680,13 +680,13 @@ describe('compiled interactive gallery demos', () => {
       plan: 'team',
       shippingDisabled: false,
     };
-    clientHandler(field, 'GalleryFieldDemo$input_input')(inputEvent('ada@jiso.dev'), {
+    clientHandler(field, 'GalleryFieldDemo$input_input')(inputEvent('ada@kovo.sh'), {
       params: {},
       signal,
       state: fieldState,
     });
     expect(fieldState).toEqual({
-      email: 'ada@jiso.dev',
+      email: 'ada@kovo.sh',
       invalid: false,
       plan: 'team',
       shippingDisabled: false,
@@ -697,7 +697,7 @@ describe('compiled interactive gallery demos', () => {
       state: fieldState,
     });
     expect(fieldState).toEqual({
-      email: 'ada@jiso.dev',
+      email: 'ada@kovo.sh',
       invalid: false,
       plan: 'enterprise',
       shippingDisabled: false,
@@ -708,7 +708,7 @@ describe('compiled interactive gallery demos', () => {
       state: fieldState,
     });
     expect(fieldState).toEqual({
-      email: 'ada@jiso.dev',
+      email: 'ada@kovo.sh',
       invalid: false,
       plan: 'enterprise',
       shippingDisabled: true,
@@ -719,7 +719,7 @@ describe('compiled interactive gallery demos', () => {
       state: fieldState,
     });
     expect(fieldState).toEqual({
-      email: 'ada@jiso.dev',
+      email: 'ada@kovo.sh',
       invalid: false,
       plan: 'enterprise',
       shippingDisabled: false,

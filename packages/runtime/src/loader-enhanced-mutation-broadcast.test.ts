@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installJisoLoader } from './index.js';
+import { createQueryStore, installKovoLoader } from './index.js';
 import {
   FakeBroadcastChannel,
   FakeBroadcastHub,
@@ -49,8 +49,8 @@ describe('loader enhanced mutation broadcasts', () => {
         headers: { get: () => null },
         async text() {
           return [
-            '<fw-query name="cart">{"count":4}</fw-query>',
-            '<fw-fragment target="cart-badge"><cart-badge>4</cart-badge></fw-fragment>',
+            '<kovo-query name="cart">{"count":4}</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>4</cart-badge></kovo-fragment>',
           ].join('\n');
         },
       }));
@@ -60,7 +60,7 @@ describe('loader enhanced mutation broadcasts', () => {
       mutationRootA.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>0</cart-badge>'));
       mutationRootB.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>0</cart-badge>'));
 
-      installJisoLoader({
+      installKovoLoader({
         enhancedMutations: {
           fetch,
           formData: () => formData,
@@ -71,7 +71,7 @@ describe('loader enhanced mutation broadcasts', () => {
         importModule: vi.fn(),
         root: loaderRootB,
       });
-      installJisoLoader({
+      installKovoLoader({
         enhancedMutations: {
           fetch,
           formData: () => formData,
@@ -89,7 +89,7 @@ describe('loader enhanced mutation broadcasts', () => {
         type: 'submit',
       });
 
-      expect(channelNames).toEqual(['jiso:mutation-response', 'jiso:mutation-response']);
+      expect(channelNames).toEqual(['kovo:mutation-response', 'kovo:mutation-response']);
       expect(storeA.get('cart')).toEqual({ count: 4 });
       expect(storeB.get('cart')).toEqual({ count: 4 });
       expect(mutationRootA.targets.get('cart-badge')?.html).toBe('<cart-badge>4</cart-badge>');
@@ -118,7 +118,7 @@ describe('loader enhanced mutation broadcasts', () => {
       const onError = vi.fn();
       const applyError = new Error('default broadcast apply failed');
 
-      installJisoLoader({
+      installKovoLoader({
         enhancedMutations: {
           applyQuery(query) {
             if (query.name === 'cart') throw applyError;
@@ -135,11 +135,11 @@ describe('loader enhanced mutation broadcasts', () => {
       channels[0]?.onmessage?.({
         data: {
           body: [
-            '<fw-query name="cart">{"count":2}</fw-query>',
-            '<fw-query name="product:p1">{"stock":8}</fw-query>',
+            '<kovo-query name="cart">{"count":2}</kovo-query>',
+            '<kovo-query name="product:p1">{"stock":8}</kovo-query>',
           ].join('\n'),
           changes: [],
-          type: 'jiso:mutation-response',
+          type: 'kovo:mutation-response',
         },
       });
 

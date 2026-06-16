@@ -29,8 +29,8 @@ const {
   extractTouchGraphFromProject,
   serializeInvalidationRegistry,
   serializeTouchGraph,
-} = await import('@jiso/drizzle/static');
-const { deriveOptimistic, serializeDerivedOptimistic } = await import('@jiso/drizzle/derive');
+} = await import('@kovojs/drizzle/static');
+const { deriveOptimistic, serializeDerivedOptimistic } = await import('@kovojs/drizzle/derive');
 const { createSoGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -110,14 +110,14 @@ const effectFacts = extractSymbolicEffectsFromProject({ files: projectFiles().fi
 const shapes = extractAlgebraicShapesFromProject({ files: projectFiles().files });
 
 // The `domain('x')` factory calls in domains.ts surface as spurious
-// `<domain>.<spread>` FW406 entries; keep only the real mutation handlers (the
+// `<domain>.<spread>` KV406 entries; keep only the real mutation handlers (the
 // entries with extracted writes). These are keyed by handler function name.
 const MUTATION_KEYS = ['postQuestion', 'postAnswer', 'voteUp'];
 const soTouchGraph = Object.fromEntries(
   MUTATION_KEYS.map((key) => {
     const entry = extractedTouchGraph[key];
     assert.ok(entry, `expected an extracted touch-graph entry for ${key}`);
-    assert.equal(entry.unresolved.length, 0, `${key} extracted clean touches (no FW406)`);
+    assert.equal(entry.unresolved.length, 0, `${key} extracted clean touches (no KV406)`);
     assert.ok(entry.touches.length > 0, `${key} has extracted touches`);
     // Normalize the virtual extraction paths back to the canonical source path.
     const normalized = {
@@ -172,7 +172,7 @@ for (const mutationKey of MUTATION_KEYS) {
   optimisticByMutation.set(mutationKey, entries);
 }
 
-// ── Build the FwExplainInput graph.json (touchGraph EXTRACTED) ─────────────────
+// ── Build the KovoExplainInput graph.json (touchGraph EXTRACTED) ─────────────────
 const graph = createSoGraph(soTouchGraph);
 const graphJson = `${formatJson(graph)}\n`;
 
@@ -197,7 +197,7 @@ import type { AnswerListResult, QuestionListResult, QuestionScoreResult } from '
 
 ${serializedTouchGraph}
 ${invalidationRegistrySource}
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface QueryRegistry {
     questionList: QuestionListResult;
     answerList: AnswerListResult;

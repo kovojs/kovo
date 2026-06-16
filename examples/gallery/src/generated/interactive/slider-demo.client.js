@@ -1,12 +1,12 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   sliderKeyDown as _sliderKeyDown,
   sliderThumbDrag as _sliderThumbDrag,
   sliderThumbDragStart as _sliderThumbDragStart,
   sliderTrackPointerDown as _sliderTrackPointerDown,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GallerySliderDemo$div_pointerdown = handler((event, ctx) => {
   const result = _sliderTrackPointerDown(Object(event), {

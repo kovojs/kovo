@@ -1,14 +1,14 @@
 import { isAbsolute, relative } from 'node:path';
 
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
 import { clientModuleUrl, clientModuleVersion } from './lower/handlers.js';
 import type { PackageComponentPrefixFact } from './types.js';
 
-export interface JisoVitePlugin {
-  configureServer?: (server: JisoViteDevServer) => void;
-  name: 'jiso';
+export interface KovoVitePlugin {
+  configureServer?: (server: KovoViteDevServer) => void;
+  name: 'kovo';
   transform: (
     source: string,
     id: string,
@@ -18,32 +18,32 @@ export interface JisoVitePlugin {
   };
 }
 
-export type JisoViteDiagnosticReporter = (diagnostic: CompilerDiagnostic) => void;
+export type KovoViteDiagnosticReporter = (diagnostic: CompilerDiagnostic) => void;
 
-export interface JisoViteModuleDiagnosticReport {
+export interface KovoViteModuleDiagnosticReport {
   diagnostics: readonly CompilerDiagnostic[];
   fileName: string;
   source: string;
 }
 
-export type JisoViteModuleDiagnosticReporter = (report: JisoViteModuleDiagnosticReport) => void;
+export type KovoViteModuleDiagnosticReporter = (report: KovoViteModuleDiagnosticReport) => void;
 
-export interface JisoVitePluginOptions {
-  onDiagnostic?: JisoViteDiagnosticReporter;
-  onModuleDiagnostics?: JisoViteModuleDiagnosticReporter;
+export interface KovoVitePluginOptions {
+  onDiagnostic?: KovoViteDiagnosticReporter;
+  onModuleDiagnostics?: KovoViteModuleDiagnosticReporter;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
 }
 
-export interface JisoViteDevServer {
+export interface KovoViteDevServer {
   config?: {
     root?: string;
   };
   middlewares: {
-    use(handler: JisoViteMiddleware): void;
+    use(handler: KovoViteMiddleware): void;
   };
 }
 
-export type JisoViteMiddleware = (
+export type KovoViteMiddleware = (
   req: { url?: string },
   res: {
     end(body: string): void;
@@ -68,10 +68,10 @@ interface ViteCompileResult {
   }[];
 }
 
-export function createJisoVitePlugin(
+export function createKovoVitePlugin(
   compileComponentModule: (options: ViteCompileOptions) => ViteCompileResult,
-  options: JisoVitePluginOptions = {},
-): JisoVitePlugin {
+  options: KovoVitePluginOptions = {},
+): KovoVitePlugin {
   const clientModules = new Map<string, string>();
   let root = process.cwd();
 
@@ -91,7 +91,7 @@ export function createJisoVitePlugin(
         res.end(source);
       });
     },
-    name: 'jiso',
+    name: 'kovo',
     transform(source: string, id: string) {
       if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
 
@@ -145,7 +145,7 @@ function viteDiagnosticErrorMessage(diagnostics: readonly CompilerDiagnostic[]):
   // SPEC §5.2 hard rule 5: diagnostics are teaching errors, so Vite surfaces the
   // source site plus the compiler's lowering/fix help instead of a terse code.
   return [
-    `Jiso Vite transform failed with ${diagnostics.length} error diagnostic${plural}.`,
+    `Kovo Vite transform failed with ${diagnostics.length} error diagnostic${plural}.`,
     diagnostics.map(formatCompilerDiagnostic).join('\n\n'),
   ].join('\n\n');
 }

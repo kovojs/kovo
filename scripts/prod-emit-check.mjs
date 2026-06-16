@@ -5,7 +5,7 @@ import { compileComponentModule } from '../dist/compiler/src/index.mjs';
 const result = compileComponentModule({
   fileName: 'routes/products/product-card.tsx',
   source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const ProductCard = component('product-card', {
   render: () => (

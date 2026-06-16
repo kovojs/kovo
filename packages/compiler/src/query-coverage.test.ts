@@ -49,7 +49,7 @@ export const CartBadge = component('cart-badge', {
       },
     ]);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, derive } from '@jiso/runtime';",
+      "import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime';",
     );
     expect(clientSource).toContain(
       'export const CartBadge$button_disabled_derive = derive(["cart"], (cart) => cart.count === 0);',
@@ -227,7 +227,7 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('classifies query-dependent render positions for FW311 coverage', () => {
+  it('classifies query-dependent render positions for KV311 coverage', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
@@ -287,7 +287,7 @@ export const CartBadge = component('cart-badge', {
     ]);
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW223',
+        code: 'KV223',
         fileName: 'cart-badge.tsx',
         length: 22,
         message:
@@ -296,7 +296,7 @@ export const CartBadge = component('cart-badge', {
         start: { column: 13, line: 6 },
       },
       {
-        code: 'FW311',
+        code: 'KV311',
         fileName: 'cart-badge.tsx',
         length: 13,
         message:
@@ -305,7 +305,7 @@ export const CartBadge = component('cart-badge', {
         start: { column: 26, line: 9 },
       },
       {
-        code: 'FW311',
+        code: 'KV311',
         fileName: 'cart-badge.tsx',
         length: 12,
         message:
@@ -316,7 +316,7 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
-  it('reports FW311 positions in author coordinates after inline derive prepends exports', () => {
+  it('reports KV311 positions in author coordinates after inline derive prepends exports', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
@@ -335,7 +335,7 @@ export const CartBadge = component('cart-badge', {
     });
 
     expect(result.diagnostics).toContainEqual({
-      code: 'FW311',
+      code: 'KV311',
       fileName: 'cart-badge.tsx',
       length: 13,
       message:
@@ -345,7 +345,7 @@ export const CartBadge = component('cart-badge', {
     });
   });
 
-  it('reports FW311 for compound query expressions in lowerer-skipped positions', () => {
+  it('reports KV311 for compound query expressions in lowerer-skipped positions', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
@@ -371,14 +371,14 @@ export const CartBadge = component('cart-badge', {
     );
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
-        code: 'FW311',
+        code: 'KV311',
         message:
           'Query/state-dependent DOM position has no update status. CartBadge cart.count expression',
       }),
     );
   });
 
-  it('classifies fragment-target query expressions as fragment-covered without FW311', () => {
+  it('classifies fragment-target query expressions as fragment-covered without KV311', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
@@ -399,7 +399,7 @@ export const CartRow = component('cart-row', {
       query: 'cart.count',
       status: 'fragment',
     });
-    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'FW311' }));
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
   });
 
   it('does not classify fragment-target state expressions as fragment-covered', () => {
@@ -426,14 +426,14 @@ export const CartRow = component('cart-row', {
     );
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
-        code: 'FW311',
+        code: 'KV311',
         message:
           'Query/state-dependent DOM position has no update status. CartRow state.open expression',
       }),
     );
   });
 
-  it('reports FW311 positions in author coordinates after navigation and derive lowerings', () => {
+  it('reports KV311 positions in author coordinates after navigation and derive lowerings', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
@@ -454,7 +454,7 @@ export const CartBadge = component('cart-badge', {
     });
 
     expect(result.diagnostics).toContainEqual({
-      code: 'FW311',
+      code: 'KV311',
       fileName: 'cart-badge.tsx',
       length: 13,
       message:
@@ -470,8 +470,8 @@ export const CartBadge = component('cart-badge', {
       source: `
 export const CartBadge = component('cart-badge', {
   render: () => (
-    <ul data-bind-list="cart.items" fw-key="productId">
-      <template fw-stamp>
+    <ul data-bind-list="cart.items" kovo-key="productId">
+      <template kovo-stamp>
         <li>
           <span data-bind=".qty">{'<span data-bind=".qty">wrong</span>'}</span>
           <span data-bind=".name">Item</span>
@@ -635,7 +635,7 @@ export const CartBadge = component('cart-badge', {
 
     expect(bootstrap.fileName).toBe('generated/app.client.js');
     expect(bootstrap.source).toContain(
-      "import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';",
+      "import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';",
     );
     expect(bootstrap.source).toContain(
       'import { CartBadge$queryUpdatePlans } from "../components/cart/cart-badge.client.js";',
@@ -646,11 +646,11 @@ export const CartBadge = component('cart-badge', {
     expect(bootstrap.source).toContain('const queryPlans = {');
     expect(bootstrap.source).toContain('...CartBadge$queryUpdatePlans,');
     expect(bootstrap.source).toContain('...CartPanel$queryUpdatePlans,');
-    expect(bootstrap.source).toContain('installJisoLoader({');
+    expect(bootstrap.source).toContain('installKovoLoader({');
     expect(bootstrap.source).toContain('queryStore: store');
     expect(bootstrap.source).toContain('enhancedMutations: {');
     expect(bootstrap.source).toContain('queryPlans,');
-    expect(bootstrap.source).toContain('export function applyJisoDeferredStreamResponse');
+    expect(bootstrap.source).toContain('export function applyKovoDeferredStreamResponse');
     expect(bootstrap.source).toContain('return applyDeferredStreamResponseToDom({');
     expect(bootstrap.source).toContain('queryPlans,');
     expect(bootstrap.source).toContain('store,');

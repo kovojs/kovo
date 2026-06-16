@@ -6,51 +6,51 @@ import { describe, expect, it } from 'vitest';
 import { createApp, createRequestHandler } from './app.js';
 import { route } from './route.js';
 import {
-  createJisoAppShellViteBuildFromBundle,
-  jisoAppShellViteManifestStylesheetHrefFromFile,
-  jisoAppShellVitePlugin,
+  createKovoAppShellViteBuildFromBundle,
+  kovoAppShellViteManifestStylesheetHrefFromFile,
+  kovoAppShellVitePlugin,
 } from './api/app-shell/vite.js';
 import {
-  jisoAppShellViteManifestAssets,
-  jisoAppShellViteManifestAssetsFromFile,
-  jisoAppShellViteManifestFromBundle,
-  jisoAppShellViteManifestFromFile,
-  jisoAppShellViteManifestHints,
-  jisoAppShellViteManifestStylesheetHref,
-  jisoAppShellViteRouteEntries,
+  kovoAppShellViteManifestAssets,
+  kovoAppShellViteManifestAssetsFromFile,
+  kovoAppShellViteManifestFromBundle,
+  kovoAppShellViteManifestFromFile,
+  kovoAppShellViteManifestHints,
+  kovoAppShellViteManifestStylesheetHref,
+  kovoAppShellViteRouteEntries,
 } from './vite-manifest.js';
-import { jisoAppShellVitePlugin as splitJisoAppShellVitePlugin } from './vite-plugin.js';
+import { kovoAppShellVitePlugin as splitKovoAppShellVitePlugin } from './vite-plugin.js';
 
 describe('server app shell Vite plugin', () => {
   it('exports the Vite plugin from the split plugin boundary', () => {
-    expect(jisoAppShellVitePlugin).toBe(splitJisoAppShellVitePlugin);
+    expect(kovoAppShellVitePlugin).toBe(splitKovoAppShellVitePlugin);
 
     const app = createApp();
-    expect(jisoAppShellVitePlugin(app).name).toBe('jiso-app-shell');
+    expect(kovoAppShellVitePlugin(app).name).toBe('kovo-app-shell');
     expect(() =>
-      jisoAppShellVitePlugin(createRequestHandler(app) as unknown as ReturnType<typeof createApp>),
+      kovoAppShellVitePlugin(createRequestHandler(app) as unknown as ReturnType<typeof createApp>),
     ).toThrow(
-      'jisoAppShellVitePlugin() requires a Jiso app aggregate. SPEC §9.5 Vite dev/build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
+      'kovoAppShellVitePlugin() requires a Kovo app aggregate. SPEC §9.5 Vite dev/build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
     );
     expect(() =>
-      jisoAppShellVitePlugin({ routes: [], endpoints: [] } as unknown as ReturnType<
+      kovoAppShellVitePlugin({ routes: [], endpoints: [] } as unknown as ReturnType<
         typeof createApp
       >),
-    ).toThrow('jisoAppShellVitePlugin() requires a Jiso app aggregate.');
+    ).toThrow('kovoAppShellVitePlugin() requires a Kovo app aggregate.');
 
     function expectVitePluginAppOnly(app: ReturnType<typeof createApp>): void {
-      jisoAppShellVitePlugin(app);
+      kovoAppShellVitePlugin(app);
       // SPEC.md section 9.5: R5 plugin inputs stay tied to the closed app aggregate
       // so request ownership, diagnostics, build, and export replay share one shell.
       // @ts-expect-error raw request handlers are node-adapter boundaries, not Vite plugin apps.
-      jisoAppShellVitePlugin(createRequestHandler(app));
+      kovoAppShellVitePlugin(createRequestHandler(app));
     }
     void expectVitePluginAppOnly;
   });
 
   it('extracts deterministic stylesheet and modulepreload hints from a Vite manifest', () => {
     expect(
-      jisoAppShellViteManifestHints(
+      kovoAppShellViteManifestHints(
         {
           '_shared.js': {
             css: ['assets/theme.css', 'assets/cart.css'],
@@ -78,7 +78,7 @@ describe('server app shell Vite plugin', () => {
   it('normalizes route-to-Vite-entry build facts in app route order', () => {
     const cartRoute = route('/cart', {});
     const accountRoute = route('/account', {});
-    const entries = jisoAppShellViteRouteEntries(
+    const entries = kovoAppShellViteRouteEntries(
       {
         '/account': 'src/account.client.ts',
         '/cart': ['src/cart.client.ts', 'assets/cart.js', 'src/cart.client.ts'],
@@ -104,7 +104,7 @@ describe('server app shell Vite plugin', () => {
 
   it('rejects stale route-to-Vite-entry build facts before hint wiring', () => {
     expect(() =>
-      jisoAppShellViteRouteEntries(
+      kovoAppShellViteRouteEntries(
         {
           '/missing': 'src/missing.client.ts',
         },
@@ -115,7 +115,7 @@ describe('server app shell Vite plugin', () => {
 
   it('rejects route-to-Vite-entry build facts missing from the manifest', () => {
     expect(() =>
-      jisoAppShellViteRouteEntries(
+      kovoAppShellViteRouteEntries(
         {
           '/cart': 'src/cart.client.ts',
         },
@@ -135,7 +135,7 @@ describe('server app shell Vite plugin', () => {
 
   it('plans deterministic Vite dist assets from the manifest', () => {
     expect(
-      jisoAppShellViteManifestAssets(
+      kovoAppShellViteManifestAssets(
         {
           'src/cart.client.ts': {
             css: ['assets/cart.css', '/assets/theme.css'],
@@ -166,7 +166,7 @@ describe('server app shell Vite plugin', () => {
 
   it('rejects multi-stylesheet manifests for singular export task stylesheet lookup', () => {
     expect(() =>
-      jisoAppShellViteManifestStylesheetHref(
+      kovoAppShellViteManifestStylesheetHref(
         {
           'src/admin.ts': {
             css: ['assets/shared.css', 'assets/admin.css'],
@@ -184,7 +184,7 @@ describe('server app shell Vite plugin', () => {
 
   it('resolves exactly one built stylesheet href through the app-shell Vite API', () => {
     expect(
-      jisoAppShellViteManifestStylesheetHref(
+      kovoAppShellViteManifestStylesheetHref(
         {
           'src/cart.ts': {
             css: ['assets/cart.css'],
@@ -197,14 +197,14 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('rejects Vite output bundles without a manifest before app-shell build wiring', () => {
-    expect(() => jisoAppShellViteManifestFromBundle({})).toThrow(
+    expect(() => kovoAppShellViteManifestFromBundle({})).toThrow(
       'App shell Vite build requires .vite/manifest.json.',
     );
   });
 
   it('rejects malformed Vite output bundle manifests before app-shell build wiring', () => {
     expect(() =>
-      jisoAppShellViteManifestFromBundle({
+      kovoAppShellViteManifestFromBundle({
         '.vite/manifest.json': {
           fileName: '.vite/manifest.json',
           source: '{',
@@ -214,7 +214,7 @@ describe('server app shell Vite plugin', () => {
     ).toThrow('App shell Vite build manifest must be valid JSON');
 
     expect(() =>
-      jisoAppShellViteManifestFromBundle({
+      kovoAppShellViteManifestFromBundle({
         '.vite/manifest.json': {
           fileName: '.vite/manifest.json',
           source: JSON.stringify([]),
@@ -224,7 +224,7 @@ describe('server app shell Vite plugin', () => {
     ).toThrow('App shell Vite build manifest must be a JSON object.');
 
     expect(() =>
-      createJisoAppShellViteBuildFromBundle({
+      createKovoAppShellViteBuildFromBundle({
         app: createApp({ routes: [route('/cart', {})] }),
         bundle: {
           '.vite/manifest.json': {
@@ -249,7 +249,7 @@ describe('server app shell Vite plugin', () => {
 
   it('rejects unsafe Vite output asset paths before they can be copied', () => {
     expect(() =>
-      jisoAppShellViteManifestAssets({
+      kovoAppShellViteManifestAssets({
         'src/cart.client.ts': {
           file: '../cart.js',
         },
@@ -258,7 +258,7 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('loads Vite manifest files through the shared app-shell validator', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-manifest-file-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-manifest-file-'));
 
     try {
       await mkdir(join(distDir, '.vite'), { recursive: true });
@@ -273,17 +273,17 @@ describe('server app shell Vite plugin', () => {
         }),
       );
 
-      await expect(jisoAppShellViteManifestFromFile(manifestFile)).resolves.toEqual({
+      await expect(kovoAppShellViteManifestFromFile(manifestFile)).resolves.toEqual({
         'src/cart.client.ts': {
           css: ['assets/cart.css'],
           file: 'assets/cart.js',
         },
       });
-      await expect(jisoAppShellViteManifestAssetsFromFile(manifestFile)).resolves.toEqual([
+      await expect(kovoAppShellViteManifestAssetsFromFile(manifestFile)).resolves.toEqual([
         { file: 'assets/cart.css', href: '/assets/cart.css', path: '/assets/cart.css' },
         { file: 'assets/cart.js', href: '/assets/cart.js', path: '/assets/cart.js' },
       ]);
-      await expect(jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile)).resolves.toBe(
+      await expect(kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile)).resolves.toBe(
         '/assets/cart.css',
       );
     } finally {
@@ -292,7 +292,7 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('rejects malformed Vite manifest files before export asset wiring', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-bad-manifest-file-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-bad-manifest-file-'));
 
     try {
       await mkdir(join(distDir, '.vite'), { recursive: true });
@@ -307,7 +307,7 @@ describe('server app shell Vite plugin', () => {
         }),
       );
 
-      await expect(jisoAppShellViteManifestAssetsFromFile(manifestFile)).rejects.toThrow(
+      await expect(kovoAppShellViteManifestAssetsFromFile(manifestFile)).rejects.toThrow(
         "App shell Vite build manifest entry 'src/cart.client.ts' field 'css' must be an array of strings.",
       );
     } finally {

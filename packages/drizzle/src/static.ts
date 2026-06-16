@@ -16,7 +16,7 @@ export type {
   TouchGraphEntry,
   TouchSite,
   UnresolvedWriteSite,
-} from '@jiso/core';
+} from '@kovojs/core';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -35,7 +35,7 @@ import {
   type SymbolicValue,
   type TouchGraph,
   type TouchGraphEntry,
-} from '@jiso/core';
+} from '@kovojs/core';
 import {
   Node,
   Project,
@@ -75,17 +75,17 @@ import {
   type WriteSummaryInput,
 } from './graph.js';
 export type {
-  JisoDomainTableAnnotation,
-  JisoTableAnnotation,
-  JisoTableExtraConfig,
+  KovoDomainTableAnnotation,
+  KovoTableAnnotation,
+  KovoTableExtraConfig,
 } from './drizzle-surface.js';
-export { jiso } from './drizzle-surface.js';
+export { kovo } from './drizzle-surface.js';
 import {
   isDrizzleDatabaseTypeName,
   isDrizzleTableFactoryName,
-  isJisoExtraConfigCallName,
-  type JisoDomainTableAnnotation,
-  type JisoTableAnnotation,
+  isKovoExtraConfigCallName,
+  type KovoDomainTableAnnotation,
+  type KovoTableAnnotation,
 } from './drizzle-surface.js';
 export type {
   InvalidationQueryInput,
@@ -100,14 +100,14 @@ const IGNORED_LOCAL_CALL_NAMES = new Set([
   'for',
   'function',
   'if',
-  'jiso',
+  'kovo',
   'pgTable',
   'return',
   'switch',
   'while',
 ]);
-const FW411_MESSAGE = 'Query read set includes an exempt table';
-const UNRESOLVED_READ_SOURCE_EXPRESSION = '__jisoUnresolvedReadSource';
+const KV411_MESSAGE = 'Query read set includes an exempt table';
+const UNRESOLVED_READ_SOURCE_EXPRESSION = '__kovoUnresolvedReadSource';
 const BOOLEAN_COLUMN_BUILDERS = new Set(['boolean']);
 const JSON_COLUMN_BUILDERS = new Set(['json', 'jsonb']);
 const NUMBER_COLUMN_BUILDERS = new Set([
@@ -181,7 +181,7 @@ export interface TouchGraphProjectOptions {
 }
 
 type ExtractedTableAnnotation =
-  | (JisoTableAnnotation & { name: string })
+  | (KovoTableAnnotation & { name: string })
   | {
       name: string;
       unmapped: true;
@@ -1566,7 +1566,7 @@ function projectUnclassifiedCallSurface(
   call: CallExpression,
 ): { name: string; receiver: Node } | undefined {
   // SPEC §10-§11: only the relational query API (`db.query.<table>.find*`) is classified as a
-  // read surface. Other typed receiver `find*` calls remain visible as FW406.
+  // read surface. Other typed receiver `find*` calls remain visible as KV406.
   const surface = directDrizzleReceiverCallSurface(call);
   if (!surface) return undefined;
   const { name } = surface;
@@ -1602,7 +1602,7 @@ function relationalReadCall(
 
 function selectReadCall(call: CallExpression): { receiver: Node; table: Node } | undefined {
   // SPEC §10-§11: standalone Drizzle select reads are touch-graph facts; unresolved table
-  // expressions become FW406 instead of silently disappearing.
+  // expressions become KV406 instead of silently disappearing.
   if (!isReadSourceCall(call)) return undefined;
   if (!isSelectQueryCallName(queryBuilderRootCallName(call))) return undefined;
   if (isNestedInWriteReadSource(call)) return undefined;
@@ -1941,18 +1941,18 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
 
   for (const write of summary.writes) {
     diagnostics.push({
-      code: 'FW406',
-      message: `${diagnosticDefinitions.FW406.message} Query local helper touches Drizzle table via ${write.operation}().`,
-      severity: diagnosticDefinitions.FW406.severity,
+      code: 'KV406',
+      message: `${diagnosticDefinitions.KV406.message} Query local helper touches Drizzle table via ${write.operation}().`,
+      severity: diagnosticDefinitions.KV406.severity,
       site: write.site,
     });
   }
 
   for (const unresolved of summary.unresolved) {
     diagnostics.push({
-      code: 'FW406',
-      message: `${diagnosticDefinitions.FW406.message} Query local helper has unresolved Drizzle ${unresolved.operation}().`,
-      severity: diagnosticDefinitions.FW406.severity,
+      code: 'KV406',
+      message: `${diagnosticDefinitions.KV406.message} Query local helper has unresolved Drizzle ${unresolved.operation}().`,
+      severity: diagnosticDefinitions.KV406.severity,
       site: unresolved.site,
     });
   }
@@ -2129,7 +2129,7 @@ function projectTableNamesBySymbol(
       const symbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
       if (!symbolKey) continue;
 
-      namesBySymbol.set(symbolKey, `__jisoProjectTable${nextTable}`);
+      namesBySymbol.set(symbolKey, `__kovoProjectTable${nextTable}`);
       nextTable += 1;
     }
   }
@@ -2168,7 +2168,7 @@ function appendProjectConditionalTableNames(
   namesBySymbol: Map<string, string>,
 ): ReadonlyMap<string, readonly string[]> {
   // SPEC §11.1: conditional table initializers are safe over-approximations. Project mode keeps
-  // exact ts-morph branch symbols and lets unresolved branches degrade separately to FW406.
+  // exact ts-morph branch symbols and lets unresolved branches degrade separately to KV406.
   const targetsBySyntheticName = new Map<string, string[]>();
   let nextConditional = 0;
 
@@ -2187,7 +2187,7 @@ function appendProjectConditionalTableNames(
         );
         if (targets.length === 0) continue;
 
-        const syntheticName = `__jisoProjectConditional${nextConditional}`;
+        const syntheticName = `__kovoProjectConditional${nextConditional}`;
         nextConditional += 1;
         namesBySymbol.set(aliasSymbolKey, syntheticName);
         targetsBySyntheticName.set(syntheticName, targets);
@@ -2688,10 +2688,10 @@ function pgCoreExportSpecifierExportName(declaration: Node): string | undefined 
   return declaration.getNameNode().getText();
 }
 
-function isJisoAnnotationCall(node: Node): boolean {
+function isKovoAnnotationCall(node: Node): boolean {
   if (!Node.isCallExpression(node)) return false;
   const expression = node.getExpression();
-  return Node.isIdentifier(expression) && isJisoExtraConfigCallName(expression.getText());
+  return Node.isIdentifier(expression) && isKovoExtraConfigCallName(expression.getText());
 }
 
 function tableNameArgument(initializer: Node): string | undefined {
@@ -2877,7 +2877,7 @@ function extractQueryDefinitionsFromSourceFile(
     const receiverReferences = queryCallbackReceiverReferences(bodyObject, receiverMode);
     // SPEC §11.1 (v1 scope): a destructured loader receiver slot (e.g. `{ db: reader }`) is not
     // type proof. When project mode cannot prove the destructured receiver via TypeScript symbols
-    // (it is absent from the proven receiverReferences), it remains a fail-closed FW406 surface
+    // (it is absent from the proven receiverReferences), it remains a fail-closed KV406 surface
     // rather than feeding read/write extraction. Drop the names project mode already proved so a
     // genuinely-typed destructured receiver (resolved into receiverReferences) does not double-fire.
     const destructuredCandidates = sourceQueryDestructuredReceiverNames(bodyObject);
@@ -2905,7 +2905,7 @@ function extractQueryDefinitionsFromSourceFile(
       ...externalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionKeys),
       ...opaqueLocalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionsByKey),
       ...unresolvedQueryReadDiagnostics(bodyObject, receiverReferences, readResolutionOptions),
-      // SPEC §11.1 (v1 scope): fail-closed FW406 for a destructured loader receiver slot that
+      // SPEC §11.1 (v1 scope): fail-closed KV406 for a destructured loader receiver slot that
       // project mode could not type-prove. This DETECTOR never produces a positive read/write
       // fact; it flags an un-analyzable Drizzle receiver surface so manual touches are required.
       ...sourceDestructuredQueryReceiverDiagnostics(
@@ -2972,9 +2972,9 @@ function selectShapeFromQueryBody(
     return {
       diagnostics: [
         {
-          code: 'FW406',
-          message: `${diagnosticDefinitions.FW406.message} Query uses ${selectCallDisplayName(selectCall)} without an explicit projection.`,
-          severity: diagnosticDefinitions.FW406.severity,
+          code: 'KV406',
+          message: `${diagnosticDefinitions.KV406.message} Query uses ${selectCallDisplayName(selectCall)} without an explicit projection.`,
+          severity: diagnosticDefinitions.KV406.severity,
           site: '',
         },
       ],
@@ -3150,9 +3150,9 @@ function relationalQueryDiagnostics(
 
   return [
     {
-      code: 'FW406',
-      message: `${diagnosticDefinitions.FW406.message} Query uses Drizzle relational query API without static projection.`,
-      severity: diagnosticDefinitions.FW406.severity,
+      code: 'KV406',
+      message: `${diagnosticDefinitions.KV406.message} Query uses Drizzle relational query API without static projection.`,
+      severity: diagnosticDefinitions.KV406.severity,
       site: '',
     },
   ];
@@ -3180,9 +3180,9 @@ function unclassifiedQueryReceiverDiagnostics(
 
     return [
       {
-        code: 'FW406' as const,
-        message: `${diagnosticDefinitions.FW406.message} Query uses unclassified Drizzle receiver call ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
-        severity: diagnosticDefinitions.FW406.severity,
+        code: 'KV406' as const,
+        message: `${diagnosticDefinitions.KV406.message} Query uses unclassified Drizzle receiver call ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
+        severity: diagnosticDefinitions.KV406.severity,
         site: '',
       },
     ];
@@ -3210,9 +3210,9 @@ function projectQueryReceiverContainerDiagnostics(
 
     return [
       {
-        code: 'FW406' as const,
-        message: `${diagnosticDefinitions.FW406.message} Query uses project Drizzle receiver container surface ${surface.receiver.getText()}.${surface.name}().`,
-        severity: diagnosticDefinitions.FW406.severity,
+        code: 'KV406' as const,
+        message: `${diagnosticDefinitions.KV406.message} Query uses project Drizzle receiver container surface ${surface.receiver.getText()}.${surface.name}().`,
+        severity: diagnosticDefinitions.KV406.severity,
         site: '',
       },
     ];
@@ -3224,7 +3224,7 @@ function externalQueryHelperDiagnostics(
   receiverReferences: QueryReceiverReferences,
   localFunctionKeys: ReadonlySet<string>,
 ): TouchGraphDiagnostic[] {
-  // SPEC §11.1: helpers that receive the query loader's Drizzle receiver are an explicit FW406
+  // SPEC §11.1: helpers that receive the query loader's Drizzle receiver are an explicit KV406
   // boundary until their read/write summaries are proven interprocedurally.
   const carrierSymbolKeys = queryReceiverCarrierSymbolKeys(body, receiverReferences);
   return queryExecutableCallExpressions(body, queryReceiverMode(receiverReferences)).flatMap(
@@ -3256,9 +3256,9 @@ function externalQueryHelperDiagnostics(
 
       return [
         {
-          code: 'FW406' as const,
-          message: `${diagnosticDefinitions.FW406.message} Query passes Drizzle receiver ${receiverName} to helper ${name}().`,
-          severity: diagnosticDefinitions.FW406.severity,
+          code: 'KV406' as const,
+          message: `${diagnosticDefinitions.KV406.message} Query passes Drizzle receiver ${receiverName} to helper ${name}().`,
+          severity: diagnosticDefinitions.KV406.severity,
           site: '',
         },
       ];
@@ -3345,9 +3345,9 @@ function opaqueLocalQueryHelperDiagnostics(
 
       return [
         {
-          code: 'FW406' as const,
-          message: `${diagnosticDefinitions.FW406.message} Query passes Drizzle receiver ${receiverName} to local helper ${staticExpressionPath(expression) ?? expression.getText()}().`,
-          severity: diagnosticDefinitions.FW406.severity,
+          code: 'KV406' as const,
+          message: `${diagnosticDefinitions.KV406.message} Query passes Drizzle receiver ${receiverName} to local helper ${staticExpressionPath(expression) ?? expression.getText()}().`,
+          severity: diagnosticDefinitions.KV406.severity,
           site: '',
         },
       ];
@@ -3363,15 +3363,15 @@ function receiverMethodAliasQueryDiagnostics(
 
   return queryCallbackBodies(body, queryReceiverMode(receiverReferences)).flatMap((callbackBody) =>
     extractReceiverMethodAliasCallsFromBody(callbackBody, isReceiverIdentifier).map((call) => ({
-      code: 'FW406' as const,
-      message: `${diagnosticDefinitions.FW406.message} Query uses detached Drizzle receiver method ${call.name}().`,
-      severity: diagnosticDefinitions.FW406.severity,
+      code: 'KV406' as const,
+      message: `${diagnosticDefinitions.KV406.message} Query uses detached Drizzle receiver method ${call.name}().`,
+      severity: diagnosticDefinitions.KV406.severity,
       site: '',
     })),
   );
 }
 
-// SPEC §11.1 (v1 scope): fail-closed FW406 DETECTOR for destructured loader receiver slots that
+// SPEC §11.1 (v1 scope): fail-closed KV406 DETECTOR for destructured loader receiver slots that
 // project mode could not type-prove. `receiverReferences` here are the unproven destructured
 // bindings (see unprovenDestructuredReceiverReferences); this never produces a positive
 // read/write fact, it only flags an un-analyzable Drizzle receiver surface.
@@ -3386,9 +3386,9 @@ function sourceDestructuredQueryReceiverDiagnostics(
     extractSourceReceiverSurfaceCallsFromBody(callbackBody, localFunctionKeys, (node) =>
       isSourceDestructuredReceiverIdentifier(node, receiverReferences),
     ).map((call) => ({
-      code: 'FW406' as const,
-      message: `${diagnosticDefinitions.FW406.message} Query uses an un-provable destructured Drizzle receiver surface ${call.name}() without project type proof.`,
-      severity: diagnosticDefinitions.FW406.severity,
+      code: 'KV406' as const,
+      message: `${diagnosticDefinitions.KV406.message} Query uses an un-provable destructured Drizzle receiver surface ${call.name}() without project type proof.`,
+      severity: diagnosticDefinitions.KV406.severity,
       site: '',
     })),
   );
@@ -3441,7 +3441,7 @@ function queryBodyObjectLiteralFromNode(
   mode: 'project' | 'source',
 ): QueryBodyObjectResolution | undefined {
   // SPEC §10.2/§11.1: query option objects are executable loader surfaces; unresolved external
-  // configs stay visible as FW406 rather than disappearing from query facts.
+  // configs stay visible as KV406 rather than disappearing from query facts.
   const expression = unwrappedStaticExpressionNode(node);
   if (Node.isObjectLiteralExpression(expression)) return { body: expression, unresolved: false };
   if (mode === 'source') {
@@ -3450,7 +3450,7 @@ function queryBodyObjectLiteralFromNode(
 
   if (Node.isConditionalExpression(expression)) {
     // SPEC §10.2/§11.1: whole query option conditionals are executable loader surfaces.
-    // Keep the statically visible branch exact, but retain FW406 for opaque sibling branches.
+    // Keep the statically visible branch exact, but retain KV406 for opaque sibling branches.
     const branches = [expression.getWhenTrue(), expression.getWhenFalse()]
       .map((branch) =>
         queryBodyObjectLiteralFromNode(unwrappedStaticExpressionNode(branch), new Set(seen), mode),
@@ -3495,7 +3495,7 @@ function queryBodyObjectLiteralFromNode(
 
   // SPEC §10.4: non-literal query option factories can hide executable Postgres loader work.
   // When ts-morph cannot resolve the object to a static declaration, keep the surface visible as
-  // FW406 instead of accepting a typed-but-invisible query body.
+  // KV406 instead of accepting a typed-but-invisible query body.
   return { unresolved: true };
 }
 
@@ -3618,7 +3618,7 @@ function queryLoadCallbackFromSpreadExpression(
 ): QueryLoadSpreadResolution {
   if (Node.isConditionalExpression(expression)) {
     // SPEC §10.2/§11.1: conditional option spreads are executable loader surfaces. Static
-    // branches contribute exact callbacks; opaque branches remain FW406 instead of disappearing.
+    // branches contribute exact callbacks; opaque branches remain KV406 instead of disappearing.
     const branches = [expression.getWhenTrue(), expression.getWhenFalse()].map((branch) =>
       queryLoadCallbackFromSpreadExpression(unwrappedStaticExpressionNode(branch), location, mode),
     );
@@ -3745,7 +3745,7 @@ function queryCallbackExpressionResolution(
 ): QueryLoadSpreadResolution {
   if (Node.isConditionalExpression(expression)) {
     // SPEC §10.2/§11.1: direct conditional loader members are executable surfaces. Static
-    // branches contribute exact callbacks; opaque branches stay visible as FW406.
+    // branches contribute exact callbacks; opaque branches stay visible as KV406.
     const branches = [expression.getWhenTrue(), expression.getWhenFalse()].map((branch) =>
       queryCallbackExpressionResolution(unwrappedStaticExpressionNode(branch), mode),
     );
@@ -3790,9 +3790,9 @@ function unresolvedQueryCallbackDiagnostics(
 
 function unresolvedQueryLoadCallbackDiagnostic(): TouchGraphDiagnostic {
   return {
-    code: 'FW406',
-    message: `${diagnosticDefinitions.FW406.message} Query load callback could not be statically resolved.`,
-    severity: diagnosticDefinitions.FW406.severity,
+    code: 'KV406',
+    message: `${diagnosticDefinitions.KV406.message} Query load callback could not be statically resolved.`,
+    severity: diagnosticDefinitions.KV406.severity,
     site: '',
   };
 }
@@ -4236,7 +4236,7 @@ function boundCallbackTarget(node: Node): Node | undefined {
   if (staticAccessName(callee) !== 'bind') return undefined;
 
   // `fn.bind(thisArg)` preserves the callback parameter list, while additional bound arguments
-  // shift loader/write parameters and must remain FW406 instead of fabricating Drizzle facts.
+  // shift loader/write parameters and must remain KV406 instead of fabricating Drizzle facts.
   if (expression.getArguments().length > 1) return undefined;
   return callee.getExpression();
 }
@@ -4327,12 +4327,12 @@ function appendUntypedQueryReceiverBinding(
   }
 
   // SPEC §11.1: source-mode destructured `db`/`tx` slots are not type proof. They stay visible
-  // as FW406 surfaces via sourceDestructuredQueryReceiverDiagnostics instead of fabricating reads.
+  // as KV406 surfaces via sourceDestructuredQueryReceiverDiagnostics instead of fabricating reads.
 }
 
 // SPEC §11.1 (v1 scope): collect destructured loader receiver bindings (e.g. `{ db: reader }`).
 // These are name/property heuristics that never prove a receiver; they only seed the fail-closed
-// FW406 detector below for receivers project mode could not prove via TypeScript symbols.
+// KV406 detector below for receivers project mode could not prove via TypeScript symbols.
 function sourceQueryDestructuredReceiverNames(
   body: ObjectLiteralExpression,
 ): QueryReceiverReferences {
@@ -4616,10 +4616,10 @@ function opaqueProjectionDiagnostics(
 ): TouchGraphDiagnostic[] {
   if (hasOutput) return [];
 
-  const definition = diagnosticDefinitions.FW410;
-  const message = diagnosticDefinitionText('FW410', { preferHelp: true });
+  const definition = diagnosticDefinitions.KV410;
+  const message = diagnosticDefinitionText('KV410', { preferHelp: true });
   return opaquePaths.map((path) => ({
-    code: 'FW410',
+    code: 'KV410',
     message: `${message} ${query}.${path} uses sql/raw projection without output.`,
     severity: definition.severity,
     site: line,
@@ -4633,9 +4633,9 @@ function unresolvedProjectionDiagnostics(
 ): TouchGraphDiagnostic[] {
   // SPEC §10.2/§11.1: unresolved static facts stay visible instead of guessed.
   return unresolvedPaths.map((path) => ({
-    code: 'FW406',
-    message: `${diagnosticDefinitions.FW406.message} Query projection ${query}.${path} could not be resolved to a Drizzle column or typed sql<T> expression.`,
-    severity: diagnosticDefinitions.FW406.severity,
+    code: 'KV406',
+    message: `${diagnosticDefinitions.KV406.message} Query projection ${query}.${path} could not be resolved to a Drizzle column or typed sql<T> expression.`,
+    severity: diagnosticDefinitions.KV406.severity,
     site,
   }));
 }
@@ -4674,8 +4674,8 @@ function exemptQueryReadDiagnostics(
 
   return [
     {
-      code: 'FW411',
-      message: `${FW411_MESSAGE}. Tables: ${[...exemptTables].sort().join(', ')}.`,
+      code: 'KV411',
+      message: `${KV411_MESSAGE}. Tables: ${[...exemptTables].sort().join(', ')}.`,
       severity: 'error',
       site,
     },
@@ -4736,7 +4736,7 @@ function queryRelationalTableExpressions(
     const queryAccess = staticAccessExpression(tableAccess);
     if (!queryAccess || staticAccessName(queryAccess) !== 'query') return [];
     const receiver = staticAccessExpression(queryAccess);
-    // SPEC §10-§11: non-DB objects must not fabricate relational read/FW406 facts.
+    // SPEC §10-§11: non-DB objects must not fabricate relational read/KV406 facts.
     if (!isQueryReceiverIdentifier(receiver, receiverReferences)) return [];
 
     const resolvedTable = relationalTableName ? relationalTableName(table) : table;
@@ -4767,9 +4767,9 @@ function unresolvedQueryReadDiagnostics(
 
       return [
         {
-          code: 'FW406' as const,
-          message: `${diagnosticDefinitions.FW406.message} Query read source for db.${name}() could not be resolved to a Drizzle table.`,
-          severity: diagnosticDefinitions.FW406.severity,
+          code: 'KV406' as const,
+          message: `${diagnosticDefinitions.KV406.message} Query read source for db.${name}() could not be resolved to a Drizzle table.`,
+          severity: diagnosticDefinitions.KV406.severity,
           site: '',
         },
       ];
@@ -4808,9 +4808,9 @@ function unresolvedRelationalQueryReadDiagnostics(
 
     return [
       {
-        code: 'FW406' as const,
-        message: `${diagnosticDefinitions.FW406.message} Query relational read source could not be resolved to a Drizzle table.`,
-        severity: diagnosticDefinitions.FW406.severity,
+        code: 'KV406' as const,
+        message: `${diagnosticDefinitions.KV406.message} Query relational read source could not be resolved to a Drizzle table.`,
+        severity: diagnosticDefinitions.KV406.severity,
         site: '',
       },
     ];
@@ -5053,7 +5053,7 @@ function directSummaryForFunction(
   const writes: WriteSummaryInput[] = [];
   const unresolved: UnresolvedSummaryInput[] = [];
 
-  // SPEC §11.1: visible Drizzle read surfaces belong in the touch graph, not FW406.
+  // SPEC §11.1: visible Drizzle read surfaces belong in the touch graph, not KV406.
   for (const call of fn.readCalls) {
     const site =
       call.site ?? `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
@@ -5064,7 +5064,7 @@ function directSummaryForFunction(
         if (isExemptExtractedTableAnnotation(table.annotation)) continue;
         if (isUnmappedTableAnnotation(table.annotation)) {
           unresolved.push({
-            code: 'FW404',
+            code: 'KV404',
             operation: call.operation,
             site,
           });
@@ -5097,7 +5097,7 @@ function directSummaryForFunction(
         if (isExemptExtractedTableAnnotation(table.annotation)) continue;
         if (isUnmappedTableAnnotation(table.annotation)) {
           unresolved.push({
-            code: 'FW404',
+            code: 'KV404',
             operation: call.operation,
             site,
           });
@@ -5150,7 +5150,7 @@ function appendReadSourceSummaries(
   unresolvedIdentifiers: ReadonlySet<string>,
 ): void {
   // SPEC §11.1: insert-select/update-from reads are independently visible even when the write
-  // target itself is opaque and must degrade to FW406.
+  // target itself is opaque and must degrade to KV406.
   for (const readSource of call.readSources) {
     const readTables = tables.get(readSource.tableExpression) ?? [];
     if (readTables.length > 0) {
@@ -5158,7 +5158,7 @@ function appendReadSourceSummaries(
         if (isExemptExtractedTableAnnotation(readTable.annotation)) continue;
         if (isUnmappedTableAnnotation(readTable.annotation)) {
           unresolved.push({
-            code: 'FW404',
+            code: 'KV404',
             operation: readSource.operation,
             site,
           });
@@ -5289,7 +5289,7 @@ function writeSummaryKey(write: WriteSummaryInput): string {
 
 function tableAnnotation(initializer: Node): ExtractedTableAnnotation | null {
   if (!Node.isCallExpression(initializer)) return null;
-  const annotationCall = initializer.getArguments().find(isJisoAnnotationCall);
+  const annotationCall = initializer.getArguments().find(isKovoAnnotationCall);
   if (!annotationCall) {
     const tableName = tableNameArgument(initializer);
     return tableName
@@ -5318,7 +5318,7 @@ function defaultDomainForTableName(tableName: string): string {
 
 function isDomainExtractedTableAnnotation(
   annotation: ExtractedTableAnnotation,
-): annotation is JisoDomainTableAnnotation & { name: string } {
+): annotation is KovoDomainTableAnnotation & { name: string } {
   return 'domain' in annotation;
 }
 
@@ -6041,7 +6041,7 @@ function domainWriteObjectFromNode(
   seen: Set<string>,
 ): DomainWriteObjectResolution | undefined {
   // SPEC §10-§11: domain action objects are executable mutation surfaces; static aliases are
-  // followed through ts-morph symbols, while opaque aliases stay visible as FW406.
+  // followed through ts-morph symbols, while opaque aliases stay visible as KV406.
   const expression = unwrappedStaticExpressionNode(node);
   if (Node.isObjectLiteralExpression(expression)) return { body: expression, unresolved: false };
 
@@ -6067,7 +6067,7 @@ function domainWriteObjectFromNode(
   }
 
   // SPEC §10.4: a typed domain-action factory can still hide mutation callbacks from static
-  // extraction. Unresolved non-literal action objects must therefore degrade to FW406.
+  // extraction. Unresolved non-literal action objects must therefore degrade to KV406.
   return { unresolved: true };
 }
 
@@ -6152,7 +6152,7 @@ function unresolvedDomainWriteSpreads(
   for (const property of object.getProperties()) {
     if (!Node.isSpreadAssignment(property)) continue;
     // SPEC §10-§11: an opaque domain action spread can contain hidden write(...) callbacks, so it
-    // must stay visible as FW406 instead of disappearing from the mutation graph.
+    // must stay visible as KV406 instead of disappearing from the mutation graph.
     const expression = unwrappedStaticExpressionNode(property.getExpression());
     const spreadProperties = domainWritePropertiesFromSpread(property, new Set());
     const resolvedMembers = new Set(
@@ -6209,7 +6209,7 @@ function domainWriteSpreadHasUnresolvedBranch(expression: Node): boolean {
 
 function typeHasOpaqueStringMembers(type: MorphType): boolean {
   // SPEC §10.2/§11.1: string-indexed objects can hide arbitrary loader/action members. Without
-  // concrete property declarations, keep that surface visible as FW406 instead of assuming empty.
+  // concrete property declarations, keep that surface visible as KV406 instead of assuming empty.
   return type.getStringIndexType() !== undefined;
 }
 
@@ -6496,7 +6496,7 @@ function writeActionCallbackResolution(
   const expression = unwrappedStaticExpressionNode(initializer);
   if (Node.isConditionalExpression(expression)) {
     // SPEC §10-§11: direct conditional domain action members are mutation surfaces. Exact static
-    // write branches contribute touches, while opaque branches remain named FW406 entries.
+    // write branches contribute touches, while opaque branches remain named KV406 entries.
     const branches = [expression.getWhenTrue(), expression.getWhenFalse()].map((branch) =>
       writeActionCallbackResolution(unwrappedStaticExpressionNode(branch), seen),
     );
@@ -7791,7 +7791,7 @@ function directDrizzleReceiverCallSurface(
 
   if (Node.isElementAccessExpression(expression)) {
     // SPEC §10.2/§11.1: a computed method on a proven Drizzle receiver can hide raw SQL or writes,
-    // so it must degrade to FW406 instead of disappearing from the static surface.
+    // so it must degrade to KV406 instead of disappearing from the static surface.
     return {
       displayName: expression.getText(),
       name: COMPUTED_DRIZZLE_RECEIVER_METHOD,
@@ -8056,7 +8056,7 @@ function boundReceiverMethodAccessName(
   if (!receiver || !isReceiverIdentifier(receiver)) return undefined;
 
   // SPEC §10-§11: bound detached receiver methods can hide raw SQL or writes just like
-  // destructured receiver methods, so they degrade through the same FW406 alias path.
+  // destructured receiver methods, so they degrade through the same KV406 alias path.
   return staticAccessName(methodAccess) ?? COMPUTED_DRIZZLE_RECEIVER_METHOD;
 }
 
@@ -8071,7 +8071,7 @@ function appendReceiverMethodAlias(
 }
 
 function isUnclassifiedDirectDrizzleReceiverMethod(name: string): boolean {
-  // SPEC §10-§11: direct receiver calls not statically classified are explicit FW406 surfaces.
+  // SPEC §10-§11: direct receiver calls not statically classified are explicit KV406 surfaces.
   return (
     UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS.has(name) ||
     !CLASSIFIED_DRIZZLE_RECEIVER_METHODS.has(name)
@@ -8117,7 +8117,7 @@ function receiverReferenceInArgument(
   isReceiverContainerExpression?: (node: Node) => boolean,
 ): Node | undefined {
   // SPEC §10-§11: opaque helper handoffs may hide Drizzle work, so receiver values passed inside
-  // containers degrade to FW406 while classified receiver call chains remain separately analyzed.
+  // containers degrade to KV406 while classified receiver call chains remain separately analyzed.
   if (isFunctionLikeNode(argument)) return undefined;
   if (
     isReceiverArgumentReference(
@@ -8213,7 +8213,7 @@ function projectTypeContainsDrizzleReceiver(
   seen: Set<string>,
   depth: number,
 ): boolean {
-  // SPEC §11.1: project-mode helper handoffs through typed containers stay visible as FW406 when
+  // SPEC §11.1: project-mode helper handoffs through typed containers stay visible as KV406 when
   // ts-morph proves a Postgres Drizzle database member, instead of relying on source carrier paths.
   if (depth > 4) return false;
   const typeText = type.getText(location);
@@ -8376,10 +8376,10 @@ function receiverParameterDeclaration(declaration: Node): ParameterDeclaration |
   return null;
 }
 
-// SPEC §11.1 (v1 scope): collect destructured receiver bindings for the FAIL-CLOSED FW406
+// SPEC §11.1 (v1 scope): collect destructured receiver bindings for the FAIL-CLOSED KV406
 // detector only. The db/tx name/property heuristic here never proves a receiver or produces a
 // read/write fact; unprovenDestructuredReceiverReferences later drops any binding project mode
-// already type-proved, so only un-analyzable destructured receivers reach the FW406 surface.
+// already type-proved, so only un-analyzable destructured receivers reach the KV406 surface.
 function appendSourceDestructuredReceiverBinding(
   name: Node,
   names: Set<string>,
@@ -8427,7 +8427,7 @@ function isSourceDestructuredReceiverIdentifier(
 
 function isLikelyDrizzleReceiver(name: string): boolean {
   // SPEC §11.1 (v1 scope): this canonical db/tx name heuristic is NOT receiver proof and never
-  // produces a read/write fact. It only seeds the fail-closed FW406 detector for destructured
+  // produces a read/write fact. It only seeds the fail-closed KV406 detector for destructured
   // loader receiver slots that project-mode ts-morph could not type-prove.
   return /^(db|tx)$/.test(name);
 }
@@ -8459,7 +8459,7 @@ function extractReadSourcesFromWriteChain(
     });
   }
 
-  // SPEC §10-§11: an opaque write read source is visible as FW406, not guessed.
+  // SPEC §10-§11: an opaque write read source is visible as KV406, not guessed.
   return sources.length > 0 || !hasInsertSelect
     ? sources
     : [{ operation: 'insert-select', tableExpression: UNRESOLVED_READ_SOURCE_EXPRESSION }];
@@ -8548,7 +8548,7 @@ function staticAccessExpression(node: Node): Node | undefined {
 function predicateSummaryFromFacts(
   facts: readonly ExtractedPredicateFact[],
   tableIdentifier: string,
-  table: JisoDomainTableAnnotation,
+  table: KovoDomainTableAnnotation,
 ): ExtractedPredicateSummary {
   if (!table.key) return {};
 
@@ -8755,8 +8755,8 @@ function lineForIndex(source: string, index: number): number {
 // SPEC.md §10.5 derivation extraction (Stage 1 write→effect, Stage 2 query→shape).
 //
 // These project-mode extractors lower real Drizzle write/query source into the
-// shared `SymbolicEffect` / `AlgebraicQueryShape` IR (`@jiso/core/derivation`)
-// that the source-agnostic Stage-3 deriver (`@jiso/drizzle/derive`) consumes.
+// shared `SymbolicEffect` / `AlgebraicQueryShape` IR (`@kovojs/core/derivation`)
+// that the source-agnostic Stage-3 deriver (`@kovojs/drizzle/derive`) consumes.
 // They REUSE the same ts-morph project, table-symbol resolution, write-chain
 // predicate extraction, and select-shape classification used by the touch-graph
 // and query-fact extractors above — never name/string heuristics (project mode
@@ -9273,7 +9273,7 @@ interface QueryShapeContextForTable {
  * algebra (`R = rowset(filter chain, key, orderBy)`), layered OVER the existing
  * `extractQueryFactsFromProject` (which keeps the raw inferred shape the binding
  * validators depend on). Out-of-grammar shapes (window / GROUP BY+HAVING /
- * DISTINCT / raw `sql<T>` projection / interprocedural FW406) classify as
+ * DISTINCT / raw `sql<T>` projection / interprocedural KV406) classify as
  * `opaque` carrying the matching §10.5 `PuntReason`.
  */
 export function extractAlgebraicShapesFromProject(

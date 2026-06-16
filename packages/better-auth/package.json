@@ -1,12 +1,12 @@
 {
-  "name": "@jiso/better-auth",
+  "name": "@kovojs/better-auth",
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@jiso/server": "workspace:*"
+    "@kovojs/server": "workspace:*"
   },
   "devDependencies": {
     "vitest": "4.1.8"

@@ -1,7 +1,7 @@
 import { count, eq, sql } from 'drizzle-orm';
 
 import type { CrmDb } from './db.js';
-import type { Domain } from '@jiso/server';
+import type { Domain } from '@kovojs/server';
 import { contact, deal } from './domains.js';
 import { contacts, deals } from './schema.js';
 

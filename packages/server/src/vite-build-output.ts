@@ -1,71 +1,71 @@
 import * as path from 'node:path';
 
 import { exportStaticApp } from './static-export.js';
-import type { JisoAppShellBuild, JisoAppShellBuiltClientModule } from './vite-build.js';
-import { jisoAppShellViteStaticExportAssets, resolvedFileSystemPath } from './vite-build-assets.js';
+import type { KovoAppShellBuild, KovoAppShellBuiltClientModule } from './vite-build.js';
+import { kovoAppShellViteStaticExportAssets, resolvedFileSystemPath } from './vite-build-assets.js';
 import type { StaticExportAssetInput, StaticExportResult } from './static-export-types.js';
 import {
-  jisoAppShellViteBuildOutputStaticExportPlan,
-  type JisoAppShellViteBuildOutputStaticExportOptions,
+  kovoAppShellViteBuildOutputStaticExportPlan,
+  type KovoAppShellViteBuildOutputStaticExportOptions,
 } from './vite-static-export-options.js';
 import {
-  assertWritableJisoAppShellViteClientModuleOutput,
-  jisoAppShellViteClientModuleOutputPlan,
-  writeJisoAppShellViteClientModuleOutput,
-  type JisoAppShellViteClientModuleOutputPlanItem,
+  assertWritableKovoAppShellViteClientModuleOutput,
+  kovoAppShellViteClientModuleOutputPlan,
+  writeKovoAppShellViteClientModuleOutput,
+  type KovoAppShellViteClientModuleOutputPlanItem,
 } from './vite-client-module-output.js';
 
-export interface JisoAppShellViteOutputOptions {
+export interface KovoAppShellViteOutputOptions {
   dir?: string;
   file?: string;
 }
 
-export interface JisoAppShellViteBuildOutputOptions {
+export interface KovoAppShellViteBuildOutputOptions {
   outDir: string | URL;
-  staticExport?: JisoAppShellViteBuildOutputStaticExportOptions | false;
+  staticExport?: KovoAppShellViteBuildOutputStaticExportOptions | false;
 }
 
-export interface JisoAppShellViteBuildOutput {
-  clientModuleOutputPlan: readonly JisoAppShellViteClientModuleOutputPlanItem[];
-  clientModules: readonly JisoAppShellBuiltClientModule[];
+export interface KovoAppShellViteBuildOutput {
+  clientModuleOutputPlan: readonly KovoAppShellViteClientModuleOutputPlanItem[];
+  clientModules: readonly KovoAppShellBuiltClientModule[];
   staticExport?: StaticExportResult;
   staticExportAssets: readonly StaticExportAssetInput[];
 }
 
-export async function writeJisoAppShellViteBuildOutput(
-  build: Pick<JisoAppShellBuild, 'clientModules'> &
-    Partial<Pick<JisoAppShellBuild, 'app' | 'assets'>>,
-  options: JisoAppShellViteBuildOutputOptions,
-): Promise<JisoAppShellViteBuildOutput> {
+export async function writeKovoAppShellViteBuildOutput(
+  build: Pick<KovoAppShellBuild, 'clientModules'> &
+    Partial<Pick<KovoAppShellBuild, 'app' | 'assets'>>,
+  options: KovoAppShellViteBuildOutputOptions,
+): Promise<KovoAppShellViteBuildOutput> {
   const root = resolvedFileSystemPath(options.outDir);
   const staticExportOptions = options.staticExport || undefined;
   const staticExportBuild = staticExportOptions ? assertStaticExportBuild(build) : undefined;
   const staticExportPlan =
     staticExportBuild && staticExportOptions
-      ? jisoAppShellViteBuildOutputStaticExportPlan(staticExportBuild, staticExportOptions, root)
+      ? kovoAppShellViteBuildOutputStaticExportPlan(staticExportBuild, staticExportOptions, root)
       : undefined;
   const staticExportAssets =
     staticExportPlan?.assets ??
-    jisoAppShellViteStaticExportAssets(build.assets ?? [], { distDir: root });
+    kovoAppShellViteStaticExportAssets(build.assets ?? [], { distDir: root });
 
-  const output: JisoAppShellViteBuildOutput = {
-    clientModuleOutputPlan: jisoAppShellViteClientModuleOutputPlan(root, build.clientModules),
+  const output: KovoAppShellViteBuildOutput = {
+    clientModuleOutputPlan: kovoAppShellViteClientModuleOutputPlan(root, build.clientModules),
     clientModules: build.clientModules,
     staticExportAssets,
   };
 
-  await assertWritableJisoAppShellViteClientModuleOutput(root, build.clientModules);
+  await assertWritableKovoAppShellViteClientModuleOutput(root, build.clientModules);
 
   if (staticExportBuild && staticExportPlan) {
     output.staticExport = await exportStaticApp(staticExportBuild.app, staticExportPlan.options);
   }
 
-  await writeJisoAppShellViteClientModuleOutput(root, build.clientModules);
+  await writeKovoAppShellViteClientModuleOutput(root, build.clientModules);
 
   return output;
 }
 
-export function jisoAppShellViteOutputDir(options: JisoAppShellViteOutputOptions): string {
+export function kovoAppShellViteOutputDir(options: KovoAppShellViteOutputOptions): string {
   if (options.dir) return options.dir;
   if (options.file) return path.dirname(options.file);
 
@@ -73,11 +73,11 @@ export function jisoAppShellViteOutputDir(options: JisoAppShellViteOutputOptions
 }
 
 function assertStaticExportBuild(
-  build: Pick<JisoAppShellBuild, 'clientModules'> &
-    Partial<Pick<JisoAppShellBuild, 'app' | 'assets'>>,
-): JisoAppShellBuild {
+  build: Pick<KovoAppShellBuild, 'clientModules'> &
+    Partial<Pick<KovoAppShellBuild, 'app' | 'assets'>>,
+): KovoAppShellBuild {
   if (!build.app) {
-    throw new Error('App shell Vite build output static export requires a Jiso app.');
+    throw new Error('App shell Vite build output static export requires a Kovo app.');
   }
 
   return {

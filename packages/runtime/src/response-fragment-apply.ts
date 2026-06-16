@@ -29,7 +29,7 @@ export function applyResponseFragments<Target>(
   fragments: readonly FragmentChunk[],
   options: ResponseFragmentApplyOptions<Target>,
 ): string[] {
-  // SPEC.md §9.1: decoded fw-fragment chunks report the same applied target
+  // SPEC.md §9.1: decoded kovo-fragment chunks report the same applied target
   // list whether the caller is modular DOM morph or the generated inline loader.
   const applied: string[] = [];
 
@@ -72,7 +72,7 @@ function d(e: HtmlResponseFragmentApplyTarget, h: string): void {
   const n = t.content.children[0];
   const s = e.contains(document.activeElement) ? document.activeElement : null;
   const q: HTMLElement[] = [];
-  for (const x of e.querySelectorAll<HTMLElement>('[fw-key]'))
+  for (const x of e.querySelectorAll<HTMLElement>('[kovo-key]'))
     if (x.scrollTop) {
       (x as HTMLElement & { s?: number }).s = x.scrollTop;
       q.push(x);
@@ -84,7 +84,7 @@ function d(e: HtmlResponseFragmentApplyTarget, h: string): void {
 }
 
 function k(e: Element): string | null {
-  return e.getAttribute('fw-key');
+  return e.getAttribute('kovo-key');
 }
 
 function m(c: Element, n: Element): Element {

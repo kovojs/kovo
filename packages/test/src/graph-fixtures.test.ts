@@ -55,7 +55,7 @@ const graph = {
   },
 };
 
-describe('@jiso/test graph fixture seam', () => {
+describe('@kovojs/test graph fixture seam', () => {
   it('looks up graph facts by public graph keys', () => {
     expect(graphPageFact(graph, '/cart')).toEqual({
       queries: ['cart', 'productGrid'],
@@ -80,7 +80,7 @@ describe('@jiso/test graph fixture seam', () => {
     ]);
   });
 
-  it('derives invalidation and optimistic matrices without fw-explain text parsing', () => {
+  it('derives invalidation and optimistic matrices without kovo-explain text parsing', () => {
     expect(graphInvalidatedQueries(graph, 'cart/add')).toEqual(['cart', 'productGrid']);
     expect(Object.fromEntries(graphInvalidatedByQueries(graph))).toEqual({
       cart: ['cart/add'],
@@ -137,7 +137,7 @@ describe('@jiso/test graph fixture seam', () => {
     });
   });
 
-  it('projects commerce graph behavior through public fw-check and fw-explain callbacks', () => {
+  it('projects commerce graph behavior through public kovo-check and kovo-explain callbacks', () => {
     const commerceGraph = {
       components: [
         { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
@@ -165,12 +165,12 @@ describe('@jiso/test graph fixture seam', () => {
         'payment.webhook': { touches: [], unresolved: [] },
       },
     } as const;
-    const fwExplain = (_graph: unknown, options: Record<string, unknown>) => {
+    const kovoExplain = (_graph: unknown, options: Record<string, unknown>) => {
       if (options.kind === 'query' && options.target === 'cart') {
         return {
           exitCode: 0,
           output: [
-            'fw-explain/v1',
+            'kovo-explain/v1',
             'QUERY cart',
             'reads: cart',
             'domain-writes: cart.addItem',
@@ -183,7 +183,7 @@ describe('@jiso/test graph fixture seam', () => {
         return {
           exitCode: 0,
           output: [
-            'fw-explain/v1',
+            'kovo-explain/v1',
             'MUTATION cart/add',
             'writes: cart, product, order',
             'invalidates: cart, product, order',
@@ -203,7 +203,7 @@ describe('@jiso/test graph fixture seam', () => {
       return {
         exitCode: 0,
         output: [
-          'fw-explain/v1',
+          'kovo-explain/v1',
           'MUTATION order/receipt',
           'writes: attachment',
           'invalidates: -',
@@ -230,19 +230,19 @@ describe('@jiso/test graph fixture seam', () => {
           routes: [],
         },
       }),
-      fwCheck: (_checkedGraph, options) =>
+      kovoCheck: (_checkedGraph, options) =>
         options === undefined
-          ? { exitCode: 0, output: 'fw-check/v1\nOK' }
+          ? { exitCode: 0, output: 'kovo-check/v1\nOK' }
           : {
               exitCode: 1,
               output: [
-                'fw-check/v1',
-                'WARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.',
-                'WARN FW311 component=CartBadge query=cart.discount status=UNHANDLED Query/state-dependent DOM position has no update status.',
+                'kovo-check/v1',
+                'WARN KV310 cart/add -> cart Invalidated query lacks optimistic transform.',
+                'WARN KV311 component=CartBadge query=cart.discount status=UNHANDLED Query/state-dependent DOM position has no update status.',
                 'COVERAGE component=OrderHistory query=orderHistory status=fragment',
               ].join('\n'),
             },
-      fwExplain,
+      kovoExplain,
       graph: commerceGraph,
     });
 
@@ -253,12 +253,12 @@ describe('@jiso/test graph fixture seam', () => {
       invalidatedBy: ['cart/add'],
       reads: ['cart'],
       subject: 'QUERY cart',
-      version: 'fw-explain/v1',
+      version: 'kovo-explain/v1',
     });
     expect(fact.matrix.matrix).toEqual(graphOptimisticStatusMatrix(commerceGraph));
     expect(fact.coverage.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      'FW310',
-      'FW311',
+      'KV310',
+      'KV311',
     ]);
     expect(fact.componentGraphFacts).toEqual([{ name: 'CartBadge', queries: ['cart'] }]);
     expect(fact.registryFacts).toEqual({
@@ -398,11 +398,11 @@ describe('@jiso/test graph fixture seam', () => {
             components: graph.components,
           },
           emitCheck: { stderr: '', stdout: '' },
-          fwCheck: {
+          kovoCheck: {
             exitCode: 0,
             issueCount: 0,
             status: 'ok',
-            version: 'fw-check/v1',
+            version: 'kovo-check/v1',
           },
           provenance,
         }),
@@ -412,11 +412,11 @@ describe('@jiso/test graph fixture seam', () => {
       emitCheck: {
         clean: true,
       },
-      fwCheck: {
+      kovoCheck: {
         exitCode: 0,
         issueCount: 0,
         status: 'ok',
-        version: 'fw-check/v1',
+        version: 'kovo-check/v1',
       },
       invalidations: {
         'cart/add': ['cart', 'productGrid'],
@@ -475,11 +475,11 @@ describe('@jiso/test graph fixture seam', () => {
             components: graph.components,
           },
           emitCheck: { stderr: '', stdout: '' },
-          fwCheck: {
+          kovoCheck: {
             exitCode: 0,
             issueCount: 0,
             status: 'ok',
-            version: 'fw-check/v1',
+            version: 'kovo-check/v1',
           },
           provenance,
         }),
@@ -487,7 +487,7 @@ describe('@jiso/test graph fixture seam', () => {
     ).toEqual({
       authoredGraphMatchesArtifact: true,
       emitCheckClean: true,
-      fwCheckOk: true,
+      kovoCheckOk: true,
       invalidationKeys: ['cart/add'],
       staticBehavior: {
         components: [
@@ -529,21 +529,21 @@ describe('@jiso/test graph fixture seam', () => {
           components: graph.components,
         },
         emitCheck: { stderr: '', stdout: '' },
-        fwCheck: {
+        kovoCheck: {
           exitCode: 0,
           issueCount: 0,
           status: 'ok',
-          version: 'fw-check/v1',
+          version: 'kovo-check/v1',
         },
         provenance,
       }),
     ).toEqual({
       authoredGraphMatchesArtifact: true,
-      fwCheck: {
+      kovoCheck: {
         exitCode: 0,
         issueCount: 0,
         status: 'ok',
-        version: 'fw-check/v1',
+        version: 'kovo-check/v1',
       },
       staticBehavior: {
         components: [
@@ -605,11 +605,11 @@ describe('@jiso/test graph fixture seam', () => {
         artifactGraph: graph,
         authoredGraph: { ...graph, pages: [] },
         emitCheck: { stderr: '', stdout: '' },
-        fwCheck: {
+        kovoCheck: {
           exitCode: 0,
           issueCount: 0,
           status: 'ok',
-          version: 'fw-check/v1',
+          version: 'kovo-check/v1',
         },
         provenance,
       }).authoredGraphMatchesArtifact,
@@ -634,16 +634,16 @@ describe('@jiso/test graph fixture seam', () => {
           command: process.execPath,
           cwd: process.cwd(),
         },
-        fwCheck: () => ({
+        kovoCheck: () => ({
           exitCode: 0,
-          output: 'fw-check/v1\nOK\n',
+          output: 'kovo-check/v1\nOK\n',
         }),
         rootPath: process.cwd(),
       }),
     ).resolves.toMatchObject({
       checklist: {
         emitCheckClean: true,
-        fwCheckOk: true,
+        kovoCheckOk: true,
         invalidationKeys: ['cart/add'],
         touchGraph: {
           unresolvedMutations: [],

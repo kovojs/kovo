@@ -1,18 +1,18 @@
 {
-  "name": "fw",
+  "name": "kovo",
   "version": "0.0.0",
   "bin": {
-    "fw": "./src/index.ts"
+    "kovo": "./src/index.ts"
   },
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@jiso/compiler": "workspace:*",
-    "@jiso/core": "workspace:*",
-    "@jiso/server": "workspace:*",
-    "@jiso/ui": "workspace:*",
+    "@kovojs/compiler": "workspace:*",
+    "@kovojs/core": "workspace:*",
+    "@kovojs/server": "workspace:*",
+    "@kovojs/ui": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {

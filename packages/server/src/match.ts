@@ -20,7 +20,7 @@ export interface RouteMatch<Route extends RouteLike = RouteLike> {
 }
 
 export interface RouteAmbiguity {
-  code: 'FW228';
+  code: 'KV228';
   message: string;
   paths: readonly [string, string];
   witnessPath: string;
@@ -126,7 +126,7 @@ export function findRouteAmbiguities(routes: readonly RouteLike[]): readonly Rou
       if (!witnessPath) continue;
 
       ambiguities.push({
-        code: 'FW228',
+        code: 'KV228',
         message: `Ambiguous route table: '${left.path}' and '${right.path}' can both match canonical request path '${witnessPath}'.`,
         paths: [left.path, right.path],
         witnessPath,

@@ -38,10 +38,10 @@ const SECTIONS = [
   { dir: 'gen/reference', key: 'reference', title: 'Reference' },
 ];
 
-// docs/prelaunch-checklist.md tracks jiso.dev confirmation; mirrors stay
+// docs/prelaunch-checklist.md tracks kovo.sh confirmation; mirrors stay
 // origin-relative in HTML, so only llms.txt bakes this in.
-const SITE_ORIGIN = 'https://jiso.dev';
-const ROUTE_MANIFEST_FILE = '.jiso-site-routes.json';
+const SITE_ORIGIN = 'https://kovo.sh';
+const ROUTE_MANIFEST_FILE = '.kovo-site-routes.json';
 
 async function loadSection(section) {
   const directory = path.join(siteRoot, section.dir);
@@ -178,7 +178,7 @@ function renderGalleryInteractiveRedirect() {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gallery · Jiso</title>
+    <title>Gallery · Kovo</title>
     <meta name="description" content="The interactive gallery has moved into the component gallery." />
     <link rel="canonical" href="/gallery/" />
     <meta http-equiv="refresh" content="0; url=/gallery/" />
@@ -345,9 +345,9 @@ async function main() {
             html: renderSectionIndex(section),
             prose: false,
           }),
-          description: `${section.title} — Jiso documentation`,
+          description: `${section.title} — Kovo documentation`,
           path: `/${section.key}/`,
-          title: `${section.title} · Jiso`,
+          title: `${section.title} · Kovo`,
         }),
       ),
     );
@@ -372,9 +372,9 @@ async function main() {
               next: next && { title: next.title, url: next.url },
               prev: prev && { title: prev.title, url: prev.url },
             }),
-            description: page.description || `${page.title} — Jiso documentation`,
+            description: page.description || `${page.title} — Kovo documentation`,
             path: page.url,
-            title: `${page.title || title} · Jiso`,
+            title: `${page.title || title} · Kovo`,
           }),
         ),
       );
@@ -404,9 +404,9 @@ async function main() {
           html: renderSectionIndex(gallerySection),
           prose: false,
         }),
-        description: 'Jiso component gallery — rendered headless and styled component fixtures.',
+        description: 'Kovo component gallery — rendered headless and styled component fixtures.',
         path: '/gallery/',
-        title: 'Gallery · Jiso',
+        title: 'Gallery · Kovo',
       }),
     ),
   );
@@ -438,7 +438,7 @@ async function main() {
           description: `${route.title} component gallery fixture.`,
           modulepreloads: interactive?.modulepreloads ?? [],
           path: url,
-          title: `${route.title} · Gallery · Jiso`,
+          title: `${route.title} · Gallery · Kovo`,
         }),
       ),
     );
@@ -482,7 +482,7 @@ async function main() {
           body: renderDocsPage({ activePath: pagePath, groups, html, prose: false }),
           description: example.blurb,
           path: pagePath,
-          title: `${example.title} · Examples · Jiso`,
+          title: `${example.title} · Examples · Kovo`,
         }),
       ),
     );
@@ -513,9 +513,9 @@ async function main() {
           }),
           prose: false,
         }),
-        description: 'Runnable Jiso example apps, embedded beside their source.',
+        description: 'Runnable Kovo example apps, embedded beside their source.',
         path: '/examples/',
-        title: 'Examples · Jiso',
+        title: 'Examples · Kovo',
       }),
     ),
   );
@@ -528,14 +528,14 @@ async function main() {
         body: `<div class="mx-auto max-w-[80rem] px-4 py-12 sm:px-6">
         <p class="note-banner">
           This is the normative specification, rendered verbatim from
-          <a href="https://github.com/jiso-sh/jiso/blob/main/SPEC.md" rel="external">SPEC.md</a>
+          <a href="https://github.com/kovojs/kovo/blob/main/SPEC.md" rel="external">SPEC.md</a>
           at build time. The docs explain; the spec decides.
         </p>
         <article class="prose">${specHtml}</article>
       </div>`,
-        description: 'Jiso — Product Requirements & Technical Specification (normative).',
+        description: 'Kovo — Product Requirements & Technical Specification (normative).',
         path: '/spec/',
-        title: 'Specification · Jiso',
+        title: 'Specification · Kovo',
       }),
     ),
   );
@@ -543,12 +543,12 @@ async function main() {
   searchIndex.push({
     section: 'Specification',
     text: spec.text.slice(0, 6000),
-    title: 'Jiso Specification',
+    title: 'Kovo Specification',
     url: '/spec/',
   });
 
   // Landing (W4). Chromeless: the landing ships its own always-dark header
-  // and footer; the docs chrome (and the Jiso name) stay everywhere else.
+  // and footer; the docs chrome (and the Kovo name) stay everywhere else.
   await writeRoutePage(
     '/',
     finishPage(
@@ -590,7 +590,7 @@ async function main() {
     buildLlmsFull(sections, {
       origin: SITE_ORIGIN,
       renderBody: (page) => substituteSnippets(substituteCaptures(page.body, captures), snippets),
-      spec: { body: specSource, title: 'Jiso Specification', url: '/spec/' },
+      spec: { body: specSource, title: 'Kovo Specification', url: '/spec/' },
     }),
     'utf8',
   );
@@ -603,7 +603,7 @@ async function main() {
         <div class="text-center">
           <p class="e404-code">404</p>
           <h1 class="mt-3 text-4xl font-bold tracking-tight">Page not found</h1>
-          <p class="mt-4" style="color: var(--dim)">No route declares this path &mdash; in a Jiso app, <code class="font-mono text-sm">vp check</code> would have caught that link.</p>
+          <p class="mt-4" style="color: var(--dim)">No route declares this path &mdash; in a Kovo app, <code class="font-mono text-sm">vp check</code> would have caught that link.</p>
           <div class="mt-8 flex justify-center gap-4">
             <a class="btn-solid" href="/docs/installation/">Read the docs</a>
             <a class="btn-line" href="/">Go home</a>
@@ -612,7 +612,7 @@ async function main() {
       </main>`,
       description: 'Page not found',
       path: '/404',
-      title: 'Not found · Jiso',
+      title: 'Not found · Kovo',
     }),
     'utf8',
   );

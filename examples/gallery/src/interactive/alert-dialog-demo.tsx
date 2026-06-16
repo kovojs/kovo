@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   alertDialogActionAttributes,
   alertDialogActionClick as _alertDialogActionClick,
@@ -10,11 +10,11 @@ import {
   alertDialogRootAttributes,
   alertDialogTriggerClick as _alertDialogTriggerClick,
   alertDialogTriggerAttributes,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/alert-dialog.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/alert-dialog.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const TRIGGER_CLASS =
   'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50';
@@ -32,7 +32,7 @@ export interface GalleryAlertDialogDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryAlertDialogDemoState) => {

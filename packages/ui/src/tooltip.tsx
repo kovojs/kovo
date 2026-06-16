@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   cn,
   defineVariants,
@@ -7,7 +7,7 @@ import {
   tooltipRootAttributes,
   tooltipTriggerAttributes,
   type ClassValue,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface TooltipStateProps {
   disabled?: boolean;
@@ -91,7 +91,7 @@ export const TooltipTrigger = component('tooltip-trigger', {
         data-state={attrs['data-state']}
         disabled={props.disabled === true}
         id={props.id}
-        jiso-tooltip={attrs['jiso-tooltip']}
+        kovo-tooltip={attrs['kovo-tooltip']}
         type="button"
       >
         {props.children}

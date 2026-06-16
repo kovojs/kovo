@@ -1,4 +1,4 @@
-/** @jsxImportSource @jiso/server */
+/** @jsxImportSource @kovojs/server */
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -33,7 +33,7 @@ import {
   navigationMenuRootAttributes,
   navigationMenuTriggerAttributes,
   navigationMenuViewportAttributes,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 import { mergeCompilerPrimitiveAttrs } from './merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
@@ -106,41 +106,41 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(input.diagnostics).toEqual([
       {
         attr: 'data-state',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
       },
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-activedescendant',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
     expect(listbox.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(item.diagnostics).toEqual([
       {
         attr: 'data-state',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-selected',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
@@ -236,45 +236,45 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'aria-expanded',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-controls',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
     expect(content.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(group.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-labelledby',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
     expect(item.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(separator.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
@@ -319,7 +319,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         'aria-expanded': 'false',
         class: 'context-trigger rounded',
         'data-state': 'author-open',
-        'jiso-context-menu': 'author-context-content',
+        'kovo-context-menu': 'author-context-content',
       },
     );
     const content = mergeCompilerPrimitiveAttrs(
@@ -379,60 +379,60 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'data-state',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-expanded',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-controls',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
       {
-        attr: 'jiso-context-menu',
-        code: 'FW231',
+        attr: 'kovo-context-menu',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
     expect(content.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(group.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-labelledby',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
     expect(item.diagnostics).toEqual([
       {
         attr: 'data-state',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
       },
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(separator.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
@@ -447,7 +447,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="context-menu"><div data-state="open" aria-expanded="false" aria-haspopup="menu" role="button" aria-controls="author-context-content" jiso-context-menu="author-context-content" id="gallery-context-trigger" aria-labelledby="gallery-context-label" class="context-trigger rounded">Canvas</div><div data-state="open" role="listbox" tabIndex="-1" id="author-context-content" aria-labelledby="gallery-context-trigger" data-anchor-x="128" data-anchor-y="64" class="context-content shadow"><div data-state="open" role="presentation" id="gallery-context-group" aria-labelledby="author-context-group-label" class="context-group"><div data-state="active" data-highlighted="" role="option" tabIndex="-1" id="gallery-context-paste" label="Paste" value="author-paste" class="context-item px-2" aria-disabled="true">Paste</div></div><div role="none" id="gallery-context-separator"></div></div></section>',
+      '<section data-gallery-merge="context-menu"><div data-state="open" aria-expanded="false" aria-haspopup="menu" role="button" aria-controls="author-context-content" kovo-context-menu="author-context-content" id="gallery-context-trigger" aria-labelledby="gallery-context-label" class="context-trigger rounded">Canvas</div><div data-state="open" role="listbox" tabIndex="-1" id="author-context-content" aria-labelledby="gallery-context-trigger" data-anchor-x="128" data-anchor-y="64" class="context-content shadow"><div data-state="open" role="presentation" id="gallery-context-group" aria-labelledby="author-context-group-label" class="context-group"><div data-state="active" data-highlighted="" role="option" tabIndex="-1" id="gallery-context-paste" label="Paste" value="author-paste" class="context-item px-2" aria-disabled="true">Paste</div></div><div role="none" id="gallery-context-separator"></div></div></section>',
     );
   });
 
@@ -584,55 +584,55 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(root.diagnostics).toEqual([
       {
         attr: 'data-state',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
       },
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-label',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(list.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(item.diagnostics).toEqual([
       {
         attr: 'data-state',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
       },
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'aria-expanded',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-controls',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
     expect(content.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
@@ -641,7 +641,7 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(indicator.diagnostics).toEqual([
       {
         attr: 'data-state',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
       },
     ]);
@@ -748,55 +748,55 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(root.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-label',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(item.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-expanded',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-controls',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
     expect(submenu.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(group.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
         attr: 'aria-labelledby',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
     expect(separator.diagnostics).toEqual([
       {
         attr: 'role',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
@@ -878,28 +878,28 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(root.diagnostics).toEqual([
       {
         attr: 'data-state',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
       },
     ]);
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'commandfor',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
     expect(dialog.diagnostics).toEqual([
       {
         attr: 'aria-modal',
-        code: 'FW232',
+        code: 'KV232',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(close.diagnostics).toEqual([
       {
         attr: 'commandfor',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);

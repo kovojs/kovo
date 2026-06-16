@@ -6,14 +6,14 @@ import {
   viteDiagnosticMessageFactsFromOutput,
 } from './diagnostic-output-fixtures.js';
 
-describe('@jiso/test diagnostic output fixtures', () => {
+describe('@kovojs/test diagnostic output fixtures', () => {
   it('turns Vite diagnostic message blocks into structured facts', () => {
     expect(
       viteDiagnosticMessageFacts(
         [
-          'Jiso Vite transform failed with 1 error diagnostic.',
+          'Kovo Vite transform failed with 1 error diagnostic.',
           '',
-          'FW201 routes/card.tsx:5:25 Event handler expression is not lowerable.',
+          'KV201 routes/card.tsx:5:25 Event handler expression is not lowerable.',
           '  help: Would lower to: on:click="/c/routes/card.client.js?v=1234abcd#Card$button_click"',
           '  help: Blocked expression: () => window.alert("x")',
           '  help: Element params: -',
@@ -26,7 +26,7 @@ describe('@jiso/test diagnostic output fixtures', () => {
     ).toEqual({
       diagnostics: [
         {
-          code: 'FW201',
+          code: 'KV201',
           help: [
             {
               label: 'Would lower to',
@@ -40,7 +40,7 @@ describe('@jiso/test diagnostic output fixtures', () => {
           message: 'Event handler expression is not lowerable.',
         },
       ],
-      summary: 'Jiso Vite transform failed with 1 error diagnostic.',
+      summary: 'Kovo Vite transform failed with 1 error diagnostic.',
     });
   });
 
@@ -50,7 +50,7 @@ describe('@jiso/test diagnostic output fixtures', () => {
     ).toThrow('Vite diagnostic header is structured: not a diagnostic header');
     expect(() =>
       viteDiagnosticMessageFacts(
-        ['summary', '', 'FW201 file.ts:1:1 message', '  note: nope'].join('\n'),
+        ['summary', '', 'KV201 file.ts:1:1 message', '  note: nope'].join('\n'),
       ),
     ).toThrow('Vite diagnostic help line is structured:   note: nope');
   });
@@ -60,25 +60,25 @@ describe('@jiso/test diagnostic output fixtures', () => {
       viteDiagnosticMessageFactsFromOutput(
         [
           'Command failed: vp build',
-          'Jiso Vite transform failed with 1 error diagnostic.',
+          'Kovo Vite transform failed with 1 error diagnostic.',
           '',
-          'FW201 routes/card.tsx:1:1 message.',
+          'KV201 routes/card.tsx:1:1 message.',
           '  help: Element params: -',
         ].join('\n'),
       ),
     ).toEqual({
       diagnostics: [
         {
-          code: 'FW201',
+          code: 'KV201',
           help: [{ label: 'Element params', text: '-' }],
           location: 'routes/card.tsx:1:1',
           message: 'message.',
         },
       ],
-      summary: 'Jiso Vite transform failed with 1 error diagnostic.',
+      summary: 'Kovo Vite transform failed with 1 error diagnostic.',
     });
     expect(() => viteDiagnosticMessageFactsFromOutput('no diagnostics')).toThrow(
-      'Vite diagnostic output includes Jiso transform summary',
+      'Vite diagnostic output includes Kovo transform summary',
     );
   });
 
@@ -87,9 +87,9 @@ describe('@jiso/test diagnostic output fixtures', () => {
       viteLoweredEventDiagnosticFact(
         [
           'Command failed: vp build',
-          'Jiso Vite transform failed with 1 error diagnostic.',
+          'Kovo Vite transform failed with 1 error diagnostic.',
           '',
-          'FW201 routes/card.tsx:5:25 Event handler expression is not lowerable.',
+          'KV201 routes/card.tsx:5:25 Event handler expression is not lowerable.',
           '  help: Would lower to: on:click="/c/routes/card.client.js?v=1234abcd#Card$button_click"',
           '  help: Blocked expression: () => window.alert("x")',
           '  help: Element params: -',
@@ -98,7 +98,7 @@ describe('@jiso/test diagnostic output fixtures', () => {
       ),
     ).toEqual({
       diagnostic: {
-        code: 'FW201',
+        code: 'KV201',
         location: 'routes/card.tsx:5:25',
         message: 'Event handler expression is not lowerable.',
       },
@@ -118,14 +118,14 @@ describe('@jiso/test diagnostic output fixtures', () => {
         versionShape: 'lower-hex-8',
       },
       sourceExpression: '() => window.alert("x")',
-      summary: 'Jiso Vite transform failed with 1 error diagnostic.',
+      summary: 'Kovo Vite transform failed with 1 error diagnostic.',
     });
     expect(() =>
       viteLoweredEventDiagnosticFact(
         [
-          'Jiso Vite transform failed with 1 error diagnostic.',
+          'Kovo Vite transform failed with 1 error diagnostic.',
           '',
-          'FW201 routes/card.tsx:5:25 Event handler expression is not lowerable.',
+          'KV201 routes/card.tsx:5:25 Event handler expression is not lowerable.',
           '  help: Element params: -',
         ].join('\n'),
       ),

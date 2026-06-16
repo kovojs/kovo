@@ -17,16 +17,16 @@ describe('optimistic enhanced mutation failure handling', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     const root = new FakeMorphRoot();
-    const pendingRoot = new FakePendingRoot([new FakePendingElement({ 'fw-deps': 'cart' })]);
+    const pendingRoot = new FakePendingRoot([new FakePendingElement({ 'kovo-deps': 'cart' })]);
     const onError = vi.fn();
     const error = new Error('network down');
     store.set('cart', { count: 1 });
     const fetch = vi.fn(async () => {
-      const pending = [...pendingRoot.querySelectorAll('[fw-deps]')][0];
+      const pending = [...pendingRoot.querySelectorAll('[kovo-deps]')][0];
       expect(store.get('cart')).toEqual({ count: 3 });
       expect(pending?.attributes).toMatchObject({
         'aria-busy': 'true',
-        'fw-pending': '',
+        'kovo-pending': '',
       });
       throw error;
     });
@@ -54,13 +54,13 @@ describe('optimistic enhanced mutation failure handling', () => {
       }),
     ).rejects.toBe(error);
 
-    const pending = [...pendingRoot.querySelectorAll('[fw-deps]')][0];
+    const pending = [...pendingRoot.querySelectorAll('[kovo-deps]')][0];
     // SPEC.md §10.4: optimistic mutations must discard failed predictions and
     // report direct-submit failures through the mutation-layer error seam.
     expect(onError).toHaveBeenCalledWith(error);
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(rebaser.pendingCount('cart')).toBe(0);
-    expect(pending?.attributes).not.toHaveProperty('fw-pending');
+    expect(pending?.attributes).not.toHaveProperty('kovo-pending');
     expect(pending?.attributes).not.toHaveProperty('aria-busy');
   });
 
@@ -68,7 +68,7 @@ describe('optimistic enhanced mutation failure handling', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     const root = new FakeMorphRoot();
-    const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
+    const cartBadge = new FakePendingElement({ 'kovo-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartBadge]);
     const onError = vi.fn();
     root.deps = [{ id: 'cart-badge' }];
@@ -88,7 +88,7 @@ describe('optimistic enhanced mutation failure handling', () => {
 
       return {
         async text() {
-          return '<fw-fragment target="cart-badge"><cart-badge>stale</cart-badge></fw-fragment>';
+          return '<kovo-fragment target="cart-badge"><cart-badge>stale</cart-badge></kovo-fragment>';
         },
       };
     });
@@ -117,7 +117,7 @@ describe('optimistic enhanced mutation failure handling', () => {
     expect(rebaser.pendingCount('cart')).toBe(1);
     expect(cartBadge.attributes).toMatchObject({
       'aria-busy': 'true',
-      'fw-pending': '',
+      'kovo-pending': '',
     });
   });
 
@@ -125,7 +125,7 @@ describe('optimistic enhanced mutation failure handling', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     const root = new FakeMorphRoot();
-    const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
+    const cartBadge = new FakePendingElement({ 'kovo-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartBadge]);
     const onError = vi.fn();
     root.deps = [{ id: 'cart-badge' }];
@@ -136,8 +136,8 @@ describe('optimistic enhanced mutation failure handling', () => {
       fetch: vi.fn(async () => ({
         async text() {
           return [
-            '<fw-query name="cart">{</fw-query>',
-            '<fw-fragment target="cart-badge"><cart-badge>stale</cart-badge></fw-fragment>',
+            '<kovo-query name="cart">{</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>stale</cart-badge></kovo-fragment>',
           ].join('\n');
         },
       })),
@@ -164,12 +164,12 @@ describe('optimistic enhanced mutation failure handling', () => {
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>stale</cart-badge>');
     expect(store.get('cart')).toEqual({ count: 0 });
     expect(rebaser.pendingCount('cart')).toBe(0);
-    expect(cartBadge.attributes).not.toHaveProperty('fw-pending');
+    expect(cartBadge.attributes).not.toHaveProperty('kovo-pending');
     expect(cartBadge.attributes).not.toHaveProperty('aria-busy');
     expect(onError).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        message: expect.stringContaining('Malformed JSON in fw-query cart'),
+        message: expect.stringContaining('Malformed JSON in kovo-query cart'),
       }),
     );
     expect(onError).toHaveBeenNthCalledWith(
@@ -186,7 +186,7 @@ describe('optimistic enhanced mutation failure handling', () => {
     const channel = new FakeBroadcastChannel();
     const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
-    const cartForm = new FakePendingElement({ 'fw-deps': 'cart' });
+    const cartForm = new FakePendingElement({ 'kovo-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartForm]);
     root.deps = [{ id: 'cart-form' }];
     root.targets.set('cart-form', new FakeMorphTarget());
@@ -195,7 +195,7 @@ describe('optimistic enhanced mutation failure handling', () => {
       ok: false,
       status: 422,
       async text() {
-        return '<fw-fragment target="cart-form"><form>Out of stock</form></fw-fragment>';
+        return '<kovo-fragment target="cart-form"><form>Out of stock</form></kovo-fragment>';
       },
     }));
 
@@ -223,7 +223,7 @@ describe('optimistic enhanced mutation failure handling', () => {
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(rebaser.pendingCount('cart')).toBe(0);
     expect(channel.messages).toEqual([]);
-    expect(cartForm.attributes).not.toHaveProperty('fw-pending');
+    expect(cartForm.attributes).not.toHaveProperty('kovo-pending');
     expect(cartForm.attributes).not.toHaveProperty('aria-busy');
     expect(root.targets.get('cart-form')?.html).toBe('<form>Out of stock</form>');
   });

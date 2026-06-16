@@ -26,8 +26,8 @@ class FakeElement implements EventElementLike {
   }
 
   closest(selector: string): FakeElement | null {
-    if (selector === '[fw-state]') return this.withAttribute('fw-state');
-    if (selector === '[fw-c]') return this.withAttribute('fw-c');
+    if (selector === '[kovo-state]') return this.withAttribute('kovo-state');
+    if (selector === '[kovo-c]') return this.withAttribute('kovo-c');
     return null;
   }
 
@@ -61,7 +61,7 @@ describe('handler context module', () => {
 
   it('defaults missing or malformed serialized state to an empty object', () => {
     expect(readElementState(new FakeElement({}))).toEqual({});
-    expect(readElementState(new FakeElement({ 'fw-state': '{' }))).toEqual({});
+    expect(readElementState(new FakeElement({ 'kovo-state': '{' }))).toEqual({});
   });
 
   it('parses typed data params for handler contexts', () => {
@@ -74,7 +74,7 @@ describe('handler context module', () => {
           'data-p-featured': 'false',
           'data-p-product-id': 'p1',
           'data-p-quantity': '2',
-          'fw-param-types': 'quantity:number featured:boolean',
+          'kovo-param-types': 'quantity:number featured:boolean',
         }),
       ),
     ).toEqual({
@@ -86,13 +86,13 @@ describe('handler context module', () => {
 
   it('builds delegated context from the nearest state host and commits to that host', () => {
     const stateHost = new FakeElement({
-      'fw-c': 'cart-badge',
-      'fw-state': '{"count":1}',
+      'kovo-c': 'cart-badge',
+      'kovo-state': '{"count":1}',
     });
     const button = new FakeElement(
       {
         'data-p-quantity': '2',
-        'fw-param-types': 'quantity:number',
+        'kovo-param-types': 'quantity:number',
       },
       stateHost,
     );
@@ -108,7 +108,7 @@ describe('handler context module', () => {
     (context.context.state as { count: number }).count += 1;
     context.commit();
 
-    expect(stateHost.getAttribute('fw-state')).toBe('{"count":2}');
-    expect(button.getAttribute('fw-state')).toBe(null);
+    expect(stateHost.getAttribute('kovo-state')).toBe('{"count":2}');
+    expect(button.getAttribute('kovo-state')).toBe(null);
   });
 });

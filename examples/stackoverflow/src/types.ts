@@ -1,4 +1,4 @@
-import { form } from '@jiso/core';
+import { form } from '@kovojs/core';
 
 // SPEC.md §6.3 / §10.4: typed mutation input shapes + their `form(...)` handles.
 // The generated optimistic transforms are `OptimisticFor<typeof <form>>`, so the

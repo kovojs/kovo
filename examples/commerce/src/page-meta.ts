@@ -5,6 +5,6 @@ export interface CommerceCartPageMetaInput {
 export function commerceCartPageMeta(cart: CommerceCartPageMetaInput) {
   return {
     description: `Browse products and checkout with ${cart.count} verifiable cart item.`,
-    title: `Jiso Commerce (${cart.count})`,
+    title: `Kovo Commerce (${cart.count})`,
   };
 }

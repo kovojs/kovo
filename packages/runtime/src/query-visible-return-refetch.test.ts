@@ -24,7 +24,7 @@ describe('query visible-return refetch', () => {
 
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":1}',
       },
     ];
@@ -68,7 +68,7 @@ describe('query visible-return refetch', () => {
 
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":1}',
       },
     ];
@@ -83,7 +83,7 @@ describe('query visible-return refetch', () => {
     });
 
     root.scripts.push({
-      getAttribute: (name) => (name === 'fw-query' ? 'reviews' : null),
+      getAttribute: (name) => (name === 'kovo-query' ? 'reviews' : null),
       textContent: '{"total":3}',
     });
 
@@ -95,7 +95,7 @@ describe('query visible-return refetch', () => {
     expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'reviews']);
     expect(fetch).toHaveBeenCalledTimes(1);
 
-    resolveFetchText?.('<fw-query name="cart">{"count":2}</fw-query>');
+    resolveFetchText?.('<kovo-query name="cart">{"count":2}</kovo-query>');
     await Promise.all([first, second]);
 
     expect(store.get('cart')).toEqual({ count: 2 });
@@ -116,15 +116,15 @@ describe('query visible-return refetch', () => {
       text: async () =>
         url === '/_q/cart'
           ? [
-              '<fw-query name="cart">{"count":2}</fw-query>',
-              '<fw-query name="recommendations:user-1">{"items":["p1"]}</fw-query>',
+              '<kovo-query name="cart">{"count":2}</kovo-query>',
+              '<kovo-query name="recommendations:user-1">{"items":["p1"]}</kovo-query>',
             ].join('')
-          : '<fw-query name="recommendations:user-1">{"items":["p2"]}</fw-query>',
+          : '<kovo-query name="recommendations:user-1">{"items":["p2"]}</kovo-query>',
     }));
 
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":1}',
       },
     ];
@@ -140,7 +140,7 @@ describe('query visible-return refetch', () => {
 
     expect(refetchOnFocus).toHaveBeenNthCalledWith(1, ['cart']);
     expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
-      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(store.get('cart')).toEqual({ count: 2 });
@@ -153,11 +153,11 @@ describe('query visible-return refetch', () => {
     // including canonical instance keys from SPEC.md §10.2.
     expect(refetchOnFocus).toHaveBeenNthCalledWith(2, ['cart', 'recommendations:user-1']);
     expect(fetch).toHaveBeenNthCalledWith(2, '/_q/cart', {
-      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(fetch).toHaveBeenNthCalledWith(3, '/_q/recommendations%3Auser-1', {
-      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(store.get('recommendations', 'user-1')).toEqual({ items: ['p2'] });
@@ -169,12 +169,12 @@ describe('query visible-return refetch', () => {
     const onError = vi.fn();
     const fetch = vi.fn(async () => ({
       status: 200,
-      text: async () => '<fw-query name="cart">{</fw-query>',
+      text: async () => '<kovo-query name="cart">{</kovo-query>',
     }));
 
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":1}',
       },
     ];
@@ -191,7 +191,9 @@ describe('query visible-return refetch', () => {
     // SPEC.md §4.4: visible-return refetch follows hydrated queries; malformed typed-read
     // chunks still report through the same runtime apply path instead of drifting silently.
     expect(onError).toHaveBeenCalledTimes(1);
-    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed JSON in kovo-query cart',
+    );
     expect(store.get('cart')).toEqual({ count: 1 });
   });
 
@@ -202,12 +204,12 @@ describe('query visible-return refetch', () => {
     const onError = vi.fn();
     const fetch = vi.fn(async () => ({
       status: 200,
-      text: async () => '<fw-query name="cart">{"count":2}</fw-query>',
+      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
     }));
 
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":1}',
       },
     ];
@@ -237,12 +239,12 @@ describe('query visible-return refetch', () => {
     const refetchOnFocus = vi.fn();
     const fetch = vi.fn(async () => ({
       status: 200,
-      text: async () => '<fw-query name="cart">{"count":2}</fw-query>',
+      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
     }));
 
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":1}',
       },
     ];
@@ -277,12 +279,12 @@ describe('query visible-return refetch', () => {
     const refetchOnFocus = vi.fn(() => focusDone);
     const fetch = vi.fn(async () => ({
       status: 200,
-      text: async () => '<fw-query name="cart">{"count":2}</fw-query>',
+      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
     }));
 
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":1}',
       },
     ];

@@ -1,2 +1,2 @@
-// @jiso-ir
+// @kovojs-ir
 // no client handlers emitted

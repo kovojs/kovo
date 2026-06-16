@@ -1,6 +1,6 @@
-import { guards, mutation, s } from '@jiso/server';
+import { guards, mutation, s } from '@kovojs/server';
 import { eq, sql } from 'drizzle-orm';
-import type { OptimisticFor } from '@jiso/runtime';
+import type { OptimisticFor } from '@kovojs/runtime';
 
 import type { CrmDb } from './db.js';
 import {
@@ -34,7 +34,7 @@ import { closeDealDerivedOptimistic } from './generated/optimistic/close-deal.js
  * The per-request value handed to every CRM mutation: a real Drizzle/PGlite db
  * plus an optional session (so the built-in `guards.authed()` applies). The
  * extractor reads the inline Drizzle writes off `request.db`; the guard keeps the
- * mutations off the `fw check` UNGUARDED audit (SPEC.md §11.2).
+ * mutations off the `kovo check` UNGUARDED audit (SPEC.md §11.2).
  */
 export interface CrmRequest {
   db: CrmDb;

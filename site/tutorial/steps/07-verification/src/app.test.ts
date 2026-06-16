@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@jiso/server';
-import { createJisoTestHarness, type JisoTestHarnessOptions } from '@jiso/test';
-import { fwCheck, fwExplain } from 'fw';
+import { csrfToken } from '@kovojs/server';
+import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test';
+import { kovoCheck, kovoExplain } from 'kovo';
 
 import {
   addToCart,
@@ -19,24 +19,24 @@ import {
 import { createShopDb, type ShopDb } from './db.js';
 
 // Tutorial step 07: the whole behavior surface is checkable without a
-// browser — fw check over the app graph, fw explain as the queryable
+// browser — kovo check over the app graph, kovo explain as the queryable
 // dependency graph, the test harness verifying observed writes against the
 // declared touches, and behavior parity with the reference commerce app
 // (SPEC.md sections 5.3, 11.2, 11.4, 16).
 
-type ShopTouchGraph = NonNullable<JisoTestHarnessOptions<ShopDb>['touchGraph']>;
+type ShopTouchGraph = NonNullable<KovoTestHarnessOptions<ShopDb>['touchGraph']>;
 
 function shopRequest(db = createShopDb()): ShopRequest {
   return { db, session: { id: 's1', user: { id: 'u1' } } };
 }
 
 function formInput(request: ShopRequest, fields: Record<string, string>) {
-  return { ...fields, 'fw-csrf': csrfToken(request, shopCsrf) };
+  return { ...fields, 'kovo-csrf': csrfToken(request, shopCsrf) };
 }
 
 function explainLine(output: string, prefix: string): string {
   const line = output.split('\n').find((item) => item.startsWith(prefix));
-  if (!line) throw new Error(`missing fw explain line: ${prefix}`);
+  if (!line) throw new Error(`missing kovo explain line: ${prefix}`);
   return line.slice(prefix.length);
 }
 
@@ -57,18 +57,18 @@ function optimisticStatuses(output: string): Map<string, string> {
 }
 
 describe('tutorial step 07 — testing & verification', () => {
-  // snippet:fw-check-test
-  it('passes fw check with no unhandled optimistic pair', () => {
-    expect(fwCheck(shopGraph)).toEqual({
+  // snippet:kovo-check-test
+  it('passes kovo check with no unhandled optimistic pair', () => {
+    expect(kovoCheck(shopGraph)).toEqual({
       exitCode: 0,
-      output: 'fw-check/v1\nOK\n',
+      output: 'kovo-check/v1\nOK\n',
     });
   });
   // /snippet
 
-  // snippet:fw-explain-test
+  // snippet:kovo-explain-test
   it('explains the cart/add mutation as a stable, diffable artifact', () => {
-    const explanation = fwExplain(shopGraph, {
+    const explanation = kovoExplain(shopGraph, {
       kind: 'mutation',
       optimistic: true,
       target: 'cart/add',
@@ -90,8 +90,8 @@ describe('tutorial step 07 — testing & verification', () => {
 
   // snippet:intent-test
   it('answers "what updates when cart/add commits" mechanically', () => {
-    const mutationExplain = fwExplain(shopGraph, { kind: 'mutation', target: 'cart/add' });
-    const pageExplain = fwExplain(shopGraph, { kind: 'page', target: '/' });
+    const mutationExplain = kovoExplain(shopGraph, { kind: 'mutation', target: 'cart/add' });
+    const pageExplain = kovoExplain(shopGraph, { kind: 'page', target: '/' });
     const pageQueries = explainList(explainLine(pageExplain.output, 'queries: '));
 
     expect(pageQueries).toEqual(['cart', 'products', 'orderHistory']);
@@ -100,7 +100,7 @@ describe('tutorial step 07 — testing & verification', () => {
     // updated by cart/add, and each names its consuming component.
     const updates = explainLine(mutationExplain.output, 'updates: ');
     for (const query of pageQueries) {
-      const queryExplain = fwExplain(shopGraph, { kind: 'query', target: query });
+      const queryExplain = kovoExplain(shopGraph, { kind: 'query', target: query });
       const consumers = explainList(explainLine(queryExplain.output, 'consumers: '));
 
       expect(updates).toContain(`${query}->`);
@@ -113,16 +113,16 @@ describe('tutorial step 07 — testing & verification', () => {
   // /snippet
 
   it('reports zero unguarded mutations, routes, and queries', () => {
-    expect(fwExplain(shopGraph, { unguarded: true })).toEqual({
+    expect(kovoExplain(shopGraph, { unguarded: true })).toEqual({
       exitCode: 0,
-      output: 'fw-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
+      output: 'kovo-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
     });
   });
 
   // snippet:harness-test
   it('executes addToCart through the harness with write verification on', async () => {
     const shopDb = createShopDb();
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: shopDb,
       pages: {
         '/': () => renderShopPage(shopDb),
@@ -220,25 +220,25 @@ describe('tutorial step 07 — testing & verification', () => {
     // No pair is UNHANDLED on either side (commerce derived, shop hand-written/await).
     expect(commerceGraph.optimistic.every((entry) => entry.status !== 'UNHANDLED')).toBe(true);
 
-    // Same enhanced wire: fw-query truth plus fragments, same failure code.
+    // Same enhanced wire: kovo-query truth plus fragments, same failure code.
     const request = shopRequest();
     const success = await submitAddToCart(
       formInput(request, { productId: 'p1', quantity: '2' }),
       request,
-      { 'FW-Fragment': 'true', 'FW-Targets': 'cart-badge,product-list,order-history' },
+      { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'cart-badge,product-list,order-history' },
     );
-    expect(success.headers['Content-Type']).toBe('text/vnd.jiso.fragment+html; charset=utf-8');
-    expect(success.body).toContain('<fw-query name="cart">{"count":2}</fw-query>');
-    expect(success.body).toContain('<fw-fragment target="order-history">');
-    expect(success.body).toContain('fw-key="order-1"');
-    expect(success.headers['FW-Changes']).toBe(
+    expect(success.headers['Content-Type']).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
+    expect(success.body).toContain('<kovo-query name="cart">{"count":2}</kovo-query>');
+    expect(success.body).toContain('<kovo-fragment target="order-history">');
+    expect(success.body).toContain('kovo-key="order-1"');
+    expect(success.headers['Kovo-Changes']).toBe(
       '[{"domain":"cart"},{"domain":"order"},{"domain":"product","keys":["p1"]}]',
     );
 
     const failure = await submitAddToCart(
       formInput(request, { productId: 'p2', quantity: '3' }),
       request,
-      { 'FW-Fragment': 'true', 'FW-Targets': 'product-form:p2' },
+      { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'product-form:p2' },
     );
     expect(failure.status).toBe(422);
     expect(failure.body).toContain('data-error-code="OUT_OF_STOCK"');
@@ -259,9 +259,9 @@ describe('tutorial step 07 — testing & verification', () => {
   it('rejects unauthenticated requests through the declared guard chain', async () => {
     const db = createShopDb();
     const response = await submitAddToCart(
-      { productId: 'p1', quantity: '1', 'fw-csrf': 'irrelevant' },
+      { productId: 'p1', quantity: '1', 'kovo-csrf': 'irrelevant' },
       { db, session: { id: 's-anon', user: null } },
-      { 'FW-Fragment': 'true', 'FW-Targets': 'product-form:p1' },
+      { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'product-form:p1' },
     );
 
     expect(response.status).toBe(422);

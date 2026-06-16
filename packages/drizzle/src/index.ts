@@ -1,12 +1,12 @@
 export type {
   DiagnosticCode,
-  JisoDomainTableAnnotation,
-  JisoTableAnnotation,
-  JisoTableExtraConfig,
+  KovoDomainTableAnnotation,
+  KovoTableAnnotation,
+  KovoTableExtraConfig,
   ReadSite,
   TouchGraph,
   TouchGraphEntry,
   TouchSite,
   UnresolvedWriteSite,
 } from './runtime.js';
-export { jiso } from './runtime.js';
+export { kovo } from './runtime.js';

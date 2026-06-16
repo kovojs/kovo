@@ -4,21 +4,21 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 
 import {
   extractTouchGraphFromProject,
-  jiso,
+  kovo,
   serializeTouchGraph,
 } from '../../../packages/drizzle/src/static.js';
 
 import { drizzleSymbol, extractQueryFactsFromProject } from './test-helpers.js';
 
 describe('Drizzle pinned subset conformance', () => {
-  it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {
+  it('pins pgTable(name, cols, kovo({...})) as the real Drizzle extra config integration point', () => {
     const cartItems = pgTable(
       'cart_items',
       {
         cartId: text('cart_id').notNull(),
         productId: text('product_id').notNull(),
       },
-      jiso({ domain: 'cart', key: 'productId' }),
+      kovo({ domain: 'cart', key: 'productId' }),
     );
 
     expect(cartItems.productId).toBeDefined();
@@ -42,7 +42,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             import type { PgDatabase } from 'drizzle-orm/pg-core';
 
-            export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));
+            export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));
 
             export async function addItem(writer: PgDatabase<any, any, any>, productId: string) {
               await writer.insert(cartItems).values({ productId });
@@ -81,7 +81,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               stock: integer('stock').notNull(),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
 
             export async function restock({ db: writer }: Context, fake: FakeContext, productId: string) {
               await writer.update(products).set({ stock: 1 }).where(eq(products.id, productId));
@@ -145,7 +145,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               stock: integer('stock').notNull(),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
 
             export async function restock(context: Context, fake: FakeContext, productId: string) {
               const { db: writer } = context;
@@ -208,7 +208,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               stock: integer('stock').notNull(),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
 
             export async function restock(db: PgDatabase<any, any, any>, fake: FakeDb, productId: string) {
               let writer;
@@ -277,7 +277,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               stock: integer('stock').notNull(),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
 
             export async function restock(context: DrizzleContext, fake: FakeContext, productId: string) {
               let writer;
@@ -346,7 +346,7 @@ describe('Drizzle pinned subset conformance', () => {
           "export const products = pgTable('products', {",
           "  id: text('id').primaryKey(),",
           "  stock: integer('stock').notNull(),",
-          "}, jiso({ domain: 'product', key: 'id' }));",
+          "}, kovo({ domain: 'product', key: 'id' }));",
           '',
           'export async function restock(context: DrizzleContext, fake: FakeContext, productId: string) {',
           '  const [writer] = context.receivers;',
@@ -422,7 +422,7 @@ describe('Drizzle pinned subset conformance', () => {
           "export const products = pgTable('products', {",
           "  id: text('id').primaryKey(),",
           "  stock: integer('stock').notNull(),",
-          "}, jiso({ domain: 'product', key: 'id' }));",
+          "}, kovo({ domain: 'product', key: 'id' }));",
           '',
           'export async function restock(context: DrizzleContext, productId: string) {',
           '  const [, ...writerRest] = context.receivers;',
@@ -458,12 +458,12 @@ describe('Drizzle pinned subset conformance', () => {
         ],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/product.domain.ts:17',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/product.domain.ts:18',
           },
@@ -474,14 +474,14 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses project Drizzle receiver container surface readerRest.select().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/product.domain.ts:22',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses project Drizzle receiver container surface objectRest.select().',
             severity: 'warn',
@@ -516,7 +516,7 @@ describe('Drizzle pinned subset conformance', () => {
           "export const products = pgTable('products', {",
           "  id: text('id').primaryKey(),",
           "  stock: integer('stock').notNull(),",
-          "}, jiso({ domain: 'product', key: 'id' }));",
+          "}, kovo({ domain: 'product', key: 'id' }));",
           '',
           'export async function restock(context: DrizzleContext, fake: FakeContext, productId: string) {',
           '  let writer;',
@@ -578,7 +578,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const cartItems = pgTable('cart_items', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'cart', key: 'id' }));
+            }, kovo({ domain: 'cart', key: 'id' }));
           `,
         },
         {
@@ -622,7 +622,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const cartItems = pgTable('cart_items', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'cart', key: 'id' }));
+            }, kovo({ domain: 'cart', key: 'id' }));
           `,
         },
         {
@@ -666,7 +666,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const cartItems = pgTable('cart_items', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'cart', key: 'id' }));
+            }, kovo({ domain: 'cart', key: 'id' }));
           `,
         },
         {
@@ -724,7 +724,7 @@ describe('Drizzle pinned subset conformance', () => {
             '  update(table: unknown): { set(value: unknown): Promise<void> };',
             '}',
             '',
-            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, queue: FakeDb[], productId: string) {',
             '  await db.transaction(async (writer) => {',
@@ -768,7 +768,7 @@ describe('Drizzle pinned subset conformance', () => {
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             "import { pgTable } from 'drizzle-orm/pg-core';",
             '',
-            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
             '  async function runInTx(tx: PgDatabase<any, any, any>) {',
@@ -810,7 +810,7 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
-  it('pins unresolved referenced transaction callbacks as FW406 under real Drizzle imports', () => {
+  it('pins unresolved referenced transaction callbacks as KV406 under real Drizzle imports', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         {
@@ -819,7 +819,7 @@ describe('Drizzle pinned subset conformance', () => {
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             "import { pgTable } from 'drizzle-orm/pg-core';",
             '',
-            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
             '  async function runInTx(writer: unknown) {',
@@ -839,7 +839,7 @@ describe('Drizzle pinned subset conformance', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
           },
@@ -856,7 +856,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: [
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
             '  await db.transaction(async (writer) => {',
@@ -894,7 +894,7 @@ describe('Drizzle pinned subset conformance', () => {
             "import { eq } from 'drizzle-orm';",
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, productId: string, queue: any) {',
             '  await db.transaction(async (writer) => {',
@@ -942,10 +942,10 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               vendorId: text('vendor_id'),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
             export const vendors = pgTable('vendors', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'vendor', key: 'id' }));
+            }, kovo({ domain: 'vendor', key: 'id' }));
 
             export async function loadCatalog(db: PgDatabase<any, any, any>) {
               await db.select({ id: products.id }).from((products as any)).leftJoin(vendors!, eq(vendors.id, products.vendorId));
@@ -988,9 +988,9 @@ describe('Drizzle pinned subset conformance', () => {
             "import { eq } from 'drizzle-orm';",
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-            'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
-            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const vendors = pgTable("vendors", {}, kovo({ domain: "vendor", key: "id" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, kovo({ domain: "snapshot", key: "productId" }));',
             '',
             'export async function syncCatalog(db: PgDatabase<any, any, any>) {',
             '  await db.select().from((products as any)).leftJoin(vendors!, eq(vendors.id, products.vendorId));',
@@ -1026,7 +1026,7 @@ describe('Drizzle pinned subset conformance', () => {
     );
   });
 
-  it('pins unresolved standalone direct select tables as FW406', () => {
+  it('pins unresolved standalone direct select tables as KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         {
@@ -1048,7 +1048,7 @@ describe('Drizzle pinned subset conformance', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/catalog.domain.ts:5',
           },
@@ -1066,7 +1066,7 @@ describe('Drizzle pinned subset conformance', () => {
             "import { eq } from 'drizzle-orm';",
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
             '  await db["insert"](cartItems).values({ productId });',
@@ -1108,8 +1108,8 @@ describe('Drizzle pinned subset conformance', () => {
           source: [
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
-            "export const auditLog = pgTable('audit_log', {}, jiso({ domain: 'audit', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
+            "export const auditLog = pgTable('audit_log', {}, kovo({ domain: 'audit', key: 'productId' }));",
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
             '  async function apply(writer: PgDatabase<any, any, any>) {',
@@ -1164,8 +1164,8 @@ describe('Drizzle pinned subset conformance', () => {
           source: [
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
-            "export const auditLog = pgTable('audit_log', {}, jiso({ domain: 'audit', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
+            "export const auditLog = pgTable('audit_log', {}, kovo({ domain: 'audit', key: 'productId' }));",
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
             '  async function apply(writer: PgDatabase<any, any, any>) {',
@@ -1220,8 +1220,8 @@ describe('Drizzle pinned subset conformance', () => {
           source: [
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
-            "export const auditLog = pgTable('audit_log', {}, jiso({ domain: 'audit', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
+            "export const auditLog = pgTable('audit_log', {}, kovo({ domain: 'audit', key: 'productId' }));",
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
             '  async function writeAudit(writer: PgDatabase<any, any, any>) {',
@@ -1281,8 +1281,8 @@ describe('Drizzle pinned subset conformance', () => {
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
             '}',
             '',
-            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
-            "export const auditLog = pgTable('audit_log', {}, jiso({ domain: 'audit', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
+            "export const auditLog = pgTable('audit_log', {}, kovo({ domain: 'audit', key: 'productId' }));",
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, fake: FakeDb, productId: string) {',
             '  async function writeAudit(writer: PgDatabase<any, any, any>) {',
@@ -1323,7 +1323,7 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
-  it('pins opaque local helper Drizzle carrier aliases as FW406 under real imports', () => {
+  it('pins opaque local helper Drizzle carrier aliases as KV406 under real imports', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         {
@@ -1357,7 +1357,7 @@ describe('Drizzle pinned subset conformance', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/cart.domain.ts:15',
           },
@@ -1366,7 +1366,7 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
-  it('pins opaque local helper assigned Drizzle carrier aliases as FW406 under real imports', () => {
+  it('pins opaque local helper assigned Drizzle carrier aliases as KV406 under real imports', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         {
@@ -1402,7 +1402,7 @@ describe('Drizzle pinned subset conformance', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/cart.domain.ts:17',
           },

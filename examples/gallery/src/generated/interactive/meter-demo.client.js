@@ -1,7 +1,7 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
-import { meterValueState as _meterValueState } from '@jiso/headless-ui/primitives';
+import { meterValueState as _meterValueState } from '@kovojs/headless-ui/primitives';
 
 export const GalleryMeterDemo$button_click = handler((_event, ctx) => {
   const value = ctx.state.value === 92 ? 72 : 92;

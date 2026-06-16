@@ -15,8 +15,8 @@ describe('mutation response DOM apply', () => {
     const domStore = createQueryStore();
     const root = new FakeMorphRoot();
     const body = [
-      '<fw-query name="cart" key="cart:c1">{"count":5}</fw-query>',
-      '<fw-fragment target="cart-list" mode="append"><li>p1</li></fw-fragment>',
+      '<kovo-query name="cart" key="cart:c1">{"count":5}</kovo-query>',
+      '<kovo-fragment target="cart-list" mode="append"><li>p1</li></kovo-fragment>',
     ].join('');
 
     // SPEC.md §9.1: mutation responses carry query patches and fragment patches together.
@@ -45,8 +45,8 @@ describe('mutation response DOM apply', () => {
     // fragment morphing; those chunks should share one §4.8 binding index.
     const applied = applyMutationResponseBodyToRuntime({
       body: [
-        '<fw-query name="cart">{"label":"Cart ready"}</fw-query>',
-        '<fw-query name="product">{"label":"Product ready"}</fw-query>',
+        '<kovo-query name="cart">{"label":"Cart ready"}</kovo-query>',
+        '<kovo-query name="product">{"label":"Product ready"}</kovo-query>',
       ].join('\n'),
       root,
       store,
@@ -67,7 +67,7 @@ describe('mutation response DOM apply', () => {
     root.bindings.push(count, total, product);
 
     const result = applyMutationResponseBodyToRuntime({
-      body: '<fw-query name="cart">{"count":2,"total":2998}</fw-query>',
+      body: '<kovo-query name="cart">{"count":2,"total":2998}</kovo-query>',
       root,
       store,
     });
@@ -95,8 +95,8 @@ describe('mutation response DOM apply', () => {
 
     applyMutationResponseBodyToRuntime({
       body: [
-        '<fw-query name="cart">{"count":5}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
+        '<kovo-query name="cart">{"count":5}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><cart-badge>Ready</cart-badge></kovo-fragment>',
       ].join('\n'),
       morph(target, html) {
         observed.push(
@@ -136,9 +136,9 @@ describe('mutation response DOM apply', () => {
 
     const applied = applyMutationResponseBodyToRuntime({
       body: [
-        '<fw-query name="cart">{</fw-query>',
-        '<fw-query name="inventory">{"available":true}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
+        '<kovo-query name="cart">{</kovo-query>',
+        '<kovo-query name="inventory">{"available":true}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><cart-badge>Ready</cart-badge></kovo-fragment>',
       ].join('\n'),
       onError,
       root,
@@ -158,12 +158,12 @@ describe('mutation response DOM apply', () => {
     const onError = vi.fn();
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    // SPEC section 9.1 defines fw-fragment as mutation response wire vocabulary.
+    // SPEC section 9.1 defines kovo-fragment as mutation response wire vocabulary.
     const applied = applyMutationResponseBodyToRuntime({
       body: [
-        '<fw-query name="cart">{"count":3}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
-        '<fw-fragment target="cart-list"><li>stale</li>',
+        '<kovo-query name="cart">{"count":3}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><cart-badge>3</cart-badge></kovo-fragment>',
+        '<kovo-fragment target="cart-list"><li>stale</li>',
       ].join('\n'),
       onError,
       root,
@@ -178,7 +178,7 @@ describe('mutation response DOM apply', () => {
       queries: ['cart'],
     });
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
-    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed fw-fragment chunk');
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed kovo-fragment chunk');
   });
 
   it('applies interposed query values through compiled plans before morphing fragments', () => {
@@ -196,8 +196,8 @@ describe('mutation response DOM apply', () => {
         return { value: store.get(query.name, query.key) };
       },
       body: [
-        '<fw-query name="cart">{"count":5}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>ready</cart-badge></fw-fragment>',
+        '<kovo-query name="cart">{"count":5}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><cart-badge>ready</cart-badge></kovo-fragment>',
       ].join('\n'),
       morph(target, html) {
         observed.push(`${count.textContent}:${summary.textContent}`);

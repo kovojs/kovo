@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { domain, mutation, query, s, type QueryLoadContext } from '@jiso/server';
+import { domain, mutation, query, s, type QueryLoadContext } from '@kovojs/server';
 
 import { createDbVerifier } from './verifier.js';
 import {
@@ -11,7 +11,7 @@ import {
   type FakeDb,
 } from './test-fixtures.js';
 
-describe('@jiso/test query verifier', () => {
+describe('@kovojs/test query verifier', () => {
   it('fails read-side verification for undeclared query domains', () => {
     const verifier = createDbVerifier(
       {},
@@ -23,7 +23,7 @@ describe('@jiso/test query verifier', () => {
     db.read('products');
 
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      expectedDiagnostic('FW407', 'product'),
+      expectedDiagnostic('KV407', 'product'),
     );
   });
 
@@ -296,11 +296,11 @@ describe('@jiso/test query verifier', () => {
     });
 
     await expect(harness.query(cartQuery)).rejects.toThrow(
-      expectedDiagnostic('FW410', 'cart Expected number'),
+      expectedDiagnostic('KV410', 'cart Expected number'),
     );
   });
 
-  it('reports FW410 for nested query output shape mismatches', async () => {
+  it('reports KV410 for nested query output shape mismatches', async () => {
     const product = domain('product');
     const harness = createVerifiedFakeHarness({
       touchGraph: {},
@@ -320,7 +320,7 @@ describe('@jiso/test query verifier', () => {
     });
 
     await expect(harness.query(productQuery)).rejects.toThrow(
-      expectedDiagnostic('FW410', 'product/list Expected string'),
+      expectedDiagnostic('KV410', 'product/list Expected string'),
     );
   });
 
@@ -343,7 +343,7 @@ describe('@jiso/test query verifier', () => {
       reads: [cart],
     });
 
-    await expect(harness.query(cartQuery)).rejects.toThrow(expectedDiagnostic('FW407', 'product'));
+    await expect(harness.query(cartQuery)).rejects.toThrow(expectedDiagnostic('KV407', 'product'));
   });
 
   it('fails query-loader verification for raw SQL reads of exempt tables', async () => {
@@ -366,7 +366,7 @@ describe('@jiso/test query verifier', () => {
     });
 
     await expect(harness.query(cartQuery)).rejects.toThrow(
-      expectedDiagnostic('FW411', 'audit_log'),
+      expectedDiagnostic('KV411', 'audit_log'),
     );
   });
 
@@ -464,7 +464,7 @@ describe('@jiso/test query verifier', () => {
     db.read('unmapped_table');
 
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      expectedDiagnostic('FW407', 'unmapped_table'),
+      expectedDiagnostic('KV407', 'unmapped_table'),
     );
   });
 
@@ -481,7 +481,7 @@ describe('@jiso/test query verifier', () => {
 
     expect(() => verifier.assertReadsCovered(['cart', 'product'])).not.toThrow();
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      expectedDiagnostic('FW407', 'product'),
+      expectedDiagnostic('KV407', 'product'),
     );
   });
 
@@ -498,7 +498,7 @@ describe('@jiso/test query verifier', () => {
 
     expect(() => verifier.assertReadsCovered(['cart', 'product'])).not.toThrow();
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      expectedDiagnostic('FW407', 'product'),
+      expectedDiagnostic('KV407', 'product'),
     );
   });
 
@@ -512,7 +512,7 @@ describe('@jiso/test query verifier', () => {
     db.sql("select * from products where sku = 'sku-1'");
 
     expect(() => verifier.assertReadsCovered(['product'])).toThrow(
-      expectedDiagnostic('FW408', 'products expected id observed sku'),
+      expectedDiagnostic('KV408', 'products expected id observed sku'),
     );
   });
 
@@ -534,7 +534,7 @@ describe('@jiso/test query verifier', () => {
 
     expect(() => verifier.assertReadsCovered(['product', 'vendor'])).not.toThrow();
     expect(() => verifier.assertReadsCovered(['product'])).toThrow(
-      expectedDiagnostic('FW407', 'vendor'),
+      expectedDiagnostic('KV407', 'vendor'),
     );
   });
 });

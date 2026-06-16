@@ -171,8 +171,8 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
       {
         fileName: 'product.queries.ts',
         source: `
-        export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
-        export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+        export const auditLog = pgTable("audit_log", {}, kovo({ exempt: true }));
+        export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));
 
         export const productQuery = query("product", {
           async load(_input, db) {
@@ -189,8 +189,8 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
       {
         fileName: 'cart.domain.ts',
         source: `
-          export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+          export const auditLog = pgTable("audit_log", {}, kovo({ exempt: true }));
+          export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));
 
           export async function writeAudit(db) {
             await db.insert(auditLog).values({ event: "cart" });
@@ -206,13 +206,13 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
       {
         fileName: 'cart.schema.ts',
         source: `
-          export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
+          export const items = pgTable("cart_items", {}, kovo({ domain: "cart", key: "id" }));
         `,
       },
       {
         fileName: 'order.schema.ts',
         source: `
-          export const items = pgTable("order_items", {}, jiso({ domain: "order", key: "id" }));
+          export const items = pgTable("order_items", {}, kovo({ domain: "order", key: "id" }));
         `,
       },
       {
@@ -232,7 +232,7 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
       {
         fileName: 'product.queries.ts',
         source: `
-        export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+        export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));
 
         export const productQuery = query("product", {
           load(input, db) {
@@ -246,7 +246,7 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
       {
         fileName: 'cart.queries.ts',
         source: `
-        export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+        export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));
 
         export const cartQuery = query("cart", {
           async load(input, db) {
@@ -266,11 +266,11 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
           cartId: text("cart_id").notNull(),
           productId: text("product_id"),
           qty: integer("qty").notNull(),
-        }, jiso({ domain: "cart", key: "cartId" }));
+        }, kovo({ domain: "cart", key: "cartId" }));
         export const products = pgTable("products", {
           id: text("id").primaryKey(),
           name: text("name").notNull(),
-        }, jiso({ domain: "product", key: "id" }));
+        }, kovo({ domain: "product", key: "id" }));
 
         export const cartQuery = query("cart", {
           output: s.object({ count: s.number() }),

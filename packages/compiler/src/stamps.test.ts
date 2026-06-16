@@ -11,7 +11,7 @@ export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
   state: () => ({ open: true }),
   render: ({ cart }) => (
-    <section class="card" fw-deps='product:p1'>
+    <section class="card" kovo-deps='product:p1'>
       {renderOnce(cart.count)}
     </section>
   ),
@@ -19,18 +19,18 @@ export const Recommendations = component('recommendations', {
 `;
     const model = parseComponentModule('recommendations.tsx', source);
     const lowering = serverRenderLowering([], model);
-    const fwDepsStart = source.indexOf("fw-deps='product:p1'");
-    const insertPosition = source.indexOf('>', fwDepsStart);
+    const kovoDepsStart = source.indexOf("kovo-deps='product:p1'");
+    const insertPosition = source.indexOf('>', kovoDepsStart);
 
     expect(lowering).toEqual([
       {
-        end: fwDepsStart + "fw-deps='product:p1'".length,
-        replacement: 'fw-deps="product:p1 cart"',
-        start: fwDepsStart,
+        end: kovoDepsStart + "kovo-deps='product:p1'".length,
+        replacement: 'kovo-deps="product:p1 cart"',
+        start: kovoDepsStart,
       },
       {
         end: insertPosition,
-        replacement: ' fw-c="recommendations" fw-state="{&quot;open&quot;:true}"',
+        replacement: ' kovo-c="recommendations" kovo-state="{&quot;open&quot;:true}"',
         start: insertPosition,
       },
     ]);
@@ -52,11 +52,11 @@ export const CartBadge = component('cart-badge', {
 `,
     });
 
-    expect(result.files[0]?.source).toContain('<cart-badge fw-deps="cart productPage">');
+    expect(result.files[0]?.source).toContain('<cart-badge kovo-deps="cart productPage">');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('stamps fw-c component identity on native render hosts', () => {
+  it('stamps kovo-c component identity on native render hosts', () => {
     const result = compileComponentModule({
       fileName: 'order-history.tsx',
       source: `
@@ -64,14 +64,16 @@ export const OrderHistory = component('order-history', {
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }) => (
     <ol>
-      <li fw-key="order-1">Order</li>
+      <li kovo-key="order-1">Order</li>
     </ol>
   ),
 });
 `,
     });
 
-    expect(result.files[0]?.source).toContain('<ol fw-c="order-history" fw-deps="orderHistory">');
+    expect(result.files[0]?.source).toContain(
+      '<ol kovo-c="order-history" kovo-deps="orderHistory">',
+    );
     expect(() => assertFixpoint(result)).not.toThrow();
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
@@ -83,26 +85,26 @@ export const OrderHistory = component('order-history', {
 export const OrderHistory = component('order-history', {
   render: () => {
     const sample = '<order-history></order-history>';
-    return <ol><li fw-key="order-1">Order</li></ol>;
+    return <ol><li kovo-key="order-1">Order</li></ol>;
   },
 });
 `,
     });
 
     const serverSource = result.files[0]?.source ?? '';
-    expect(serverSource).toContain('<ol fw-c="order-history">');
+    expect(serverSource).toContain('<ol kovo-c="order-history">');
     expect(serverSource).toContain("'<order-history></order-history>'");
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('keeps hand-written fw-c stamps on native hosts unchanged in ejected IR', () => {
+  it('keeps hand-written kovo-c stamps on native hosts unchanged in ejected IR', () => {
     const result = compileComponentModule({
       fileName: 'order-history.tsx',
       source: `
 export const OrderHistory = component('order-history', {
   render: () => (
-    <ol fw-c="order-history">
-      <li fw-key="order-1">Order</li>
+    <ol kovo-c="order-history">
+      <li kovo-key="order-1">Order</li>
     </ol>
   ),
 });
@@ -110,8 +112,8 @@ export const OrderHistory = component('order-history', {
     });
 
     const serverSource = result.files[0]?.source ?? '';
-    expect(serverSource).toContain('<ol fw-c="order-history">');
-    expect(serverSource.match(/fw-c=/g)).toHaveLength(1);
+    expect(serverSource).toContain('<ol kovo-c="order-history">');
+    expect(serverSource.match(/kovo-c=/g)).toHaveLength(1);
   });
 
   it('does not stamp query or state declarations from strings and comments', () => {
@@ -129,8 +131,8 @@ export const CartBadge = component('cart-badge', {
     });
 
     const serverSource = result.files[0]?.source ?? '';
-    expect(serverSource).not.toContain('fw-deps=');
-    expect(serverSource).not.toContain('fw-state=');
+    expect(serverSource).not.toContain('kovo-deps=');
+    expect(serverSource).not.toContain('kovo-state=');
     expect(result.diagnostics).toEqual([]);
   });
 
@@ -152,14 +154,14 @@ export const CartBadge = component('cart-badge', {
 
     const serverSource = result.files[0]?.source ?? '';
     expect(serverSource).toContain(
-      '<cart-badge fw-deps="cart" fw-state="{&quot;open&quot;:true}">',
+      '<cart-badge kovo-deps="cart" kovo-state="{&quot;open&quot;:true}">',
     );
     expect(serverSource).toContain("'<not-the-host></not-the-host>'");
-    expect(serverSource).not.toContain('<not-the-host fw-deps=');
+    expect(serverSource).not.toContain('<not-the-host kovo-deps=');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('merges declared query dependencies into existing fw-deps stamps', () => {
+  it('merges declared query dependencies into existing kovo-deps stamps', () => {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',
       registryFacts: {
@@ -171,7 +173,7 @@ export const CartBadge = component('cart-badge', {
 export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section fw-c="recommendations" fw-deps="product:p1 cart">
+    <section kovo-c="recommendations" kovo-deps="product:p1 cart">
       {renderOnce(cart.count)}
     </section>
   ),
@@ -180,20 +182,20 @@ export const Recommendations = component('recommendations', {
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section fw-c="recommendations" fw-deps="product:p1 cart">',
+      '<section kovo-c="recommendations" kovo-deps="product:p1 cart">',
     );
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('updates existing fw-deps from parsed attribute spans', () => {
+  it('updates existing kovo-deps from parsed attribute spans', () => {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',
       source: `
 export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section class="card" fw-deps='product:p1'>
+    <section class="card" kovo-deps='product:p1'>
       {renderOnce(cart.count)}
     </section>
   ),
@@ -202,12 +204,12 @@ export const Recommendations = component('recommendations', {
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section class="card" fw-deps="product:p1 cart" fw-c="recommendations">',
+      '<section class="card" kovo-deps="product:p1 cart" kovo-c="recommendations">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('validates residual fw-c and fw-deps stamps against known component and query facts', () => {
+  it('validates residual kovo-c and kovo-deps stamps against known component and query facts', () => {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',
       registryFacts: {
@@ -219,7 +221,7 @@ export const Recommendations = component('recommendations', {
 export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section fw-c="recommendations" fw-deps="product:p1 cart">
+    <section kovo-c="recommendations" kovo-deps="product:p1 cart">
       <span data-bind="cart.count">{cart.count}</span>
     </section>
   ),
@@ -229,7 +231,7 @@ export const Recommendations = component('recommendations', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW223',
+        code: 'KV223',
         fileName: 'recommendations.tsx',
         length: 22,
         message:
@@ -240,14 +242,14 @@ export const Recommendations = component('recommendations', {
     ]);
   });
 
-  it('reports FW226 for residual stamps naming unknown components or query instances', () => {
+  it('reports KV226 for residual stamps naming unknown components or query instances', () => {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',
       source: `
 export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section fw-c="unknown-component" fw-deps="cart missingQuery:p1">
+    <section kovo-c="unknown-component" kovo-deps="cart missingQuery:p1">
       <span data-bind="cart.count">{cart.count}</span>
     </section>
   ),
@@ -257,7 +259,7 @@ export const Recommendations = component('recommendations', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW223',
+        code: 'KV223',
         fileName: 'recommendations.tsx',
         length: 22,
         message:
@@ -266,22 +268,22 @@ export const Recommendations = component('recommendations', {
         start: { column: 13, line: 6 },
       },
       {
-        code: 'FW226',
+        code: 'KV226',
         fileName: 'recommendations.tsx',
         message:
-          'fw-deps or fw-c names an unknown query instance or component. fw-c="unknown-component"',
+          'kovo-deps or kovo-c names an unknown query instance or component. kovo-c="unknown-component"',
         severity: 'error',
         start: { column: 14, line: 5 },
-        length: 24,
+        length: 26,
       },
       {
-        code: 'FW226',
+        code: 'KV226',
         fileName: 'recommendations.tsx',
         message:
-          'fw-deps or fw-c names an unknown query instance or component. fw-deps="missingQuery:p1"',
+          'kovo-deps or kovo-c names an unknown query instance or component. kovo-deps="missingQuery:p1"',
         severity: 'error',
-        start: { column: 39, line: 5 },
-        length: 30,
+        start: { column: 41, line: 5 },
+        length: 32,
       },
     ]);
   });
@@ -293,10 +295,10 @@ export const Recommendations = component('recommendations', {
 export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
   render: ({ cart }) => {
-    const sample = '<section fw-c="unknown-component" fw-deps="missingQuery:p1"></section>';
-    // <section fw-c="other-unknown" fw-deps="otherMissing:p1"></section>
+    const sample = '<section kovo-c="unknown-component" kovo-deps="missingQuery:p1"></section>';
+    // <section kovo-c="other-unknown" kovo-deps="otherMissing:p1"></section>
     return (
-      <section fw-c="recommendations" fw-deps="cart">
+      <section kovo-c="recommendations" kovo-deps="cart">
         <span>{renderOnce(cart.count)}</span>
       </section>
     );
@@ -308,7 +310,7 @@ export const Recommendations = component('recommendations', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('reports FW222 and FW223 for hand-written stamps around typed expressions in sugar', () => {
+  it('reports KV222 and KV223 for hand-written stamps around typed expressions in sugar', () => {
     const redundant = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
@@ -330,7 +332,7 @@ export const CartBadge = component('cart-badge', {
 
     expect(redundant.diagnostics).toEqual([
       {
-        code: 'FW223',
+        code: 'KV223',
         fileName: 'cart-badge.tsx',
         length: 22,
         message:
@@ -341,7 +343,7 @@ export const CartBadge = component('cart-badge', {
     ]);
     expect(drift.diagnostics).toEqual([
       {
-        code: 'FW222',
+        code: 'KV222',
         fileName: 'cart-badge.tsx',
         length: 22,
         message:
@@ -350,7 +352,7 @@ export const CartBadge = component('cart-badge', {
         start: { column: 31, line: 4 },
       },
       {
-        code: 'FW311',
+        code: 'KV311',
         fileName: 'cart-badge.tsx',
         length: 10,
         message:
@@ -390,9 +392,9 @@ export const CartBadge = component('cart-badge', {
       source: `
 export const CartBadge = component('cart-badge', {
   render: () => (
-    <ul data-bind-list="cart.items" fw-key="sku">
+    <ul data-bind-list="cart.items" kovo-key="sku">
       <ul />
-      <template fw-stamp>
+      <template kovo-stamp>
         <li><span data-bind=".missing">Item</span></li>
       </template>
     </ul>
@@ -404,7 +406,7 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
         {
-          code: 'FW302',
+          code: 'KV302',
           fileName: 'cart-badge.tsx',
           message: 'data-bind path is not present in the declared query shape. cart.items',
           severity: 'error',

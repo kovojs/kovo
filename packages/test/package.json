@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/test",
+  "name": "@kovojs/test",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -10,9 +10,9 @@
     "./commerce-fixtures": "./src/commerce-fixtures.ts",
     "./derivation-fixtures": "./src/derivation-fixtures.ts",
     "./diagnostic-output-fixtures": "./src/diagnostic-output-fixtures.ts",
-    "./fw-check-fixtures": "./src/fw-check-fixtures.ts",
-    "./fw-explain-fixtures": "./src/fw-explain-fixtures.ts",
-    "./fw-export-fixtures": "./src/fw-export-fixtures.ts",
+    "./kovo-check-fixtures": "./src/kovo-check-fixtures.ts",
+    "./kovo-explain-fixtures": "./src/kovo-explain-fixtures.ts",
+    "./kovo-export-fixtures": "./src/kovo-export-fixtures.ts",
     "./graph-fixtures": "./src/graph-fixtures.ts",
     "./generated-module-fixtures": "./src/generated-module-fixtures.ts",
     "./headers": "./src/headers.ts",
@@ -40,12 +40,12 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
-    "@jiso/core": "workspace:*",
-    "@jiso/server": "workspace:*",
+    "@kovojs/core": "workspace:*",
+    "@kovojs/server": "workspace:*",
     "pgsql-ast-parser": "^12.0.2"
   },
   "devDependencies": {
-    "@jiso/drizzle": "workspace:*",
+    "@kovojs/drizzle": "workspace:*",
     "vitest": "4.1.8"
   }
 }

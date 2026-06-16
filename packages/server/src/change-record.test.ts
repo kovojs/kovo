@@ -131,7 +131,7 @@ describe('server change records', () => {
     expect(assertWrongInputRejected).toBeTypeOf('function');
   });
 
-  it('omits mutation input and manual reasons from FW-Changes headers', async () => {
+  it('omits mutation input and manual reasons from Kovo-Changes headers', async () => {
     const cart = domain('cart');
     const addToCart = mutation('cart/add', {
       input: s.object({ cartId: s.string(), note: s.string(), productId: s.string() }),
@@ -152,13 +152,13 @@ describe('server change records', () => {
       }),
     ).resolves.toMatchObject({
       headers: {
-        'FW-Changes': '[{"domain":"cart","keys":["c1"]}]',
+        'Kovo-Changes': '[{"domain":"cart","keys":["c1"]}]',
       },
       status: 200,
     });
   });
 
-  it('keeps FW-Changes headers ASCII-safe when input and keys contain Unicode', async () => {
+  it('keeps Kovo-Changes headers ASCII-safe when input and keys contain Unicode', async () => {
     const cart = domain('cart');
     const addToCart = mutation('cart/add', {
       input: s.object({ cartId: s.string(), note: s.string(), productId: s.string() }),
@@ -176,14 +176,14 @@ describe('server change records', () => {
       rawInput: { cartId: '東京-🔐', note: 'secret café token'.repeat(256), productId: 'p1' },
       request: {},
     });
-    const header = response.headers['FW-Changes'];
+    const header = response.headers['Kovo-Changes'];
 
     expect(header).toBe('[{"domain":"cart","keys":["\\u6771\\u4eac-\\ud83d\\udd10"]}]');
     expect(header).toBeDefined();
-    if (typeof header !== 'string') throw new Error('expected FW-Changes header');
+    if (typeof header !== 'string') throw new Error('expected Kovo-Changes header');
     expect(header).not.toContain('secret');
     expect(header).not.toContain('café');
-    expect(() => validateHeaderValue('FW-Changes', header)).not.toThrow();
+    expect(() => validateHeaderValue('Kovo-Changes', header)).not.toThrow();
     expect(JSON.parse(header)).toEqual([{ domain: 'cart', keys: ['東京-🔐'] }]);
   });
 });

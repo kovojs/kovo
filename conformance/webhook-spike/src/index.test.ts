@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { stripeSignature } from '@jiso/core';
+import { stripeSignature } from '@kovojs/core';
 import {
   createMemoryMutationReplayStore,
   type MutationReplayStore,
   type MutationWireResponse,
-} from '@jiso/server';
+} from '@kovojs/server';
 
 const stripePayload =
   '{"id":"evt_payment_succeeded_001","object":"event","type":"payment_intent.succeeded","data":{"object":{"id":"pi_123","metadata":{"orderId":"order_123"}}},"livemode":false,"pending_webhooks":1}';
@@ -71,9 +71,9 @@ describe('S7 Stripe-format webhook lifecycle spike', () => {
       body: 'ok',
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'FW-Changes':
+        'Kovo-Changes':
           '[{"domain":"order","keys":["order_123"],"input":{"eventId":"evt_payment_succeeded_001","paymentIntentId":"pi_123"}}]',
-        'FW-Idem': 'evt_payment_succeeded_001',
+        'Kovo-Idem': 'evt_payment_succeeded_001',
       },
       status: 200,
     });
@@ -161,7 +161,7 @@ describe('S7 Stripe-format webhook lifecycle spike', () => {
       ),
     ).resolves.toMatchObject({
       headers: {
-        'FW-Idem': 'evt_payment_succeeded_001',
+        'Kovo-Idem': 'evt_payment_succeeded_001',
       },
       status: 200,
     });
@@ -217,8 +217,8 @@ async function runStripeWebhookSpike(
       body: 'ok',
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'FW-Changes': JSON.stringify([change]),
-        'FW-Idem': event.id,
+        'Kovo-Changes': JSON.stringify([change]),
+        'Kovo-Idem': event.id,
       },
       status: 200,
     };

@@ -26,14 +26,14 @@ export async function exportCrmStaticApp({
   try {
     const [appShellModule, coreModule, viteModule, staticExportModule] = await Promise.all([
       viteServer.ssrLoadModule('/src/app-shell.ts'),
-      viteServer.ssrLoadModule('@jiso/server/app-shell/core'),
-      viteServer.ssrLoadModule('@jiso/server/app-shell/vite'),
-      viteServer.ssrLoadModule('@jiso/server/app-shell/static-export'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/core'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/static-export'),
     ]);
-    const { isJisoApp } = coreModule;
+    const { isKovoApp } = coreModule;
     const {
-      exportJisoAppShellViteBuildWithManifestFromManifestFile,
-      jisoAppShellViteManifestStylesheetHrefFromFile,
+      exportKovoAppShellViteBuildWithManifestFromManifestFile,
+      kovoAppShellViteManifestStylesheetHrefFromFile,
     } = viteModule;
     const {
       formatStaticExportDiagnostic,
@@ -48,15 +48,15 @@ export async function exportCrmStaticApp({
     };
 
     const app = appShellModule.crmStaticExportApp;
-    if (!isJisoApp(app)) {
+    if (!isKovoApp(app)) {
       throw new Error('src/app-shell.ts must export crmStaticExportApp for public export.');
     }
 
-    await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
+    await kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
     // SPEC.md §9.5: replay the public app shell and copy the Vite manifest bytes
     // through the public app-shell export bridge.
-    const { manifest, result } = await exportJisoAppShellViteBuildWithManifestFromManifestFile({
+    const { manifest, result } = await exportKovoAppShellViteBuildWithManifestFromManifestFile({
       app,
       distDir: builtDistDir,
       manifestFile,

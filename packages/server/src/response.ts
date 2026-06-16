@@ -160,7 +160,7 @@ export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: H
  * (SPEC §6.4).
  *
  * @example
- * import { respond, route } from '@jiso/server';
+ * import { respond, route } from '@kovojs/server';
  *
  * export const exportRoute = route('/export.csv', {
  *   page: () =>

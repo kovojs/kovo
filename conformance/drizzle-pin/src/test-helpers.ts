@@ -1,6 +1,6 @@
 import {
   extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
-  type jiso,
+  type kovo,
   type SourceFileInput,
   type TouchGraphProjectOptions,
 } from '../../../packages/drizzle/src/static.js';
@@ -45,7 +45,7 @@ export function extractQueryFactsFromProject(
   return extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 }
 
-export function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
+export function annotatedTable(name: string, annotation: ReturnType<typeof kovo>) {
   return {
     domain: annotation.domain,
     ...(annotation.key ? { key: annotation.key } : {}),

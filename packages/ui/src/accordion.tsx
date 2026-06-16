@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   accordionContentAttributes,
   accordionHeaderAttributes,
@@ -12,7 +12,7 @@ import {
   type AccordionValue,
   type ClassValue,
   type CollectionOrientation,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface AccordionStateProps {
   collapsible?: boolean;

@@ -30,7 +30,7 @@ const SAMPLE = [
   '**Example**',
   '',
   '```ts',
-  "import { component } from '@jiso/core';",
+  "import { component } from '@kovojs/core';",
   "const c = component('x', { render: () => null });",
   '```',
 ].join('\n');
@@ -39,7 +39,7 @@ describe('api-examples extractor', () => {
   it('extracts only the example fence, never the signature fence', () => {
     const blocks = extractExampleBlocks(SAMPLE);
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]).toContain("import { component } from '@jiso/core';");
+    expect(blocks[0]).toContain("import { component } from '@kovojs/core';");
     expect(blocks[0]).not.toContain('function component(name: string)');
   });
 
@@ -49,7 +49,7 @@ describe('api-examples extractor', () => {
   });
 
   it('collects examples from the generated pages with stable ids', async () => {
-    const outDir = await mkdtemp(path.join(tmpdir(), 'jiso-api-examples-'));
+    const outDir = await mkdtemp(path.join(tmpdir(), 'kovo-api-examples-'));
 
     try {
       await generateApiReference({ outDir });
@@ -62,7 +62,7 @@ describe('api-examples extractor', () => {
       }
       // The `component` export's example is present and imports the real export.
       const component = examples.find((example) => example.id.startsWith('core__component__'));
-      expect(component?.code).toContain("from '@jiso/core'");
+      expect(component?.code).toContain("from '@kovojs/core'");
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }

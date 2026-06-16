@@ -73,20 +73,20 @@ interface CommerceDevPlugin {
 export function commerceSharedAppShellDevPlugin(): CommerceDevPlugin {
   return {
     async configureServer(server) {
-      const serverModule = await server.ssrLoadModule('@jiso/server/app-shell/vite');
-      const sharedPluginFactory = serverModule.jisoAppShellViteDevPlugin;
+      const serverModule = await server.ssrLoadModule('@kovojs/server/app-shell/vite');
+      const sharedPluginFactory = serverModule.kovoAppShellViteDevPlugin;
       if (typeof sharedPluginFactory !== 'function') {
-        throw new Error('@jiso/server/app-shell/vite must export jisoAppShellViteDevPlugin.');
+        throw new Error('@kovojs/server/app-shell/vite must export kovoAppShellViteDevPlugin.');
       }
 
       const sharedPlugin = sharedPluginFactory({
-        name: 'jiso-commerce-app-shell-dev',
+        name: 'kovo-commerce-app-shell-dev',
         nodeHandlerExportName: 'commerceNodeHandler',
         order: 'post',
       }) as { configureServer(server: CommerceDevServer): void | DevPostHook };
 
       return sharedPlugin.configureServer(server);
     },
-    name: 'jiso-commerce-app-shell-dev-loader',
+    name: 'kovo-commerce-app-shell-dev-loader',
   };
 }

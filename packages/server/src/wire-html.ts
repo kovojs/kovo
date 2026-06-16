@@ -29,25 +29,25 @@ export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
   const versionAttribute =
     options.version === undefined ? '' : ` version="${escapeAttribute(String(options.version))}"`;
 
-  return `<fw-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(options.value))}</fw-query>`;
+  return `<kovo-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(options.value))}</kovo-query>`;
 }
 
 /**
  * Serialize a query's initial value into the inline `<script type="application/json"
- * fw-query>` tag the runtime hydrates from on first paint. Emit one per query a
+ * kovo-query>` tag the runtime hydrates from on first paint. Emit one per query a
  * page reads so the client store starts populated without a round-trip (SPEC §9.4).
  *
  * @param options - The query `name`, its `value`, and optional instance `key`.
  * @returns The query-script HTML string.
  * @example
- * import { renderQueryScript } from '@jiso/server';
+ * import { renderQueryScript } from '@kovojs/server';
  *
  * const html: string = renderQueryScript({ name: 'cart', value: { count: 2 } });
  */
 export function renderQueryScript(options: QueryScriptRenderOptions): string {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
 
-  return `<script type="application/json" fw-query="${escapeAttribute(options.name)}"${keyAttribute}>${escapeScriptJson(JSON.stringify(options.value))}</script>`;
+  return `<script type="application/json" kovo-query="${escapeAttribute(options.name)}"${keyAttribute}>${escapeScriptJson(JSON.stringify(options.value))}</script>`;
 }
 
 export function renderFragmentWireHtml(options: FragmentWireRenderOptions): string {
@@ -63,5 +63,5 @@ export function renderFragmentWireHtml(options: FragmentWireRenderOptions): stri
 
   const html = `${renderStylesheetLinks(options.stylesheets ?? [])}${options.html}`;
 
-  return `<fw-fragment target="${escapeAttribute(options.target)}"${modeAttribute}${priorityAttribute}${errorBoundaryAttribute}>${html}</fw-fragment>`;
+  return `<kovo-fragment target="${escapeAttribute(options.target)}"${modeAttribute}${priorityAttribute}${errorBoundaryAttribute}>${html}</kovo-fragment>`;
 }

@@ -9,7 +9,7 @@ import {
 } from './lint-primitives.js';
 
 describe('primitive handler lint CLI gate', () => {
-  it('passes over the real @jiso/headless-ui primitive sources', () => {
+  it('passes over the real @kovojs/headless-ui primitive sources', () => {
     const result = lintPrimitiveHandlerPackageSources({
       packageRoot: new URL('../../', import.meta.url),
     });
@@ -22,7 +22,7 @@ describe('primitive handler lint CLI gate', () => {
   it('returns a zero exit code when marked primitive source is guarded', () => {
     const root = temporaryPackageRoot({
       'src/primitives/tooltip.ts': `
-/** @jisoPrimitiveHandler */
+/** @kovoPrimitiveHandler */
 export function tooltipPointerEnter(event: Event): void {
   if (event.defaultPrevented) return;
   showTooltip();
@@ -46,7 +46,7 @@ export function tooltipPointerEnter(event: Event): void {
   it('returns a failing exit code with formatted findings for unguarded marked handlers', () => {
     const root = temporaryPackageRoot({
       'src/primitives/popover.ts': `
-/** @jisoPrimitiveHandler */
+/** @kovoPrimitiveHandler */
 export const popoverTriggerClick = (event: Event): void => {
   openPopover();
 };
@@ -59,7 +59,7 @@ export const popoverTriggerClick = (event: Event): void => {
       expect(result.exitCode).toBe(1);
       expect(result.output).toBe('');
       expect(result.errorOutput).toBe(
-        'src/primitives/popover.ts:3:14 JISO_HUI001 popoverTriggerClick Primitive handler must begin by no-oping when event.defaultPrevented is true; SPEC.md §4.6 keeps chained on:* handlers running left-to-right and assigns cancellation handling to primitive handlers.\n',
+        'src/primitives/popover.ts:3:14 KOVO_HUI001 popoverTriggerClick Primitive handler must begin by no-oping when event.defaultPrevented is true; SPEC.md §4.6 keeps chained on:* handlers running left-to-right and assigns cancellation handling to primitive handlers.\n',
       );
     } finally {
       rmSync(root, { force: true, recursive: true });
@@ -76,7 +76,7 @@ export const popoverTriggerClick = (event: Event): void => {
 });
 
 function temporaryPackageRoot(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'jiso-headless-ui-lint-'));
+  const root = mkdtempSync(join(tmpdir(), 'kovo-headless-ui-lint-'));
 
   for (const [path, source] of Object.entries(files)) {
     const filePath = join(root, path);

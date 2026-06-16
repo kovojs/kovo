@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installJisoLoader } from './index.js';
+import { createQueryStore, installKovoLoader } from './index.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -9,7 +9,7 @@ afterEach(() => {
 describe('browser query visible-return refetch', () => {
   it('refetches typed reads on document visible-return without a window focus duplicate', async () => {
     document.body.innerHTML =
-      '<script fw-query="cart" type="application/json">{"count":1}</script>';
+      '<script kovo-query="cart" type="application/json">{"count":1}</script>';
     const store = createQueryStore();
     let resolveText: ((body: string) => void) | undefined;
     const textDone = new Promise<string>((resolve) => {
@@ -20,7 +20,7 @@ describe('browser query visible-return refetch', () => {
       text: () => textDone,
     }));
 
-    const loader = installJisoLoader({
+    const loader = installKovoLoader({
       importModule: vi.fn(),
       queryRefetch: { fetch },
       queryStore: store,
@@ -32,7 +32,7 @@ describe('browser query visible-return refetch', () => {
 
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
 
-    resolveText?.('<fw-query name="cart">{"count":2}</fw-query>');
+    resolveText?.('<kovo-query name="cart">{"count":2}</kovo-query>');
     await vi.waitFor(() => expect(store.get('cart')).toEqual({ count: 2 }));
 
     window.dispatchEvent(new Event('focus'));

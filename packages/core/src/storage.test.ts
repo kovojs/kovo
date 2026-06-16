@@ -104,7 +104,7 @@ storageConformance('memory', async () => ({
 }));
 
 storageConformance('filesystem', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'jiso-storage-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-'));
   return {
     cleanup: () => rm(root, { force: true, recursive: true }),
     storage: createFileSystemStorage({ root }),
@@ -115,7 +115,7 @@ storageConformance('S3-compatible', async () => {
   const client = new MockS3Client();
   return {
     storage: createS3CompatibleStorage({
-      bucket: 'jiso-test',
+      bucket: 'kovo-test',
       client,
       prefix: 'uploads',
     }),
@@ -124,7 +124,7 @@ storageConformance('S3-compatible', async () => {
 
 describe('storage adapters', () => {
   it('passes caller-provided ETags through memory and filesystem storage', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'jiso-storage-etag-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-etag-'));
     try {
       const memory = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
       const filesystem = createFileSystemStorage({ root });

@@ -1,10 +1,10 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   toggleGroupItemClick as _toggleGroupItemClick,
   toggleGroupKeyDown as _toggleGroupKeyDown,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryToggleGroupDemo$section_keydown = handler((event, ctx) => {
   const result = _toggleGroupKeyDown(Object(event), {

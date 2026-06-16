@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installJisoLoader } from './index.js';
+import { createQueryStore, installKovoLoader } from './index.js';
 import {
   FakeFormElement,
   FakeMorphRoot,
@@ -17,7 +17,7 @@ describe('loader enhanced mutation failures', () => {
   it('reports enhanced loader submit failures after preventing native submit', async () => {
     const loaderRoot = new FakeRoot();
     const mutationRoot = new FakeMorphRoot();
-    const pendingForm = new FakePendingElement({ 'fw-deps': 'cart' });
+    const pendingForm = new FakePendingElement({ 'kovo-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([pendingForm]);
     const store = createQueryStore();
     const loaderOnError = vi.fn();
@@ -31,7 +31,7 @@ describe('loader enhanced mutation failures', () => {
       new FakeFormElement(
         {
           enhance: '',
-          'fw-deps': 'cart',
+          'kovo-deps': 'cart',
         },
         {
           action: '/_m/cart/add',
@@ -44,12 +44,12 @@ describe('loader enhanced mutation failures', () => {
     const fetch = vi.fn(async () => {
       expect(pendingForm.attributes).toMatchObject({
         'aria-busy': 'true',
-        'fw-pending': '',
+        'kovo-pending': '',
       });
       throw error;
     });
 
-    installJisoLoader({
+    installKovoLoader({
       enhancedMutations: {
         fetch,
         formData: () => formData,
@@ -77,7 +77,7 @@ describe('loader enhanced mutation failures', () => {
     expect(loaderOnError).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
     expect(importModule).not.toHaveBeenCalled();
-    expect(pendingForm.attributes).not.toHaveProperty('fw-pending');
+    expect(pendingForm.attributes).not.toHaveProperty('kovo-pending');
     expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
   });
 
@@ -96,7 +96,7 @@ describe('loader enhanced mutation failures', () => {
       },
     );
 
-    installJisoLoader({
+    installKovoLoader({
       enhancedMutations: {
         fetch: vi.fn(async () => {
           throw error;
@@ -144,7 +144,7 @@ describe('loader enhanced mutation failures', () => {
       { submit },
     );
 
-    installJisoLoader({
+    installKovoLoader({
       enhancedMutations: {
         fetch: vi.fn(async () => {
           throw error;

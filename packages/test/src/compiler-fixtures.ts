@@ -1,8 +1,8 @@
 import {
-  fwCheckAssertionFact,
-  type FwCheckAssertionFact,
-  type FwCheckResultLike,
-} from './fw-check-fixtures.ts';
+  kovoCheckAssertionFact,
+  type KovoCheckAssertionFact,
+  type KovoCheckResultLike,
+} from './kovo-check-fixtures.ts';
 
 export interface CompilerDiagnosticLike {
   code: string;
@@ -161,8 +161,8 @@ export type CompilerDiagnosticMessageFact = Pick<
 >;
 
 export interface CompilerDataBindDiagnosticDefinitions {
-  FW227: { help: string };
-  FW302: { message: string };
+  KV227: { help: string };
+  KV302: { message: string };
 }
 
 export interface CompilerDataBindCompileResult {
@@ -181,12 +181,12 @@ export interface CompilerDataBindBehaviorOptions {
 }
 
 export interface CompilerValidationDiagnosticDefinitions {
-  FW211: { message: string };
-  FW212: { message: string };
-  FW221: { message: string };
-  FW224: { message: string };
-  FW225: { message: string };
-  FW226: { message: string };
+  KV211: { message: string };
+  KV212: { message: string };
+  KV221: { message: string };
+  KV224: { message: string };
+  KV225: { message: string };
+  KV226: { message: string };
 }
 
 export interface CompilerValidationCompileResult {
@@ -202,29 +202,29 @@ export interface CompilerValidationBehaviorOptions {
   diagnosticDefinitions: CompilerValidationDiagnosticDefinitions;
 }
 
-export interface CompilerLoweredIrFwCheckCompileResult {
+export interface CompilerLoweredIrKovoCheckCompileResult {
   diagnostics: readonly CompilerDiagnosticLike[];
 }
 
-export interface CompilerLoweredIrFwCheckBehaviorOptions {
+export interface CompilerLoweredIrKovoCheckBehaviorOptions {
   compileComponentModule(options: {
     fileName: string;
     source: string;
-  }): CompilerLoweredIrFwCheckCompileResult;
-  fwCheck(input: {
+  }): CompilerLoweredIrKovoCheckCompileResult;
+  kovoCheck(input: {
     diagnostics: readonly {
       code: string;
       message: string;
       site?: string;
       start?: unknown;
     }[];
-  }): FwCheckResultLike;
+  }): KovoCheckResultLike;
 }
 
 export interface CompilerDataBindBehaviorFact {
   diagnostics: {
-    FW227Help: string;
-    FW302Message: string;
+    KV227Help: string;
+    KV302Message: string;
   };
   generatedCartShapeFacts: CompilerQueryShapeFact[];
   invalidListStampDiagnostics: CompilerDiagnosticMessageFact[];
@@ -250,9 +250,9 @@ export interface CompilerValidationBehaviorFact {
   validResidualStampDiagnostics: CompilerDiagnosticFact[];
 }
 
-export interface CompilerLoweredIrFwCheckBehaviorFact {
+export interface CompilerLoweredIrKovoCheckBehaviorFact {
   compilerDiagnostics: CompilerDiagnosticFact[];
-  fwCheck: FwCheckAssertionFact;
+  kovoCheck: KovoCheckAssertionFact;
   sourceFileName: string;
   specSection: 'SPEC §5.2';
 }
@@ -391,8 +391,8 @@ export const CartBadge = component('cart-badge', {
     <cart-badge>
       <span data-bind="cart.count">2</span>
       <button data-bind:hidden="cart.empty">Checkout</button>
-      <ul data-bind-list="cart.items" fw-key="productId">
-        <template fw-stamp>
+      <ul data-bind-list="cart.items" kovo-key="productId">
+        <template kovo-stamp>
           <li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>
         </template>
       </ul>
@@ -423,8 +423,8 @@ export const CartBadge = component('cart-badge', {
     source: `
 export const CartBadge = component('cart-badge', {
   render: () => (
-    <ul data-bind-list="cart.items" fw-key="sku">
-      <template fw-stamp>
+    <ul data-bind-list="cart.items" kovo-key="sku">
+      <template kovo-stamp>
         <li><span data-bind=".missing">0</span></li>
       </template>
     </ul>
@@ -474,8 +474,8 @@ export const ProductCard = component('product-card', {
 
   return {
     diagnostics: {
-      FW227Help: options.diagnosticDefinitions.FW227.help,
-      FW302Message: options.diagnosticDefinitions.FW302.message,
+      KV227Help: options.diagnosticDefinitions.KV227.help,
+      KV302Message: options.diagnosticDefinitions.KV302.message,
     },
     generatedCartShapeFacts,
     invalidListStampDiagnostics: compilerDiagnosticMessageFacts(invalidListStamp.diagnostics),
@@ -497,7 +497,7 @@ export function compilerValidationBehaviorFact(
   const validIdrefs = options.compileComponentModule({
     fileName: 'components/cart/cart-search.tsx',
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartSearch = component('cart-search', {
   render: () => (
@@ -514,7 +514,7 @@ export const CartSearch = component('cart-search', {
   const invalidIdrefs = options.compileComponentModule({
     fileName: 'components/cart/cart-search.tsx',
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartSearch = component('cart-search', {
   render: () => (
@@ -532,7 +532,7 @@ export const CartSearch = component('cart-search', {
   const duplicateStaticId = options.compileComponentModule({
     fileName: 'components/cart/cart-shell.tsx',
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartShell = component('cart-shell', {
   render: () => (
@@ -548,12 +548,12 @@ export const CartShell = component('cart-shell', {
   const repeatableStaticId = options.compileComponentModule({
     fileName: 'components/cart/cart-list.tsx',
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartList = component('cart-list', {
   render: () => (
-    <ul data-bind-list="cart.items" fw-key="productId">
-      <template fw-stamp>
+    <ul data-bind-list="cart.items" kovo-key="productId">
+      <template kovo-stamp>
         <li id="cart-row"><span data-bind=".name">Mug</span></li>
       </template>
     </ul>
@@ -568,13 +568,13 @@ export const CartList = component('cart-list', {
       components: ['cart-row'],
     },
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartTable = component('cart-table', {
   render: () => (
     <table>
       <tbody>
-        <tr fw-c="cart-row">
+        <tr kovo-c="cart-row">
           <td>Cart row</td>
         </tr>
       </tbody>
@@ -587,7 +587,7 @@ export const CartTable = component('cart-table', {
   const invalidContentModel = options.compileComponentModule({
     fileName: 'components/cart/cart-shell.tsx',
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartShell = component('cart-shell', {
   render: () => (
@@ -608,7 +608,7 @@ export const CartShell = component('cart-shell', {
   const validExecutionTriggers = options.compileComponentModule({
     fileName: 'components/execution-triggers.tsx',
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const ExecutionTriggers = component('execution-triggers', {
   render: () => (
@@ -616,7 +616,7 @@ export const ExecutionTriggers = component('execution-triggers', {
       <button on:click="/c/cart.client.js#Cart$add">Add</button>
       <search-index on:idle="/c/search.client.js#Search$warm"></search-index>
       <sales-chart on:visible="/c/chart.client.js#SalesChart$mount"></sales-chart>
-      {/* FW211: stock ticker intentionally starts at parse for market-open pages. */}
+      {/* KV211: stock ticker intentionally starts at parse for market-open pages. */}
       <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
     </section>
   ),
@@ -627,7 +627,7 @@ export const ExecutionTriggers = component('execution-triggers', {
   const invalidExecutionTriggers = options.compileComponentModule({
     fileName: 'components/execution-triggers.tsx',
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const ExecutionTriggers = component('execution-triggers', {
   render: () => (
@@ -643,12 +643,12 @@ export const ExecutionTriggers = component('execution-triggers', {
   const validResidualStamp = options.compileComponentModule({
     fileName: 'components/recommendations.tsx',
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section fw-c="recommendations" fw-deps="cart">{cart.count}</section>
+    <section kovo-c="recommendations" kovo-deps="cart">{cart.count}</section>
   ),
 });
 `,
@@ -657,12 +657,12 @@ export const Recommendations = component('recommendations', {
   const invalidResidualStamp = options.compileComponentModule({
     fileName: 'components/recommendations.tsx',
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section fw-c="unknown-component" fw-deps="cart missingQuery:p1">{cart.count}</section>
+    <section kovo-c="unknown-component" kovo-deps="cart missingQuery:p1">{cart.count}</section>
   ),
 });
 `,
@@ -670,27 +670,27 @@ export const Recommendations = component('recommendations', {
 
   return {
     diagnostics: {
-      FW211: options.diagnosticDefinitions.FW211.message,
-      FW212: options.diagnosticDefinitions.FW212.message,
-      FW221: options.diagnosticDefinitions.FW221.message,
-      FW224: options.diagnosticDefinitions.FW224.message,
-      FW225: options.diagnosticDefinitions.FW225.message,
-      FW226: options.diagnosticDefinitions.FW226.message,
+      KV211: options.diagnosticDefinitions.KV211.message,
+      KV212: options.diagnosticDefinitions.KV212.message,
+      KV221: options.diagnosticDefinitions.KV221.message,
+      KV224: options.diagnosticDefinitions.KV224.message,
+      KV225: options.diagnosticDefinitions.KV225.message,
+      KV226: options.diagnosticDefinitions.KV226.message,
     },
     invalidContentModelDiagnostics: compilerDiagnosticFacts(invalidContentModel.diagnostics, [
-      'FW225',
+      'KV225',
     ]),
     invalidExecutionTriggerDiagnostics: compilerDiagnosticFacts(
       invalidExecutionTriggers.diagnostics,
-      ['FW211', 'FW212'],
+      ['KV211', 'KV212'],
     ),
-    invalidIdrefDiagnostics: compilerDiagnosticFacts(invalidIdrefs.diagnostics, ['FW221']),
+    invalidIdrefDiagnostics: compilerDiagnosticFacts(invalidIdrefs.diagnostics, ['KV221']),
     invalidResidualStampDiagnostics: compilerDiagnosticFacts(invalidResidualStamp.diagnostics, [
-      'FW226',
+      'KV226',
     ]),
     invalidStaticIdDiagnostics: [
-      ...compilerDiagnosticFacts(duplicateStaticId.diagnostics, ['FW224']),
-      ...compilerDiagnosticFacts(repeatableStaticId.diagnostics, ['FW224']),
+      ...compilerDiagnosticFacts(duplicateStaticId.diagnostics, ['KV224']),
+      ...compilerDiagnosticFacts(repeatableStaticId.diagnostics, ['KV224']),
     ],
     validContentModelDiagnostics: compilerDiagnosticFacts(validContentModel.diagnostics),
     validExecutionTriggerDiagnostics: compilerDiagnosticFacts(validExecutionTriggers.diagnostics),
@@ -699,29 +699,29 @@ export const Recommendations = component('recommendations', {
   };
 }
 
-export function compilerLoweredIrFwCheckBehaviorFact(
-  options: CompilerLoweredIrFwCheckBehaviorOptions,
-): CompilerLoweredIrFwCheckBehaviorFact {
+export function compilerLoweredIrKovoCheckBehaviorFact(
+  options: CompilerLoweredIrKovoCheckBehaviorOptions,
+): CompilerLoweredIrKovoCheckBehaviorFact {
   const sourceFileName = 'cart-badge.tsx';
   const result = options.compileComponentModule({
     fileName: sourceFileName,
     source: `
 export const CartBadge = component('cart-badge', {
   queries: { cart: cartQuery },
-  render: ({ cart }) => \`<cart-badge fw-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
+  render: ({ cart }) => \`<cart-badge kovo-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
 });
 `,
   });
-  const diagnostics = result.diagnostics.filter((entry) => entry.code === 'FW235');
+  const diagnostics = result.diagnostics.filter((entry) => entry.code === 'KV235');
 
   if (diagnostics.length !== 1) {
-    throw new Error(`Expected exactly one FW235 diagnostic; found ${diagnostics.length}`);
+    throw new Error(`Expected exactly one KV235 diagnostic; found ${diagnostics.length}`);
   }
 
   return {
     compilerDiagnostics: compilerDiagnosticFacts(diagnostics),
-    fwCheck: fwCheckAssertionFact(
-      options.fwCheck({
+    kovoCheck: kovoCheckAssertionFact(
+      options.kovoCheck({
         diagnostics: diagnostics.map((diagnostic) => ({
           code: diagnostic.code,
           message: diagnostic.message,

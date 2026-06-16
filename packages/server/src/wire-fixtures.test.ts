@@ -50,13 +50,13 @@ describe('server wire fixture contracts', () => {
         {
           fragments: [
             {
-              html: '<section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section>',
+              html: '<section kovo-c="reviews" kovo-deps="product:p1"><article kovo-key="r1">5</article></section>',
               priority: 5,
               stylesheets: ['/assets/reviews.css'],
               target: 'reviews:p1',
             },
             {
-              html: '<section fw-c="recommendations" fw-deps="product:p1"><article fw-key="rec-1">Beans</article></section>',
+              html: '<section kovo-c="recommendations" kovo-deps="product:p1"><article kovo-key="rec-1">Beans</article></section>',
               target: 'recommendations:p1',
             },
           ],
@@ -67,7 +67,7 @@ describe('server wire fixture contracts', () => {
         },
       ],
       shell:
-        '<!doctype html>\n<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer><fw-defer target="recommendations:p1" state="pending"></fw-defer></product-page></main>\n',
+        '<!doctype html>\n<html><body><main><product-page kovo-deps="product:p1"><kovo-defer target="reviews:p1" state="pending"></kovo-defer><kovo-defer target="recommendations:p1" state="pending"></kovo-defer></product-page></main>\n',
     });
     const fixture = await readFile(
       new URL('../../../fixtures/wire/defer-stream.http', import.meta.url),
@@ -143,7 +143,7 @@ describe('server wire fixture contracts', () => {
                 const data = failure.error.payload as { availableQuantity: number };
 
                 return [
-                  '<form fw-c="product-form" aria-invalid="true">',
+                  '<form kovo-c="product-form" aria-invalid="true">',
                   `<output role="alert" data-error-code="${failure.error.code}">Only ${data.availableQuantity} left.</output>`,
                   `<input name="productId" value="${input.productId}">`,
                   `<input name="quantity" value="${input.quantity}">`,
@@ -249,7 +249,7 @@ describe('server wire fixture contracts', () => {
         const data = failure.error.payload as { availableQuantity: number };
 
         return [
-          '<form fw-c="product-form" aria-invalid="true">',
+          '<form kovo-c="product-form" aria-invalid="true">',
           `<output role="alert" data-error-code="${failure.error.code}">Only ${data.availableQuantity} left.</output>`,
           `<input name="productId" value="${input.productId}">`,
           `<input name="quantity" value="${input.quantity}">`,
@@ -344,13 +344,13 @@ async function routeWireFixtureRequest(
           {
             fragments: [
               {
-                html: '<section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section>',
+                html: '<section kovo-c="reviews" kovo-deps="product:p1"><article kovo-key="r1">5</article></section>',
                 priority: 5,
                 stylesheets: ['/assets/reviews.css'],
                 target: 'reviews:p1',
               },
               {
-                html: '<section fw-c="recommendations" fw-deps="product:p1"><article fw-key="rec-1">Beans</article></section>',
+                html: '<section kovo-c="recommendations" kovo-deps="product:p1"><article kovo-key="rec-1">Beans</article></section>',
                 target: 'recommendations:p1',
               },
             ],
@@ -365,7 +365,7 @@ async function routeWireFixtureRequest(
           },
         ],
         shell:
-          '<!doctype html>\n<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer><fw-defer target="recommendations:p1" state="pending"></fw-defer></product-page></main>\n',
+          '<!doctype html>\n<html><body><main><product-page kovo-deps="product:p1"><kovo-defer target="reviews:p1" state="pending"></kovo-defer><kovo-defer target="recommendations:p1" state="pending"></kovo-defer></product-page></main>\n',
       }),
       'OK',
     );
@@ -396,7 +396,7 @@ async function routeWireFixtureRequest(
     return writeLiveFixtureResponse(
       response,
       {
-        body: '<!doctype html>\n<html><body><script type="application/json" fw-query="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</script><cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge></body></html>',
+        body: '<!doctype html>\n<html><body><script type="application/json" kovo-query="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</script><cart-badge kovo-deps="cart"><span data-bind="cart.count">1</span></cart-badge></body></html>',
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
         status: 200,
       },

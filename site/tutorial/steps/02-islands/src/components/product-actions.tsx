@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 
 // Tutorial step 02 (chapter 2): the interaction ladder in one component
 // (SPEC.md section 7). The size-guide button is L0 — the compiler proves the

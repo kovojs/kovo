@@ -53,7 +53,7 @@ export interface SoInvalidationSets {
   'voteUp': 'questionList' | 'questionScore';
 }
 
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface QueryRegistry {
     questionList: QuestionListResult;
     answerList: AnswerListResult;

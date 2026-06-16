@@ -1,4 +1,4 @@
-import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
+import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
 import { escapeHtml } from './html.js';
 import {
   renderDocument,
@@ -50,7 +50,7 @@ export function renderDiagnosticDocument(
       };
   const title =
     options.diagnostics.length === 1
-      ? `${options.diagnostics[0]?.code ?? 'FW'} diagnostic`
+      ? `${options.diagnostics[0]?.code ?? 'KV'} diagnostic`
       : `${options.diagnostics.length} diagnostics`;
   const document = renderDocument({
     body: renderDiagnosticDocumentBody(options.diagnostics, options.source),
@@ -82,12 +82,12 @@ function renderDiagnosticDocumentBody(
   source: DiagnosticDocumentSource | string | undefined,
 ): string {
   return [
-    '<main class="jiso-diagnostic">',
+    '<main class="kovo-diagnostic">',
     '<style>',
     diagnosticDocumentStyles(),
     '</style>',
-    '<h1>Jiso diagnostic</h1>',
-    '<div class="jiso-diagnostic-list">',
+    '<h1>Kovo diagnostic</h1>',
+    '<div class="kovo-diagnostic-list">',
     diagnostics.map((diagnostic) => renderDiagnosticPanel(diagnostic, source)).join(''),
     '</div>',
     '</main>',
@@ -104,10 +104,10 @@ function renderDiagnosticPanel(
   const sourceFrame = renderSourceFrame(diagnostic, source);
 
   return [
-    '<section class="jiso-diagnostic-panel">',
+    '<section class="kovo-diagnostic-panel">',
     '<header>',
-    `<p class="jiso-diagnostic-code">${escapeHtml(diagnostic.code)}</p>`,
-    `<p class="jiso-diagnostic-severity">${escapeHtml(severity)}</p>`,
+    `<p class="kovo-diagnostic-code">${escapeHtml(diagnostic.code)}</p>`,
+    `<p class="kovo-diagnostic-severity">${escapeHtml(severity)}</p>`,
     '</header>',
     `<h2>${escapeHtml(diagnostic.message)}</h2>`,
     renderDiagnosticLocation(diagnostic),
@@ -121,7 +121,7 @@ function renderDiagnosticLocation(diagnostic: DiagnosticDocumentDiagnostic): str
   const site = diagnosticSite(diagnostic);
   if (site === undefined) return '';
 
-  return `<p class="jiso-diagnostic-location">${escapeHtml(site)}</p>`;
+  return `<p class="kovo-diagnostic-location">${escapeHtml(site)}</p>`;
 }
 
 function renderDiagnosticHelp(help: string): string {
@@ -133,7 +133,7 @@ function renderDiagnosticHelp(help: string): string {
     .join('');
 
   if (!items) return '';
-  return `<div class="jiso-diagnostic-help"><h3>Fix menu</h3><ul>${items}</ul></div>`;
+  return `<div class="kovo-diagnostic-help"><h3>Fix menu</h3><ul>${items}</ul></div>`;
 }
 
 function renderSourceFrame(
@@ -165,7 +165,7 @@ function renderSourceFrame(
     }
   }
 
-  return `<pre class="jiso-diagnostic-source"><code>${escapeHtml(frameLines.join('\n'))}</code></pre>`;
+  return `<pre class="kovo-diagnostic-source"><code>${escapeHtml(frameLines.join('\n'))}</code></pre>`;
 }
 
 function diagnosticSource(
@@ -190,19 +190,19 @@ function diagnosticSite(diagnostic: DiagnosticDocumentDiagnostic): string | unde
 
 function diagnosticDocumentStyles(): string {
   return [
-    '.jiso-diagnostic{font-family:ui-sans-serif,system-ui,sans-serif;margin:0 auto;max-width:72rem;padding:2rem;color:#111827}',
-    '.jiso-diagnostic h1{font-size:1.5rem;margin:0 0 1rem}',
-    '.jiso-diagnostic-list{display:grid;gap:1rem}',
-    '.jiso-diagnostic-panel{border:1px solid #d1d5db;border-radius:8px;padding:1rem;background:#fff}',
-    '.jiso-diagnostic-panel header{align-items:center;display:flex;gap:.5rem;margin-bottom:.75rem}',
-    '.jiso-diagnostic-code,.jiso-diagnostic-severity{border-radius:999px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8125rem;margin:0;padding:.125rem .5rem}',
-    '.jiso-diagnostic-code{background:#111827;color:#fff}',
-    '.jiso-diagnostic-severity{background:#fee2e2;color:#991b1b}',
-    '.jiso-diagnostic-panel h2{font-size:1.125rem;line-height:1.4;margin:0}',
-    '.jiso-diagnostic-location{color:#4b5563;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin:.5rem 0 0}',
-    '.jiso-diagnostic-help h3{font-size:.875rem;margin:1rem 0 .25rem}',
-    '.jiso-diagnostic-help ul{margin:.25rem 0 0;padding-left:1.25rem}',
-    '.jiso-diagnostic-source{background:#111827;border-radius:8px;color:#f9fafb;margin:1rem 0 0;overflow:auto;padding:1rem}',
-    '.jiso-diagnostic-source code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.875rem;line-height:1.5}',
+    '.kovo-diagnostic{font-family:ui-sans-serif,system-ui,sans-serif;margin:0 auto;max-width:72rem;padding:2rem;color:#111827}',
+    '.kovo-diagnostic h1{font-size:1.5rem;margin:0 0 1rem}',
+    '.kovo-diagnostic-list{display:grid;gap:1rem}',
+    '.kovo-diagnostic-panel{border:1px solid #d1d5db;border-radius:8px;padding:1rem;background:#fff}',
+    '.kovo-diagnostic-panel header{align-items:center;display:flex;gap:.5rem;margin-bottom:.75rem}',
+    '.kovo-diagnostic-code,.kovo-diagnostic-severity{border-radius:999px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8125rem;margin:0;padding:.125rem .5rem}',
+    '.kovo-diagnostic-code{background:#111827;color:#fff}',
+    '.kovo-diagnostic-severity{background:#fee2e2;color:#991b1b}',
+    '.kovo-diagnostic-panel h2{font-size:1.125rem;line-height:1.4;margin:0}',
+    '.kovo-diagnostic-location{color:#4b5563;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin:.5rem 0 0}',
+    '.kovo-diagnostic-help h3{font-size:.875rem;margin:1rem 0 .25rem}',
+    '.kovo-diagnostic-help ul{margin:.25rem 0 0;padding-left:1.25rem}',
+    '.kovo-diagnostic-source{background:#111827;border-radius:8px;color:#f9fafb;margin:1rem 0 0;overflow:auto;padding:1rem}',
+    '.kovo-diagnostic-source code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.875rem;line-height:1.5}',
   ].join('');
 }

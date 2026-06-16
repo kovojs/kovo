@@ -1,13 +1,13 @@
 ---
 title: Streaming & defer
-description: Answer immediately with the cheap parts of a page and stream the expensive parts into the same response with fw-defer.
+description: Answer immediately with the cheap parts of a page and stream the expensive parts into the same response with kovo-defer.
 order: 8
 ---
 
 # Streaming & defer
 
 A product page where recommendations come from a slow model shouldn't make the whole page wait on
-them. With `<fw-defer>` the page answers immediately with everything cheap, and the expensive subtree
+them. With `<kovo-defer>` the page answers immediately with everything cheap, and the expensive subtree
 streams into the same response: the shell renders with a fallback, the real fragment arrives as a
 later chunk, and the morph layer patches it in. It reuses the fragment protocol within first render
 rather than adding a second mechanism.
@@ -17,14 +17,14 @@ rather than adding a second mechanism.
 From the commerce reference app, deferring the product grid:
 
 ```ts
-import { renderDeferredStream } from '@jiso/server';
+import { renderDeferredStream } from '@kovojs/server';
 
 export function renderProductGridDeferredStream(db: CommerceDb) {
   const productGrid = loadProductGrid(db);
 
   return renderDeferredStream({
     shell:
-      '<!doctype html><html><body><main class="min-h-dvh bg-slate-50 p-6"><fw-defer target="product-grid" state="pending"></fw-defer>',
+      '<!doctype html><html><body><main class="min-h-dvh bg-slate-50 p-6"><kovo-defer target="product-grid" state="pending"></kovo-defer>',
     chunks: [
       {
         queries: [{ name: 'productGrid', value: productGrid }],
@@ -49,28 +49,28 @@ The response is one chunked HTML document. On the wire, in order:
 <html>
   <body>
     <main class="min-h-dvh bg-slate-50 p-6">
-      <fw-defer target="product-grid" state="pending"></fw-defer>
-      --jiso-boundary
-      <fw-query name="productGrid">{"items":[…],"nextCursor":"p2"}</fw-query>
-      <fw-fragment target="product-grid"
+      <kovo-defer target="product-grid" state="pending"></kovo-defer>
+      --kovo-boundary
+      <kovo-query name="productGrid">{"items":[…],"nextCursor":"p2"}</kovo-query>
+      <kovo-fragment target="product-grid"
         ><link rel="stylesheet" href="/assets/tailwind.css" />
-        <section fw-c="product-grid" fw-deps="product">…</section>
-      </fw-fragment>
-      --jiso-boundary--
+        <section kovo-c="product-grid" kovo-deps="product">…</section>
+      </kovo-fragment>
+      --kovo-boundary--
     </main>
   </body>
 </html>
 ```
 
-The vocabulary is the mutation response's — `<fw-query>` then `<fw-fragment>` — arriving during first
+The vocabulary is the mutation response's — `<kovo-query>` then `<kovo-fragment>` — arriving during first
 render instead of after a POST. It reads top to bottom in view-source, like everything else on the
 wire.
 
 ## How the fallback gets replaced
 
-The `<fw-defer>` element is the fallback. Whatever you render inside it — a skeleton, a spinner, a
+The `<kovo-defer>` element is the fallback. Whatever you render inside it — a skeleton, a spinner, a
 static placeholder — paints with the shell at first byte. When the matching
-`<fw-fragment target="…">` chunk arrives, the morph layer patches it in. Because it morphs rather
+`<kovo-fragment target="…">` chunk arrives, the morph layer patches it in. Because it morphs rather
 than replaces, the swap preserves focus, scroll position, selection, CSS transitions, and the state
 of any islands nested in the fallback. Patched-in islands are inert-until-touched like everything
 else, and `on:visible` observers attach to them normally.
@@ -82,7 +82,7 @@ mutation fragments — useful for streaming list pages.
 
 The guarantee to rely on: deferred query JSON arrives before or with its consumers. That's why
 `renderDeferredStream` couples `queries` and `fragments` per chunk — the
-`<fw-query name="productGrid">` value lands in the same chunk as the fragment whose `data-bind`
+`<kovo-query name="productGrid">` value lands in the same chunk as the fragment whose `data-bind`
 attributes read it, so a deferred island never renders against missing data. When you build chunks by
 hand, keep a fragment's queries in its own chunk or an earlier one, never a later one.
 
@@ -120,16 +120,16 @@ the starter's `client.ts` wires it for programmatic use:
 import {
   applyDeferredStreamResponseToDom,
   createQueryStore,
-  installJisoLoader,
-} from '@jiso/runtime';
+  installKovoLoader,
+} from '@kovojs/runtime';
 
 const store = createQueryStore();
-installJisoLoader({ importModule: (s) => import(s), root: document, queryStore: store });
+installKovoLoader({ importModule: (s) => import(s), root: document, queryStore: store });
 
 applyDeferredStreamResponseToDom({
   body, // the streamed document text
   root: document,
-  store, // <fw-query> chunks land here and run their update plans
+  store, // <kovo-query> chunks land here and run their update plans
 });
 ```
 
@@ -139,7 +139,7 @@ bindings, fragments morph into their targets.
 ## When to reach for it
 
 Projected children all ship in the initial HTML — every tab panel, dialog body, accordion content.
-There's no client-side lazy mount. So the question `<fw-defer>` answers is about server render cost at
+There's no client-side lazy mount. So the question `<kovo-defer>` answers is about server render cost at
 first paint, not payload size.
 
 **Use it when** a subtree is expensive to produce and the rest of the page isn't: recommendations
@@ -159,7 +159,7 @@ seconds later with no client round-trip.
 
 A reasonable default: render everything inline until a route's server time is dominated by one
 identifiable subtree, then defer exactly that subtree. The wire stays readable either way, and
-`fw explain page` keeps listing the route's queries — deferred or not — as one surface.
+`kovo explain page` keeps listing the route's queries — deferred or not — as one surface.
 
 ## Degradation
 
@@ -177,10 +177,10 @@ the same reason the no-JS form path stays a real form.
 <summary>Spec & diagnostics</summary>
 
 Defer as a first-render reuse of the fragment protocol, morph survival, the before-or-with ordering
-guarantee, and no-JS degradation: SPEC §8. The shared `<fw-query>`/`<fw-fragment>` wire vocabulary and
+guarantee, and no-JS degradation: SPEC §8. The shared `<kovo-query>`/`<kovo-fragment>` wire vocabulary and
 `mode="append"`: SPEC §9.1. `on:visible` and inert-until-touched islands: SPEC §4.7. Projected
 children shipping in initial HTML: SPEC §4.5. Priority hinting and open stream-ordering areas:
 SPEC §13.3. Stylesheets for late fragments: SPEC §13.1. Defer vs. post-load data updates: SPEC §9.3.
-`fw explain page` as one surface: SPEC §5.3.
+`kovo explain page` as one surface: SPEC §5.3.
 
 </details>

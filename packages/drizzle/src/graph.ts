@@ -6,7 +6,7 @@ import {
   type TouchGraph,
   type TouchGraphEntry,
   type TouchSite,
-} from '@jiso/core';
+} from '@kovojs/core';
 
 interface GraphDomainTableAnnotation {
   domain: string;
@@ -41,7 +41,7 @@ export interface ReadSummaryInput {
 }
 
 export interface UnresolvedSummaryInput {
-  code?: 'FW404' | 'FW406';
+  code?: 'KV404' | 'KV406';
   domain?: string;
   operation: string;
   site: string;
@@ -96,7 +96,7 @@ export function createTouchGraphEntry(input: {
       }))
       .sort(compareTouchSites),
     unresolved: [...(input.unresolved ?? [])].map((site) => ({
-      code: site.code ?? 'FW406',
+      code: site.code ?? 'KV406',
       ...(site.domain === undefined ? {} : { domain: site.domain }),
       message: unresolvedMessage(site),
       site: site.site,
@@ -105,23 +105,23 @@ export function createTouchGraphEntry(input: {
 }
 
 function unresolvedMessage(site: UnresolvedSummaryInput): string {
-  if (site.code === 'FW404') return diagnosticDefinitions.FW404.message;
+  if (site.code === 'KV404') return diagnosticDefinitions.KV404.message;
 
   // SPEC §11.1: write read sources are separate visible surfaces from the write target. Keep
-  // their FW406 diagnostics explicit when the source table cannot be proven.
+  // their KV406 diagnostics explicit when the source table cannot be proven.
   if (site.operation === 'insert-select') {
-    return `${diagnosticDefinitions.FW406.message} Insert-select read source could not be resolved to a Drizzle table.`;
+    return `${diagnosticDefinitions.KV406.message} Insert-select read source could not be resolved to a Drizzle table.`;
   }
   if (site.operation === 'update-from') {
-    return `${diagnosticDefinitions.FW406.message} Update-from read source could not be resolved to a Drizzle table.`;
+    return `${diagnosticDefinitions.KV406.message} Update-from read source could not be resolved to a Drizzle table.`;
   }
   if (site.operation === 'update-predicate') {
-    return `${diagnosticDefinitions.FW406.message} Update predicate read source could not be resolved to a Drizzle table.`;
+    return `${diagnosticDefinitions.KV406.message} Update predicate read source could not be resolved to a Drizzle table.`;
   }
   if (site.operation === 'delete-predicate') {
-    return `${diagnosticDefinitions.FW406.message} Delete predicate read source could not be resolved to a Drizzle table.`;
+    return `${diagnosticDefinitions.KV406.message} Delete predicate read source could not be resolved to a Drizzle table.`;
   }
-  return diagnosticDefinitions.FW406.message;
+  return diagnosticDefinitions.KV406.message;
 }
 
 export function serializeTouchGraph(graph: TouchGraph): string {
@@ -170,17 +170,17 @@ export function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnosti
     ...entry.touches
       .filter((touch) => touch.predicate === 'non-eq')
       .map((touch) => ({
-        code: 'FW409' as const,
-        message: diagnosticDefinitions.FW409.message,
-        severity: diagnosticDefinitions.FW409.severity,
+        code: 'KV409' as const,
+        message: diagnosticDefinitions.KV409.message,
+        severity: diagnosticDefinitions.KV409.severity,
         site: touch.site,
       })),
     ...(entry.reads ?? [])
       .filter((read) => read.predicate === 'non-eq')
       .map((read) => ({
-        code: 'FW409' as const,
-        message: diagnosticDefinitions.FW409.message,
-        severity: diagnosticDefinitions.FW409.severity,
+        code: 'KV409' as const,
+        message: diagnosticDefinitions.KV409.message,
+        severity: diagnosticDefinitions.KV409.severity,
         site: read.site,
       })),
   ]);

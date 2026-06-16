@@ -173,15 +173,15 @@ export function lowerInlineAttributeDerives(
   // decide whether escapeText is already imported (avoids a duplicate-binding SyntaxError when an
   // author imported it manually). On a recompile escapeApplied is false, so the import is stable.
   const alreadyImportsEscapeText = model.namedImports.some(
-    (entry) => entry.importedName === 'escapeText' && entry.moduleSpecifier === '@jiso/server',
+    (entry) => entry.importedName === 'escapeText' && entry.moduleSpecifier === '@kovojs/server',
   );
   const escapeImport =
     escapeApplied && !alreadyImportsEscapeText
-      ? `import { escapeText } from '@jiso/server';\n`
+      ? `import { escapeText } from '@kovojs/server';\n`
       : '';
   const derivePrefix =
     deriveExports.length > 0
-      ? `import { derive } from '@jiso/runtime';\n\n${deriveExports.join('\n')}\n\n`
+      ? `import { derive } from '@kovojs/runtime';\n\n${deriveExports.join('\n')}\n\n`
       : '';
   const prefix = `${escapeImport}${derivePrefix}`;
   if (prefix.length > 0) {
@@ -200,7 +200,7 @@ export function lowerInlineAttributeDerives(
   };
 }
 
-// SECURITY (SECURITY_FINDINGS.md C1): the @jiso/server jsx runtime emits text children verbatim,
+// SECURITY (SECURITY_FINDINGS.md C1): the @kovojs/server jsx runtime emits text children verbatim,
 // so an app-authored `{data.field}` text interpolation is a stored-XSS sink. During lowering we
 // wrap simple data-path text children in escapeText(...) (which mirrors renderJsxChildren's
 // null/undefined/boolean/array coercion and HTML-escapes scalar values) so generated components
@@ -372,7 +372,7 @@ function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean 
     name === 'data-bind' ||
     name.startsWith('data-bind:') ||
     name.startsWith('data-p-') ||
-    name.startsWith('fw-')
+    name.startsWith('kovo-')
   );
 }
 

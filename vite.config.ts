@@ -3,8 +3,8 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   lint: {
     // site/tutorial/steps/*/src/generated holds compiler-emitted IR pinned
-    // byte-identical to @jiso/compiler output; lint governs authored code.
-    ignorePatterns: ['packages/create-jiso/templates/**', 'site/tutorial/steps/*/src/generated/**'],
+    // byte-identical to @kovojs/compiler output; lint governs authored code.
+    ignorePatterns: ['packages/create-kovo/templates/**', 'site/tutorial/steps/*/src/generated/**'],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -13,7 +13,7 @@ export default defineConfig({
   fmt: {
     // examples/commerce/src/generated and the tutorial step generated dirs
     // hold compiler-emitted IR that must stay byte-identical to
-    // @jiso/compiler output (SPEC.md section 5.2.3 staleness and fixpoint
+    // @kovojs/compiler output (SPEC.md section 5.2.3 staleness and fixpoint
     // pins), so the formatter must not rewrite them.
     ignorePatterns: [
       'dist/**',
@@ -73,7 +73,7 @@ export default defineConfig({
       },
       conformance: {
         command:
-          'pnpm --filter @jiso/conformance-drizzle-pin test && pnpm --filter @jiso/conformance-better-auth-pin test && pnpm --filter @jiso/conformance-auth-spike test && pnpm --filter @jiso/conformance-webhook-spike test && pnpm --filter @jiso/conformance-app-shell-spike test',
+          'pnpm --filter @kovojs/conformance-drizzle-pin test && pnpm --filter @kovojs/conformance-better-auth-pin test && pnpm --filter @kovojs/conformance-auth-spike test && pnpm --filter @kovojs/conformance-webhook-spike test && pnpm --filter @kovojs/conformance-app-shell-spike test',
         input: [
           { auto: true },
           { pattern: 'conformance/**/package.json', base: 'workspace' },
@@ -111,8 +111,8 @@ export default defineConfig({
           { pattern: 'tsconfig.json', base: 'workspace' },
         ],
       },
-      'fw-check': {
-        command: 'node scripts/fw-check.mjs',
+      'kovo-check': {
+        command: 'node scripts/kovo-check.mjs',
         input: [
           { auto: true },
           { pattern: 'SPEC.md', base: 'workspace' },
@@ -128,8 +128,8 @@ export default defineConfig({
           { pattern: 'packages/*/package.json', base: 'workspace' },
           { pattern: 'packages/**/src/**', base: 'workspace' },
           { pattern: 'pnpm-lock.yaml', base: 'workspace' },
-          { pattern: 'scripts/fw-check.mjs', base: 'workspace' },
-          { pattern: 'tests/fw-check.node.mjs', base: 'workspace' },
+          { pattern: 'scripts/kovo-check.mjs', base: 'workspace' },
+          { pattern: 'tests/kovo-check.node.mjs', base: 'workspace' },
           { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
           { pattern: 'vite.config.ts', base: 'workspace' },
@@ -152,7 +152,7 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/*.browser.test.ts',
-      'packages/create-jiso/templates/**/*.test.ts',
+      'packages/create-kovo/templates/**/*.test.ts',
       // Conformance suites run in their own gate (`test:conformance` → `vp run conformance`,
       // per-package cwd). The root unit pool runs from the repo root, where project-mode ts-morph
       // type resolution differs; conformance is covered by its dedicated gate, not double-run here.

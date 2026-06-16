@@ -1,8 +1,8 @@
-import { fwCheckAssertionFact, type FwCheckAssertionFact } from './fw-check-fixtures.ts';
+import { kovoCheckAssertionFact, type KovoCheckAssertionFact } from './kovo-check-fixtures.ts';
 
 export interface VerificationLayerRuntime {
   createDbVerifier: (...args: any[]) => any;
-  createJisoTestHarness: (...args: any[]) => any;
+  createKovoTestHarness: (...args: any[]) => any;
   csrfField: (...args: any[]) => string;
   csrfToken: (...args: any[]) => string;
   domain: (...args: any[]) => any;
@@ -12,9 +12,9 @@ export interface VerificationLayerRuntime {
   s: any;
 }
 
-export interface VerificationLayerFwCheckDiagnosticsRuntime {
+export interface VerificationLayerKovoCheckDiagnosticsRuntime {
   diagnosticDefinitions: Record<string, { message: string }>;
-  fwCheck(graph: Record<string, unknown>): { exitCode: number; output: string };
+  kovoCheck(graph: Record<string, unknown>): { exitCode: number; output: string };
 }
 
 export interface VerificationLayerBehaviorFact {
@@ -47,10 +47,10 @@ export interface VerificationLayerBehaviorFact {
   };
 }
 
-export interface VerificationLayerFwCheckDiagnosticsFact {
-  exemptTableDiagnostic: FwCheckAssertionFact;
+export interface VerificationLayerKovoCheckDiagnosticsFact {
+  exemptTableDiagnostic: KovoCheckAssertionFact;
   verificationDiagnosticMessages: Record<string, string>;
-  verificationDiagnostics: FwCheckAssertionFact;
+  verificationDiagnostics: KovoCheckAssertionFact;
 }
 
 interface FakeDb {
@@ -83,7 +83,7 @@ export async function verificationLayerBehaviorFact(
   const failures: Record<string, string> = {};
   const {
     createDbVerifier,
-    createJisoTestHarness,
+    createKovoTestHarness,
     csrfField,
     csrfToken,
     diagnosticDefinitions,
@@ -94,7 +94,7 @@ export async function verificationLayerBehaviorFact(
   } = runtime;
 
   const diagnosticMessages = Object.fromEntries(
-    ['FW402', 'FW404', 'FW407', 'FW408', 'FW410', 'FW411'].map((code) => [
+    ['KV402', 'KV404', 'KV407', 'KV408', 'KV410', 'KV411'].map((code) => [
       code,
       diagnosticDefinitions[code]?.message ?? '',
     ]),
@@ -117,7 +117,7 @@ export async function verificationLayerBehaviorFact(
       return input.productId;
     },
   });
-  const csrfHarness = createJisoTestHarness({ db: {}, request: csrfRequest });
+  const csrfHarness = createKovoTestHarness({ db: {}, request: csrfRequest });
   const token = csrfToken(csrfRequest, csrf);
   const field = csrfField(csrfRequest, csrf);
   const validResult = await csrfHarness.exec(csrfMutation, { csrf: token, productId: 'p1' });
@@ -131,7 +131,7 @@ export async function verificationLayerBehaviorFact(
       return input.productId;
     },
   });
-  const writeHarness = createJisoTestHarness({
+  const writeHarness = createKovoTestHarness({
     db: createVerificationFakeDb(),
     touchGraph: {
       'cart.add': {
@@ -187,7 +187,7 @@ export async function verificationLayerBehaviorFact(
 
   const cart = domain('cart');
   const product = domain('product');
-  const queryHarness = createJisoTestHarness({
+  const queryHarness = createKovoTestHarness({
     db: createVerificationFakeDb(),
     touchGraph: {},
     verification: {
@@ -223,7 +223,7 @@ export async function verificationLayerBehaviorFact(
   });
   failures.invalidOutput = await rejectedMessage(queryHarness.query(invalidOutputQuery));
 
-  const exemptRawSqlHarness = createJisoTestHarness({
+  const exemptRawSqlHarness = createKovoTestHarness({
     db: createVerificationFakeDb(),
     touchGraph: {},
     verification: { domainByTable: { cart_items: 'cart' }, exemptTables: ['audit_log'] },
@@ -359,7 +359,7 @@ export async function verificationLayerBehaviorFact(
       });
     },
   };
-  const pgliteHarness = createJisoTestHarness({
+  const pgliteHarness = createKovoTestHarness({
     db: { pglite: pgliteHandle },
     touchGraph: {
       'cart.add': {
@@ -433,32 +433,32 @@ export async function verificationLayerBehaviorFact(
   };
 }
 
-export function verificationLayerFwCheckDiagnosticsFact(
-  runtime: VerificationLayerFwCheckDiagnosticsRuntime,
-): VerificationLayerFwCheckDiagnosticsFact {
+export function verificationLayerKovoCheckDiagnosticsFact(
+  runtime: VerificationLayerKovoCheckDiagnosticsRuntime,
+): VerificationLayerKovoCheckDiagnosticsFact {
   const verificationDiagnosticMessages = Object.fromEntries(
-    ['FW402', 'FW403', 'FW404', 'FW405', 'FW407', 'FW408', 'FW410', 'FW411'].map((code) => [
+    ['KV402', 'KV403', 'KV404', 'KV405', 'KV407', 'KV408', 'KV410', 'KV411'].map((code) => [
       code,
       runtime.diagnosticDefinitions[code]?.message ?? '',
     ]),
   );
 
   return {
-    exemptTableDiagnostic: fwCheckAssertionFact(
-      runtime.fwCheck({
-        diagnostics: [{ code: 'FW411', site: 'cart.queries.ts:9' }],
+    exemptTableDiagnostic: kovoCheckAssertionFact(
+      runtime.kovoCheck({
+        diagnostics: [{ code: 'KV411', site: 'cart.queries.ts:9' }],
       }),
     ),
     verificationDiagnosticMessages,
-    verificationDiagnostics: fwCheckAssertionFact(
-      runtime.fwCheck({
+    verificationDiagnostics: kovoCheckAssertionFact(
+      runtime.kovoCheck({
         diagnostics: [
           {
-            code: 'FW410',
+            code: 'KV410',
             site: 'cart.queries.ts:5',
           },
           {
-            code: 'FW302',
+            code: 'KV302',
             message: 'data-bind path is not present in the declared query shape. cart.missing',
             site: 'cart-badge.tsx',
             start: { column: 23, line: 3 },
@@ -467,38 +467,38 @@ export function verificationLayerFwCheckDiagnosticsFact(
         verificationDiagnostics: [
           {
             branch: 'stock-reserve',
-            code: 'FW405',
+            code: 'KV405',
             domain: 'product',
             site: 'cart.domain.ts:2',
           },
           {
-            code: 'FW402',
+            code: 'KV402',
             detail: 'observed table audit_log',
             domain: 'audit',
           },
           {
-            code: 'FW403',
+            code: 'KV403',
             domain: 'order',
           },
           {
-            code: 'FW404',
+            code: 'KV404',
             detail: 'observed table unknown_table',
             domain: 'unknown_table',
           },
           {
-            code: 'FW407',
+            code: 'KV407',
             detail: 'observed table products',
             domain: 'product',
             site: 'cart.queries.ts:7',
           },
           {
-            code: 'FW408',
+            code: 'KV408',
             detail: 'expected id observed sku',
             domain: 'product',
             site: 'product.domain.ts:9',
           },
           {
-            code: 'FW410',
+            code: 'KV410',
             detail: 'cart Expected number',
             domain: 'cart',
             site: 'cart.queries.ts:11',

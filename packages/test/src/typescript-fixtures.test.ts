@@ -5,7 +5,7 @@ import {
   typeScriptInterfaceMemberTypes,
 } from './typescript-fixtures.js';
 
-describe('@jiso/test TypeScript fixture seam', () => {
+describe('@kovojs/test TypeScript fixture seam', () => {
   it('asserts clean virtual programs through a reusable helper', async () => {
     await expect(
       assertTypeScriptProgramHasNoDiagnostics(

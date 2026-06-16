@@ -6,7 +6,7 @@ order: 5
 
 # Project structure
 
-A scaffolded Jiso project is small enough to hold in your head. Here is the whole thing:
+A scaffolded Kovo project is small enough to hold in your head. Here is the whole thing:
 
 ```
 my-app/
@@ -27,22 +27,22 @@ Most of it is what you'd expect. The part that isn't is `graph.json`.
 
 ## The graph workflow
 
-Jiso keeps application wiring auditable through one generated artifact: `graph.json`. It records
+Kovo keeps application wiring auditable through one generated artifact: `graph.json`. It records
 components, queries, mutations, pages, optimistic coverage, and the touch graph — the derived map
 of which writes refresh which queries, the complete "what updates what" of your app.
 
 ```sh
 vp run emit-graph          # regenerate graph.json from the app
-vp run fw-check            # framework semantic checks (FW310 optimistic coverage, audits…)
-fw explain query cart graph.json
-fw explain mutation cart/add --optimistic graph.json
-fw explain --unguarded graph.json
+vp run kovo-check            # framework semantic checks (KV310 optimistic coverage, audits…)
+kovo explain query cart graph.json
+kovo explain mutation cart/add --optimistic graph.json
+kovo explain --unguarded graph.json
 ```
 
-`fw explain` output is stable and diffable by design. When a product rule matters — "every
+`kovo explain` output is stable and diffable by design. When a product rule matters — "every
 component that shows cart data must refresh when the cart changes" — you assert it in
-`scripts/graph-assertions.mjs` and CI enforces it from then on. The [fw check & fw explain
-guide](/guides/fw-explain/) walks through the recipes. SPEC §11.4
+`scripts/graph-assertions.mjs` and CI enforces it from then on. The [kovo check & kovo explain
+guide](/guides/kovo-explain/) walks through the recipes. SPEC §11.4
 
 ## Styling
 
@@ -53,7 +53,7 @@ and deferred streams all need their CSS present in the single generated styleshe
 
 ## Deployment shape
 
-A Jiso app deploys as a stateless server: mutation responses are ordinary HTML over the wire, the
+A Kovo app deploys as a stateless server: mutation responses are ordinary HTML over the wire, the
 server keeps no record of what's on screen, and liveness comes from BroadcastChannel tab sync
 plus refetch-on-focus — no Redis, no sticky sessions, no socket tier. SPEC §9.3
 

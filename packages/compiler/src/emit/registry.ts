@@ -93,7 +93,7 @@ export interface InvalidationSets {
 ${invalidationSetLines}
 }
 
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface FragmentTargets {
 ${fragmentTargetLines}
   }
@@ -137,7 +137,7 @@ function registryTypeFactLines(facts: RegistryTypeFacts | undefined): string {
 function routeRegistryFactLines(routes: readonly string[] | undefined): string {
   return [...new Set(routes ?? [])]
     .sort((left, right) => left.localeCompare(right))
-    .map((routePath) => `  '${routePath}': import('@jiso/core').Route<'${routePath}'>;`)
+    .map((routePath) => `  '${routePath}': import('@kovojs/core').Route<'${routePath}'>;`)
     .join('\n');
 }
 

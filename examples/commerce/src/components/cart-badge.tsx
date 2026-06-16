@@ -1,12 +1,12 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
-import { t } from '@jiso/server';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { t } from '@kovojs/server';
 
 import { commerceMessages, type CartQueryResult } from '../app.js';
 import { cartQuery } from '../queries.js';
 
 // SPEC.md section 4.1: authored sugar carries no stamps. The compiler derives
-// the fw-deps stamp from the queries declaration and the cart.count data-bind
+// the kovo-deps stamp from the queries declaration and the cart.count data-bind
 // stamp from the sole-text-child expression (section 4.8). The lowered IR is
 // committed at src/generated/cart-badge.tsx (scripts/emit-components.mjs) and
 // is what the app imports at runtime, so served HTML carries derived stamps.

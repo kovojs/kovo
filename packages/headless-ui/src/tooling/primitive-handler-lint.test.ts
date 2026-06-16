@@ -12,13 +12,13 @@ describe('primitive handler lint', () => {
         {
           path: 'src/dialog.ts',
           source: `
-/** @jisoPrimitiveHandler */
+/** @kovoPrimitiveHandler */
 export function triggerClick(event: Event): void {
   if (event.defaultPrevented) return;
   openDialog();
 }
 
-/** @jisoPrimitiveHandler */
+/** @kovoPrimitiveHandler */
 export const closeClick = (evt: Event): void => {
   if (evt.defaultPrevented === true) {
     return;
@@ -38,7 +38,7 @@ export const closeClick = (evt: Event): void => {
         source: `
 const setup = true;
 
-/** @jisoPrimitiveHandler */
+/** @kovoPrimitiveHandler */
 export const triggerPointerEnter = (event: Event): void => {
   showTooltip();
 };
@@ -48,7 +48,7 @@ export const triggerPointerEnter = (event: Event): void => {
 
     expect(findings).toEqual([
       {
-        code: 'JISO_HUI001',
+        code: 'KOVO_HUI001',
         column: 14,
         handlerName: 'triggerPointerEnter',
         line: 5,
@@ -58,7 +58,7 @@ export const triggerPointerEnter = (event: Event): void => {
       },
     ]);
     expect(formatPrimitiveHandlerLintFindings(findings)).toBe(
-      'src/tooltip.ts:5:14 JISO_HUI001 triggerPointerEnter Primitive handler must begin by no-oping when event.defaultPrevented is true; SPEC.md §4.6 keeps chained on:* handlers running left-to-right and assigns cancellation handling to primitive handlers.',
+      'src/tooltip.ts:5:14 KOVO_HUI001 triggerPointerEnter Primitive handler must begin by no-oping when event.defaultPrevented is true; SPEC.md §4.6 keeps chained on:* handlers running left-to-right and assigns cancellation handling to primitive handlers.',
     );
   });
 
@@ -76,7 +76,7 @@ export function tooltipPointerEnter(event: Event): void {
 
     expect(findings).toEqual([
       expect.objectContaining({
-        code: 'JISO_HUI001',
+        code: 'KOVO_HUI001',
         handlerName: 'tooltipPointerEnter',
         path: 'src/tooltip.ts',
       }),
@@ -89,7 +89,7 @@ export function tooltipPointerEnter(event: Event): void {
         {
           path: 'src/popover.ts',
           source: `
-/** @jisoPrimitiveHandler */
+/** @kovoPrimitiveHandler */
 export function triggerClick(event: Event): void {
   if (other.defaultPrevented) return;
   openPopover();

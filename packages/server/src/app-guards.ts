@@ -1,8 +1,8 @@
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 
 // SPEC §9.5: app-shell dev and export tasks dynamically load user modules, then
 // replay the closed app aggregate through the public Request -> Response shell.
-export function isJisoApp(value: unknown): value is JisoApp {
+export function isKovoApp(value: unknown): value is KovoApp {
   return (
     isRecord(value) &&
     isEndpointDeclarations(value.endpoints) &&
@@ -22,7 +22,7 @@ export function isJisoApp(value: unknown): value is JisoApp {
   );
 }
 
-function isAppDiagnostics(value: unknown): value is JisoApp['diagnostics'] {
+function isAppDiagnostics(value: unknown): value is KovoApp['diagnostics'] {
   return (
     Array.isArray(value) &&
     value.every(
@@ -46,7 +46,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isAppDocumentOptions(value: unknown): value is JisoApp['document'] {
+function isAppDocumentOptions(value: unknown): value is KovoApp['document'] {
   return (
     isRecord(value) &&
     (value.lang === undefined || typeof value.lang === 'string') &&
@@ -54,7 +54,7 @@ function isAppDocumentOptions(value: unknown): value is JisoApp['document'] {
   );
 }
 
-function isAppErrorShellOptions(value: unknown): value is JisoApp['errorShells'] {
+function isAppErrorShellOptions(value: unknown): value is KovoApp['errorShells'] {
   return (
     isRecord(value) &&
     isOptionalFunction(value.forbidden) &&
@@ -63,11 +63,11 @@ function isAppErrorShellOptions(value: unknown): value is JisoApp['errorShells']
   );
 }
 
-function isVersionedClientModuleRegistry(value: unknown): value is JisoApp['clientModules'] {
+function isVersionedClientModuleRegistry(value: unknown): value is KovoApp['clientModules'] {
   return isRecord(value) && typeof value.put === 'function' && typeof value.resolve === 'function';
 }
 
-function isEndpointDeclarations(value: unknown): value is JisoApp['endpoints'] {
+function isEndpointDeclarations(value: unknown): value is KovoApp['endpoints'] {
   return (
     Array.isArray(value) &&
     value.every(
@@ -88,7 +88,7 @@ function isEndpointDeclarations(value: unknown): value is JisoApp['endpoints'] {
   );
 }
 
-function isMutationDeclarations(value: unknown): value is JisoApp['mutations'] {
+function isMutationDeclarations(value: unknown): value is KovoApp['mutations'] {
   return (
     Array.isArray(value) &&
     value.every(
@@ -108,7 +108,7 @@ function isMutationDeclarations(value: unknown): value is JisoApp['mutations'] {
   );
 }
 
-function isQueryDeclarations(value: unknown): value is JisoApp['queries'] {
+function isQueryDeclarations(value: unknown): value is KovoApp['queries'] {
   return (
     Array.isArray(value) &&
     value.every(
@@ -132,7 +132,7 @@ function isQueryDeclarations(value: unknown): value is JisoApp['queries'] {
   );
 }
 
-function isRouteDeclarations(value: unknown): value is JisoApp['routes'] {
+function isRouteDeclarations(value: unknown): value is KovoApp['routes'] {
   return (
     Array.isArray(value) &&
     value.every(

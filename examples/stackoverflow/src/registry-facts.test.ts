@@ -1,11 +1,11 @@
-import { deriveOptimistic } from '@jiso/drizzle/derive';
+import { deriveOptimistic } from '@kovojs/drizzle/derive';
 import {
   extractAlgebraicShapesFromProject,
   extractSymbolicEffectsFromProject,
   extractTouchGraphFromProject,
   type AlgebraicQueryShape,
   type SymbolicEffect,
-} from '@jiso/drizzle/static';
+} from '@kovojs/drizzle/static';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -131,7 +131,7 @@ describe('stackoverflow §10.5 Stage 1 — write → SymbolicEffect', () => {
 });
 
 describe('stackoverflow §10.5 Stage 1 — touch graph', () => {
-  it('extracts clean (FW406-free) touch entries for every mutation handler', () => {
+  it('extracts clean (KV406-free) touch entries for every mutation handler', () => {
     const graph = extractTouchGraphFromProject({ files: projectFiles() });
     for (const key of ['postQuestion', 'postAnswer', 'voteUp']) {
       const entry = graph[key];

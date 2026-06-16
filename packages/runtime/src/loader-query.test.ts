@@ -12,7 +12,7 @@ describe('loader query runtime', () => {
     const inventoryPlan = vi.fn();
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":2}',
       },
     ];
@@ -20,7 +20,7 @@ describe('loader query runtime', () => {
     store.subscribe('inventory', inventoryPlan);
 
     const runtime = installLoaderQueryRuntime({ queryStore: store, root });
-    void root.listeners.get('jiso:query')?.({
+    void root.listeners.get('kovo:query')?.({
       detail: {
         queries: [{ attrs: ' name="inventory"', content: '{"available":true}' }],
       },
@@ -34,7 +34,7 @@ describe('loader query runtime', () => {
     expect(inventoryPlan).toHaveBeenCalledWith({ available: true });
 
     runtime.dispose();
-    expect(root.listeners.has('jiso:query')).toBe(false);
+    expect(root.listeners.has('kovo:query')).toBe(false);
   });
 
   it('threads loader query hydration errors through the runtime context reporter', () => {
@@ -43,7 +43,7 @@ describe('loader query runtime', () => {
     const onError = vi.fn();
 
     installLoaderQueryRuntime({ onError, queryStore: store, root });
-    void root.listeners.get('jiso:query')?.({
+    void root.listeners.get('kovo:query')?.({
       detail: {
         queries: [{ attrs: ' name="cart"', content: '{' }],
       },

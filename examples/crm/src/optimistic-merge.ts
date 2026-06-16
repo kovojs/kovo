@@ -1,5 +1,5 @@
-import type { Form, FormInput, InvalidationSets, JsonValue, QueryRegistry } from '@jiso/core';
-import type { OptimisticEntry, OptimisticPlan } from '@jiso/runtime';
+import type { Form, FormInput, InvalidationSets, JsonValue, QueryRegistry } from '@kovojs/core';
+import type { OptimisticEntry, OptimisticPlan } from '@kovojs/runtime';
 
 // SPEC.md §10.4 (the override path): a PARTIALLY-derived mutation ships a
 // generated plan covering only the pairs the deriver could lower, with the

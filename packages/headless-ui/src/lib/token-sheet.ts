@@ -1,24 +1,24 @@
-export type JisoUiTokenCategory = 'color' | 'radius';
-export type JisoUiTokenMode = 'light' | 'dark';
-export type JisoUiTokenProperty = `--jiso-${string}`;
-export type JisoUiTailwindThemeProperty = `--color-${string}` | `--radius-${string}`;
+export type KovoUiTokenCategory = 'color' | 'radius';
+export type KovoUiTokenMode = 'light' | 'dark';
+export type KovoUiTokenProperty = `--kovo-${string}`;
+export type KovoUiTailwindThemeProperty = `--color-${string}` | `--radius-${string}`;
 
-export interface JisoUiTokenDefinition {
-  readonly category: JisoUiTokenCategory;
+export interface KovoUiTokenDefinition {
+  readonly category: KovoUiTokenCategory;
   readonly dark: string;
   readonly light: string;
   readonly name: string;
-  readonly property: JisoUiTokenProperty;
-  readonly tailwindThemeProperty?: JisoUiTailwindThemeProperty;
+  readonly property: KovoUiTokenProperty;
+  readonly tailwindThemeProperty?: KovoUiTailwindThemeProperty;
   readonly tailwindThemeValue?: string;
 }
 
-interface JisoUiTailwindTokenDefinition extends JisoUiTokenDefinition {
-  readonly tailwindThemeProperty: JisoUiTailwindThemeProperty;
+interface KovoUiTailwindTokenDefinition extends KovoUiTokenDefinition {
+  readonly tailwindThemeProperty: KovoUiTailwindThemeProperty;
   readonly tailwindThemeValue: string;
 }
 
-export const jisoUiTokenSheet = [
+export const kovoUiTokenSheet = [
   colorToken('background', '0 0% 100%', '222.2 84% 4.9%'),
   colorToken('foreground', '222.2 84% 4.9%', '210 40% 98%'),
   colorToken('card', '0 0% 100%', '222.2 84% 4.9%'),
@@ -41,18 +41,18 @@ export const jisoUiTokenSheet = [
   radiusToken('sm', '0.375rem'),
   radiusToken('md', '0.5rem'),
   radiusToken('lg', '0.75rem'),
-] as const satisfies readonly JisoUiTokenDefinition[];
+] as const satisfies readonly KovoUiTokenDefinition[];
 
-export type JisoUiTokenName = (typeof jisoUiTokenSheet)[number]['name'];
+export type KovoUiTokenName = (typeof kovoUiTokenSheet)[number]['name'];
 
-export const jisoUiTailwindThemeCss = renderTailwindThemeCss();
-export const jisoUiTokenSheetCss = `${jisoUiTailwindThemeCss}\n\n${renderTokenBlock(
+export const kovoUiTailwindThemeCss = renderTailwindThemeCss();
+export const kovoUiTokenSheetCss = `${kovoUiTailwindThemeCss}\n\n${renderTokenBlock(
   ':root',
   'light',
 )}\n\n${renderTokenBlock(':root[data-theme="dark"]', 'dark')}\n`;
 
 function colorToken<const Name extends string>(name: Name, light: string, dark: string) {
-  const property = `--jiso-color-${name}` as const;
+  const property = `--kovo-color-${name}` as const;
 
   return {
     category: 'color',
@@ -62,11 +62,11 @@ function colorToken<const Name extends string>(name: Name, light: string, dark: 
     property,
     tailwindThemeProperty: `--color-${name}`,
     tailwindThemeValue: `hsl(var(${property}))`,
-  } satisfies JisoUiTokenDefinition;
+  } satisfies KovoUiTokenDefinition;
 }
 
 function radiusToken<const Name extends string>(name: Name, value: string) {
-  const property = `--jiso-radius-${name}` as const;
+  const property = `--kovo-radius-${name}` as const;
 
   return {
     category: 'radius',
@@ -76,11 +76,11 @@ function radiusToken<const Name extends string>(name: Name, value: string) {
     property,
     tailwindThemeProperty: `--radius-${name}`,
     tailwindThemeValue: `var(${property})`,
-  } satisfies JisoUiTokenDefinition;
+  } satisfies KovoUiTokenDefinition;
 }
 
-function renderTokenBlock(selector: string, mode: JisoUiTokenMode): string {
-  const declarations = jisoUiTokenSheet
+function renderTokenBlock(selector: string, mode: KovoUiTokenMode): string {
+  const declarations = kovoUiTokenSheet
     .map((token) => `  ${token.property}: ${mode === 'light' ? token.light : token.dark};`)
     .join('\n');
 
@@ -88,7 +88,7 @@ function renderTokenBlock(selector: string, mode: JisoUiTokenMode): string {
 }
 
 function renderTailwindThemeCss(): string {
-  const declarations = jisoUiTokenSheet
+  const declarations = kovoUiTokenSheet
     .filter(hasTailwindThemeAlias)
     .map((token) => `  ${token.tailwindThemeProperty}: ${token.tailwindThemeValue};`)
     .join('\n');
@@ -99,7 +99,7 @@ function renderTailwindThemeCss(): string {
 }
 
 function hasTailwindThemeAlias(
-  token: JisoUiTokenDefinition,
-): token is JisoUiTailwindTokenDefinition {
+  token: KovoUiTokenDefinition,
+): token is KovoUiTailwindTokenDefinition {
   return token.tailwindThemeProperty !== undefined && token.tailwindThemeValue !== undefined;
 }

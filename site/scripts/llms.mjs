@@ -15,7 +15,7 @@
  * both"). Output is deterministic: no timestamps, no absolute paths.
  */
 
-const PROJECT_NAME = 'Jiso';
+const PROJECT_NAME = 'Kovo';
 const TAGLINE = [
   '> The TypeScript web framework where agents get build-time errors and users get instant pages.',
   '> Server-rendered MPA, zero hydration, statically verifiable end-to-end.',

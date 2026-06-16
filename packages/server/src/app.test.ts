@@ -46,14 +46,14 @@ describe('server createApp request shell', () => {
     expect(() =>
       createRequestHandler(rawHandler as unknown as Parameters<typeof createRequestHandler>[0]),
     ).toThrow(
-      'createRequestHandler() requires a Jiso app aggregate. SPEC §9.5 request dispatch must start from createApp(), not a raw request handler or compatibility shell.',
+      'createRequestHandler() requires a Kovo app aggregate. SPEC §9.5 request dispatch must start from createApp(), not a raw request handler or compatibility shell.',
     );
     expect(() =>
       createRequestHandler({
         ...app,
         renderRoute: '<main>compat</main>',
       } as unknown as Parameters<typeof createRequestHandler>[0]),
-    ).toThrow('createRequestHandler() requires a Jiso app aggregate.');
+    ).toThrow('createRequestHandler() requires a Kovo app aggregate.');
   });
 
   it('rejects malformed declaration entries before request dispatch', () => {
@@ -77,7 +77,7 @@ describe('server createApp request shell', () => {
     ]) {
       expect(() =>
         createRequestHandler(malformedApp as unknown as Parameters<typeof createRequestHandler>[0]),
-      ).toThrow('createRequestHandler() requires a Jiso app aggregate.');
+      ).toThrow('createRequestHandler() requires a Kovo app aggregate.');
     }
   });
 
@@ -123,7 +123,7 @@ describe('server createApp request shell', () => {
     await expect(method.text()).resolves.toBe('Method Not Allowed');
   });
 
-  it('blocks ambiguous route tables with FW228 before declaration-order dispatch', async () => {
+  it('blocks ambiguous route tables with KV228 before declaration-order dispatch', async () => {
     const app = createApp({
       routes: [
         route('/products/:id', { page: () => '<main>Param</main>' }),
@@ -133,7 +133,7 @@ describe('server createApp request shell', () => {
 
     expect(app.diagnostics).toEqual([
       {
-        code: 'FW228',
+        code: 'KV228',
         fileName: '/products/:id <-> /products/new',
         help: expect.stringContaining('SPEC §9.5'),
         message:
@@ -147,7 +147,7 @@ describe('server createApp request shell', () => {
     const body = await response.text();
 
     expect(response.status).toBe(500);
-    expect(body).toContain('<p class="jiso-diagnostic-code">FW228</p>');
+    expect(body).toContain('<p class="kovo-diagnostic-code">KV228</p>');
     expect(body).toContain('/products/:id &lt;-&gt; /products/new');
     expect(body).not.toContain('<main>New</main>');
   });
@@ -343,7 +343,7 @@ describe('server createApp request shell', () => {
     const queryResponse = await handler(new Request('https://example.test/_q/cart?id=c1'));
     expect(queryResponse.status).toBe(200);
     await expect(queryResponse.text()).resolves.toContain(
-      '<fw-query name="cart">{"id":"c1","total":42}</fw-query>',
+      '<kovo-query name="cart">{"id":"c1","total":42}</kovo-query>',
     );
 
     const moduleResponse = await handler(new Request(`https://example.test${href}`));
@@ -388,18 +388,18 @@ describe('server createApp request shell', () => {
       new Request('https://example.test/_m/cart/add', {
         body: enhancedForm,
         headers: {
-          'FW-Fragment': 'true',
-          'FW-Targets': 'cart',
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'cart',
         },
         method: 'POST',
       }),
     );
     expect(enhanced.status).toBe(200);
-    expect(enhanced.headers.get('content-type')).toBe('text/vnd.jiso.fragment+html; charset=utf-8');
+    expect(enhanced.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
     await expect(enhanced.text()).resolves.toBe(
       [
-        '<fw-query name="cart">{"count":1}</fw-query>',
-        '<fw-fragment target="cart"><cart-badge>1</cart-badge></fw-fragment>',
+        '<kovo-query name="cart">{"count":1}</kovo-query>',
+        '<kovo-fragment target="cart"><cart-badge>1</cart-badge></kovo-fragment>',
       ].join('\n'),
     );
 

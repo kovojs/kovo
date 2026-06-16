@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { domain, mutation, query, s } from '@jiso/server';
-import type { QueryLoadContext } from '@jiso/server';
+import { domain, mutation, query, s } from '@kovojs/server';
+import type { QueryLoadContext } from '@kovojs/server';
 
 import {
   commerceDeclaredQueriesHarnessFact,
@@ -91,7 +91,7 @@ const uploadReceipt = mutation('order/receipt', {
   registry: { touches: [attachment] },
 });
 
-const fwExplain = (
+const kovoExplain = (
   _graph: typeof graph,
   options:
     | { kind: 'mutation'; optimistic?: boolean; target: string }
@@ -101,13 +101,13 @@ const fwExplain = (
   if (options.kind === 'page') {
     return {
       exitCode: 0,
-      output: ['fw-explain/v1', 'PAGE /cart', 'queries: cart,productGrid'].join('\n'),
+      output: ['kovo-explain/v1', 'PAGE /cart', 'queries: cart,productGrid'].join('\n'),
     };
   }
   if (options.kind === 'query' && options.target === 'cart') {
     return {
       exitCode: 0,
-      output: ['fw-explain/v1', 'QUERY cart', 'consumers: component:CartBadge,page:/cart'].join(
+      output: ['kovo-explain/v1', 'QUERY cart', 'consumers: component:CartBadge,page:/cart'].join(
         '\n',
       ),
     };
@@ -116,7 +116,7 @@ const fwExplain = (
     return {
       exitCode: 0,
       output: [
-        'fw-explain/v1',
+        'kovo-explain/v1',
         'QUERY productGrid',
         'consumers: component:ProductGrid,page:/cart',
       ].join('\n'),
@@ -127,7 +127,7 @@ const fwExplain = (
     return {
       exitCode: 0,
       output: [
-        'fw-explain/v1',
+        'kovo-explain/v1',
         'MUTATION cart/add',
         'invalidates: cart,productGrid',
         'updates: cart->component:CartBadge,page:/cart; productGrid->component:ProductGrid,page:/cart',
@@ -141,7 +141,7 @@ const fwExplain = (
   return {
     exitCode: 0,
     output: [
-      'fw-explain/v1',
+      'kovo-explain/v1',
       'MUTATION order/receipt',
       'invalidates: -',
       'updates: -',
@@ -150,11 +150,11 @@ const fwExplain = (
   };
 };
 
-describe('@jiso/test commerce fixture facts', () => {
-  it('projects cart page update intent without local fw-explain map mechanics', () => {
+describe('@kovojs/test commerce fixture facts', () => {
+  it('projects cart page update intent without local kovo-explain map mechanics', () => {
     expect(
       commerceUpdateIntentFact({
-        fwExplain,
+        kovoExplain,
         graph,
         mutation: 'cart/add',
         page: '/cart',
@@ -263,16 +263,16 @@ describe('@jiso/test commerce fixture facts', () => {
         },
       },
       createDb,
-      fwExplain,
+      kovoExplain,
       graph,
       submitAddToCart: async () => ({
         body: [
-          '<fw-query name="cart">{"count":2}</fw-query>',
-          '<fw-query name="productGrid">{"items":[]}</fw-query>',
-          '<fw-fragment target="cart-badge"><span fw-key="order-2">2</span></fw-fragment>',
-          '<fw-fragment target="product-grid"></fw-fragment>',
+          '<kovo-query name="cart">{"count":2}</kovo-query>',
+          '<kovo-query name="productGrid">{"items":[]}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><span kovo-key="order-2">2</span></kovo-fragment>',
+          '<kovo-fragment target="product-grid"></kovo-fragment>',
         ].join(''),
-        headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+        headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
         status: 200,
       }),
       uploadReceipt,
@@ -290,7 +290,7 @@ describe('@jiso/test commerce fixture facts', () => {
     expect(fact.fragmentResponse).toEqual({
       expectedFragmentTargets: ['cart-badge', 'product-grid'],
       fragmentTargets: ['cart-badge', 'product-grid'],
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
       keyValues: ['order-2'],
       queryNames: ['cart', 'productGrid'],
       status: 200,

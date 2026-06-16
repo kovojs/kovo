@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   avatarFallbackAttributes,
   avatarImageAttributes,
@@ -8,7 +8,7 @@ import {
   defineVariants,
   type AvatarImageStatus,
   type ClassValue,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface AvatarStateProps {
   src?: string;

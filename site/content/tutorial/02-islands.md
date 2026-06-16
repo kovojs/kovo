@@ -13,7 +13,7 @@ Step state: `site/tutorial/steps/02-islands/`.
 
 ## Write the component
 
-Jiso ranks every interaction on a fixed ladder and uses the lowest layer that works. **L0** is
+Kovo ranks every interaction on a fixed ladder and uses the lowest layer that works. **L0** is
 platform behavior — popovers, dialogs, `<details>` — costing zero JavaScript. **L1** is a pure
 client island whose handler module loads on first interaction. You don't pick the layer; the
 compiler does. You write TSX:
@@ -22,7 +22,7 @@ compiler does. You write TSX:
 
 Three things to notice in what you wrote — and didn't:
 
-- **No stamps.** You never hand-write `fw-c`, `fw-state`, or binding attributes; the compiler
+- **No stamps.** You never hand-write `kovo-c`, `kovo-state`, or binding attributes; the compiler
   derives them. Hand-writing one is a lint warning, and one that disagrees with the typed
   expression it wraps is a compile error.
 - **`state` is a typed, serializable fact.** The `JsonValue` constraint makes unserializable
@@ -59,7 +59,7 @@ exactly what the loader does, against the real emitted handler module:
 
 {{snippet:02-islands/src/app.test.ts#dispatch-test}}
 
-Two clicks, state `0 → 2`, persisted back into the `fw-state` attribute. Note what loaded when:
+Two clicks, state `0 → 2`, persisted back into the `kovo-state` attribute. Note what loaded when:
 nothing at page load, the module on first interaction. Zero JS before interaction is the default
 the markup declares, not an optimization you turn on.
 
@@ -70,8 +70,8 @@ closure earns a naming nudge, and the popover substitution is recorded:
 
 {{snippet:02-islands/src/app.test.ts#lint-test}}
 
-Every Jiso diagnostic shows what would have been generated, why it can't be, and the fix menu.
-The [reading fw check guide](/guides/fw-explain/) tours the diagnostic registry.
+Every Kovo diagnostic shows what would have been generated, why it can't be, and the fix menu.
+The [reading kovo check guide](/guides/kovo-explain/) tours the diagnostic registry.
 
 You now have a free popover, a lazy island, and tests proving both from strings. Next: real
 data — queries, and the bindings the compiler derives from them.
@@ -80,9 +80,9 @@ data — queries, and the bindings the compiler derives from them.
 <summary>Spec & diagnostics</summary>
 
 Interaction ladder and lowest-layer rule: SPEC §7. Compiler-derived stamps: SPEC §4.1, §4.8;
-hand-written stamp is **FW223**, a stamp that disagrees with its typed expression is **FW222**.
+hand-written stamp is **KV223**, a stamp that disagrees with its typed expression is **KV222**.
 Serializable island state: SPEC §4.1. Popover lowering and naming nudge: SPEC §5.2 rule 4,
-**FW210**. Committed lowered IR under `src/generated/`: Constitution #3. Legible served HTML and
+**KV210**. Committed lowered IR under `src/generated/`: Constitution #3. Legible served HTML and
 load-bearing names: SPEC §4.2, §16.2, Constitution #1. Handler signature and lazy load: SPEC
 §4.3, §4.4.
 

@@ -13,21 +13,21 @@ updates, streaming, and a behavior graph a machine can check.
 
 Every code block in this tutorial is extracted at build time from a checked-in, compiling,
 tested step state under `site/tutorial/steps/` in the
-[jiso repository](https://github.com/jiso-sh/jiso). One command — `node
+[kovo repository](https://github.com/kovojs/kovo). One command — `node
 site/tutorial/run-steps.mjs` — typechecks every step, compiles every component through the real
 compiler, and runs every step's tests, so a chapter and its code stay in sync. This chapter's
 state is `site/tutorial/steps/01-first-page/`.
 
 ## Prerequisites
 
-Jiso is pre-release, so you'll work inside the repository as workspace code. See
+Kovo is pre-release, so you'll work inside the repository as workspace code. See
 [Installation](/docs/installation/) for the prerequisites (Node 24+, pnpm 10+) and a tour of
 what `pnpm install` sets up. You'll write strict TypeScript throughout — the framework's
 correctness checks are checks on TypeScript programs.
 
 ## Declare a catalog and a route
 
-Jiso is an MPA framework: each page is a complete document, there is no client router, and
+Kovo is an MPA framework: each page is a complete document, there is no client router, and
 navigation is real navigation. A page starts on the server, with a route. You declare the route
 as a plain value, and the compiler captures its path string as a literal type:
 

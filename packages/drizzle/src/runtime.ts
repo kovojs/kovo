@@ -5,11 +5,11 @@ export type {
   TouchGraphEntry,
   TouchSite,
   UnresolvedWriteSite,
-} from '@jiso/core';
+} from '@kovojs/core';
 
 export type {
-  JisoDomainTableAnnotation,
-  JisoTableAnnotation,
-  JisoTableExtraConfig,
+  KovoDomainTableAnnotation,
+  KovoTableAnnotation,
+  KovoTableExtraConfig,
 } from './drizzle-surface.js';
-export { jiso } from './drizzle-surface.js';
+export { kovo } from './drizzle-surface.js';

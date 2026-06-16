@@ -1,4 +1,4 @@
-/** @jsxImportSource @jiso/server */
+/** @jsxImportSource @kovojs/server */
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -9,7 +9,7 @@ import {
   tabsPanelAttributes,
   tabsTriggerAttributes,
   tooltipTriggerAttributes,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 import {
   type AttributeRecord,
   authorStressAttrs,
@@ -137,25 +137,25 @@ describe('gallery G5 primitive merge fixtures', () => {
     );
   });
 
-  it('pins FW231 for package-prefixed behavior IDREF conflicts', () => {
+  it('pins KV231 for package-prefixed behavior IDREF conflicts', () => {
     const merged = mergeCompilerPrimitiveAttrs(
       tooltipTriggerAttributes({
         contentId: 'gallery-tooltip-content',
         open: true,
       }),
-      { 'jiso-tooltip': 'author-tooltip-content' },
+      { 'kovo-tooltip': 'author-tooltip-content' },
     );
 
     expect(merged.diagnostics).toEqual([
       {
-        attr: 'jiso-tooltip',
-        code: 'FW231',
+        attr: 'kovo-tooltip',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
   });
 
-  it('pins FW231 for double-wired dialog trigger relationships', () => {
+  it('pins KV231 for double-wired dialog trigger relationships', () => {
     const merged = mergeCompilerPrimitiveAttrs(
       dialogTriggerAttributes({ contentId: 'gallery-dialog-content', open: false }),
       { commandfor: 'other-dialog' },
@@ -164,7 +164,7 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(merged.diagnostics).toEqual([
       {
         attr: 'commandfor',
-        code: 'FW231',
+        code: 'KV231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
@@ -194,15 +194,15 @@ describe('gallery G5 primitive merge fixtures', () => {
         if (attr === 'data-state') {
           expect(merged.diagnostics).toContainEqual({
             attr,
-            code: 'FW232',
+            code: 'KV232',
             message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
           });
         }
 
         if (attr === 'role' || attr.startsWith('aria-')) {
-          const code = idrefAttributes.has(attr) ? 'FW231' : 'FW232';
+          const code = idrefAttributes.has(attr) ? 'KV231' : 'KV232';
           const message =
-            code === 'FW231'
+            code === 'KV231'
               ? 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6'
               : 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6';
           expect(merged.diagnostics).toContainEqual({ attr, code, message });
@@ -211,7 +211,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         if (idrefAttributes.has(attr)) {
           expect(merged.diagnostics).toContainEqual({
             attr,
-            code: 'FW231',
+            code: 'KV231',
             message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
           });
         }
@@ -458,7 +458,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 7,
-          "html": "<div data-gallery-merge-builder="contextMenuTriggerAttributes" data-state="open" aria-expanded="false" aria-haspopup="author-aria" role="presentation" aria-controls="author-aria-controls" jiso-context-menu="author-jiso-context-menu" id="author-contextMenuTriggerAttributes" aria-labelledby="author-aria-labelledby" class="primitive-contextMenuTriggerAttributes author-contextMenuTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="contextMenuTriggerAttributes" data-state="open" aria-expanded="false" aria-haspopup="author-aria" role="presentation" aria-controls="author-aria-controls" kovo-context-menu="author-kovo-context-menu" id="author-contextMenuTriggerAttributes" aria-labelledby="author-aria-labelledby" class="primitive-contextMenuTriggerAttributes author-contextMenuTriggerAttributes">merged</div>",
           "name": "contextMenuTriggerAttributes",
         },
         {
@@ -573,7 +573,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="hoverCardTriggerAttributes" data-state="open" jiso-hover-card="author-jiso-hover-card" class="primitive-hoverCardTriggerAttributes author-hoverCardTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="hoverCardTriggerAttributes" data-state="open" kovo-hover-card="author-kovo-hover-card" class="primitive-hoverCardTriggerAttributes author-hoverCardTriggerAttributes">merged</div>",
           "name": "hoverCardTriggerAttributes",
         },
         {
@@ -913,7 +913,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="tooltipTriggerAttributes" data-state="open" jiso-tooltip="author-jiso-tooltip" aria-describedby="author-aria-describedby" class="primitive-tooltipTriggerAttributes author-tooltipTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="tooltipTriggerAttributes" data-state="open" kovo-tooltip="author-kovo-tooltip" aria-describedby="author-aria-describedby" class="primitive-tooltipTriggerAttributes author-tooltipTriggerAttributes">merged</div>",
           "name": "tooltipTriggerAttributes",
         },
       ]

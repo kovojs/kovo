@@ -1,34 +1,34 @@
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 import {
-  createJisoAppShellViteBuildFromBundle,
-  type JisoAppShellBuild,
-  type JisoAppShellVitePluginBuildOptions,
+  createKovoAppShellViteBuildFromBundle,
+  type KovoAppShellBuild,
+  type KovoAppShellVitePluginBuildOptions,
 } from './vite-build.js';
 import {
-  jisoAppShellViteOutputDir,
-  writeJisoAppShellViteBuildOutput,
-  type JisoAppShellViteBuildOutput,
-  type JisoAppShellViteOutputOptions,
+  kovoAppShellViteOutputDir,
+  writeKovoAppShellViteBuildOutput,
+  type KovoAppShellViteBuildOutput,
+  type KovoAppShellViteOutputOptions,
 } from './vite-build-output.js';
-import type { JisoAppShellViteOutputBundle } from './vite-manifest.js';
+import type { KovoAppShellViteOutputBundle } from './vite-manifest.js';
 
-export interface JisoAppShellVitePluginBuildContext {
-  app: JisoApp;
-  buildOptions: JisoAppShellVitePluginBuildOptions;
-  bundle: JisoAppShellViteOutputBundle;
-  outputOptions: JisoAppShellViteOutputOptions;
+export interface KovoAppShellVitePluginBuildContext {
+  app: KovoApp;
+  buildOptions: KovoAppShellVitePluginBuildOptions;
+  bundle: KovoAppShellViteOutputBundle;
+  outputOptions: KovoAppShellViteOutputOptions;
 }
 
-export interface JisoAppShellVitePluginBuildResult {
-  build: JisoAppShellBuild;
-  output: JisoAppShellViteBuildOutput;
+export interface KovoAppShellVitePluginBuildResult {
+  build: KovoAppShellBuild;
+  output: KovoAppShellViteBuildOutput;
 }
 
-export async function writeJisoAppShellVitePluginBuild(
-  context: JisoAppShellVitePluginBuildContext,
-): Promise<JisoAppShellVitePluginBuildResult> {
-  const outDir = context.buildOptions.outDir ?? jisoAppShellViteOutputDir(context.outputOptions);
-  const build = createJisoAppShellViteBuildFromBundle({
+export async function writeKovoAppShellVitePluginBuild(
+  context: KovoAppShellVitePluginBuildContext,
+): Promise<KovoAppShellVitePluginBuildResult> {
+  const outDir = context.buildOptions.outDir ?? kovoAppShellViteOutputDir(context.outputOptions);
+  const build = createKovoAppShellViteBuildFromBundle({
     app: context.app,
     bundle: context.bundle,
     ...(context.buildOptions.base === undefined ? {} : { base: context.buildOptions.base }),
@@ -41,7 +41,7 @@ export async function writeJisoAppShellVitePluginBuild(
   });
   // SPEC §9.5: the Vite plugin build hook publishes the same app-shell build
   // output and optional static export as manifest-file export tasks.
-  const output = await writeJisoAppShellViteBuildOutput(build, {
+  const output = await writeKovoAppShellViteBuildOutput(build, {
     outDir,
     ...(context.buildOptions.staticExport === undefined
       ? {}

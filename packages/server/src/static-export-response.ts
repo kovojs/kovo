@@ -41,13 +41,13 @@ function staticExportReplayResponseDiagnostic(
   if (options.kind === 'route-document') {
     return staticExportDiagnostic(
       options.routePath,
-      `FW229 static export can only write successful HTML route documents; '${options.routePath}' returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'.`,
+      `KV229 static export can only write successful HTML route documents; '${options.routePath}' returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'.`,
     );
   }
 
   return staticExportDiagnostic(
     options.path,
-    `FW229 static export cannot copy client module '${options.href}' because the app handler returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
+    `KV229 static export cannot copy client module '${options.href}' because the app handler returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
   );
 }
 

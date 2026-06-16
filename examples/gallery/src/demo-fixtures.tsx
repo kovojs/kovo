@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { tabsRootAttributes } from '@jiso/headless-ui/primitives';
+/** @jsxImportSource @kovojs/server */
+import { tabsRootAttributes } from '@kovojs/headless-ui/primitives';
 import {
   Alert,
   Accordion,
@@ -153,7 +153,7 @@ import {
   Toolbar,
   ToolbarButton,
   ToolbarItem,
-} from '@jiso/ui';
+} from '@kovojs/ui';
 
 export type GalleryComponent =
   | 'accordion'

@@ -75,7 +75,7 @@ function assertStaticExportClientModuleTarget(artifact: StaticExportClientModule
   const hrefUrl = staticExportClientModuleHrefUrl(artifact);
 
   if (
-    hrefUrl.origin === 'https://jiso.local' &&
+    hrefUrl.origin === 'https://kovo.local' &&
     artifact.path.startsWith('/c/') &&
     hrefUrl.pathname === artifact.path &&
     hrefUrl.searchParams.get('v')
@@ -86,19 +86,19 @@ function assertStaticExportClientModuleTarget(artifact: StaticExportClientModule
   throw new StaticExportError([
     staticExportDiagnostic(
       artifact.path,
-      `FW229 static export refused client module '${artifact.path}' with href '${artifact.href}'. SPEC §4.3 and §9.5 publish same-origin immutable versioned /c/ module URLs, so artifact path and href pathname must match under /c/ with a v= version.`,
+      `KV229 static export refused client module '${artifact.path}' with href '${artifact.href}'. SPEC §4.3 and §9.5 publish same-origin immutable versioned /c/ module URLs, so artifact path and href pathname must match under /c/ with a v= version.`,
     ),
   ]);
 }
 
 function staticExportClientModuleHrefUrl(artifact: StaticExportClientModuleArtifact): URL {
   try {
-    return new URL(artifact.href, 'https://jiso.local');
+    return new URL(artifact.href, 'https://kovo.local');
   } catch {
     throw new StaticExportError([
       staticExportDiagnostic(
         artifact.path,
-        `FW229 static export refused client module '${artifact.path}' with invalid href '${artifact.href}'. SPEC §4.3 and §9.5 publish same-origin immutable versioned /c/ module URLs.`,
+        `KV229 static export refused client module '${artifact.path}' with invalid href '${artifact.href}'. SPEC §4.3 and §9.5 publish same-origin immutable versioned /c/ module URLs.`,
       ),
     ]);
   }
@@ -113,7 +113,7 @@ function assertNoStaticExportOutputConflicts(targets: readonly StaticExportOutpu
       throw new StaticExportError([
         staticExportDiagnostic(
           target.diagnosticPath,
-          `FW229 static export cannot write ${target.kind} '${target.diagnosticPath}' because it conflicts with ${existing.kind} '${existing.diagnosticPath}'.`,
+          `KV229 static export cannot write ${target.kind} '${target.diagnosticPath}' because it conflicts with ${existing.kind} '${existing.diagnosticPath}'.`,
         ),
       ]);
     }
@@ -128,7 +128,7 @@ function staticExportArtifactTargetPath(root: string, artifactPath: string): str
     throw new StaticExportError([
       staticExportDiagnostic(
         artifactPath,
-        `FW229 static export refused route document '${artifactPath}' because it does not name an output file.`,
+        `KV229 static export refused route document '${artifactPath}' because it does not name an output file.`,
       ),
     ]);
   }
@@ -139,7 +139,7 @@ function staticExportArtifactTargetPath(root: string, artifactPath: string): str
   throw new StaticExportError([
     staticExportDiagnostic(
       artifactPath,
-      `FW229 static export refused to write '${artifactPath}' outside the configured output directory.`,
+      `KV229 static export refused to write '${artifactPath}' outside the configured output directory.`,
     ),
   ]);
 }
@@ -152,7 +152,7 @@ function decodeRouteDocumentPathSegment(segment: string): string {
     throw new StaticExportError([
       staticExportDiagnostic(
         segment,
-        `FW229 static export cannot write route document path segment '${segment}' because it is not valid URL encoding.`,
+        `KV229 static export cannot write route document path segment '${segment}' because it is not valid URL encoding.`,
       ),
     ]);
   }
@@ -161,7 +161,7 @@ function decodeRouteDocumentPathSegment(segment: string): string {
     throw new StaticExportError([
       staticExportDiagnostic(
         segment,
-        `FW229 static export refused unsafe route document path segment '${segment}'.`,
+        `KV229 static export refused unsafe route document path segment '${segment}'.`,
       ),
     ]);
   }
@@ -177,7 +177,7 @@ function staticExportClientModuleTargetPath(root: string, modulePath: string): s
   throw new StaticExportError([
     staticExportDiagnostic(
       modulePath,
-      `FW229 static export refused to write client module '${modulePath}' outside the configured output directory.`,
+      `KV229 static export refused to write client module '${modulePath}' outside the configured output directory.`,
     ),
   ]);
 }
@@ -190,7 +190,7 @@ function decodeClientModulePathSegment(segment: string): string {
     throw new StaticExportError([
       staticExportDiagnostic(
         `/c/${segment}`,
-        `FW229 static export cannot write client module path segment '${segment}' because it is not valid URL encoding.`,
+        `KV229 static export cannot write client module path segment '${segment}' because it is not valid URL encoding.`,
       ),
     ]);
   }
@@ -199,7 +199,7 @@ function decodeClientModulePathSegment(segment: string): string {
     throw new StaticExportError([
       staticExportDiagnostic(
         `/c/${segment}`,
-        `FW229 static export refused unsafe client module path segment '${segment}'.`,
+        `KV229 static export refused unsafe client module path segment '${segment}'.`,
       ),
     ]);
   }
@@ -213,7 +213,7 @@ function staticExportAssetTargetPath(root: string, assetPath: string): string {
     throw new StaticExportError([
       staticExportDiagnostic(
         assetPath,
-        `FW229 static export refused static asset '${assetPath}' because it does not name an output file.`,
+        `KV229 static export refused static asset '${assetPath}' because it does not name an output file.`,
       ),
     ]);
   }
@@ -224,7 +224,7 @@ function staticExportAssetTargetPath(root: string, assetPath: string): string {
   throw new StaticExportError([
     staticExportDiagnostic(
       assetPath,
-      `FW229 static export refused to write static asset '${assetPath}' outside the configured output directory.`,
+      `KV229 static export refused to write static asset '${assetPath}' outside the configured output directory.`,
     ),
   ]);
 }
@@ -237,7 +237,7 @@ function decodeStaticExportAssetPathSegment(segment: string): string {
     throw new StaticExportError([
       staticExportDiagnostic(
         segment,
-        `FW229 static export cannot write static asset path segment '${segment}' because it is not valid URL encoding.`,
+        `KV229 static export cannot write static asset path segment '${segment}' because it is not valid URL encoding.`,
       ),
     ]);
   }
@@ -246,7 +246,7 @@ function decodeStaticExportAssetPathSegment(segment: string): string {
     throw new StaticExportError([
       staticExportDiagnostic(
         segment,
-        `FW229 static export refused unsafe static asset path segment '${segment}'.`,
+        `KV229 static export refused unsafe static asset path segment '${segment}'.`,
       ),
     ]);
   }

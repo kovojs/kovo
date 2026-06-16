@@ -344,7 +344,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'id="gallery-command-value">Invite teammate</span>',
   ],
   '/components/context-menu': [
-    'jiso-context-menu="gallery-context-menu-content"',
+    'kovo-context-menu="gallery-context-menu-content"',
     'aria-haspopup="menu"',
     'data-anchor-x="24"',
     'data-anchor-y="32"',
@@ -402,7 +402,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   ],
   '/components/hover-card': [
     'href="/team/ada"',
-    'jiso-hover-card="gallery-hover-card-content"',
+    'kovo-hover-card="gallery-hover-card-content"',
     'popover="manual"',
     'id="gallery-hover-card-content"',
   ],
@@ -586,7 +586,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'tabIndex="-1" type="button" value="link"',
   ],
   '/components/tooltip': [
-    'jiso-tooltip="gallery-tooltip-content"',
+    'kovo-tooltip="gallery-tooltip-content"',
     'aria-describedby="gallery-tooltip-content"',
     'role="tooltip"',
   ],

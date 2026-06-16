@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 export const GalleryFieldDemo$input_input = handler((event, ctx) => {
   const target = Object(event)['target'];
@@ -9,7 +9,7 @@ export const GalleryFieldDemo$input_input = handler((event, ctx) => {
   ctx.state.invalid =
     typeof checkValidity === 'function'
       ? !checkValidity.call(target)
-      : !/.+@jiso\.dev/.test(nextEmail);
+      : !/.+@kovo\.sh/.test(nextEmail);
 });
 export const GalleryFieldDemo$select_change = handler((event, ctx) => {
   ctx.state.plan = Object(event)['target']?.value?.toString?.() ?? ctx.state.plan;

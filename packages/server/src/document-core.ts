@@ -1,4 +1,4 @@
-import { jisoLoaderSource } from '@jiso/runtime';
+import { kovoLoaderSource } from '@kovojs/runtime';
 import { renderDeferredStream, type DeferredStreamChunk } from './deferred-stream.js';
 import { escapeAttribute, escapeHtml } from './html.js';
 import {
@@ -216,7 +216,7 @@ function defaultDeferredDocumentTemplate({
 }
 
 function inlineLoaderScript(): string {
-  return `<script>${jisoLoaderSource}</script>`;
+  return `<script>${kovoLoaderSource}</script>`;
 }
 
 function langFromHints(hints: PageHintOptions | undefined): string | undefined {

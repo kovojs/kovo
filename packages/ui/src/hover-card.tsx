@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   cn,
   defineVariants,
@@ -8,7 +8,7 @@ import {
   hoverCardTriggerAttributes,
   safeUrl,
   type ClassValue,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface HoverCardStateProps {
   disabled?: boolean;
@@ -98,7 +98,7 @@ export const HoverCardTrigger = component('hover-card-trigger', {
         // omit href when disabled, default to '#' when no href is supplied.
         href={props.disabled === true ? undefined : safeUrl(props.href)}
         id={props.id}
-        jiso-hover-card={attrs['jiso-hover-card']}
+        kovo-hover-card={attrs['kovo-hover-card']}
       >
         {props.children}
       </a>

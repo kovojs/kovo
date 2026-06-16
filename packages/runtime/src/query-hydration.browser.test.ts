@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installJisoLoader } from './index.js';
+import { createQueryStore, installKovoLoader } from './index.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -9,7 +9,7 @@ afterEach(() => {
 describe('query hydration browser runtime', () => {
   it('hydrates newly inserted query scripts through store subscribers and DOM bindings', async () => {
     document.body.innerHTML = [
-      '<script fw-query="cart" type="application/json">{"count":1}</script>',
+      '<script kovo-query="cart" type="application/json">{"count":1}</script>',
       '<output data-bind="recommendations.items"></output>',
     ].join('');
     const store = createQueryStore();
@@ -22,7 +22,7 @@ describe('query hydration browser runtime', () => {
     store.subscribe('cart', cartPlan);
     store.subscribe('recommendations', recommendationsPlan, 'homepage');
 
-    const loader = installJisoLoader({
+    const loader = installKovoLoader({
       importModule: vi.fn(),
       queryPlans: { recommendations: { bindings: true } },
       queryStore: store,
@@ -30,7 +30,7 @@ describe('query hydration browser runtime', () => {
       root: document,
     });
 
-    const originalScript = document.querySelector('script[fw-query="cart"]');
+    const originalScript = document.querySelector('script[kovo-query="cart"]');
     if (!originalScript) throw new Error('missing original query script');
 
     expect(store.get('cart')).toEqual({ count: 1 });
@@ -38,7 +38,7 @@ describe('query hydration browser runtime', () => {
     originalScript.textContent = '{"count":99}';
     const laterScript = document.createElement('script');
     laterScript.type = 'application/json';
-    laterScript.setAttribute('fw-query', 'recommendations:homepage');
+    laterScript.setAttribute('kovo-query', 'recommendations:homepage');
     laterScript.textContent = '{"items":["p1"]}';
     document.body.append(laterScript);
 
@@ -60,17 +60,17 @@ describe('query hydration browser runtime', () => {
   });
 
   it('recovers malformed hydrated query scripts on a later visible return', async () => {
-    document.body.innerHTML = '<script fw-query="cart" type="application/json">{</script>';
+    document.body.innerHTML = '<script kovo-query="cart" type="application/json">{</script>';
     const store = createQueryStore();
     const cartPlan = vi.fn();
     const onError = vi.fn();
     const refetchOnFocus = vi.fn();
-    const script = document.querySelector('script[fw-query="cart"]');
+    const script = document.querySelector('script[kovo-query="cart"]');
     if (!script) throw new Error('missing cart query script');
 
     store.subscribe('cart', cartPlan);
 
-    const loader = installJisoLoader({
+    const loader = installKovoLoader({
       importModule: vi.fn(),
       onError,
       queryStore: store,
@@ -100,7 +100,7 @@ describe('query hydration browser runtime', () => {
 
   it('recovers parsed query scripts after a transient apply failure', async () => {
     document.body.innerHTML = [
-      '<script fw-query="cart" type="application/json">{"count":2}</script>',
+      '<script kovo-query="cart" type="application/json">{"count":2}</script>',
       '<output data-bind="cart.count"></output>',
     ].join('');
     const store = createQueryStore();
@@ -114,7 +114,7 @@ describe('query hydration browser runtime', () => {
 
     store.subscribe('cart', cartPlan);
 
-    const loader = installJisoLoader({
+    const loader = installKovoLoader({
       applyQuery() {
         attempts += 1;
         if (attempts === 1) throw applyError;
@@ -154,7 +154,7 @@ describe('query hydration browser runtime', () => {
     const output = document.querySelector('output');
     if (!output) throw new Error('missing query binding output');
 
-    const loader = installJisoLoader({
+    const loader = installKovoLoader({
       importModule: vi.fn(),
       queryPlans: { cart: { bindings: true } },
       queryStore: store,
@@ -163,7 +163,7 @@ describe('query hydration browser runtime', () => {
     });
 
     window.dispatchEvent(
-      new CustomEvent('jiso:query', {
+      new CustomEvent('kovo:query', {
         detail: {
           queries: [{ attrs: ' name="cart"', content: '{"count":5}' }],
         },
@@ -180,7 +180,7 @@ describe('query hydration browser runtime', () => {
 
     loader.dispose();
     window.dispatchEvent(
-      new CustomEvent('jiso:query', {
+      new CustomEvent('kovo:query', {
         detail: {
           queries: [{ attrs: ' name="cart"', content: '{"count":6}' }],
         },
@@ -200,7 +200,7 @@ describe('query hydration browser runtime', () => {
     const output = document.querySelector('output');
     if (!output) throw new Error('missing query binding output');
 
-    const loader = installJisoLoader({
+    const loader = installKovoLoader({
       applyQuery(query) {
         const value =
           typeof query.value === 'object' && query.value !== null
@@ -216,7 +216,7 @@ describe('query hydration browser runtime', () => {
     });
 
     window.dispatchEvent(
-      new CustomEvent('jiso:query', {
+      new CustomEvent('kovo:query', {
         detail: {
           queries: [{ attrs: ' name="cart"', content: '{"count":5}' }],
         },
@@ -239,7 +239,7 @@ describe('query hydration browser runtime', () => {
     const applyError = new Error('browser inline query apply failed');
     if (!output) throw new Error('missing product binding output');
 
-    const loader = installJisoLoader({
+    const loader = installKovoLoader({
       applyQuery(query) {
         if (query.name === 'cart') throw applyError;
       },
@@ -251,7 +251,7 @@ describe('query hydration browser runtime', () => {
     });
 
     window.dispatchEvent(
-      new CustomEvent('jiso:query', {
+      new CustomEvent('kovo:query', {
         detail: {
           queries: [
             { attrs: ' name="cart"', content: '{"count":5}' },

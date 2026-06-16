@@ -1,4 +1,4 @@
-import type { Form, FormFailure, FormInput, JsonValue } from '@jiso/core';
+import type { Form, FormFailure, FormInput, JsonValue } from '@kovojs/core';
 
 import type { AppliedMutationResponse } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';

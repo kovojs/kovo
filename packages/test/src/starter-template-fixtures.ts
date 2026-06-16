@@ -12,15 +12,15 @@ import {
   runCommandSequenceSync,
   type VitePlusTask,
 } from './command-fixtures.ts';
-import { fwCheckOkAssertionFact, type FwCheckOkAssertionFact } from './fw-check-fixtures.ts';
+import { kovoCheckOkAssertionFact, type KovoCheckOkAssertionFact } from './kovo-check-fixtures.ts';
 import {
-  fwExplainMutationAssertionFact,
-  fwExplainPageAssertionFact,
-  fwExplainQueryAssertionFact,
-  type FwExplainMutationAssertionFact,
-  type FwExplainPageAssertionFact,
-  type FwExplainQueryAssertionFact,
-} from './fw-explain-fixtures.ts';
+  kovoExplainMutationAssertionFact,
+  kovoExplainPageAssertionFact,
+  kovoExplainQueryAssertionFact,
+  type KovoExplainMutationAssertionFact,
+  type KovoExplainPageAssertionFact,
+  type KovoExplainQueryAssertionFact,
+} from './kovo-explain-fixtures.ts';
 import { htmlElementFacts, type HtmlElementFact } from './html-fragment.ts';
 import { cssSourceDirectives } from './source-fixtures.ts';
 
@@ -72,7 +72,7 @@ export interface StarterTemplateDevDependencyCoverage {
   present: readonly string[];
 }
 
-export interface StarterTemplateFwOutput {
+export interface StarterTemplateKovoOutput {
   args: readonly string[];
   output: string;
 }
@@ -108,25 +108,25 @@ export interface StarterTemplateAcceptanceFact {
   emittedGraph: StarterTemplateExecutionResult;
   graph: StarterTemplateGraphFact;
   graphAssertionsOutput: string;
-  graphCheck: FwCheckOkAssertionFact;
+  graphCheck: KovoCheckOkAssertionFact;
   html: StarterTemplateIndexHtmlFacts;
   package: {
     dependencies: readonly string[];
     scripts: {
       emitGraph: unknown;
-      fwCheck: unknown;
+      kovoCheck: unknown;
       graphAssertions: unknown;
     };
   };
   taskOutputs: readonly StarterTemplateExecutionResult[];
   tasks: {
-    fwCheck: StarterTemplateTaskFact;
+    kovoCheck: StarterTemplateTaskFact;
     graphAssertions: StarterTemplateTaskFact;
   };
   explain: {
-    cartAdd: FwExplainMutationAssertionFact;
-    cartPage: FwExplainPageAssertionFact;
-    cartQuery: FwExplainQueryAssertionFact;
+    cartAdd: KovoExplainMutationAssertionFact;
+    cartPage: KovoExplainPageAssertionFact;
+    cartQuery: KovoExplainQueryAssertionFact;
   };
 }
 
@@ -135,15 +135,15 @@ export interface StarterTemplateAcceptanceOptions extends StarterTemplateFixture
   assertRenderEquivalence(result: unknown): void;
   compileComponentModule(options: { fileName: string; source: string }): unknown;
   expectedDevDependencies: readonly string[];
-  fwCheck(graph: Record<string, unknown>): { exitCode: number; output: string };
-  fwExplain(
+  kovoCheck(graph: Record<string, unknown>): { exitCode: number; output: string };
+  kovoExplain(
     graph: Record<string, unknown>,
     options:
       | { kind: 'mutation'; optimistic: true; target: string }
       | { kind: 'page'; target: string }
       | { kind: 'query'; target: string },
   ): { exitCode: number; output: string };
-  fwOutputs: readonly StarterTemplateFwOutput[];
+  kovoOutputs: readonly StarterTemplateKovoOutput[];
 }
 
 interface StarterTemplateGraphShape extends Record<string, unknown> {
@@ -285,14 +285,17 @@ export async function starterTemplateAcceptanceFact(
   }
 
   const graph = starterFacts.graph as StarterTemplateGraphShape;
-  const fwCheckTask = starterFacts.viteTasks['fw-check'];
+  const kovoCheckTask = starterFacts.viteTasks['kovo-check'];
   const graphAssertionsTask = starterFacts.viteTasks['graph-assertions'];
   const taskOutputs = await Promise.all([
-    runStarterTemplateViteTaskCommand(fwCheckTask?.command, options, options.fwOutputs),
-    runStarterTemplateViteTaskCommand(graphAssertionsTask?.command, options, options.fwOutputs),
+    runStarterTemplateViteTaskCommand(kovoCheckTask?.command, options, options.kovoOutputs),
+    runStarterTemplateViteTaskCommand(graphAssertionsTask?.command, options, options.kovoOutputs),
   ]);
   const emittedGraph = await runStarterTemplateEmitGraph(options);
-  const graphAssertionsOutput = await runStarterTemplateGraphAssertions(options, options.fwOutputs);
+  const graphAssertionsOutput = await runStarterTemplateGraphAssertions(
+    options,
+    options.kovoOutputs,
+  );
   const appCompile = options.compileComponentModule({
     fileName: 'src/app.tsx',
     source: starterFacts.appSource,
@@ -302,7 +305,7 @@ export async function starterTemplateAcceptanceFact(
 
   // SPEC.md §5.2: starter app code is authored as TSX/JS; this acceptance
   // projection verifies generated graph and runtime behavior without
-  // asserting lowered source text in the fw-check monolith.
+  // asserting lowered source text in the kovo-check monolith.
   return {
     appCompile: {
       fixpointAsserted: true,
@@ -317,14 +320,14 @@ export async function starterTemplateAcceptanceFact(
     ),
     emittedGraph,
     explain: {
-      cartAdd: fwExplainMutationAssertionFact(
-        options.fwExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' }),
+      cartAdd: kovoExplainMutationAssertionFact(
+        options.kovoExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' }),
       ),
-      cartPage: fwExplainPageAssertionFact(
-        options.fwExplain(graph, { kind: 'page', target: '/cart' }),
+      cartPage: kovoExplainPageAssertionFact(
+        options.kovoExplain(graph, { kind: 'page', target: '/cart' }),
       ),
-      cartQuery: fwExplainQueryAssertionFact(
-        options.fwExplain(graph, { kind: 'query', target: 'cart' }),
+      cartQuery: kovoExplainQueryAssertionFact(
+        options.kovoExplain(graph, { kind: 'query', target: 'cart' }),
       ),
     },
     graph: {
@@ -338,21 +341,21 @@ export async function starterTemplateAcceptanceFact(
       ),
     },
     graphAssertionsOutput,
-    graphCheck: fwCheckOkAssertionFact(options.fwCheck(graph)),
+    graphCheck: kovoCheckOkAssertionFact(options.kovoCheck(graph)),
     html: starterFacts.indexHtml,
     package: {
       dependencies: starterFacts.package.dependencies,
       scripts: {
         emitGraph: starterFacts.package.scripts['emit-graph'],
-        fwCheck: starterFacts.package.scripts['fw-check'],
+        kovoCheck: starterFacts.package.scripts['kovo-check'],
         graphAssertions: starterFacts.package.scripts['graph-assertions'],
       },
     },
     taskOutputs,
     tasks: {
-      fwCheck: {
-        input: fwCheckTask?.input,
-        output: fwCheckTask?.output,
+      kovoCheck: {
+        input: kovoCheckTask?.input,
+        output: kovoCheckTask?.output,
       },
       graphAssertions: {
         input: graphAssertionsTask?.input,
@@ -367,7 +370,7 @@ const compilerModuleUrlFor = (paths: StarterTemplateFixturePaths): string =>
   pathToFileURL(join(pathFrom(paths.projectRoot), 'dist/compiler/src/index.mjs')).href;
 
 const writeCompilerShim = async (fixtureRoot: string, compilerModuleUrl: string): Promise<void> => {
-  const compilerShimRoot = join(fixtureRoot, 'node_modules/@jiso/compiler');
+  const compilerShimRoot = join(fixtureRoot, 'node_modules/@kovojs/compiler');
   await mkdir(compilerShimRoot, { recursive: true });
   await writeFile(
     join(compilerShimRoot, 'package.json'),
@@ -381,39 +384,39 @@ const writeCompilerShim = async (fixtureRoot: string, compilerModuleUrl: string)
   );
 };
 
-const writeFakeFw = async (
+const writeFakeKovo = async (
   fakeBin: string,
-  outputs: readonly StarterTemplateFwOutput[],
+  outputs: readonly StarterTemplateKovoOutput[],
 ): Promise<string> => {
   await mkdir(fakeBin, { recursive: true });
-  const fakeFw = join(fakeBin, 'fw');
+  const fakeKovo = join(fakeBin, 'kovo');
   await writeFile(
-    fakeFw,
+    fakeKovo,
     `#!/usr/bin/env node
 const outputs = new Map(${JSON.stringify(
       outputs.map((entry) => [JSON.stringify(entry.args), entry.output]),
     )});
 const output = outputs.get(JSON.stringify(process.argv.slice(2)));
 if (output === undefined) {
-  process.stderr.write(\`unexpected fw args: \${JSON.stringify(process.argv.slice(2))}\\n\`);
+  process.stderr.write(\`unexpected kovo args: \${JSON.stringify(process.argv.slice(2))}\\n\`);
   process.exit(64);
 }
 process.stdout.write(output);
 `,
     'utf8',
   );
-  await chmod(fakeFw, 0o755);
-  return fakeFw;
+  await chmod(fakeKovo, 0o755);
+  return fakeKovo;
 };
 
 export async function runStarterTemplateGraphAssertions(
   paths: StarterTemplateFixturePaths,
-  fwOutputs: readonly StarterTemplateFwOutput[],
+  kovoOutputs: readonly StarterTemplateKovoOutput[],
 ): Promise<string> {
-  const fakeBin = await mkdtemp(join(tmpdir(), 'jiso-fake-fw-'));
+  const fakeBin = await mkdtemp(join(tmpdir(), 'kovo-fake-kovo-'));
 
   try {
-    await writeFakeFw(fakeBin, fwOutputs);
+    await writeFakeKovo(fakeBin, kovoOutputs);
 
     return execFileSync('node', ['scripts/graph-assertions.mjs'], {
       cwd: pathFrom(paths.templateRoot),
@@ -428,7 +431,7 @@ export async function runStarterTemplateGraphAssertions(
 export async function runStarterTemplateEmitGraph(
   paths: StarterTemplateFixturePaths,
 ): Promise<StarterTemplateExecutionResult> {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'jiso-template-emit-graph-'));
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'kovo-template-emit-graph-'));
 
   try {
     await cp(paths.templateRoot, fixtureRoot, { recursive: true });
@@ -450,15 +453,15 @@ export async function runStarterTemplateEmitGraph(
 export async function runStarterTemplateViteTaskCommand(
   command: unknown,
   paths: StarterTemplateFixturePaths,
-  fwOutputs: readonly StarterTemplateFwOutput[],
+  kovoOutputs: readonly StarterTemplateKovoOutput[],
 ): Promise<StarterTemplateExecutionResult> {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'jiso-template-task-'));
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'kovo-template-task-'));
   const fakeBin = join(fixtureRoot, '.fake-bin');
 
   try {
     await cp(paths.templateRoot, fixtureRoot, { recursive: true });
     await writeCompilerShim(fixtureRoot, compilerModuleUrlFor(paths));
-    await writeFakeFw(fakeBin, fwOutputs);
+    await writeFakeKovo(fakeBin, kovoOutputs);
 
     const output = runCommandSequenceSync(command, {
       cwd: fixtureRoot,
@@ -478,7 +481,7 @@ export async function runPnpmFilterTaskCommand(
   expectedPackages: readonly ConformancePackageFixture[],
   options: { cwd: string | URL },
 ): Promise<PnpmFilterTaskExecution> {
-  const fakeBin = await mkdtemp(join(tmpdir(), 'jiso-conformance-pnpm-'));
+  const fakeBin = await mkdtemp(join(tmpdir(), 'kovo-conformance-pnpm-'));
   const fakePnpm = join(fakeBin, 'pnpm');
   const observedPath = join(fakeBin, 'observed.jsonl');
   const packageScripts = Object.fromEntries(
@@ -496,7 +499,7 @@ import assert from 'node:assert/strict';
 import { appendFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
-const scriptsByPackage = JSON.parse(process.env.JISO_CONFORMANCE_PACKAGE_SCRIPTS ?? '{}');
+const scriptsByPackage = JSON.parse(process.env.KOVO_CONFORMANCE_PACKAGE_SCRIPTS ?? '{}');
 assert.deepEqual(args.slice(0, 2), ['--filter', args[1]]);
 assert.equal(args[2], 'test');
 assert.equal(args.length, 3);
@@ -507,7 +510,7 @@ assert.ok(
     observedTestScript === 'vitest --run src/index.test.ts',
   \`\${packageName} exposes the expected conformance test command (got: \${observedTestScript})\`,
 );
-appendFileSync(process.env.JISO_CONFORMANCE_OBSERVED, JSON.stringify({ packageName, script: args[2] }) + '\\n');
+appendFileSync(process.env.KOVO_CONFORMANCE_OBSERVED, JSON.stringify({ packageName, script: args[2] }) + '\\n');
 process.stdout.write(\`pnpm-filter-test \${packageName}\\n\`);
 `,
       'utf8',
@@ -519,8 +522,8 @@ process.stdout.write(\`pnpm-filter-test \${packageName}\\n\`);
       encoding: 'utf8',
       env: {
         ...process.env,
-        JISO_CONFORMANCE_OBSERVED: observedPath,
-        JISO_CONFORMANCE_PACKAGE_SCRIPTS: JSON.stringify(packageScripts),
+        KOVO_CONFORMANCE_OBSERVED: observedPath,
+        KOVO_CONFORMANCE_PACKAGE_SCRIPTS: JSON.stringify(packageScripts),
         PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
       },
     });
@@ -643,7 +646,7 @@ export async function executeStarterClientTemplate(
       return fragmentById[id] ?? null;
     },
     querySelector(selector: string) {
-      return selector === '[fw-fragment-target="cart-list"]'
+      return selector === '[kovo-fragment-target="cart-list"]'
         ? {
             innerHTML: '<ul></ul>',
             insertAdjacentHTML(position: string, html: string) {
@@ -687,7 +690,7 @@ export async function executeStarterClientTemplate(
         this.element.innerHTML = html;
       }
     },
-    installJisoLoader(options: unknown) {
+    installKovoLoader(options: unknown) {
       loaderInstalls.push(options);
     },
   };
@@ -708,7 +711,7 @@ export async function executeStarterClientTemplate(
     },
     module,
     require(specifier: string) {
-      if (specifier === '@jiso/runtime') return runtime;
+      if (specifier === '@kovojs/runtime') return runtime;
       assert.fail(`unexpected starter client import ${specifier}`);
     },
   });
@@ -741,16 +744,16 @@ export async function starterClientTemplateBehaviorFact(
 
   const fetchResult = enhancedMutations?.fetch?.('/_m/cart/add', {
     body: 'productId=p1',
-    headers: { Accept: 'text/vnd.jiso.fragment+html' },
+    headers: { Accept: 'text/vnd.kovo.fragment+html' },
     keepalive: true,
     method: 'POST',
   });
   const [fetchUrl, fetchOptions = {}] = fixture.fetchCalls[0] ?? [];
   const deferredResult = (
-    fixture.exports.applyJisoDeferredStreamResponse as
+    fixture.exports.applyKovoDeferredStreamResponse as
       | ((body: string, options: Record<string, unknown>) => { applied?: unknown })
       | undefined
-  )?.('<fw-fragment></fw-fragment>', {
+  )?.('<kovo-fragment></kovo-fragment>', {
     boundary: 'starter-boundary',
     morph: 'structural',
   });

@@ -23,7 +23,7 @@ export async function assertTypeScriptProgramHasNoDiagnostics(
     moduleResolution: ts.ModuleResolutionKind.NodeNext,
     noEmit: true,
     paths: {
-      '@jiso/core': ['dist/core/src/index.d.mts'],
+      '@kovojs/core': ['dist/core/src/index.d.mts'],
     },
     skipLibCheck: true,
     strict: true,

@@ -6,7 +6,7 @@ import {
   runMutation,
   s,
   session,
-} from '@jiso/server';
+} from '@kovojs/server';
 import {
   authed,
   betterAuthSession,
@@ -17,8 +17,8 @@ import {
   type BetterAuthResponseLike,
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
-} from '@jiso/better-auth';
-import type { FwExplainInput } from '@jiso/core';
+} from '@kovojs/better-auth';
+import type { KovoExplainInput } from '@kovojs/core';
 
 export type ReferenceRole = 'admin' | 'member';
 
@@ -78,7 +78,7 @@ export const referenceAuthCsrf = {
   },
 };
 
-const referenceCookieName = 'jiso_reference_session';
+const referenceCookieName = 'kovo_reference_session';
 
 const referenceUsers = new Map<string, ReferenceBetterAuthUser & { password: string }>([
   [
@@ -247,7 +247,7 @@ export const referenceGraph = {
       site: 'examples/reference/src/app.ts:adminRoute',
     },
   ],
-} as const satisfies FwExplainInput;
+} as const satisfies KovoExplainInput;
 
 export const accountRoute = route('/account', {
   guard: authed<ReferenceRequest>(),

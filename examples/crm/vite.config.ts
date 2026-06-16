@@ -71,20 +71,20 @@ interface CrmDevPlugin {
 export function crmSharedAppShellDevPlugin(): CrmDevPlugin {
   return {
     async configureServer(server) {
-      const serverModule = await server.ssrLoadModule('@jiso/server/app-shell/vite');
-      const sharedPluginFactory = serverModule.jisoAppShellViteDevPlugin;
+      const serverModule = await server.ssrLoadModule('@kovojs/server/app-shell/vite');
+      const sharedPluginFactory = serverModule.kovoAppShellViteDevPlugin;
       if (typeof sharedPluginFactory !== 'function') {
-        throw new Error('@jiso/server/app-shell/vite must export jisoAppShellViteDevPlugin.');
+        throw new Error('@kovojs/server/app-shell/vite must export kovoAppShellViteDevPlugin.');
       }
 
       const sharedPlugin = sharedPluginFactory({
-        name: 'jiso-crm-app-shell-dev',
+        name: 'kovo-crm-app-shell-dev',
         nodeHandlerExportName: 'crmNodeHandler',
         order: 'post',
       }) as { configureServer(server: CrmDevServer): void | DevPostHook };
 
       return sharedPlugin.configureServer(server);
     },
-    name: 'jiso-crm-app-shell-dev-loader',
+    name: 'kovo-crm-app-shell-dev-loader',
   };
 }

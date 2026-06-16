@@ -55,22 +55,22 @@ describe('Better Auth pinned conformance', () => {
     expect(result.importNote).toEqual({
       hasRequiredImport: true,
       insertedImport: false,
-      localName: 'jiso',
+      localName: 'kovo',
       shouldAddRequiredImport: false,
-      suggestedImport: "import { jiso } from '@jiso/drizzle';",
+      suggestedImport: "import { kovo } from '@kovojs/drizzle';",
     });
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+      "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
     );
     expect(result.source).toContain(
-      "export const organization = pgTable('organization', {}, jiso({ domain: 'organization', key: 'id' }));",
+      "export const organization = pgTable('organization', {}, kovo({ domain: 'organization', key: 'id' }));",
     );
     expect(result.source).toContain(
-      "export const teamMember = pgTable('teamMember', {}, jiso({ domain: 'organization', key: 'teamId' }));",
+      "export const teamMember = pgTable('teamMember', {}, kovo({ domain: 'organization', key: 'teamId' }));",
     );
     expect(result.source).toContain(
-      "export const verification = pgTable('verification', {}, jiso({ exempt: true }));",
+      "export const verification = pgTable('verification', {}, kovo({ exempt: true }));",
     );
   });
 
@@ -112,7 +112,7 @@ describe('Better Auth pinned conformance', () => {
     expect(result.skippedTables).toEqual([]);
     expect(result.unsupportedPluginTables).toEqual([]);
     expect(result.requiredImports).toEqual([
-      "import { jiso } from '@jiso/drizzle';",
+      "import { kovo } from '@kovojs/drizzle';",
       "import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
     ]);
     expect(result.source).toContain(
@@ -134,7 +134,7 @@ describe('Better Auth pinned conformance', () => {
         "  userId: text('userId').notNull(),\n" +
         "  role: text('role').notNull(),\n" +
         "  createdAt: timestamp('createdAt').notNull(),\n" +
-        "}, jiso({ domain: 'organization', key: 'organizationId' }));",
+        "}, kovo({ domain: 'organization', key: 'organizationId' }));",
     );
     expect(result.source).toContain(
       "export const verification = pgTable('verification', {\n" +
@@ -144,7 +144,7 @@ describe('Better Auth pinned conformance', () => {
         "  expiresAt: timestamp('expiresAt').notNull(),\n" +
         "  createdAt: timestamp('createdAt').notNull(),\n" +
         "  updatedAt: timestamp('updatedAt').notNull(),\n" +
-        '}, jiso({ exempt: true }));',
+        '}, kovo({ exempt: true }));',
     );
   });
 
@@ -204,7 +204,7 @@ describe('Better Auth pinned conformance', () => {
     const tables = getAuthTables(auth.options);
     const tableNames = Object.keys(tables).sort();
     const source = [
-      "import { jiso } from '@jiso/drizzle';",
+      "import { kovo } from '@kovojs/drizzle';",
       "import { pgTable as authPgTable } from 'drizzle-orm/pg-core';",
       "import * as sqlite from 'drizzle-orm/sqlite-core';",
       '',
@@ -239,13 +239,13 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const account = authPgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const account = authPgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
-      "export const invitation = sqlite.sqliteTable('invitation', {}, jiso({ domain: 'organization', key: 'organizationId' }));",
+      "export const invitation = sqlite.sqliteTable('invitation', {}, kovo({ domain: 'organization', key: 'organizationId' }));",
     );
     expect(result.source).toContain(
-      "export const verification = sqlite.sqliteTable('verification', {}, jiso({ exempt: true }));",
+      "export const verification = sqlite.sqliteTable('verification', {}, kovo({ exempt: true }));",
     );
   });
 
@@ -254,7 +254,7 @@ describe('Better Auth pinned conformance', () => {
     const tables = getAuthTables(auth.options);
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
         '',
         "export const user = pgTable('user', {});",
@@ -280,12 +280,12 @@ describe('Better Auth pinned conformance', () => {
     expect(result.duplicateSourceTables).toEqual(['user']);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain("export const user = pgTable('user', {});");
     expect(result.source).toContain("export const userShadow = pgTable('user', {});");
     expect(result.source).not.toContain(
-      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+      "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
     );
   });
 
@@ -349,16 +349,16 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const auth_users = pgTable('auth_users', {}, jiso({ domain: 'user', key: 'id' }));",
+      "export const auth_users = pgTable('auth_users', {}, kovo({ domain: 'user', key: 'id' }));",
     );
     expect(result.source).toContain(
-      "export const auth_sessions = pgTable('auth_sessions', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const auth_sessions = pgTable('auth_sessions', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
-      "export const auth_organizations = pgTable('auth_organizations', {}, jiso({ domain: 'organization', key: 'id' }));",
+      "export const auth_organizations = pgTable('auth_organizations', {}, kovo({ domain: 'organization', key: 'id' }));",
     );
     expect(result.source).toContain(
-      "export const auth_verifications = pgTable('auth_verifications', {}, jiso({ exempt: true }));",
+      "export const auth_verifications = pgTable('auth_verifications', {}, kovo({ exempt: true }));",
     );
     expect(generated.validation.ok).toBe(true);
     expect(generated.skippedTables).toEqual([]);
@@ -434,7 +434,7 @@ describe('Better Auth pinned conformance', () => {
     expect(result.annotatedTables).toEqual(['account', 'verification']);
     expect(result.source).toContain("export const auth_users = pgTable('auth_users', {});");
     expect(result.source).not.toContain(
-      "export const auth_users = pgTable('auth_users', {}, jiso({ domain: 'user', key: 'id' }));",
+      "export const auth_users = pgTable('auth_users', {}, kovo({ domain: 'user', key: 'id' }));",
     );
     expect(verifierConfig.domainByTable).not.toHaveProperty('auth_users');
     expect(verifierConfig.keyByTable).not.toHaveProperty('auth_users');

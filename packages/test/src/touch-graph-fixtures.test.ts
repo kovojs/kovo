@@ -12,9 +12,9 @@ import {
   touchGraphSummaryFacts,
 } from './touch-graph-fixtures.js';
 
-describe('@jiso/test touch graph fixture seam', () => {
+describe('@kovojs/test touch graph fixture seam', () => {
   it('summarizes touch-graph source provenance against resolved source lines', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'jiso-test-touch-graph-'));
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-touch-graph-'));
     const touchGraph = {
       'cart.addItem': {
         touches: [

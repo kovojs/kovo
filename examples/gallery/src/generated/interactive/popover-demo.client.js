@@ -1,7 +1,7 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
-import { popoverBeforeToggle as _popoverBeforeToggle } from '@jiso/headless-ui/primitives';
+import { popoverBeforeToggle as _popoverBeforeToggle } from '@kovojs/headless-ui/primitives';
 
 export const GalleryPopoverDemo$div_beforetoggle = handler((event, ctx) => {
   const result = _popoverBeforeToggle(Object(event), { open: ctx.state.open });

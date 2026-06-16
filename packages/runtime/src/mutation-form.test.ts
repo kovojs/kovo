@@ -38,7 +38,7 @@ describe('enhanced mutation form helpers', () => {
     });
     fallbackEnhancedMutationSubmit(syntheticForm);
     expect(syntheticForm.getAttribute('data-error-code')).toBe('NETWORK_ERROR');
-    expect(syntheticForm.getAttribute('fw-error')).toBe('');
+    expect(syntheticForm.getAttribute('kovo-error')).toBe('');
   });
 
   it('stamps upload progress without preserving stale indeterminate values', () => {

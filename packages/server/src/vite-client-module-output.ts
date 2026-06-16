@@ -1,43 +1,43 @@
 import { lstat, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import type { JisoAppShellBuiltClientModule } from './vite-build.js';
+import type { KovoAppShellBuiltClientModule } from './vite-build.js';
 import { viteDistSourcePath } from './vite-build-assets.js';
 
-export interface JisoAppShellViteClientModuleOutputPlanItem {
+export interface KovoAppShellViteClientModuleOutputPlanItem {
   path: string;
   targetPath: string;
 }
 
-interface JisoAppShellViteClientModuleWrite extends JisoAppShellViteClientModuleOutputPlanItem {
+interface KovoAppShellViteClientModuleWrite extends KovoAppShellViteClientModuleOutputPlanItem {
   source: string;
 }
 
-export async function writeJisoAppShellViteClientModuleOutput(
+export async function writeKovoAppShellViteClientModuleOutput(
   root: string,
-  modules: readonly JisoAppShellBuiltClientModule[],
+  modules: readonly KovoAppShellBuiltClientModule[],
 ): Promise<void> {
-  const writes = jisoAppShellViteClientModuleWrites(root, modules);
+  const writes = kovoAppShellViteClientModuleWrites(root, modules);
 
   // SPEC §9.5: production app-shell builds publish immutable /c/ modules
   // through one validated output commit, so export rejection never leaves partial files.
-  assertNoJisoAppShellViteClientModuleWriteConflicts(writes);
-  await assertWritableJisoAppShellViteClientModuleTargets(root, writes);
+  assertNoKovoAppShellViteClientModuleWriteConflicts(writes);
+  await assertWritableKovoAppShellViteClientModuleTargets(root, writes);
   if (writes.length === 0) return;
 
-  const stagingRoot = await createJisoAppShellViteStagingRoot(root);
+  const stagingRoot = await createKovoAppShellViteStagingRoot(root);
   try {
     await Promise.all(
       writes.map((write) =>
-        writeJisoAppShellViteClientModuleFile(
+        writeKovoAppShellViteClientModuleFile(
           write.source,
-          jisoAppShellViteStagedTargetPath(root, stagingRoot, write.targetPath),
+          kovoAppShellViteStagedTargetPath(root, stagingRoot, write.targetPath),
         ),
       ),
     );
 
     for (const write of writes) {
-      const stagedPath = jisoAppShellViteStagedTargetPath(root, stagingRoot, write.targetPath);
+      const stagedPath = kovoAppShellViteStagedTargetPath(root, stagingRoot, write.targetPath);
       await mkdir(path.dirname(write.targetPath), { recursive: true });
       await rename(stagedPath, write.targetPath);
     }
@@ -46,34 +46,34 @@ export async function writeJisoAppShellViteClientModuleOutput(
   }
 }
 
-export async function assertWritableJisoAppShellViteClientModuleOutput(
+export async function assertWritableKovoAppShellViteClientModuleOutput(
   root: string,
-  modules: readonly JisoAppShellBuiltClientModule[],
+  modules: readonly KovoAppShellBuiltClientModule[],
 ): Promise<void> {
-  const writes = jisoAppShellViteClientModuleWrites(root, modules);
+  const writes = kovoAppShellViteClientModuleWrites(root, modules);
 
   // SPEC §9.5: plugin-time static export must not publish static-host files
   // until the matching Vite /c/ module output has proved its target boundary.
-  assertNoJisoAppShellViteClientModuleWriteConflicts(writes);
-  await assertWritableJisoAppShellViteClientModuleTargets(root, writes);
+  assertNoKovoAppShellViteClientModuleWriteConflicts(writes);
+  await assertWritableKovoAppShellViteClientModuleTargets(root, writes);
 }
 
-export function jisoAppShellViteClientModuleOutputPlan(
+export function kovoAppShellViteClientModuleOutputPlan(
   root: string,
-  modules: readonly JisoAppShellBuiltClientModule[],
-): JisoAppShellViteClientModuleOutputPlanItem[] {
+  modules: readonly KovoAppShellBuiltClientModule[],
+): KovoAppShellViteClientModuleOutputPlanItem[] {
   // SPEC §9.5: build hooks and static export tasks inspect the same immutable
   // /c/ module targets that the Vite app-shell output commit will publish.
-  return jisoAppShellViteClientModuleWrites(root, modules).map((write) => ({
+  return kovoAppShellViteClientModuleWrites(root, modules).map((write) => ({
     path: write.path,
     targetPath: write.targetPath,
   }));
 }
 
-function jisoAppShellViteClientModuleWrites(
+function kovoAppShellViteClientModuleWrites(
   root: string,
-  modules: readonly JisoAppShellBuiltClientModule[],
-): JisoAppShellViteClientModuleWrite[] {
+  modules: readonly KovoAppShellBuiltClientModule[],
+): KovoAppShellViteClientModuleWrite[] {
   return modules.map((module) => ({
     path: module.path,
     source: module.source,
@@ -81,7 +81,7 @@ function jisoAppShellViteClientModuleWrites(
   }));
 }
 
-async function writeJisoAppShellViteClientModuleFile(
+async function writeKovoAppShellViteClientModuleFile(
   source: string,
   targetPath: string,
 ): Promise<void> {
@@ -89,8 +89,8 @@ async function writeJisoAppShellViteClientModuleFile(
   await writeFile(targetPath, source, 'utf8');
 }
 
-function assertNoJisoAppShellViteClientModuleWriteConflicts(
-  writes: readonly JisoAppShellViteClientModuleWrite[],
+function assertNoKovoAppShellViteClientModuleWriteConflicts(
+  writes: readonly KovoAppShellViteClientModuleWrite[],
 ): void {
   const seen = new Set<string>();
 
@@ -105,17 +105,17 @@ function assertNoJisoAppShellViteClientModuleWriteConflicts(
   }
 }
 
-async function assertWritableJisoAppShellViteClientModuleTargets(
+async function assertWritableKovoAppShellViteClientModuleTargets(
   root: string,
-  writes: readonly JisoAppShellViteClientModuleWrite[],
+  writes: readonly KovoAppShellViteClientModuleWrite[],
 ): Promise<void> {
   for (const write of writes) {
-    await assertJisoAppShellViteClientModuleParentDirectories(root, write.targetPath);
-    await assertJisoAppShellViteClientModuleTargetIsNotDirectory(write.targetPath);
+    await assertKovoAppShellViteClientModuleParentDirectories(root, write.targetPath);
+    await assertKovoAppShellViteClientModuleTargetIsNotDirectory(write.targetPath);
   }
 }
 
-async function assertJisoAppShellViteClientModuleParentDirectories(
+async function assertKovoAppShellViteClientModuleParentDirectories(
   root: string,
   targetPath: string,
 ): Promise<void> {
@@ -141,7 +141,7 @@ async function assertJisoAppShellViteClientModuleParentDirectories(
   }
 }
 
-async function assertJisoAppShellViteClientModuleTargetIsNotDirectory(
+async function assertKovoAppShellViteClientModuleTargetIsNotDirectory(
   targetPath: string,
 ): Promise<void> {
   let targetStat: Awaited<ReturnType<typeof lstat>>;
@@ -158,12 +158,12 @@ async function assertJisoAppShellViteClientModuleTargetIsNotDirectory(
   );
 }
 
-async function createJisoAppShellViteStagingRoot(root: string): Promise<string> {
+async function createKovoAppShellViteStagingRoot(root: string): Promise<string> {
   await mkdir(path.dirname(root), { recursive: true });
-  return await mkdtemp(path.join(path.dirname(root), '.jiso-vite-app-shell-'));
+  return await mkdtemp(path.join(path.dirname(root), '.kovo-vite-app-shell-'));
 }
 
-function jisoAppShellViteStagedTargetPath(
+function kovoAppShellViteStagedTargetPath(
   root: string,
   stagingRoot: string,
   targetPath: string,

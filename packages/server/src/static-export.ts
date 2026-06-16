@@ -1,5 +1,5 @@
-import type { JisoApp } from './app-types.js';
-import { isJisoApp } from './app-guards.js';
+import type { KovoApp } from './app-types.js';
+import { isKovoApp } from './app-guards.js';
 import {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,
@@ -25,7 +25,7 @@ import { type StaticExportOptions, type StaticExportResult } from './static-expo
  * @returns A `StaticExportResult` describing the emitted files.
  */
 export async function exportStaticApp(
-  app: JisoApp,
+  app: KovoApp,
   options: StaticExportOptions = {},
 ): Promise<StaticExportResult> {
   assertStaticExportAppAggregate(app);
@@ -58,13 +58,13 @@ export async function exportStaticApp(
   };
 }
 
-function assertStaticExportAppAggregate(app: JisoApp): void {
-  if (isJisoApp(app)) return;
+function assertStaticExportAppAggregate(app: KovoApp): void {
+  if (isKovoApp(app)) return;
 
   throw new StaticExportError([
     staticExportDiagnostic(
       'app',
-      'FW229 static export requires a closed Jiso app aggregate. SPEC §9.5 export replay must start from createApp(), not a raw request handler or compatibility shell.',
+      'KV229 static export requires a closed Kovo app aggregate. SPEC §9.5 export replay must start from createApp(), not a raw request handler or compatibility shell.',
     ),
   ]);
 }
@@ -75,7 +75,7 @@ function assertNoStaticExportHtmlPathStyleOption(options: object): void {
   throw new StaticExportError([
     staticExportDiagnostic(
       'htmlPathStyle',
-      'FW229 static export refused htmlPathStyle. SPEC §9.5 exports route documents as directory-index HTML; remove this option.',
+      'KV229 static export refused htmlPathStyle. SPEC §9.5 exports route documents as directory-index HTML; remove this option.',
     ),
   ]);
 }

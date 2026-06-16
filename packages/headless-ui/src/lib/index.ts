@@ -13,14 +13,14 @@ export type {
   VariantValues,
 } from './variants.js';
 
-export { jisoUiTailwindThemeCss, jisoUiTokenSheet, jisoUiTokenSheetCss } from './token-sheet.js';
+export { kovoUiTailwindThemeCss, kovoUiTokenSheet, kovoUiTokenSheetCss } from './token-sheet.js';
 export type {
-  JisoUiTailwindThemeProperty,
-  JisoUiTokenCategory,
-  JisoUiTokenDefinition,
-  JisoUiTokenMode,
-  JisoUiTokenName,
-  JisoUiTokenProperty,
+  KovoUiTailwindThemeProperty,
+  KovoUiTokenCategory,
+  KovoUiTokenDefinition,
+  KovoUiTokenMode,
+  KovoUiTokenName,
+  KovoUiTokenProperty,
 } from './token-sheet.js';
 
 export {

@@ -39,7 +39,7 @@ interface MutationChangeRecordRegistry {
  * @param options - Optional row `keys`, an `input` echo, and a `reason`.
  * @returns A `ChangeRecord` for the touched domain.
  * @example
- * import { domain, invalidate } from '@jiso/server';
+ * import { domain, invalidate } from '@kovojs/server';
  *
  * const cart = domain('cart');
  * const change = invalidate(cart, { reason: 'item added' });

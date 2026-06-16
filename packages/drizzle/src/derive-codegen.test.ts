@@ -1,4 +1,4 @@
-import type { PatchProgram } from '@jiso/core';
+import type { PatchProgram } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { lowerTransform, serializeDerivedOptimistic } from './derive-codegen.js';
@@ -41,7 +41,7 @@ describe('serializeDerivedOptimistic', () => {
 
     expect(source).toContain('// DO NOT EDIT');
     expect(source).toContain("import type { addToCartForm } from '../../app.js';");
-    expect(source).toContain("import type { OptimisticFor } from '@jiso/runtime';");
+    expect(source).toContain("import type { OptimisticFor } from '@kovojs/runtime';");
     expect(source).toContain('export const cartAddDerivedOptimistic = {');
     expect(source).toContain("queue: 'cart',");
     expect(source).toContain('transforms: {');
@@ -57,7 +57,7 @@ describe('serializeDerivedOptimistic', () => {
       entries: [{ program: pushProgram, query: 'orderHistory' }],
       formImport: { name: 'addToCartForm', path: '../../app.js' },
     });
-    expect(source).toContain("import { tempId, type OptimisticFor } from '@jiso/runtime';");
+    expect(source).toContain("import { tempId, type OptimisticFor } from '@kovojs/runtime';");
     expect(source).toContain(
       'next.items.push({ id: tempId(), productId: $input.productId, total: 0 });',
     );
@@ -87,7 +87,7 @@ describe('serializeDerivedOptimistic', () => {
 
 describe('lowerTransform — codegen ≡ interpreter parity', () => {
   it('produces an executable transform equivalent to applyPatchProgram', async () => {
-    const { applyPatchProgram } = await import('@jiso/core');
+    const { applyPatchProgram } = await import('@kovojs/core');
     const program: PatchProgram = {
       ops: [
         {

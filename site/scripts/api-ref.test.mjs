@@ -16,7 +16,7 @@ import { generateApiReference } from './api-ref.mjs';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 
-/** Independent export list for @jiso/core straight from the type checker, so
+/** Independent export list for @kovojs/core straight from the type checker, so
  * the test does not trust the generator's own collection logic. */
 function coreExportNames() {
   const entry = path.join(repoRoot, 'packages/core/src/index.ts');
@@ -37,7 +37,7 @@ describe('api-ref generator', () => {
   let corePage;
 
   beforeAll(async () => {
-    outDir = await mkdtemp(path.join(tmpdir(), 'jiso-api-ref-'));
+    outDir = await mkdtemp(path.join(tmpdir(), 'kovo-api-ref-'));
     result = await generateApiReference({ outDir });
     corePage = await readFile(path.join(outDir, 'core.md'), 'utf8');
   }, 60_000);
@@ -57,18 +57,18 @@ describe('api-ref generator', () => {
     for (const pkg of result.packages) expect(pkg.exports).toBeGreaterThan(0);
   });
 
-  it('includes every public export of @jiso/core in the core page', () => {
+  it('includes every public export of @kovojs/core in the core page', () => {
     const names = coreExportNames();
     expect(names.length).toBeGreaterThan(0);
     for (const name of names) {
       expect(corePage, `missing export "${name}"`).toContain(`### \`${name}\``);
     }
-    const core = result.packages.find((pkg) => pkg.name === '@jiso/core');
+    const core = result.packages.find((pkg) => pkg.name === '@kovojs/core');
     expect(new Set(core.names)).toEqual(new Set(names));
   });
 
   it('flags undocumented exports with an explicit marker, never omits them', () => {
-    const core = result.packages.find((pkg) => pkg.name === '@jiso/core');
+    const core = result.packages.find((pkg) => pkg.name === '@kovojs/core');
     const headings = corePage.match(/^### `/gm) ?? [];
     const markers = corePage.match(/^\*Undocumented\.\*$/gm) ?? [];
     expect(headings.length).toBe(core.exports);
@@ -76,14 +76,14 @@ describe('api-ref generator', () => {
   });
 
   it('uses the site frontmatter convention', () => {
-    expect(corePage.startsWith('---\ntitle: "@jiso/core"\n')).toBe(true);
+    expect(corePage.startsWith('---\ntitle: "@kovojs/core"\n')).toBe(true);
     expect(corePage).toMatch(/^description: .+$/m);
     expect(corePage).toMatch(/^order: 1$/m);
   });
 
   it('emits deterministic, repo-relative output', async () => {
     expect(corePage).not.toContain(repoRoot);
-    const again = await mkdtemp(path.join(tmpdir(), 'jiso-api-ref-'));
+    const again = await mkdtemp(path.join(tmpdir(), 'kovo-api-ref-'));
     try {
       await generateApiReference({ outDir: again });
       expect(await readFile(path.join(again, 'core.md'), 'utf8')).toBe(corePage);
@@ -109,7 +109,7 @@ describe('api-ref generator', () => {
     expect(section).toContain('**Example**');
     // The example is its own fenced block and imports the real export.
     const exampleStart = section.indexOf('**Example**');
-    expect(section.slice(exampleStart)).toContain("import { component } from '@jiso/core';");
+    expect(section.slice(exampleStart)).toContain("import { component } from '@kovojs/core';");
     // Each documented export still has exactly one signature fence.
     expect(section.match(/```ts/g)?.length).toBeGreaterThanOrEqual(2);
   });
@@ -117,11 +117,11 @@ describe('api-ref generator', () => {
   it('documents the app-facing export tier across packages', () => {
     // Coverage must be meaningful, not the historical "0 documented".
     const expected = {
-      '@jiso/core': 40,
-      '@jiso/drizzle': 4,
-      '@jiso/runtime': 15,
-      '@jiso/server': 70,
-      '@jiso/test': 12,
+      '@kovojs/core': 40,
+      '@kovojs/drizzle': 4,
+      '@kovojs/runtime': 15,
+      '@kovojs/server': 70,
+      '@kovojs/test': 12,
     };
     for (const pkg of result.packages) {
       expect(pkg.documented, `${pkg.name} documented`).toBeGreaterThanOrEqual(expected[pkg.name]);

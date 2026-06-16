@@ -12,7 +12,7 @@ import { renderDiagnosticDocument } from './document-diagnostics.js';
 describe('server app shell document assembly', () => {
   it('assembles deterministic documents with hints, loader, and query hydration before body', () => {
     const document = renderDocument({
-      body: '<main><cart-badge fw-deps="cart"></cart-badge></main>',
+      body: '<main><cart-badge kovo-deps="cart"></cart-badge></main>',
       hints: {
         i18n: { locale: 'en-US', messages: { cart: 'Cart' } },
         meta: { description: 'Cart summary', title: 'Cart' },
@@ -28,16 +28,18 @@ describe('server app shell document assembly', () => {
     expect(document.html).toContain('<!doctype html><html lang="en-US"><head>');
     expect(document.html).toContain('<title>Cart</title>');
     expect(document.html).toContain(
-      '<style data-jiso-critical-href="/assets/app.css">body{color:red}</style><link rel="stylesheet" href="/assets/app.css">',
+      '<style data-kovo-critical-href="/assets/app.css">body{color:red}</style><link rel="stylesheet" href="/assets/app.css">',
     );
     expect(document.html).toContain('<script>');
-    expect(document.html).toContain('installInlineJisoLoader');
-    expect(document.html.indexOf('fw-query="cart"')).toBeLessThan(document.html.indexOf('<body>'));
-    expect(document.html).toContain(
-      '<script type="application/json" fw-query="cart" key="cart:c1">{"count":1}</script>',
+    expect(document.html).toContain('installInlineKovoLoader');
+    expect(document.html.indexOf('kovo-query="cart"')).toBeLessThan(
+      document.html.indexOf('<body>'),
     );
     expect(document.html).toContain(
-      '<body><main><cart-badge fw-deps="cart"></cart-badge></main></body></html>',
+      '<script type="application/json" kovo-query="cart" key="cart:c1">{"count":1}</script>',
+    );
+    expect(document.html).toContain(
+      '<body><main><cart-badge kovo-deps="cart"></cart-badge></main></body></html>',
     );
   });
 
@@ -58,8 +60,8 @@ describe('server app shell document assembly', () => {
     });
 
     expect(document.html).toContain('<html data-lang="fr">');
-    expect(document.html).toContain('installInlineJisoLoader');
-    expect(document.html).toContain('fw-query="account"');
+    expect(document.html).toContain('installInlineKovoLoader');
+    expect(document.html).toContain('kovo-query="account"');
     expect(document.html).toContain('<body data-shell><main>Account</main></body>');
   });
 
@@ -103,7 +105,7 @@ describe('server app shell document assembly', () => {
 
   it('assembles deferred document streams with chunks before the closing shell', () => {
     const response = renderDeferredDocument({
-      body: '<main><fw-defer target="reviews:p1"></fw-defer></main>',
+      body: '<main><kovo-defer target="reviews:p1"></kovo-defer></main>',
       chunks: [
         {
           fragments: [
@@ -128,16 +130,16 @@ describe('server app shell document assembly', () => {
     });
     expect(response.body).toContain('<link rel="stylesheet" href="/app.css">');
     expect(response.body).toContain('<script>');
-    expect(response.body.indexOf('<fw-defer target="reviews:p1">')).toBeLessThan(
-      response.body.indexOf('--jiso-boundary'),
+    expect(response.body.indexOf('<kovo-defer target="reviews:p1">')).toBeLessThan(
+      response.body.indexOf('--kovo-boundary'),
     );
     expect(response.body).toContain(
-      '<fw-query name="reviews" key="reviews:p1">{"count":1}</fw-query>',
+      '<kovo-query name="reviews" key="reviews:p1">{"count":1}</kovo-query>',
     );
     expect(response.body).toContain(
-      '<fw-fragment target="reviews:p1"><link rel="stylesheet" href="/reviews.css"><section>Ready</section></fw-fragment>',
+      '<kovo-fragment target="reviews:p1"><link rel="stylesheet" href="/reviews.css"><section>Ready</section></kovo-fragment>',
     );
-    expect(response.body.endsWith('--jiso-boundary--\n</body></html>')).toBe(true);
+    expect(response.body.endsWith('--kovo-boundary--\n</body></html>')).toBe(true);
   });
 
   it('renders stable error documents with escaped content', () => {
@@ -160,7 +162,7 @@ describe('server app shell document assembly', () => {
     const response = renderDiagnosticDocument(
       [
         {
-          code: 'FW201',
+          code: 'KV201',
           fileName: 'src/cart.tsx',
           help: 'Fixes: move the value into ctx.\nUse data-p-* for serializable params.',
           length: 6,
@@ -182,9 +184,9 @@ describe('server app shell document assembly', () => {
       }),
       status: 500,
     });
-    expect(response.body).toContain('<title>FW201 diagnostic</title>');
-    expect(response.body).toContain('<p class="jiso-diagnostic-code">FW201</p>');
-    expect(response.body).toContain('<p class="jiso-diagnostic-severity">error</p>');
+    expect(response.body).toContain('<title>KV201 diagnostic</title>');
+    expect(response.body).toContain('<p class="kovo-diagnostic-code">KV201</p>');
+    expect(response.body).toContain('<p class="kovo-diagnostic-severity">error</p>');
     expect(response.body).toContain('<h2>Closure captures &lt;window&gt;.</h2>');
     expect(response.body).toContain('src/cart.tsx:2:17');
     expect(response.body).toContain('<h3>Fix menu</h3>');
@@ -200,13 +202,13 @@ describe('server app shell document assembly', () => {
     const response = renderDiagnosticDocument({
       diagnostics: [
         {
-          code: 'FW210',
+          code: 'KV210',
           fileName: 'src/cart.tsx',
           message: 'Anonymous handler; name it for stable identity.',
           severity: 'lint',
         },
         {
-          code: 'FW225',
+          code: 'KV225',
           fileName: 'src/detail.tsx',
           message: 'JSX nesting violates the HTML content model.',
           severity: 'error',
@@ -221,9 +223,9 @@ describe('server app shell document assembly', () => {
 
     expect(response.status).toBe(500);
     expect(response.body).toContain('<title>2 diagnostics</title>');
-    expect(response.body).toContain('<p class="jiso-diagnostic-severity">lint</p>');
+    expect(response.body).toContain('<p class="kovo-diagnostic-severity">lint</p>');
     expect(response.body).toContain('src/detail.tsx:1:3');
-    expect(response.body).not.toContain('<pre class="jiso-diagnostic-source"><code>');
+    expect(response.body).not.toContain('<pre class="kovo-diagnostic-source"><code>');
   });
 
   it('renders one error document title while preserving other static meta hints', () => {
@@ -249,7 +251,7 @@ describe('server app shell document assembly', () => {
         value: { html: '</script><script>alert(1)</script>' },
       }),
     ).toBe(
-      '<script type="application/json" fw-query="cart">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>"}</script>',
+      '<script type="application/json" kovo-query="cart">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>"}</script>',
     );
   });
 });

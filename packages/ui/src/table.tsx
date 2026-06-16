@@ -1,7 +1,7 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
-import { cn, type ClassValue } from '@jiso/headless-ui';
-import { escapeAttribute, escapeHtml } from '@jiso/server';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { cn, type ClassValue } from '@kovojs/headless-ui';
+import { escapeAttribute, escapeHtml } from '@kovojs/server';
 
 export interface TableProps {
   caption?: string;

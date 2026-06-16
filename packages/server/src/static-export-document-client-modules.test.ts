@@ -14,7 +14,7 @@ describe('server static export client module replay boundary', () => {
         status: 200,
       });
     };
-    const context = { handler, origin: 'https://jiso.local' };
+    const context = { handler, origin: 'https://kovo.local' };
 
     await expect(
       replayStaticExportClientModuleArtifacts({
@@ -29,10 +29,10 @@ describe('server static export client module replay boundary', () => {
         ],
       }),
     ).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining('different response snapshots'),
           routePath: '/c/cart.js',
         },
@@ -57,7 +57,7 @@ describe('server static export client module replay boundary', () => {
         status: 200,
       });
     };
-    const context = { handler, origin: 'https://jiso.local' };
+    const context = { handler, origin: 'https://kovo.local' };
 
     await expect(
       replayStaticExportClientModuleArtifacts({
@@ -75,10 +75,10 @@ describe('server static export client module replay boundary', () => {
         ],
       }),
     ).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining('different response snapshots'),
           routePath: '/c/cart.js',
         },
@@ -207,13 +207,13 @@ describe('server static export client module replay boundary', () => {
     expect(seen).toEqual(['/c/cart.client.js?v=cart-1#Cart$add', '/c/menu.client.js?v=menu-1']);
   });
 
-  it('raises FW229 when a referenced client module replays to non-JavaScript', async () => {
+  it('raises KV229 when a referenced client module replays to non-JavaScript', async () => {
     const handler: RequestHandler = async () =>
       new Response('<!doctype html><h1>Not found</h1>', {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
         status: 200,
       });
-    const context = { handler, origin: 'https://jiso.local' };
+    const context = { handler, origin: 'https://kovo.local' };
 
     await expect(
       replayStaticExportClientModuleArtifacts({
@@ -228,10 +228,10 @@ describe('server static export client module replay boundary', () => {
         ],
       }),
     ).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining(
             "returned status 200 with Content-Type 'text/html; charset=utf-8'",
           ),

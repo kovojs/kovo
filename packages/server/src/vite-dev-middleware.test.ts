@@ -6,10 +6,10 @@ import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import {
-  createJisoAppShellDevDiagnosticLedger,
-  jisoAppShellViteDevPlugin,
-  jisoAppShellVitePlugin,
-  type JisoAppShellViteMiddleware,
+  createKovoAppShellDevDiagnosticLedger,
+  kovoAppShellViteDevPlugin,
+  kovoAppShellVitePlugin,
+  type KovoAppShellViteMiddleware,
 } from './api/app-shell/vite.js';
 import { nodeFetch } from './vite-test-http.js';
 
@@ -21,8 +21,8 @@ describe('server app shell Vite plugin', () => {
         return `<main>${params.id}</main>`;
       },
     });
-    const plugin = jisoAppShellVitePlugin(createApp({ routes: [productRoute] }));
-    const middlewares: JisoAppShellViteMiddleware[] = [];
+    const plugin = kovoAppShellVitePlugin(createApp({ routes: [productRoute] }));
+    const middlewares: KovoAppShellViteMiddleware[] = [];
 
     plugin.configureServer({
       middlewares: {
@@ -79,10 +79,10 @@ describe('server app shell Vite plugin', () => {
       },
     });
     const app = createApp({ routes: [productRoute] });
-    const plugin = jisoAppShellViteDevPlugin({
+    const plugin = kovoAppShellViteDevPlugin({
       nodeHandlerExportName: 'commerceNodeHandler',
     });
-    const middlewares: JisoAppShellViteMiddleware[] = [];
+    const middlewares: KovoAppShellViteMiddleware[] = [];
     let moduleLoads = 0;
     let handled = 0;
 
@@ -152,8 +152,8 @@ describe('server app shell Vite plugin', () => {
       },
     });
     const app = createApp({ clientModules: registry, routes: [productRoute] });
-    const plugin = jisoAppShellViteDevPlugin();
-    const middlewares: JisoAppShellViteMiddleware[] = [];
+    const plugin = kovoAppShellViteDevPlugin();
+    const middlewares: KovoAppShellViteMiddleware[] = [];
     let moduleLoads = 0;
 
     plugin.configureServer({
@@ -213,10 +213,10 @@ describe('server app shell Vite plugin', () => {
 
   it('keeps explicit dev node handler exports strict', async () => {
     const app = createApp({ routes: [route('/cart', {})] });
-    const plugin = jisoAppShellViteDevPlugin({
+    const plugin = kovoAppShellViteDevPlugin({
       nodeHandlerExportName: 'commerceNodeHandler',
     });
-    const middlewares: JisoAppShellViteMiddleware[] = [];
+    const middlewares: KovoAppShellViteMiddleware[] = [];
 
     plugin.configureServer({
       middlewares: {
@@ -252,11 +252,11 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('serves a diagnostic document for page routes that depend on a failed dev module', async () => {
-    const diagnostics = createJisoAppShellDevDiagnosticLedger();
+    const diagnostics = createKovoAppShellDevDiagnosticLedger();
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
         {
-          code: 'FW225',
+          code: 'KV225',
           fileName: 'src/components/cart.tsx',
           length: 7,
           message: 'JSX nesting violates the HTML content model.',
@@ -276,10 +276,10 @@ describe('server app shell Vite plugin', () => {
         return '<main>Cart</main>';
       },
     });
-    const plugin = jisoAppShellVitePlugin(createApp({ routes: [cartRoute] }), {
+    const plugin = kovoAppShellVitePlugin(createApp({ routes: [cartRoute] }), {
       devDiagnostics: diagnostics,
     });
-    const middlewares: JisoAppShellViteMiddleware[] = [];
+    const middlewares: KovoAppShellViteMiddleware[] = [];
 
     plugin.configureServer({
       middlewares: {
@@ -309,13 +309,13 @@ describe('server app shell Vite plugin', () => {
       );
 
       expect(response).toMatchObject({
-        body: expect.stringContaining('<p class="jiso-diagnostic-code">FW225</p>'),
+        body: expect.stringContaining('<p class="kovo-diagnostic-code">KV225</p>'),
         headers: expect.objectContaining({
           'content-type': 'text/html; charset=utf-8',
         }),
         status: 500,
       });
-      expect(response.body).toContain('<title>FW225 diagnostic</title>');
+      expect(response.body).toContain('<title>KV225 diagnostic</title>');
       expect(response.body).toContain('src/components/cart.tsx:2:11');
       expect(response.body).toContain('2 |   render: () =&gt; &lt;p&gt;&lt;div /&gt;&lt;/p&gt;');
       expect(response.body).not.toContain('<main>Cart</main>');

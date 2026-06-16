@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 
-import { headerValues, setCookieValues } from '@jiso/test/headers';
-import { type StructuralMorphNode } from '@jiso/runtime';
+import { headerValues, setCookieValues } from '@kovojs/test/headers';
+import { type StructuralMorphNode } from '@kovojs/runtime';
 import { eq } from 'drizzle-orm';
 
 import {
@@ -254,7 +254,7 @@ export function keyedListNode(
     children: keys.map((key) => ({
       ...(stateByKey[key] ? { browserState: stateByKey[key] } : {}),
       key,
-      props: { 'fw-key': key },
+      props: { 'kovo-key': key },
       text: key,
       type: 'li',
     })),

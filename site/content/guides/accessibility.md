@@ -1,12 +1,12 @@
 ---
 title: Accessibility
-description: Jiso's styled primitives are axe-clean across their interactive state tiers — proven, not asserted, by the framework's own gallery browser axe suite.
+description: Kovo's styled primitives are axe-clean across their interactive state tiers — proven, not asserted, by the framework's own gallery browser axe suite.
 order: 10
 ---
 
 # Accessibility
 
-Most component libraries claim accessibility and ship an audit once. Jiso treats it as a standing
+Most component libraries claim accessibility and ship an audit once. Kovo treats it as a standing
 contract: every primitive family is run through [axe-core](https://github.com/dequelabs/axe-core) in
 a real Chromium browser, not at initial render only but in the **end-state of each interaction
 tier** — open, expanded, checked, selected, pressed, complete, error. If a primitive can reach a
@@ -21,7 +21,7 @@ focus-trapped, `aria-modal` top-layer state. A checkbox has unchecked, checked, 
 value, and a valueless indeterminate state. An accessibility check that only sees the initial render
 proves nothing about the states a user actually interacts with.
 
-Jiso's gallery browser suite drives each primitive into its **terminal awaited active state** and
+Kovo's gallery browser suite drives each primitive into its **terminal awaited active state** and
 runs axe there. Concretely, the suite asserts axe-clean for, among others:
 
 - **Disclosure tier** — accordion (expanded), disclosure (open panel), collapsible (native
@@ -72,6 +72,6 @@ documented exclusions only where a state cannot be represented in an axe-stable 
 §12.1**. The proving suite is the gallery browser axe suite
 (`examples/gallery/src/interactive-gallery.browser.test.ts`), which runs axe-core in Chromium at each
 primitive's terminal awaited state and on the static styled fixtures. Run it with
-`pnpm --filter @jiso/example-gallery run test:browser`.
+`pnpm --filter @kovojs/example-gallery run test:browser`.
 
 </details>

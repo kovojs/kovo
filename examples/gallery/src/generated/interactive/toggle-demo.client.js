@@ -1,7 +1,7 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
-import { toggleTriggerClick as _toggleTriggerClick } from '@jiso/headless-ui/primitives';
+import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/headless-ui/primitives';
 
 export const GalleryToggleDemo$button_click = handler((event, ctx) => {
   const result = _toggleTriggerClick(Object(event), { pressed: ctx.state.pressed });

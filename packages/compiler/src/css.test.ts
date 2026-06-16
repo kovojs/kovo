@@ -11,61 +11,61 @@ import {
 describe('component CSS helpers', () => {
   it('wraps component CSS in @scope and emits a prefixed fallback', () => {
     const result = scopeComponentCss(
-      '[fw-c="cart-badge"]',
+      '[kovo-c="cart-badge"]',
       '.count { color: red; }\nbutton, a { color: blue; }',
     );
 
     expect(result.scoped).toBe(
-      '@scope ([fw-c="cart-badge"]) to (:scope [fw-c]) {\n  .count { color: red; }\n  button, a { color: blue; }\n}\n',
+      '@scope ([kovo-c="cart-badge"]) to (:scope [kovo-c]) {\n  .count { color: red; }\n  button, a { color: blue; }\n}\n',
     );
     expect(result.fallback).toBe(
-      '[fw-c="cart-badge"] .count:not([fw-c]):not([fw-c] *) { color: red; }\n[fw-c="cart-badge"] button:not([fw-c]):not([fw-c] *), [fw-c="cart-badge"] a:not([fw-c]):not([fw-c] *) { color: blue; }',
+      '[kovo-c="cart-badge"] .count:not([kovo-c]):not([kovo-c] *) { color: red; }\n[kovo-c="cart-badge"] button:not([kovo-c]):not([kovo-c] *), [kovo-c="cart-badge"] a:not([kovo-c]):not([kovo-c] *) { color: blue; }',
     );
   });
 
   it('prefixes component CSS fallback selectors inside conditional at-rules', () => {
     const result = scopeComponentCss(
-      '[fw-c="cart-badge"]',
+      '[kovo-c="cart-badge"]',
       '@media (min-width: 40rem) { .count { color: red; } button, a { color: blue; } }',
     );
 
     expect(result.fallback).toBe(
-      '@media (min-width: 40rem) { [fw-c="cart-badge"] .count:not([fw-c]):not([fw-c] *) { color: red; } [fw-c="cart-badge"] button:not([fw-c]):not([fw-c] *), [fw-c="cart-badge"] a:not([fw-c]):not([fw-c] *) { color: blue; } }',
+      '@media (min-width: 40rem) { [kovo-c="cart-badge"] .count:not([kovo-c]):not([kovo-c] *) { color: red; } [kovo-c="cart-badge"] button:not([kovo-c]):not([kovo-c] *), [kovo-c="cart-badge"] a:not([kovo-c]):not([kovo-c] *) { color: blue; } }',
     );
   });
 
   it('excludes stamped and dashed nested island hosts from component CSS scopes', () => {
-    const result = scopeComponentCss('[fw-c="cart-badge"]', '.count { color: red; }', {
-      nestedHostSelectors: ['[fw-c]', 'cart-row'],
+    const result = scopeComponentCss('[kovo-c="cart-badge"]', '.count { color: red; }', {
+      nestedHostSelectors: ['[kovo-c]', 'cart-row'],
     });
 
     expect(result.scoped).toBe(
-      '@scope ([fw-c="cart-badge"]) to (:scope [fw-c], :scope cart-row) {\n  .count { color: red; }\n}\n',
+      '@scope ([kovo-c="cart-badge"]) to (:scope [kovo-c], :scope cart-row) {\n  .count { color: red; }\n}\n',
     );
     expect(result.fallback).toBe(
-      '[fw-c="cart-badge"] .count:not([fw-c]):not([fw-c] *):not(cart-row):not(cart-row *) { color: red; }',
+      '[kovo-c="cart-badge"] .count:not([kovo-c]):not([kovo-c] *):not(cart-row):not(cart-row *) { color: red; }',
     );
   });
 
   it('splits fallback selector lists only on top-level commas', () => {
     const result = scopeComponentCss(
-      '[fw-c="cart-badge"]',
+      '[kovo-c="cart-badge"]',
       ':is(.primary, .secondary), [data-label="a,b"] { color: red; }',
     );
 
     expect(result.fallback).toBe(
-      '[fw-c="cart-badge"] :is(.primary, .secondary):not([fw-c]):not([fw-c] *), [fw-c="cart-badge"] [data-label="a,b"]:not([fw-c]):not([fw-c] *) { color: red; }',
+      '[kovo-c="cart-badge"] :is(.primary, .secondary):not([kovo-c]):not([kovo-c] *), [kovo-c="cart-badge"] [data-label="a,b"]:not([kovo-c]):not([kovo-c] *) { color: red; }',
     );
   });
 
   it('flattens nested ampersand fallback selectors with the host prefix and donut exclusion', () => {
     const result = scopeComponentCss(
-      '[fw-c="cart-badge"]',
+      '[kovo-c="cart-badge"]',
       '.card { color: red; & .title, &:is(.active, .open) { color: blue; } }',
     );
 
     expect(result.fallback).toBe(
-      '[fw-c="cart-badge"] .card:not([fw-c]):not([fw-c] *) { color: red;}[fw-c="cart-badge"] .card .title:not([fw-c]):not([fw-c] *), [fw-c="cart-badge"] .card:is(.active, .open):not([fw-c]):not([fw-c] *) { color: blue; }',
+      '[kovo-c="cart-badge"] .card:not([kovo-c]):not([kovo-c] *) { color: red;}[kovo-c="cart-badge"] .card .title:not([kovo-c]):not([kovo-c] *), [kovo-c="cart-badge"] .card:is(.active, .open):not([kovo-c]):not([kovo-c] *) { color: blue; }',
     );
   });
 
@@ -77,7 +77,7 @@ describe('component CSS helpers', () => {
     const cartBadge = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   css: \`
@@ -90,7 +90,7 @@ export const CartBadge = component('cart-badge', {
     const cartDrawer = compileComponentModule({
       fileName: 'components/cart/cart-drawer.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartDrawer = component('cart-drawer', {
   css: \`
@@ -102,31 +102,35 @@ export const CartDrawer = component('cart-drawer', {
     });
 
     const manifest = collectCssAssetManifest([cartBadge, cartDrawer, cartBadge], {
-      baseHref: '/_jiso/',
+      baseHref: '/_kovo/',
     });
 
     expect(manifest.stylesheets).toEqual([
       {
         componentName: 'CartBadge',
-        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [fw-c])'),
+        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
         fragmentTargets: [],
-        href: '/_jiso/components/cart/cart-badge.css',
+        href: '/_kovo/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
       },
       {
         componentName: 'CartDrawer',
-        criticalCss: expect.stringContaining('@scope ([fw-c="cart-drawer"]) to (:scope [fw-c])'),
+        criticalCss: expect.stringContaining(
+          '@scope ([kovo-c="cart-drawer"]) to (:scope [kovo-c])',
+        ),
         fragmentTargets: [],
-        href: '/_jiso/components/cart/cart-drawer.css',
+        href: '/_kovo/components/cart/cart-drawer.css',
         sourceFileName: 'components/cart/cart-drawer.css',
       },
     ]);
     expect(selectCssAssets(manifest, ['components/cart/cart-drawer.css'])).toEqual([
       {
         componentName: 'CartDrawer',
-        criticalCss: expect.stringContaining('@scope ([fw-c="cart-drawer"]) to (:scope [fw-c])'),
+        criticalCss: expect.stringContaining(
+          '@scope ([kovo-c="cart-drawer"]) to (:scope [kovo-c])',
+        ),
         fragmentTargets: [],
-        href: '/_jiso/components/cart/cart-drawer.css',
+        href: '/_kovo/components/cart/cart-drawer.css',
         sourceFileName: 'components/cart/cart-drawer.css',
       },
     ]);
@@ -136,7 +140,7 @@ export const CartDrawer = component('cart-drawer', {
     const cartBadge = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
@@ -151,7 +155,7 @@ export const CartBadge = component('cart-badge', {
     expect(collectCssAssetManifest(cartBadge).stylesheets).toEqual([
       {
         componentName: 'CartBadge',
-        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [fw-c])'),
+        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
         fragmentTargets: ['cart-badge'],
         href: '/assets/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
@@ -175,7 +179,7 @@ export const Reviews = component('reviews', {
     expect(collectCssAssetManifest(result, { preload: false }).stylesheets).toEqual([
       {
         componentName: 'Reviews',
-        criticalCss: expect.stringContaining('@scope ([fw-c="reviews"]) to (:scope [fw-c])'),
+        criticalCss: expect.stringContaining('@scope ([kovo-c="reviews"]) to (:scope [kovo-c])'),
         fragmentTargets: [],
         href: '/assets/components/reviews.css',
         preload: false,

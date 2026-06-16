@@ -1,5 +1,5 @@
-// @jiso-ir
-import { applyCompiledQueryUpdatePlan } from '@jiso/runtime';
+// @kovojs-ir
+import { applyCompiledQueryUpdatePlan } from '@kovojs/runtime';
 
 export const CartBadge$queryUpdatePlans = {
   "cart"(root, value) {

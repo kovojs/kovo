@@ -38,9 +38,9 @@ import {
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
   GeneratedFixtureTemplateStampHost,
-} from '@jiso/test/generated-module-fixtures';
+} from '@kovojs/test/generated-module-fixtures';
 
-describe('@jiso/test generated module fixtures', () => {
+describe('@kovojs/test generated module fixtures', () => {
   it('selects generated artifacts by kind instead of positional file membership checks', () => {
     const files = [
       { fileName: 'cart.server.js', kind: 'server', source: 'server-source' },
@@ -72,14 +72,18 @@ describe('@jiso/test generated module fixtures', () => {
         {
           kind: 'css',
           source: `
-@scope (doc-card) to (:scope [fw-c]) {
+@scope (doc-card) to (:scope [kovo-c]) {
   .title { color: teal; }
 }
 `,
         },
       ]),
     ).toEqual([
-      { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },
+      {
+        limit: ':scope [kovo-c]',
+        raw: '@scope (doc-card) to (:scope [kovo-c]) {',
+        scope: 'doc-card',
+      },
     ]);
   });
 
@@ -90,7 +94,7 @@ describe('@jiso/test generated module fixtures', () => {
           {
             kind: 'server',
             source:
-              'export function renderSource() { return `<img fw-c="product-card" src="/p1.png" style="opacity: .8; view-transition-name: product-p1-image" />`; }',
+              'export function renderSource() { return `<img kovo-c="product-card" src="/p1.png" style="opacity: .8; view-transition-name: product-p1-image" />`; }',
           },
         ],
         registryMemberTypes: Promise.resolve({ 'product-p1-image': 'unknown' }),
@@ -111,7 +115,7 @@ describe('@jiso/test generated module fixtures', () => {
     expect(
       generatedComponentSourceFacts({
         authoredSource: '<cart-badge class="ready"></cart-badge>',
-        generatedSource: '// @jiso-ir\nexport const CartBadge = true;',
+        generatedSource: '// @kovojs-ir\nexport const CartBadge = true;',
       }),
     ).toEqual({
       authoredLoweredStampAttributes: [],
@@ -119,11 +123,11 @@ describe('@jiso/test generated module fixtures', () => {
     });
     expect(
       generatedComponentSourceFacts({
-        authoredSource: '<cart-badge fw-deps="cart" data-p-id="1"></cart-badge>',
+        authoredSource: '<cart-badge kovo-deps="cart" data-p-id="1"></cart-badge>',
         generatedSource: 'export const CartBadge = true;',
       }),
     ).toEqual({
-      authoredLoweredStampAttributes: ['fw-deps', 'data-p-id'],
+      authoredLoweredStampAttributes: ['kovo-deps', 'data-p-id'],
       generatedHasLoweredIrMarker: false,
     });
   });
@@ -146,7 +150,7 @@ describe('@jiso/test generated module fixtures', () => {
   });
 
   it('compares committed generated IR to compiler output through a fixture seam', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'jiso-test-committed-ir-'));
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-committed-ir-'));
     try {
       await mkdir(join(root, 'components'), { recursive: true });
       await mkdir(join(root, 'generated'), { recursive: true });
@@ -157,8 +161,8 @@ describe('@jiso/test generated module fixtures', () => {
       await writeFile(
         join(root, 'generated/cart-badge.tsx'),
         [
-          '// @jiso-ir — lowered from examples/commerce/src/components/cart-badge.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.',
-          '<cart-badge fw-deps="cart"><span data-bind="cart.count">{cart.count}</span></cart-badge>',
+          '// @kovojs-ir — lowered from examples/commerce/src/components/cart-badge.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.',
+          '<cart-badge kovo-deps="cart"><span data-bind="cart.count">{cart.count}</span></cart-badge>',
         ].join('\n'),
       );
 
@@ -179,7 +183,7 @@ describe('@jiso/test generated module fixtures', () => {
                   expected:
                     fileName.endsWith('components/cart-badge.tsx') &&
                     source.includes('{cart.count}')
-                      ? '<cart-badge fw-deps="cart"><span data-bind="cart.count">{cart.count}</span></cart-badge>'
+                      ? '<cart-badge kovo-deps="cart"><span data-bind="cart.count">{cart.count}</span></cart-badge>'
                       : '',
                 },
               ],
@@ -216,7 +220,7 @@ describe('@jiso/test generated module fixtures', () => {
   it('executes generated client modules through explicit runtime bindings', () => {
     const exports = executeGeneratedClientModule(
       `
-import { derive, handler } from '@jiso/runtime';
+import { derive, handler } from '@kovojs/runtime';
 export const Cart$isEmpty = derive(['cart'], (cart) => cart.count === 0);
 export const Cart$click = handler((event, ctx) => ctx.value + event.delta);
 `,
@@ -248,7 +252,7 @@ export const Cart$click = handler((event, ctx) => ctx.value + event.delta);
         {
           kind: 'client',
           source: `
-import { handler } from '@jiso/runtime';
+import { handler } from '@kovojs/runtime';
 export const Cart$click = handler((_event, ctx) => ctx.value);
 `,
         },
@@ -336,7 +340,7 @@ export const CartBadge$button_click_2 = (_event, ctx) => ctx.state.count = ctx.s
         kind: 'server',
         source: `
 export function renderSource() {
-  return '<button fw-param-types="quantity:number" data-p-quantity="{item.quantity}">Add</button><button fw-param-types="selected:boolean" data-p-selected="{item.selected}" data-p-id="{item.id}">Select</button>';
+  return '<button kovo-param-types="quantity:number" data-p-quantity="{item.quantity}">Add</button><button kovo-param-types="selected:boolean" data-p-selected="{item.selected}" data-p-id="{item.id}">Select</button>';
 }
 `,
       },
@@ -355,7 +359,7 @@ export const CartActions$button_click_2 = (_event, ctx) => ctx.params.selected ?
         files,
         readElementParams(element) {
           const types = Object.fromEntries(
-            (element.getAttribute('fw-param-types') ?? '')
+            (element.getAttribute('kovo-param-types') ?? '')
               .split(/\s+/)
               .filter(Boolean)
               .map((entry) => entry.split(':') as [string, string]),
@@ -382,11 +386,11 @@ export const CartActions$button_click_2 = (_event, ctx) => ctx.params.selected ?
       }),
     ).toEqual({
       buttonAttributes: [
-        { 'data-p-quantity': '{item.quantity}', 'fw-param-types': 'quantity:number' },
+        { 'data-p-quantity': '{item.quantity}', 'kovo-param-types': 'quantity:number' },
         {
           'data-p-id': '{item.id}',
           'data-p-selected': '{item.selected}',
-          'fw-param-types': 'selected:boolean',
+          'kovo-param-types': 'selected:boolean',
         },
       ],
       handlerResults: { add: 3, deselect: 'deselect:p2', select: 'select:p1' },
@@ -591,13 +595,13 @@ export function renderSource() {
             return {
               diagnostics: [
                 {
-                  code: 'FW220',
+                  code: 'KV220',
                   fileName: 'components/product-links.tsx',
                   message: 'Literal href or form action matches no declared route. /product/p1',
                   severity: 'error',
                 },
                 {
-                  code: 'FW220',
+                  code: 'KV220',
                   fileName: 'components/product-links.tsx',
                   message: 'Literal href or form action matches no declared route. /checkout',
                   severity: 'error',
@@ -642,13 +646,13 @@ export function renderSource() {
       },
       invalidDiagnostics: [
         {
-          code: 'FW220',
+          code: 'KV220',
           fileName: 'components/product-links.tsx',
           message: 'Literal href or form action matches no declared route. /product/p1',
           severity: 'error',
         },
         {
-          code: 'FW220',
+          code: 'KV220',
           fileName: 'components/product-links.tsx',
           message: 'Literal href or form action matches no declared route. /checkout',
           severity: 'error',
@@ -788,7 +792,7 @@ export function renderSource() {
       createQueryStore() {
         return store;
       },
-      installJisoLoader() {
+      installKovoLoader() {
         return { dispose() {}, events: ['click'] };
       },
     };
@@ -799,11 +803,11 @@ export function renderSource() {
         {
           emitQueryPlanBootstrapModule: () => ({
             source: `
-import { installJisoLoader, createQueryStore, applyDeferredStreamResponseToDom } from '@jiso/runtime';
+import { installKovoLoader, createQueryStore, applyDeferredStreamResponseToDom } from '@kovojs/runtime';
 import { CartBadge$queryUpdatePlans } from '../components/cart-badge.client.js';
 const queryStore = createQueryStore();
-installJisoLoader({ queryStore, enhancedMutations: { queryPlans: CartBadge$queryUpdatePlans, store: queryStore } });
-export function applyJisoDeferredStreamResponse(body, options) {
+installKovoLoader({ queryStore, enhancedMutations: { queryPlans: CartBadge$queryUpdatePlans, store: queryStore } });
+export function applyKovoDeferredStreamResponse(body, options) {
   return applyDeferredStreamResponseToDom({ body, root: options.root });
 }
 `,
@@ -884,10 +888,10 @@ export function applyJisoDeferredStreamResponse(body, options) {
 
   it('projects wire deferred stream application into structured facts', () => {
     const body = [
-      '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>',
-      '<fw-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</fw-query>',
-      '<fw-fragment target="reviews:p1"><link rel="stylesheet" href="/assets/reviews.css"><article fw-key="r1">5</article></fw-fragment>',
-      '<fw-fragment target="recommendations:p1"><section>Rec</section></fw-fragment>',
+      '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</kovo-query>',
+      '<kovo-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</kovo-query>',
+      '<kovo-fragment target="reviews:p1"><link rel="stylesheet" href="/assets/reviews.css"><article kovo-key="r1">5</article></kovo-fragment>',
+      '<kovo-fragment target="recommendations:p1"><section>Rec</section></kovo-fragment>',
     ].join('');
     const values = new Map<string, unknown>();
 
@@ -898,7 +902,7 @@ export function applyJisoDeferredStreamResponse(body, options) {
           root.targets
             .get('reviews:p1')!
             .replaceWithHtml(
-              '<link rel="stylesheet" href="/assets/reviews.css"><article fw-key="r1">5</article>',
+              '<link rel="stylesheet" href="/assets/reviews.css"><article kovo-key="r1">5</article>',
             );
           const writableStore = store as unknown as {
             set(name: string, key: string, value: unknown): void;
@@ -909,7 +913,7 @@ export function applyJisoDeferredStreamResponse(body, options) {
             appliedFragments: ['reviews:p1', 'recommendations:p1'],
             chunks: [
               {
-                fragments: [{ html: '<article fw-key="r1">5</article>', target: 'reviews:p1' }],
+                fragments: [{ html: '<article kovo-key="r1">5</article>', target: 'reviews:p1' }],
                 queries: ['reviews', 'recommendations'],
               },
             ],
@@ -929,7 +933,7 @@ export function applyJisoDeferredStreamResponse(body, options) {
       appliedFragments: ['reviews:p1', 'recommendations:p1'],
       chunkFragmentTargets: [['reviews:p1']],
       fragmentHtmlFactsByTarget: {
-        'reviews:p1': [{ attrs: { 'fw-key': 'r1' }, innerHtml: '5', tag: 'article' }],
+        'reviews:p1': [{ attrs: { 'kovo-key': 'r1' }, innerHtml: '5', tag: 'article' }],
       },
       fragmentTargets: ['reviews:p1', 'recommendations:p1'],
       queryNames: ['reviews', 'recommendations'],
@@ -988,13 +992,13 @@ export function applyJisoDeferredStreamResponse(body, options) {
 
   it('matches escaped attribute selectors and closest() for generated loader fixtures', () => {
     const element = new GeneratedFixtureElement({
-      'fw-state': 'ready',
+      'kovo-state': 'ready',
       'on:load': '/c/app.js#load',
     });
 
     expect(element.matches('[on\\:load]')).toBe(true);
     expect(element.matches('[on\\:load="/c/app.js#load"]')).toBe(true);
-    expect(element.closest('[fw-state]')).toBe(element);
+    expect(element.closest('[kovo-state]')).toBe(element);
     expect(element.closest('[on\\:idle]')).toBeNull();
   });
 
@@ -1006,17 +1010,17 @@ export function applyJisoDeferredStreamResponse(body, options) {
       createQueryStore() {
         return { kind: 'store' };
       },
-      installJisoLoader(options: unknown) {
+      installKovoLoader(options: unknown) {
         return { installed: options };
       },
     };
     const fixture = executeGeneratedBootstrapModule(
       `
-import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
+import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 import { Cart$queryUpdatePlans } from '../components/cart.client.js';
 const queryStore = createQueryStore();
-installJisoLoader({ enhancedMutations: { queryPlans: Cart$queryUpdatePlans, store: queryStore }, queryStore });
-export function applyJisoDeferredStreamResponse(body, options) {
+installKovoLoader({ enhancedMutations: { queryPlans: Cart$queryUpdatePlans, store: queryStore }, queryStore });
+export function applyKovoDeferredStreamResponse(body, options) {
   return applyDeferredStreamResponseToDom({ body, root: options.root, store: queryStore });
 }
 `,
@@ -1039,7 +1043,7 @@ export function applyJisoDeferredStreamResponse(body, options) {
     ]);
     expect(
       (
-        fixture.exports.applyJisoDeferredStreamResponse as (
+        fixture.exports.applyKovoDeferredStreamResponse as (
           body: string,
           options: { root: GeneratedFixtureMorphRoot },
         ) => unknown
@@ -1062,12 +1066,12 @@ addEventListener('submit', async (event) => {
   const response = await fetch(form.action, {
     body: new FormData(form),
     headers: new Headers({
-      Accept: 'text/vnd.jiso.fragment+html',
-      'FW-Fragment': 'true',
-      'FW-Idem': crypto.randomUUID(),
-      'FW-Targets': Array.from(document.querySelectorAll('[fw-deps]')).map((element) => {
-        const target = element.getAttribute('fw-fragment-target') || element.id;
-        return target + '=' + element.getAttribute('fw-deps');
+      Accept: 'text/vnd.kovo.fragment+html',
+      'Kovo-Fragment': 'true',
+      'Kovo-Idem': crypto.randomUUID(),
+      'Kovo-Targets': Array.from(document.querySelectorAll('[kovo-deps]')).map((element) => {
+        const target = element.getAttribute('kovo-fragment-target') || element.id;
+        return target + '=' + element.getAttribute('kovo-deps');
       }).join('; '),
     }),
     keepalive: true,
@@ -1075,8 +1079,8 @@ addEventListener('submit', async (event) => {
   });
   const body = await response.text();
   const parsed = new DOMParser().parseFromString(body, 'text/html');
-  for (const query of parsed.querySelectorAll('fw-query')) {
-    dispatchEvent(new CustomEvent('jiso:query', {
+  for (const query of parsed.querySelectorAll('kovo-query')) {
+    dispatchEvent(new CustomEvent('kovo:query', {
       detail: {
         body: query.textContent,
         key: query.getAttribute('key'),
@@ -1084,10 +1088,10 @@ addEventListener('submit', async (event) => {
       },
     }));
   }
-  for (const fragment of parsed.querySelectorAll('fw-fragment')) {
+  for (const fragment of parsed.querySelectorAll('kovo-fragment')) {
     const target = fragment.getAttribute('target');
     if (fragment.getAttribute('mode') === 'append') {
-      document.querySelector('[fw-fragment-target="' + target + '"]').insertAdjacentHTML('beforeend', fragment.innerHTML);
+      document.querySelector('[kovo-fragment-target="' + target + '"]').insertAdjacentHTML('beforeend', fragment.innerHTML);
     } else {
       document.getElementById(target).innerHTML = fragment.innerHTML;
     }
@@ -1100,16 +1104,16 @@ addEventListener('change', () => {}, {});
     expect(fact).toMatchObject({
       appendCalls: [['beforeend', '<li>2</li>']],
       dispatchedQueries: [
-        { body: '{"count":1}', key: 'cart:c1', name: 'cart', type: 'jiso:query' },
+        { body: '{"count":1}', key: 'cart:c1', name: 'cart', type: 'kovo:query' },
       ],
       fetchCalls: [
         {
           body: { kind: 'form-data' },
           headers: {
-            Accept: 'text/vnd.jiso.fragment+html',
-            'FW-Fragment': 'true',
-            'FW-Idem': 'idem-inline',
-            'FW-Targets': 'cart-badge=cart; inventory=inventory stock',
+            Accept: 'text/vnd.kovo.fragment+html',
+            'Kovo-Fragment': 'true',
+            'Kovo-Idem': 'idem-inline',
+            'Kovo-Targets': 'cart-badge=cart; inventory=inventory stock',
           },
           keepalive: true,
           method: 'POST',

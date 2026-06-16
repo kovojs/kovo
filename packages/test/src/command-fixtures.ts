@@ -121,9 +121,9 @@ export interface P10PerfAcceptanceGateFact {
   inputFacts: VitePlusTaskInputFact[];
   ordering: {
     acceptanceAfterBuild: true;
-    acceptanceBeforeFwCheck: true;
+    acceptanceBeforeKovoCheck: true;
     ciAfterBuild: true;
-    ciBeforeFwCheck: true;
+    ciBeforeKovoCheck: true;
   };
   presentInAcceptance: boolean;
   presentInCi: boolean;
@@ -397,9 +397,9 @@ export function p10PerfAcceptanceGateFact(options: {
   });
   nodeTaskCommand(gate.task.command);
   assertOrderedItems(gate.acceptanceScripts, 'check:build', scriptName);
-  assertOrderedItems(gate.acceptanceScripts, scriptName, 'check:fw');
+  assertOrderedItems(gate.acceptanceScripts, scriptName, 'check:kovo');
   assertOrderedItems(gate.ciTaskNames, 'build', gate.taskName);
-  assertOrderedItems(gate.ciTaskNames, gate.taskName, 'fw-check');
+  assertOrderedItems(gate.ciTaskNames, gate.taskName, 'kovo-check');
 
   return {
     acceptance: {
@@ -414,9 +414,9 @@ export function p10PerfAcceptanceGateFact(options: {
     inputFacts: vitePlusTaskInputFacts(gate.task),
     ordering: {
       acceptanceAfterBuild: true,
-      acceptanceBeforeFwCheck: true,
+      acceptanceBeforeKovoCheck: true,
       ciAfterBuild: true,
-      ciBeforeFwCheck: true,
+      ciBeforeKovoCheck: true,
     },
     presentInAcceptance: gate.presentInAcceptance,
     presentInCi: gate.presentInCi,

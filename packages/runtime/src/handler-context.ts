@@ -1,4 +1,4 @@
-import type { JsonValue } from '@jiso/core';
+import type { JsonValue } from '@kovojs/core';
 import { domAttributes } from './dom-like.js';
 import type { EventElementLike } from './events.js';
 import { readAttribute, tagClose } from './wire-html.js';
@@ -57,7 +57,7 @@ export function createDelegatedHandlerContext(
 }
 
 export function readElementParams(element: EventElementLike): Record<string, ElementParamValue> {
-  const paramTypes = readElementParamTypes(element.getAttribute?.('fw-param-types'));
+  const paramTypes = readElementParamTypes(element.getAttribute?.('kovo-param-types'));
   const params: Record<string, ElementParamValue> = {};
 
   for (const attribute of domAttributes(element.attributes)) {
@@ -90,7 +90,7 @@ function coerceElementParam(value: string, type: string | undefined): ElementPar
 
 export function readElementState(element: EventElementLike): JsonValue {
   const stateHost = readElementStateHost(element);
-  const state = stateHost?.getAttribute('fw-state');
+  const state = stateHost?.getAttribute('kovo-state');
   if (!state) return {};
 
   try {
@@ -101,12 +101,13 @@ export function readElementState(element: EventElementLike): JsonValue {
 }
 
 export function writeElementState(element: EventElementLike, state: JsonValue): void {
-  element.setAttribute?.('fw-state', JSON.stringify(state));
+  element.setAttribute?.('kovo-state', JSON.stringify(state));
 }
 
 export function readElementStateHost(element: EventElementLike): EventElementLike | null {
   return (
-    element.closest?.('[fw-state]') ?? (element.getAttribute('fw-state') === null ? null : element)
+    element.closest?.('[kovo-state]') ??
+    (element.getAttribute('kovo-state') === null ? null : element)
   );
 }
 
@@ -124,10 +125,10 @@ function createHandlerSignal(element: EventElementLike, scope: IslandSignalScope
 }
 
 function islandSignalKey(element: EventElementLike): string | null {
-  const island = element.closest?.('[fw-c]') ?? element;
+  const island = element.closest?.('[kovo-c]') ?? element;
   return islandSignalIdentity(
-    island.getAttribute('fw-c'),
-    island.getAttribute('fw-key'),
+    island.getAttribute('kovo-c'),
+    island.getAttribute('kovo-key'),
     island.getAttribute('id'),
   );
 }
@@ -137,8 +138,8 @@ export function abortRemovedIslandSignals(
   nextHtml: string,
   scope: IslandSignalScope = defaultIslandSignalScope,
 ): string[] {
-  const next = fwComponentIds(nextHtml);
-  const removed = [...fwComponentIds(currentHtml)].filter((id) => !next.has(id));
+  const next = kovoComponentIds(nextHtml);
+  const removed = [...kovoComponentIds(currentHtml)].filter((id) => !next.has(id));
   const controllers = islandSignalControllersFor(scope);
 
   for (const id of removed) {
@@ -161,7 +162,7 @@ function islandSignalControllersFor(scope: IslandSignalScope): Map<string, Abort
   return controllers;
 }
 
-function fwComponentIds(html: string): Set<string> {
+function kovoComponentIds(html: string): Set<string> {
   const ids = new Set<string>();
   let offset = 0;
 
@@ -183,8 +184,8 @@ function fwComponentIds(html: string): Set<string> {
     if (close === undefined) break;
     const tag = html.slice(start, close + 1);
     const identity = islandSignalIdentity(
-      readAttribute(tag, 'fw-c'),
-      readAttribute(tag, 'fw-key'),
+      readAttribute(tag, 'kovo-c'),
+      readAttribute(tag, 'kovo-key'),
       readAttribute(tag, 'id'),
     );
     if (identity) ids.add(identity);

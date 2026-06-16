@@ -53,7 +53,7 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
 
   try {
     const broadcast = installMutationBroadcast({
-      channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
+      channel: new globalThis.BroadcastChannel('kovo:mutation-response') as BroadcastLike,
       ...definedProps({
         applyQuery: options.applyQuery,
         onError: options.broadcastOnError,
@@ -119,7 +119,7 @@ export function installMutationBroadcast(
           const sanitized = sanitizeMutationChangeRecord(change);
           return sanitized ? [sanitized] : [];
         }),
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       });
     },
   };

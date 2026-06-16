@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
 
-// SECURITY_FINDINGS.md C1: the @jiso/server jsx runtime emits text children verbatim, so the
+// SECURITY_FINDINGS.md C1: the @kovojs/server jsx runtime emits text children verbatim, so the
 // compiler wraps static data-path text interpolations in escapeText(...) during lowering, making
 // generated components safe-by-default without a runtime contract change.
 describe('compiler text-child escaping (C1)', () => {
@@ -14,7 +14,7 @@ export const OrderHistory = component('order-history', {
   render: ({ orders }) => (
     <ol>
       {orders.map((item) => (
-        <li fw-key={item.id}>
+        <li kovo-key={item.id}>
           {item.productId} x {item.qty}
         </li>
       ))}
@@ -27,7 +27,7 @@ export const OrderHistory = component('order-history', {
 
     expect(serverSource).toContain('{escapeText(item.productId)}');
     expect(serverSource).toContain('{escapeText(item.qty)}');
-    expect(serverSource).toContain("import { escapeText } from '@jiso/server';");
+    expect(serverSource).toContain("import { escapeText } from '@kovojs/server';");
     // The map callback itself is not a property-access path, so it is never wrapped.
     expect(serverSource).not.toContain('escapeText(orders.map');
     expect(result.diagnostics).toEqual([]);

@@ -7,7 +7,7 @@ import {
   s,
   type MutationFail,
   type MutationWireHeaderSource,
-} from '@jiso/server';
+} from '@kovojs/server';
 
 import { createShopDb, type ShopDb } from './db.js';
 import { CartBadge } from './generated/cart-badge.js';
@@ -26,7 +26,7 @@ export interface ShopRequest {
 }
 
 // snippet:csrf
-// SPEC.md section 6.6: fw-csrf is a session-bound synchronizer token stamped
+// SPEC.md section 6.6: kovo-csrf is a session-bound synchronizer token stamped
 // into every emitted form and verified before input parsing on every POST.
 export const shopCsrf = {
   secret: 'tutorial-shop-secret',
@@ -90,10 +90,10 @@ export function renderShopPage(
   const queryData =
     renderQueryScript({ name: 'cart', value: cart }) +
     renderQueryScript({ name: 'products', value: products });
-  const badge = `<fw-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</fw-fragment>`;
-  const list = `<fw-fragment target="product-list">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</fw-fragment>`;
+  const badge = `<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment>`;
+  const list = `<kovo-fragment target="product-list">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</kovo-fragment>`;
 
-  return `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1>${queryData}${badge}${list}</main></body></html>`;
+  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${queryData}${badge}${list}</main></body></html>`;
 }
 // /snippet
 

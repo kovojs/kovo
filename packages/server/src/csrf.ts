@@ -21,7 +21,7 @@ export interface CsrfValidationOptions<Request> extends CsrfOptions<Request> {
  * @param options - The CSRF `secret` and `sessionId` extractor.
  * @returns The CSRF token string.
  * @example
- * import { csrfToken } from '@jiso/server';
+ * import { csrfToken } from '@kovojs/server';
  *
  * interface Req { session: { id: string } }
  * const token: string = csrfToken({ session: { id: 's1' } } as Req, {
@@ -42,14 +42,14 @@ export function csrfToken<Request>(request: Request, options: CsrfOptions<Reques
  * hand-written forms (SPEC §6.6).
  *
  * @param request - The request to derive the session from.
- * @param options - CSRF options plus an optional `field` name (defaults to `fw-csrf`).
+ * @param options - CSRF options plus an optional `field` name (defaults to `kovo-csrf`).
  * @returns The hidden-input HTML string.
  */
 export function csrfField<Request>(
   request: Request,
   options: CsrfOptions<Request> & { field?: string },
 ): string {
-  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'fw-csrf')}" value="${escapeAttribute(csrfToken(request, options))}">`;
+  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(csrfToken(request, options))}">`;
 }
 
 export function validateCsrfToken<Request>(
@@ -60,7 +60,7 @@ export function validateCsrfToken<Request>(
   const sessionId = options.sessionId(request);
   if (!sessionId) return false;
 
-  const submitted = formLikeToRecord(rawInput)[options.field ?? 'fw-csrf'];
+  const submitted = formLikeToRecord(rawInput)[options.field ?? 'kovo-csrf'];
   if (typeof submitted !== 'string') return false;
 
   return secureEqual(submitted, createCsrfToken(sessionId, options.secret));

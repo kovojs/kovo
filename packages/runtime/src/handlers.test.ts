@@ -11,7 +11,7 @@ describe('delegated handler reference dispatch', () => {
     const element = new FakeElement({
       'data-p-item-id': 'i_42',
       'data-p-quantity': '2',
-      'fw-param-types': 'quantity:number',
+      'kovo-param-types': 'quantity:number',
       'on:click': '/c/cart-badge.client.js#CartBadge$button_click',
     });
 
@@ -74,7 +74,7 @@ describe('delegated handler reference dispatch', () => {
     });
     const importModule = vi.fn(async (url: string) => (url === '/c/a.js' ? { first } : { second }));
     const element = new FakeElement({
-      'fw-state': '{"count":1}',
+      'kovo-state': '{"count":1}',
       'on:click': '/c/a.js#first /c/b.js#second',
     });
 
@@ -83,12 +83,12 @@ describe('delegated handler reference dispatch', () => {
     expect(importModule).toHaveBeenNthCalledWith(1, '/c/a.js');
     expect(importModule).toHaveBeenNthCalledWith(2, '/c/b.js');
     expect(calls).toEqual(['first:1:false', 'second:2:false']);
-    expect(element.getAttribute('fw-state')).toBe('{"count":3}');
+    expect(element.getAttribute('kovo-state')).toBe('{"count":3}');
   });
 
   it('applies state bindings from the final state after chained handlers run', async () => {
     const host = new FakeStatefulBindingElement({
-      'fw-state': '{"count":1}',
+      'kovo-state': '{"count":1}',
       'on:click': '/c/a.js#first /c/b.js#second',
     });
     const output = new FakeStatefulBindingElement(
@@ -105,7 +105,7 @@ describe('delegated handler reference dispatch', () => {
 
     await dispatchDelegatedEvent({ target: host, type: 'click' }, importModule);
 
-    expect(host.getAttribute('fw-state')).toBe('{"count":3}');
+    expect(host.getAttribute('kovo-state')).toBe('{"count":3}');
     expect(output.textContent).toBe('3');
   });
 
@@ -124,7 +124,7 @@ describe('delegated handler reference dispatch', () => {
     });
     const importModule = vi.fn(async () => ({ increment: handler }));
     const element = new FakeElement({
-      'fw-state': '{"count":0}',
+      'kovo-state': '{"count":0}',
       'on:click': '/c/counter.client.js#increment',
     });
 
@@ -137,7 +137,7 @@ describe('delegated handler reference dispatch', () => {
     await Promise.all([first, second]);
 
     expect(calls).toEqual([0, 1]);
-    expect(element.getAttribute('fw-state')).toBe('{"count":2}');
+    expect(element.getAttribute('kovo-state')).toBe('{"count":2}');
   });
 
   it('does not serialize delegated state writes across different islands', async () => {
@@ -153,11 +153,11 @@ describe('delegated handler reference dispatch', () => {
     });
     const importModule = vi.fn(async () => ({ increment: handler }));
     const firstElement = new FakeElement({
-      'fw-state': '{"count":0}',
+      'kovo-state': '{"count":0}',
       'on:click': '/c/counter.client.js#increment',
     });
     const secondElement = new FakeElement({
-      'fw-state': '{"count":10}',
+      'kovo-state': '{"count":10}',
       'on:click': '/c/counter.client.js#increment',
     });
 
@@ -167,11 +167,11 @@ describe('delegated handler reference dispatch', () => {
 
     expect(handler).toHaveBeenCalledTimes(2);
     await second;
-    expect(secondElement.getAttribute('fw-state')).toBe('{"count":11}');
+    expect(secondElement.getAttribute('kovo-state')).toBe('{"count":11}');
 
     releaseFirst?.();
     await first;
-    expect(firstElement.getAttribute('fw-state')).toBe('{"count":1}');
+    expect(firstElement.getAttribute('kovo-state')).toBe('{"count":1}');
   });
 
   it('continues the delegated state queue after a handler rejects', async () => {
@@ -191,7 +191,7 @@ describe('delegated handler reference dispatch', () => {
       url === '/c/fail.client.js' ? { first } : { second },
     );
     const element = new FakeElement({
-      'fw-state': '{"count":0}',
+      'kovo-state': '{"count":0}',
       'on:click': '/c/fail.client.js#first',
     });
 
@@ -204,14 +204,14 @@ describe('delegated handler reference dispatch', () => {
     await expect(failed).rejects.toThrow('boom');
     await passed;
 
-    expect(element.getAttribute('fw-state')).toBe('{"count":2}');
+    expect(element.getAttribute('kovo-state')).toBe('{"count":2}');
   });
 
   it('hydrates serialized island state for delegated handlers', async () => {
     const handler = vi.fn();
     const importModule = vi.fn(async () => ({ CartBadge$button_click: handler }));
     const element = new FakeElement({
-      'fw-state': '{"bouncing":false,"count":2}',
+      'kovo-state': '{"bouncing":false,"count":2}',
       'on:click': '/c/cart-badge.client.js#CartBadge$button_click',
     });
 
@@ -229,13 +229,13 @@ describe('delegated handler reference dispatch', () => {
     });
     const importModule = vi.fn(async () => ({ Counter$button_click: handler }));
     const element = new FakeElement({
-      'fw-state': '{"count":2}',
+      'kovo-state': '{"count":2}',
       'on:click': '/c/counter.client.js#Counter$button_click',
     });
 
     await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
 
-    expect(element.getAttribute('fw-state')).toBe('{"count":3}');
+    expect(element.getAttribute('kovo-state')).toBe('{"count":3}');
   });
 
   it('persists delegated handler state before reporting a later handler failure', async () => {
@@ -244,7 +244,7 @@ describe('delegated handler reference dispatch', () => {
     });
     const importModule = vi.fn(async (url: string) => (url === '/c/a.js' ? { first } : {}));
     const element = new FakeElement({
-      'fw-state': '{"count":2}',
+      'kovo-state': '{"count":2}',
       'on:click': '/c/a.js#first /c/b.js#missing',
     });
 
@@ -252,6 +252,6 @@ describe('delegated handler reference dispatch', () => {
       dispatchDelegatedEvent({ target: element, type: 'click' }, importModule),
     ).rejects.toThrow('Handler export not found: /c/b.js#missing');
 
-    expect(element.getAttribute('fw-state')).toBe('{"count":3}');
+    expect(element.getAttribute('kovo-state')).toBe('{"count":3}');
   });
 });

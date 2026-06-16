@@ -77,7 +77,7 @@ describe('server route matching', () => {
     });
   });
 
-  it('reports FW228 ambiguities when two route patterns can match one pathname', () => {
+  it('reports KV228 ambiguities when two route patterns can match one pathname', () => {
     expect(
       findRouteAmbiguities([
         route('/products/:id', {}),
@@ -88,14 +88,14 @@ describe('server route matching', () => {
       ]),
     ).toEqual([
       {
-        code: 'FW228',
+        code: 'KV228',
         message:
           "Ambiguous route table: '/products/:id' and '/products/new' can both match canonical request path '/products/new'.",
         paths: ['/products/:id', '/products/new'],
         witnessPath: '/products/new',
       },
       {
-        code: 'FW228',
+        code: 'KV228',
         message:
           "Ambiguous route table: '/products/:sku/reviews' and '/products/:id/reviews' can both match canonical request path '/products/:sku/reviews'.",
         paths: ['/products/:sku/reviews', '/products/:id/reviews'],

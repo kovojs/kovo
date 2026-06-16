@@ -1,7 +1,7 @@
-import { diagnosticDefinitions, type DiagnosticCode, type TouchGraph } from '@jiso/core';
+import { diagnosticDefinitions, type DiagnosticCode, type TouchGraph } from '@kovojs/core';
 
 import type { HarnessOperationVerifier } from './harness-operations.js';
-import { createJisoTestHarness, type JisoTestContext } from './harness.js';
+import { createKovoTestHarness, type KovoTestContext } from './harness.js';
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 
 export interface FakeDb {
@@ -45,8 +45,8 @@ export function createVerifiedFakeHarness({
   request,
   touchGraph = {},
   verification,
-}: VerifiedFakeHarnessOptions): JisoTestContext<FakeDb> {
-  return createJisoTestHarness({
+}: VerifiedFakeHarnessOptions): KovoTestContext<FakeDb> {
+  return createKovoTestHarness({
     db,
     ...(request === undefined ? {} : { request }),
     touchGraph,

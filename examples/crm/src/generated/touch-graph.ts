@@ -95,7 +95,7 @@ export interface CrmInvalidationSets {
   'moveDeal': 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
 }
 
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface QueryRegistry {
     contactList: ContactListResult;
     dealList: DealListResult;

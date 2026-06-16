@@ -1,10 +1,10 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
-import { toggleTriggerClick as _toggleTriggerClick } from '@jiso/headless-ui/primitives';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/toggle.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/toggle.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 // BUTTON_CLASS = toggleClassNames base + the default `outline` variant.
 const BUTTON_CLASS =

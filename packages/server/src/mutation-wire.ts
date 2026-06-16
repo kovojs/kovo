@@ -99,10 +99,10 @@ export interface MutationEndpointRequest<
 export type MutationEndpointResponse = MutationWireResponse | NoJsMutationResponse;
 
 export function readMutationWireHeaders(headers: MutationWireHeaderSource): MutationWireHeaders {
-  const fragment = readHeader(headers, 'FW-Fragment')?.toLowerCase() === 'true';
-  const idem = readHeader(headers, 'FW-Idem')?.trim();
+  const fragment = readHeader(headers, 'Kovo-Fragment')?.toLowerCase() === 'true';
+  const idem = readHeader(headers, 'Kovo-Idem')?.trim();
   const targets = dedupe(
-    (readHeader(headers, 'FW-Targets') ?? '')
+    (readHeader(headers, 'Kovo-Targets') ?? '')
       .split(/[;,]/)
       .map((target) => target.trim())
       .map((target) => target.split('=')[0]?.trim() ?? '')

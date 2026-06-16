@@ -53,7 +53,7 @@ describe('server static export app replay boundary', () => {
       ],
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining(
             "successful HTML route documents; '/exports/orders.csv' returned status 200 with Content-Type 'text/csv; charset=utf-8'",
           ),
@@ -73,10 +73,10 @@ describe('server static export app replay boundary', () => {
     });
 
     await expect(replayStaticExportApp({ app })).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining('staticPaths metadata'),
           routePath: '/products/:id',
         },
@@ -84,7 +84,7 @@ describe('server static export app replay boundary', () => {
     });
   });
 
-  it('reports FW228 route-table diagnostics before replaying route documents', async () => {
+  it('reports KV228 route-table diagnostics before replaying route documents', async () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
@@ -99,10 +99,10 @@ describe('server static export app replay boundary', () => {
     });
 
     await expect(replayStaticExportApp({ app })).rejects.toMatchObject({
-      code: 'FW228',
+      code: 'KV228',
       diagnostics: [
         {
-          code: 'FW228',
+          code: 'KV228',
           message: expect.stringContaining('/products/new'),
           routePath: '/products/:id <-> /products/new',
         },

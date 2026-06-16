@@ -1,10 +1,10 @@
 import { runInThisContext } from 'node:vm';
 
 import {
-  buildInlineJisoLoaderInstallerSource,
-  inlineJisoLoaderInstallerReadableSource,
+  buildInlineKovoLoaderInstallerSource,
+  inlineKovoLoaderInstallerReadableSource,
 } from './inline-loader-build.js';
-import { createInlineJisoLoaderSource, installInlineJisoLoader } from './inline-loader.js';
+import { createInlineKovoLoaderSource, installInlineKovoLoader } from './inline-loader.js';
 
 export type InlineSourceInstall = (
   importModule: (url: string) => Promise<Record<string, unknown>>,
@@ -15,29 +15,29 @@ export const inlineSourceInstallCases: readonly [string, InlineSourceInstall][] 
   [
     'readable build source',
     (importModule, globalRecord) => {
-      globalRecord.__jisoInlineImport = importModule;
+      globalRecord.__kovoInlineImport = importModule;
       runInThisContext(
-        `(${inlineJisoLoaderInstallerReadableSource})(globalThis.__jisoInlineImport);`,
+        `(${inlineKovoLoaderInstallerReadableSource})(globalThis.__kovoInlineImport);`,
       );
     },
   ],
   [
     'freshly minified build source',
     (importModule, globalRecord) => {
-      globalRecord.__jisoInlineImport = importModule;
+      globalRecord.__kovoInlineImport = importModule;
       runInThisContext(
-        `(${buildInlineJisoLoaderInstallerSource()})(globalThis.__jisoInlineImport);`,
+        `(${buildInlineKovoLoaderInstallerSource()})(globalThis.__kovoInlineImport);`,
       );
     },
   ],
   [
     'generated bootstrap source',
     (importModule, globalRecord) => {
-      globalRecord.__jisoInlineImport = importModule;
-      runInThisContext(createInlineJisoLoaderSource('globalThis.__jisoInlineImport'));
+      globalRecord.__kovoInlineImport = importModule;
+      runInThisContext(createInlineKovoLoaderSource('globalThis.__kovoInlineImport'));
     },
   ],
-  ['extracted installer source', (importModule) => installInlineJisoLoader(importModule)],
+  ['extracted installer source', (importModule) => installInlineKovoLoader(importModule)],
 ] as const;
 
 export async function dispatchInlineDelegatedClick(
@@ -49,7 +49,7 @@ export async function dispatchInlineDelegatedClick(
   const originals = {
     addEventListener: globalRecord.addEventListener,
     document: globalRecord.document,
-    importModule: globalRecord.__jisoInlineImport,
+    importModule: globalRecord.__kovoInlineImport,
   };
   const listeners = new Map<string, (event: unknown) => Promise<void>>();
 
@@ -75,9 +75,9 @@ export async function dispatchInlineDelegatedClick(
       document: originals.document,
     });
     if (originals.importModule === undefined) {
-      delete globalRecord.__jisoInlineImport;
+      delete globalRecord.__kovoInlineImport;
     } else {
-      globalRecord.__jisoInlineImport = originals.importModule;
+      globalRecord.__kovoInlineImport = originals.importModule;
     }
   }
 }
@@ -88,8 +88,8 @@ export class InlineTriggerElement {
   constructor(private readonly attrs: Record<string, string>) {}
 
   closest(selector: string): InlineTriggerElement | null {
-    if (selector === '[fw-state]') {
-      return Object.hasOwn(this.attrs, 'fw-state') ? this : null;
+    if (selector === '[kovo-state]') {
+      return Object.hasOwn(this.attrs, 'kovo-state') ? this : null;
     }
 
     const trigger = /^\[on\\:(.+)\]$/.exec(selector)?.[1];
@@ -115,13 +115,13 @@ export class InlineParityRoot {
   querySelectorAll(
     selector: string,
   ): Iterable<{ getAttribute(name: string): string | null; id?: string }> {
-    if (selector !== '[fw-deps]') return [];
+    if (selector !== '[kovo-deps]') return [];
 
     return this.deps.map((dep) => ({
       getAttribute(name: string) {
-        if (name === 'fw-fragment-target') return dep.target ?? null;
-        if (name === 'fw-deps') return dep.deps ?? null;
-        if (name === 'fw-c') return dep.component ?? null;
+        if (name === 'kovo-fragment-target') return dep.target ?? null;
+        if (name === 'kovo-deps') return dep.deps ?? null;
+        if (name === 'kovo-c') return dep.component ?? null;
         return null;
       },
       ...(dep.id ? { id: dep.id } : {}),

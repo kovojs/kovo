@@ -14,8 +14,8 @@ import {
 
 describe('server static export output boundary', () => {
   it('normalizes static assets and plans directory targets without writing', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-plan-'));
-    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-assets-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-plan-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-assets-'));
     try {
       const cssSource = path.join(sourceDir, 'app.css');
       await writeFile(cssSource, 'body { color: black; }\n', 'utf8');
@@ -87,7 +87,7 @@ describe('server static export output boundary', () => {
     const base = {
       artifacts: [],
       assets: [],
-      outDir: '/tmp/jiso-static-export-output',
+      outDir: '/tmp/kovo-static-export-output',
     };
 
     expect(() =>
@@ -133,7 +133,7 @@ describe('server static export output boundary', () => {
     const base = {
       artifacts: [],
       assets: [],
-      outDir: '/tmp/jiso-static-export-output',
+      outDir: '/tmp/kovo-static-export-output',
     };
     const moduleArtifact = {
       body: 'export {};',
@@ -182,7 +182,7 @@ describe('server static export output boundary', () => {
   });
 
   it('validates static asset sources before writing any output files', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-write-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-write-'));
     try {
       const plan = createStaticExportOutputPlan({
         artifacts: [
@@ -206,10 +206,10 @@ describe('server static export output boundary', () => {
       });
 
       await expect(writeStaticExportOutput(plan)).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             routePath: '/assets/missing.css',
           },
         ],
@@ -250,8 +250,8 @@ describe('server static export output boundary', () => {
   });
 
   it('validates final output targets before committing staged files', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-commit-'));
-    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-source-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-commit-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-source-'));
     try {
       const cssSource = path.join(sourceDir, 'app.css');
       await writeFile(cssSource, 'body { color: black; }\n', 'utf8');
@@ -287,10 +287,10 @@ describe('server static export output boundary', () => {
       });
 
       await expect(writeStaticExportOutput(plan)).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining("target '"),
             routePath: '/assets/app.css',
           },

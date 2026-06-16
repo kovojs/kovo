@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/toggle-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/toggle-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryToggleDemo$button_aria_pressed_derive = derive(['state'], (state: any) =>
   String(state.pressed),
@@ -12,12 +12,12 @@ export const GalleryToggleDemo$output_text_derive = derive(['state'], (state: an
   state.pressed ? 'pressed' : 'off',
 );
 
-import { component } from '@jiso/core';
-import { toggleTriggerClick as _toggleTriggerClick } from '@jiso/headless-ui/primitives';
+import { component } from '@kovojs/core';
+import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/toggle.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/toggle.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 // BUTTON_CLASS = toggleClassNames base + the default `outline` variant.
 const BUTTON_CLASS =
@@ -35,17 +35,17 @@ export const GalleryToggleDemo = component('gallery-toggle-demo', {
     <section
       class="grid gap-2 text-sm text-neutral-950"
       data-gallery-interactive="toggle"
-      fw-c="gallery-toggle-demo"
-      fw-state='{"pressed":false}'
+      kovo-c="gallery-toggle-demo"
+      kovo-state='{"pressed":false}'
     >
       <button
         aria-label="Toggle gallery density"
         aria-pressed={String(state.pressed)}
-        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=f13bbe2a#GalleryToggleDemo$button_aria_pressed_derive"
+        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_aria_pressed_derive"
         class={BUTTON_CLASS}
         data-state={state.pressed ? 'pressed' : 'off'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=f13bbe2a#GalleryToggleDemo$button_data_state_derive"
-        on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=f13bbe2a#GalleryToggleDemo$button_click"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_data_state_derive"
+        on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_click"
         type="button"
       >
         Dense rows
@@ -53,7 +53,7 @@ export const GalleryToggleDemo = component('gallery-toggle-demo', {
       <output
         class="text-xs text-neutral-500"
         data-demo-state="pressed"
-        data-bind="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=f13bbe2a#GalleryToggleDemo$output_text_derive"
+        data-bind="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$output_text_derive"
       >
         {state.pressed ? 'pressed' : 'off'}
       </output>

@@ -28,9 +28,9 @@ describe('compiled interactive gallery demos', () => {
 
   it('wires every compiled interactive demo into the docs gallery route', () => {
     const packageJson = JSON.parse(readFileSync(resolve(galleryRoot, 'package.json'), 'utf8')) as {
-      jiso?: { interactiveGallery?: { compiledDemos?: unknown } };
+      kovo?: { interactiveGallery?: { compiledDemos?: unknown } };
     };
-    const manifestDemos = packageJson.jiso?.interactiveGallery?.compiledDemos;
+    const manifestDemos = packageJson.kovo?.interactiveGallery?.compiledDemos;
     const generatedDemos = readdirSync(resolve(galleryRoot, 'src/generated/interactive'))
       .filter((fileName) => fileName.endsWith('-demo.tsx'))
       .map((fileName) => fileName.replace(/\.tsx$/, ''))
@@ -67,7 +67,7 @@ describe('compiled interactive gallery demos', () => {
 
       expect(output).toContain('gallery-interactive-export/v1');
       expect(output).toContain('html=1');
-      // One module per demo, plus the shared jiso-runtime module and the served headless-ui
+      // One module per demo, plus the shared kovo-runtime module and the served headless-ui
       // primitive modules imported by generated handlers (SPEC §4.4: resolvable URLs, no import map).
       expect(output).toContain(
         `client-modules=${
@@ -80,7 +80,7 @@ describe('compiled interactive gallery demos', () => {
       expect(output).toContain('diagnostics=0');
 
       const html = readFileSync(join(distDir, 'gallery/interactive/index.html'), 'utf8');
-      expect(html).toContain('<title>Jiso Interactive Gallery</title>');
+      expect(html).toContain('<title>Kovo Interactive Gallery</title>');
       expect(html).toContain('data-gallery-route="/gallery/interactive"');
       expect(html).toContain('data-gallery-interactive="progress"');
       expect(html).toContain('data-gallery-interactive="meter"');

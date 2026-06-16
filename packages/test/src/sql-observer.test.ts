@@ -16,7 +16,7 @@ function createSqlDb(): SqlDb {
   };
 }
 
-describe('@jiso/test SQL observer', () => {
+describe('@kovojs/test SQL observer', () => {
   it('extracts only supported SQL statement shapes', () => {
     expect(sqlStatementText('select * from products')).toBe('select * from products');
     expect(sqlStatementText({ text: 'select * from products', values: ['p1'] })).toBe(
@@ -117,6 +117,6 @@ describe('@jiso/test SQL observer', () => {
       },
     ]);
     expect(() => verifier.assertReadsCovered(['product'])).not.toThrow();
-    expect(() => verifier.assertReadsCovered([])).toThrow(expectedDiagnostic('FW407', 'product'));
+    expect(() => verifier.assertReadsCovered([])).toThrow(expectedDiagnostic('KV407', 'product'));
   });
 });

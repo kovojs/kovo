@@ -57,7 +57,7 @@ async function sendFile(response, filePath) {
 }
 
 if (!existsSync(distDir)) {
-  throw new Error('serve: site/dist is missing; run `pnpm --filter @jiso/site run build` first');
+  throw new Error('serve: site/dist is missing; run `pnpm --filter @kovojs/site run build` first');
 }
 
 const server = createServer((request, response) => {
@@ -78,5 +78,5 @@ const server = createServer((request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`Jiso docs served from site/dist at http://${host}:${port}/`);
+  console.log(`Kovo docs served from site/dist at http://${host}:${port}/`);
 });

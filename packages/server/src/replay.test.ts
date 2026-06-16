@@ -34,12 +34,12 @@ describe('server mutation replay store', () => {
       const replayStore = createMemoryMutationReplayStore({ maxEntries: 1, ttlMs: 100 });
       const first = {
         body: 'first',
-        headers: { 'FW-Idem': 'idem_01' },
+        headers: { 'Kovo-Idem': 'idem_01' },
         status: 200,
       } as const;
       const second = {
         body: 'second',
-        headers: { 'FW-Idem': 'idem_02' },
+        headers: { 'Kovo-Idem': 'idem_02' },
         status: 200,
       } as const;
 
@@ -59,7 +59,7 @@ describe('server mutation replay store', () => {
 });
 
 describe('server mutation response replay', () => {
-  it('replays enhanced mutation responses by FW-Idem without re-running the handler', async () => {
+  it('replays enhanced mutation responses by Kovo-Idem without re-running the handler', async () => {
     const cart = domain('cart');
     const replayStore = createMemoryMutationReplayStore();
     let writes = 0;
@@ -92,11 +92,11 @@ describe('server mutation response replay', () => {
 
     expect(writes).toBe(1);
     expect(second).toEqual({
-      body: '<fw-query name="cart">{"count":1}</fw-query>',
+      body: '<kovo-query name="cart">{"count":1}</kovo-query>',
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Changes': '[{"domain":"cart"}]',
-        'FW-Idem': 'idem_01',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Changes': '[{"domain":"cart"}]',
+        'Kovo-Idem': 'idem_01',
       },
       status: 200,
     });
@@ -148,7 +148,7 @@ describe('server mutation response replay', () => {
     expect(writes).toBe(1);
     expect(firstResponse).toEqual(secondResponse);
     expect(firstResponse).toMatchObject({
-      body: '<fw-query name="cart">{"count":1}</fw-query>',
+      body: '<kovo-query name="cart">{"count":1}</kovo-query>',
       status: 200,
     });
   });
@@ -182,7 +182,7 @@ describe('server mutation response replay', () => {
     };
 
     await renderMutationResponse(addToCart, baseRequest);
-    // Same session + same FW-Idem but a different mutation: must NOT replay the
+    // Same session + same Kovo-Idem but a different mutation: must NOT replay the
     // add response; the remove handler must run on its own scope.
     await renderMutationResponse(removeFromCart, baseRequest);
 
@@ -330,20 +330,20 @@ describe('server mutation response replay', () => {
     queryRelease.resolve();
     await expect(Promise.all([first, second])).resolves.toEqual([
       {
-        body: '<fw-query name="cart">{"count":1}</fw-query>',
+        body: '<kovo-query name="cart">{"count":1}</kovo-query>',
         headers: {
-          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'FW-Changes': '[{"domain":"cart"}]',
-          'FW-Idem': 'idem_pending_query',
+          'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Changes': '[{"domain":"cart"}]',
+          'Kovo-Idem': 'idem_pending_query',
         },
         status: 200,
       },
       {
-        body: '<fw-query name="cart">{"count":1}</fw-query>',
+        body: '<kovo-query name="cart">{"count":1}</kovo-query>',
         headers: {
-          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'FW-Changes': '[{"domain":"cart"}]',
-          'FW-Idem': 'idem_pending_query',
+          'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Changes': '[{"domain":"cart"}]',
+          'Kovo-Idem': 'idem_pending_query',
         },
         status: 200,
       },
@@ -399,20 +399,20 @@ describe('server mutation response replay', () => {
     fragmentRelease.resolve();
     await expect(Promise.all([first, second])).resolves.toEqual([
       {
-        body: '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+        body: '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
         headers: {
-          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'FW-Changes': '[{"domain":"cart"}]',
-          'FW-Idem': 'idem_pending_fragment',
+          'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Changes': '[{"domain":"cart"}]',
+          'Kovo-Idem': 'idem_pending_fragment',
         },
         status: 200,
       },
       {
-        body: '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+        body: '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
         headers: {
-          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'FW-Changes': '[{"domain":"cart"}]',
-          'FW-Idem': 'idem_pending_fragment',
+          'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Changes': '[{"domain":"cart"}]',
+          'Kovo-Idem': 'idem_pending_fragment',
         },
         status: 200,
       },
@@ -461,18 +461,18 @@ describe('server mutation response replay', () => {
     failureRelease.resolve();
     await expect(Promise.all([first, second])).resolves.toEqual([
       {
-        body: '<fw-fragment target="error"><output role="alert">Sold out</output></fw-fragment>',
+        body: '<kovo-fragment target="error"><output role="alert">Sold out</output></kovo-fragment>',
         headers: {
-          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'FW-Idem': 'idem_pending_failure',
+          'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Idem': 'idem_pending_failure',
         },
         status: 422,
       },
       {
-        body: '<fw-fragment target="error"><output role="alert">Sold out</output></fw-fragment>',
+        body: '<kovo-fragment target="error"><output role="alert">Sold out</output></kovo-fragment>',
         headers: {
-          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'FW-Idem': 'idem_pending_failure',
+          'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Idem': 'idem_pending_failure',
         },
         status: 422,
       },
@@ -481,7 +481,7 @@ describe('server mutation response replay', () => {
     expect(renders).toBe(1);
   });
 
-  it('replays enhanced mutation validation failures by FW-Idem', async () => {
+  it('replays enhanced mutation validation failures by Kovo-Idem', async () => {
     const replayStore = createMemoryMutationReplayStore();
     let attempts = 0;
     const addToCart = mutation('cart/add', {
@@ -505,17 +505,17 @@ describe('server mutation response replay', () => {
       status: 422,
     });
     await expect(renderMutationResponse(addToCart, request)).resolves.toEqual({
-      body: '<fw-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>',
+      body: '<kovo-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>',
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Idem': 'idem_422',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Idem': 'idem_422',
       },
       status: 422,
     });
     expect(attempts).toBe(1);
   });
 
-  it('does not replay pure schema validation failures by FW-Idem', async () => {
+  it('does not replay pure schema validation failures by Kovo-Idem', async () => {
     const replayStore = createMemoryMutationReplayStore();
     let writes = 0;
     const addToCart = mutation('cart/add', {
@@ -562,7 +562,7 @@ describe('server mutation response replay', () => {
       get() {
         getCalls += 1;
         return {
-          body: '<fw-query name="cart">{"count":999}</fw-query>',
+          body: '<kovo-query name="cart">{"count":999}</kovo-query>',
           headers: {},
           status: 200,
         };
@@ -737,11 +737,11 @@ describe('server mutation response replay', () => {
 
     expect(writes).toBe(1);
     expect(first).toEqual({
-      body: '<fw-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></fw-fragment>',
+      body: '<kovo-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></kovo-fragment>',
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Changes': '[{"domain":"cart"}]',
-        'FW-Idem': 'idem_render_failure',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Changes': '[{"domain":"cart"}]',
+        'Kovo-Idem': 'idem_render_failure',
       },
       status: 500,
     });

@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/example-gallery",
+  "name": "@kovojs/example-gallery",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,21 +9,21 @@
     "test:browser": "vitest --config vitest.browser.config.ts --run"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*",
-    "@jiso/headless-ui": "workspace:*",
-    "@jiso/runtime": "workspace:*",
-    "@jiso/server": "workspace:*",
-    "@jiso/ui": "workspace:*"
+    "@kovojs/core": "workspace:*",
+    "@kovojs/headless-ui": "workspace:*",
+    "@kovojs/runtime": "workspace:*",
+    "@kovojs/server": "workspace:*",
+    "@kovojs/ui": "workspace:*"
   },
   "devDependencies": {
-    "@jiso/compiler": "workspace:*",
-    "@jiso/test": "workspace:*",
+    "@kovojs/compiler": "workspace:*",
+    "@kovojs/test": "workspace:*",
     "axe-core": "^4.12.1",
-    "fw": "workspace:*",
+    "kovo": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "4.1.8"
   },
-  "jiso": {
+  "kovo": {
     "interactiveGallery": {
       "compiledDemos": [
         "accordion-demo",

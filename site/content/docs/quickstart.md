@@ -1,29 +1,29 @@
 ---
 title: Quickstart
-description: Scaffold a Jiso app, get a page rendering, and watch the compiler catch a bug you'd normally ship.
+description: Scaffold a Kovo app, get a page rendering, and watch the compiler catch a bug you'd normally ship.
 order: 2
 ---
 
 # Quickstart
 
 In a few minutes you'll have a typed page rendering in the browser — and you'll see the thing that
-makes Jiso different: a wiring mistake that fails the build instead of reaching production.
+makes Kovo different: a wiring mistake that fails the build instead of reaching production.
 
-> **Status: pre-v1.** Jiso isn't on npm yet. The commands below describe the intended flow and work
-> today inside the [Jiso repository](https://github.com/jiso-sh/jiso) as workspace packages. Until
+> **Status: pre-v1.** Kovo isn't on npm yet. The commands below describe the intended flow and work
+> today inside the [Kovo repository](https://github.com/kovojs/kovo) as workspace packages. Until
 > packages publish, clone the repo and work in a workspace member — that's all the
 > [Tutorial](/tutorial/) does, and it runs against the real compiler.
 
 ## 1. Scaffold
 
 ```sh
-pnpm create jiso my-app
+pnpm create kovo my-app
 cd my-app
 pnpm install
 ```
 
 You get a deliberately small project: one component, one route's worth of HTML, Tailwind wired
-through Vite, and the graph-check scripts that make Jiso's verification part of your CI from day one.
+through Vite, and the graph-check scripts that make Kovo's verification part of your CI from day one.
 
 ## 2. Run it
 
@@ -40,7 +40,7 @@ A route is a plain value. The compiler captures its path as a literal type, so e
 points at it is checked against it:
 
 ```ts
-import { route } from '@jiso/server';
+import { route } from '@kovojs/server';
 
 export const productRoute = route('/products/:id', {
   params: { id: String },
@@ -70,11 +70,11 @@ vp check
 ```
 
 Instead of a blank render in production, you get a compile error at the binding, naming the fix.
-This is where Jiso surfaces the mistakes other stacks only reveal at runtime: handler references,
+This is where Kovo surfaces the mistakes other stacks only reveal at runtime: handler references,
 form fields, navigation targets, and data-binding paths all live in the type system.
 
 ```sh
-vp check     # typecheck + lint — Jiso's static errors show up here
+vp check     # typecheck + lint — Kovo's static errors show up here
 ```
 
 If you internalize one command, make it `vp check`.
@@ -83,16 +83,16 @@ If you internalize one command, make it `vp check`.
 
 | Command                   | What it does                                         |
 | ------------------------- | ---------------------------------------------------- |
-| `vp dev`                  | Dev server with the Jiso compile step                |
+| `vp dev`                  | Dev server with the Kovo compile step                |
 | `vp check`                | Typecheck + lint — where wiring errors surface       |
 | `vp test`                 | Vitest suites                                        |
 | `vp run build`            | Production build                                     |
-| `vp run fw-check`         | Framework semantic checks over the emitted app graph |
+| `vp run kovo-check`       | Framework semantic checks over the emitted app graph |
 | `vp run graph-assertions` | Your app's own behavior assertions, as graph queries |
 
 ## Next steps
 
-- [Thinking in Jiso](/docs/mental-model/) — how components become self-describing HTML.
+- [Thinking in Kovo](/docs/mental-model/) — how components become self-describing HTML.
 - [Installation](/docs/installation/) — prerequisites and what the scaffold sets up.
 - [Tutorial](/tutorial/) — build a real commerce app end to end.
 

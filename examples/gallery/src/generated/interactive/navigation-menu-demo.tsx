@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/navigation-menu-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/navigation-menu-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryNavigationMenuDemo$section_data_open_derive = derive(
   ['state'],
@@ -60,7 +60,7 @@ export const GalleryNavigationMenuDemo$output_text_derive = derive(
   (state: any) => state.openValue || 'none',
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   navigationMenuContentAttributes,
   navigationMenuFocusElement as _navigationMenuFocusElement,
@@ -78,11 +78,11 @@ import {
   navigationMenuTypeahead as _navigationMenuTypeahead,
   navigationMenuViewportAttributes,
   type NavigationMenuItem,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/navigation-menu.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/navigation-menu.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const LIST_CLASS =
   'flex list-none items-center gap-1 rounded-md border border-neutral-200 bg-white p-1 shadow-sm data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch';
@@ -108,7 +108,7 @@ const navigationItems: readonly NavigationMenuItem[] = Object.freeze([
 ]);
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo', {
   state: () => ({ activeValue: 'products', openValue: '', value: 'none' }),
   render: (_queries: Record<string, never>, state: GalleryNavigationMenuDemoState) => {
@@ -125,19 +125,19 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
         class="grid gap-2"
         data-gallery-interactive="navigation-menu"
         data-open={state.openValue || 'none'}
-        data-bind:data-open="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$section_data_open_derive"
-        on:keydown="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$section_keydown"
-        fw-c="gallery-navigation-menu-demo"
-        fw-state='{"activeValue":"products","openValue":"","value":"none"}'
+        data-bind:data-open="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$section_data_open_derive"
+        on:keydown="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$section_keydown"
+        kovo-c="gallery-navigation-menu-demo"
+        kovo-state='{"activeValue":"products","openValue":"","value":"none"}'
       >
         <div {...navigationMenuListAttributes(rootState)} class={LIST_CLASS}>
           <div
             {...navigationMenuItemAttributes({ ...rootState, itemValue: 'products' })}
             class={ITEM_CLASS}
             data-highlighted={state.activeValue === 'products' ? '' : null}
-            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$div_data_highlighted_derive"
+            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_highlighted_derive"
             data-state={state.activeValue === 'products' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$div_data_state_derive"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_state_derive"
           >
             <button
               {...navigationMenuTriggerAttributes({
@@ -148,17 +148,17 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
                 itemValue: 'products',
               })}
               aria-expanded={state.openValue === 'products' ? 'true' : 'false'}
-              data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$button_aria_expanded_derive"
+              data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_aria_expanded_derive"
               class={TRIGGER_CLASS}
               data-highlighted={state.activeValue === 'products' ? '' : null}
-              data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$button_data_highlighted_derive"
+              data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_data_highlighted_derive"
               data-state={state.openValue === 'products' ? 'open' : 'closed'}
-              data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$button_data_state_derive"
+              data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_data_state_derive"
               tabIndex={state.activeValue === 'products' ? 0 : -1}
-              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$button_tabIndex_derive"
-              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$button_click"
-              on:focus="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$button_focus"
-              on:pointerenter="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$button_pointerenter"
+              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_tabIndex_derive"
+              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_click"
+              on:focus="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_focus"
+              on:pointerenter="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_pointerenter"
             >
               Products
             </button>
@@ -167,9 +167,9 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
             {...navigationMenuItemAttributes({ ...rootState, itemValue: 'docs' })}
             class={ITEM_CLASS}
             data-highlighted={state.activeValue === 'docs' ? '' : null}
-            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$div_data_highlighted_derive_2"
+            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_highlighted_derive_2"
             data-state={state.activeValue === 'docs' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$div_data_state_derive_2"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_state_derive_2"
           >
             <a
               {...navigationMenuLinkAttributes({
@@ -181,13 +181,13 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
               })}
               class={LINK_CLASS}
               data-highlighted={state.activeValue === 'docs' ? '' : null}
-              data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$a_data_highlighted_derive"
+              data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_data_highlighted_derive"
               data-state={state.activeValue === 'docs' ? 'active' : 'inactive'}
-              data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$a_data_state_derive"
+              data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_data_state_derive"
               tabIndex={state.activeValue === 'docs' ? 0 : -1}
-              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$a_tabIndex_derive"
-              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$a_click"
-              on:focus="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$a_focus"
+              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_tabIndex_derive"
+              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_click"
+              on:focus="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_focus"
             >
               Docs
             </a>
@@ -202,9 +202,9 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
           })}
           class={CONTENT_CLASS}
           data-state={state.openValue === 'products' ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$div_data_state_derive_3"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_state_derive_3"
           hidden={state.openValue !== 'products'}
-          data-bind:hidden="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$div_hidden_derive"
+          data-bind:hidden="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_hidden_derive"
         >
           Platform primitives and gallery fixtures
         </div>
@@ -212,13 +212,13 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
           {...navigationMenuViewportAttributes({ ...rootState, id: 'gallery-navigation-viewport' })}
           class={VIEWPORT_CLASS}
           data-state={state.openValue === 'products' ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$div_data_state_derive_4"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_state_derive_4"
           hidden={state.openValue === ''}
-          data-bind:hidden="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$div_hidden_derive_2"
+          data-bind:hidden="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_hidden_derive_2"
         />
         <output
           data-demo-state="navigation-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=35991404#GalleryNavigationMenuDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$output_text_derive"
         >
           {state.openValue || 'none'}
         </output>

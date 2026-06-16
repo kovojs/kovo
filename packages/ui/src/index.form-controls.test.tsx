@@ -64,7 +64,7 @@ import {
   toolbarItemClasses,
 } from './index.js';
 
-describe('@jiso/ui styled package foundation', () => {
+describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless checkbox-group primitive as styled native checkboxes', () => {
     const items = [
       { value: 'updates' },

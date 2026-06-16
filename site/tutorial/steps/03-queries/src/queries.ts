@@ -1,4 +1,4 @@
-import { query } from '@jiso/server';
+import { query } from '@kovojs/server';
 
 import { createShopDb, type ShopDb, type ShopProduct } from './db.js';
 import { cart, product } from './domains.js';

@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/sheet-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/sheet-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GallerySheetDemo$section_data_state_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
@@ -24,7 +24,7 @@ export const GallerySheetDemo$output_text_derive = derive(['state'], (state: any
   state.open ? 'open' : 'closed',
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   dialogCancel as _dialogCancel,
   dialogCloseAttributes,
@@ -33,11 +33,11 @@ import {
   dialogRootAttributes,
   dialogTriggerClick as _dialogTriggerClick,
   dialogTriggerAttributes,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/sheet.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/sheet.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 // CONTENT_CLASS is sheetContentClassNames base + the `right` side variant.
 const TRIGGER_CLASS =
@@ -55,7 +55,7 @@ export interface GallerySheetDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GallerySheetDemo = component('gallery-sheet-demo', {
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GallerySheetDemoState) => {
@@ -70,18 +70,18 @@ export const GallerySheetDemo = component('gallery-sheet-demo', {
         data-gallery-interactive="sheet"
         data-side="right"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=6261b698#GallerySheetDemo$section_data_state_derive"
-        fw-c="gallery-sheet-demo"
-        fw-state='{"open":false}'
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=d18e3e9f#GallerySheetDemo$section_data_state_derive"
+        kovo-c="gallery-sheet-demo"
+        kovo-state='{"open":false}'
       >
         <button
           {...dialogTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=6261b698#GallerySheetDemo$button_aria_expanded_derive"
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=d18e3e9f#GallerySheetDemo$button_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=6261b698#GallerySheetDemo$button_data_state_derive"
-          on:click="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=6261b698#GallerySheetDemo$button_click"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=d18e3e9f#GallerySheetDemo$button_data_state_derive"
+          on:click="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=d18e3e9f#GallerySheetDemo$button_click"
         >
           Open sheet
         </button>
@@ -90,10 +90,10 @@ export const GallerySheetDemo = component('gallery-sheet-demo', {
           class={CONTENT_CLASS}
           data-side="right"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=6261b698#GallerySheetDemo$dialog_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=d18e3e9f#GallerySheetDemo$dialog_data_state_derive"
           open={state.open}
-          data-bind:open="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=6261b698#GallerySheetDemo$dialog_open_derive"
-          on:cancel="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=6261b698#GallerySheetDemo$dialog_cancel"
+          data-bind:open="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=d18e3e9f#GallerySheetDemo$dialog_open_derive"
+          on:cancel="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=d18e3e9f#GallerySheetDemo$dialog_cancel"
         >
           <header class={HEADER_CLASS}>
             <h2 class={TITLE_CLASS} id={titleId}>
@@ -107,15 +107,15 @@ export const GallerySheetDemo = component('gallery-sheet-demo', {
             {...dialogCloseAttributes({ contentId, open: state.open })}
             class={CLOSE_CLASS}
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=6261b698#GallerySheetDemo$button_data_state_derive_2"
-            on:click="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=6261b698#GallerySheetDemo$button_click_2"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=d18e3e9f#GallerySheetDemo$button_data_state_derive_2"
+            on:click="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=d18e3e9f#GallerySheetDemo$button_click_2"
           >
             Close sheet
           </button>
         </dialog>
         <output
           data-demo-state="sheet-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=6261b698#GallerySheetDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/sheet-demo.client.js?v=d18e3e9f#GallerySheetDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

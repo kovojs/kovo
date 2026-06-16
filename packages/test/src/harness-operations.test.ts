@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { domain, mutation, query, s } from '@jiso/server';
+import { domain, mutation, query, s } from '@kovojs/server';
 import {
   executeHarnessMutation,
   executeHarnessQuery,
   loadHarnessPage,
-} from '@jiso/test/harness-operations';
+} from '@kovojs/test/harness-operations';
 import {
   createFakeDb,
   createRecordingOperationVerifier,
@@ -14,7 +14,7 @@ import {
 } from './test-fixtures.js';
 import type { ObservedDbOperation } from './verifier.js';
 
-describe('@jiso/test harness operations', () => {
+describe('@kovojs/test harness operations', () => {
   it('runs mutations through captured verification and preserves the harness db request seam', async () => {
     const db = createFakeDb();
     const observed: ObservedDbOperation[] = [
@@ -123,7 +123,7 @@ describe('@jiso/test harness operations', () => {
 
     await expect(
       executeHarnessQuery(cartQuery, undefined, createFakeDb(), undefined, state.verifier),
-    ).rejects.toThrow(expectedDiagnostic('FW410', 'cart Expected number'));
+    ).rejects.toThrow(expectedDiagnostic('KV410', 'cart Expected number'));
     expect(state.reads).toEqual(['cart']);
     expect(state.captured).toEqual([observed]);
   });
@@ -172,7 +172,7 @@ describe('@jiso/test harness operations', () => {
       loadHarnessPage(
         {
           '/cart': () =>
-            '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+            '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
         },
         '/cart',
       ).then((page) => page.fragment('cart-badge')),

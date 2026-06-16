@@ -1,4 +1,4 @@
-import type { FwExplainInput, TouchGraph } from '@jiso/core';
+import type { KovoExplainInput, TouchGraph } from '@kovojs/core';
 
 import { commerceCartPageMeta } from './page-meta.js';
 
@@ -82,7 +82,7 @@ export function commerceGraphDeclarations(cart: CommerceGraphCartSummary) {
     ],
     // SPEC.md §10.5: cart/add is fully compiler-derived (see generated/optimistic/
     // cart-add.ts). All three invalidated queries are `derived` with derivation
-    // metadata; zero unhandled FW310, zero punts.
+    // metadata; zero unhandled KV310, zero punts.
     optimistic: [
       { derivation: { status: 'derived' }, mutation: 'cart/add', query: 'cart', status: 'derived' },
       {
@@ -133,7 +133,7 @@ export function commerceGraphDeclarations(cart: CommerceGraphCartSummary) {
         site: 'examples/commerce/src/app.ts:attachmentDownloadRoute',
       },
     ],
-  } satisfies Omit<FwExplainInput, 'touchGraph'>;
+  } satisfies Omit<KovoExplainInput, 'touchGraph'>;
 }
 
 export function createCommerceGraph(cart: CommerceGraphCartSummary, touchGraph: TouchGraph) {
@@ -142,5 +142,5 @@ export function createCommerceGraph(cart: CommerceGraphCartSummary, touchGraph: 
     touchGraph,
   };
 
-  return graph satisfies FwExplainInput;
+  return graph satisfies KovoExplainInput;
 }

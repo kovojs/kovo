@@ -1,4 +1,4 @@
-import type { JsonValue } from '@jiso/core';
+import type { JsonValue } from '@kovojs/core';
 
 import { reportServerError } from './diagnostics.js';
 import {
@@ -102,7 +102,7 @@ export interface RouteRequestInput {
  * @param definition - The `page` handler plus optional `params`/`search` schemas, guards, and meta.
  * @returns A `RouteDeclaration` carrying `path`.
  * @example
- * import { notFound, route, s } from '@jiso/server';
+ * import { notFound, route, s } from '@kovojs/server';
  *
  * const catalog = new Map<string, { name: string }>();
  *
@@ -158,7 +158,7 @@ export function parseRouteRequest<
  *
  * @returns A `NotFound` marker (`{ notFound: true, status: 404 }`).
  * @example
- * import { notFound } from '@jiso/server';
+ * import { notFound } from '@kovojs/server';
  *
  * const missing = notFound();
  * // missing.status === 404
@@ -238,7 +238,7 @@ export interface RoutePageFailure {
  * @param options - Guard-failure, session, and error options.
  * @returns A `RoutePageResponse`.
  * @example
- * import { renderRoutePageResponse, route } from '@jiso/server';
+ * import { renderRoutePageResponse, route } from '@kovojs/server';
  *
  * const homeRoute = route('/', { page: () => '<h1>Home</h1>' });
  *

@@ -1,6 +1,6 @@
-// @jiso-ir — lowered from site/tutorial/steps/07-verification/src/components/cart-badge.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `node site/tutorial/run-steps.mjs --write`.
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+// @kovojs-ir — lowered from site/tutorial/steps/07-verification/src/components/cart-badge.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `node site/tutorial/run-steps.mjs --write`.
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 
 import { cartQuery, type CartResult } from '../queries.js';
 
@@ -13,7 +13,7 @@ export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart }: { cart: CartResult }) => (
-    <cart-badge fw-deps="cart">
+    <cart-badge kovo-deps="cart">
       Cart: <span data-bind="cart.count">{cart.count}</span>
     </cart-badge>
   ),

@@ -82,7 +82,7 @@ describe('Better Auth pinned conformance', () => {
       'verification',
     ]);
     expect(result.source).toContain(
-      "export const twoFactor = pgTable('twoFactor', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const twoFactor = pgTable('twoFactor', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
   });
 
@@ -134,7 +134,7 @@ describe('Better Auth pinned conformance', () => {
       'verification',
     ]);
     expect(result.source).toContain(
-      "export const twoFactor = pgTable('twoFactor', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const twoFactor = pgTable('twoFactor', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
   });
 
@@ -187,7 +187,7 @@ describe('Better Auth pinned conformance', () => {
       'verification',
     ]);
     expect(result.source).toContain(
-      "export const deviceCode = pgTable('deviceCode', {}, jiso({ exempt: true }));",
+      "export const deviceCode = pgTable('deviceCode', {}, kovo({ exempt: true }));",
     );
   });
 
@@ -263,13 +263,13 @@ describe('Better Auth pinned conformance', () => {
       'verification',
     ]);
     expect(result.source).toContain(
-      "export const oauthApplication = pgTable('oauthApplication', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const oauthApplication = pgTable('oauthApplication', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
-      "export const oauthAccessToken = pgTable('oauthAccessToken', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const oauthAccessToken = pgTable('oauthAccessToken', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
-      "export const oauthConsent = pgTable('oauthConsent', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const oauthConsent = pgTable('oauthConsent', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
   });
 
@@ -344,13 +344,13 @@ describe('Better Auth pinned conformance', () => {
       'verification',
     ]);
     expect(result.source).toContain(
-      "export const oauthApplication = pgTable('oauthApplication', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const oauthApplication = pgTable('oauthApplication', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
-      "export const oauthAccessToken = pgTable('oauthAccessToken', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const oauthAccessToken = pgTable('oauthAccessToken', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
-      "export const oauthConsent = pgTable('oauthConsent', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const oauthConsent = pgTable('oauthConsent', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
   });
 
@@ -401,7 +401,7 @@ describe('Better Auth pinned conformance', () => {
       'walletAddress',
     ]);
     expect(result.source).toContain(
-      "export const walletAddress = pgTable('walletAddress', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const walletAddress = pgTable('walletAddress', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
   });
 
@@ -437,7 +437,7 @@ describe('Better Auth pinned conformance', () => {
     expect(betterAuthSchemaBridge.user).toEqual({ domain: 'user', key: 'id' });
     expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
     expect(result.source).toContain(
-      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+      "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
     );
   });
 
@@ -506,7 +506,7 @@ describe('Better Auth pinned conformance', () => {
       });
       expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
       expect(result.source).toContain(
-        "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+        "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
       );
     }
   });

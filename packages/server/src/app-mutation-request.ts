@@ -2,11 +2,11 @@ import { resolveLifecycleRequest } from './guards.js';
 import { renderMutationEndpointResponse, type MutationDefinition } from './mutation.js';
 import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
 
 export async function handleAppMutationRequest(
-  app: JisoApp,
+  app: KovoApp,
   request: Request,
   url: URL,
   mutationKey: string,

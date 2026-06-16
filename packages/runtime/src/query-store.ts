@@ -17,12 +17,12 @@ export type QuerySnapshot = Map<string, unknown>;
 
 /**
  * Create the client-side query store: the in-memory source of truth the loader
- * hydrates from `<fw-query>` scripts and that bindings and optimistic updates
+ * hydrates from `<kovo-query>` scripts and that bindings and optimistic updates
  * read and write (SPEC §9.4).
  *
  * @returns A fresh `QueryStore`.
  * @example
- * import { createQueryStore } from '@jiso/runtime';
+ * import { createQueryStore } from '@kovojs/runtime';
  *
  * const store = createQueryStore();
  * store.set('cart', { count: 1 });

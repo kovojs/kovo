@@ -29,27 +29,27 @@ describe('mutation broadcast publish', () => {
       store,
     });
 
-    broadcast.publish('<fw-query name="cart">{"count":1}</fw-query>', [
+    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>', [
       { domain: 'cart', input: { productId: 'p1' } },
       { domain: 'product', keys: ['p1'] },
     ] as never);
 
     expect(channel.messages).toEqual([
       {
-        body: '<fw-query name="cart">{"count":1}</fw-query>',
+        body: '<kovo-query name="cart">{"count":1}</kovo-query>',
         changes: [{ domain: 'cart' }, { domain: 'product', keys: ['p1'] }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     ]);
 
     channel.onmessage?.({
       data: {
         body: [
-          '<fw-query name="cart">{"count":2}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+          '<kovo-query name="cart">{"count":2}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
         ].join(''),
         changes: [{ domain: 'cart', keys: ['cart:1'] }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     });
 
@@ -68,9 +68,9 @@ describe('mutation broadcast publish', () => {
 
     channel.onmessage?.({
       data: {
-        body: '<fw-query name="cart">{"count":2}</fw-query>',
+        body: '<kovo-query name="cart">{"count":2}</kovo-query>',
         changes: [{ domain: 'cart', keys: [1] }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     });
     expect(store.get('cart')).toBeUndefined();
@@ -87,22 +87,22 @@ describe('mutation broadcast publish', () => {
     const onChanges = vi.fn();
     const broadcast = installMutationBroadcast({ channel, onChanges, store });
 
-    broadcast.publish('<fw-query name="cart">{"count":5}</fw-query>', [
+    broadcast.publish('<kovo-query name="cart">{"count":5}</kovo-query>', [
       { domain: 'cart', input: { productId: 'p1' } },
     ] as never);
     expect(channel.messages).toEqual([
       {
-        body: '<fw-query name="cart">{"count":5}</fw-query>',
+        body: '<kovo-query name="cart">{"count":5}</kovo-query>',
         changes: [{ domain: 'cart' }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     ]);
 
     channel.onmessage?.({
       data: {
-        body: '<fw-query name="cart">{"count":6}</fw-query>',
+        body: '<kovo-query name="cart">{"count":6}</kovo-query>',
         changes: [{ domain: 'cart', keys: ['cart_1'] }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     });
 
@@ -135,8 +135,8 @@ describe('mutation broadcast publish', () => {
 
     broadcastA.publish(
       [
-        '<fw-query name="cart">{"count":5}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>5</cart-badge></fw-fragment>',
+        '<kovo-query name="cart">{"count":5}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><cart-badge>5</cart-badge></kovo-fragment>',
       ].join('\n'),
       [{ domain: 'cart', keys: ['cart_1'] }],
     );
@@ -144,11 +144,11 @@ describe('mutation broadcast publish', () => {
     expect(channelA.messages).toEqual([
       {
         body: [
-          '<fw-query name="cart">{"count":5}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>5</cart-badge></fw-fragment>',
+          '<kovo-query name="cart">{"count":5}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>5</cart-badge></kovo-fragment>',
         ].join('\n'),
         changes: [{ domain: 'cart', keys: ['cart_1'] }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     ]);
     expect(channelB.messages).toEqual([]);
@@ -181,15 +181,15 @@ describe('mutation broadcast publish', () => {
       expect(createdChannels).toHaveLength(1);
       const channel = createdChannels[0];
       expect(channel).toBeDefined();
-      expect(channel?.name).toBe('jiso:mutation-response');
+      expect(channel?.name).toBe('kovo:mutation-response');
       expect(setup.options.broadcast).toBeDefined();
 
-      setup.options.broadcast?.publish('<fw-query name="cart">{"count":1}</fw-query>');
+      setup.options.broadcast?.publish('<kovo-query name="cart">{"count":1}</kovo-query>');
       expect(channel?.messages).toEqual([
         {
-          body: '<fw-query name="cart">{"count":1}</fw-query>',
+          body: '<kovo-query name="cart">{"count":1}</kovo-query>',
           changes: [],
-          type: 'jiso:mutation-response',
+          type: 'kovo:mutation-response',
         },
       ]);
 

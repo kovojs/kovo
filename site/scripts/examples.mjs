@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
  * files to surface; build/render is one generic path (commerce, crm, so all run
  * through it). `sources` show authored TSX next to the data/optimism story
  * (queries, mutations, derived transforms) — never lowered IR / generated
- * components (SPEC §5.2: hand-authored lowered IR is FW235; we display, not author).
+ * components (SPEC §5.2: hand-authored lowered IR is KV235; we display, not author).
  */
 
 /** @typedef {{ name: string, title: string, blurb: string, dir: string,
@@ -28,7 +28,7 @@ export const EXAMPLES = [
     name: 'commerce',
     title: 'Commerce',
     blurb:
-      'A full Jiso storefront — product grid, cart badge, and order history — running live next to the authored components, queries, and derived optimism that drive it.',
+      'A full Kovo storefront — product grid, cart badge, and order history — running live next to the authored components, queries, and derived optimism that drive it.',
     dir: 'examples/commerce',
     exportModule: 'examples/commerce/scripts/export-static.mjs',
     exportFn: 'exportCommerceStaticApp',

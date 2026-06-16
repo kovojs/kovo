@@ -105,7 +105,7 @@ export const ProductCard = component('product-card', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('reports FW227 when binding paths traverse nullable query shape metadata without optional segments', () => {
+  it('reports KV227 when binding paths traverse nullable query shape metadata without optional segments', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       queryShapeFacts: [
@@ -131,7 +131,7 @@ export const ProductCard = component('product-card', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW227',
+        code: 'KV227',
         fileName: 'product-card.tsx',
         help: [
           'Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.',
@@ -184,7 +184,7 @@ export const DealCard = component('deal-card', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('reports FW302 for absent paths under nullable query shape metadata', () => {
+  it('reports KV302 for absent paths under nullable query shape metadata', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       queryShapeFacts: [
@@ -210,7 +210,7 @@ export const ProductCard = component('product-card', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW302',
+        code: 'KV302',
         fileName: 'product-card.tsx',
         length: 33,
         message: 'data-bind path is not present in the declared query shape. product.details.price',
@@ -220,7 +220,7 @@ export const ProductCard = component('product-card', {
     ]);
   });
 
-  it('reports FW302 when data-bind paths are absent from declared query shapes', () => {
+  it('reports KV302 when data-bind paths are absent from declared query shapes', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       queryShapes: {
@@ -237,7 +237,7 @@ export const CartBadge = component('cart-badge', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW302',
+        code: 'KV302',
         fileName: 'cart-badge.tsx',
         length: 22,
         message: 'data-bind path is not present in the declared query shape. cart.total',
@@ -247,7 +247,7 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
-  it('reports FW302 when generated query shape facts no longer contain a binding path', () => {
+  it('reports KV302 when generated query shape facts no longer contain a binding path', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       queryShapeFacts: [
@@ -268,7 +268,7 @@ export const CartBadge = component('cart-badge', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW302',
+        code: 'KV302',
         fileName: 'cart-badge.tsx',
         length: 22,
         message: 'data-bind path is not present in the declared query shape. cart.count',
@@ -311,8 +311,8 @@ export const CartBadge = component('cart-badge', {
       source: `
 export const CartBadge = component('cart-badge', {
   render: () => (
-    <ul data-bind-list="cart.items" fw-key="productId">
-      <template fw-stamp>
+    <ul data-bind-list="cart.items" kovo-key="productId">
+      <template kovo-stamp>
         <li><span data-bind=".qty">0</span> × <span data-bind=".name">Item</span></li>
       </template>
     </ul>
@@ -330,8 +330,8 @@ export const CartBadge = component('cart-badge', {
       source: `
 export const CartBadge = component('cart-badge', {
   render: () => (
-    <ul data-bind-list="cart.items" fw-key="sku">
-      <template fw-stamp>
+    <ul data-bind-list="cart.items" kovo-key="sku">
+      <template kovo-stamp>
         <li><span data-bind=".missing">0</span></li>
       </template>
     </ul>
@@ -343,7 +343,7 @@ export const CartBadge = component('cart-badge', {
     expect(valid.diagnostics).toEqual([]);
     expect(invalid.diagnostics).toEqual([
       {
-        code: 'FW302',
+        code: 'KV302',
         fileName: 'cart-badge.tsx',
         message: 'data-bind path is not present in the declared query shape. cart.items',
         severity: 'error',
@@ -364,11 +364,11 @@ export const CartBadge = component('cart-badge', {
       source: `
 export const CartBadge = component('cart-badge', {
   render: () => {
-    const sample = '<ul data-bind-list="cart.missing" fw-key="id"><template fw-stamp><li><span data-bind=".name">Item</span></li></template></ul>';
-    // <ul data-bind-list="cart.otherMissing" fw-key="id"><template fw-stamp><li><span data-bind=".name">Item</span></li></template></ul>
+    const sample = '<ul data-bind-list="cart.missing" kovo-key="id"><template kovo-stamp><li><span data-bind=".name">Item</span></li></template></ul>';
+    // <ul data-bind-list="cart.otherMissing" kovo-key="id"><template kovo-stamp><li><span data-bind=".name">Item</span></li></template></ul>
     return (
-      <ul data-bind-list="cart.items" fw-key="productId">
-        <template fw-stamp>
+      <ul data-bind-list="cart.items" kovo-key="productId">
+        <template kovo-stamp>
           <li><span data-bind=".name">Item</span></li>
         </template>
       </ul>

@@ -1,4 +1,4 @@
-import { applyPatchProgram, type PatchProgram } from '@jiso/core';
+import { applyPatchProgram, type PatchProgram } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { createQueryStore } from './index.js';

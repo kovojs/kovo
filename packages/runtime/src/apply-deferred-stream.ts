@@ -41,7 +41,7 @@ export function applyDeferredStreamResponseToRuntime(
 export function applyDeferredStreamResponseToRuntime(
   options: ApplyDeferredStreamResponseToRuntimeOptions,
 ): AppliedDeferredStreamResponseToRuntime {
-  const chunks = deferredStreamChunks(options.body, options.boundary ?? 'jiso-boundary').map(
+  const chunks = deferredStreamChunks(options.body, options.boundary ?? 'kovo-boundary').map(
     (body) =>
       applyMutationResponseBodyToRuntime({
         ...definedProps({

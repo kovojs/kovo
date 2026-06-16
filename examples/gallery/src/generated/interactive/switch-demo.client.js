@@ -1,7 +1,7 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
-import { switchTriggerClick as _switchTriggerClick } from '@jiso/headless-ui/primitives';
+import { switchTriggerClick as _switchTriggerClick } from '@kovojs/headless-ui/primitives';
 
 export const GallerySwitchDemo$input_click = handler((event, ctx) => {
   const result = _switchTriggerClick(Object(event), { checked: ctx.state.checked });

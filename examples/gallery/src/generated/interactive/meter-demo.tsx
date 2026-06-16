@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/meter-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/meter-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryMeterDemo$meter_aria_valuetext_derive = derive(
   ['state'],
@@ -18,19 +18,19 @@ export const GalleryMeterDemo$output_text_derive = derive(['state'], (state: any
   String(state.value),
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   meterRootAttributes,
   meterValueState as _meterValueState,
   type MeterDataState,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/meter.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/meter.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
-// METER_CLASS is the styled gauge; the wrapper/label/button have no @jiso/ui
-// counterpart, so they use the @jiso/ui button base (packages/ui/src/button.tsx)
+// METER_CLASS is the styled gauge; the wrapper/label/button have no @kovojs/ui
+// counterpart, so they use the @kovojs/ui button base (packages/ui/src/button.tsx)
 // and sensible layout utilities.
 const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
 const METER_CLASS =
@@ -44,7 +44,7 @@ export interface GalleryMeterDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryMeterDemo = component('gallery-meter-demo', {
   state: () => ({ dataState: 'suboptimum' as MeterDataState, value: 72 }),
   render: (_queries: Record<string, never>, state: GalleryMeterDemoState) => {
@@ -62,33 +62,33 @@ export const GalleryMeterDemo = component('gallery-meter-demo', {
       <section
         class={ROOT_CLASS}
         data-gallery-interactive="meter"
-        fw-c="gallery-meter-demo"
-        fw-state='{"dataState":"suboptimum","value":72}'
+        kovo-c="gallery-meter-demo"
+        kovo-state='{"dataState":"suboptimum","value":72}'
       >
         <label for="gallery-meter-value">Storage capacity</label>
         <meter
           {...meterRootAttributes(meterState)}
           aria-valuetext={`${state.value} percent capacity`}
-          data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$meter_aria_valuetext_derive"
+          data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=6a787584#GalleryMeterDemo$meter_aria_valuetext_derive"
           class={METER_CLASS}
           data-state={state.dataState}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$meter_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=6a787584#GalleryMeterDemo$meter_data_state_derive"
           data-value={String(state.value)}
-          data-bind:data-value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$meter_data_value_derive"
+          data-bind:data-value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=6a787584#GalleryMeterDemo$meter_data_value_derive"
           id="gallery-meter-value"
           value={state.value}
-          data-bind:value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$meter_value_derive"
+          data-bind:value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=6a787584#GalleryMeterDemo$meter_value_derive"
         />
         <button
           type="button"
           class={BUTTON_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=6a787584#GalleryMeterDemo$button_click"
         >
           Optimize capacity
         </button>
         <output
           data-demo-state="meter-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=6a787584#GalleryMeterDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

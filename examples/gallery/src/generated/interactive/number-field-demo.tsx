@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/number-field-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/number-field-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryNumberFieldDemo$button_data_disabled_derive = derive(['state'], (state: any) =>
   state.value <= 0 ? '' : null,
@@ -23,7 +23,7 @@ export const GalleryNumberFieldDemo$output_text_derive = derive(['state'], (stat
   String(state.value),
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   numberFieldDecrementAttributes,
   numberFieldDecrementClick as _numberFieldDecrementClick,
@@ -33,11 +33,11 @@ import {
   numberFieldInputAttributes,
   numberFieldKeyDown as _numberFieldKeyDown,
   numberFieldRootAttributes,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/number-field.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/number-field.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS =
   'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950';
@@ -54,7 +54,7 @@ export interface GalleryNumberFieldDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
   state: () => ({ value: 2 }),
   render: (_queries: Record<string, never>, state: GalleryNumberFieldDemoState) => {
@@ -76,8 +76,8 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
         class={ROOT_CLASS}
         data-gallery-interactive="number-field"
         id={formId}
-        fw-c="gallery-number-field-demo"
-        fw-state='{"value":2}'
+        kovo-c="gallery-number-field-demo"
+        kovo-state='{"value":2}'
       >
         <label for={inputId} class={LABEL_CLASS}>
           Seats
@@ -87,10 +87,10 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
             {...numberFieldDecrementAttributes({ ...fieldState, inputId, label: 'Decrease seats' })}
             class={BUTTON_CLASS}
             data-disabled={state.value <= 0 ? '' : null}
-            data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_data_disabled_derive"
+            data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=0addeb6b#GalleryNumberFieldDemo$button_data_disabled_derive"
             disabled={state.value <= 0}
-            data-bind:disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_disabled_derive"
-            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_click"
+            data-bind:disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=0addeb6b#GalleryNumberFieldDemo$button_disabled_derive"
+            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=0addeb6b#GalleryNumberFieldDemo$button_click"
           >
             -
           </button>
@@ -103,18 +103,18 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
             })}
             class={INPUT_CLASS}
             value={state.value}
-            data-bind:value="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$input_value_derive"
-            on:input="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$input_input"
-            on:keydown="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$input_keydown"
+            data-bind:value="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=0addeb6b#GalleryNumberFieldDemo$input_value_derive"
+            on:input="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=0addeb6b#GalleryNumberFieldDemo$input_input"
+            on:keydown="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=0addeb6b#GalleryNumberFieldDemo$input_keydown"
           />
           <button
             {...numberFieldIncrementAttributes({ ...fieldState, inputId, label: 'Increase seats' })}
             class={BUTTON_CLASS}
             data-disabled={state.value >= 5 ? '' : null}
-            data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_data_disabled_derive_2"
+            data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=0addeb6b#GalleryNumberFieldDemo$button_data_disabled_derive_2"
             disabled={state.value >= 5}
-            data-bind:disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_disabled_derive_2"
-            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_click_2"
+            data-bind:disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=0addeb6b#GalleryNumberFieldDemo$button_disabled_derive_2"
+            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=0addeb6b#GalleryNumberFieldDemo$button_click_2"
           >
             +
           </button>
@@ -122,7 +122,7 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
         <output
           data-demo-state="value"
           class="text-xs text-neutral-500"
-          data-bind="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=0addeb6b#GalleryNumberFieldDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

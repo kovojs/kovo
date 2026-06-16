@@ -1,45 +1,45 @@
 /** Severity tier of a diagnostic, from blocking `error` down to advisory `notice`. */
 export type DiagnosticSeverity = 'error' | 'warn' | 'lint' | 'notice';
 
-/** The string-literal union of every `FW###` diagnostic code the framework can emit. */
+/** The string-literal union of every `KV###` diagnostic code the framework can emit. */
 export type DiagnosticCode =
-  | 'FW201'
-  | 'FW210'
-  | 'FW211'
-  | 'FW212'
-  | 'FW220'
-  | 'FW221'
-  | 'FW222'
-  | 'FW223'
-  | 'FW224'
-  | 'FW225'
-  | 'FW226'
-  | 'FW227'
-  | 'FW228'
-  | 'FW230'
-  | 'FW231'
-  | 'FW232'
-  | 'FW233'
-  | 'FW234'
-  | 'FW235'
-  | 'FW301'
-  | 'FW302'
-  | 'FW303'
-  | 'FW304'
-  | 'FW310'
-  | 'FW311'
-  | 'FW320'
-  | 'FW330'
-  | 'FW402'
-  | 'FW403'
-  | 'FW404'
-  | 'FW405'
-  | 'FW406'
-  | 'FW407'
-  | 'FW408'
-  | 'FW409'
-  | 'FW410'
-  | 'FW411';
+  | 'KV201'
+  | 'KV210'
+  | 'KV211'
+  | 'KV212'
+  | 'KV220'
+  | 'KV221'
+  | 'KV222'
+  | 'KV223'
+  | 'KV224'
+  | 'KV225'
+  | 'KV226'
+  | 'KV227'
+  | 'KV228'
+  | 'KV230'
+  | 'KV231'
+  | 'KV232'
+  | 'KV233'
+  | 'KV234'
+  | 'KV235'
+  | 'KV301'
+  | 'KV302'
+  | 'KV303'
+  | 'KV304'
+  | 'KV310'
+  | 'KV311'
+  | 'KV320'
+  | 'KV330'
+  | 'KV402'
+  | 'KV403'
+  | 'KV404'
+  | 'KV405'
+  | 'KV406'
+  | 'KV407'
+  | 'KV408'
+  | 'KV409'
+  | 'KV410'
+  | 'KV411';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -60,13 +60,13 @@ export interface DiagnosticTextOptions {
  * Render the human-readable text for a diagnostic code, optionally including or
  * preferring its help line.
  *
- * @param code - A `FW###` diagnostic code.
+ * @param code - A `KV###` diagnostic code.
  * @param options - Whether to include/prefer the help text.
  * @returns The diagnostic's message (and help, when requested).
  * @example
- * import { diagnosticDefinitionText } from '@jiso/core';
+ * import { diagnosticDefinitionText } from '@kovojs/core';
  *
- * const text: string = diagnosticDefinitionText('FW201', { includeHelp: true });
+ * const text: string = diagnosticDefinitionText('KV201', { includeHelp: true });
  */
 export function diagnosticDefinitionText(
   code: DiagnosticCode,
@@ -81,14 +81,14 @@ export function diagnosticDefinitionText(
 }
 
 /**
- * Type guard: narrow an unknown value to a known `FW###` diagnostic code.
+ * Type guard: narrow an unknown value to a known `KV###` diagnostic code.
  *
  * @param value - The value to test.
  * @returns `true` when `value` is a registered `DiagnosticCode`.
  * @example
- * import { isDiagnosticCode } from '@jiso/core';
+ * import { isDiagnosticCode } from '@kovojs/core';
  *
- * const code: unknown = 'FW201';
+ * const code: unknown = 'KV201';
  * if (isDiagnosticCode(code)) {
  *   // code is now typed as DiagnosticCode
  * }
@@ -97,10 +97,10 @@ export function isDiagnosticCode(value: unknown): value is DiagnosticCode {
   return typeof value === 'string' && value in diagnosticDefinitions;
 }
 
-/** The frozen registry of every `FW###` diagnostic: code → definition (message, severity, help). */
+/** The frozen registry of every `KV###` diagnostic: code → definition (message, severity, help). */
 export const diagnosticDefinitions = {
-  FW201: {
-    code: 'FW201',
+  KV201: {
+    code: 'KV201',
     detailLabels: {
       blockedExpression: 'Blocked expression:',
       elementParams: 'Element params:',
@@ -113,58 +113,58 @@ export const diagnosticDefinitions = {
     severity: 'error',
     message: 'Closure captures unserializable value.',
   },
-  FW210: {
-    code: 'FW210',
+  KV210: {
+    code: 'KV210',
     severity: 'lint',
     message: 'Anonymous handler; name it for stable identity.',
   },
-  FW211: {
-    code: 'FW211',
+  KV211: {
+    code: 'KV211',
     severity: 'lint',
     message: 'on:load eager trigger requires a justification comment.',
   },
-  FW212: {
-    code: 'FW212',
+  KV212: {
+    code: 'KV212',
     severity: 'lint',
     message: 'Unknown on:* event or execution trigger name.',
   },
-  FW220: {
-    code: 'FW220',
+  KV220: {
+    code: 'KV220',
     severity: 'error',
     message: 'Literal href or form action matches no declared route.',
   },
-  FW221: {
-    code: 'FW221',
+  KV221: {
+    code: 'KV221',
     severity: 'error',
     message: 'IDREF references an id not present in component scope.',
   },
-  FW222: {
-    code: 'FW222',
+  KV222: {
+    code: 'KV222',
     severity: 'error',
     message: 'Hand-written binding stamp disagrees with the typed expression it wraps.',
   },
-  FW223: {
-    code: 'FW223',
+  KV223: {
+    code: 'KV223',
     severity: 'lint',
     message: 'Redundant hand-written binding stamp in sugar; the compiler derives it.',
   },
-  FW224: {
-    code: 'FW224',
+  KV224: {
+    code: 'KV224',
     severity: 'error',
     message: 'Static id is duplicated in component scope or appears inside a repeatable stamp.',
   },
-  FW225: {
-    code: 'FW225',
+  KV225: {
+    code: 'KV225',
     severity: 'error',
     message: 'JSX nesting violates the HTML content model.',
   },
-  FW226: {
-    code: 'FW226',
+  KV226: {
+    code: 'KV226',
     severity: 'error',
-    message: 'fw-deps or fw-c names an unknown query instance or component.',
+    message: 'kovo-deps or kovo-c names an unknown query instance or component.',
   },
-  FW227: {
-    code: 'FW227',
+  KV227: {
+    code: 'KV227',
     help: [
       'Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.',
       'SPEC §4.8 requires empty-on-null semantics to be explicit so the server renderer and loader cannot drift.',
@@ -172,14 +172,14 @@ export const diagnosticDefinitions = {
     severity: 'error',
     message: 'Binding path traverses a nullable segment without ?.',
   },
-  FW228: {
-    code: 'FW228',
+  KV228: {
+    code: 'KV228',
     help: 'SPEC §9.5 requires static-first route matching to be unambiguous at compile time; split the patterns or make one route path more specific.',
     severity: 'error',
     message: 'Ambiguous route table: two routes can match the same canonical request path.',
   },
-  FW230: {
-    code: 'FW230',
+  KV230: {
+    code: 'KV230',
     detailLabels: {
       blockedChildren: 'Blocked children:',
       slotHoist: 'Would hoist children to:',
@@ -188,124 +188,124 @@ export const diagnosticDefinitions = {
     severity: 'error',
     message: 'Fragment-target children cannot lower to a component reference.',
   },
-  FW231: {
-    code: 'FW231',
+  KV231: {
+    code: 'KV231',
     severity: 'error',
     message: 'Unmergeable attribute conflict in primitive composition.',
   },
-  FW232: {
-    code: 'FW232',
+  KV232: {
+    code: 'KV232',
     severity: 'lint',
     message: 'Author overrides a primitive-owned ARIA or state attribute.',
   },
-  FW233: {
-    code: 'FW233',
+  KV233: {
+    code: 'KV233',
     severity: 'error',
     message: 'Two writers target the same binding slot.',
   },
-  FW234: {
-    code: 'FW234',
-    help: 'SPEC §6.1.1 requires lowercase, dash-terminated, app-wide unique package component prefixes; jiso-* is reserved for @jiso/* packages.',
+  KV234: {
+    code: 'KV234',
+    help: 'SPEC §6.1.1 requires lowercase, dash-terminated, app-wide unique package component prefixes; kovo-* is reserved for @kovojs/* packages.',
     severity: 'error',
     message: 'Package component prefix registration conflict or reservation violation.',
   },
-  FW235: {
-    code: 'FW235',
-    help: 'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+  KV235: {
+    code: 'KV235',
+    help: 'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
     severity: 'error',
     message:
       'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
   },
-  FW301: {
-    code: 'FW301',
+  KV301: {
+    code: 'KV301',
     severity: 'lint',
     message: 'Server fact stored in island-local state.',
   },
-  FW302: {
-    code: 'FW302',
+  KV302: {
+    code: 'KV302',
     severity: 'error',
     message: 'data-bind path is not present in the declared query shape.',
   },
-  FW303: {
-    code: 'FW303',
+  KV303: {
+    code: 'KV303',
     severity: 'error',
     message: 'Fragment target render input is not declared as query data or stamped props.',
   },
-  FW304: {
-    code: 'FW304',
+  KV304: {
+    code: 'KV304',
     severity: 'error',
     message: 'Reserved query name is not allowed.',
   },
-  FW310: {
-    code: 'FW310',
+  KV310: {
+    code: 'KV310',
     severity: 'warn',
     message: 'Invalidated query lacks optimistic transform.',
   },
-  FW311: {
-    code: 'FW311',
+  KV311: {
+    code: 'KV311',
     help: 'Fixes: add a data-bind/query update plan, mark the expression renderOnce, move the subtree behind a fragment target, or make the component isomorphic.',
     severity: 'warn',
     message: 'Query/state-dependent DOM position has no update status.',
   },
-  FW320: {
-    code: 'FW320',
+  KV320: {
+    code: 'KV320',
     severity: 'lint',
     message: 'Event payload overlaps query data; use a transform.',
   },
-  FW330: {
-    code: 'FW330',
+  KV330: {
+    code: 'KV330',
     severity: 'lint',
     message: 'Direct db access in a mutation handler; route through domain.',
   },
-  FW402: {
-    code: 'FW402',
+  KV402: {
+    code: 'KV402',
     severity: 'error',
     message: 'Write touched an undeclared domain.',
   },
-  FW403: {
-    code: 'FW403',
+  KV403: {
+    code: 'KV403',
     severity: 'warn',
     message: 'Declared domain was never observed written.',
   },
-  FW404: {
-    code: 'FW404',
+  KV404: {
+    code: 'KV404',
     severity: 'error',
     message: 'Write to unmapped table.',
   },
-  FW405: {
-    code: 'FW405',
+  KV405: {
+    code: 'KV405',
     severity: 'warn',
     message: 'Conditional write branch was never executed under instrumentation.',
   },
-  FW406: {
-    code: 'FW406',
+  KV406: {
+    code: 'KV406',
     severity: 'warn',
     message: 'Statically un-analyzable write site; manual touches required.',
   },
-  FW407: {
-    code: 'FW407',
+  KV407: {
+    code: 'KV407',
     help: 'No mutation touch graph writes that domain.',
     severity: 'error',
     message: 'Query read from undeclared domain.',
   },
-  FW408: {
-    code: 'FW408',
+  KV408: {
+    code: 'KV408',
     severity: 'error',
     message: 'Declared row key differs from observed row predicate.',
   },
-  FW409: {
-    code: 'FW409',
+  KV409: {
+    code: 'KV409',
     severity: 'notice',
     message: 'Non-eq predicate degraded to table-level invalidation.',
   },
-  FW410: {
-    code: 'FW410',
+  KV410: {
+    code: 'KV410',
     help: 'Opaque query projection requires a declared output schema.',
     severity: 'error',
     message: 'Query result shape failed declared output schema.',
   },
-  FW411: {
-    code: 'FW411',
+  KV411: {
+    code: 'KV411',
     severity: 'error',
     message: 'Query read set includes an exempt table.',
   },

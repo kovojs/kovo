@@ -6,7 +6,7 @@ order: 5
 
 # Deployment
 
-To ship a Jiso app you run a stateless app server (or, for sites without mutations, no server at
+To ship a Kovo app you run a stateless app server (or, for sites without mutations, no server at
 all), a database, and one thing most platforms leave implicit: you keep versioned client modules
 available across deploys. This guide covers each piece, and what "live" means without a socket tier.
 
@@ -15,9 +15,9 @@ available across deploys. This guide covers each piece, and what "live" means wi
 The v1 server holds no state between requests. Concretely:
 
 - **No session of what's on screen.** An enhanced mutation tells the server which fragments to render
-  through the `FW-Targets` header, read off the live DOM's `fw-deps` stamps at submit time. The
+  through the `Kovo-Targets` header, read off the live DOM's `kovo-deps` stamps at submit time. The
   server answers a self-contained question on every request.
-- **No socket tier, no pub/sub.** v1 ships no SSE and no live bus. `<fw-live>` over SSE is v2, added
+- **No socket tier, no pub/sub.** v1 ships no SSE and no live bus. `<kovo-live>` over SSE is v2, added
   as a transport over the same fragment/query vocabulary, so adopting it later isn't a rearchitecture.
 - **No optimistic state server-side.** Predictions live in the document and die with it.
 
@@ -39,7 +39,7 @@ This is the deployment mistake to design out first. Emitted module URLs are immu
 and your serving layer has to retain prior versions — so an old document's `on:*` refs keep
 resolving after a deploy, and the first interaction on a still-open tab never 404s.
 
-Here's why it matters. Jiso documents are long-lived. A tab opened before your Tuesday deploy still
+Here's why it matters. Kovo documents are long-lived. A tab opened before your Tuesday deploy still
 has HTML pointing at Tuesday-minus-one's handler modules:
 
 ```html
@@ -101,7 +101,7 @@ module files when you re-upload.
 
 v1 ships liveness only where the server stays stateless:
 
-- **BroadcastChannel rebroadcast** — a mutation's `<fw-query>` response is rebroadcast to the user's
+- **BroadcastChannel rebroadcast** — a mutation's `<kovo-query>` response is rebroadcast to the user's
   other open tabs. Add to cart in tab A, and the badge in tab B ticks. Zero server cost, no
   infrastructure.
 - **Refetch on focus/visibility** — the loader re-runs queries over the typed read endpoint
@@ -122,13 +122,13 @@ ahead of any deploy:
 vp check                  # typecheck + lint — wiring proofs (handlers, forms, links, bindings)
 vp test                   # vitest suites, including wire-level and pglite-backed tests
 vp run build              # production build
-vp run fw-check           # graph checks: FW310 optimistic coverage, FW311 update coverage, audits
+vp run kovo-check           # graph checks: KV310 optimistic coverage, KV311 update coverage, audits
 vp run graph-assertions   # your app's behavior rules, as graph queries
 ```
 
 The starter's CI workflow runs exactly this list. If a deploy passes these, the things that usually
 need a staging click-through — does this button do anything, does that mutation refresh the badge —
-are already proven. See [reading fw check & fw explain](/guides/fw-explain/).
+are already proven. See [reading kovo check & kovo explain](/guides/kovo-explain/).
 
 ## Checklist
 
@@ -137,17 +137,17 @@ are already proven. See [reading fw check & fw explain](/guides/fw-explain/).
 - [ ] HTML responses are not cached as immutable (documents change per deploy; modules don't).
 - [ ] 103 Early Hints / preload wired from `renderPageHints` output if your edge supports it.
 - [ ] Speculation Rules prefetch only on routes that opted in — it is per-route, default off.
-- [ ] CI runs `vp check`, `vp test`, `vp run fw-check`, and graph assertions before deploy.
+- [ ] CI runs `vp check`, `vp test`, `vp run kovo-check`, and graph assertions before deploy.
 
 ## Next
 
-- [Reading fw check & fw explain](/guides/fw-explain/) — the gates in that checklist.
+- [Reading kovo check & kovo explain](/guides/kovo-explain/) — the gates in that checklist.
 - [Streaming & defer](/guides/streaming/) — response streaming and what it needs from the edge.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
-The stateless-server guarantee and liveness without sockets: SPEC §9.3. `FW-Targets` and the
+The stateless-server guarantee and liveness without sockets: SPEC §9.3. `Kovo-Targets` and the
 mutation round-trip: SPEC §9.1. Session providers: SPEC §6.5. The typed read endpoint: SPEC §9.4.
 `keepalive` and bfcache hygiene, plus per-route Speculation Rules: SPEC §8. Immutable versioned
 module URLs and the retention rule, plus deploy-skew handling: SPEC §6.6. Schema-validated old-form

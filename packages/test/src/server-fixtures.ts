@@ -481,7 +481,7 @@ export async function serverCommerceStylesheetBehaviorFact(
         ],
       },
     ],
-    shell: '<!doctype html><main><fw-defer target="recommendations"></fw-defer></main>',
+    shell: '<!doctype html><main><kovo-defer target="recommendations"></kovo-defer></main>',
   });
   const deferredElements = htmlElementFacts(deferred.body);
   const cart = runtime.domain('cart');
@@ -503,7 +503,7 @@ export async function serverCommerceStylesheetBehaviorFact(
 
   return {
     deferred: {
-      fragmentAttrs: deferredElements.find((element) => element.tag === 'fw-fragment')?.attrs,
+      fragmentAttrs: deferredElements.find((element) => element.tag === 'kovo-fragment')?.attrs,
       linkAttrs: deferredElements.find((element) => element.tag === 'link')?.attrs,
       sectionAttrs: deferredElements.find((element) => element.tag === 'section')?.attrs,
       tags: deferredElements.map((element) => element.tag),
@@ -511,7 +511,7 @@ export async function serverCommerceStylesheetBehaviorFact(
     failure: await runtime.renderMutationEndpointResponse(addToCart, {
       failureStylesheets: ['/assets/tailwind.css'],
       failureTarget: 'product-form:p2',
-      headers: { 'FW-Fragment': 'true' },
+      headers: { 'Kovo-Fragment': 'true' },
       rawInput: { productId: 'p2' },
       renderFailureFragment: () =>
         '<form class="border-slate-200"><output role="alert">Only 0 left.</output></form>',
@@ -539,7 +539,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
   });
   const cartMeta = runtime.metaFromQuery(cartQuery, (cart: { count: number }) => ({
     description: `Browse products and checkout with ${cart.count} verifiable cart item.`,
-    title: `Jiso Commerce (${cart.count})`,
+    title: `Kovo Commerce (${cart.count})`,
   }));
   const messages = runtime.i18n('en-US', {
     cartLabel: 'Cart ({count})',
@@ -642,14 +642,14 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
       },
     };
   };
-  const progressElement = element({ 'fw-upload-progress': '', max: '100', value: '0' });
-  const pendingElement = element({ 'fw-deps': 'order' });
+  const progressElement = element({ 'kovo-upload-progress': '', max: '100', value: '0' });
+  const pendingElement = element({ 'kovo-deps': 'order' });
   const form = {
-    ...element({ 'data-mutation': 'order/receipt', enhance: '', 'fw-deps': 'order' }),
+    ...element({ 'data-mutation': 'order/receipt', enhance: '', 'kovo-deps': 'order' }),
     action: '/_m/order/receipt',
     method: 'post',
     querySelectorAll(selector: string) {
-      return selector === '[fw-upload-progress]' ? [progressElement] : [];
+      return selector === '[kovo-upload-progress]' ? [progressElement] : [];
     },
   };
   const mutationRoot = {
@@ -657,7 +657,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
       return null;
     },
     querySelectorAll(selector: string) {
-      return selector === '[fw-deps]' ? [pendingElement] : [];
+      return selector === '[kovo-deps]' ? [pendingElement] : [];
     },
   };
   let pendingDuringResponse: string | null = null;
@@ -667,8 +667,8 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
       headers: { get: () => null },
       async text() {
         options.onUploadProgress?.({ loaded: 32, total: 64 });
-        pendingDuringResponse = pendingElement.getAttribute('fw-pending');
-        return '<fw-query name="receipt">{"ok":true}</fw-query>';
+        pendingDuringResponse = pendingElement.getAttribute('kovo-pending');
+        return '<kovo-query name="receipt">{"ok":true}</kovo-query>';
       },
     }),
     form,
@@ -709,7 +709,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
         },
       ),
     ],
-    headers: { 'FW-Fragment': 'true', 'FW-Targets': 'product-grid' },
+    headers: { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'product-grid' },
     rawInput: { productId: 'p1' },
     request: {},
   });
@@ -738,7 +738,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
       translation: runtime.t(messages, 'cartLabel', { count: 1 }),
     },
     upload: {
-      pendingAfterSubmit: pendingElement.getAttribute('fw-pending'),
+      pendingAfterSubmit: pendingElement.getAttribute('kovo-pending'),
       pendingDuringResponse,
       progress: {
         max: progressElement.getAttribute('max'),

@@ -1,5 +1,5 @@
-import { applyPatchProgram, type JsonValue } from '@jiso/core';
-import { deriveOptimistic, lowerTransform } from '@jiso/drizzle/derive';
+import { applyPatchProgram, type JsonValue } from '@kovojs/core';
+import { deriveOptimistic, lowerTransform } from '@kovojs/drizzle/derive';
 import { describe, expect, it } from 'vitest';
 
 import {

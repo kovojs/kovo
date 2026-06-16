@@ -129,7 +129,7 @@ function renderPageStylesheetHint(asset: StylesheetAsset): string {
   const link = `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`;
   if (!asset.criticalCss) return link;
 
-  return `<style data-jiso-critical-href="${escapeAttribute(asset.href)}">${escapeStyleText(asset.criticalCss)}</style>${link}`;
+  return `<style data-kovo-critical-href="${escapeAttribute(asset.href)}">${escapeStyleText(asset.criticalCss)}</style>${link}`;
 }
 
 function renderEarlyHints(
@@ -219,7 +219,7 @@ function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): string[] {
 
   return catalogs.map(
     (catalog) =>
-      `<script type="application/json" fw-i18n locale="${escapeAttribute(catalog.locale)}">${escapeScriptJson(JSON.stringify(catalog.messages))}</script>`,
+      `<script type="application/json" kovo-i18n locale="${escapeAttribute(catalog.locale)}">${escapeScriptJson(JSON.stringify(catalog.messages))}</script>`,
   );
 }
 

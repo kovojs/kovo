@@ -1,4 +1,4 @@
-import type { ComponentExplain, FwExplainInput } from '@jiso/core';
+import type { ComponentExplain, KovoExplainInput } from '@kovojs/core';
 
 import type { ComponentCssAsset } from './css.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
@@ -35,7 +35,7 @@ export interface RegistryFacts {
 export type RegistryTypeFacts = Readonly<Record<string, string>>;
 
 export type RegistryGraphInput = Pick<
-  FwExplainInput,
+  KovoExplainInput,
   'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
 >;
 
@@ -150,7 +150,7 @@ export function emitElementParamTypes(params: readonly ElementParam[]): string {
   const entries = typedParams
     .map((param) => `${elementParamNameFromAttribute(param.attributeName)}:${param.type}`)
     .join(',');
-  return `fw-param-types="${entries}"`;
+  return `kovo-param-types="${entries}"`;
 }
 
 export function elementParamAttributeNameFromPropertyName(name: string): string {

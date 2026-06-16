@@ -1,5 +1,5 @@
 // Tutorial step 03 (chapter 3): an in-memory database standing in for the
-// SPEC.md section 10.1 schema layer. The blessed @jiso/drizzle path derives
+// SPEC.md section 10.1 schema layer. The blessed @kovojs/drizzle path derives
 // domains from real table annotations; the tutorial keeps the storage plain
 // so every behavior stays visible.
 

@@ -6,7 +6,7 @@ import { staticExportOutputTargets } from './static-export-output-targets.js';
 
 describe('server static export output target boundary', () => {
   it('plans route document, client module, and static asset targets in write order', () => {
-    const root = path.resolve('/tmp/jiso-static-export-targets');
+    const root = path.resolve('/tmp/kovo-static-export-targets');
 
     expect(
       staticExportOutputTargets(
@@ -71,7 +71,7 @@ describe('server static export output target boundary', () => {
   });
 
   it('rejects unsafe route documents, client modules, and static assets before output writes', () => {
-    const root = path.resolve('/tmp/jiso-static-export-targets');
+    const root = path.resolve('/tmp/kovo-static-export-targets');
     const base = {
       artifacts: [],
       assets: [],
@@ -189,7 +189,7 @@ describe('server static export output target boundary', () => {
           ],
           clientModules: [],
         },
-        path.resolve('/tmp/jiso-static-export-targets'),
+        path.resolve('/tmp/kovo-static-export-targets'),
       ),
     ).toThrow(/conflicts with route document '\/index\.html'/);
   });

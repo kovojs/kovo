@@ -1,6 +1,6 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
-import { cn, safeUrl, separatorRootAttributes, type ClassValue } from '@jiso/headless-ui';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { cn, safeUrl, separatorRootAttributes, type ClassValue } from '@kovojs/headless-ui';
 
 export interface BreadcrumbProps {
   children?: string;

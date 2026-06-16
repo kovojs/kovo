@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installJisoLoader, type MutationBroadcast } from './index.js';
+import { createQueryStore, installKovoLoader, type MutationBroadcast } from './index.js';
 import {
   FakeBroadcastChannel,
   FakeElement,
@@ -34,7 +34,7 @@ describe('loader disposal', () => {
     root.elements.set('[on\\:visible]', [visibleElement]);
 
     try {
-      const loader = installJisoLoader({
+      const loader = installKovoLoader({
         discardPendingOptimism,
         enhancedMutations: {
           fetch: vi.fn(),
@@ -77,7 +77,7 @@ describe('loader disposal', () => {
       publish: vi.fn(),
     };
 
-    const loader = installJisoLoader({
+    const loader = installKovoLoader({
       enhancedMutations: {
         broadcast,
         fetch: vi.fn(),

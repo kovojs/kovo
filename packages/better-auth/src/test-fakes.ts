@@ -38,7 +38,7 @@ export class FakeBetterAuth implements BetterAuthLike<AuthSession, AuthUser> {
     getSession: (options: { headers: Headers }) => {
       this.lastHeaders = options.headers;
 
-      if (options.headers.get('cookie') !== 'jiso_session=s1') return null;
+      if (options.headers.get('cookie') !== 'kovo_session=s1') return null;
 
       return {
         session: {
@@ -80,16 +80,16 @@ export class FakeCredentialAuth {
       }
 
       return responseWithCookies([
-        'jiso_session=session-1; Path=/; HttpOnly; SameSite=Lax',
-        'jiso_session_data=user-1; Path=/; HttpOnly; SameSite=Lax',
+        'kovo_session=session-1; Path=/; HttpOnly; SameSite=Lax',
+        'kovo_session_data=user-1; Path=/; HttpOnly; SameSite=Lax',
       ]);
     },
     signOut: async (options: { asResponse: true; headers: Headers }) => {
       this.lastSignOut = options;
 
       return responseWithCookies([
-        'jiso_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
-        'jiso_session_data=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+        'kovo_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+        'kovo_session_data=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
       ]);
     },
     signUpEmail: async (options: {
@@ -103,7 +103,7 @@ export class FakeCredentialAuth {
         return responseWithCookies([], 400);
       }
 
-      return responseWithCookies(['jiso_session=session-2; Path=/; HttpOnly; SameSite=Lax']);
+      return responseWithCookies(['kovo_session=session-2; Path=/; HttpOnly; SameSite=Lax']);
     },
   };
 

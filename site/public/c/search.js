@@ -1,5 +1,5 @@
 /**
- * ⌘K search island (plan W8). An ordinary Jiso handler module: nothing here
+ * ⌘K search island (plan W8). An ordinary Kovo handler module: nothing here
  * runs until the loader imports it on first interaction (SPEC §4.4, §7 L1).
  * The index is fetched once, on open — zero JS, zero network before that.
  */

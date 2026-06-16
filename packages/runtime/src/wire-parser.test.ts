@@ -30,15 +30,15 @@ describe('wire parser HTML entity handling', () => {
     expect(wireParserModule.readMutationResponseBodyChunks).toBe(readMutationResponseBodyChunks);
   });
 
-  it('reads fw-query attributes with quoted tag closers', () => {
+  it('reads kovo-query attributes with quoted tag closers', () => {
     expect(
-      readQueryChunks('<fw-query name="cart" key="cart>a">{&quot;count&quot;:1}</fw-query>'),
+      readQueryChunks('<kovo-query name="cart" key="cart>a">{&quot;count&quot;:1}</kovo-query>'),
     ).toEqual([{ key: 'cart>a', name: 'cart', value: { count: 1 } }]);
   });
 
-  it('reads a pre-split fw-query element chunk through the same decoded shape', () => {
+  it('reads a pre-split kovo-query element chunk through the same decoded shape', () => {
     // SPEC.md §9.1/§9.4: inline hydration and mutation bodies share the same
-    // fw-query chunk parser after the inline bootstrap has split wire markup.
+    // kovo-query chunk parser after the inline bootstrap has split wire markup.
     expect(
       readQueryElementChunk({
         attrs: ' name="product" key="product&gt;p1"',
@@ -50,7 +50,7 @@ describe('wire parser HTML entity handling', () => {
   it('normalizes canonical query instance names into the shared query chunk shape', () => {
     // SPEC.md §9.4/§10.2: typed reads and hydration carry instance keys as
     // `query:key`; runtime apply paths decode that once before hitting the store.
-    expect(readQueryChunks('<fw-query name="product:p1">{"stock":7}</fw-query>')).toEqual([
+    expect(readQueryChunks('<kovo-query name="product:p1">{"stock":7}</kovo-query>')).toEqual([
       { key: 'p1', name: 'product', value: { stock: 7 } },
     ]);
     expect(
@@ -62,17 +62,17 @@ describe('wire parser HTML entity handling', () => {
     expect(
       readQueryScriptChunks([
         {
-          getAttribute: (name) => (name === 'fw-query' ? 'product:p3' : null),
+          getAttribute: (name) => (name === 'kovo-query' ? 'product:p3' : null),
           textContent: '{"stock":9}',
         },
       ]),
     ).toEqual([{ key: 'p3', name: 'product', value: { stock: 9 } }]);
   });
 
-  it('decodes apostrophe entities in fw-query JSON bodies', () => {
+  it('decodes apostrophe entities in kovo-query JSON bodies', () => {
     expect(
       readQueryChunks(
-        '<fw-query name="cart">{&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}</fw-query>',
+        '<kovo-query name="cart">{&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}</kovo-query>',
       ),
     ).toEqual([{ name: 'cart', value: { label: "Alice's & Bob's" } }]);
   });
@@ -82,12 +82,14 @@ describe('wire parser HTML entity handling', () => {
 
     expect(
       readQueryChunks(
-        '<fw-query name="cart">{&quot;label&quot;:&#39;bad&#39;}</fw-query>',
+        '<kovo-query name="cart">{&quot;label&quot;:&#39;bad&#39;}</kovo-query>',
         onError,
       ),
     ).toEqual([]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
-    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed JSON in kovo-query cart',
+    );
   });
 
   it('reads hydrated query scripts into the shared query chunk shape', () => {
@@ -97,11 +99,11 @@ describe('wire parser HTML entity handling', () => {
       readQueryScriptChunks([
         {
           getAttribute: (name) =>
-            name === 'fw-query' ? 'product' : name === 'key' ? 'product>p1' : null,
+            name === 'kovo-query' ? 'product' : name === 'key' ? 'product>p1' : null,
           textContent: '{"stock":7}',
         },
         {
-          getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+          getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
           textContent: '{"count":2}',
         },
         {
@@ -118,7 +120,7 @@ describe('wire parser HTML entity handling', () => {
   it('keeps hydrated script chunks and wire query chunks on one parsed query shape', () => {
     const hydrated = readQueryScriptChunks([
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'product:p1' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'product:p1' : null),
         textContent: '{"label":"Alice\'s & Bob\'s"}',
       },
     ]);
@@ -132,14 +134,14 @@ describe('wire parser HTML entity handling', () => {
     expect(hydrated).toEqual([wire]);
   });
 
-  it('reports hydrated query script JSON with the same fw-query label as wire chunks', () => {
+  it('reports hydrated query script JSON with the same kovo-query label as wire chunks', () => {
     const onError = vi.fn();
 
     expect(
       readQueryScriptChunks(
         [
           {
-            getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+            getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
             textContent: '{',
           },
         ],
@@ -147,31 +149,33 @@ describe('wire parser HTML entity handling', () => {
       ),
     ).toEqual([]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
-    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed JSON in kovo-query cart',
+    );
   });
 
-  it('reports malformed fw-query markup instead of silently truncating', () => {
+  it('reports malformed kovo-query markup instead of silently truncating', () => {
     const onError = vi.fn();
 
-    expect(readQueryChunks('<fw-query name="cart">{"count":1}', onError)).toEqual([]);
+    expect(readQueryChunks('<kovo-query name="cart">{"count":1}', onError)).toEqual([]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
-      'Malformed fw-query chunk: missing closing tag',
+      'Malformed kovo-query chunk: missing closing tag',
     );
   });
 
   it('decodes mutation response bodies into one query and fragment shape', () => {
     const onError = vi.fn();
 
-    // SPEC.md §9.1: enhanced mutation responses use fw-query plus fw-fragment
+    // SPEC.md §9.1: enhanced mutation responses use kovo-query plus kovo-fragment
     // wire chunks, and all runtime apply paths consume the same decoded body.
     expect(
       readMutationResponseBodyChunks(
         [
-          '<fw-query name="cart">{</fw-query>',
-          '<fw-query name="inventory" key="inventory:p1">{"available":true}</fw-query>',
-          '<fw-fragment target="inventory" mode="append"><li>p1</li></fw-fragment>',
-          '<fw-fragment target="stale"><li>stale</li>',
+          '<kovo-query name="cart">{</kovo-query>',
+          '<kovo-query name="inventory" key="inventory:p1">{"available":true}</kovo-query>',
+          '<kovo-fragment target="inventory" mode="append"><li>p1</li></kovo-fragment>',
+          '<kovo-fragment target="stale"><li>stale</li>',
         ].join('\n'),
         onError,
       ),
@@ -180,8 +184,8 @@ describe('wire parser HTML entity handling', () => {
       queries: [{ key: 'inventory:p1', name: 'inventory', value: { available: true } }],
     });
     expect(onError.mock.calls.map(([error]) => String(error.message))).toEqual([
-      expect.stringContaining('Malformed JSON in fw-query cart'),
-      expect.stringContaining('Malformed fw-fragment chunk: missing closing tag'),
+      expect.stringContaining('Malformed JSON in kovo-query cart'),
+      expect.stringContaining('Malformed kovo-fragment chunk: missing closing tag'),
     ]);
   });
 
@@ -190,44 +194,44 @@ describe('wire parser HTML entity handling', () => {
 
     // SPEC.md §4.4/§9.1 (v1-cleanup item 3): readMutationResponseBodyChunks now
     // consumes readMutationResponseBodyCore for scan + fragment decode, but the
-    // observable onError sequence must stay: malformed fw-query reasons reported
-    // during the shared scan / decode pass, then buffered fw-fragment reasons
+    // observable onError sequence must stay: malformed kovo-query reasons reported
+    // during the shared scan / decode pass, then buffered kovo-fragment reasons
     // replayed afterwards. Malformed query MARKUP (not just JSON) must still come
     // before malformed fragment markup.
     expect(
       readMutationResponseBodyChunks(
         [
-          '<fw-query name="cart">{"count":1}',
-          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge>',
+          '<kovo-query name="cart">{"count":1}',
+          '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge>',
         ].join(''),
         onError,
       ),
     ).toEqual({ fragments: [], queries: [] });
     expect(onError.mock.calls.map(([error]) => String(error.message))).toEqual([
-      expect.stringContaining('Malformed fw-query chunk: missing closing tag'),
-      expect.stringContaining('Malformed fw-fragment chunk: missing closing tag'),
+      expect.stringContaining('Malformed kovo-query chunk: missing closing tag'),
+      expect.stringContaining('Malformed kovo-fragment chunk: missing closing tag'),
     ]);
   });
 
   it('extracts CRLF deferred stream parts before the shared mutation parser', () => {
-    // SPEC.md §9.1: deferred streams carry the same fw-query/fw-fragment
+    // SPEC.md §9.1: deferred streams carry the same kovo-query/kovo-fragment
     // mutation vocabulary; multipart boundary framing must not create a
     // transport-specific apply/parser fork.
     expect(
       deferredStreamChunks(
         [
           'HTTP/1.1 200 OK\r\n',
-          '--jiso-boundary\r\n',
-          'Content-Type: text/vnd.jiso.fragment+html\r\n',
+          '--kovo-boundary\r\n',
+          'Content-Type: text/vnd.kovo.fragment+html\r\n',
           '\r\n',
-          '<fw-query name="cart">{"count":1}</fw-query>\r\n',
-          '--jiso-boundary\r\n',
-          'Content-Type: text/vnd.jiso.fragment+html\r\n',
+          '<kovo-query name="cart">{"count":1}</kovo-query>\r\n',
+          '--kovo-boundary\r\n',
+          'Content-Type: text/vnd.kovo.fragment+html\r\n',
           '\r\n',
-          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>\r\n',
-          '--jiso-boundary--\r\n',
+          '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>\r\n',
+          '--kovo-boundary--\r\n',
         ].join(''),
-        'jiso-boundary',
+        'kovo-boundary',
       ).map((chunk) => readMutationResponseBodyChunks(chunk)),
     ).toEqual([
       {
@@ -244,49 +248,49 @@ describe('wire parser HTML entity handling', () => {
   it('filters deferred stream parts through the mutation response element scanner', () => {
     // SPEC.md §9.1: deferred streams reuse mutation response wire chunks, so
     // stream part detection must not keep a regex-only parser beside the
-    // canonical fw-query/fw-fragment element scanner.
+    // canonical kovo-query/kovo-fragment element scanner.
     expect(
       deferredStreamChunks(
         [
-          '--jiso-boundary',
+          '--kovo-boundary',
           '<p>shell-only chunk</p>',
-          '--jiso-boundary',
-          '<fw-query name="cart">{"count":1}',
-          '--jiso-boundary',
-          '<fw-fragment target="cart"><span>ready</span></fw-fragment>',
-          '--jiso-boundary--',
+          '--kovo-boundary',
+          '<kovo-query name="cart">{"count":1}',
+          '--kovo-boundary',
+          '<kovo-fragment target="cart"><span>ready</span></kovo-fragment>',
+          '--kovo-boundary--',
         ].join('\n'),
-        'jiso-boundary',
+        'kovo-boundary',
       ),
     ).toEqual([
-      '<fw-query name="cart">{"count":1}',
-      '<fw-fragment target="cart"><span>ready</span></fw-fragment>',
+      '<kovo-query name="cart">{"count":1}',
+      '<kovo-fragment target="cart"><span>ready</span></kovo-fragment>',
     ]);
   });
 
-  it('reports malformed fw-fragment markup instead of silently truncating', () => {
+  it('reports malformed kovo-fragment markup instead of silently truncating', () => {
     const onError = vi.fn();
 
     expect(
       readMutationResponseBodyChunks(
         [
-          '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
-          '<fw-fragment target="cart-list"><li>stale</li>',
+          '<kovo-fragment target="cart-badge"><cart-badge>3</cart-badge></kovo-fragment>',
+          '<kovo-fragment target="cart-list"><li>stale</li>',
         ].join('\n'),
         onError,
       ).fragments,
     ).toEqual([{ html: '<cart-badge>3</cart-badge>', target: 'cart-badge' }]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
-      'Malformed fw-fragment chunk: missing closing tag',
+      'Malformed kovo-fragment chunk: missing closing tag',
     );
   });
 
   it('keeps mutation-body and standalone fragment chunk decoding in parity', () => {
     const body = [
-      '<fw-fragment target="cart-list" mode="append"><li>new</li></fw-fragment>',
-      '<fw-fragment><li>missing target</li></fw-fragment>',
-      '<fw-fragment target="cart-total" mode="replace"><span>$7</span></fw-fragment>',
+      '<kovo-fragment target="cart-list" mode="append"><li>new</li></kovo-fragment>',
+      '<kovo-fragment><li>missing target</li></kovo-fragment>',
+      '<kovo-fragment target="cart-total" mode="replace"><span>$7</span></kovo-fragment>',
     ].join('');
 
     // SPEC.md §9.1: response apply and fragment-only readers consume the same

@@ -13,7 +13,7 @@ interface TestFragmentTarget {
 
 describe('response fragment apply primitive', () => {
   it('applies replace and append fragment modes through supplied target operations', () => {
-    // SPEC.md §9.1: fw-fragment patches share one decoded apply primitive
+    // SPEC.md §9.1: kovo-fragment patches share one decoded apply primitive
     // across modular morph and the generated inline loader closure.
     const targets = new Map([
       ['cart-badge', { html: '' }],

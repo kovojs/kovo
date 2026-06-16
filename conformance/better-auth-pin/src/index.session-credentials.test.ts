@@ -1,5 +1,5 @@
-import { renderRoutePageResponse, route, runMutation } from '@jiso/server';
-import { createJisoTestHarness } from '@jiso/test/harness';
+import { renderRoutePageResponse, route, runMutation } from '@kovojs/server';
+import { createKovoTestHarness } from '@kovojs/test/harness';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -34,7 +34,7 @@ import {
 } from './real-auth-fixtures.js';
 
 describe('Better Auth pinned conformance', () => {
-  it('maps a real Better Auth session through the Jiso session provider seam', async () => {
+  it('maps a real Better Auth session through the Kovo session provider seam', async () => {
     const { auth } = createRealAuth();
     const signUp = await auth.api.signUpEmail({
       asResponse: true,
@@ -61,7 +61,7 @@ describe('Better Auth pinned conformance', () => {
     await expect(provider({ headers: requestHeaders() })).resolves.toBe(null);
   });
 
-  it('wraps real sign-up, sign-in, and sign-out auth.api responses as Jiso mutations', async () => {
+  it('wraps real sign-up, sign-in, and sign-out auth.api responses as Kovo mutations', async () => {
     const { auth } = createRealAuth();
     const signUp = betterAuthSignUpEmailMutation(auth, {
       csrf: false,
@@ -342,7 +342,7 @@ describe('Better Auth pinned conformance', () => {
   });
 
   it('verifies adapter credential wrappers through the P9 observed-write harness', async () => {
-    const harness = createJisoTestHarness<AuthVerifierDb>({
+    const harness = createKovoTestHarness<AuthVerifierDb>({
       db: createAuthVerifierDb(),
       request: {
         headers: requestHeaders(),
@@ -446,7 +446,7 @@ describe('Better Auth pinned conformance', () => {
       db: PluginVerifierDb;
       headers: Headers;
     };
-    const harness = createJisoTestHarness<PluginVerifierDb>({
+    const harness = createKovoTestHarness<PluginVerifierDb>({
       db: {
         writes: [],
         write(table, value) {

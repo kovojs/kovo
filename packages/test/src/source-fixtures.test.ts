@@ -26,8 +26,8 @@ import {
   projectTouchGraphBehaviorFacts,
 } from './source-fixtures.js';
 
-describe('@jiso/test source fixture seam', () => {
-  it('extracts Tailwind source directives without keeping a local fw-check parser', () => {
+describe('@kovojs/test source fixture seam', () => {
+  it('extracts Tailwind source directives without keeping a local kovo-check parser', () => {
     expect(
       cssSourceDirectives(
         [
@@ -44,15 +44,15 @@ describe('@jiso/test source fixture seam', () => {
       cssScopeRules(
         [
           '.global { color: red; }',
-          '  @scope (doc-card) to (:scope [fw-c]) {',
+          '  @scope (doc-card) to (:scope [kovo-c]) {',
           '    .title { color: teal; }',
           '  }',
         ].join('\n'),
       ),
     ).toEqual([
       {
-        limit: ':scope [fw-c]',
-        raw: '@scope (doc-card) to (:scope [fw-c]) {',
+        limit: ':scope [kovo-c]',
+        raw: '@scope (doc-card) to (:scope [kovo-c]) {',
         scope: 'doc-card',
       },
     ]);
@@ -115,7 +115,7 @@ describe('@jiso/test source fixture seam', () => {
   });
 
   it('resolves source-site lines without pinning callers to raw line parsing', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'jiso-test-source-lines-'));
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-source-lines-'));
     try {
       await mkdir(join(root, 'src'), { recursive: true });
       await writeFile(
@@ -138,14 +138,14 @@ describe('@jiso/test source fixture seam', () => {
     }
   });
 
-  it('loads structured project file and package-directory facts for fw-check gates', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'jiso-test-project-source-'));
+  it('loads structured project file and package-directory facts for kovo-check gates', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-project-source-'));
     try {
       await mkdir(join(root, 'packages/runtime/src'), { recursive: true });
       await mkdir(join(root, 'packages/runtime/docs'), { recursive: true });
       await mkdir(join(root, 'packages/compiler/src'), { recursive: true });
       await writeFile(join(root, 'packages/compiler/package.json'), '{}');
-      await writeFile(join(root, 'packages/runtime/package.json'), '{"name":"@jiso/runtime"}');
+      await writeFile(join(root, 'packages/runtime/package.json'), '{"name":"@kovojs/runtime"}');
       await writeFile(join(root, 'packages/runtime/src/index.ts'), 'export const runtime = true;');
       await writeFile(join(root, 'packages/runtime/docs/readme.md'), '# Runtime');
       await writeFile(join(root, 'packages/compiler/src/index.test.ts'), 'export {};');
@@ -171,7 +171,7 @@ describe('@jiso/test source fixture seam', () => {
         { path: 'packages/runtime/src/index.ts', source: 'export const runtime = true;' },
       ]);
       expect(await projectJsonFile(root, 'packages/runtime/package.json')).toEqual({
-        name: '@jiso/runtime',
+        name: '@kovojs/runtime',
       });
       expect(await projectPackageManifestFacts({ rootPath: root, directory: 'packages' })).toEqual([
         {
@@ -180,7 +180,7 @@ describe('@jiso/test source fixture seam', () => {
         },
         {
           directory: 'runtime',
-          manifest: { name: '@jiso/runtime' },
+          manifest: { name: '@kovojs/runtime' },
         },
       ]);
     } finally {
@@ -189,7 +189,7 @@ describe('@jiso/test source fixture seam', () => {
   });
 
   it('audits framework source for forbidden browser architecture through a project fixture', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'jiso-test-browser-architecture-'));
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-browser-architecture-'));
     try {
       await mkdir(join(root, 'packages/runtime/src'), { recursive: true });
       await mkdir(join(root, 'packages/runtime/test'), { recursive: true });
@@ -238,7 +238,7 @@ describe('@jiso/test source fixture seam', () => {
     }
   });
 
-  it('provides Drizzle query source fixtures without local fw-check source bodies', () => {
+  it('provides Drizzle query source fixtures without local kovo-check source bodies', () => {
     const fixtures = drizzleQueryBehaviorSourceFixtures();
 
     expect(Object.keys(fixtures).sort()).toEqual([
@@ -267,7 +267,7 @@ describe('@jiso/test source fixture seam', () => {
       {
         diagnostics: [
           {
-            code: 'FW410',
+            code: 'KV410',
             message: 'Opaque query projection requires a declared output schema.',
             severity: 'error',
             site: 'cart.queries.ts:4',
@@ -290,7 +290,7 @@ describe('@jiso/test source fixture seam', () => {
     expect(projectQueryBehaviorFacts(queryFacts)).toEqual(queryFacts);
     expect(projectQueryDiagnosticFacts(queryFacts)).toEqual([
       {
-        code: 'FW410',
+        code: 'KV410',
         message: 'Opaque query projection requires a declared output schema.',
         severity: 'error',
         site: 'cart.queries.ts:4',

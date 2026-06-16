@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   compileComponentV1,
-  handleFwMcpRequest,
+  handleKovoMcpRequest,
   runMcpFallbackStdio,
   runMcpSdkServer,
 } from './index.js';
@@ -63,7 +63,7 @@ function writePackageManifest(
   writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest)}\n`, 'utf8');
 }
 
-describe('compile/v1 and fw mcp', () => {
+describe('compile/v1 and kovo mcp', () => {
   it('returns a snapshot-stable compile/v1 contract for in-memory component source', async () => {
     await expect(
       compileComponentV1({
@@ -80,17 +80,17 @@ describe('compile/v1 and fw mcp', () => {
         "diagnostics": [],
         "emittedFiles": [
           {
-            "byteLength": 78,
+            "byteLength": 80,
             "fileName": "cart-badge.server.js",
             "kind": "server",
           },
           {
-            "byteLength": 42,
+            "byteLength": 44,
             "fileName": "cart-badge.client.js",
             "kind": "client",
           },
           {
-            "byteLength": 652,
+            "byteLength": 656,
             "fileName": "generated/registries.d.ts",
             "kind": "registry",
           },
@@ -112,7 +112,7 @@ describe('compile/v1 and fw mcp', () => {
     `);
   });
 
-  it('proves the in-memory repair loop with shared FW201 diagnostics', async () => {
+  it('proves the in-memory repair loop with shared KV201 diagnostics', async () => {
     const adversarial = await compileComponentV1({
       fileName: 'cart-badge.tsx',
       source: '<button onClick={() => window.alert("x")}>x</button>',
@@ -120,18 +120,18 @@ describe('compile/v1 and fw mcp', () => {
 
     expect(adversarial.ok).toBe(false);
     expect(adversarial.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      'FW210',
-      'FW201',
+      'KV210',
+      'KV201',
     ]);
-    const fw201 = adversarial.diagnostics.find((diagnostic) => diagnostic.code === 'FW201');
-    expect(fw201).toMatchObject({
-      code: 'FW201',
+    const kv201 = adversarial.diagnostics.find((diagnostic) => diagnostic.code === 'KV201');
+    expect(kv201).toMatchObject({
+      code: 'KV201',
       fileName: 'cart-badge.tsx',
       message: 'Closure captures unserializable value.',
       severity: 'error',
       start: { column: 9, line: 1 },
     });
-    expect(fw201?.help).toContain(
+    expect(kv201?.help).toContain(
       'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
     );
 
@@ -145,15 +145,15 @@ describe('compile/v1 and fw mcp', () => {
   });
 
   it('feeds discovered package prefix facts through compile/v1', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'jiso-cli-prefix-'));
+    const root = mkdtempSync(join(tmpdir(), 'kovo-cli-prefix-'));
 
     try {
       writePackageManifest(root, '@acme/primitives', {
-        jiso: { prefix: 'acme-' },
+        kovo: { prefix: 'acme-' },
         name: '@acme/primitives',
       });
       writePackageManifest(root, '@other/widgets', {
-        jiso: { prefix: 'acme-' },
+        kovo: { prefix: 'acme-' },
         name: '@other/widgets',
       });
 
@@ -162,7 +162,7 @@ describe('compile/v1 and fw mcp', () => {
           fileName: 'src/shell.tsx',
           packagePrefixDiscoveryRoot: root,
           source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import '@acme/primitives';
 import '@other/widgets';
 
@@ -174,7 +174,7 @@ export const Shell = component('shell', {
       ).resolves.toMatchObject({
         diagnostics: [
           {
-            code: 'FW234',
+            code: 'KV234',
             fileName: 'src/shell.tsx',
             message:
               'Package component prefix registration conflict or reservation violation. Effective package prefix "acme-" is claimed by @acme/primitives and @other/widgets.',
@@ -189,7 +189,7 @@ export const Shell = component('shell', {
   });
 
   it('exposes MCP-style tool listing and structured compile results over JSON-RPC objects', async () => {
-    await expect(handleFwMcpRequest({ id: 1, jsonrpc: '2.0', method: 'tools/list' })).resolves
+    await expect(handleKovoMcpRequest({ id: 1, jsonrpc: '2.0', method: 'tools/list' })).resolves
       .toMatchInlineSnapshot(`
       {
         "id": 1,
@@ -197,7 +197,7 @@ export const Shell = component('shell', {
         "result": {
           "content": [
             {
-              "text": "fw-mcp/v1",
+              "text": "kovo-mcp/v1",
               "type": "text",
             },
           ],
@@ -245,7 +245,7 @@ export const Shell = component('shell', {
                 "name": "compile_component",
               },
               {
-                "description": "Run fwCheck against an inline graph or graphPath.",
+                "description": "Run kovoCheck against an inline graph or graphPath.",
                 "inputSchema": {
                   "additionalProperties": false,
                   "properties": {
@@ -266,10 +266,10 @@ export const Shell = component('shell', {
                   "required": [],
                   "type": "object",
                 },
-                "name": "fw_check",
+                "name": "kovo_check",
               },
               {
-                "description": "Run fwExplain against an inline graph or graphPath.",
+                "description": "Run kovoExplain against an inline graph or graphPath.",
                 "inputSchema": {
                   "additionalProperties": false,
                   "properties": {
@@ -288,10 +288,10 @@ export const Shell = component('shell', {
                   ],
                   "type": "object",
                 },
-                "name": "fw_explain",
+                "name": "kovo_explain",
               },
               {
-                "description": "List shared diagnostic definitions from the @jiso/core registry.",
+                "description": "List shared diagnostic definitions from the @kovojs/core registry.",
                 "inputSchema": {
                   "additionalProperties": false,
                   "properties": {},
@@ -300,14 +300,14 @@ export const Shell = component('shell', {
                 "name": "list_diagnostics",
               },
             ],
-            "version": "fw-mcp/v1",
+            "version": "kovo-mcp/v1",
           },
-          "version": "fw-mcp/v1",
+          "version": "kovo-mcp/v1",
         },
       }
     `);
 
-    const response = await handleFwMcpRequest({
+    const response = await handleKovoMcpRequest({
       id: 'compile-1',
       jsonrpc: '2.0',
       method: 'tools/call',
@@ -326,37 +326,37 @@ export const Shell = component('shell', {
       result: {
         structuredContent: {
           diagnostics: [
-            { code: 'FW210', severity: 'lint' },
-            { code: 'FW201', severity: 'error' },
+            { code: 'KV210', severity: 'lint' },
+            { code: 'KV201', severity: 'error' },
           ],
           ok: false,
           version: 'compile/v1',
         },
-        version: 'fw-mcp/v1',
+        version: 'kovo-mcp/v1',
       },
     });
   });
 
-  it('wraps fw_check, fw_explain, and diagnostic definitions without a second policy', async () => {
+  it('wraps kovo_check, kovo_explain, and diagnostic definitions without a second policy', async () => {
     await expect(
-      handleFwMcpRequest({
+      handleKovoMcpRequest({
         id: 'check-1',
         jsonrpc: '2.0',
         method: 'tools/call',
-        params: { arguments: { graph: {} }, name: 'fw_check' },
+        params: { arguments: { graph: {} }, name: 'kovo_check' },
       }),
     ).resolves.toMatchObject({
       result: {
         structuredContent: {
           exitCode: 0,
-          output: 'fw-check/v1\nOK\n',
-          version: 'fw-check/v1',
+          output: 'kovo-check/v1\nOK\n',
+          version: 'kovo-check/v1',
         },
       },
     });
 
     await expect(
-      handleFwMcpRequest({
+      handleKovoMcpRequest({
         id: 'explain-1',
         jsonrpc: '2.0',
         method: 'tools/call',
@@ -365,7 +365,7 @@ export const Shell = component('shell', {
             graph: { queries: [{ domains: ['cart'], query: 'cart' }] },
             options: { kind: 'query', target: 'cart' },
           },
-          name: 'fw_explain',
+          name: 'kovo_explain',
         },
       }),
     ).resolves.toMatchObject({
@@ -373,13 +373,13 @@ export const Shell = component('shell', {
         structuredContent: {
           exitCode: 0,
           output:
-            'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: -\ninvalidated-by: -\ndomain-writes: -\n',
-          version: 'fw-explain/v1',
+            'kovo-explain/v1\nQUERY cart\nreads: cart\nconsumers: -\ninvalidated-by: -\ndomain-writes: -\n',
+          version: 'kovo-explain/v1',
         },
       },
     });
 
-    const diagnostics = await handleFwMcpRequest({
+    const diagnostics = await handleKovoMcpRequest({
       id: 'definitions-1',
       jsonrpc: '2.0',
       method: 'tools/call',
@@ -390,7 +390,7 @@ export const Shell = component('shell', {
         structuredContent: {
           diagnostics: expect.arrayContaining([
             expect.objectContaining({
-              code: 'FW201',
+              code: 'KV201',
               message: 'Closure captures unserializable value.',
               severity: 'error',
             }),
@@ -420,9 +420,9 @@ export const Shell = component('shell', {
       result: {
         structuredContent: {
           tools: expect.arrayContaining([expect.objectContaining({ name: 'compile_component' })]),
-          version: 'fw-mcp/v1',
+          version: 'kovo-mcp/v1',
         },
-        version: 'fw-mcp/v1',
+        version: 'kovo-mcp/v1',
       },
     });
   });
@@ -439,7 +439,7 @@ export const Shell = component('shell', {
       method: 'initialize',
       params: {
         capabilities: {},
-        clientInfo: { name: 'fw-test-client', version: '0.0.0' },
+        clientInfo: { name: 'kovo-test-client', version: '0.0.0' },
         protocolVersion: '2025-06-18',
       },
     });
@@ -453,7 +453,7 @@ export const Shell = component('shell', {
       jsonrpc: '2.0',
       result: {
         capabilities: { tools: {} },
-        serverInfo: { name: 'fw', version: 'fw-mcp/v1' },
+        serverInfo: { name: 'kovo', version: 'kovo-mcp/v1' },
       },
     });
 
@@ -501,8 +501,8 @@ export const Shell = component('shell', {
         content: [{ type: 'text' }],
         structuredContent: {
           diagnostics: [
-            { code: 'FW210', severity: 'lint' },
-            { code: 'FW201', severity: 'error' },
+            { code: 'KV210', severity: 'lint' },
+            { code: 'KV201', severity: 'error' },
           ],
           ok: false,
           version: 'compile/v1',

@@ -2,14 +2,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
-import { jisoVitePlugin, type JisoViteMiddleware } from './index.js';
-import { createJisoVitePlugin } from './vite.js';
+import { kovoVitePlugin, type KovoViteMiddleware } from './index.js';
+import { createKovoVitePlugin } from './vite.js';
 
 const cartBadgeSource = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import { removeItem } from './cart-actions';
 
 export const CartBadge = component('cart-badge', {
@@ -23,8 +23,8 @@ export const CartBadge = component('cart-badge', {
 });
 `;
 
-const fw201 = diagnosticDefinitions.FW201;
-const fw210 = diagnosticDefinitions.FW210;
+const kv201 = diagnosticDefinitions.KV201;
+const kv210 = diagnosticDefinitions.KV210;
 
 function createMiddlewareResponse(): {
   body: string;
@@ -44,11 +44,11 @@ function createMiddlewareResponse(): {
   };
 }
 
-describe('jisoVitePlugin', () => {
+describe('kovoVitePlugin', () => {
   it('exposes a Vite transform hook for component modules', () => {
-    const plugin = jisoVitePlugin();
+    const plugin = kovoVitePlugin();
 
-    expect(plugin.name).toBe('jiso');
+    expect(plugin.name).toBe('kovo');
     expect(plugin.transform?.(cartBadgeSource, 'cart-badge.tsx')).toMatchObject({
       code: expect.stringContaining('export function renderSource()'),
       map: null,
@@ -57,17 +57,17 @@ describe('jisoVitePlugin', () => {
 
   it('throws registry-error diagnostics from the Vite transform with teaching text', () => {
     const onModuleDiagnostics = vi.fn();
-    const plugin = createJisoVitePlugin(
+    const plugin = createKovoVitePlugin(
       () => ({
         diagnostics: [
           {
-            code: 'FW201',
+            code: 'KV201',
             fileName: 'src/bad.tsx',
             help: [
               'Would lower to: on:click="/c/src/bad.client.js#Bad$button_click"',
               'Fixes: move the value into component/query state via ctx.',
             ].join('\n'),
-            message: fw201.message,
+            message: kv201.message,
             severity: 'lint',
             start: { line: 3, column: 12 },
           },
@@ -90,9 +90,9 @@ describe('jisoVitePlugin', () => {
     expect(thrown).toBeInstanceOf(Error);
     expect((thrown as Error).message).toBe(
       [
-        'Jiso Vite transform failed with 1 error diagnostic.',
+        'Kovo Vite transform failed with 1 error diagnostic.',
         [
-          'FW201 src/bad.tsx:3:12 Closure captures unserializable value.',
+          'KV201 src/bad.tsx:3:12 Closure captures unserializable value.',
           '  help: Would lower to: on:click="/c/src/bad.client.js#Bad$button_click"',
           '  help: Fixes: move the value into component/query state via ctx.',
         ].join('\n'),
@@ -101,9 +101,9 @@ describe('jisoVitePlugin', () => {
     expect(onModuleDiagnostics).toHaveBeenCalledWith({
       diagnostics: [
         expect.objectContaining({
-          code: 'FW201',
+          code: 'KV201',
           fileName: 'src/bad.tsx',
-          message: fw201.message,
+          message: kv201.message,
         }),
       ],
       fileName: 'src/bad.tsx',
@@ -113,25 +113,25 @@ describe('jisoVitePlugin', () => {
 
   it('reports warn, lint, and notice diagnostics without blocking the Vite transform', () => {
     const onDiagnostic = vi.fn();
-    const plugin = createJisoVitePlugin(
+    const plugin = createKovoVitePlugin(
       () => ({
         diagnostics: [
           {
-            code: 'FW311',
+            code: 'KV311',
             fileName: 'src/diagnostics.tsx',
             message: 'Query/state-dependent DOM position has no update status.',
             severity: 'error',
             start: { line: 4, column: 9 },
           },
           {
-            code: 'FW210',
+            code: 'KV210',
             fileName: 'src/diagnostics.tsx',
-            message: fw210.message,
+            message: kv210.message,
             severity: 'error',
             start: { line: 5, column: 11 },
           },
           {
-            code: 'FW409',
+            code: 'KV409',
             fileName: 'src/diagnostics.tsx',
             message: 'Non-eq predicate degraded to table-level invalidation.',
             severity: 'error',
@@ -152,15 +152,15 @@ describe('jisoVitePlugin', () => {
     });
     expect(onDiagnostic).toHaveBeenCalledTimes(3);
     expect(onDiagnostic.mock.calls.map(([diagnostic]) => diagnostic.code)).toEqual([
-      'FW311',
-      'FW210',
-      'FW409',
+      'KV311',
+      'KV210',
+      'KV409',
     ]);
   });
 
   it('serves emitted client modules from Vite dev middleware', () => {
-    const plugin = jisoVitePlugin();
-    const middlewares: JisoViteMiddleware[] = [];
+    const plugin = kovoVitePlugin();
+    const middlewares: KovoViteMiddleware[] = [];
     plugin.configureServer?.({
       middlewares: {
         use(handler) {
@@ -195,8 +195,8 @@ describe('jisoVitePlugin', () => {
   });
 
   it('serves project-relative client modules when Vite passes absolute ids', () => {
-    const plugin = jisoVitePlugin();
-    const middlewares: JisoViteMiddleware[] = [];
+    const plugin = kovoVitePlugin();
+    const middlewares: KovoViteMiddleware[] = [];
     plugin.configureServer?.({
       config: { root: '/workspace/app' },
       middlewares: {
@@ -233,19 +233,19 @@ describe('jisoVitePlugin', () => {
   });
 
   it('feeds discovered package prefix facts into the Vite transform', () => {
-    const root = mkdtempSync(join(tmpdir(), 'jiso-vite-prefix-'));
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-prefix-'));
 
     try {
       writePackageManifest(root, '@acme/primitives', {
-        jiso: { prefix: 'dupe-' },
+        kovo: { prefix: 'dupe-' },
         name: '@acme/primitives',
       });
       writePackageManifest(root, '@other/widgets', {
-        jiso: { prefix: 'dupe-' },
+        kovo: { prefix: 'dupe-' },
         name: '@other/widgets',
       });
 
-      const plugin = jisoVitePlugin();
+      const plugin = kovoVitePlugin();
       plugin.configureServer?.({
         config: { root },
         middlewares: {
@@ -256,7 +256,7 @@ describe('jisoVitePlugin', () => {
       expect(() =>
         plugin.transform?.(
           `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import '@acme/primitives';
 import '@other/widgets/menu';
 
@@ -275,10 +275,10 @@ export const Shell = component('shell', {
   });
 
   it('retains old versioned client modules after a newer transform', () => {
-    const plugin = jisoVitePlugin();
-    const middlewares: JisoViteMiddleware[] = [];
+    const plugin = kovoVitePlugin();
+    const middlewares: KovoViteMiddleware[] = [];
     const source = (handler: string) => `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import { ${handler} } from './cart-actions';
 
 export const CartBadge = component('cart-badge', {
@@ -316,8 +316,8 @@ export const CartBadge = component('cart-badge', {
   });
 
   it('passes through unknown Vite dev middleware requests', () => {
-    const plugin = jisoVitePlugin();
-    const middlewares: JisoViteMiddleware[] = [];
+    const plugin = kovoVitePlugin();
+    const middlewares: KovoViteMiddleware[] = [];
     plugin.configureServer?.({
       middlewares: {
         use(handler) {

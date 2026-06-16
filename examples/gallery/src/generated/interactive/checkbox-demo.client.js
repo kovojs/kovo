@@ -1,7 +1,7 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
-import { checkboxTriggerClick as _checkboxTriggerClick } from '@jiso/headless-ui/primitives';
+import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/headless-ui/primitives';
 
 export const GalleryCheckboxDemo$input_click = handler((event, ctx) => {
   const result = _checkboxTriggerClick(Object(event), { checked: ctx.state.checked });

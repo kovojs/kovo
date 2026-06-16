@@ -7,7 +7,7 @@ import {
   type OptimisticCoverage,
   type PatchProgram,
   type SymbolicEffect,
-} from '@jiso/core';
+} from '@kovojs/core';
 
 // SPEC.md §10.5 / derived-optimism plan Phase 0: a single, formatting-resistant
 // contract shared by the shape, effect, derivation, codegen, diagnostics, and

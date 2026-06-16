@@ -170,7 +170,7 @@ describe('derivation result constructors + punt labels', () => {
       [{ code: 'non-key-match', expr: 'gt(price, 10)' }, 'non-key match: gt(price, 10)'],
       [{ code: 'opaque-shape', shape: 'window' }, 'window shape'],
       [{ code: 'opaque-shape', detail: 'rank()', shape: 'distinct' }, 'distinct shape: rank()'],
-      [{ code: 'interprocedural', site: 'cart.ts:8' }, 'interprocedural FW406: cart.ts:8'],
+      [{ code: 'interprocedural', site: 'cart.ts:8' }, 'interprocedural KV406: cart.ts:8'],
       [{ code: 'untraceable-param', expr: 'serverNow()' }, 'untraceable param: serverNow()'],
       [{ code: 'opaque-orderby', column: 'rank' }, 'Opaque orderBy: rank'],
       [{ code: 'opaque-projection', expr: 'sql`...`' }, 'Opaque projection: sql`...`'],

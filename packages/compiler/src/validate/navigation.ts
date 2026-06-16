@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
@@ -25,8 +25,8 @@ export function validateLiteralHrefs(
   });
 
   return dedupeBy(missing, (target) => target.value).map((target) => ({
-    ...diagnosticFor(options.fileName, 'FW220', source, target.index, target.length),
-    message: `${diagnosticDefinitions.FW220.message} ${target.value}`,
+    ...diagnosticFor(options.fileName, 'KV220', source, target.index, target.length),
+    message: `${diagnosticDefinitions.KV220.message} ${target.value}`,
   }));
 }
 

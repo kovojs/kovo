@@ -1,7 +1,7 @@
-import { route } from '@jiso/server';
-import { createMemoryVersionedClientModuleRegistry } from '@jiso/server/app-shell/client-modules';
-import { createApp, createRequestHandler } from '@jiso/server/app-shell/core';
-import { toNodeHandler } from '@jiso/server/app-shell/node';
+import { route } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
+import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
+import { toNodeHandler } from '@kovojs/server/app-shell/node';
 import { asc, eq } from 'drizzle-orm';
 
 import { renderQuestionDetailPage, type AnswerDetail } from './components/question-detail.js';
@@ -12,7 +12,7 @@ import { questionList, questionScore } from './queries.js';
 import { answers, questions } from './schema.js';
 
 // SPEC.md §9.5: the Stack Overflow example's public, read-only static-export
-// shell. It replays a real multi-page Jiso app — a ranked question list and a
+// shell. It replays a real multi-page Kovo app — a ranked question list and a
 // per-question detail page with answers — over the seeded PGlite database. The
 // mutation + DERIVED-optimism story (postQuestion, postAnswer, voteUp) lives in
 // mutations.ts and generated/optimistic/; this shell renders the read side so

@@ -1,11 +1,11 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { collectMinifierReservedNames, compileComponentModule } from './index.js';
 import { lowerEventHandlers } from './lower/handlers.js';
 import { parseComponentModule } from './scan/parse.js';
 
-const fw210 = diagnosticDefinitions.FW210;
+const kv210 = diagnosticDefinitions.KV210;
 
 function expectHandlerRef(source: string, path: string, exportName: string): void {
   expect(source).toMatch(
@@ -20,7 +20,7 @@ function escapeRegExp(value: string): string {
 describe('handler lowering', () => {
   it('names element params from parsed property-access terminal facts', () => {
     const source = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => <button onClick={() => state.count += item.quantity}>Add one</button>,
@@ -46,7 +46,7 @@ export const CartActions = component('cart-actions', {
     const cartBadge = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   render: () => (
@@ -61,7 +61,7 @@ export const CartBadge = component('cart-badge', {
     const cartDrawer = compileComponentModule({
       fileName: 'components/cart/cart-drawer.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartDrawer = component('cart-drawer', {
   render: () => (
@@ -82,7 +82,7 @@ export const CartDrawer = component('cart-drawer', {
     const disclosure = compileComponentModule({
       fileName: 'disclosure-demo.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const DisclosureDemo = component('disclosure-demo', {
   state: () => ({ open: false }),
@@ -100,11 +100,11 @@ export const DisclosureDemo = component('disclosure-demo', {
     ]);
   });
 
-  it('reports FW210 for anonymous handlers', () => {
+  it('reports KV210 for anonymous handlers', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import { removeItem } from './actions';
 
 export const CartBadge = component('cart-badge', {
@@ -121,17 +121,17 @@ export const CartBadge = component('cart-badge', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW210',
+        code: 'KV210',
         fileName: 'cart-badge.tsx',
         length: 5,
-        message: fw210.message,
-        severity: fw210.severity,
+        message: kv210.message,
+        severity: kv210.severity,
         start: { column: 13, line: 9 },
       },
     ]);
   });
 
-  it('reports FW201 when a handler captures non-serializable browser objects', () => {
+  it('reports KV201 when a handler captures non-serializable browser objects', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: '<button onClick={() => window.alert("x")}>x</button>',
@@ -139,44 +139,44 @@ export const CartBadge = component('cart-badge', {
 
     expect(result.diagnostics).toMatchObject([
       {
-        code: 'FW210',
-        severity: fw210.severity,
+        code: 'KV210',
+        severity: kv210.severity,
       },
       {
-        code: 'FW201',
+        code: 'KV201',
         severity: 'error',
       },
     ]);
-    const fw201 = result.diagnostics.find((diagnostic) => diagnostic.code === 'FW201');
-    expect(fw201?.help).toMatch(
+    const kv201 = result.diagnostics.find((diagnostic) => diagnostic.code === 'KV201');
+    expect(kv201?.help).toMatch(
       /Would lower to: on:click="\/c\/cart-badge\.client\.js\?v=[0-9a-f]{8}#CartBadge\$button_click"/,
     );
-    expect(fw201?.help).toContain('Blocked expression: () => window.alert("x")');
-    expect(fw201?.help).toContain(
+    expect(kv201?.help).toContain('Blocked expression: () => window.alert("x")');
+    expect(kv201?.help).toContain(
       'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
     );
-    expect(fw201?.help).toContain(
+    expect(kv201?.help).toContain(
       'Handlers may reference only state/ctx/event, data-p-* element params, named imports, and statically serializable module constants.',
     );
-    expect(fw201?.start).toEqual({ column: 9, line: 1 });
+    expect(kv201?.start).toEqual({ column: 9, line: 1 });
   });
 
-  it('reports FW201 for globals outside the handler channels', () => {
+  it('reports KV201 for globals outside the handler channels', () => {
     for (const expression of ['fetch("/api/cart")', 'localStorage.getItem("cart")']) {
       const result = compileComponentModule({
         fileName: 'cart-badge.tsx',
         source: `<button onClick={() => ${expression}}>x</button>`,
       });
 
-      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210', 'FW201']);
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
     }
   });
 
-  it('reports FW201 for captured outer locals that are not element params', () => {
+  it('reports KV201 for captured outer locals that are not element params', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import { track } from './analytics';
 
 export const CartBadge = component('cart-badge', {
@@ -188,14 +188,14 @@ export const CartBadge = component('cart-badge', {
 `,
     });
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210', 'FW201']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
   });
 
   it('allows handler references through state, element params, named imports, and static module constants', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import { track } from './analytics';
 
 const LABEL = 'cart';
@@ -215,7 +215,7 @@ export const CartBadge = component('cart-badge', {
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
     expect(serverSource).toContain('data-p-quantity="{quantity}"');
     expect(clientSource).toContain('import { track } from "./analytics";');
     expect(clientSource).toContain("const LABEL = 'cart';");
@@ -246,7 +246,7 @@ export const CartBadge = component('cart-badge', {
 
     const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
     expect(clientSource).toContain(
       "ctx.state.value = Object(event)['target']?.value?.toString?.() ?? undefined;",
     );
@@ -261,20 +261,20 @@ export const CartBadge = component('cart-badge', {
       source: '<button onClick={() => window.alert("x")}>x</button>',
     });
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210', 'FW201']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
     expect(result.diagnostics[0]).toMatchObject({
-      code: 'FW210',
-      severity: fw210.severity,
+      code: 'KV210',
+      severity: kv210.severity,
       start: { column: 9, line: 1 },
     });
     expect(result.diagnostics[1]).toMatchObject({
-      code: 'FW201',
+      code: 'KV201',
       severity: 'error',
       start: { column: 9, line: 1 },
     });
   });
 
-  it('does not report FW201 for local variables named like non-serializable captures', () => {
+  it('does not report KV201 for local variables named like non-serializable captures', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
@@ -290,11 +290,11 @@ export const CartBadge = component('cart-badge', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW210',
+        code: 'KV210',
         fileName: 'cart-badge.tsx',
         length: 5,
-        message: fw210.message,
-        severity: fw210.severity,
+        message: kv210.message,
+        severity: kv210.severity,
         start: { column: 13, line: 4 },
       },
     ]);
@@ -302,7 +302,7 @@ export const CartBadge = component('cart-badge', {
 
   it('versions handler URLs from the emitted client module source', () => {
     const source = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   render: () => <button onClick={() => add(item.id)}>Add</button>,
@@ -328,7 +328,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   state: () => ({ count: 0 }),
@@ -356,7 +356,7 @@ export const CartActions = component('cart-actions', {
       'CartActions$button_click_2',
     );
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
-    expect(serverSource).toContain('fw-param-types="quantity:number"');
+    expect(serverSource).toContain('kovo-param-types="quantity:number"');
     expect(clientSource).toContain(
       'export const CartActions$button_click = handler((_event, ctx) => {',
     );
@@ -373,8 +373,8 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/tabs/tabs-demo.tsx',
       source: `
-import { component } from '@jiso/core';
-import { tabsKeyDown as keyDown, tabsTriggerClick } from '@jiso/headless-ui/primitives';
+import { component } from '@kovojs/core';
+import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/primitives';
 
 export const TabsDemo = component('tabs-demo', {
   state: () => ({ activeValue: 'overview', value: 'overview' }),
@@ -410,7 +410,7 @@ export const TabsDemo = component('tabs-demo', {
     const clientSource = result.files[1]?.source ?? '';
 
     expect(clientSource).toContain(
-      'import { tabsKeyDown as keyDown, tabsTriggerClick } from "@jiso/headless-ui/primitives";',
+      'import { tabsKeyDown as keyDown, tabsTriggerClick } from "@kovojs/headless-ui/primitives";',
     );
     expect(clientSource).toContain('const result = keyDown(event, {');
     expect(clientSource).toContain('activeValue: ctx.state.activeValue,');
@@ -427,7 +427,7 @@ export const TabsDemo = component('tabs-demo', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   state: () => ({ count: 0 }),
@@ -451,7 +451,7 @@ export const CartActions = component('cart-actions', {
     );
     expect(serverSource).not.toContain('onClick=');
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
-    expect(serverSource).toContain('fw-param-types="quantity:number"');
+    expect(serverSource).toContain('kovo-param-types="quantity:number"');
     expect(clientSource).toContain(
       'export const CartActions$button_click = handler((_event, ctx) => {',
     );
@@ -462,7 +462,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   state: () => ({ count: 0 }),
@@ -493,7 +493,7 @@ export const CartActions = component('cart-actions', {
     expect(serverSource).not.toContain('{...{');
     expect(serverSource).not.toContain('onClick=');
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
-    expect(serverSource).toContain('fw-param-types="quantity:number"');
+    expect(serverSource).toContain('kovo-param-types="quantity:number"');
     expect(clientSource).toContain(
       'export const CartActions$button_click = handler((_event, ctx) => {',
     );
@@ -504,7 +504,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   state: () => ({ count: 0 }),
@@ -535,14 +535,14 @@ export const CartActions = component('cart-actions', {
     expect(serverSource).not.toContain('asChild');
     expect(serverSource).not.toContain('onClick=');
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
-    expect(serverSource).toContain('fw-param-types="quantity:number"');
+    expect(serverSource).toContain('kovo-param-types="quantity:number"');
   });
 
   it('lowers attrs-function primitive wrappers onto the behavior-attribute merge path', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   state: () => ({ count: 0 }),
@@ -575,14 +575,14 @@ export const CartActions = component('cart-actions', {
     expect(serverSource).not.toContain('{...attrs}');
     expect(serverSource).not.toContain('onClick=');
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
-    expect(serverSource).toContain('fw-param-types="quantity:number"');
+    expect(serverSource).toContain('kovo-param-types="quantity:number"');
   });
 
   it('declares boolean coercion for boolean-ish captured handler params', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (
@@ -595,7 +595,7 @@ export const CartActions = component('cart-actions', {
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(serverSource).toContain('fw-param-types="selected:boolean"');
+    expect(serverSource).toContain('kovo-param-types="selected:boolean"');
     expect(serverSource).toContain('data-p-selected="{item.selected}"');
     expect(serverSource).toContain('data-p-id="{item.id}"');
     expect(clientSource).toContain(
@@ -607,7 +607,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (
@@ -645,7 +645,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (
@@ -670,7 +670,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   state: () => ({ count: 0 }),
@@ -698,7 +698,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (
@@ -722,7 +722,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: ({ quantity }) => (
@@ -741,7 +741,7 @@ export const CartActions = component('cart-actions', {
 
   it('does not fabricate params for unmodeled call argument expressions', () => {
     const source = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (
@@ -762,7 +762,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (
@@ -784,7 +784,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (
@@ -806,7 +806,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (
@@ -820,7 +820,7 @@ export const CartActions = component('cart-actions', {
     const clientSource = result.files[1]?.source ?? '';
 
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
-    expect(serverSource).not.toContain('fw-param-types="quantity:number"');
+    expect(serverSource).not.toContain('kovo-param-types="quantity:number"');
     expect(clientSource).toContain("return track(ctx.params.quantity, 'item.quantity > 0');");
   });
 
@@ -828,7 +828,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (
@@ -842,14 +842,14 @@ export const CartActions = component('cart-actions', {
 
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
     expect(serverSource).toContain('data-p-selected="{item.selected}"');
-    expect(serverSource).toContain('fw-param-types="quantity:number,selected:boolean"');
+    expect(serverSource).toContain('kovo-param-types="quantity:number,selected:boolean"');
   });
 
   it('ignores event handler text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => {
@@ -875,7 +875,7 @@ describe('handler lowering is formatting-resistant', () => {
   function lowerSingle(handlerAttribute: string) {
     const fileName = 'components/cart/cart-actions.tsx';
     const source = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (<button ${handlerAttribute}>Act</button>),
@@ -893,7 +893,7 @@ export const CartActions = component('cart-actions', {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartActions = component('cart-actions', {
   render: () => (<button ${handlerAttribute}>Act</button>),

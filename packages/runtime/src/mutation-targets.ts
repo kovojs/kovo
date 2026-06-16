@@ -25,12 +25,12 @@ export function readLiveTargetSnapshot(root: TargetCollectorRoot): LiveTargetSna
 function collectLiveTargets(root: TargetCollectorRoot): string[] {
   const targets = new Set<string>();
 
-  for (const element of root.querySelectorAll('[fw-deps]')) {
-    // SPEC.md §9.1: FW-Targets is read from the live DOM so patched-in
+  for (const element of root.querySelectorAll('[kovo-deps]')) {
+    // SPEC.md §9.1: Kovo-Targets is read from the live DOM so patched-in
     // fragment targets participate in the stateless enhanced mutation request.
     const target =
-      element.getAttribute('fw-fragment-target') ?? element.id ?? element.getAttribute('fw-c');
-    const deps = readDeps(element.getAttribute('fw-deps'));
+      element.getAttribute('kovo-fragment-target') ?? element.id ?? element.getAttribute('kovo-c');
+    const deps = readDeps(element.getAttribute('kovo-deps'));
     if (target) targets.add(deps.length > 0 ? `${target}=${deps.join(' ')}` : target);
   }
 

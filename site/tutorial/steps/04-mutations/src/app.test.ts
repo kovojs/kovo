@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@jiso/server';
+import { csrfToken } from '@kovojs/server';
 
 import {
   renderShopPage,
@@ -19,10 +19,10 @@ function shopRequest(db = createShopDb()): ShopRequest {
   return { db, session: { id: 's1' } };
 }
 
-// The browser would echo the stamped fw-csrf hidden field back; tests build
+// The browser would echo the stamped kovo-csrf hidden field back; tests build
 // the same submission explicitly (SPEC.md section 6.6).
 function formInput(request: ShopRequest, fields: Record<string, string>) {
-  return { ...fields, 'fw-csrf': csrfToken(request, shopCsrf) };
+  return { ...fields, 'kovo-csrf': csrfToken(request, shopCsrf) };
 }
 
 describe('tutorial step 04 — mutations & forms', () => {
@@ -34,10 +34,10 @@ describe('tutorial step 04 — mutations & forms', () => {
     expect(html).toContain(
       '<form method="post" action="/_m/cart/add" enhance data-mutation="cart/add"',
     );
-    expect(html).toContain('name="fw-csrf"');
+    expect(html).toContain('name="kovo-csrf"');
     expect(html).toContain('name="productId" value="p1"');
     expect(html).toContain('name="quantity" type="number" min="1" max="5" value="1"');
-    expect(html).toContain('fw-fragment-target="product-form:p1"');
+    expect(html).toContain('kovo-fragment-target="product-form:p1"');
   });
   // /snippet
 
@@ -88,16 +88,16 @@ describe('tutorial step 04 — mutations & forms', () => {
       formInput(request, { productId: 'p1', quantity: '2' }),
       request,
       {
-        'FW-Fragment': 'true',
-        'FW-Targets': 'cart-badge,product-list',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'cart-badge,product-list',
       },
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers['Content-Type']).toBe('text/vnd.jiso.fragment+html; charset=utf-8');
-    expect(response.body).toContain('<fw-fragment target="cart-badge">');
+    expect(response.headers['Content-Type']).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
+    expect(response.body).toContain('<kovo-fragment target="cart-badge">');
     expect(response.body).toContain('<span data-bind="cart.count">2</span>');
-    expect(response.body).toContain('<fw-fragment target="product-list">');
+    expect(response.body).toContain('<kovo-fragment target="product-list">');
     expect(response.body).toContain('(3 in stock)');
   });
   // /snippet
@@ -109,14 +109,14 @@ describe('tutorial step 04 — mutations & forms', () => {
       formInput(request, { productId: 'p2', quantity: '3' }),
       request,
       {
-        'FW-Fragment': 'true',
-        'FW-Targets': 'product-form:p2',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'product-form:p2',
       },
     );
 
     expect(response.status).toBe(422);
-    expect(response.body).toContain('<fw-fragment target="product-form:p2">');
-    expect(response.body).toContain('fw-fragment-target="product-form:p2"');
+    expect(response.body).toContain('<kovo-fragment target="product-form:p2">');
+    expect(response.body).toContain('kovo-fragment-target="product-form:p2"');
     expect(response.body).toContain('data-error-code="OUT_OF_STOCK"');
     expect(request.db.cartItems).toEqual([]);
   });
@@ -126,9 +126,9 @@ describe('tutorial step 04 — mutations & forms', () => {
   it('fails closed on a POST without the session-bound CSRF token', async () => {
     const request = shopRequest();
     const response = await submitAddToCart(
-      { productId: 'p1', quantity: '1' }, // no fw-csrf field
+      { productId: 'p1', quantity: '1' }, // no kovo-csrf field
       request,
-      { 'FW-Fragment': 'true', 'FW-Targets': 'product-form:p1' },
+      { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'product-form:p1' },
     );
 
     expect(response.status).toBe(422);

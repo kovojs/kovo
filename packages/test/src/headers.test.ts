@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { cookiePair, firstSetCookiePair, headerValues, setCookieValues } from './headers.js';
 
-describe('@jiso/test header fixtures', () => {
+describe('@kovojs/test header fixtures', () => {
   it('reads case-insensitive header record values', () => {
     expect(
       headerValues(

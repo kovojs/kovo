@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
-const inlineJisoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
+const inlineKovoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
 const inlineResponseApplySourcePath = fileURLToPath(
   new URL('./inline-response-apply.ts', import.meta.url),
 );
@@ -41,21 +41,21 @@ const inlineHelperSpecs = {
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
 
-export const inlineJisoLoaderGzipByteBudget = 4096;
+export const inlineKovoLoaderGzipByteBudget = 4096;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
 
-export const inlineJisoLoaderInstallerReadableSource =
-  buildInlineJisoLoaderInstallerReadableSource();
+export const inlineKovoLoaderInstallerReadableSource =
+  buildInlineKovoLoaderInstallerReadableSource();
 
-export function buildInlineJisoLoaderInstallerReadableSource(
+export function buildInlineKovoLoaderInstallerReadableSource(
   wireParserReadableSource = inlineWireParserReadableSource,
   responseApplyReadableSource = inlineResponseApplyReadableSource,
 ): string {
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
-function installInlineJisoLoader(im) {
+function installInlineKovoLoader(im) {
   // SPEC.md §4.4: delegate (capture phase) every on:* event the document uses.
   // focus/blur have no bubble phase but DO run a capture phase at ancestors, so
   // capture-phase delegation reaches them; pointerenter/pointerleave never run a
@@ -70,10 +70,10 @@ function installInlineJisoLoader(im) {
   const ci = () =>
     crypto.randomUUID?.() ??
     'idem_' + Date.now().toString(36) + '_' + (ic += 1).toString(36);
-  const rh = (el) => el.closest?.('[fw-state]') ?? el;
+  const rh = (el) => el.closest?.('[kovo-state]') ?? el;
   const rs = (el) => {
     try {
-      return JSON.parse(rh(el)?.getAttribute('fw-state') ?? '{}');
+      return JSON.parse(rh(el)?.getAttribute('kovo-state') ?? '{}');
     } catch {
       return {};
     }
@@ -88,7 +88,7 @@ function installInlineJisoLoader(im) {
   const fb = (val) =>
     val == null ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
   const sh = (el, host) =>
-    el === host || !el.closest || el.closest('[fw-state]') === host;
+    el === host || !el.closest || el.closest('[kovo-state]') === host;
   const ba = (el) =>
     [...(el.attributes || [])].filter(
       (attr) => attr.name.startsWith('data-bind:') && attr.value,
@@ -179,11 +179,11 @@ function installInlineJisoLoader(im) {
       .filter(Boolean);
   const rt = () => [
     ...new Set(
-      [...doc.querySelectorAll('[fw-deps]')]
+      [...doc.querySelectorAll('[kovo-deps]')]
         .map((el) => {
-          const deps = rd(el.getAttribute('fw-deps'));
+          const deps = rd(el.getAttribute('kovo-deps'));
           const target =
-            el.getAttribute('fw-fragment-target') ?? el.id ?? el.getAttribute('fw-c');
+            el.getAttribute('kovo-fragment-target') ?? el.id ?? el.getAttribute('kovo-c');
           return target && (deps.length > 0 ? target + '=' + deps.join(' ') : target);
         })
         .filter(Boolean)
@@ -197,9 +197,9 @@ function installInlineJisoLoader(im) {
   const ft = (target) => {
     try {
       return (
-        doc.querySelector('[fw-c="' + target + '"]') ??
+        doc.querySelector('[kovo-c="' + target + '"]') ??
         doc.getElementById(target) ??
-        doc.querySelector('[fw-fragment-target="' + target + '"]')
+        doc.querySelector('[kovo-fragment-target="' + target + '"]')
       );
     } catch {
       return;
@@ -228,7 +228,7 @@ function installInlineJisoLoader(im) {
       return;
     }
     form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
-    form.setAttribute?.('fw-error', '');
+    form.setAttribute?.('kovo-error', '');
   };
   const ha = (form, name) => form.getAttribute?.(name) != null;
   const ief = (form) =>
@@ -240,10 +240,10 @@ function installInlineJisoLoader(im) {
     fetch(form.action, {
       body: new FormData(form),
       headers: {
-        Accept: 'text/vnd.jiso.fragment+html',
-        'FW-Fragment': 'true',
-        'FW-Idem': ci(),
-        'FW-Targets': rt().join('; '),
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': ci(),
+        'Kovo-Targets': rt().join('; '),
       },
       keepalive: true,
       method: (form.method || 'post').toUpperCase(),
@@ -253,7 +253,7 @@ function installInlineJisoLoader(im) {
       .catch(() => fsb(form));
   };
   const rp = (el) =>
-    (el.getAttribute('fw-param-types') || '').split(/[\s,]+/).reduce((types, entry) => {
+    (el.getAttribute('kovo-param-types') || '').split(/[\s,]+/).reduce((types, entry) => {
       const [name, type] = entry.split(':');
       if (name) types[name] = type;
       return types;
@@ -291,7 +291,7 @@ function installInlineJisoLoader(im) {
       if (typeof fn !== 'function') throw Error('Handler export not found: ' + ref);
       await fn(event, context);
     }
-    st?.setAttribute?.('fw-state', JSON.stringify(state));
+    st?.setAttribute?.('kovo-state', JSON.stringify(state));
     if (st) await as(st, state);
   };
   const trigger = (type, target) => {
@@ -331,36 +331,36 @@ function installInlineJisoLoader(im) {
 `;
 }
 
-export function buildInlineJisoLoaderInstallerSource(
-  source = inlineJisoLoaderInstallerReadableSource,
+export function buildInlineKovoLoaderInstallerSource(
+  source = inlineKovoLoaderInstallerReadableSource,
 ): string {
-  assertDefaultInlineJisoLoaderInstallerHelperParity(source);
+  assertDefaultInlineKovoLoaderInstallerHelperParity(source);
   const installerInput =
-    source === inlineJisoLoaderInstallerReadableSource
-      ? compactInlineJisoLoaderInstallerLocalNames(source)
+    source === inlineKovoLoaderInstallerReadableSource
+      ? compactInlineKovoLoaderInstallerLocalNames(source)
       : source;
   const installerSource = minifyInlineJavaScriptSource(installerInput);
-  assertDefaultMinifiedInlineJisoLoaderInstallerHelperParity(source, installerSource);
+  assertDefaultMinifiedInlineKovoLoaderInstallerHelperParity(source, installerSource);
   return installerSource;
 }
 
-export interface EmitInlineJisoLoaderModuleOptions {
+export interface EmitInlineKovoLoaderModuleOptions {
   check?: boolean;
   source?: string;
   targetPath?: string;
 }
 
-export interface EmitInlineJisoLoaderModuleResult {
+export interface EmitInlineKovoLoaderModuleResult {
   changed: boolean;
   source: string;
   targetPath: string;
 }
 
-export function buildInlineJisoLoaderModuleSource(
-  source = inlineJisoLoaderInstallerReadableSource,
+export function buildInlineKovoLoaderModuleSource(
+  source = inlineKovoLoaderInstallerReadableSource,
 ): string {
-  const installerSource = buildInlineJisoLoaderInstallerSource(source);
-  assertInlineJisoLoaderGzipBudget(installerSource, 'Generated inline Jiso loader module');
+  const installerSource = buildInlineKovoLoaderInstallerSource(source);
+  assertInlineKovoLoaderGzipBudget(installerSource, 'Generated inline Kovo loader module');
 
   const moduleSource = `${[
     '// @ts-nocheck',
@@ -369,48 +369,48 @@ export function buildInlineJisoLoaderModuleSource(
     '',
     '// SPEC.md §4.4 keeps the always-loaded loader under a 4KB gzip budget; this',
     '// literal is the pre-minified bootstrap shipped in document shells.',
-    `export const inlineJisoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
+    `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
       installerSource,
     )};`,
     '',
     '// prettier-ignore',
-    'const inlineJisoLoaderInstaller = (',
+    'const inlineKovoLoaderInstaller = (',
     `  ${installerSource}`,
     ') as (',
     '    importModule: ImportHandlerModule,',
     '  ) => void;',
     '',
-    'export function installInlineJisoLoader(importModule: ImportHandlerModule): void {',
-    '  inlineJisoLoaderInstaller(importModule);',
+    'export function installInlineKovoLoader(importModule: ImportHandlerModule): void {',
+    '  inlineKovoLoaderInstaller(importModule);',
     '}',
     '',
-    'export function createInlineJisoLoaderSource(',
+    'export function createInlineKovoLoaderSource(',
     "  importModuleExpression = '(url)=>import(url)',",
     '): string {',
     '  const expression = importModuleExpression.trim();',
     '  if (!expression) {',
-    "    throw new Error('Inline Jiso loader import expression cannot be empty.');",
+    "    throw new Error('Inline Kovo loader import expression cannot be empty.');",
     '  }',
     '',
-    '  return `(${inlineJisoLoaderInstallerSource})(${expression});`;',
+    '  return `(${inlineKovoLoaderInstallerSource})(${expression});`;',
     '}',
     '',
-    'export const jisoLoaderSource = createInlineJisoLoaderSource();',
+    'export const kovoLoaderSource = createInlineKovoLoaderSource();',
   ].join('\n')}\n`;
-  assertInlineJisoLoaderModuleArtifactParity(moduleSource, 'Generated inline Jiso loader module');
+  assertInlineKovoLoaderModuleArtifactParity(moduleSource, 'Generated inline Kovo loader module');
 
   return moduleSource;
 }
 
-export function assertInlineJisoLoaderGzipBudget(
+export function assertInlineKovoLoaderGzipBudget(
   installerSource: string,
-  label = 'Inline Jiso loader',
+  label = 'Inline Kovo loader',
 ): void {
-  const bytes = gzipSync(createInlineJisoLoaderBootstrapSource(installerSource)).byteLength;
-  if (bytes <= inlineJisoLoaderGzipByteBudget) return;
+  const bytes = gzipSync(createInlineKovoLoaderBootstrapSource(installerSource)).byteLength;
+  if (bytes <= inlineKovoLoaderGzipByteBudget) return;
 
   throw new Error(
-    `${label} exceeds SPEC.md §4.4 gzip budget: ${bytes} bytes > ${inlineJisoLoaderGzipByteBudget} bytes.`,
+    `${label} exceeds SPEC.md §4.4 gzip budget: ${bytes} bytes > ${inlineKovoLoaderGzipByteBudget} bytes.`,
   );
 }
 
@@ -493,7 +493,7 @@ function extractInlineHelperReadableSource({
   const missing = rootFunctionNames.filter((name) => !declarations.has(name));
   if (missing.length > 0) {
     throw new Error(
-      `Inline Jiso loader ${label} source is missing helper(s): ${missing.join(', ')}`,
+      `Inline Kovo loader ${label} source is missing helper(s): ${missing.join(', ')}`,
     );
   }
 
@@ -519,56 +519,56 @@ function extractInlineHelperReadableSource({
   return transpiled.replace(/^"use strict";\s*/, '').trim();
 }
 
-export function assertInlineJisoLoaderInstallerWireParserParity(
+export function assertInlineKovoLoaderInstallerWireParserParity(
   installerSource: string,
   wireParserSource: string = readInlineHelperCanonicalSource(inlineHelperSpecs.wireParser),
 ): void {
-  assertInlineJisoLoaderInstallerHelperParity(
+  assertInlineKovoLoaderInstallerHelperParity(
     inlineHelperSpecs.wireParser,
     installerSource,
     wireParserSource,
   );
 }
 
-export function assertMinifiedInlineJisoLoaderInstallerWireParserParity(
+export function assertMinifiedInlineKovoLoaderInstallerWireParserParity(
   installerSource: string,
   wireParserSource: string = readInlineHelperCanonicalSource(inlineHelperSpecs.wireParser),
 ): void {
-  assertMinifiedInlineJisoLoaderInstallerHelperParity(
+  assertMinifiedInlineKovoLoaderInstallerHelperParity(
     inlineHelperSpecs.wireParser,
     installerSource,
     wireParserSource,
   );
 }
 
-export function assertInlineJisoLoaderInstallerResponseApplyParity(
+export function assertInlineKovoLoaderInstallerResponseApplyParity(
   installerSource: string,
   responseApplySource: string = readInlineHelperCanonicalSource(inlineHelperSpecs.responseApply),
 ): void {
-  assertInlineJisoLoaderInstallerHelperParity(
+  assertInlineKovoLoaderInstallerHelperParity(
     inlineHelperSpecs.responseApply,
     installerSource,
     responseApplySource,
   );
 }
 
-export function assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(
+export function assertMinifiedInlineKovoLoaderInstallerResponseApplyParity(
   installerSource: string,
   responseApplySource: string = readInlineHelperCanonicalSource(inlineHelperSpecs.responseApply),
 ): void {
-  assertMinifiedInlineJisoLoaderInstallerHelperParity(
+  assertMinifiedInlineKovoLoaderInstallerHelperParity(
     inlineHelperSpecs.responseApply,
     installerSource,
     responseApplySource,
   );
 }
 
-function assertInlineJisoLoaderInstallerHelperParity(
+function assertInlineKovoLoaderInstallerHelperParity(
   spec: InlineHelperSpec,
   installerSource: string,
   helperSource: string,
 ): void {
-  assertInlineJisoLoaderInstallerHelperContains(
+  assertInlineKovoLoaderInstallerHelperContains(
     installerSource,
     extractInlineHelperReadableSourceForSpec(spec, helperSource),
     spec.readableParityLabel,
@@ -576,7 +576,7 @@ function assertInlineJisoLoaderInstallerHelperParity(
   );
 }
 
-function assertMinifiedInlineJisoLoaderInstallerHelperParity(
+function assertMinifiedInlineKovoLoaderInstallerHelperParity(
   spec: InlineHelperSpec,
   installerSource: string,
   helperSource: string,
@@ -584,7 +584,7 @@ function assertMinifiedInlineJisoLoaderInstallerHelperParity(
   const expectedSource = extractInlineHelperReadableSourceForSpec(spec, helperSource);
   const expected = minifyInlineJavaScriptSource(expectedSource);
   const compactExpected = minifyInlineJavaScriptSource(
-    compactInlineJisoLoaderInstallerLocalNames(expectedSource),
+    compactInlineKovoLoaderInstallerLocalNames(expectedSource),
   );
 
   if (
@@ -595,11 +595,11 @@ function assertMinifiedInlineJisoLoaderInstallerHelperParity(
   }
 
   throw new Error(
-    `Inline Jiso loader minified source must embed the ${spec.minifiedParityLabel} exactly once; found 0.`,
+    `Inline Kovo loader minified source must embed the ${spec.minifiedParityLabel} exactly once; found 0.`,
   );
 }
 
-function compactInlineJisoLoaderInstallerLocalNames(source: string): string {
+function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
   // SPEC.md §4.4: the generated bootstrap has a hard 4KB gzip ceiling. Keep
   // source modules readable, then compact only closure-local helper names before
   // the parse-checked minifier runs.
@@ -645,7 +645,7 @@ function compactInlineJisoLoaderInstallerLocalNames(source: string): string {
   return compacted;
 }
 
-function assertInlineJisoLoaderInstallerHelperContains(
+function assertInlineKovoLoaderInstallerHelperContains(
   installerSource: string,
   expected: string,
   parityLabel: string,
@@ -655,15 +655,15 @@ function assertInlineJisoLoaderInstallerHelperContains(
 
   if (count !== 1) {
     throw new Error(
-      `Inline Jiso loader ${sourceKind} source must embed the ${parityLabel} exactly once; found ${count}.`,
+      `Inline Kovo loader ${sourceKind} source must embed the ${parityLabel} exactly once; found ${count}.`,
     );
   }
 }
 
-function assertDefaultInlineJisoLoaderInstallerHelperParity(source: string): void {
-  if (source !== inlineJisoLoaderInstallerReadableSource) return;
+function assertDefaultInlineKovoLoaderInstallerHelperParity(source: string): void {
+  if (source !== inlineKovoLoaderInstallerReadableSource) return;
   for (const spec of Object.values(inlineHelperSpecs)) {
-    assertInlineJisoLoaderInstallerHelperParity(
+    assertInlineKovoLoaderInstallerHelperParity(
       spec,
       source,
       readInlineHelperCanonicalSource(spec),
@@ -671,13 +671,13 @@ function assertDefaultInlineJisoLoaderInstallerHelperParity(source: string): voi
   }
 }
 
-function assertDefaultMinifiedInlineJisoLoaderInstallerHelperParity(
+function assertDefaultMinifiedInlineKovoLoaderInstallerHelperParity(
   readableSource: string,
   installerSource: string,
 ): void {
-  if (readableSource !== inlineJisoLoaderInstallerReadableSource) return;
+  if (readableSource !== inlineKovoLoaderInstallerReadableSource) return;
   for (const spec of Object.values(inlineHelperSpecs)) {
-    assertMinifiedInlineJisoLoaderInstallerHelperParity(
+    assertMinifiedInlineKovoLoaderInstallerHelperParity(
       spec,
       installerSource,
       readInlineHelperCanonicalSource(spec),
@@ -717,7 +717,7 @@ function collectInlineHelperDependencyClosure(
 
     const declaration = declarations.get(name);
     if (!declaration) {
-      throw new Error(`Inline Jiso loader ${label} source is missing helper: ${name}`);
+      throw new Error(`Inline Kovo loader ${label} source is missing helper: ${name}`);
     }
 
     visiting.add(name);
@@ -800,7 +800,7 @@ function collectInlineHelperFunctionDependencies(
       if (name !== ownName && declarations.has(name) && !local) dependencies.add(name);
       if (unsupportedTopLevelBindings.has(name) && !declarations.has(name) && !local) {
         throw new Error(
-          `Inline Jiso loader ${label} helper ${ownName ?? '<anonymous>'} references top-level binding ${name}, but inline extraction only supports self-contained top-level function declarations.`,
+          `Inline Kovo loader ${label} helper ${ownName ?? '<anonymous>'} references top-level binding ${name}, but inline extraction only supports self-contained top-level function declarations.`,
         );
       }
     }
@@ -952,20 +952,20 @@ function collectUnsupportedInlineHelperTopLevelBindings(sourceFile: ts.SourceFil
   return bindings;
 }
 
-export function assertInlineJisoLoaderModuleArtifactParity(
+export function assertInlineKovoLoaderModuleArtifactParity(
   moduleSource: string,
-  label = 'Inline Jiso loader module',
+  label = 'Inline Kovo loader module',
 ): void {
-  const sourceFile = parseInlineJisoLoaderModuleSource(moduleSource, label);
+  const sourceFile = parseInlineKovoLoaderModuleSource(moduleSource, label);
   let installerLiteralSource: string | undefined;
   let installerFunctionSource: string | undefined;
 
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
-      if (node.name.text === 'inlineJisoLoaderInstallerSource') {
+      if (node.name.text === 'inlineKovoLoaderInstallerSource') {
         installerLiteralSource = readInlineInstallerSourceLiteral(node.initializer);
       }
-      if (node.name.text === 'inlineJisoLoaderInstaller') {
+      if (node.name.text === 'inlineKovoLoaderInstaller') {
         const expression = unwrapInlineInstallerExpression(node.initializer);
         if (ts.isFunctionExpression(expression)) {
           installerFunctionSource = expression.getText(sourceFile);
@@ -978,20 +978,20 @@ export function assertInlineJisoLoaderModuleArtifactParity(
   visit(sourceFile);
 
   if (installerLiteralSource === undefined) {
-    throw new Error(`${label} is missing inlineJisoLoaderInstallerSource.`);
+    throw new Error(`${label} is missing inlineKovoLoaderInstallerSource.`);
   }
   if (installerFunctionSource === undefined) {
-    throw new Error(`${label} is missing inlineJisoLoaderInstaller function artifact.`);
+    throw new Error(`${label} is missing inlineKovoLoaderInstaller function artifact.`);
   }
   if (installerLiteralSource !== installerFunctionSource) {
     throw new Error(
-      `${label} embedded installer artifacts drifted: inlineJisoLoaderInstallerSource does not match inlineJisoLoaderInstaller.`,
+      `${label} embedded installer artifacts drifted: inlineKovoLoaderInstallerSource does not match inlineKovoLoaderInstaller.`,
     );
   }
-  assertInlineJisoLoaderGzipBudget(installerLiteralSource, label);
+  assertInlineKovoLoaderGzipBudget(installerLiteralSource, label);
 }
 
-function parseInlineJisoLoaderModuleSource(moduleSource: string, label: string): ts.SourceFile {
+function parseInlineKovoLoaderModuleSource(moduleSource: string, label: string): ts.SourceFile {
   const sourceFile = ts.createSourceFile(
     'inline-loader.ts',
     moduleSource,
@@ -1032,24 +1032,24 @@ function unwrapInlineInstallerExpression(expression: ts.Expression): ts.Expressi
   return current;
 }
 
-export function emitInlineJisoLoaderModule(
-  options: EmitInlineJisoLoaderModuleOptions = {},
-): EmitInlineJisoLoaderModuleResult {
-  const targetPath = options.targetPath ?? inlineJisoLoaderModulePath;
+export function emitInlineKovoLoaderModule(
+  options: EmitInlineKovoLoaderModuleOptions = {},
+): EmitInlineKovoLoaderModuleResult {
+  const targetPath = options.targetPath ?? inlineKovoLoaderModulePath;
   const source =
     options.source === undefined
-      ? buildInlineJisoLoaderModuleSource()
-      : buildInlineJisoLoaderModuleSource(options.source);
+      ? buildInlineKovoLoaderModuleSource()
+      : buildInlineKovoLoaderModuleSource(options.source);
   const current = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : undefined;
   const changed = current !== source;
 
   if (options.check) {
     if (current !== undefined) {
-      assertInlineJisoLoaderModuleArtifactParity(current, targetPath);
+      assertInlineKovoLoaderModuleArtifactParity(current, targetPath);
     }
     if (changed) {
       throw new Error(
-        `Inline Jiso loader module is stale: ${targetPath}. Run pnpm --filter @jiso/runtime run build:inline-loader.`,
+        `Inline Kovo loader module is stale: ${targetPath}. Run pnpm --filter @kovojs/runtime run build:inline-loader.`,
       );
     }
     return { changed, source, targetPath };
@@ -1064,7 +1064,7 @@ function inlineJavaScriptTemplateLiteral(value: string): string {
   return `\`${value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${')}\``;
 }
 
-function createInlineJisoLoaderBootstrapSource(
+function createInlineKovoLoaderBootstrapSource(
   installerSource: string,
   importModuleExpression = '(url)=>import(url)',
 ): string {
@@ -1072,7 +1072,7 @@ function createInlineJisoLoaderBootstrapSource(
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const result = emitInlineJisoLoaderModule({ check: process.argv.includes('--check') });
+  const result = emitInlineKovoLoaderModule({ check: process.argv.includes('--check') });
 
   if (!process.argv.includes('--check')) {
     console.log(

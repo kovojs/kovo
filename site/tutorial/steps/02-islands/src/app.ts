@@ -1,4 +1,4 @@
-import { notFound, renderRoutePageResponse, route, s } from '@jiso/server';
+import { notFound, renderRoutePageResponse, route, s } from '@kovojs/server';
 
 import { ProductActions } from './generated/product-actions.js';
 
@@ -46,13 +46,13 @@ export function renderHomePage(): string {
         `<li><a href="/products/${product.id}">${product.name}</a> — ${formatPrice(product.unitPrice)}</li>`,
     )
     .join('');
-  return `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1><ul>${items}</ul></main></body></html>`;
+  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1><ul>${items}</ul></main></body></html>`;
 }
 
 // snippet:render-island
 export function renderProductPage(product: Product): string {
   const actions = ProductActions.definition.render({}, ProductActions.definition.state());
-  return `<!doctype html><html><head><title>${product.name} · Jiso Shop</title></head><body><main><h1>${product.name}</h1><p>${formatPrice(product.unitPrice)}</p>${actions}<a href="/">Back to the shop</a></main></body></html>`;
+  return `<!doctype html><html><head><title>${product.name} · Kovo Shop</title></head><body><main><h1>${product.name}</h1><p>${formatPrice(product.unitPrice)}</p>${actions}<a href="/">Back to the shop</a></main></body></html>`;
 }
 // /snippet
 

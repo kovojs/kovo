@@ -8,7 +8,7 @@ order: 4
 
 Your shop shows live data; now you'll sell something. In this chapter you add `cart/add`: a
 schema-validated, transactional write whose UI is a real HTML form. One endpoint answers
-browsers without JavaScript (POST-redirect-GET) and enhanced browsers (the fragment wire, Jiso's
+browsers without JavaScript (POST-redirect-GET) and enhanced browsers (the fragment wire, Kovo's
 readable chunk format for partial updates) — one handler, two response modes. Step state:
 `site/tutorial/steps/04-mutations/`.
 
@@ -50,7 +50,7 @@ fallback bolted on afterward:
 {{snippet:04-mutations/src/components/product-list.tsx#add-to-cart-form}}
 
 `enhance` is the entire opt-in: with JavaScript, the loader intercepts the submit and speaks the
-fragment wire; without it, the browser posts natively. `fw-fragment-target` names this form as a
+fragment wire; without it, the browser posts natively. `kovo-fragment-target` names this form as a
 patchable region so failures can re-render just it. Either way the wire stays legible — a named
 POST to `/_m/cart/add` with schema-shaped fields.
 
@@ -70,8 +70,8 @@ aspirational.
 
 ## Mode two: the fragment wire
 
-With JavaScript, the same endpoint sees an `FW-Fragment` header and answers with readable chunks:
-re-rendered fragments for the targets the live DOM declared via its `fw-deps` stamps. The server
+With JavaScript, the same endpoint sees an `Kovo-Fragment` header and answers with readable chunks:
+re-rendered fragments for the targets the live DOM declared via its `kovo-deps` stamps. The server
 holds no record of what's on screen — it answers a stateless question:
 
 {{snippet:04-mutations/src/app.test.ts#enhanced-test}}
@@ -95,6 +95,6 @@ That's the next chapter.
 `input` schema as single source of truth, validators required: SPEC §6.3, §6.6. `errors` as a
 typed discriminated union: SPEC §9.2. Transaction lifecycle and rollback: SPEC §10.3. CSRF
 default-on, fail-closed: SPEC §6.6. No-JS degradation as a structural contract: SPEC §8. Legible
-named POST: Constitution #4. Stateless fragment responses keyed off live `fw-deps`: SPEC §9.1.
+named POST: Constitution #4. Stateless fragment responses keyed off live `kovo-deps`: SPEC §9.1.
 
 </details>

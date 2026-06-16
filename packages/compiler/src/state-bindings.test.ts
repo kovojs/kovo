@@ -170,7 +170,7 @@ export const BadProfileCard = component('bad-profile-card', {
     expect(valid.diagnostics).toEqual([]);
     expect(invalid.diagnostics).toEqual([
       {
-        code: 'FW302',
+        code: 'KV302',
         fileName: 'bad-profile-card.tsx',
         length: 30,
         message: 'data-bind path is not present in the declared query shape. state.doesNotExist',
@@ -205,7 +205,7 @@ export const DisclosureDemo = component('disclosure-demo', {
     expect(serverSource).not.toContain('data-derive=');
     expect(serverSource).toContain("aria-expanded={state.open ? 'true' : 'false'}");
     expect(serverSource).toContain('hidden={!state.open}');
-    expect(clientSource).toContain("import { derive } from '@jiso/runtime';");
+    expect(clientSource).toContain("import { derive } from '@kovojs/runtime';");
     expect(clientSource).toContain(
       `export const DisclosureDemo$button_aria_expanded_derive = derive(["state"], (state) => state.open ? 'true' : 'false');`,
     );
@@ -236,7 +236,7 @@ export const DisclosureDemo = component('disclosure-demo', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('reports unhandled state and mixed query/state render expressions as FW311', () => {
+  it('reports unhandled state and mixed query/state render expressions as KV311', () => {
     const result = compileComponentModule({
       fileName: 'mixed-state.tsx',
       source: `
@@ -283,7 +283,7 @@ export const MixedState = component('mixed-state', {
     ]);
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW311',
+        code: 'KV311',
         fileName: 'mixed-state.tsx',
         length: 50,
         message:
@@ -292,7 +292,7 @@ export const MixedState = component('mixed-state', {
         start: { column: 22, line: 8 },
       },
       {
-        code: 'FW311',
+        code: 'KV311',
         fileName: 'mixed-state.tsx',
         length: 30,
         message:
@@ -301,7 +301,7 @@ export const MixedState = component('mixed-state', {
         start: { column: 24, line: 7 },
       },
       {
-        code: 'FW311',
+        code: 'KV311',
         fileName: 'mixed-state.tsx',
         length: 50,
         message:
@@ -356,7 +356,7 @@ export const BadStateQuery = component('bad-state-query', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW304',
+        code: 'KV304',
         fileName: 'bad-state-query.tsx',
         message: 'Reserved query name is not allowed. state',
         severity: 'error',

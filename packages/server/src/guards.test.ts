@@ -303,9 +303,9 @@ describe('server guard and session primitives', () => {
         request,
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="error"><output role="alert" data-error-code="RATE_LIMITED">{}</output></fw-fragment>',
+      body: '<kovo-fragment target="error"><output role="alert" data-error-code="RATE_LIMITED">{}</output></kovo-fragment>',
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Retry-After': '60',
       },
       status: 429,

@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/switch-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/switch-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GallerySwitchDemo$input_aria_checked_derive = derive(['state'], (state: any) =>
   String(state.checked),
@@ -15,12 +15,12 @@ export const GallerySwitchDemo$output_text_derive = derive(['state'], (state: an
   state.checked ? 'on' : 'off',
 );
 
-import { component } from '@jiso/core';
-import { switchTriggerClick as _switchTriggerClick } from '@jiso/headless-ui/primitives';
+import { component } from '@kovojs/core';
+import { switchTriggerClick as _switchTriggerClick } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/switch.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/switch.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS =
   'inline-flex items-center gap-2 text-sm text-neutral-950 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50';
@@ -32,28 +32,28 @@ export interface GallerySwitchDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GallerySwitchDemo = component('gallery-switch-demo', {
   state: () => ({ checked: false }),
   render: (_queries: Record<string, never>, state: GallerySwitchDemoState) => (
     <label
       class={ROOT_CLASS}
       data-gallery-interactive="switch"
-      fw-c="gallery-switch-demo"
-      fw-state='{"checked":false}'
+      kovo-c="gallery-switch-demo"
+      kovo-state='{"checked":false}'
     >
       <input
         aria-checked={String(state.checked)}
-        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=e64ef5d2#GallerySwitchDemo$input_aria_checked_derive"
+        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_aria_checked_derive"
         checked={state.checked}
-        data-bind:checked="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=e64ef5d2#GallerySwitchDemo$input_checked_derive"
+        data-bind:checked="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_checked_derive"
         class={INPUT_CLASS}
         data-state={state.checked ? 'checked' : 'unchecked'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=e64ef5d2#GallerySwitchDemo$input_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_data_state_derive"
         form="gallery-switch-form"
         name="gallery-notifications"
-        on:click="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=e64ef5d2#GallerySwitchDemo$input_click"
-        on:keydown="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=e64ef5d2#GallerySwitchDemo$input_keydown"
+        on:click="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_click"
+        on:keydown="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_keydown"
         role="switch"
         type="checkbox"
         value="enabled"
@@ -62,7 +62,7 @@ export const GallerySwitchDemo = component('gallery-switch-demo', {
       <output
         class="text-xs text-neutral-500"
         data-demo-state="checked"
-        data-bind="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=e64ef5d2#GallerySwitchDemo$output_text_derive"
+        data-bind="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$output_text_derive"
       >
         {state.checked ? 'on' : 'off'}
       </output>

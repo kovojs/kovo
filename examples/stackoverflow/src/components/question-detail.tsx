@@ -1,4 +1,4 @@
-/** @jsxImportSource @jiso/server */
+/** @jsxImportSource @kovojs/server */
 import type { AnswerListItem } from '../types.js';
 import { renderSoShell, score } from './chrome.js';
 

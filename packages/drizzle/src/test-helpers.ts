@@ -1,6 +1,6 @@
-import { jiso, type SourceFileInput, type TouchGraphProjectOptions } from '@jiso/drizzle/static';
+import { kovo, type SourceFileInput, type TouchGraphProjectOptions } from '@kovojs/drizzle/static';
 
-export function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
+export function annotatedTable(name: string, annotation: ReturnType<typeof kovo>) {
   return {
     domain: annotation.domain,
     ...(annotation.key ? { key: annotation.key } : {}),
@@ -37,7 +37,7 @@ export function unresolvedQueryLoadFact(query: string, site: string) {
   return {
     diagnostics: [
       {
-        code: 'FW406',
+        code: 'KV406',
         message:
           'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
         severity: 'warn',

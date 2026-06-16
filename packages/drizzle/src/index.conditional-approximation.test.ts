@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractTouchGraphFromProject } from '@jiso/drizzle/static';
+import { extractTouchGraphFromProject } from '@kovojs/drizzle/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
-describe('@jiso/drizzle touch graph helpers', () => {
-  it('marks project-mode computed table expressions as FW406 instead of resolving descendant tables', () => {
+describe('@kovojs/drizzle touch graph helpers', () => {
+  it('marks project-mode computed table expressions as KV406 instead of resolving descendant tables', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         {
@@ -12,7 +12,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export async function syncProduct(db: PgDatabase<any, any, any>) {',
             '  await db.update(tableFor(products)).set({ reserved: true });',
@@ -29,7 +29,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'product.domain.ts:6',
           },
@@ -50,9 +50,9 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { eq } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const archivedProducts = pgTable("archived_products", {}, jiso({ domain: "archive", key: "id" }));',
-            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const archivedProducts = pgTable("archived_products", {}, kovo({ domain: "archive", key: "id" }));',
+            'export const prices = pgTable("prices", {}, kovo({ domain: "price", key: "productId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             'const priceSource = useArchive ? archivedProducts : prices;',
             'const writeTarget = useArchive ? archivedProducts : products;',
             '',
@@ -101,7 +101,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('keeps project-mode resolved conditional table branches with opaque branch FW406', () => {
+  it('keeps project-mode resolved conditional table branches with opaque branch KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes(['update(table: unknown): { set(value: unknown): Promise<void> };']),
@@ -110,7 +110,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             'const writeTarget = useDynamic ? tableFor("archive:products") : products;',
             '',
             'export async function syncProduct(db: PgDatabase<any, any, any>) {',
@@ -134,7 +134,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         ],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'product.domain.ts:7',
           },
@@ -156,8 +156,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-            'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const vendors = pgTable("vendors", {}, kovo({ domain: "vendor", key: "id" }));',
             '',
             'export async function syncCatalog(db: PgDatabase<any, any, any>) {',
             '  await db.insert(tableFor("snapshots")).select(db.select().from(products));',
@@ -189,12 +189,12 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'catalog.domain.ts:7',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'catalog.domain.ts:8',
           },
@@ -203,7 +203,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('marks project unresolved insert-select source tables as FW406', () => {
+  it('marks project unresolved insert-select source tables as KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([
@@ -215,7 +215,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, kovo({ domain: "snapshot", key: "productId" }));',
             '',
             'export async function importSnapshots(db: PgDatabase<any, any, any>) {',
             '  await db.insert(snapshots).select(db.select().from(tableFor("products")));',
@@ -233,7 +233,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         ],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
             site: 'product.domain.ts:6',
@@ -243,7 +243,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('marks project unresolved update-from source tables as explicit FW406 read-source surfaces', () => {
+  it('marks project unresolved update-from source tables as explicit KV406 read-source surfaces', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([
@@ -254,7 +254,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export async function importSnapshots(db: PgDatabase<any, any, any>) {',
             '  await db.update(products).set({ reserved: true }).from(tableFor("prices"));',
@@ -270,7 +270,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:6', via: 'products' }],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Update-from read source could not be resolved to a Drizzle table.',
             site: 'product.domain.ts:6',
@@ -289,8 +289,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, kovo({ domain: "snapshot", key: "productId" }));',
             '',
             'export async function importSnapshots(db: PgDatabase<any, any, any>) {',
             '  await db.insert(snapshots).select(sql`select * from products where marker = ".from(products)"`);',
@@ -308,7 +308,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         ],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
             site: 'product.domain.ts:7',

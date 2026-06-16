@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/server",
+  "name": "@kovojs/server",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -13,8 +13,8 @@
     "./jsx-dev-runtime": "./src/jsx-runtime.ts"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*",
-    "@jiso/runtime": "workspace:*"
+    "@kovojs/core": "workspace:*",
+    "@kovojs/runtime": "workspace:*"
   },
   "devDependencies": {
     "vitest": "4.1.8"

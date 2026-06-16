@@ -244,7 +244,7 @@ export function dismissToast(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -265,7 +265,7 @@ export function toastCloseClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -296,7 +296,7 @@ export function toastActionClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -318,7 +318,7 @@ export function toastEscapeKeyDown(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -326,7 +326,7 @@ export function toastEscapeKeyDown(
 export function toastAnimationEnd(
   event: ToastAnimationEvent,
   state: ToastState,
-  animationName = 'jiso-toast-auto-dismiss',
+  animationName = 'kovo-toast-auto-dismiss',
   options: ToastChangeOptions = {},
 ): ToastChangeResult | undefined {
   if (event.defaultPrevented) return;
@@ -341,7 +341,7 @@ export function toastAnimationEnd(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.

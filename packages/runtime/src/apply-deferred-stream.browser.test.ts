@@ -15,12 +15,12 @@ describe('browser deferred stream response apply', () => {
   it('applies CRLF deferred stream query truth before browser fragment morphs', () => {
     const root = document.createElement('main');
     root.innerHTML = [
-      '<section fw-c="cart-badge"><output data-bind="cart.count">0</output></section>',
+      '<section kovo-c="cart-badge"><output data-bind="cart.count">0</output></section>',
       '<p data-bind="cart.count">0</p>',
     ].join('');
     document.body.append(root);
     const store = createQueryStore();
-    const badge = root.querySelector('[fw-c="cart-badge"]');
+    const badge = root.querySelector('[kovo-c="cart-badge"]');
     const observed: string[] = [];
     if (!badge) throw new Error('missing cart badge fixture');
 
@@ -28,14 +28,14 @@ describe('browser deferred stream response apply', () => {
     // apply, so browser morphs observe the query-store truth from the same part.
     const applied = applyDeferredStreamResponseToRuntime({
       body: [
-        '--jiso-boundary\r\n',
-        'Content-Type: text/vnd.jiso.fragment+html\r\n',
+        '--kovo-boundary\r\n',
+        'Content-Type: text/vnd.kovo.fragment+html\r\n',
         '\r\n',
-        '<fw-query name="cart">{"count":4}</fw-query>\r\n',
-        '<fw-fragment target="cart-badge">',
-        '<section fw-c="cart-badge"><output data-bind="cart.count">server</output></section>',
-        '</fw-fragment>\r\n',
-        '--jiso-boundary--\r\n',
+        '<kovo-query name="cart">{"count":4}</kovo-query>\r\n',
+        '<kovo-fragment target="cart-badge">',
+        '<section kovo-c="cart-badge"><output data-bind="cart.count">server</output></section>',
+        '</kovo-fragment>\r\n',
+        '--kovo-boundary--\r\n',
       ].join(''),
       morph(target, html) {
         observed.push(root.querySelector('p')?.textContent ?? '');
@@ -51,8 +51,8 @@ describe('browser deferred stream response apply', () => {
     expect(applied.appliedFragments).toEqual(['cart-badge']);
     expect(store.get('cart')).toEqual({ count: 4 });
     expect(observed).toEqual(['4']);
-    expect(root.querySelector('[fw-c="cart-badge"]')).toBe(badge);
-    expect(root.querySelector('[fw-c="cart-badge"] output')?.textContent).toBe('server');
+    expect(root.querySelector('[kovo-c="cart-badge"]')).toBe(badge);
+    expect(root.querySelector('[kovo-c="cart-badge"] output')?.textContent).toBe('server');
     expect(root.querySelector('p')?.textContent).toBe('4');
   });
 });

@@ -1,5 +1,5 @@
-import { diagnosticDefinitions } from '@jiso/core';
-import type { AppDiagnostic, JisoApp } from './app-types.js';
+import { diagnosticDefinitions } from '@kovojs/core';
+import type { AppDiagnostic, KovoApp } from './app-types.js';
 import { findRouteAmbiguities, type RouteLike } from './match.js';
 
 export class AppDiagnosticError extends Error {
@@ -11,25 +11,25 @@ export class AppDiagnosticError extends Error {
     super(
       diagnostics.length === 1 && first
         ? `${first.code} ${first.message}`
-        : `Jiso app has ${diagnostics.length} blocking diagnostics.`,
+        : `Kovo app has ${diagnostics.length} blocking diagnostics.`,
     );
     this.name = 'AppDiagnosticError';
-    this.code = first?.code ?? 'FW228';
+    this.code = first?.code ?? 'KV228';
     this.diagnostics = diagnostics;
   }
 }
 
 export function routeTableDiagnostics(routes: readonly RouteLike[]): readonly AppDiagnostic[] {
   return findRouteAmbiguities(routes).map((ambiguity) => ({
-    code: 'FW228',
+    code: 'KV228',
     fileName: ambiguity.paths.join(' <-> '),
-    help: diagnosticDefinitions.FW228.help,
+    help: diagnosticDefinitions.KV228.help,
     message: ambiguity.message,
   }));
 }
 
 export function blockingAppDiagnostics(
-  app: Pick<JisoApp, 'diagnostics'>,
+  app: Pick<KovoApp, 'diagnostics'>,
 ): readonly AppDiagnostic[] {
   // SPEC §11.3: app-shell surfaces use the shared diagnostic registry severity.
   return app.diagnostics.filter(
@@ -37,7 +37,7 @@ export function blockingAppDiagnostics(
   );
 }
 
-export function assertNoBlockingAppDiagnostics(app: Pick<JisoApp, 'diagnostics'>): void {
+export function assertNoBlockingAppDiagnostics(app: Pick<KovoApp, 'diagnostics'>): void {
   const diagnostics = blockingAppDiagnostics(app);
   if (diagnostics.length > 0) throw new AppDiagnosticError(diagnostics);
 }

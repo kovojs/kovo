@@ -27,9 +27,9 @@ describe('mutation broadcast replay', () => {
 
     channel.onmessage?.({
       data: {
-        body: '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</fw-query>',
+        body: '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</kovo-query>',
         changes: [{ domain: 'product', keys: ['p1'] }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     });
 
@@ -49,11 +49,11 @@ describe('mutation broadcast replay', () => {
     channel.onmessage?.({
       data: {
         body: [
-          '<fw-query name="cart">{</fw-query>',
-          '<fw-query name="product:p1">{"stock":8}</fw-query>',
+          '<kovo-query name="cart">{</kovo-query>',
+          '<kovo-query name="product:p1">{"stock":8}</kovo-query>',
         ].join('\n'),
         changes: [],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     });
 
@@ -62,7 +62,9 @@ describe('mutation broadcast replay', () => {
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('product', 'p1')).toEqual({ stock: 8 });
     expect(onError).toHaveBeenCalledTimes(1);
-    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed JSON in kovo-query cart',
+    );
   });
 
   it('reports broadcast apply hook failures without aborting later chunks', () => {
@@ -83,11 +85,11 @@ describe('mutation broadcast replay', () => {
     channel.onmessage?.({
       data: {
         body: [
-          '<fw-query name="cart">{"count":2}</fw-query>',
-          '<fw-query name="product:p1">{"stock":8}</fw-query>',
+          '<kovo-query name="cart">{"count":2}</kovo-query>',
+          '<kovo-query name="product:p1">{"stock":8}</kovo-query>',
         ].join('\n'),
         changes: [],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     });
 
@@ -132,11 +134,11 @@ describe('mutation broadcast replay', () => {
     channel.onmessage?.({
       data: {
         body: [
-          '<fw-query name="cart">{"count":6}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>6</cart-badge></fw-fragment>',
+          '<kovo-query name="cart">{"count":6}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>6</cart-badge></kovo-fragment>',
         ].join('\n'),
         changes: [],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     });
 

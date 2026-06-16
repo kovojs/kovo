@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import type { PackageComponentPrefixFact } from '../types.js';
@@ -24,10 +24,10 @@ export function validatePackageComponentPrefixes(
       diagnostics.push(
         packagePrefixDiagnostic(
           fileName,
-          `${fact.packageName} is imported as a component package but does not declare package.json jiso.prefix.`,
+          `${fact.packageName} is imported as a component package but does not declare package.json kovo.prefix.`,
           [
             'SPEC §6.1.1 requires every imported component package to declare a package prefix.',
-            'Fix: add "jiso": { "prefix": "acme-" } to the package manifest, or vendor the source so the component names are app-local.',
+            'Fix: add "kovo": { "prefix": "acme-" } to the package manifest, or vendor the source so the component names are app-local.',
           ],
         ),
       );
@@ -38,10 +38,10 @@ export function validatePackageComponentPrefixes(
       diagnostics.push(
         packagePrefixDiagnostic(
           fileName,
-          `${fact.packageName} declares invalid package.json jiso.prefix "${declaredPrefix}".`,
+          `${fact.packageName} declares invalid package.json kovo.prefix "${declaredPrefix}".`,
           [
             'SPEC §6.1.1 requires package prefixes to be lowercase ASCII and dash-terminated.',
-            'Fix: use a prefix like "acme-" so rendered hosts, fw-c, scoped CSS, and behavior attributes share one stable vocabulary.',
+            'Fix: use a prefix like "acme-" so rendered hosts, kovo-c, scoped CSS, and behavior attributes share one stable vocabulary.',
           ],
         ),
       );
@@ -63,33 +63,22 @@ export function validatePackageComponentPrefixes(
       continue;
     }
 
-    const reservedPrefix = reservedJisoPrefixViolation(fact, declaredPrefix, effectivePrefix);
+    // The kovo-* namespace is reserved for the framework: it is both the
+    // first-party package prefix family (only @kovojs/* packages may claim it)
+    // and the framework-owned attribute namespace (SPEC §6.1.1). Before the
+    // rebrand these were two distinct vocabularies (jiso-* and fw-*); they now
+    // share one root, so a single reservation check — exempting @kovojs/* —
+    // covers both, and the diagnostic explains both reservations.
+    const reservedPrefix = reservedKovoPrefixViolation(fact, declaredPrefix, effectivePrefix);
     if (reservedPrefix) {
       diagnostics.push(
         packagePrefixDiagnostic(
           fileName,
-          `${fact.packageName} cannot use reserved jiso-* package prefix "${reservedPrefix}".`,
+          `${fact.packageName} cannot use reserved kovo-* package prefix "${reservedPrefix}".`,
           [
-            'SPEC §6.1.1 reserves the jiso-* prefix family for packages whose manifest name is in the @jiso/* scope.',
-            'Fix: choose a non-reserved prefix, or add an explicit app-side alias such as "acme-jiso-".',
-          ],
-        ),
-      );
-      continue;
-    }
-
-    const frameworkReservedPrefix = reservedFrameworkPrefixViolation(
-      declaredPrefix,
-      effectivePrefix,
-    );
-    if (frameworkReservedPrefix) {
-      diagnostics.push(
-        packagePrefixDiagnostic(
-          fileName,
-          `${fact.packageName} cannot use reserved fw-* package prefix "${frameworkReservedPrefix}".`,
-          [
-            'SPEC §6.1.1 reserves the fw-* attribute namespace for framework-owned attributes and future loader/compiler growth.',
-            'Fix: choose a package-owned prefix such as "acme-" for package behavior attributes.',
+            'SPEC §6.1.1 reserves the kovo-* prefix family for packages whose manifest name is in the @kovojs/* scope.',
+            'SPEC §6.1.1 reserves the kovo-* attribute namespace for framework-owned attributes and future loader/compiler growth.',
+            'Fix: choose a non-reserved prefix, or add an explicit app-side alias such as "acme-kovo-".',
           ],
         ),
       );
@@ -115,7 +104,7 @@ export function validatePackageComponentPrefixes(
         fileName,
         `Effective package prefix "${prefix}" is claimed by ${packages.join(' and ')}.`,
         [
-          'SPEC §6.1.1 keeps package prefixes app-wide unique because the effective prefix is emitted into rendered hosts, residual fw-c values, scoped CSS, and package behavior attributes.',
+          'SPEC §6.1.1 keeps package prefixes app-wide unique because the effective prefix is emitted into rendered hosts, residual kovo-c values, scoped CSS, and package behavior attributes.',
           `Packages: ${packages.join(', ')}.`,
           `Fix: add an app-side alias so one package has a distinct effective prefix, e.g. { packageName: "${aliasPackage}", prefix: "${aliasDeclaredPrefix}", effectivePrefix: "${aliasExample(prefix, aliasPackage)}" }.`,
         ],
@@ -130,28 +119,19 @@ function isValidPrefix(prefix: string): boolean {
   return prefixPattern.test(prefix);
 }
 
-function reservedJisoPrefixViolation(
+function reservedKovoPrefixViolation(
   fact: PackageComponentPrefixFact,
   declaredPrefix: string,
   effectivePrefix: string,
 ): string | null {
-  if (isJisoPackage(fact.packageName)) return null;
-  if (declaredPrefix.startsWith('jiso-')) return declaredPrefix;
-  if (effectivePrefix.startsWith('jiso-')) return effectivePrefix;
+  if (isKovoPackage(fact.packageName)) return null;
+  if (declaredPrefix.startsWith('kovo-')) return declaredPrefix;
+  if (effectivePrefix.startsWith('kovo-')) return effectivePrefix;
   return null;
 }
 
-function reservedFrameworkPrefixViolation(
-  declaredPrefix: string,
-  effectivePrefix: string,
-): string | null {
-  if (declaredPrefix.startsWith('fw-')) return declaredPrefix;
-  if (effectivePrefix.startsWith('fw-')) return effectivePrefix;
-  return null;
-}
-
-function isJisoPackage(packageName: string): boolean {
-  return packageName.startsWith('@jiso/');
+function isKovoPackage(packageName: string): boolean {
+  return packageName.startsWith('@kovojs/');
 }
 
 function aliasExample(prefix: string, packageName: string): string {
@@ -170,10 +150,10 @@ function packagePrefixDiagnostic(
   help: readonly string[],
 ): CompilerDiagnostic {
   return {
-    code: 'FW234',
+    code: 'KV234',
     fileName,
-    help: [diagnosticDefinitions.FW234.help, ...help].filter(Boolean).join('\n'),
-    message: `${diagnosticDefinitions.FW234.message} ${detail}`,
-    severity: diagnosticDefinitions.FW234.severity,
+    help: [diagnosticDefinitions.KV234.help, ...help].filter(Boolean).join('\n'),
+    message: `${diagnosticDefinitions.KV234.message} ${detail}`,
+    severity: diagnosticDefinitions.KV234.severity,
   };
 }

@@ -31,15 +31,15 @@ export const CartShell = component('cart-shell', {
       packageComponentPrefixes: [
         {
           idrefBehaviorAttributes: ['tooltip'],
-          packageName: '@jiso/headless-ui',
-          prefix: 'jiso-',
+          packageName: '@kovojs/headless-ui',
+          prefix: 'kovo-',
         },
       ],
       source: `
 export const PricingLink = component('pricing-link', {
   render: () => (
     <section>
-      <a href="/pricing" jiso-tooltip="pricing-tip">Pricing</a>
+      <a href="/pricing" kovo-tooltip="pricing-tip">Pricing</a>
       <p id="pricing-tip">Starts at $20.</p>
     </section>
   ),
@@ -50,7 +50,7 @@ export const PricingLink = component('pricing-link', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('reports FW221 when an IDREF is only satisfied by another component', () => {
+  it('reports KV221 when an IDREF is only satisfied by another component', () => {
     const result = compileComponentModule({
       fileName: 'search-controls.tsx',
       source: `
@@ -66,7 +66,7 @@ export const SearchInput = component('search-input', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW221',
+        code: 'KV221',
         fileName: 'search-controls.tsx',
         length: 19,
         message: 'IDREF references an id not present in component scope. shared-search',
@@ -76,7 +76,7 @@ export const SearchInput = component('search-input', {
     ]);
   });
 
-  it('reports FW221 for package-prefixed behavior IDREFs that miss component scope ids', () => {
+  it('reports KV221 for package-prefixed behavior IDREFs that miss component scope ids', () => {
     const result = compileComponentModule({
       fileName: 'pricing-link.tsx',
       packageComponentPrefixes: [
@@ -91,7 +91,7 @@ export const SearchInput = component('search-input', {
 export const PricingLink = component('pricing-link', {
   render: () => (
     <section>
-      <a href="/pricing" acme-ui-tooltip="missing-tip" fw-tooltip="framework-owned">Pricing</a>
+      <a href="/pricing" acme-ui-tooltip="missing-tip" kovo-tooltip="framework-owned">Pricing</a>
     </section>
   ),
 });
@@ -100,7 +100,7 @@ export const PricingLink = component('pricing-link', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW221',
+        code: 'KV221',
         fileName: 'pricing-link.tsx',
         length: 29,
         message: 'IDREF references an id not present in component scope. missing-tip',
@@ -110,7 +110,7 @@ export const PricingLink = component('pricing-link', {
     ]);
   });
 
-  it('reports FW221 for literal IDREFs that miss component scope ids', () => {
+  it('reports KV221 for literal IDREFs that miss component scope ids', () => {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
@@ -129,7 +129,7 @@ export const CartShell = component('cart-shell', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW221',
+        code: 'KV221',
         fileName: 'cart-shell.tsx',
         length: 17,
         message: 'IDREF references an id not present in component scope. cart-search',
@@ -137,7 +137,7 @@ export const CartShell = component('cart-shell', {
         start: { column: 14, line: 5 },
       },
       {
-        code: 'FW221',
+        code: 'KV221',
         fileName: 'cart-shell.tsx',
         length: 41,
         message: 'IDREF references an id not present in component scope. missing-help',
@@ -145,7 +145,7 @@ export const CartShell = component('cart-shell', {
         start: { column: 30, line: 6 },
       },
       {
-        code: 'FW221',
+        code: 'KV221',
         fileName: 'cart-shell.tsx',
         length: 23,
         message: 'IDREF references an id not present in component scope. filters',
@@ -172,7 +172,7 @@ export const CartShell = component('cart-shell', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('reports FW224 for duplicate literal ids in component scope', () => {
+  it('reports KV224 for duplicate literal ids in component scope', () => {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
@@ -189,7 +189,7 @@ export const CartShell = component('cart-shell', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW224',
+        code: 'KV224',
         fileName: 'cart-shell.tsx',
         message:
           'Static id is duplicated in component scope or appears inside a repeatable stamp. duplicate id="cart-title"',
@@ -200,7 +200,7 @@ export const CartShell = component('cart-shell', {
     ]);
   });
 
-  it('reports FW224 without FW221 when an IDREF targets a duplicated id', () => {
+  it('reports KV224 without KV221 when an IDREF targets a duplicated id', () => {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
@@ -218,7 +218,7 @@ export const CartShell = component('cart-shell', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW224',
+        code: 'KV224',
         fileName: 'cart-shell.tsx',
         message:
           'Static id is duplicated in component scope or appears inside a repeatable stamp. duplicate id="cart-drawer"',
@@ -229,14 +229,14 @@ export const CartShell = component('cart-shell', {
     ]);
   });
 
-  it('reports FW224 for static ids inside repeatable list stamps', () => {
+  it('reports KV224 for static ids inside repeatable list stamps', () => {
     const result = compileComponentModule({
       fileName: 'cart-list.tsx',
       source: `
 export const CartList = component('cart-list', {
   render: () => (
-    <ul data-bind-list="cart.items" fw-key="productId">
-      <template fw-stamp>
+    <ul data-bind-list="cart.items" kovo-key="productId">
+      <template kovo-stamp>
         <li id="cart-row"><span data-bind=".name">Mug</span></li>
       </template>
     </ul>
@@ -247,7 +247,7 @@ export const CartList = component('cart-list', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW224',
+        code: 'KV224',
         fileName: 'cart-list.tsx',
         message:
           'Static id is duplicated in component scope or appears inside a repeatable stamp. repeatable id="cart-row"',
@@ -264,8 +264,8 @@ export const CartList = component('cart-list', {
       source: `
 export const CartList = component('cart-list', {
   render: () => (
-    <ul id="cart-items" data-bind-list="cart.items" fw-key="productId">
-      <template fw-stamp>
+    <ul id="cart-items" data-bind-list="cart.items" kovo-key="productId">
+      <template kovo-stamp>
         <li><span data-bind=".name">Mug</span></li>
       </template>
     </ul>
@@ -288,7 +288,7 @@ export const CartTable = component('cart-table', {
   render: () => (
     <table>
       <tbody>
-        <tr fw-c="cart-row">
+        <tr kovo-c="cart-row">
           <td>Cart row</td>
         </tr>
       </tbody>
@@ -301,7 +301,7 @@ export const CartTable = component('cart-table', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('reports FW225 for parser-reparented HTML content-model violations', () => {
+  it('reports KV225 for parser-reparented HTML content-model violations', () => {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
@@ -323,7 +323,7 @@ export const CartShell = component('cart-shell', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW225',
+        code: 'KV225',
         fileName: 'cart-shell.tsx',
         length: 5,
         message: 'JSX nesting violates the HTML content model. <div> cannot appear inside <p>',
@@ -331,7 +331,7 @@ export const CartShell = component('cart-shell', {
         start: { column: 9, line: 7 },
       },
       {
-        code: 'FW225',
+        code: 'KV225',
         fileName: 'cart-shell.tsx',
         length: 4,
         message:

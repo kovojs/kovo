@@ -21,7 +21,7 @@ describe('optimistic enhanced mutation submission', () => {
     const channel = new FakeBroadcastChannel();
     const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
-    const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
+    const cartBadge = new FakePendingElement({ 'kovo-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartBadge]);
     root.deps = [{ id: 'cart-badge' }];
     root.targets.set('cart-badge', new FakeMorphTarget());
@@ -31,21 +31,21 @@ describe('optimistic enhanced mutation submission', () => {
       expect(store.get('cart')).toEqual({ count: 3 });
       expect(cartBadge.attributes).toMatchObject({
         'aria-busy': 'true',
-        'fw-pending': '',
+        'kovo-pending': '',
       });
 
       return {
         headers: {
           get(name: string) {
-            return name === 'FW-Changes'
+            return name === 'Kovo-Changes'
               ? '[{"domain":"cart","input":{"productId":"p1","quantity":2}}]'
               : null;
           },
         },
         async text() {
           return [
-            '<fw-query name="cart">{"count":4}</fw-query>',
-            '<fw-fragment target="cart-badge"><cart-badge>4</cart-badge></fw-fragment>',
+            '<kovo-query name="cart">{"count":4}</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>4</cart-badge></kovo-fragment>',
           ].join('\n');
         },
       };
@@ -77,16 +77,16 @@ describe('optimistic enhanced mutation submission', () => {
     expect(channel.messages).toEqual([
       {
         body: [
-          '<fw-query name="cart">{"count":4}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>4</cart-badge></fw-fragment>',
+          '<kovo-query name="cart">{"count":4}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>4</cart-badge></kovo-fragment>',
         ].join('\n'),
         changes: [{ domain: 'cart' }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     ]);
     expect(store.get('cart')).toEqual({ count: 4 });
     expect(rebaser.pendingCount('cart')).toBe(0);
-    expect(cartBadge.attributes).not.toHaveProperty('fw-pending');
+    expect(cartBadge.attributes).not.toHaveProperty('kovo-pending');
     expect(cartBadge.attributes).not.toHaveProperty('aria-busy');
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>4</cart-badge>');
   });
@@ -107,8 +107,8 @@ describe('optimistic enhanced mutation submission', () => {
       return {
         async text() {
           return [
-            '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</fw-query>',
-            '<fw-fragment target="reviews:p1"><section>Reviews ready</section></fw-fragment>',
+            '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</kovo-query>',
+            '<kovo-fragment target="reviews:p1"><section>Reviews ready</section></kovo-fragment>',
           ].join('\n');
         },
       };
@@ -152,7 +152,7 @@ describe('optimistic enhanced mutation submission', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     const root = new FakeMorphRoot();
-    const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
+    const cartBadge = new FakePendingElement({ 'kovo-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartBadge]);
     root.deps = [{ id: 'cart-badge' }];
     const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
@@ -177,8 +177,8 @@ describe('optimistic enhanced mutation submission', () => {
       return {
         async text() {
           return [
-            '<fw-query name="cart">{"count":2}</fw-query>',
-            '<fw-fragment target="cart-badge"><cart-badge>server</cart-badge></fw-fragment>',
+            '<kovo-query name="cart">{"count":2}</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>server</cart-badge></kovo-fragment>',
           ].join('\n');
         },
       };
@@ -219,7 +219,7 @@ describe('optimistic enhanced mutation submission', () => {
     expect(rebaser.pendingCount('cart')).toBe(1);
     expect(cartBadge.attributes).toMatchObject({
       'aria-busy': 'true',
-      'fw-pending': '',
+      'kovo-pending': '',
     });
   });
 });

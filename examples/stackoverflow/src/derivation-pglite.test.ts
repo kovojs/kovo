@@ -1,11 +1,11 @@
-import { applyPatchProgram, type JsonValue } from '@jiso/core';
-import { deriveOptimistic } from '@jiso/drizzle/derive';
+import { applyPatchProgram, type JsonValue } from '@kovojs/core';
+import { deriveOptimistic } from '@kovojs/drizzle/derive';
 import {
   extractAlgebraicShapesFromProject,
   extractSymbolicEffectsFromProject,
   type AlgebraicQueryShape,
   type SymbolicEffect,
-} from '@jiso/drizzle/static';
+} from '@kovojs/drizzle/static';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +21,7 @@ import { postAnswer, postQuestion, voteUp } from './mutations.js';
 // Every (mutation × invalidated-query) pair: run the query BEFORE, run the real
 // Drizzle handler, run the query AFTER (= truth), then assert the DERIVED patch
 // program agrees (modulo placeholder columns). The effects/shapes are EXTRACTED
-// from src — the same IR `fw check`/the generated transforms use.
+// from src — the same IR `kovo check`/the generated transforms use.
 
 const srcDir = dirname(fileURLToPath(import.meta.url));
 const sourceFileNames = [

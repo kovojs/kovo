@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { hmacSignature } from '@jiso/core';
+import { hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
@@ -130,7 +130,7 @@ describe('server webhook primitive', () => {
       },
     ]);
     expect(first.response.status).toBe(200);
-    expect(first.response.headers.get('fw-changes')).toBe(
+    expect(first.response.headers.get('kovo-changes')).toBe(
       '[{"domain":"invoice","keys":["evt_1"]}]',
     );
     await expect(first.response.text()).resolves.toBe('ok');
@@ -138,7 +138,7 @@ describe('server webhook primitive', () => {
     expect(second.replayed).toBe(true);
     expect(second.changes).toEqual([]);
     expect(second.response.status).toBe(200);
-    expect(second.response.headers.get('fw-idem')).toBe('evt_1');
+    expect(second.response.headers.get('kovo-idem')).toBe('evt_1');
     await expect(second.response.text()).resolves.toBe('ok');
     expect(writes).toBe(1);
     expect(steps).toEqual(['begin', 'handler:tx_1', 'commit']);
@@ -213,7 +213,7 @@ describe('server webhook primitive', () => {
 
     expect(first.changes).toEqual([]);
     expect(first.response.status).toBe(422);
-    expect(first.response.headers.get('fw-changes')).toBeNull();
+    expect(first.response.headers.get('kovo-changes')).toBeNull();
     await expect(first.response.json()).resolves.toEqual({
       error: { code: 'IGNORED_EVENT', payload: { id: 'evt_ignore' } },
       ok: false,

@@ -11,7 +11,7 @@ export interface Domain<Key extends string = string> {
  * @param key - The domain's stable name.
  * @returns A `Domain` keyed by `key`.
  * @example
- * import { domain } from '@jiso/server';
+ * import { domain } from '@kovojs/server';
  *
  * export const cart = domain('cart');
  * export const product = domain('product');
@@ -30,7 +30,7 @@ export type Tag<Key extends string = string> = Domain<Key>;
  * @param key - The tag's stable name.
  * @returns A `Tag` keyed by `key`.
  * @example
- * import { tag } from '@jiso/server';
+ * import { tag } from '@kovojs/server';
  *
  * export const cartItem = tag('cart-item');
  */

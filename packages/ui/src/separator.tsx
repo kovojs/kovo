@@ -1,12 +1,12 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   cn,
   defineVariants,
   separatorRootAttributes,
   type ClassValue,
   type SeparatorOrientation,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface SeparatorProps {
   class?: ClassValue;

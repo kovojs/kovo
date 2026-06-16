@@ -1,5 +1,5 @@
-import { diagnosticDefinitions } from '@jiso/core';
-import type { EventDefinition, JsonValue } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
+import type { EventDefinition, JsonValue } from '@kovojs/core';
 import type {
   AttributeElementLike,
   AttributeWriterLike,
@@ -138,5 +138,5 @@ function assertPayloadDoesNotCarryQueryData(
   );
   if (!overlap) return;
 
-  throw new Error(`${diagnosticDefinitions.FW320.message} event ${name} carries ${overlap}.`);
+  throw new Error(`${diagnosticDefinitions.KV320.message} event ${name} carries ${overlap}.`);
 }

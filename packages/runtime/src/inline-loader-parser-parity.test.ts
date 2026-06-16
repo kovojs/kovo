@@ -6,12 +6,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  assertInlineJisoLoaderInstallerWireParserParity,
-  assertMinifiedInlineJisoLoaderInstallerWireParserParity,
-  buildInlineJisoLoaderInstallerReadableSource,
-  buildInlineJisoLoaderInstallerSource,
+  assertInlineKovoLoaderInstallerWireParserParity,
+  assertMinifiedInlineKovoLoaderInstallerWireParserParity,
+  buildInlineKovoLoaderInstallerReadableSource,
+  buildInlineKovoLoaderInstallerSource,
   extractInlineWireParserReadableSource,
-  inlineJisoLoaderInstallerReadableSource,
+  inlineKovoLoaderInstallerReadableSource,
   inlineWireParserReadableSource,
 } from './inline-loader-build.js';
 
@@ -35,14 +35,14 @@ describe('inline loader parser parity', () => {
       '  return [{ attrs: readAttribute(body, "target"), content: body }];',
       '}',
       'function readMutationResponseElementChunks(body) {',
-      '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
+      '  return { fragments: readElementChunks(body, "kovo-fragment"), queries: readElementChunks(body, "kovo-query") };',
       '}',
     ].join('\n');
 
-    const defaultReadable = buildInlineJisoLoaderInstallerReadableSource();
-    const alternateReadable = buildInlineJisoLoaderInstallerReadableSource(alternateReadableParser);
+    const defaultReadable = buildInlineKovoLoaderInstallerReadableSource();
+    const alternateReadable = buildInlineKovoLoaderInstallerReadableSource(alternateReadableParser);
 
-    expect(defaultReadable).toBe(inlineJisoLoaderInstallerReadableSource);
+    expect(defaultReadable).toBe(inlineKovoLoaderInstallerReadableSource);
     expect(defaultReadable).toContain(inlineWireParserReadableSource);
     expect(inlineWireParserReadableSource).toContain('function readElementChunks(');
     expect(inlineWireParserReadableSource).toContain('function readFragmentChunksFromElements(');
@@ -85,7 +85,7 @@ describe('inline loader parser parity', () => {
       '  return chunks.map(readFragmentElementChunk);',
       '}',
       'export function readMutationResponseElementChunks(body) {',
-      '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
+      '  return { fragments: readElementChunks(body, "kovo-fragment"), queries: readElementChunks(body, "kovo-query") };',
       '}',
       'export function readInlineMutationResponseBodyChunks(body) {',
       '  const chunks = readMutationResponseElementChunks(body);',
@@ -119,7 +119,7 @@ describe('inline loader parser parity', () => {
       '  return [{ attrs: readAttribute(body, "target"), content: tagName }];',
       '}',
       'function defaultTagName() {',
-      '  return "fw-fragment";',
+      '  return "kovo-fragment";',
       '}',
       'export function readAttribute(attrs, name) {',
       '  return attrs + name;',
@@ -134,7 +134,7 @@ describe('inline loader parser parity', () => {
       '  return [];',
       '}',
       'export function readMutationResponseElementChunks(body) {',
-      '  return { fragments: readElementChunks(body), queries: readElementChunks(body, "fw-query") };',
+      '  return { fragments: readElementChunks(body), queries: readElementChunks(body, "kovo-query") };',
       '}',
       'export function readInlineMutationResponseBodyChunks(body) {',
       '  const chunks = readMutationResponseElementChunks(body);',
@@ -164,7 +164,7 @@ describe('inline loader parser parity', () => {
       '  return [{ attrs: readAttribute(attrs, "target"), content: tagName }];',
       '}',
       'function readDefaultTagName() {',
-      '  return "fw-fragment";',
+      '  return "kovo-fragment";',
       '}',
       'function readDefaultAttrName() {',
       '  return "target";',
@@ -182,7 +182,7 @@ describe('inline loader parser parity', () => {
       '  return chunks.map(readFragmentElementChunk);',
       '}',
       'export function readMutationResponseElementChunks(body) {',
-      '  return { fragments: readElementChunks(body), queries: readElementChunks(body, { "fw-query": "fw-query" }) };',
+      '  return { fragments: readElementChunks(body), queries: readElementChunks(body, { "kovo-query": "kovo-query" }) };',
       '}',
       'export function readInlineMutationResponseBodyChunks(body) {',
       '  const chunks = readMutationResponseElementChunks(body);',
@@ -214,7 +214,7 @@ describe('inline loader parser parity', () => {
       '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
       '}',
       'export function readMutationResponseElementChunks(body) {',
-      '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
+      '  return { fragments: readElementChunks(body, "kovo-fragment"), queries: readElementChunks(body, "kovo-query") };',
       '}',
       'export function readInlineMutationResponseBodyChunks(body) {',
       '  const chunks = readMutationResponseElementChunks(body);',
@@ -222,23 +222,23 @@ describe('inline loader parser parity', () => {
       '}',
     ].join('\n');
     const canonicalReadable = extractInlineWireParserReadableSource(canonicalParser);
-    const readableInstaller = buildInlineJisoLoaderInstallerReadableSource(canonicalReadable);
-    const minifiedInstaller = buildInlineJisoLoaderInstallerSource(readableInstaller);
+    const readableInstaller = buildInlineKovoLoaderInstallerReadableSource(canonicalReadable);
+    const minifiedInstaller = buildInlineKovoLoaderInstallerSource(readableInstaller);
 
     expect(() =>
-      assertInlineJisoLoaderInstallerWireParserParity(readableInstaller, canonicalParser),
+      assertInlineKovoLoaderInstallerWireParserParity(readableInstaller, canonicalParser),
     ).not.toThrow();
     expect(() =>
-      assertMinifiedInlineJisoLoaderInstallerWireParserParity(minifiedInstaller, canonicalParser),
+      assertMinifiedInlineKovoLoaderInstallerWireParserParity(minifiedInstaller, canonicalParser),
     ).not.toThrow();
     expect(() =>
-      assertInlineJisoLoaderInstallerWireParserParity(
+      assertInlineKovoLoaderInstallerWireParserParity(
         readableInstaller.replace('return attrs + name;', 'return name + attrs;'),
         canonicalParser,
       ),
     ).toThrow('canonical wire parser helper closure exactly once; found 0');
     expect(() =>
-      assertMinifiedInlineJisoLoaderInstallerWireParserParity(
+      assertMinifiedInlineKovoLoaderInstallerWireParserParity(
         minifiedInstaller.replace('return attrs+name', 'return name+attrs'),
         canonicalParser,
       ),
@@ -248,15 +248,15 @@ describe('inline loader parser parity', () => {
   it('checks generated inline parser embeds through the default canonical helper source', () => {
     // SPEC.md §4.4/§9.1: the default parity assertions must use the same
     // scanner plus shared HTML helper closure as the generated inline loader.
-    const readableInstaller = buildInlineJisoLoaderInstallerReadableSource();
-    const minifiedInstaller = buildInlineJisoLoaderInstallerSource(readableInstaller);
+    const readableInstaller = buildInlineKovoLoaderInstallerReadableSource();
+    const minifiedInstaller = buildInlineKovoLoaderInstallerSource(readableInstaller);
 
-    expect(() => assertInlineJisoLoaderInstallerWireParserParity(readableInstaller)).not.toThrow();
+    expect(() => assertInlineKovoLoaderInstallerWireParserParity(readableInstaller)).not.toThrow();
     expect(() =>
-      assertMinifiedInlineJisoLoaderInstallerWireParserParity(minifiedInstaller),
+      assertMinifiedInlineKovoLoaderInstallerWireParserParity(minifiedInstaller),
     ).not.toThrow();
     expect(() =>
-      assertInlineJisoLoaderInstallerWireParserParity(
+      assertInlineKovoLoaderInstallerWireParserParity(
         readableInstaller.replace(
           'function unescapeHtml(value) {\n',
           'function unescapeHtml(value) {\n    value = String(value);\n',
@@ -264,7 +264,7 @@ describe('inline loader parser parity', () => {
       ),
     ).toThrow('canonical wire parser helper closure exactly once; found 0');
     expect(() =>
-      assertMinifiedInlineJisoLoaderInstallerWireParserParity(
+      assertMinifiedInlineKovoLoaderInstallerWireParserParity(
         minifiedInstaller.replace('function uh(value){', 'function uh(value){value=String(value);'),
       ),
     ).toThrow('canonical minified wire parser helper closure exactly once; found 0');
@@ -328,7 +328,7 @@ describe('inline loader parser parity', () => {
       '}',
     ].join('\n');
     const parameterInitializerSource = [
-      'const defaultTagName = () => "fw-fragment";',
+      'const defaultTagName = () => "kovo-fragment";',
       'export function readElementChunks(body, tagName = defaultTagName()) {',
       '  return readAttribute("", tagName) + body;',
       '}',

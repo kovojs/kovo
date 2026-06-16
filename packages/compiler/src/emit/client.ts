@@ -31,7 +31,7 @@ export function emitClientModule(
     ...(handlers.length > 0 ? ['handler'] : []),
   ].sort();
   const importLine =
-    imports.length > 0 ? `import { ${imports.join(', ')} } from '@jiso/runtime';\n\n` : '';
+    imports.length > 0 ? `import { ${imports.join(', ')} } from '@kovojs/runtime';\n\n` : '';
   const dependencyImportLines = emitClientImportDependencies(
     handlers.flatMap((handler) => [...(handler.clientImports ?? [])]),
   );

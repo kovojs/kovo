@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { createMemoryStorage, form, stripeSignature } from '@jiso/core';
+import { createMemoryStorage, form, stripeSignature } from '@kovojs/core';
 import {
   createMemoryMutationReplayStore,
   errorBoundary,
@@ -27,7 +27,7 @@ import {
   type MutationFail,
   type MutationWireHeaderSource,
   type StoredFileUpload,
-} from '@jiso/server';
+} from '@kovojs/server';
 import {
   authed as betterAuthAuthed,
   betterAuthSession,
@@ -38,7 +38,7 @@ import {
   type BetterAuthResponseLike,
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
-} from '@jiso/better-auth';
+} from '@kovojs/better-auth';
 import { and, count, eq, sql } from 'drizzle-orm';
 
 import { createCommerceDb, type CommerceDb } from './db.js';
@@ -147,7 +147,7 @@ export const commerceAuthCsrf = {
   },
 };
 
-const commerceAuthCookieName = 'jiso_commerce_session';
+const commerceAuthCookieName = 'kovo_commerce_session';
 
 const commerceAuthUsers = new Map<
   string,
@@ -732,7 +732,7 @@ export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
 
 // The product grid (cards, no-JS add-to-cart forms, failure output) is
 // authored as a TSX component in src/components/product-grid.tsx and compiled
-// through @jiso/compiler (SPEC.md sections 3, 4.1, 5.2); the app imports its
+// through @kovojs/compiler (SPEC.md sections 3, 4.1, 5.2); the app imports its
 // committed lowered IR from src/generated/. Bound via a namespace import so
 // the import block stays one line: the committed touch graph pins the
 // mutation handlers' write-site line numbers in this file.
@@ -751,7 +751,7 @@ export function renderProductGrid(
   options: { readOnly?: boolean | undefined } = {},
 ): string {
   // SPEC.md section 4.2: the markup comes from the compiled TSX component;
-  // fw-c and fw-deps are compiler-derived (section 4.8). SPEC.md section
+  // kovo-c and kovo-deps are compiler-derived (section 4.8). SPEC.md section
   // 10.2 keeps query data separate from request-only form failure context.
   return ProductGrid.definition.render(
     { productGrid: result },
@@ -770,7 +770,7 @@ export async function renderProductGridPageFragment(
   db: CommerceDb,
   input: ProductGridInput = {},
 ): Promise<string> {
-  return `<fw-fragment target="product-grid" mode="append">${renderProductGridAppend(await loadProductGrid(db, input))}</fw-fragment>`;
+  return `<kovo-fragment target="product-grid" mode="append">${renderProductGridAppend(await loadProductGrid(db, input))}</kovo-fragment>`;
 }
 
 export async function renderProductGridDeferredStream(
@@ -794,13 +794,13 @@ export async function renderProductGridDeferredStream(
       },
     ],
     shell:
-      '<!doctype html><html><body><main class="min-h-dvh bg-slate-50 p-6"><fw-defer target="product-grid" state="pending"></fw-defer>',
+      '<!doctype html><html><body><main class="min-h-dvh bg-slate-50 p-6"><kovo-defer target="product-grid" state="pending"></kovo-defer>',
   });
 }
 
 export async function renderOrderHistory(db: CommerceDb, userId?: string): Promise<string> {
   // SPEC.md section 4.2: the markup comes from the compiled TSX component
-  // (src/components/order-history.tsx); fw-c and fw-deps are compiler-derived.
+  // (src/components/order-history.tsx); kovo-c and kovo-deps are compiler-derived.
   // SECURITY (SECURITY_FINDINGS.md M9): order history is per-user. With no
   // authenticated user (e.g. the read-only static export, or an unauthenticated
   // viewer) we default-deny and render an EMPTY history rather than leaking every
@@ -811,12 +811,12 @@ export async function renderOrderHistory(db: CommerceDb, userId?: string): Promi
 
 export function renderReceiptUploadForm(orderId = 'order-1'): string {
   return [
-    '<form method="post" action="/_m/order/receipt" enhance data-mutation="order/receipt" enctype="multipart/form-data" fw-deps="order" class="mt-4 grid gap-2 rounded border border-slate-200 bg-white p-4" aria-busy="false">',
+    '<form method="post" action="/_m/order/receipt" enhance data-mutation="order/receipt" enctype="multipart/form-data" kovo-deps="order" class="mt-4 grid gap-2 rounded border border-slate-200 bg-white p-4" aria-busy="false">',
     `<input type="hidden" name="orderId" value="${escapeAttribute(orderId)}">`,
     '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Receipt</span>',
     '<input name="receipt" type="file" accept="application/pdf,image/png" class="rounded border border-slate-300 px-2 py-1">',
     '</label>',
-    '<progress fw-upload-progress value="0" max="100" class="h-2 w-full" aria-label="Receipt upload progress"></progress>',
+    '<progress kovo-upload-progress value="0" max="100" class="h-2 w-full" aria-label="Receipt upload progress"></progress>',
     '<button class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white" type="submit">Upload receipt</button>',
     '</form>',
   ].join('');
@@ -867,7 +867,7 @@ function csvCell(value: string): string {
 }
 
 // CartBadge and OrderHistory are authored as TSX components under
-// src/components/ and compiled through @jiso/compiler (SPEC.md sections 3,
+// src/components/ and compiled through @kovojs/compiler (SPEC.md sections 3,
 // 4.1, 5.2); the app imports their committed lowered IR from src/generated/.
 export { CartBadge, OrderHistory };
 
@@ -909,7 +909,7 @@ export async function renderCartPageBody(
   const receiptForm = options.readOnly ? '' : renderReceiptUploadForm();
   // SECURITY (SECURITY_FINDINGS.md M9): scope order history to the session user.
   const orderHistory = await renderOrderHistory(db, request?.session?.user?.id);
-  return `<main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${orderHistory}${receiptForm}</fw-fragment></main>`;
+  return `<main class="mx-auto max-w-4xl"><kovo-fragment target="cart-badge">${cartBadge}</kovo-fragment><kovo-fragment target="product-grid">${productGrid}</kovo-fragment><kovo-fragment target="order-history">${orderHistory}${receiptForm}</kovo-fragment></main>`;
 }
 
 export function submitAddToCartNoJs(rawInput: unknown, request: CommerceRequest) {

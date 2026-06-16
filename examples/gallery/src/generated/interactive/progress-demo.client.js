@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 export const GalleryProgressDemo$button_click = handler((_event, ctx) => {
   ctx.state.value = ctx.state.value === 100 ? 40 : 100;

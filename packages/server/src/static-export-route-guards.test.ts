@@ -13,7 +13,7 @@ import { StaticExportError } from './static-export-diagnostics.js';
 
 describe('server static export', () => {
   it('rejects raw request handlers before static export replay or writes', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     const rawHandler = async () => new Response('<main>compat</main>');
 
     try {
@@ -22,10 +22,10 @@ describe('server static export', () => {
           outDir,
         }),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining('SPEC §9.5 export replay must start from createApp()'),
             routePath: 'app',
           },
@@ -38,7 +38,7 @@ describe('server static export', () => {
   });
 
   it('rejects stale html path-style options before replay or writes', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     let rendered = false;
     try {
       const app = createApp({
@@ -58,10 +58,10 @@ describe('server static export', () => {
           outDir,
         } as Parameters<typeof exportStaticApp>[1]),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining(
               'SPEC §9.5 exports route documents as directory-index HTML',
             ),
@@ -94,10 +94,10 @@ describe('server static export', () => {
         outDir: new URL('https://static.example.test/export/'),
       }),
     ).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining(
             'SPEC §9.5 static export output directories must be filesystem paths or file: URLs',
           ),
@@ -109,7 +109,7 @@ describe('server static export', () => {
   });
 
   it('rejects invalid static export origins before replay or writes', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     let rendered = false;
     try {
       const app = createApp({
@@ -129,10 +129,10 @@ describe('server static export', () => {
           outDir,
         }),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining('SPEC §9.5 synthetic replay origin'),
             routePath: 'origin',
           },
@@ -162,10 +162,10 @@ describe('server static export', () => {
     });
 
     await expect(exportStaticApp(app)).rejects.toMatchObject({
-      code: 'FW228',
+      code: 'KV228',
       diagnostics: [
         {
-          code: 'FW228',
+          code: 'KV228',
           message: expect.stringContaining(
             "'/docs/intro' and '/docs/intro' can both match canonical request path '/docs/intro'",
           ),
@@ -187,10 +187,10 @@ describe('server static export', () => {
     });
 
     await expect(exportStaticApp(guardedApp)).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           routePath: '/account',
           message: expect.stringContaining('guarded route'),
         },
@@ -203,10 +203,10 @@ describe('server static export', () => {
     });
 
     await expect(exportStaticApp(sessionApp)).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           routePath: '/profile',
           message: expect.stringContaining('sessionProvider'),
         },
@@ -215,7 +215,7 @@ describe('server static export', () => {
   });
 
   it('exports param routes through explicit staticPaths metadata', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
       const app = createApp({
         routes: [
@@ -248,7 +248,7 @@ describe('server static export', () => {
   });
 
   it('rejects invalid param route staticPaths before writing output', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
       const app = createApp({
         routes: [
@@ -265,25 +265,25 @@ describe('server static export', () => {
       });
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             routePath: '/products/:id',
             message: expect.stringContaining('absolute pathname without search or hash'),
           },
           {
-            code: 'FW229',
+            code: 'KV229',
             routePath: '/products/:id',
             message: expect.stringContaining('must be a concrete URL'),
           },
           {
-            code: 'FW229',
+            code: 'KV229',
             routePath: '/products/:id',
             message: expect.stringContaining('does not match param route'),
           },
           {
-            code: 'FW229',
+            code: 'KV229',
             routePath: '/products/:id',
             message: expect.stringContaining('absolute pathname without search or hash'),
           },
@@ -296,7 +296,7 @@ describe('server static export', () => {
   });
 
   it('rejects static-host-unsafe route document targets before replay or writes', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     let rendered = false;
     try {
       const app = createApp({
@@ -312,10 +312,10 @@ describe('server static export', () => {
       });
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             routePath: '/products/:id',
             message: expect.stringContaining('unsafe URL path segment'),
           },
@@ -341,7 +341,7 @@ describe('server static export', () => {
     await expect(exportStaticApp(app)).rejects.toMatchObject({
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           routePath: '/products/:id',
           message: expect.stringContaining('staticPaths metadata'),
         },
@@ -354,7 +354,7 @@ describe('server static export', () => {
       clientModules: [],
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           routePath: '/products/:id',
           message: expect.stringContaining('staticPaths metadata'),
         },
@@ -379,10 +379,10 @@ describe('server static export', () => {
     });
 
     await expect(exportStaticApp(app)).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           routePath: '/exports/orders.csv',
           message: expect.stringContaining(
             "can only write successful HTML route documents; '/exports/orders.csv' returned status 200 with Content-Type 'text/csv; charset=utf-8'",
@@ -395,7 +395,7 @@ describe('server static export', () => {
       artifacts: [{ path: '/index.html', status: 200 }],
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           routePath: '/exports/orders.csv',
           message: expect.stringContaining('Content-Type'),
         },

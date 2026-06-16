@@ -246,13 +246,13 @@ function isDomTemplateStampHost(element: QueryBindingElement): element is Elemen
 }
 
 function reconcileDomTemplateStamp(host: Element, items: readonly TemplateStampItem[]): void {
-  const template = host.querySelector('template[fw-stamp]');
+  const template = host.querySelector('template[kovo-stamp]');
   if (!isHtmlTemplateElement(template)) return;
 
   const existingByKey = new Map(
     [...host.children]
       .filter((child) => child !== template)
-      .map((child) => [child.getAttribute('fw-key'), child] as const)
+      .map((child) => [child.getAttribute('kovo-key'), child] as const)
       .filter((entry): entry is [string, Element] => entry[0] !== null),
   );
   const desired = new Set<Element>();
@@ -269,7 +269,7 @@ function reconcileDomTemplateStamp(host: Element, items: readonly TemplateStampI
   }
 
   for (const child of Array.from(host.children)) {
-    if (child !== template && child.hasAttribute('fw-key') && !desired.has(child)) child.remove();
+    if (child !== template && child.hasAttribute('kovo-key') && !desired.has(child)) child.remove();
   }
 }
 
@@ -282,7 +282,7 @@ function domTemplateStampElement(
   const element = parser.content.firstElementChild;
   if (!element) return null;
 
-  element.setAttribute('fw-key', item.key);
+  element.setAttribute('kovo-key', item.key);
   return element;
 }
 
@@ -440,7 +440,7 @@ function parseDeriveReference(value: string): { exportName: string; url: string 
 function elementBelongsToScope(element: QueryBindingElement, scopeRoot: unknown): boolean {
   if (!scopeRoot || element === scopeRoot) return true;
 
-  const closestStateHost = element.closest?.('[fw-state]');
+  const closestStateHost = element.closest?.('[kovo-state]');
   return !closestStateHost || closestStateHost === scopeRoot;
 }
 

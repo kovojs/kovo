@@ -1,6 +1,6 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
-import { csrfField } from '@jiso/server';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { csrfField } from '@kovojs/server';
 
 import { formatPrice, type ShopProduct, type ShopRequest } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
@@ -24,7 +24,7 @@ export const ProductList = component('product-list', {
   render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
     <ul class="products">
       {products.items.map((item) => (
-        <li fw-key={item.id}>
+        <li kovo-key={item.id}>
           {item.name} — {formatPrice(item.unitPrice)} ({item.stock} in stock)
           {renderAddToCartForm(
             item,
@@ -40,7 +40,7 @@ export const ProductList = component('product-list', {
 // snippet:add-to-cart-form
 // SPEC.md section 6.3: the no-JS add-to-cart form posts to the mutation
 // endpoint; `enhance` upgrades it to the fragment wire. Rendered standalone
-// as the failure-rerender fragment (fw-fragment-target). The fw-csrf token
+// as the failure-rerender fragment (kovo-fragment-target). The kovo-csrf token
 // is stamped into the form whenever the request carries a session
 // (SPEC.md section 6.6).
 export function renderAddToCartForm(
@@ -54,7 +54,7 @@ export function renderAddToCartForm(
       action="/_m/cart/add"
       enhance
       data-mutation="cart/add"
-      fw-fragment-target={productFormTarget(item.id)}
+      kovo-fragment-target={productFormTarget(item.id)}
     >
       {request?.session?.id ? csrfField(request, shopCsrf) : ''}
       <input type="hidden" name="productId" value={item.id} />

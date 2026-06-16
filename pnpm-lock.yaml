@@ -47,13 +47,13 @@ importers:
 
   conformance/better-auth-pin:
     dependencies:
-      '@jiso/better-auth':
+      '@kovojs/better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@jiso/test':
+      '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
     devDependencies:
@@ -66,7 +66,7 @@ importers:
 
   conformance/drizzle-pin:
     dependencies:
-      '@jiso/drizzle':
+      '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
     devDependencies:
@@ -79,10 +79,10 @@ importers:
 
   conformance/webhook-spike:
     dependencies:
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
     devDependencies:
@@ -95,35 +95,35 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.1
         version: 0.5.1
-      '@jiso/better-auth':
+      '@kovojs/better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@jiso/drizzle':
+      '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
-      '@jiso/runtime':
+      '@kovojs/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@jiso/test':
+      '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
     devDependencies:
-      '@jiso/compiler':
+      '@kovojs/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
       '@tailwindcss/vite':
         specifier: ^4.3.0
         version: 4.3.0(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))
-      fw:
+      kovo:
         specifier: workspace:*
         version: link:../../packages/cli
       tailwindcss:
@@ -144,32 +144,32 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.1
         version: 0.5.1
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@jiso/drizzle':
+      '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
-      '@jiso/runtime':
+      '@kovojs/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
     devDependencies:
-      '@jiso/compiler':
+      '@kovojs/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
-      '@jiso/test':
+      '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
       '@tailwindcss/vite':
         specifier: ^4.3.0
         version: 4.3.0(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))
-      fw:
+      kovo:
         specifier: workspace:*
         version: link:../../packages/cli
       tailwindcss:
@@ -187,32 +187,32 @@ importers:
 
   examples/gallery:
     dependencies:
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@jiso/headless-ui':
+      '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../../packages/headless-ui
-      '@jiso/runtime':
+      '@kovojs/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@jiso/ui':
+      '@kovojs/ui':
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
-      '@jiso/compiler':
+      '@kovojs/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
-      '@jiso/test':
+      '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
       axe-core:
         specifier: ^4.12.1
         version: 4.12.1
-      fw:
+      kovo:
         specifier: workspace:*
         version: link:../../packages/cli
       typescript:
@@ -224,13 +224,13 @@ importers:
 
   examples/reference:
     dependencies:
-      '@jiso/better-auth':
+      '@kovojs/better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
     devDependencies:
@@ -246,29 +246,29 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.1
         version: 0.5.1
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@jiso/drizzle':
+      '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
-      '@jiso/runtime':
+      '@kovojs/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
     devDependencies:
-      '@jiso/test':
+      '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
       '@tailwindcss/vite':
         specifier: ^4.3.0
         version: 4.3.0(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))
-      fw:
+      kovo:
         specifier: workspace:*
         version: link:../../packages/cli
       tailwindcss:
@@ -286,7 +286,7 @@ importers:
 
   packages/better-auth:
     dependencies:
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../server
     devDependencies:
@@ -296,16 +296,16 @@ importers:
 
   packages/cli:
     dependencies:
-      '@jiso/compiler':
+      '@kovojs/compiler':
         specifier: workspace:*
         version: link:../compiler
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../core
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../server
-      '@jiso/ui':
+      '@kovojs/ui':
         specifier: workspace:*
         version: link:../ui
       '@modelcontextprotocol/sdk':
@@ -318,7 +318,7 @@ importers:
 
   packages/compiler:
     dependencies:
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../core
       typescript:
@@ -335,9 +335,9 @@ importers:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))
 
-  packages/create-jiso:
+  packages/create-kovo:
     devDependencies:
-      '@jiso/compiler':
+      '@kovojs/compiler':
         specifier: workspace:*
         version: link:../compiler
       vitest:
@@ -346,7 +346,7 @@ importers:
 
   packages/drizzle:
     dependencies:
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -372,7 +372,7 @@ importers:
 
   packages/runtime:
     dependencies:
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -382,10 +382,10 @@ importers:
 
   packages/server:
     dependencies:
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../core
-      '@jiso/runtime':
+      '@kovojs/runtime':
         specifier: workspace:*
         version: link:../runtime
     devDependencies:
@@ -398,17 +398,17 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.1
         version: 0.5.1
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../core
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../server
       pgsql-ast-parser:
         specifier: ^12.0.2
         version: 12.0.2
     devDependencies:
-      '@jiso/drizzle':
+      '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../drizzle
       vitest:
@@ -417,13 +417,13 @@ importers:
 
   packages/ui:
     dependencies:
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../core
-      '@jiso/headless-ui':
+      '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../headless-ui
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../server
     devDependencies:
@@ -433,26 +433,26 @@ importers:
 
   site:
     dependencies:
-      '@jiso/core':
+      '@kovojs/core':
         specifier: workspace:*
         version: link:../packages/core
-      '@jiso/runtime':
+      '@kovojs/runtime':
         specifier: workspace:*
         version: link:../packages/runtime
-      '@jiso/server':
+      '@kovojs/server':
         specifier: workspace:*
         version: link:../packages/server
     devDependencies:
-      '@jiso/compiler':
+      '@kovojs/compiler':
         specifier: workspace:*
         version: link:../packages/compiler
-      '@jiso/test':
+      '@kovojs/test':
         specifier: workspace:*
         version: link:../packages/test
       '@tailwindcss/vite':
         specifier: ^4.3.0
         version: 4.3.0(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))
-      fw:
+      kovo:
         specifier: workspace:*
         version: link:../packages/cli
       marked:

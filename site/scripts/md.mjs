@@ -90,7 +90,7 @@ const specCitation = {
 
 /** Code blocks render as designed windows: title bar (optional
  * `title="..."` in the fence info string), language badge, copy button.
- * The copy button is a Jiso island — no JS loads until first click. */
+ * The copy button is a Kovo island — no JS loads until first click. */
 function codeWindow({ highlighted, language, title }) {
   const bar = [
     `<span class="code-window-title">${title ? escapeHtml(title) : ''}</span>`,

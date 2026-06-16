@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { installJisoLoader as installJisoLoaderFromBarrel } from './index.js';
-import { installJisoLoader } from './loader.js';
+import { installKovoLoader as installKovoLoaderFromBarrel } from './index.js';
+import { installKovoLoader } from './loader.js';
 import { FakeElement, FakeRoot } from './runtime-test-fakes.js';
 
 describe('runtime loader module', () => {
   it('keeps the barrel export wired to the extracted loader owner', async () => {
     // SPEC.md section 4.4: the always-loaded runtime path delegates browser events.
-    expect(installJisoLoaderFromBarrel).toBe(installJisoLoader);
+    expect(installKovoLoaderFromBarrel).toBe(installKovoLoader);
 
     const root = new FakeRoot();
     const handler = vi.fn();
     const importModule = vi.fn(async () => ({ run: handler }));
-    const loader = installJisoLoader({
+    const loader = installKovoLoader({
       events: ['click'],
       importModule,
       root,
@@ -46,7 +46,7 @@ describe('runtime loader module', () => {
       [input],
     );
 
-    installJisoLoader({
+    installKovoLoader({
       importModule: vi.fn(async () => ({})),
       root,
     });

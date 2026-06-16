@@ -8,10 +8,10 @@ import type { I18nCatalog, RouteMeta, RouteMetaFactory } from './hints.js';
  * @param definition - The route metadata fields.
  * @returns The same `RouteMeta`, typed.
  * @example
- * import { meta } from '@jiso/server';
+ * import { meta } from '@kovojs/server';
  *
  * export const homeMeta = meta({
- *   title: 'Jiso Shop',
+ *   title: 'Kovo Shop',
  *   description: 'Fresh coffee gear.',
  * });
  */
@@ -72,7 +72,7 @@ export function metaFromQuery<
  * @param messages - A map of message keys to template strings (`{name}` placeholders).
  * @returns An `I18nCatalog`.
  * @example
- * import { i18n, t } from '@jiso/server';
+ * import { i18n, t } from '@kovojs/server';
  *
  * const en = i18n('en', { greeting: 'Hello, {name}!' });
  * const text: string = t(en, 'greeting', { name: 'Sam' });

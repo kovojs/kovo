@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractTouchGraphFromProject, extractQueryFactsFromProject } from '@jiso/drizzle/static';
+import { extractTouchGraphFromProject, extractQueryFactsFromProject } from '@kovojs/drizzle/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
-describe('@jiso/drizzle touch graph helpers', () => {
+describe('@kovojs/drizzle touch graph helpers', () => {
   it('extracts project configured write callbacks and folds local helper summaries', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -16,8 +16,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: `
             import type { PgDatabase } from "drizzle-orm/pg-core";
 
-            export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));
-            export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+            export const auditLog = pgTable("audit_log", {}, kovo({ domain: "audit", key: "productId" }));
+            export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));
 
             const writeAudit = async (db: PgDatabase<any, any, any>, productId: string) => {
               await db.insert(auditLog).values({ productId });
@@ -79,7 +79,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: `
             import type { PgDatabase } from "drizzle-orm/pg-core";
 
-            export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+            export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));
 
             interface FakeDb {
               insert(table: unknown): { values(value: unknown): Promise<void> };
@@ -121,7 +121,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           'export const products = pgTable("products", {',
           '  id: text("id").primaryKey(),',
           '  stock: integer("stock").notNull(),',
-          '}, jiso({ domain: "product", key: "id" }));',
+          '}, kovo({ domain: "product", key: "id" }));',
           'const productAlias = alias(products, "p");',
           '',
           'export async function syncProduct(db: PgDatabase<any, any, any>, productId: string) {',
@@ -185,7 +185,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             'function alias<T>(table: T): T { return table; }',
             'const productAlias = alias(products);',
             '',
@@ -204,7 +204,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'product.domain.ts:8',
           },
@@ -243,12 +243,12 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:9',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:10',
           },
@@ -293,12 +293,12 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:17',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:16',
           },
@@ -326,7 +326,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             '  query: any;',
             '}',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "id" }));',
             '',
             'declare const sendAudit: (receiver: unknown) => Promise<void>;',
             '',
@@ -364,17 +364,17 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:16',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:14',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:18',
           },
@@ -383,7 +383,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('marks project member helpers receiving typed Drizzle receivers as FW406', () => {
+  it('marks project member helpers receiving typed Drizzle receivers as KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([]),
@@ -415,7 +415,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:12',
           },
@@ -424,7 +424,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('marks project helpers receiving typed Drizzle receivers through containers as FW406', () => {
+  it('marks project helpers receiving typed Drizzle receivers through containers as KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([]),
@@ -456,7 +456,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:13',
           },
@@ -465,7 +465,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('marks project helpers receiving assigned typed Drizzle carrier aliases as FW406', () => {
+  it('marks project helpers receiving assigned typed Drizzle carrier aliases as KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([]),
@@ -501,7 +501,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:17',
           },
@@ -510,7 +510,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('marks project helpers receiving typed Drizzle context containers as FW406', () => {
+  it('marks project helpers receiving typed Drizzle context containers as KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([]),
@@ -538,7 +538,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:9',
           },
@@ -547,7 +547,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('marks project local helpers receiving typed Drizzle carrier aliases as FW406', () => {
+  it('marks project local helpers receiving typed Drizzle carrier aliases as KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([]),
@@ -581,7 +581,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:15',
           },
@@ -590,7 +590,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('marks project local helpers receiving assigned typed Drizzle carrier aliases as FW406', () => {
+  it('marks project local helpers receiving assigned typed Drizzle carrier aliases as KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([]),
@@ -626,7 +626,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:17',
           },
@@ -677,22 +677,22 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:11',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:12',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:13',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:14',
           },
@@ -701,7 +701,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('keeps project CTE builder query surfaces visible as FW406', () => {
+  it('keeps project CTE builder query surfaces visible as KV406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         pgDatabaseTypes([
@@ -715,7 +715,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             '',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, jiso({ domain: "product", key: "id" }));',
+            '}, kovo({ domain: "product", key: "id" }));',
             '',
             'export const productQuery = query("product/cte-builder", {',
             '  load(_input: unknown, db: PgDatabase) {',
@@ -732,7 +732,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.$with().',
             severity: 'warn',
@@ -775,7 +775,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:6',
           },
@@ -796,7 +796,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            'export const users = pgTable("users", {}, kovo({ domain: "user", key: "id" }));',
             '',
             'interface FakeDb {',
             '  execute(query: unknown): Promise<void>;',
@@ -824,17 +824,17 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:15',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:16',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:17',
           },
@@ -855,7 +855,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            'export const users = pgTable("users", {}, kovo({ domain: "user", key: "id" }));',
             '',
             'interface FakeDb {',
             '  execute(query: unknown): Promise<void>;',
@@ -898,32 +898,32 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:26',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:27',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:28',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:29',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:30',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:31',
           },
@@ -944,7 +944,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            'export const users = pgTable("users", {}, kovo({ domain: "user", key: "id" }));',
             '',
             'interface FakeDb {',
             '  execute(query: unknown): Promise<void>;',
@@ -973,22 +973,22 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:15',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:16',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:17',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:18',
           },

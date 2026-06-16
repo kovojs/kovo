@@ -1,4 +1,4 @@
-import { endpointMatches, runEndpoint } from '@jiso/server';
+import { endpointMatches, runEndpoint } from '@kovojs/server';
 import { getAuthTables } from 'better-auth';
 import { deviceAuthorization, oidcProvider, twoFactor } from 'better-auth/plugins';
 import { describe, expect, it } from 'vitest';
@@ -20,7 +20,7 @@ import {
 } from './real-auth-fixtures.js';
 
 describe('Better Auth pinned conformance', () => {
-  it('degrades real future plugin schema tables with FW406 bridge suggestions', () => {
+  it('degrades real future plugin schema tables with KV406 bridge suggestions', () => {
     const { auth } = createRealAuth({
       plugins: [futureWebAuthnPlugin()],
     });
@@ -51,7 +51,7 @@ describe('Better Auth pinned conformance', () => {
     ]);
 
     // SPEC.md §10.1 / §11.2: future Better Auth plugin tables are real
-    // metadata, but stay FW406 until schema annotations and declared touches
+    // metadata, but stay KV406 until schema annotations and declared touches
     // are explicit. Protocol state gets an exempt suggestion; credentials get
     // an auth-domain ownership suggestion.
     expect(validateBetterAuthSchemaBridge(tables)).toEqual({
@@ -61,12 +61,12 @@ describe('Better Auth pinned conformance', () => {
       ok: false,
       pluginTableDegradations: [
         {
-          diagnosticCode: 'FW406',
+          diagnosticCode: 'KV406',
           fields: ['challenge', 'expiresAt', 'id'],
           manualBridgeSteps: [
             'Inspect webauthnChallenge (physical auth_webauthn_challenges) fields (challenge, expiresAt, id) and decide whether the app reads this table.',
-            'Likely Better Auth protocol/bookkeeping state is jiso({ exempt: true }); confirm the app never queries it before adding the bridge.',
-            'Add declared Better Auth API touches for writes that can mutate webauthnChallenge; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+            'Likely Better Auth protocol/bookkeeping state is kovo({ exempt: true }); confirm the app never queries it before adding the bridge.',
+            'Add declared Better Auth API touches for writes that can mutate webauthnChallenge; SPEC.md §11.2 keeps observed writes KV406 until declared coverage exists.',
           ],
           message:
             'webauthnChallenge (physical auth_webauthn_challenges) is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
@@ -80,12 +80,12 @@ describe('Better Auth pinned conformance', () => {
           table: 'webauthnChallenge',
         },
         {
-          diagnosticCode: 'FW406',
+          diagnosticCode: 'KV406',
           fields: ['credentialId', 'id', 'userId'],
           manualBridgeSteps: [
             'Inspect webauthnCredential (physical auth_webauthn_credentials) fields (credentialId, id, userId) and decide whether the app reads this table.',
-            "Likely app-visible ownership is jiso({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
-            'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+            "Likely app-visible ownership is kovo({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use kovo({ exempt: true }) with a rationale.",
+            'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes KV406 until declared coverage exists.',
           ],
           message:
             'webauthnCredential (physical auth_webauthn_credentials) is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
@@ -141,10 +141,10 @@ describe('Better Auth pinned conformance', () => {
       'user is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge',
     ]);
     expect(result.source).toContain(
-      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+      "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
     );
     expect(result.source).not.toContain(
-      "export const user = pgTable('user', {}, jiso({ exempt: true }));",
+      "export const user = pgTable('user', {}, kovo({ exempt: true }));",
     );
     expect(verifierConfig.domainByTable.user).toBe('user');
     expect(verifierConfig.exemptTables).not.toContain('user');
@@ -218,18 +218,18 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const auth_oauth_apps = pgTable('auth_oauth_apps', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const auth_oauth_apps = pgTable('auth_oauth_apps', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
-      "export const auth_two_factors = pgTable('auth_two_factors', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const auth_two_factors = pgTable('auth_two_factors', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
-      "export const auth_device_codes = pgTable('auth_device_codes', {}, jiso({ exempt: true }));",
+      "export const auth_device_codes = pgTable('auth_device_codes', {}, kovo({ exempt: true }));",
     );
     expect(generated.validation.ok).toBe(true);
     expect(generated.skippedTables).toEqual([]);
     expect(generated.requiredImports).toEqual([
-      "import { jiso } from '@jiso/drizzle';",
+      "import { kovo } from '@kovojs/drizzle';",
       "import { boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
     ]);
     expect(generated.source).toContain(
@@ -307,11 +307,11 @@ describe('Better Auth pinned conformance', () => {
     expect(result.unrecognizedSourceTables).toEqual([
       {
         callee: 'table',
-        diagnosticCode: 'FW406',
+        diagnosticCode: 'KV406',
         manualBridgeSteps: [
           'Import the Drizzle table factory that declares auth_oauth_apps, or pass it through tableFactories when the factory is intentionally wrapped.',
-          'Add the Better Auth jiso(...) annotation manually if table is not a Drizzle table factory.',
-          'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+          'Add the Better Auth kovo(...) annotation manually if table is not a Drizzle table factory.',
+          'Keep observed writes KV406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
         ],
         message:
           'oauthApplication (physical auth_oauth_apps) appears in schema.ts through unrecognized table factory table; the Better Auth adapter did not synthesize a schema annotation.',

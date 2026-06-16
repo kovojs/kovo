@@ -113,7 +113,7 @@ export interface RegisteredQueryDefinition {
  * @param definition - `load`, `reads`, and optional `args`/`output`/`guard`/`version`.
  * @returns A query definition carrying `key`.
  * @example
- * import { domain, query } from '@jiso/server';
+ * import { domain, query } from '@kovojs/server';
  *
  * const product = domain('product');
  *

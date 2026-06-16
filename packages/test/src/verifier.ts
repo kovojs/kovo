@@ -1,4 +1,4 @@
-import { type TouchGraph } from '@jiso/core';
+import { type TouchGraph } from '@kovojs/core';
 import {
   assertObservedReadsCovered,
   assertObservedWritesCovered,
@@ -107,7 +107,7 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
       // tests must pass and use the wrapped harness DB handle instead.
       const proxy = new Proxy(db as Record<string, unknown>, {
         get(target, prop, receiver) {
-          if (prop === '__jisoObserved') return recorder.observed;
+          if (prop === '__kovoObserved') return recorder.observed;
           const value = Reflect.get(target, prop, receiver);
 
           if (prop === 'pglite' && isSqlHandleLike(value)) {

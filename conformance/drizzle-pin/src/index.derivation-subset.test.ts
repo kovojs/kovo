@@ -52,7 +52,7 @@ function shapeOf(...lines: string[]): AlgebraicQueryShape {
   return shape;
 }
 
-// ── Table schemas reused across the matrix (real pgTable + jiso annotations) ──
+// ── Table schemas reused across the matrix (real pgTable + kovo annotations) ──
 
 const ITEMS_TABLE = [
   "export const items = pgTable('items', {",
@@ -61,7 +61,7 @@ const ITEMS_TABLE = [
   "  qty: integer('qty'),",
   "  stock: integer('stock'),",
   "  tag: text('tag'),",
-  "}, jiso({ domain: 'item', key: 'id' }));",
+  "}, kovo({ domain: 'item', key: 'id' }));",
 ].join('\n');
 
 describe('Drizzle pinned subset conformance — §10.5 derivation subset', () => {
@@ -286,7 +286,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         '  }),',
         '});',
       );
-      expect(effect?.table).toBe('__jisoUnresolvedReadSource');
+      expect(effect?.table).toBe('__kovoUnresolvedReadSource');
     });
   });
 
@@ -453,7 +453,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
       ).toEqual({ kind: 'opaque', reason: { code: 'opaque-shape', shape: 'window' } });
     });
 
-    it('opaque-projection for a raw sql<T> projection (FW410)', () => {
+    it('opaque-projection for a raw sql<T> projection (KV410)', () => {
       expect(
         singleField(
           COMMON_IMPORTS,

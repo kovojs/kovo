@@ -264,7 +264,7 @@ function canReuseDomElement(current: Element, next: Element): boolean {
 }
 
 function domMorphKey(element: Element): string | null {
-  return element.getAttribute('fw-key') ?? element.getAttribute('data-key');
+  return element.getAttribute('kovo-key') ?? element.getAttribute('data-key');
 }
 
 function syncDomAttributes(current: Element, next: Element): void {
@@ -320,7 +320,7 @@ function restoreActiveDomState(state: ReturnType<typeof captureActiveDomState>):
 }
 
 function captureDomScrollStates(root: Element) {
-  return [...root.querySelectorAll<HTMLElement>('[fw-key], [data-key]')]
+  return [...root.querySelectorAll<HTMLElement>('[kovo-key], [data-key]')]
     .filter((element) => element.scrollLeft !== 0 || element.scrollTop !== 0)
     .map((element) => ({
       element,

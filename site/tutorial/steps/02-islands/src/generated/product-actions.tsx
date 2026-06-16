@@ -1,6 +1,6 @@
-// @jiso-ir — lowered from site/tutorial/steps/02-islands/src/components/product-actions.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `node site/tutorial/run-steps.mjs --write`.
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+// @kovojs-ir — lowered from site/tutorial/steps/02-islands/src/components/product-actions.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `node site/tutorial/run-steps.mjs --write`.
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 
 // Tutorial step 02 (chapter 2): the interaction ladder in one component
 // (SPEC.md section 7). The size-guide button is L0 — the compiler proves the
@@ -21,7 +21,7 @@ export type ProductActionsState = {
 export const ProductActions = component('product-actions', {
   state: (): ProductActionsState => ({ saved: 0 }),
   render: (_queries: Record<string, never>, state: ProductActionsState) => (
-    <product-actions fw-state="{&quot;saved&quot;:0}">
+    <product-actions kovo-state="{&quot;saved&quot;:0}">
       <button type="button" popovertarget="size-guide" popovertargetaction="toggle">
         Size guide
       </button>

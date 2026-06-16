@@ -1,45 +1,45 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installJisoLoader } from './index.js';
+import { createQueryStore, installKovoLoader } from './index.js';
 import { FakeRoot } from './runtime-test-fakes.js';
 
 describe('loader query hydration', () => {
-  it('hydrates initial fw-query scripts into the configured query store', () => {
+  it('hydrates initial kovo-query scripts into the configured query store', () => {
     // SPEC.md §9.4: server-rendered query snapshots hydrate through the runtime query store.
     const root = new FakeRoot();
     const store = createQueryStore();
     const plan = vi.fn();
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":2}',
       },
     ];
     store.subscribe('cart', plan);
 
-    installJisoLoader({ importModule: vi.fn(), queryStore: store, root });
+    installKovoLoader({ importModule: vi.fn(), queryStore: store, root });
 
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(plan).toHaveBeenCalledWith({ count: 2 });
   });
 
-  it('ignores malformed initial fw-query scripts without aborting loader install', () => {
+  it('ignores malformed initial kovo-query scripts without aborting loader install', () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const importModule = vi.fn();
     const onError = vi.fn();
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{',
       },
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'inventory' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'inventory' : null),
         textContent: '{"available":true}',
       },
     ];
 
-    installJisoLoader({ importModule, onError, queryStore: store, root });
+    installKovoLoader({ importModule, onError, queryStore: store, root });
 
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toEqual({ available: true });
@@ -63,26 +63,26 @@ describe('loader query hydration', () => {
       'pointerup',
       'pointerover',
       'pointerout',
-      'jiso:query',
+      'kovo:query',
     ]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { phase: 'query-hydration' });
   });
 
-  it('retries malformed initial fw-query scripts before visible-return refetch', async () => {
+  it('retries malformed initial kovo-query scripts before visible-return refetch', async () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const onError = vi.fn();
     const refetchOnFocus = vi.fn();
     const cartPlan = vi.fn();
     const script = {
-      getAttribute: (name: string) => (name === 'fw-query' ? 'cart' : null),
+      getAttribute: (name: string) => (name === 'kovo-query' ? 'cart' : null),
       textContent: '{',
     };
 
     root.scripts = [script];
     store.subscribe('cart', cartPlan);
 
-    installJisoLoader({
+    installKovoLoader({
       importModule: vi.fn(),
       onError,
       queryStore: store,

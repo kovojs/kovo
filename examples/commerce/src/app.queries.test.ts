@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { commerceDeclaredQueriesHarnessFact } from '@jiso/test/commerce-fixtures';
-import { createJisoTestHarness } from '@jiso/test/harness';
+import { commerceDeclaredQueriesHarnessFact } from '@kovojs/test/commerce-fixtures';
+import { createKovoTestHarness } from '@kovojs/test/harness';
 import {
-  fwFragmentFacts,
-  fwResponseBodyFact,
+  kovoFragmentFacts,
+  kovoResponseBodyFact,
   htmlElementFacts,
   htmlKeyTextMap,
   htmlKeyValues,
-} from '@jiso/test/html-fragment';
-import type { QueryDefinition } from '@jiso/server';
+} from '@kovojs/test/html-fragment';
+import type { QueryDefinition } from '@kovojs/server';
 
-import type { TouchGraph } from '@jiso/drizzle';
-import { morphStructuralTree } from '@jiso/runtime';
+import type { TouchGraph } from '@kovojs/drizzle';
+import { morphStructuralTree } from '@kovojs/runtime';
 
 import {
   addToCart,
@@ -73,7 +73,7 @@ describe('commerce example', () => {
   });
 
   it('executes addToCart and verifies rendered cart badge without a browser', async () => {
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: createCommerceDb(),
       pages: {
         '/cart': renderCartPage,
@@ -280,11 +280,13 @@ describe('commerce example', () => {
       productGridInput(firstPage.nextCursor, 2),
     );
 
-    expect(fwFragmentFacts(appendFragment, 'product-grid')).toMatchObject([
+    expect(kovoFragmentFacts(appendFragment, 'product-grid')).toMatchObject([
       { attrs: { mode: 'append', target: 'product-grid' } },
     ]);
     expect(htmlKeyValues(appendFragment)).toEqual(['p3']);
-    expect(htmlElementFacts(appendFragment, { attrs: { 'fw-c': 'product-grid' } })).toHaveLength(0);
+    expect(htmlElementFacts(appendFragment, { attrs: { 'kovo-c': 'product-grid' } })).toHaveLength(
+      0,
+    );
 
     await addToCart.handler(
       { productId: 'p1', quantity: 2 },
@@ -324,7 +326,7 @@ describe('commerce example', () => {
 
     expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
     expect(
-      fwFragmentFacts(
+      kovoFragmentFacts(
         await renderProductGridPageFragment(db, productGridInput(firstPage.nextCursor)),
         'product-grid',
       ),
@@ -395,10 +397,10 @@ describe('commerce example', () => {
     expect(
       htmlElementFacts(response.body, {
         attrs: { state: 'pending', target: 'product-grid' },
-        tag: 'fw-defer',
+        tag: 'kovo-defer',
       }),
     ).toHaveLength(1);
-    const responseFact = fwResponseBodyFact(response.body);
+    const responseFact = kovoResponseBodyFact(response.body);
     expect(responseFact.queryNames).toEqual(['productGrid']);
     expect(
       responseFact.fragments.filter((fragment) => fragment.target === 'product-grid'),

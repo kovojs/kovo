@@ -31,12 +31,12 @@ describe('headless-ui state attributes', () => {
       mergeDataAttributes(
         openState(true),
         dataDisabled(true),
-        { 'data-jiso-test': 'author' },
+        { 'data-kovo-test': 'author' },
         openState(false),
       ),
     ).toEqual({
       'data-disabled': '',
-      'data-jiso-test': 'author',
+      'data-kovo-test': 'author',
       'data-state': 'closed',
     });
   });

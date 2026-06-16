@@ -1,5 +1,5 @@
-import { form, type FwExplainInput } from '@jiso/core';
-import type { OptimisticFor } from '@jiso/runtime';
+import { form, type KovoExplainInput } from '@kovojs/core';
+import type { OptimisticFor } from '@kovojs/runtime';
 import {
   guards,
   mutation,
@@ -12,7 +12,7 @@ import {
   session,
   type MutationFail,
   type MutationWireHeaderSource,
-} from '@jiso/server';
+} from '@kovojs/server';
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
@@ -30,7 +30,7 @@ import {
 
 // Tutorial step 07 (chapter 7): the finished app is commerce-shaped — three
 // islands, a guarded session-typed mutation writing three domains, and a
-// declared app graph that fw check and fw explain answer questions about
+// declared app graph that kovo check and kovo explain answer questions about
 // without executing a browser (SPEC.md sections 5.3, 10.3, 11.4).
 
 export type { ShopRequest } from './db.js';
@@ -165,8 +165,8 @@ export const addToCartOptimistic = {
 } satisfies OptimisticFor<typeof addToCartForm>;
 
 // snippet:graph
-// The app graph: every fact fw check and fw explain reason over. In the
-// blessed @jiso/drizzle path most of this is derived (SPEC.md section 11.1);
+// The app graph: every fact kovo check and kovo explain reason over. In the
+// blessed @kovojs/drizzle path most of this is derived (SPEC.md section 11.1);
 // examples/commerce commits it as a generated artifact. Declared or derived,
 // it is the same machine-checkable shape (section 11.4).
 export const shopGraph = {
@@ -205,7 +205,7 @@ export const shopGraph = {
     { domains: ['order'], query: 'orderHistory' },
   ],
   touchGraph: shopTouchGraph,
-} satisfies FwExplainInput;
+} satisfies KovoExplainInput;
 // /snippet
 
 export function renderShopPage(
@@ -220,11 +220,11 @@ export function renderShopPage(
     renderQueryScript({ name: 'cart', value: cart }) +
     renderQueryScript({ name: 'products', value: products }) +
     renderQueryScript({ name: 'orderHistory', value: orderHistory });
-  const badge = `<fw-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</fw-fragment>`;
-  const list = `<fw-fragment target="product-list">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</fw-fragment>`;
-  const orders = `<fw-fragment target="order-history">${OrderHistory.definition.render({ orderHistory })}</fw-fragment>`;
+  const badge = `<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment>`;
+  const list = `<kovo-fragment target="product-list">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</kovo-fragment>`;
+  const orders = `<kovo-fragment target="order-history">${OrderHistory.definition.render({ orderHistory })}</kovo-fragment>`;
 
-  return `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1>${queryData}${badge}${list}${orders}</main></body></html>`;
+  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${queryData}${badge}${list}${orders}</main></body></html>`;
 }
 
 export const homeRoute = route('/', {
@@ -239,7 +239,7 @@ export function renderHomeRoute() {
 
 export function renderShopPageDeferredStream(db: ShopDb = createShopDb(), request?: ShopRequest) {
   const cart = loadCart(db);
-  const shell = `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1>${renderQueryScript({ name: 'cart', value: cart })}<fw-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</fw-fragment><fw-defer target="product-list" state="pending">Loading products…</fw-defer>`;
+  const shell = `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${renderQueryScript({ name: 'cart', value: cart })}<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment><kovo-defer target="product-list" state="pending">Loading products…</kovo-defer>`;
   const products = loadProducts(db);
 
   return renderDeferredStream({

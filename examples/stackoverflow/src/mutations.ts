@@ -1,4 +1,4 @@
-import { mutation, s } from '@jiso/server';
+import { mutation, s } from '@kovojs/server';
 import { eq, sql } from 'drizzle-orm';
 
 import { answer, question, vote } from './domains.js';

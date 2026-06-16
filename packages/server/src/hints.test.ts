@@ -104,7 +104,7 @@ describe('page hints', () => {
         Link: '</assets/components/cart/cart-badge.css>; rel=preload; as=style',
       },
       html: [
-        '<style data-jiso-critical-href="/assets/components/cart/cart-badge.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style>',
+        '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style>',
         '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
       ].join(''),
     });
@@ -135,7 +135,7 @@ describe('page hints', () => {
         Link: '</assets/components/cart/cart-badge.css>; rel=preload; as=style, </assets/components/cart/cart-drawer.css>; rel=preload; as=style',
       },
       html: [
-        '<style data-jiso-critical-href="/assets/components/cart/cart-badge.css">cart-badge { color: teal; }</style>',
+        '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css">cart-badge { color: teal; }</style>',
         '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
         '<link rel="stylesheet" href="/assets/components/cart/cart-drawer.css">',
       ].join(''),
@@ -153,10 +153,10 @@ describe('page hints', () => {
             ],
           },
         ],
-        shell: '<!doctype html><html><body><fw-defer target="cart-drawer"></fw-defer>',
+        shell: '<!doctype html><html><body><kovo-defer target="cart-drawer"></kovo-defer>',
       }).body,
     ).toContain(
-      '<fw-fragment target="cart-drawer"><link rel="stylesheet" href="/assets/components/cart/cart-drawer.css"><cart-drawer>Ready</cart-drawer></fw-fragment>',
+      '<kovo-fragment target="cart-drawer"><link rel="stylesheet" href="/assets/components/cart/cart-drawer.css"><cart-drawer>Ready</cart-drawer></kovo-fragment>',
     );
   });
 

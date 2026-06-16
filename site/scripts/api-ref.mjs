@@ -20,7 +20,7 @@ const PACKAGES = [
     description:
       'Component model, diagnostics registry, routes, queries, forms, storage, and webhook verifiers.',
     dir: 'core',
-    name: '@jiso/core',
+    name: '@kovojs/core',
     order: 1,
     slug: 'core',
   },
@@ -28,15 +28,15 @@ const PACKAGES = [
     description:
       'Schemas and validation, guards and sessions, the request lifecycle, route matching, rendering, and streaming.',
     dir: 'server',
-    name: '@jiso/server',
+    name: '@kovojs/server',
     order: 2,
     slug: 'server',
   },
   {
     description:
-      'Client runtime: the Jiso loader, delegated events, island signals, morphing, the query store, and optimistic mutations.',
+      'Client runtime: the Kovo loader, delegated events, island signals, morphing, the query store, and optimistic mutations.',
     dir: 'runtime',
-    name: '@jiso/runtime',
+    name: '@kovojs/runtime',
     order: 3,
     slug: 'runtime',
   },
@@ -44,7 +44,7 @@ const PACKAGES = [
     description:
       'Test harness: PGlite-backed databases, db verification against the touch graph, and mutation/property testing.',
     dir: 'test',
-    name: '@jiso/test',
+    name: '@kovojs/test',
     order: 4,
     slug: 'test',
   },
@@ -52,7 +52,7 @@ const PACKAGES = [
     description:
       'Drizzle adapter: table annotations, touch-graph extraction from queries, and invalidation registry derivation.',
     dir: 'drizzle',
-    name: '@jiso/drizzle',
+    name: '@kovojs/drizzle',
     order: 5,
     slug: 'drizzle',
   },

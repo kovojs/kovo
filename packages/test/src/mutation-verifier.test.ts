@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@jiso/server';
+import { mutation, s } from '@kovojs/server';
 
-import { createJisoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './harness.js';
 import {
   createFakeDb,
   expectedDiagnostic,
@@ -10,7 +10,7 @@ import {
   type FakeDb,
 } from './test-fixtures.js';
 
-describe('@jiso/test mutation verifier', () => {
+describe('@kovojs/test mutation verifier', () => {
   it('fails verification for writes to domains outside the static graph', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
@@ -20,7 +20,7 @@ describe('@jiso/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart.addItem': {
@@ -37,7 +37,7 @@ describe('@jiso/test mutation verifier', () => {
     });
 
     await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-      expectedDiagnostic('FW402', 'audit'),
+      expectedDiagnostic('KV402', 'audit'),
     );
   });
 
@@ -50,7 +50,7 @@ describe('@jiso/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/add': {
@@ -74,7 +74,7 @@ describe('@jiso/test mutation verifier', () => {
 
     await expect(
       harness.exec(cartMutation, { productId: 'p1' }, { touchGraphKey: 'cart/add' }),
-    ).rejects.toThrow(expectedDiagnostic('FW402', 'product'));
+    ).rejects.toThrow(expectedDiagnostic('KV402', 'product'));
   });
 
   it('uses explicit harness touch graph keys when mutation keys differ from graph entries', async () => {
@@ -86,7 +86,7 @@ describe('@jiso/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart.addItem': {
@@ -109,7 +109,7 @@ describe('@jiso/test mutation verifier', () => {
     });
   });
 
-  it('keeps scoped FW406 coverage tied to the executed mutation graph entry', async () => {
+  it('keeps scoped KV406 coverage tied to the executed mutation graph entry', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
@@ -118,7 +118,7 @@ describe('@jiso/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/add': {
@@ -129,9 +129,9 @@ describe('@jiso/test mutation verifier', () => {
           touches: [],
           unresolved: [
             {
-              code: 'FW406',
+              code: 'KV406',
               domain: 'audit',
-              message: expectedDiagnosticMessage('FW406'),
+              message: expectedDiagnosticMessage('KV406'),
               site: 'audit.domain.ts:1',
             },
           ],
@@ -147,10 +147,10 @@ describe('@jiso/test mutation verifier', () => {
 
     await expect(
       harness.exec(cartMutation, { productId: 'p1' }, { touchGraphKey: 'cart/add' }),
-    ).rejects.toThrow(expectedDiagnostic('FW402', 'audit'));
+    ).rejects.toThrow(expectedDiagnostic('KV402', 'audit'));
   });
 
-  it('allows scoped writes covered by same-entry FW406 annotations', async () => {
+  it('allows scoped writes covered by same-entry KV406 annotations', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
@@ -159,16 +159,16 @@ describe('@jiso/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/add': {
           touches: [],
           unresolved: [
             {
-              code: 'FW406',
+              code: 'KV406',
               domain: 'audit',
-              message: expectedDiagnosticMessage('FW406'),
+              message: expectedDiagnosticMessage('KV406'),
               site: 'cart.domain.ts:9',
             },
           ],
@@ -198,7 +198,7 @@ describe('@jiso/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/add': {
@@ -233,7 +233,7 @@ describe('@jiso/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart.addItem': {
@@ -249,7 +249,7 @@ describe('@jiso/test mutation verifier', () => {
     });
 
     await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-      expectedDiagnostic('FW404', 'unknown_table'),
+      expectedDiagnostic('KV404', 'unknown_table'),
     );
   });
 });

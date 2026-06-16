@@ -25,16 +25,16 @@ registerHooks({
   },
 });
 
-const { deriveAppGraph } = await import('@jiso/compiler/graph');
+const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 const {
   deriveInvalidationRegistry,
   serializeInvalidationRegistry,
   extractTouchGraphFromProject,
   extractSymbolicEffectsFromProject,
   extractAlgebraicShapesFromProject,
-} = await import('@jiso/drizzle/static');
-const { deriveOptimistic, serializeDerivedOptimistic } = await import('@jiso/drizzle/derive');
-const { puntReasonLabel } = await import('@jiso/core');
+} = await import('@kovojs/drizzle/static');
+const { deriveOptimistic, serializeDerivedOptimistic } = await import('@kovojs/drizzle/derive');
+const { puntReasonLabel } = await import('@kovojs/core');
 const { createCrmGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -142,7 +142,7 @@ for (const fact of effectFacts) {
 }
 
 // Keep only the mutation-handler touch entries, re-keyed by mutation key (the
-// domain() leaf-module factory calls surface as `<spread>` FW406 noise — they are
+// domain() leaf-module factory calls surface as `<spread>` KV406 noise — they are
 // not mutation write sites, so they are dropped from the published touch graph).
 const crmTouchGraph = {};
 for (const mutation of MUTATIONS) {
@@ -171,7 +171,7 @@ for (const mutation of MUTATIONS) {
 
     if (overrides.has(query)) {
       // HAND-WRITTEN / await-fragment in the mutation module. Record the
-      // derivation metadata so `fw explain --optimistic` shows the PUNTED reason
+      // derivation metadata so `kovo explain --optimistic` shows the PUNTED reason
       // inline; status is 'hand-written' (a transform) or 'await-fragment'.
       const status = AWAIT_FRAGMENT_PAIRS.has(`${mutation.key}\0${query}`)
         ? 'await-fragment'
@@ -264,7 +264,7 @@ const touchGraphSource = formatSource(
 export const crmTouchGraph = ${formatJson(crmTouchGraph)} as const;
 
 ${crmInvalidationSource}
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface QueryRegistry {
     contactList: ContactListResult;
     dealList: DealListResult;
@@ -297,7 +297,7 @@ if (process.argv.includes('--check')) {
       `generated optimistic/${kebab(module.key)}.ts`,
     );
   }
-  // Surface the named punts for the operator (parity with `fw explain --optimistic`).
+  // Surface the named punts for the operator (parity with `kovo explain --optimistic`).
   for (const entry of optimisticEntries) {
     if (entry.derivation?.status === 'PUNTED') {
       // eslint-disable-next-line no-console
@@ -332,7 +332,7 @@ function typeDerivedSubset(source, formName, derivedQueries) {
           .map((query) => JSON.stringify(query))
           .join(' | ');
   const withImport = source.replace(
-    "import type { OptimisticFor } from '@jiso/runtime';\n",
+    "import type { OptimisticFor } from '@kovojs/runtime';\n",
     "import type { CrmDerivedSubset } from '../../optimistic-merge.js';\n",
   );
   assert.notEqual(withImport, source, 'expected the OptimisticFor import to rewrite');

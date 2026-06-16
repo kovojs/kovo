@@ -1,4 +1,4 @@
-import { notFound, renderRoutePageResponse, route, s } from '@jiso/server';
+import { notFound, renderRoutePageResponse, route, s } from '@kovojs/server';
 
 // Tutorial step 01 (chapter 1): routes and the first page. Pages are complete
 // documents rendered on the server — there is no client router and no
@@ -49,12 +49,12 @@ export function renderHomePage(): string {
         `<li><a href="/products/${product.id}">${product.name}</a> — ${formatPrice(product.unitPrice)}</li>`,
     )
     .join('');
-  return `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1><ul>${items}</ul></main></body></html>`;
+  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1><ul>${items}</ul></main></body></html>`;
 }
 // /snippet
 
 export function renderProductPage(product: Product): string {
-  return `<!doctype html><html><head><title>${product.name} · Jiso Shop</title></head><body><main><h1>${product.name}</h1><p>${formatPrice(product.unitPrice)}</p><a href="/">Back to the shop</a></main></body></html>`;
+  return `<!doctype html><html><head><title>${product.name} · Kovo Shop</title></head><body><main><h1>${product.name}</h1><p>${formatPrice(product.unitPrice)}</p><a href="/">Back to the shop</a></main></body></html>`;
 }
 
 // snippet:render-route

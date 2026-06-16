@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/conformance-app-shell-spike",
+  "name": "@kovojs/conformance-app-shell-spike",
   "version": "0.0.0",
   "private": true,
   "type": "module",

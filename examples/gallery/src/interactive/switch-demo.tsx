@@ -1,10 +1,10 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
-import { switchTriggerClick as _switchTriggerClick } from '@jiso/headless-ui/primitives';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { switchTriggerClick as _switchTriggerClick } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/switch.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/switch.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS =
   'inline-flex items-center gap-2 text-sm text-neutral-950 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50';
@@ -16,7 +16,7 @@ export interface GallerySwitchDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GallerySwitchDemo = component('gallery-switch-demo', {
   state: () => ({ checked: false }),
   render: (_queries: Record<string, never>, state: GallerySwitchDemoState) => (

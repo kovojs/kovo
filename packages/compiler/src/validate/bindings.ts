@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 
 import { collectDataBindListStamps } from '../analyze/query-updates.js';
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
@@ -54,14 +54,14 @@ export function validateDataBindings(
       if (!result.exists) {
         return [
           {
-            ...diagnosticFor(options.fileName, 'FW302', source, binding.index, binding.length),
-            message: `${diagnosticDefinitions.FW302.message} ${binding.path}`,
+            ...diagnosticFor(options.fileName, 'KV302', source, binding.index, binding.length),
+            message: `${diagnosticDefinitions.KV302.message} ${binding.path}`,
           },
         ];
       }
 
       return result.nullableTraversal
-        ? [fw227Diagnostic(source, options.fileName, binding, result.nullableTraversal)]
+        ? [kv227Diagnostic(source, options.fileName, binding, result.nullableTraversal)]
         : [];
     });
 
@@ -73,8 +73,8 @@ export function validateDataBindings(
 
       return [
         {
-          ...diagnosticFor(options.fileName, 'FW302', source, binding.index, binding.length),
-          message: `${diagnosticDefinitions.FW302.message} ${binding.path}`,
+          ...diagnosticFor(options.fileName, 'KV302', source, binding.index, binding.length),
+          message: `${diagnosticDefinitions.KV302.message} ${binding.path}`,
         },
       ];
     });
@@ -86,14 +86,14 @@ export function validateDataBindings(
         if (!result.exists) {
           return [
             {
-              ...diagnosticFor(options.fileName, 'FW302', source, binding?.index, binding?.length),
-              message: `${diagnosticDefinitions.FW302.message} ${stamp.list}`,
+              ...diagnosticFor(options.fileName, 'KV302', source, binding?.index, binding?.length),
+              message: `${diagnosticDefinitions.KV302.message} ${stamp.list}`,
             },
           ];
         }
 
         return result.nullableTraversal && binding
-          ? [fw227Diagnostic(source, options.fileName, binding, result.nullableTraversal)]
+          ? [kv227Diagnostic(source, options.fileName, binding, result.nullableTraversal)]
           : [];
       })
     : [];
@@ -126,7 +126,7 @@ export function validateStampExpressionDrift(
         queryPathUsesKnownQuery(stamp.expression, knownQueries),
     )
     .map((stamp) => {
-      const code = stamp.binding === stamp.expression ? 'FW223' : 'FW222';
+      const code = stamp.binding === stamp.expression ? 'KV223' : 'KV222';
 
       return {
         ...diagnosticFor(options.fileName, code, source, stamp.index, stamp.length),
@@ -240,7 +240,7 @@ function nullableItemBindingDiagnostics(
     const containers = elements.filter(
       (element) =>
         jsxStaticAttributeValue(element, 'data-bind-list') === stamp.list &&
-        jsxStaticAttributeValue(element, 'fw-key') === stamp.key,
+        jsxStaticAttributeValue(element, 'kovo-key') === stamp.key,
     );
 
     for (const container of containers) {
@@ -260,7 +260,7 @@ function nullableItemBindingDiagnostics(
           parseBindingPath(binding.relativeReadPath ?? ''),
         );
         if (result.exists && result.nullableTraversal) {
-          diagnostics.push(fw227Diagnostic(source, fileName, binding, result.nullableTraversal));
+          diagnostics.push(kv227Diagnostic(source, fileName, binding, result.nullableTraversal));
         }
       }
     }
@@ -273,16 +273,16 @@ function nullableItemBindingDiagnostics(
   );
 }
 
-function fw227Diagnostic(
+function kv227Diagnostic(
   source: string,
   fileName: string,
   binding: DataBindAttribute,
   traversal: { segment: string },
 ): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW227', source, binding.index, binding.length),
-    help: diagnosticDefinitions.FW227.help,
-    message: `${diagnosticDefinitions.FW227.message} ${binding.path} (segment: ${traversal.segment})`,
+    ...diagnosticFor(fileName, 'KV227', source, binding.index, binding.length),
+    help: diagnosticDefinitions.KV227.help,
+    message: `${diagnosticDefinitions.KV227.message} ${binding.path} (segment: ${traversal.segment})`,
   };
 }
 

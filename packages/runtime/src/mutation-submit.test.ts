@@ -41,7 +41,7 @@ describe('enhanced mutation submit', () => {
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: {
         get(name: string) {
-          return name === 'FW-Changes'
+          return name === 'Kovo-Changes'
             ? '[{"domain":"cart","input":{"productId":"p1","quantity":"1"}}]'
             : null;
         },
@@ -49,9 +49,9 @@ describe('enhanced mutation submit', () => {
       async text() {
         options.onUploadProgress?.({ loaded: 512, total: 1024 });
         return [
-          '<fw-query name="cart">{"count":1}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
-          '<fw-fragment target="recommendations"><section></section></fw-fragment>',
+          '<kovo-query name="cart">{"count":1}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
+          '<kovo-fragment target="recommendations"><section></section></kovo-fragment>',
         ].join('\n');
       },
     }));
@@ -92,10 +92,10 @@ describe('enhanced mutation submit', () => {
     expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
       body: formData,
       headers: {
-        Accept: 'text/vnd.jiso.fragment+html',
-        'FW-Fragment': 'true',
-        'FW-Idem': 'idem_01HX',
-        'FW-Targets': 'cart-badge=cart; recommendations=product:p1',
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_01HX',
+        'Kovo-Targets': 'cart-badge=cart; recommendations=product:p1',
       },
       keepalive: true,
       method: 'POST',
@@ -114,12 +114,12 @@ describe('enhanced mutation submit', () => {
     expect(channel.messages).toEqual([
       {
         body: [
-          '<fw-query name="cart">{"count":1}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
-          '<fw-fragment target="recommendations"><section></section></fw-fragment>',
+          '<kovo-query name="cart">{"count":1}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
+          '<kovo-fragment target="recommendations"><section></section></kovo-fragment>',
         ].join('\n'),
         changes: [{ domain: 'cart' }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     ]);
     expect(store.get('cart')).toEqual({ count: 1 });
@@ -128,7 +128,7 @@ describe('enhanced mutation submit', () => {
     expect(root.targets.get('recommendations')?.html).toBe('<section></section>');
   });
 
-  it('ignores malformed FW-Changes headers while applying successful mutation bodies', async () => {
+  it('ignores malformed Kovo-Changes headers while applying successful mutation bodies', async () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();
     const broadcast = installMutationBroadcast({ channel, store });
@@ -138,13 +138,13 @@ describe('enhanced mutation submit', () => {
     const fetch = vi.fn(async () => ({
       headers: {
         get(name: string) {
-          return name === 'FW-Changes' ? '[' : null;
+          return name === 'Kovo-Changes' ? '[' : null;
         },
       },
       async text() {
         return [
-          '<fw-query name="cart">{"count":2}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+          '<kovo-query name="cart">{"count":2}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
         ].join('\n');
       },
     }));
@@ -165,16 +165,16 @@ describe('enhanced mutation submit', () => {
     expect(channel.messages).toEqual([
       {
         body: [
-          '<fw-query name="cart">{"count":2}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+          '<kovo-query name="cart">{"count":2}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
         ].join('\n'),
         changes: [],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       },
     ]);
   });
 
-  it('reports malformed FW-Changes headers while applying successful mutation bodies', async () => {
+  it('reports malformed Kovo-Changes headers while applying successful mutation bodies', async () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const onError = vi.fn();
@@ -183,13 +183,13 @@ describe('enhanced mutation submit', () => {
     const fetch = vi.fn(async () => ({
       headers: {
         get(name: string) {
-          return name === 'FW-Changes' ? '[' : null;
+          return name === 'Kovo-Changes' ? '[' : null;
         },
       },
       async text() {
         return [
-          '<fw-query name="cart">{"count":2}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+          '<kovo-query name="cart">{"count":2}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
         ].join('\n');
       },
     }));
@@ -208,20 +208,20 @@ describe('enhanced mutation submit', () => {
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>2</cart-badge>');
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
-    expect(String(onError.mock.calls[0]?.[0])).toContain('Malformed JSON in FW-Changes header');
+    expect(String(onError.mock.calls[0]?.[0])).toContain('Malformed JSON in Kovo-Changes header');
   });
 
   it('reports direct enhanced mutation fetch failures and clears pending state', async () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
-    const pendingRoot = new FakePendingRoot([new FakePendingElement({ 'fw-deps': 'cart' })]);
+    const pendingRoot = new FakePendingRoot([new FakePendingElement({ 'kovo-deps': 'cart' })]);
     const onError = vi.fn();
     const error = new Error('network down');
     const fetch = vi.fn(async () => {
-      const pending = [...pendingRoot.querySelectorAll('[fw-deps]')][0];
+      const pending = [...pendingRoot.querySelectorAll('[kovo-deps]')][0];
       expect(pending?.attributes).toMatchObject({
         'aria-busy': 'true',
-        'fw-pending': '',
+        'kovo-pending': '',
       });
       throw error;
     });
@@ -239,9 +239,9 @@ describe('enhanced mutation submit', () => {
       }),
     ).rejects.toBe(error);
 
-    const pending = [...pendingRoot.querySelectorAll('[fw-deps]')][0];
+    const pending = [...pendingRoot.querySelectorAll('[kovo-deps]')][0];
     expect(onError).toHaveBeenCalledWith(error);
-    expect(pending?.attributes).not.toHaveProperty('fw-pending');
+    expect(pending?.attributes).not.toHaveProperty('kovo-pending');
     expect(pending?.attributes).not.toHaveProperty('aria-busy');
   });
 
@@ -261,7 +261,7 @@ describe('enhanced mutation submit', () => {
       ok: false,
       status: 422,
       async text() {
-        return '<fw-fragment target="cart-form"><form>Out of stock</form></fw-fragment>';
+        return '<kovo-fragment target="cart-form"><form>Out of stock</form></kovo-fragment>';
       },
     }));
 

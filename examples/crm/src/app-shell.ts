@@ -1,7 +1,7 @@
-import { route } from '@jiso/server';
-import { createMemoryVersionedClientModuleRegistry } from '@jiso/server/app-shell/client-modules';
-import { createApp, createRequestHandler } from '@jiso/server/app-shell/core';
-import { toNodeHandler } from '@jiso/server/app-shell/node';
+import { route } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
+import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
+import { toNodeHandler } from '@kovojs/server/app-shell/node';
 import { asc, eq } from 'drizzle-orm';
 
 import { renderContactsPage } from './components/contacts.js';
@@ -18,7 +18,7 @@ import {
 import { activities, contacts, deals } from './schema.js';
 
 // SPEC.md §9.5: the CRM example's public, read-only static-export shell. It
-// replays a real multi-page Jiso app — pipeline dashboard, contact book, and a
+// replays a real multi-page Kovo app — pipeline dashboard, contact book, and a
 // per-deal detail page — over the seeded PGlite database. The mutation +
 // derived/custom-optimism story (createDeal, moveDeal, closeDeal …) lives in
 // mutations.ts and generated/optimistic/; this shell renders the read side so

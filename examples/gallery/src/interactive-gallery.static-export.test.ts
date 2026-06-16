@@ -13,7 +13,7 @@ const galleryRoot = fileURLToPath(new URL('../', import.meta.url));
 
 describe('compiled interactive gallery static export', () => {
   it('runs shipped client handlers from the verbatim static export without shims', async () => {
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-gallery-static-export-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-gallery-static-export-'));
     let browser: Browser | undefined;
     let server: Server | undefined;
 
@@ -25,7 +25,7 @@ describe('compiled interactive gallery static export', () => {
 
       const html = await readFile(join(outDir, 'gallery/interactive/index.html'), 'utf8');
       expect(html).not.toContain('type="importmap"');
-      expect(html).not.toContain('@jiso/runtime');
+      expect(html).not.toContain('@kovojs/runtime');
 
       server = await serveStaticExport(outDir);
       const address = server.address();
@@ -149,7 +149,7 @@ async function waitForState(
 ): Promise<void> {
   await page.waitForFunction(
     ({ rootSelector: selector, expected }) =>
-      document.querySelector(selector)?.getAttribute('fw-state')?.includes(expected) ?? false,
+      document.querySelector(selector)?.getAttribute('kovo-state')?.includes(expected) ?? false,
     { expected: expectedStateFragment, rootSelector },
   );
 }

@@ -11,7 +11,7 @@ const {
   renderPageHints,
   toNodeHandler,
 } = await import('../dist/server/src/index.mjs');
-const { jisoLoaderSource } = await import('../dist/runtime/src/index.mjs');
+const { kovoLoaderSource } = await import('../dist/runtime/src/index.mjs');
 
 export const p10PerfAcceptance = {
   browser: 'chromium',
@@ -94,13 +94,13 @@ export async function runP10PerfAcceptance() {
         const button = document.querySelector('#action');
 
         return {
-          buttonStateBeforeClick: button?.getAttribute('fw-state') ?? null,
+          buttonStateBeforeClick: button?.getAttribute('kovo-state') ?? null,
           clientModuleLoadsBeforeInteraction: globalThis.__clientModuleLoads ?? 0,
           fcp: paint?.startTime ?? Number.NaN,
           handlerImportsBeforeInteraction: globalThis.__handlerImports ?? 0,
           hasSpeculationRules: document.querySelector('script[type="speculationrules"]') !== null,
-          lastDelegatedListenerMark: globalThis.__jisoPerf.lastDelegatedListenerMark,
-          ttiMinusFcpMs: globalThis.__jisoPerf.lastDelegatedListenerMark - (paint?.startTime ?? 0),
+          lastDelegatedListenerMark: globalThis.__kovoPerf.lastDelegatedListenerMark,
+          ttiMinusFcpMs: globalThis.__kovoPerf.lastDelegatedListenerMark - (paint?.startTime ?? 0),
         };
       });
 
@@ -120,10 +120,11 @@ export async function runP10PerfAcceptance() {
 
       await page.click('#action');
       await page.waitForFunction(
-        () => document.querySelector('#action')?.getAttribute('fw-state') === '{"count":1}',
+        () => document.querySelector('#action')?.getAttribute('kovo-state') === '{"count":1}',
       );
       const afterClick = await page.evaluate(() => ({
-        buttonStateAfterClick: document.querySelector('#action')?.getAttribute('fw-state') ?? null,
+        buttonStateAfterClick:
+          document.querySelector('#action')?.getAttribute('kovo-state') ?? null,
         clientModuleLoadsAfterClick: globalThis.__clientModuleLoads ?? 0,
       }));
 
@@ -208,21 +209,21 @@ function renderDocument({ head = '', route, title }) {
     <script>
       globalThis.__readyEpoch = Date.now();
       globalThis.__handlerImports = 0;
-      globalThis.__jisoPerf = { lastDelegatedListenerMark: 0 };
+      globalThis.__kovoPerf = { lastDelegatedListenerMark: 0 };
       const addEventListenerOriginal = globalThis.addEventListener.bind(globalThis);
       globalThis.addEventListener = (type, listener, options) => {
         if (['click', 'submit', 'input', 'change'].includes(type)) {
-          globalThis.__jisoPerf.lastDelegatedListenerMark = performance.now();
+          globalThis.__kovoPerf.lastDelegatedListenerMark = performance.now();
         }
         return addEventListenerOriginal(type, listener, options);
       };
     </script>
-    <script>${jisoLoaderSource}</script>
+    <script>${kovoLoaderSource}</script>
   </head>
   <body>
     <main data-route="${route}">
       <h1>${title}</h1>
-      <button id="action" fw-state="{&quot;count&quot;:0}" on:click="${handlerHref}#increment">Add</button>
+      <button id="action" kovo-state="{&quot;count&quot;:0}" on:click="${handlerHref}#increment">Add</button>
       <a id="next" href="/next">Next</a>
     </main>
   </body>

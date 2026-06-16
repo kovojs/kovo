@@ -19,7 +19,7 @@ app uses:
 
 ```ts
 // app.ts — the commerce reference app's shape
-import { guards, mutation, s } from '@jiso/server';
+import { guards, mutation, s } from '@kovojs/server';
 
 export const addToCart = mutation('cart/add', {
   csrf: commerceCsrf,
@@ -56,7 +56,7 @@ You declare each part once, and the framework derives the rest from it:
 - **`errors`** is the failure vocabulary. `context.fail('OUT_OF_STOCK', …)` is typed against it,
   and callers receive an exhaustive discriminated union.
 - **`guard`** composes from combinators. `authed` refines `req.session` so the user is non-null
-  inside the handler, and every mutation shows up in the `fw explain --unguarded` audit — the
+  inside the handler, and every mutation shows up in the `kovo explain --unguarded` audit — the
   report of everything reachable without authentication.
 
 ## Render the form
@@ -65,7 +65,7 @@ The rendered form is an ordinary form. This is what the commerce app serves:
 
 ```html
 <form method="post" action="/_m/cart/add" enhance>
-  <input type="hidden" name="fw-csrf" value="…" />
+  <input type="hidden" name="kovo-csrf" value="…" />
   <input type="hidden" name="productId" value="p1" />
   <input name="quantity" type="number" min="1" value="1" />
   <button type="submit">Add</button>
@@ -79,7 +79,7 @@ Field names are type-checked against the mutation's input schema. A missing requ
 typo'd `name` is a compile error, so you find out at build time instead of in production:
 
 ```ts
-import { form, formFields } from '@jiso/core';
+import { form, formFields } from '@kovojs/core';
 
 const f = form('cart/add'); // key validated against MutationRegistry; input type inferred
 formFields(f, ['productId', 'quantity']); // ✗ compile error if a required field is missing
@@ -87,19 +87,19 @@ formFields(f, ['productId', 'quantity']); // ✗ compile error if a required fie
 
 ## CSRF is on by default
 
-`fw-csrf` is a session-bound token stamped into every emitted mutation form. The server verifies
+`kovo-csrf` is a session-bound token stamped into every emitted mutation form. The server verifies
 it before anything else — before schema parsing, before replay lookup, before guards. In app code,
 you render the field:
 
 ```ts
-import { csrfField } from '@jiso/server';
+import { csrfField } from '@kovojs/server';
 
 const csrf = csrfField(request, commerceCsrf); // → <input type="hidden" name="csrf" value="…">
 ```
 
 CSRF stays on for server-rendered mutation endpoints unless you set `csrf: false` on a mutation,
 which you reserve for non-browser or externally authenticated endpoints. Any opt-out shows up in
-the `fw explain --endpoints` audit.
+the `kovo explain --endpoints` audit.
 
 ## The request lifecycle
 
@@ -108,12 +108,12 @@ Every mutation POST runs the same pipeline:
 ```
 CSRF validation → replay lookup by idempotency key → parse + coerce input (schema)
 → guard chain → BEGIN tx → handler (Tx-typed db; escaping the tx is a type error)
-→ COMMIT → re-run invalidated queries (post-commit) → render <fw-query>/<fw-fragment> → respond
+→ COMMIT → re-run invalidated queries (post-commit) → render <kovo-query>/<kovo-fragment> → respond
                      ↘ on fail(): ROLLBACK → typed error fragment, 422
 ```
 
 Queries re-run after commit, so a response never renders pre-commit data — which would visibly
-revert the user's optimistic update. The `FW-Idem` hidden field makes duplicate submissions
+revert the user's optimistic update. The `Kovo-Idem` hidden field makes duplicate submissions
 replayable: the server answers a duplicate with the stored response instead of running the handler
 again.
 
@@ -125,34 +125,34 @@ exchange in the Network panel:
 ```http
 POST /_m/cart/add HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
-FW-Fragment: true
-FW-Targets: cart-badge=cart; product-grid=product; order-history=order
-FW-Idem: 7f3a-…
+Kovo-Fragment: true
+Kovo-Targets: cart-badge=cart; product-grid=product; order-history=order
+Kovo-Idem: 7f3a-…
 
-productId=p1&quantity=2&fw-csrf=…
+productId=p1&quantity=2&kovo-csrf=…
 ```
 
 ```http
 HTTP/1.1 200 OK
-Content-Type: text/vnd.jiso.fragment+html; charset=utf-8
-FW-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1"]}]
+Content-Type: text/vnd.kovo.fragment+html; charset=utf-8
+Kovo-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1"]}]
 
-<fw-query name="cart">{"count": 3, "items": […]}</fw-query>
-<fw-fragment target="cart-badge">
+<kovo-query name="cart">{"count": 3, "items": […]}</kovo-query>
+<kovo-fragment target="cart-badge">
   <!-- server-rendered HTML — the SAME render function full page loads use -->
-</fw-fragment>
+</kovo-fragment>
 ```
 
 What each piece does:
 
-- **`FW-Targets`** is read off the live DOM's `fw-deps` stamps at submit time. The server keeps no
+- **`Kovo-Targets`** is read off the live DOM's `kovo-deps` stamps at submit time. The server keeps no
   session of what's on screen; it answers a self-contained question. This matters for
   [deployment](/guides/deployment/).
-- **`<fw-query>`** chunks replace the client's query values and run each query's update plan across
+- **`<kovo-query>`** chunks replace the client's query values and run each query's update plan across
   every dependent island.
-- **`<fw-fragment>`** chunks are DOM-morphed in by default, so focus, scroll, selection, and nested
+- **`<kovo-fragment>`** chunks are DOM-morphed in by default, so focus, scroll, selection, and nested
   island state survive. `mode="append"` is the explicit vocabulary for pagination and streams.
-- **`FW-Changes`** is the sanitized summary of committed writes — `{domain, keys}` only, never
+- **`Kovo-Changes`** is the sanitized summary of committed writes — `{domain, keys}` only, never
   mutation input or failure detail.
 
 Fragments are rendered by the same functions as full pages, so a partial can't drift from the page
@@ -160,14 +160,14 @@ it patches.
 
 ## The no-JS path: POST-redirect-GET
 
-When the same endpoint sees no `FW-Fragment` header, it answers with PRG. In the commerce app's
+When the same endpoint sees no `Kovo-Fragment` header, it answers with PRG. In the commerce app's
 tests, a successful no-JS `cart/add` returns `303` with `Location: /cart` and
 `Cache-Control: no-store`, and the next GET renders the updated page. Errors re-render the full page
 with messages in place. You don't write this path twice — one server helper renders both modes from
 the same declaration:
 
 ```ts
-import { renderMutationEndpointResponse } from '@jiso/server';
+import { renderMutationEndpointResponse } from '@kovojs/server';
 
 return renderMutationEndpointResponse(addToCart, {
   csrf: commerceCsrf,
@@ -179,7 +179,7 @@ return renderMutationEndpointResponse(addToCart, {
   redirectTo: '/cart', // the PRG destination for the no-JS mode
   renderFailureFragment: (failure) => renderAddToCartForm(item, failure, request),
   renderFailurePage: (failure) => renderCartPage(request.db, { failure }, request),
-  headers, // FW-Fragment / FW-Targets, when present
+  headers, // Kovo-Fragment / Kovo-Targets, when present
   request,
 });
 ```
@@ -193,13 +193,13 @@ out-of-stock failure on the enhanced path:
 
 ```http
 HTTP/1.1 422 Unprocessable Content
-Content-Type: text/vnd.jiso.fragment+html; charset=utf-8
+Content-Type: text/vnd.kovo.fragment+html; charset=utf-8
 
-<fw-fragment target="product-form:p2">
+<kovo-fragment target="product-form:p2">
   <form method="post" action="/_m/cart/add" enhance>…
     <output role="alert" data-error-code="OUT_OF_STOCK">Only 2 available.</output>
   </form>
-</fw-fragment>
+</kovo-fragment>
 ```
 
 Because the form is morphed rather than replaced, the user's field values and focus survive the
@@ -216,7 +216,7 @@ ctx.submit(addToCart, {
 ```
 
 Unexpected server failures stay outside the typed union and don't leak internals. A render failure
-after commit returns a render-error fragment with HTTP 500 and a sanitized `FW-Changes` header for
+after commit returns a render-error fragment with HTTP 500 and a sanitized `Kovo-Changes` header for
 the writes that already committed.
 
 ## Audit what you built
@@ -224,11 +224,11 @@ the writes that already committed.
 This is real output from the commerce reference app's committed graph:
 
 ```sh
-fw explain mutation cart/add graph.json
+kovo explain mutation cart/add graph.json
 ```
 
 ```txt
-fw-explain/v1
+kovo-explain/v1
 MUTATION cart/add
 guards: authed,rateLimit:session
 session: commerceSession
@@ -241,7 +241,7 @@ updates: cart->component:CartBadge,page:/cart; orderHistory->component:OrderHist
 
 One diffable artifact gives you the guard chain, the input surface, the write set, the derived
 invalidations, and every consumer that updates. See
-[reading fw check & fw explain](/guides/fw-explain/).
+[reading kovo check & kovo explain](/guides/kovo-explain/).
 
 ## Next
 
@@ -256,6 +256,6 @@ The mutation contract and the enhanced round-trip: SPEC §9.1. Declare-once deri
 Input schema and FormData coercion, plus CSRF default-on: SPEC §6.6. Typed errors and the 422 path:
 SPEC §9.2. The guard chain, the unguarded audit, and the request lifecycle: SPEC §10.3. The
 endpoints audit: SPEC §11.4. Update plans across dependent islands: SPEC §4.8. Direct db access in a
-handler is **FW330**. The `fw explain` artifact format: SPEC §5.3.
+handler is **KV330**. The `kovo explain` artifact format: SPEC §5.3.
 
 </details>

@@ -28,7 +28,7 @@ export type ClientHandler<State = unknown, Params = Record<string, ElementParamV
  * @param fn - The handler implementation.
  * @returns The same handler, typed.
  * @example
- * import { handler } from '@jiso/runtime';
+ * import { handler } from '@kovojs/runtime';
  *
  * type CounterState = { count: number };
  *

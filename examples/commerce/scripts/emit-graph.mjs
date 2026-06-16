@@ -15,14 +15,14 @@ registerHooks({
   },
 });
 
-const { deriveAppGraph } = await import('@jiso/compiler/graph');
+const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 const {
   deriveInvalidationRegistry,
   serializeInvalidationRegistry,
   extractSymbolicEffectsFromProject,
   extractAlgebraicShapesFromProject,
-} = await import('@jiso/drizzle/static');
-const { deriveOptimistic, serializeDerivedOptimistic } = await import('@jiso/drizzle/derive');
+} = await import('@kovojs/drizzle/static');
+const { deriveOptimistic, serializeDerivedOptimistic } = await import('@kovojs/drizzle/derive');
 const ts = await import('typescript');
 const { createCommerceGraph } = await import('../src/graph.js');
 
@@ -205,7 +205,7 @@ const touchGraphSource = `import type { CartQueryResult, OrderHistoryResult, Pro
 export const commerceTouchGraph = ${formatJson(commerceTouchGraph)} as const;
 
 ${commerceInvalidationRegistrySource}
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface QueryRegistry {
     cart: CartQueryResult;
     productGrid: ProductGridResult;

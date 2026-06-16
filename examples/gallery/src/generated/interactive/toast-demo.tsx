@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/toast-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/toast-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryToastDemo$div_data_state_derive = derive(['state'], (state: any) =>
   state.previousOpen ? 'open' : 'closed',
@@ -32,7 +32,7 @@ export const GalleryToastDemo$output_text_derive = derive(['state'], (state: any
   state.activeOpen ? 'open' : state.previousOpen ? 'stacked' : 'empty',
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   normalizeToastDuration,
   toastActionAttributes,
@@ -46,11 +46,11 @@ import {
   toastTitleAttributes,
   toastViewportAttributes,
   toastViewportKeyDown as _toastViewportKeyDown,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/toast.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/toast.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const VIEWPORT_CLASS =
   'fixed z-50 grid w-full max-w-sm gap-2 p-4 outline-none data-[placement=top-start]:left-0 data-[placement=top-start]:top-0 data-[placement=top-end]:right-0 data-[placement=top-end]:top-0 data-[placement=bottom-start]:bottom-0 data-[placement=bottom-start]:left-0 data-[placement=bottom-end]:bottom-0 data-[placement=bottom-end]:right-0 data-[placement=top-center]:left-1/2 data-[placement=top-center]:top-0 data-[placement=bottom-center]:bottom-0 data-[placement=bottom-center]:left-1/2 data-[disabled]:opacity-50';
@@ -75,7 +75,7 @@ export interface GalleryToastDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryToastDemo = component('gallery-toast-demo', {
   state: () => ({ activeCount: 0, activeOpen: false, previousCount: 0, previousOpen: false }),
   render: (_queries: Record<string, never>, state: GalleryToastDemoState) => {
@@ -104,16 +104,16 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
         class={VIEWPORT_CLASS}
         data-gallery-interactive="toast"
         data-toast-duration-ms={durationMs}
-        on:keydown="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$section_keydown"
-        fw-c="gallery-toast-demo"
-        fw-state='{"activeCount":0,"activeOpen":false,"previousCount":0,"previousOpen":false}'
+        on:keydown="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$section_keydown"
+        kovo-c="gallery-toast-demo"
+        kovo-state='{"activeCount":0,"activeOpen":false,"previousCount":0,"previousOpen":false}'
       >
         <style>{'@keyframes gallery-toast-auto-dismiss{from{opacity:1}to{opacity:1}}'}</style>
         <button
           class={TRIGGER_CLASS}
           data-toast-show=""
           type="button"
-          on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$button_click"
         >
           Show toast
         </button>
@@ -121,9 +121,9 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           {...toastRootAttributes(previousToastState)}
           class={TOAST_CLASS}
           data-state={state.previousOpen ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$div_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$div_data_state_derive"
           hidden={!state.previousOpen}
-          data-bind:hidden="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$div_hidden_derive"
+          data-bind:hidden="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$div_hidden_derive"
         >
           <strong
             {...toastTitleAttributes({ id: 'gallery-toast-previous-title' })}
@@ -134,7 +134,7 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           <p
             {...toastDescriptionAttributes({ id: 'gallery-toast-previous-description' })}
             class={DESCRIPTION_CLASS}
-            data-bind="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$p_text_derive"
+            data-bind="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$p_text_derive"
           >
             {'Gallery settings update #' + state.previousCount}
           </p>
@@ -142,8 +142,8 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
             {...toastCloseAttributes(previousToastState)}
             class={CLOSE_CLASS}
             data-state={state.previousOpen ? 'open' : 'closed'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$button_data_state_derive"
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$button_click_2"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$button_data_state_derive"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$button_click_2"
           >
             Dismiss
           </button>
@@ -152,10 +152,10 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           {...toastRootAttributes(activeToastState)}
           class={TOAST_CLASS + ' ' + TIMER_CLASS}
           data-state={state.activeOpen ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$div_data_state_derive_2"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$div_data_state_derive_2"
           hidden={!state.activeOpen}
-          data-bind:hidden="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$div_hidden_derive_2"
-          on:animationend="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$div_animationend"
+          data-bind:hidden="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$div_hidden_derive_2"
+          on:animationend="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$div_animationend"
         >
           <strong {...toastTitleAttributes({ id: 'gallery-toast-title' })} class={TITLE_CLASS}>
             Saved
@@ -163,14 +163,14 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           <p
             {...toastDescriptionAttributes({ id: 'gallery-toast-description' })}
             class={DESCRIPTION_CLASS}
-            data-bind="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$p_text_derive_2"
+            data-bind="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$p_text_derive_2"
           >
             {'Gallery settings update #' + state.activeCount}
           </p>
           <button
             {...toastActionAttributes({ ...activeToastState, actionValue: 'undo' })}
             class={ACTION_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$button_click_3"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$button_click_3"
           >
             Undo
           </button>
@@ -182,7 +182,7 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
             })}
             class={ACTION_CLASS}
             data-toast-cancel-dismiss=""
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$button_click_4"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$button_click_4"
           >
             Keep open
           </button>
@@ -190,8 +190,8 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
             {...toastCloseAttributes(activeToastState)}
             class={CLOSE_CLASS}
             data-state={state.activeOpen ? 'open' : 'closed'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$button_data_state_derive_2"
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$button_click_5"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$button_data_state_derive_2"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$button_click_5"
           >
             Dismiss
           </button>
@@ -204,14 +204,14 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
             })}
             class={ACTION_CLASS}
             data-toast-disabled-action=""
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$button_click_6"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$button_click_6"
           >
             Blocked
           </button>
         </div>
         <output
           data-demo-state="toast-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=7d639b35#GalleryToastDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=cc44eb80#GalleryToastDemo$output_text_derive"
         >
           {state.activeOpen ? 'open' : state.previousOpen ? 'stacked' : 'empty'}
         </output>

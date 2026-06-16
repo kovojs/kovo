@@ -1,20 +1,20 @@
-import type { DiagnosticCode } from '@jiso/core';
+import type { DiagnosticCode } from '@kovojs/core';
 
 import { compileComponentModule } from './compile.js';
-import { createJisoVitePlugin, type JisoVitePlugin, type JisoVitePluginOptions } from './vite.js';
+import { createKovoVitePlugin, type KovoVitePlugin, type KovoVitePluginOptions } from './vite.js';
 
 export type { DiagnosticCode };
 export type { CompilerDiagnostic, SourcePosition } from './diagnostics.js';
 export type { QueryPlanBootstrapInput, QueryPlanBootstrapOptions } from './emit/bootstrap.js';
 export { emitQueryPlanBootstrapModule } from './emit/bootstrap.js';
 export type {
-  JisoViteDevServer,
-  JisoViteDiagnosticReporter,
-  JisoViteMiddleware,
-  JisoViteModuleDiagnosticReport,
-  JisoViteModuleDiagnosticReporter,
-  JisoVitePlugin,
-  JisoVitePluginOptions,
+  KovoViteDevServer,
+  KovoViteDiagnosticReporter,
+  KovoViteMiddleware,
+  KovoViteModuleDiagnosticReport,
+  KovoViteModuleDiagnosticReporter,
+  KovoVitePlugin,
+  KovoVitePluginOptions,
 } from './vite.js';
 export type { PlatformSubstitution } from './lower/platform.js';
 export type {
@@ -64,6 +64,6 @@ export {
 } from './compile.js';
 export { createEmptyCompileResult, queryShapesFromFacts } from './types.js';
 
-export function jisoVitePlugin(options: JisoVitePluginOptions = {}): JisoVitePlugin {
-  return createJisoVitePlugin(compileComponentModule, options);
+export function kovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlugin {
+  return createKovoVitePlugin(compileComponentModule, options);
 }

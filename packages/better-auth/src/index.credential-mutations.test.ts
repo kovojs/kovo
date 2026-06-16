@@ -1,4 +1,4 @@
-import { runMutation } from '@jiso/server';
+import { runMutation } from '@kovojs/server';
 import { describe, expect, it } from 'vitest';
 import {
   betterAuthSignInEmailMutation,
@@ -45,8 +45,8 @@ describe('credential mutation helpers', () => {
       ok: true,
       responseHeaders: {
         'Set-Cookie': [
-          'jiso_session=session-1; Path=/; HttpOnly; SameSite=Lax',
-          'jiso_session_data=user-1; Path=/; HttpOnly; SameSite=Lax',
+          'kovo_session=session-1; Path=/; HttpOnly; SameSite=Lax',
+          'kovo_session_data=user-1; Path=/; HttpOnly; SameSite=Lax',
         ],
       },
       value: {
@@ -100,7 +100,7 @@ describe('credential mutation helpers', () => {
     ).resolves.toMatchObject({
       ok: true,
       responseHeaders: {
-        'Set-Cookie': ['jiso_session=session-2; Path=/; HttpOnly; SameSite=Lax'],
+        'Set-Cookie': ['kovo_session=session-2; Path=/; HttpOnly; SameSite=Lax'],
       },
       value: {
         redirectTo: '/welcome',
@@ -139,7 +139,7 @@ describe('credential mutation helpers', () => {
 
   it('wraps signOut and forwards clearing cookies', async () => {
     const auth = new FakeCredentialAuth();
-    const headers = requestHeaders('jiso_session=session-1');
+    const headers = requestHeaders('kovo_session=session-1');
     const signOut = betterAuthSignOutMutation(auth, { csrf: false });
 
     const result = await runMutation(signOut, {}, { headers });
@@ -152,8 +152,8 @@ describe('credential mutation helpers', () => {
       ok: true,
       responseHeaders: {
         'Set-Cookie': [
-          'jiso_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
-          'jiso_session_data=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+          'kovo_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+          'kovo_session_data=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
         ],
       },
       value: {
@@ -190,11 +190,11 @@ describe('credential mutation helpers', () => {
 
   it('exposes small helpers for Better Auth response quirks', () => {
     const headers = responseWithCookies([
-      'jiso_session=session-1; Path=/; HttpOnly; SameSite=Lax',
+      'kovo_session=session-1; Path=/; HttpOnly; SameSite=Lax',
     ]).headers;
 
     expect(getBetterAuthSetCookie(headers)).toEqual([
-      'jiso_session=session-1; Path=/; HttpOnly; SameSite=Lax',
+      'kovo_session=session-1; Path=/; HttpOnly; SameSite=Lax',
     ]);
     expect(isBetterAuthCredentialFailureError(new AuthApiError(403, 'Forbidden'))).toBe(true);
     expect(isBetterAuthCredentialFailureError(new AuthApiError(500, 'Broken'))).toBe(false);

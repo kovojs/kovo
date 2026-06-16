@@ -7,22 +7,22 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import { route } from './route.js';
 import { StaticExportError } from './static-export-diagnostics.js';
-import { createJisoAppShellViteBuild } from './vite-build.js';
+import { createKovoAppShellViteBuild } from './vite-build.js';
 import {
-  jisoAppShellViteBuildDryRunStaticExportOptions,
-  jisoAppShellViteBuildOutputStaticExportPlan,
-  jisoAppShellViteBuildWriteStaticExportOptions,
-  jisoAppShellViteManifestFileDryRunStaticExportOptions,
-  jisoAppShellViteManifestFileWriteStaticExportOptions,
+  kovoAppShellViteBuildDryRunStaticExportOptions,
+  kovoAppShellViteBuildOutputStaticExportPlan,
+  kovoAppShellViteBuildWriteStaticExportOptions,
+  kovoAppShellViteManifestFileDryRunStaticExportOptions,
+  kovoAppShellViteManifestFileWriteStaticExportOptions,
 } from './vite-static-export-options.js';
 
 describe('server app shell Vite static export options boundary', () => {
   it('normalizes build static-export options without changing the replay contract', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-static-export-options-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-static-export-options-out-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-static-export-options-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-static-export-options-out-'));
 
     try {
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/shop', {
@@ -48,7 +48,7 @@ describe('server app shell Vite static export options boundary', () => {
       };
 
       expect(
-        jisoAppShellViteBuildWriteStaticExportOptions(build, {
+        kovoAppShellViteBuildWriteStaticExportOptions(build, {
           assets: [robots],
           distDir,
           onNonExportable: 'skip',
@@ -75,7 +75,7 @@ describe('server app shell Vite static export options boundary', () => {
       });
 
       expect(
-        jisoAppShellViteBuildDryRunStaticExportOptions(build, {
+        kovoAppShellViteBuildDryRunStaticExportOptions(build, {
           assets: [robots],
           distDir,
         }),
@@ -103,11 +103,11 @@ describe('server app shell Vite static export options boundary', () => {
   });
 
   it('projects Vite build-output static export through one observable asset plan', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-output-export-options-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-output-export-options-out-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-output-export-options-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-output-export-options-out-'));
 
     try {
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/cart', {
@@ -133,7 +133,7 @@ describe('server app shell Vite static export options boundary', () => {
         source: join(distDir, 'public/robots.txt'),
       };
 
-      const plan = jisoAppShellViteBuildOutputStaticExportPlan(
+      const plan = kovoAppShellViteBuildOutputStaticExportPlan(
         build,
         {
           assets: [robots],
@@ -171,8 +171,8 @@ describe('server app shell Vite static export options boundary', () => {
   });
 
   it('projects manifest-file options without leaking build-only fields', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-manifest-export-options-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-manifest-export-options-out-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-manifest-export-options-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-manifest-export-options-out-'));
 
     try {
       const app = createApp({
@@ -197,7 +197,7 @@ describe('server app shell Vite static export options boundary', () => {
       };
 
       expect(
-        jisoAppShellViteManifestFileWriteStaticExportOptions({
+        kovoAppShellViteManifestFileWriteStaticExportOptions({
           app,
           assets: [robots],
           base: '/docs/',
@@ -228,7 +228,7 @@ describe('server app shell Vite static export options boundary', () => {
           '/docs': 'src/docs.client.ts',
         },
       };
-      expect(jisoAppShellViteManifestFileDryRunStaticExportOptions(dryRunOptions)).toEqual({
+      expect(kovoAppShellViteManifestFileDryRunStaticExportOptions(dryRunOptions)).toEqual({
         distDir,
         onNonExportable: 'skip',
       });
@@ -241,8 +241,8 @@ describe('server app shell Vite static export options boundary', () => {
   });
 
   it('rejects write targets on dry-run inventory option helpers', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-dry-run-reject-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-dry-run-reject-out-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-dry-run-reject-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-dry-run-reject-out-'));
 
     try {
       const app = createApp({
@@ -254,15 +254,15 @@ describe('server app shell Vite static export options boundary', () => {
           }),
         ],
       });
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app,
         manifest: {},
       });
       const expectedError = {
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining(
               'Vite app-shell static export inventory/manifest tasks are dry runs and must not receive outDir.',
             ),
@@ -273,10 +273,10 @@ describe('server app shell Vite static export options boundary', () => {
 
       let buildError: unknown;
       try {
-        jisoAppShellViteBuildDryRunStaticExportOptions(build, {
+        kovoAppShellViteBuildDryRunStaticExportOptions(build, {
           distDir,
           outDir,
-        } as unknown as Parameters<typeof jisoAppShellViteBuildDryRunStaticExportOptions>[1]);
+        } as unknown as Parameters<typeof kovoAppShellViteBuildDryRunStaticExportOptions>[1]);
       } catch (error) {
         buildError = error;
       }
@@ -285,12 +285,12 @@ describe('server app shell Vite static export options boundary', () => {
 
       let manifestFileError: unknown;
       try {
-        jisoAppShellViteManifestFileDryRunStaticExportOptions({
+        kovoAppShellViteManifestFileDryRunStaticExportOptions({
           app,
           distDir,
           outDir,
         } as unknown as Parameters<
-          typeof jisoAppShellViteManifestFileDryRunStaticExportOptions
+          typeof kovoAppShellViteManifestFileDryRunStaticExportOptions
         >[0]);
       } catch (error) {
         manifestFileError = error;
@@ -306,12 +306,12 @@ describe('server app shell Vite static export options boundary', () => {
   });
 
   it('rejects build-only distDir on plugin-time static export options', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-output-reject-dist-'));
-    const staleDistDir = await mkdtemp(join(tmpdir(), 'jiso-vite-output-reject-stale-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-output-reject-out-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-output-reject-dist-'));
+    const staleDistDir = await mkdtemp(join(tmpdir(), 'kovo-vite-output-reject-stale-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-output-reject-out-'));
 
     try {
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/plugin', {
@@ -334,12 +334,12 @@ describe('server app shell Vite static export options boundary', () => {
 
       let error: unknown;
       try {
-        jisoAppShellViteBuildOutputStaticExportPlan(
+        kovoAppShellViteBuildOutputStaticExportPlan(
           build,
           {
             distDir: staleDistDir,
             outDir,
-          } as unknown as Parameters<typeof jisoAppShellViteBuildOutputStaticExportPlan>[1],
+          } as unknown as Parameters<typeof kovoAppShellViteBuildOutputStaticExportPlan>[1],
           distDir,
         );
       } catch (caught) {
@@ -348,10 +348,10 @@ describe('server app shell Vite static export options boundary', () => {
 
       expect(error).toBeInstanceOf(StaticExportError);
       expect(error).toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining(
               'Vite app-shell plugin/build-output static export uses the Vite output directory as its asset root and must not receive distDir.',
             ),

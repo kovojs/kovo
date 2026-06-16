@@ -6,7 +6,7 @@ order: 9
 
 # Compiler internals
 
-You don't need this page to build a Jiso app — everywhere else in these docs, and in your codebase,
+You don't need this page to build a Kovo app — everywhere else in these docs, and in your codebase,
 you author components in TSX. Read it when you want to see what the compiler did with that TSX:
 reviewing emitted output, debugging a stamp, ejecting a component, or building tooling.
 
@@ -23,7 +23,7 @@ cart-badge.tsx ──► cart-badge.server.js   (render with derived stamps)
 ```
 
 Everything below is real compiler output, regenerated from the compiler on every build of this site,
-so it can't drift from what `@jiso/compiler` actually emits.
+so it can't drift from what `@kovojs/compiler` actually emits.
 
 ## What you write
 
@@ -47,7 +47,7 @@ Three derivations did the work:
   refactors.
 - `{cart.count}` became **`data-bind="cart.count"`** — a typed path into the `cart` query's result
   shape, checked at compile time.
-- The query dependency became **`fw-deps="cart"`** and the island state a serialized **`fw-state`**
+- The query dependency became **`kovo-deps="cart"`** and the island state a serialized **`kovo-state`**
   stamp, which is how mutations later know this element wants fresh fragments.
 
 You never write these stamps. Hand-writing one that duplicates the derivation, or drifts from it, is
@@ -64,8 +64,8 @@ what the closure would have compiled to and how to fix it.
 
 ## Emitted output is valid source
 
-The emitted form isn't a private artifact — it's authorable Jiso source. The marker comment
-`// @jiso-ir` is informational, not load-bearing. Two consequences follow:
+The emitted form isn't a private artifact — it's authorable Kovo source. The marker comment
+`// @kovojs-ir` is informational, not load-bearing. Two consequences follow:
 
 1. **The fixpoint.** Compiling the compiler's own output is a no-op, byte-for-byte, and CI enforces it
    with `assertFixpoint`. If a compiler change ever makes lowering non-idempotent, the gate fails —
@@ -90,19 +90,19 @@ functions that render full pages without diverging from them.
 - The generated `registries.d.ts` is where declare-once typing comes from: handler modules, fragment
   targets, query update plans, and route/mutation registries all land as interface augmentations,
   which is why renames propagate as type errors instead of stale strings.
-- `fw explain component <Name> graph.json` shows the compiler's view of any component — queries
+- `kovo explain component <Name> graph.json` shows the compiler's view of any component — queries
   consumed, fragments targeted, handlers exported — without reading the emitted files at all. See
-  [Reading fw check & fw explain](/guides/fw-explain/).
+  [Reading kovo check & kovo explain](/guides/kovo-explain/).
 
 <details>
 <summary>Spec & diagnostics</summary>
 
 The TSX-to-`{server,client}.js` pipeline and the 1:1 mapping: SPEC §5.1, §5.2. Derived stamps
-(`fw-deps`, `data-bind`, `fw-state`): SPEC §4.8; typed binding paths: SPEC §6.2; the mutation
-fragment contract behind `fw-state`: SPEC §9.1. A hand-written stamp that drifts from the derivation
-is **FW222**; one that duplicates it is **FW223** (SPEC §11.3). A handler reaching outside its allowed
-capture channels (`ctx`, `data-p-*`, module scope) is **FW201** (SPEC §4.3). Source-derived,
-unmanglable handler names: Constitution #1. Emitted output as authorable source, the `// @jiso-ir`
+(`kovo-deps`, `data-bind`, `kovo-state`): SPEC §4.8; typed binding paths: SPEC §6.2; the mutation
+fragment contract behind `kovo-state`: SPEC §9.1. A hand-written stamp that drifts from the derivation
+is **KV222**; one that duplicates it is **KV223** (SPEC §11.3). A handler reaching outside its allowed
+capture channels (`ctx`, `data-p-*`, module scope) is **KV201** (SPEC §4.3). Source-derived,
+unmanglable handler names: Constitution #1. Emitted output as authorable source, the `// @kovojs-ir`
 marker, the fixpoint (`assertFixpoint`), and ejection: Constitution #3, SPEC §5.2. Render equivalence
 (`assertRenderEquivalence`): SPEC §5.2. Declare-once registry typing: SPEC §6.1. Immutable versioned
 module URLs retained across deploys: SPEC §6.6.

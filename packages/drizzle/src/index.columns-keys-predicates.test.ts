@@ -4,14 +4,14 @@ import {
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
   extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
-} from '@jiso/drizzle/static';
+} from '@kovojs/drizzle/static';
 import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
 
 const extractQueryFactsFromProject = (
   options: Parameters<typeof extractQueryFactsFromProjectBase>[0],
 ) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 
-describe('@jiso/drizzle touch graph helpers', () => {
+describe('@kovojs/drizzle touch graph helpers', () => {
   it('derives project query shapes from Drizzle column builders instead of selected aliases', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -25,7 +25,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
               metadata: json("metadata"),
               name: text("name"),
               stock: integer("stock").notNull(),
-            }, jiso({ domain: "product", key: "id" }));
+            }, kovo({ domain: "product", key: "id" }));
 
             export const productQuery = query("product", {
               load(_input, db: PgDatabase) {
@@ -79,11 +79,11 @@ describe('@jiso/drizzle touch graph helpers', () => {
             export const auditLog = pgTable("audit_log", {
               id: text("id").primaryKey(),
               message: text("message").notNull(),
-            }, jiso({ domain: "audit", key: "id" }));
+            }, kovo({ domain: "audit", key: "id" }));
             export const products = pgTable("products", {
               id: text("id").primaryKey(),
               name: text("name").notNull(),
-            }, jiso({ domain: "product", key: "id" }));
+            }, kovo({ domain: "product", key: "id" }));
 
             export const productQuery = query("product", {
               async load(_input, db: PgDatabase) {
@@ -117,11 +117,11 @@ describe('@jiso/drizzle touch graph helpers', () => {
             export const products = pgTable("products", {
               id: text("id"),
               name: text("name").notNull(),
-            }, jiso({ domain: "product", key: "id" }));
+            }, kovo({ domain: "product", key: "id" }));
             export const reviews = pgTable("reviews", {
               productId: text("product_id"),
               rating: integer("rating"),
-            }, jiso({ domain: "review", key: "productId" }));
+            }, kovo({ domain: "review", key: "productId" }));
 
             export const productQuery = query("product", {
               load(_input, db: PgDatabase) {
@@ -166,11 +166,11 @@ describe('@jiso/drizzle touch graph helpers', () => {
           export const products = pgTable("products", {
             id: text("id"),
             name: text("name").notNull(),
-          }, jiso({ domain: "product", key: "id" }));
+          }, kovo({ domain: "product", key: "id" }));
           export const reviews = pgTable("reviews", {
             productId: text("product_id"),
             rating: integer("rating"),
-          }, jiso({ domain: "review", key: "productId" }));
+          }, kovo({ domain: "review", key: "productId" }));
 
           export const reviewQuery = query("review", {
             load(_input, db: PgDatabase) {
@@ -220,11 +220,11 @@ describe('@jiso/drizzle touch graph helpers', () => {
             export const products = pgTable("products", {
               id: text("id"),
               name: text("name").notNull(),
-            }, jiso({ domain: "product", key: "id" }));
+            }, kovo({ domain: "product", key: "id" }));
             export const reviews = pgTable("reviews", {
               productId: text("product_id"),
               rating: integer("rating").notNull(),
-            }, jiso({ domain: "review", key: "productId" }));
+            }, kovo({ domain: "review", key: "productId" }));
 
             export const productReviewQuery = query("productReview", {
               load(_input, db: PgDatabase) {
@@ -272,10 +272,10 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { eq } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
-            'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
-            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const prices = pgTable("prices", {}, kovo({ domain: "price", key: "productId" }));',
+            'export const vendors = pgTable("vendors", {}, kovo({ domain: "vendor", key: "id" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, kovo({ domain: "snapshot", key: "productId" }));',
             '',
             'export async function importSnapshots(db: PgDatabase) {',
             '  await db.insert(snapshots).select(db.select().from(products).innerJoin(vendors, eq(vendors.id, products.vendorId)));',
@@ -326,7 +326,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
     expect(diagnosticsForTouchGraph(graph)).toEqual([
       {
-        code: 'FW409',
+        code: 'KV409',
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'product.domain.ts:11',
@@ -348,9 +348,9 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { eq, gt, sql } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
-            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const prices = pgTable("prices", {}, kovo({ domain: "price", key: "productId" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, kovo({ domain: "snapshot", key: "productId" }));',
             '',
             'export async function syncSnapshots(db: PgDatabase, productId: string) {',
             '  await db["insert"](snapshots).select(db.select().from(products).where(gt(sql.raw(".from(prices)"), 0)));',
@@ -406,10 +406,10 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { eq } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-            'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
-            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const vendors = pgTable("vendors", {}, kovo({ domain: "vendor", key: "id" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, kovo({ domain: "snapshot", key: "productId" }));',
             '',
             'async function insertCartItem(db: PgDatabase, input: { productId: string }) {',
             '  await db.insert(cartItems).values({ productId: input.productId });',
@@ -489,7 +489,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+            'export const auditLog = pgTable("audit_log", {}, kovo({ domain: "audit", key: "productId" }));',
             '',
             'async function writeAudit(db: PgDatabase, productId: string) {',
             '  await db.insert(auditLog).values({ productId });',
@@ -531,7 +531,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
             'async function insert(db: PgDatabase, productId: string) {',
             '  await db.insert(cartItems).values({ productId });',
@@ -561,8 +561,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-            'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
+            'export const auditLog = pgTable("audit_log", {}, kovo({ domain: "audit", key: "productId" }));',
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
             '  async function apply(writer: PgDatabase<any, any, any>) {',
@@ -603,8 +603,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
           fileName: 'cart.domain.ts',
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-            'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
+            'export const auditLog = pgTable("audit_log", {}, kovo({ domain: "audit", key: "productId" }));',
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
             '  async function writeAudit({ db: writer }: { db: PgDatabase<any, any, any> }) {',
@@ -644,8 +644,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-            'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
+            'export const auditLog = pgTable("audit_log", {}, kovo({ domain: "audit", key: "productId" }));',
             '',
             'export async function addItem(db: PgDatabase, productId: string) {',
             '  async function writeAudit(db: PgDatabase) {',
@@ -690,8 +690,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
             '}',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-            'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
+            'export const auditLog = pgTable("audit_log", {}, kovo({ domain: "audit", key: "productId" }));',
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, fake: FakeDb, productId: string) {',
             '  async function writeAudit(writer: PgDatabase<any, any, any>) {',
@@ -727,7 +727,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
             'async function insertCartItem(db: PgDatabase) {',
             '  await db.insert(cartItems).values({ productId: "p1" });',
@@ -763,8 +763,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { eq } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export async function updateProduct(db: PgDatabase, input: { id: string }, productId: string) {',
             '  await db.update(products).set({ reserved: true }).where(eq(products.id, input.id));',
@@ -801,7 +801,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export async function scrubPredicates(db: PgDatabase, id: string) {',
             '  await db.update(products).set({ note: ".where(eq(products.id, id))" });',
@@ -830,7 +830,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { gt, sql } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export async function scrubPredicate(db: PgDatabase, productId: string) {',
             '  await db.update(products).set({ reserved: true }).where(gt(sql.raw("products.id"), productId));',
@@ -862,7 +862,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { eq } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export async function syncProducts(db: PgDatabase, productId: string) {',
             '  await db.update(products).set({ reserved: true })',
@@ -902,8 +902,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { eq } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const prices = pgTable("prices", {}, kovo({ domain: "price", key: "productId" }));',
             'export const auditLog = pgTable("audit_log", {});',
             '',
             'export async function syncProduct(db: PgDatabase, productId: string) {',
@@ -949,13 +949,13 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
     expect(diagnosticsForTouchGraph(graph)).toEqual([
       {
-        code: 'FW409',
+        code: 'KV409',
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'product.domain.ts:10',
       },
       {
-        code: 'FW409',
+        code: 'KV409',
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'product.domain.ts:11',
@@ -975,7 +975,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { eq, or } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export async function syncProducts(db: PgDatabase, primaryId: string, fallbackId: string) {',
             '  await db.update(products).set({ reserved: true }).where(or(eq(products.id, primaryId), eq(products.id, fallbackId)));',
@@ -1002,7 +1002,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
     expect(diagnosticsForTouchGraph(graph)).toEqual([
       {
-        code: 'FW409',
+        code: 'KV409',
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'product.domain.ts:7',
@@ -1022,7 +1022,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { and, eq } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id,tenantId" }));',
+            'export const users = pgTable("users", {}, kovo({ domain: "user", key: "id,tenantId" }));',
             '',
             'export async function syncUser(db: PgDatabase, id: string, tenantId: string) {',
             '  await db.update(users).set({ active: true }).where(and(eq(users.id, id), eq(users.tenantId, tenantId)));',
@@ -1061,7 +1061,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { eq } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export async function syncProduct(db: PgDatabase) {',
             '  const randomLocal = "p1";',
@@ -1089,7 +1089,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
     expect(diagnosticsForTouchGraph(graph)).toEqual([
       {
-        code: 'FW409',
+        code: 'KV409',
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'product.domain.ts:8',
@@ -1097,7 +1097,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     ]);
   });
 
-  it('marks direct non-equality predicates as FW409 degraded table-level invalidation', () => {
+  it('marks direct non-equality predicates as KV409 degraded table-level invalidation', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([
@@ -1109,8 +1109,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import { gt } from "drizzle-orm";',
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const prices = pgTable("prices", {}, kovo({ domain: "price", key: "productId" }));',
             '',
             'export async function syncProduct(db: PgDatabase, productId: string) {',
             '  await db.update(products).set({ reserved: true }).where(gt(products.id, productId));',
@@ -1148,13 +1148,13 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
     expect(diagnosticsForTouchGraph(graph)).toEqual([
       {
-        code: 'FW409',
+        code: 'KV409',
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'product.domain.ts:8',
       },
       {
-        code: 'FW409',
+        code: 'KV409',
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'product.domain.ts:9',
@@ -1174,10 +1174,10 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'export const prices = pgTable("prices", {',
             '  amount: integer("amount").notNull(),',
             '  productId: text("product_id").notNull(),',
-            '}, jiso({ domain: "price", key: "productId" }));',
+            '}, kovo({ domain: "price", key: "productId" }));',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, jiso({ domain: "product", key: "id" }));',
+            '}, kovo({ domain: "product", key: "id" }));',
             'const priceAlias = alias(prices, "pr");',
             'const productAlias = alias(products, "p");',
             '',
@@ -1222,7 +1222,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
     expect(diagnosticsForTouchGraph(graph)).toEqual([
       {
-        code: 'FW409',
+        code: 'KV409',
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'packages/drizzle/src/product.domain.ts:16',
@@ -1239,8 +1239,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.schema.ts',
           source: `
-          const hiddenProducts = pgTable("hidden_products", {}, jiso({ domain: "hidden", key: "id" }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          const hiddenProducts = pgTable("hidden_products", {}, kovo({ domain: "hidden", key: "id" }));
+          export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));
         `,
         },
         {
@@ -1264,7 +1264,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'product.domain.ts:6',
           },
@@ -1283,7 +1283,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         {
           fileName: 'schema.ts',
           source: `
-            export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+            export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));
           `,
         },
         {
@@ -1339,7 +1339,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         {
           fileName: 'schema.ts',
           source: `
-            export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+            export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));
           `,
         },
         {
@@ -1366,12 +1366,12 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'product.domain.ts:8',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'product.domain.ts:9',
           },

@@ -2,10 +2,10 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { route } from '@jiso/server';
-import { createMemoryVersionedClientModuleRegistry } from '@jiso/server/app-shell/client-modules';
-import { createApp, createRequestHandler } from '@jiso/server/app-shell/core';
-import { toNodeHandler } from '@jiso/server/app-shell/node';
+import { route } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
+import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
+import { toNodeHandler } from '@kovojs/server/app-shell/node';
 import ts from 'typescript';
 
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
@@ -17,10 +17,10 @@ const headlessUiSourceRoot = fileURLToPath(
 const galleryInteractiveClientModules = createMemoryVersionedClientModuleRegistry();
 
 // SPEC.md §4.4: load-bearing import maps are a non-goal — "the compiler and server emit full module
-// URLs". Generated client modules import tiny declaration helpers from `@jiso/runtime`, a bare
+// URLs". Generated client modules import tiny declaration helpers from `@kovojs/runtime`, a bare
 // specifier the browser cannot resolve. Serve a minimal runtime module at a resolvable /c/ URL and
 // rewrite the bare import to it so the static export is interactive without an import map.
-const galleryRuntimeModulePath = '/c/examples/gallery/src/generated/jiso-runtime.client.js';
+const galleryRuntimeModulePath = '/c/examples/gallery/src/generated/kovo-runtime.client.js';
 const galleryRuntimeModuleSource = [
   'export const derive = (inputs, run) => ({ inputs, run });',
   'export const handler = (fn) => fn;',
@@ -53,8 +53,8 @@ export const galleryInteractiveClientModuleHrefs = Object.freeze(
 
 export const galleryInteractiveRoute = route('/gallery/interactive', {
   meta: {
-    description: 'Compiled Jiso UI primitive demos with generated client handlers.',
-    title: 'Jiso Interactive Gallery',
+    description: 'Compiled Kovo UI primitive demos with generated client handlers.',
+    title: 'Kovo Interactive Gallery',
   },
   // Include the shared runtime module first so the static export writes it (the demo modules
   // import it), then the primitive modules imported by generated handlers, before demo handlers.
@@ -156,13 +156,13 @@ function readGeneratedInteractiveArtifact(fileName: string): string {
 // generated client module graph without an import map.
 function rewriteGalleryClientImports(source: string): string {
   return source
-    .replaceAll("from '@jiso/runtime';", `from '${galleryRuntimeModuleHref}';`)
+    .replaceAll("from '@kovojs/runtime';", `from '${galleryRuntimeModuleHref}';`)
     .replaceAll(
-      'from "@jiso/headless-ui/primitives";',
+      'from "@kovojs/headless-ui/primitives";',
       `from '${galleryHeadlessPrimitivesModuleHref}';`,
     )
     .replaceAll(
-      "from '@jiso/headless-ui/primitives';",
+      "from '@kovojs/headless-ui/primitives';",
       `from '${galleryHeadlessPrimitivesModuleHref}';`,
     );
 }

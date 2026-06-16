@@ -26,14 +26,14 @@ export async function exportCommerceStaticApp({
   try {
     const [appShellModule, coreModule, viteModule, staticExportModule] = await Promise.all([
       viteServer.ssrLoadModule('/src/app-shell.ts'),
-      viteServer.ssrLoadModule('@jiso/server/app-shell/core'),
-      viteServer.ssrLoadModule('@jiso/server/app-shell/vite'),
-      viteServer.ssrLoadModule('@jiso/server/app-shell/static-export'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/core'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/static-export'),
     ]);
-    const { isJisoApp } = coreModule;
+    const { isKovoApp } = coreModule;
     const {
-      exportJisoAppShellViteBuildWithManifestFromManifestFile,
-      jisoAppShellViteManifestStylesheetHrefFromFile,
+      exportKovoAppShellViteBuildWithManifestFromManifestFile,
+      kovoAppShellViteManifestStylesheetHrefFromFile,
     } = viteModule;
     const {
       formatStaticExportDiagnostic,
@@ -41,32 +41,32 @@ export async function exportCommerceStaticApp({
       isStaticExportDiagnosticError,
     } = staticExportModule;
 
-    if (typeof exportJisoAppShellViteBuildWithManifestFromManifestFile !== 'function') {
+    if (typeof exportKovoAppShellViteBuildWithManifestFromManifestFile !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildWithManifestFromManifestFile.',
+        '@kovojs/server/app-shell/vite must export exportKovoAppShellViteBuildWithManifestFromManifestFile.',
       );
     }
-    if (typeof isJisoApp !== 'function') {
-      throw new Error('@jiso/server/app-shell/core must export isJisoApp.');
+    if (typeof isKovoApp !== 'function') {
+      throw new Error('@kovojs/server/app-shell/core must export isKovoApp.');
     }
     if (typeof formatStaticExportDiagnostic !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/static-export must export formatStaticExportDiagnostic.',
+        '@kovojs/server/app-shell/static-export must export formatStaticExportDiagnostic.',
       );
     }
     if (typeof formatStaticExportDiagnostics !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/static-export must export formatStaticExportDiagnostics.',
+        '@kovojs/server/app-shell/static-export must export formatStaticExportDiagnostics.',
       );
     }
     if (typeof isStaticExportDiagnosticError !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/static-export must export isStaticExportDiagnosticError.',
+        '@kovojs/server/app-shell/static-export must export isStaticExportDiagnosticError.',
       );
     }
-    if (typeof jisoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
+    if (typeof kovoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/vite must export jisoAppShellViteManifestStylesheetHrefFromFile.',
+        '@kovojs/server/app-shell/vite must export kovoAppShellViteManifestStylesheetHrefFromFile.',
       );
     }
     staticExportTaskHelpers = {
@@ -77,15 +77,15 @@ export async function exportCommerceStaticApp({
 
     const app = appShellModule.commerceStaticExportApp;
 
-    if (!isJisoApp(app)) {
+    if (!isKovoApp(app)) {
       throw new Error('src/app-shell.ts must export commerceStaticExportApp for public export.');
     }
 
-    await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
+    await kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
     // SPEC.md section 9.5: static export replays the public app shell and copies
     // the Vite manifest bytes through the public app-shell export bridge.
-    const { manifest, result } = await exportJisoAppShellViteBuildWithManifestFromManifestFile({
+    const { manifest, result } = await exportKovoAppShellViteBuildWithManifestFromManifestFile({
       app,
       distDir: builtDistDir,
       manifestFile,

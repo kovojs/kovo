@@ -1,7 +1,11 @@
-import { route, type CsrfValidationOptions, type ServerErrorHandler } from '@jiso/server';
-import { createMemoryVersionedClientModuleRegistry } from '@jiso/server/app-shell/client-modules';
-import { createApp, createRequestHandler, type RequestHandler } from '@jiso/server/app-shell/core';
-import { toNodeHandler } from '@jiso/server/app-shell/node';
+import { route, type CsrfValidationOptions, type ServerErrorHandler } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
+import {
+  createApp,
+  createRequestHandler,
+  type RequestHandler,
+} from '@kovojs/server/app-shell/core';
+import { toNodeHandler } from '@kovojs/server/app-shell/node';
 
 import {
   accountRoute,
@@ -50,14 +54,14 @@ const shellReferenceAuthCsrf: CsrfValidationOptions<Request> = {
 
 export const referencePublicRoute = route('/', {
   meta: {
-    description: 'A public Jiso reference app shell exported through synthetic replay.',
-    title: 'Jiso Reference Public Shell',
+    description: 'A public Kovo reference app shell exported through synthetic replay.',
+    title: 'Kovo Reference Public Shell',
   },
   modulepreloads: [referencePublicClientModuleHref],
   page() {
     return [
       '<section data-reference-public-shell>',
-      '<h1>Jiso Reference App</h1>',
+      '<h1>Kovo Reference App</h1>',
       '<p>Public route exported by the shared request shell.</p>',
       `<button type="button" on:click="${referencePublicClientModuleHref}#Reference$markReady">Check shell</button>`,
       '<output id="reference-status">Waiting for client module.</output>',
@@ -68,8 +72,8 @@ export const referencePublicRoute = route('/', {
 
 export const referenceLoginRoute = route('/login', {
   meta: {
-    description: 'Sign in to the Jiso reference app.',
-    title: 'Jiso Reference Sign In',
+    description: 'Sign in to the Kovo reference app.',
+    title: 'Kovo Reference Sign In',
   },
   page(context, request: ReferenceShellRequest) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/account';

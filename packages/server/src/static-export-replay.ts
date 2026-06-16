@@ -1,4 +1,4 @@
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
@@ -15,7 +15,7 @@ import {
 } from './static-export-types.js';
 
 export interface StaticExportAppReplayOptions {
-  app: JisoApp;
+  app: KovoApp;
   onNonExportable?: StaticExportNonExportablePolicy;
   origin?: string;
 }

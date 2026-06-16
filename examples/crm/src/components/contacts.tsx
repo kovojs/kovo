@@ -1,4 +1,4 @@
-/** @jsxImportSource @jiso/server */
+/** @jsxImportSource @kovojs/server */
 import type { ContactRow } from '../queries.js';
 import { renderCrmShell } from './chrome.js';
 

@@ -5,19 +5,19 @@ import { hydrateQueryScripts } from './query-script-hydration.js';
 import { createQueryStore } from './query-store.js';
 
 // SPEC.md §9.1/§9.4: direct `hydrateQueryScripts` decodes server-authored
-// fw-query scripts (including canonical instance keys) into the one runtime
+// kovo-query scripts (including canonical instance keys) into the one runtime
 // query apply path, in parity with later mutation/typed-read chunks. The
 // stateful ledger retry/visible-return seam lives in the sibling
 // query-script-hydration-ledger.test.ts file.
 describe('query script hydration direct', () => {
-  it('hydrates fw-query scripts and immediately runs subscribed update plans', () => {
+  it('hydrates kovo-query scripts and immediately runs subscribed update plans', () => {
     const store = createQueryStore();
     const plan = vi.fn();
 
     store.subscribe('cart', plan);
     const hydrated = hydrateQueryScripts(store, [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":2}',
       },
     ]);
@@ -36,11 +36,11 @@ describe('query script hydration direct', () => {
     store.subscribe('product', p2Plan, 'p2');
     const hydrated = hydrateQueryScripts(store, [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'product' : name === 'key' ? 'p1' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'product' : name === 'key' ? 'p1' : null),
         textContent: '{"stock":4}',
       },
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'product' : name === 'key' ? 'p2' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'product' : name === 'key' ? 'p2' : null),
         textContent: '{"stock":9}',
       },
     ]);
@@ -64,17 +64,17 @@ describe('query script hydration direct', () => {
     store.subscribe('product', p2Plan, 'p2');
     const hydrated = hydrateQueryScripts(store, [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'product:p1' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'product:p1' : null),
         textContent: '{"stock":4}',
       },
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'product:p2' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'product:p2' : null),
         textContent: '{"stock":9}',
       },
     ]);
 
     // SPEC.md §9.4/§10.2: server-authored hydration scripts may encode the
-    // canonical instance key directly in `fw-query`, matching typed-read URLs.
+    // canonical instance key directly in `kovo-query`, matching typed-read URLs.
     expect(hydrated).toEqual(['product:p1', 'product:p2']);
     expect(store.get('product', 'p1')).toEqual({ stock: 4 });
     expect(store.get('product', 'p2')).toEqual({ stock: 9 });
@@ -94,7 +94,7 @@ describe('query script hydration direct', () => {
 
     const hydrated = hydrateQueryScripts(hydratedStore, [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'product' : name === 'key' ? 'p1' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'product' : name === 'key' ? 'p1' : null),
         textContent: '{"stock":4}',
       },
     ]);
@@ -117,7 +117,7 @@ describe('query script hydration direct', () => {
     expect(appliedPlan).toHaveBeenCalledWith({ stock: 4 });
   });
 
-  it('returns only successfully hydrated fw-query scripts', () => {
+  it('returns only successfully hydrated kovo-query scripts', () => {
     const store = createQueryStore();
     const onError = vi.fn();
 
@@ -125,11 +125,11 @@ describe('query script hydration direct', () => {
       store,
       [
         {
-          getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+          getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
           textContent: '{"count":1}',
         },
         {
-          getAttribute: (name) => (name === 'fw-query' ? 'inventory' : null),
+          getAttribute: (name) => (name === 'kovo-query' ? 'inventory' : null),
           textContent: '{',
         },
       ],
@@ -141,7 +141,7 @@ describe('query script hydration direct', () => {
     expect(store.get('inventory')).toBeUndefined();
     expect(onError).toHaveBeenCalledTimes(1);
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
-      'Malformed JSON in fw-query inventory',
+      'Malformed JSON in kovo-query inventory',
     );
   });
 
@@ -157,11 +157,11 @@ describe('query script hydration direct', () => {
       store,
       [
         {
-          getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+          getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
           textContent: '{"count":1}',
         },
         {
-          getAttribute: (name) => (name === 'fw-query' ? 'product:p1' : null),
+          getAttribute: (name) => (name === 'kovo-query' ? 'product:p1' : null),
           textContent: '{"stock":9}',
         },
       ],

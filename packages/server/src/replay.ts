@@ -150,7 +150,7 @@ export function mutationReplayContext<Request, Response extends MutationReplayRe
     // Security finding M4: fold the mutation key into the replay scope so
     // idempotency is per-(session, mutation, idem). Without this, one mutation's
     // cached response/Set-Cookie could be replayed under a different mutation
-    // that happened to share a session and FW-Idem.
+    // that happened to share a session and Kovo-Idem.
     scope: composeMutationReplayScope(sessionScope, wireRequest.mutationKey),
   };
 }

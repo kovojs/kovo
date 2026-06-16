@@ -7,7 +7,7 @@ import {
 } from './query.js';
 import { methodNotAllowedWebResponse, routeResponseToWebResponse } from './response.js';
 import type { ShellDispatchMatch } from './shell.js';
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 import {
   appRequestUrl,
   renderAppErrorDocumentResponse,
@@ -16,8 +16,8 @@ import {
 import { handleAppMutationRequest } from './app-mutation-request.js';
 
 export interface MatchedAppDispatchOptions {
-  app: JisoApp;
-  match: ShellDispatchMatch<JisoApp['routes'][number], JisoApp['endpoints'][number]>;
+  app: KovoApp;
+  match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>;
   request: Request;
   url: URL;
 }

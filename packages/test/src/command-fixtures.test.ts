@@ -31,22 +31,22 @@ import {
   workflowStepCommands,
 } from './command-fixtures.js';
 
-describe('@jiso/test command fixtures', () => {
+describe('@kovojs/test command fixtures', () => {
   it('turns shell-free command sequences into argv facts', () => {
     expect(
-      commandSequence('vp run fw-check && pnpm --filter @jiso/conformance-auth-spike test'),
+      commandSequence('vp run kovo-check && pnpm --filter @kovojs/conformance-auth-spike test'),
     ).toEqual([
       {
-        args: ['run', 'fw-check'],
-        argv: ['vp', 'run', 'fw-check'],
+        args: ['run', 'kovo-check'],
+        argv: ['vp', 'run', 'kovo-check'],
         executable: 'vp',
-        raw: 'vp run fw-check',
+        raw: 'vp run kovo-check',
       },
       {
-        args: ['--filter', '@jiso/conformance-auth-spike', 'test'],
-        argv: ['pnpm', '--filter', '@jiso/conformance-auth-spike', 'test'],
+        args: ['--filter', '@kovojs/conformance-auth-spike', 'test'],
+        argv: ['pnpm', '--filter', '@kovojs/conformance-auth-spike', 'test'],
         executable: 'pnpm',
-        raw: 'pnpm --filter @jiso/conformance-auth-spike test',
+        raw: 'pnpm --filter @kovojs/conformance-auth-spike test',
       },
     ]);
   });
@@ -54,10 +54,10 @@ describe('@jiso/test command fixtures', () => {
   it('derives command prefixes through parsed command facts', () => {
     expect(
       commandSequenceWithoutLast(
-        'pnpm --filter @jiso/one test && pnpm --filter @jiso/two test && pnpm --filter @jiso/three test',
+        'pnpm --filter @kovojs/one test && pnpm --filter @kovojs/two test && pnpm --filter @kovojs/three test',
       ),
-    ).toBe('pnpm --filter @jiso/one test && pnpm --filter @jiso/two test');
-    expect(() => commandSequenceWithoutLast('pnpm --filter @jiso/one test')).toThrow(
+    ).toBe('pnpm --filter @kovojs/one test && pnpm --filter @kovojs/two test');
+    expect(() => commandSequenceWithoutLast('pnpm --filter @kovojs/one test')).toThrow(
       'task command has more than one entry',
     );
   });
@@ -74,23 +74,25 @@ describe('@jiso/test command fixtures', () => {
       'check:build',
       'test:conformance',
     ]);
-    expect(vpRunTaskName('vp run fw-check')).toBe('fw-check');
-    expect(requiredVpRunTaskName('check:fw', { scripts: { 'check:fw': 'vp run fw-check' } })).toBe(
-      'fw-check',
-    );
+    expect(vpRunTaskName('vp run kovo-check')).toBe('kovo-check');
+    expect(
+      requiredVpRunTaskName('check:kovo', { scripts: { 'check:kovo': 'vp run kovo-check' } }),
+    ).toBe('kovo-check');
     expect(() => requiredVpRunTaskName('missing', { scripts: {} })).toThrow(
       'missing script exists',
     );
   });
 
-  it('asserts required task ordering without keeping local fw-check helpers', () => {
+  it('asserts required task ordering without keeping local kovo-check helpers', () => {
     expect(() =>
-      assertOrderedItems(['build', 'perf', 'fw-check'], 'build', 'fw-check'),
+      assertOrderedItems(['build', 'perf', 'kovo-check'], 'build', 'kovo-check'),
     ).not.toThrow();
-    expect(() => assertOrderedItems(['fw-check', 'perf'], 'perf', 'fw-check')).toThrow(
-      'perf precedes fw-check',
+    expect(() => assertOrderedItems(['kovo-check', 'perf'], 'perf', 'kovo-check')).toThrow(
+      'perf precedes kovo-check',
     );
-    expect(() => assertOrderedItems(['build'], 'build', 'fw-check')).toThrow('fw-check is present');
+    expect(() => assertOrderedItems(['build'], 'build', 'kovo-check')).toThrow(
+      'kovo-check is present',
+    );
   });
 
   it('normalizes line-oriented command output without local stdout parsers', () => {
@@ -146,16 +148,16 @@ describe('@jiso/test command fixtures', () => {
     expect(nodeTaskCommand('node scripts/p10-perf.mjs')).toEqual({
       modulePath: 'scripts/p10-perf.mjs',
     });
-    expect(pnpmFilterTestCommands('pnpm --filter @jiso/conformance-auth-spike test')).toEqual([
+    expect(pnpmFilterTestCommands('pnpm --filter @kovojs/conformance-auth-spike test')).toEqual([
       {
-        argv: ['pnpm', '--filter', '@jiso/conformance-auth-spike', 'test'],
-        packageName: '@jiso/conformance-auth-spike',
+        argv: ['pnpm', '--filter', '@kovojs/conformance-auth-spike', 'test'],
+        packageName: '@kovojs/conformance-auth-spike',
         script: 'test',
       },
     ]);
   });
 
-  it('collects workflow run and uses commands without exposing fw-check to YAML text scans', () => {
+  it('collects workflow run and uses commands without exposing kovo-check to YAML text scans', () => {
     const workflow = [
       'name: CI',
       'jobs:',
@@ -183,8 +185,8 @@ describe('@jiso/test command fixtures', () => {
         '  plugins: [tailwindcss()],',
         '  run: {',
         '    tasks: {',
-        "      'fw-check': {",
-        "        command: 'fw check graph.json',",
+        "      'kovo-check': {",
+        "        command: 'kovo check graph.json',",
         "        input: [{ pattern: 'src/**/*', base: 'workspace' }],",
         "        output: ['graph.json'],",
         '      },',
@@ -194,8 +196,8 @@ describe('@jiso/test command fixtures', () => {
       ].join('\n'),
     );
 
-    expect(config.run?.tasks?.['fw-check']).toEqual({
-      command: 'fw check graph.json',
+    expect(config.run?.tasks?.['kovo-check']).toEqual({
+      command: 'kovo check graph.json',
       input: [{ pattern: 'src/**/*', base: 'workspace' }],
       output: ['graph.json'],
     });
@@ -204,7 +206,7 @@ describe('@jiso/test command fixtures', () => {
   it('collects acceptance task facts from package scripts, CI, and Vite+ config', () => {
     const packageJson = {
       scripts: {
-        acceptance: 'pnpm run check:build && pnpm run test:browser && pnpm run check:fw',
+        acceptance: 'pnpm run check:build && pnpm run test:browser && pnpm run check:kovo',
         'test:browser': 'vp run browser',
       },
     };
@@ -212,7 +214,7 @@ describe('@jiso/test command fixtures', () => {
       'steps:',
       '  - run: vp run build',
       '  - run: vp run browser',
-      '  - run: vp run fw-check',
+      '  - run: vp run kovo-check',
     ].join('\n');
     const viteConfig = {
       run: {
@@ -237,8 +239,8 @@ describe('@jiso/test command fixtures', () => {
     });
 
     expect(facts).toMatchObject({
-      acceptanceScripts: ['check:build', 'test:browser', 'check:fw'],
-      ciTaskNames: ['build', 'browser', 'fw-check'],
+      acceptanceScripts: ['check:build', 'test:browser', 'check:kovo'],
+      ciTaskNames: ['build', 'browser', 'kovo-check'],
       presentInAcceptance: true,
       presentInCi: true,
       scriptName: 'test:browser',
@@ -266,11 +268,11 @@ describe('@jiso/test command fixtures', () => {
         'steps:',
         '  - run: vp run build',
         '  - run: vp run browser',
-        '  - run: vp run fw-check',
+        '  - run: vp run kovo-check',
       ].join('\n'),
       packageJson: {
         scripts: {
-          acceptance: 'pnpm run check:build && pnpm run test:browser && pnpm run check:fw',
+          acceptance: 'pnpm run check:build && pnpm run test:browser && pnpm run check:kovo',
           'test:browser': 'vp run browser',
         },
       },
@@ -330,7 +332,7 @@ describe('@jiso/test command fixtures', () => {
   });
 
   it('loads browser suite acceptance wiring from a project root fixture', async () => {
-    const rootPath = await mkdtemp(join(tmpdir(), 'jiso-browser-acceptance-'));
+    const rootPath = await mkdtemp(join(tmpdir(), 'kovo-browser-acceptance-'));
 
     try {
       await mkdir(join(rootPath, '.github/workflows'), { recursive: true });
@@ -339,7 +341,7 @@ describe('@jiso/test command fixtures', () => {
         join(rootPath, 'package.json'),
         JSON.stringify({
           scripts: {
-            acceptance: 'pnpm run check:build && pnpm run test:browser && pnpm run check:fw',
+            acceptance: 'pnpm run check:build && pnpm run test:browser && pnpm run check:kovo',
             'test:browser': 'vp run browser',
           },
         }),
@@ -418,11 +420,11 @@ describe('@jiso/test command fixtures', () => {
         'steps:',
         '  - run: vp run build',
         '  - run: vp run p10-perf',
-        '  - run: vp run fw-check',
+        '  - run: vp run kovo-check',
       ].join('\n'),
       packageJson: {
         scripts: {
-          acceptance: 'pnpm run check:build && pnpm run test:p10-perf && pnpm run check:fw',
+          acceptance: 'pnpm run check:build && pnpm run test:p10-perf && pnpm run check:kovo',
           'test:p10-perf': 'vp run p10-perf',
         },
       },
@@ -460,9 +462,9 @@ describe('@jiso/test command fixtures', () => {
       ],
       ordering: {
         acceptanceAfterBuild: true,
-        acceptanceBeforeFwCheck: true,
+        acceptanceBeforeKovoCheck: true,
         ciAfterBuild: true,
-        ciBeforeFwCheck: true,
+        ciBeforeKovoCheck: true,
       },
       presentInAcceptance: true,
       presentInCi: true,
@@ -492,7 +494,7 @@ describe('@jiso/test command fixtures', () => {
   });
 
   it('loads P10 perf acceptance wiring from a project root fixture', async () => {
-    const rootPath = await mkdtemp(join(tmpdir(), 'jiso-p10-perf-acceptance-'));
+    const rootPath = await mkdtemp(join(tmpdir(), 'kovo-p10-perf-acceptance-'));
 
     try {
       await mkdir(join(rootPath, '.github/workflows'), { recursive: true });
@@ -501,7 +503,7 @@ describe('@jiso/test command fixtures', () => {
         join(rootPath, 'package.json'),
         JSON.stringify({
           scripts: {
-            acceptance: 'pnpm run check:build && pnpm run test:p10-perf && pnpm run check:fw',
+            acceptance: 'pnpm run check:build && pnpm run test:p10-perf && pnpm run check:kovo',
             'test:p10-perf': 'vp run p10-perf',
           },
         }),
@@ -512,7 +514,7 @@ describe('@jiso/test command fixtures', () => {
           'steps:',
           '  - run: vp run build',
           '  - run: vp run p10-perf',
-          '  - run: vp run fw-check',
+          '  - run: vp run kovo-check',
         ].join('\n'),
       );
       await writeFile(
@@ -568,9 +570,9 @@ describe('@jiso/test command fixtures', () => {
         ],
         ordering: {
           acceptanceAfterBuild: true,
-          acceptanceBeforeFwCheck: true,
+          acceptanceBeforeKovoCheck: true,
           ciAfterBuild: true,
-          ciBeforeFwCheck: true,
+          ciBeforeKovoCheck: true,
         },
         presentInAcceptance: true,
         presentInCi: true,
@@ -583,26 +585,29 @@ describe('@jiso/test command fixtures', () => {
     }
   });
 
-  it('collects conformance gate facts without local fw-check package parsers', () => {
+  it('collects conformance gate facts without local kovo-check package parsers', () => {
     const facts = conformanceGateFacts({
       expectedPackages: {
-        'auth-spike': '@jiso/conformance-auth-spike',
-        'webhook-spike': '@jiso/conformance-webhook-spike',
+        'auth-spike': '@kovojs/conformance-auth-spike',
+        'webhook-spike': '@kovojs/conformance-webhook-spike',
       },
       packageJson: {
         scripts: {
-          acceptance: 'pnpm run test:conformance && pnpm run check:fw',
+          acceptance: 'pnpm run test:conformance && pnpm run check:kovo',
           'test:conformance': 'vp run conformance',
         },
       },
       packages: [
         {
           directory: 'auth-spike',
-          manifest: { name: '@jiso/conformance-auth-spike', scripts: { test: 'vitest --run' } },
+          manifest: { name: '@kovojs/conformance-auth-spike', scripts: { test: 'vitest --run' } },
         },
         {
           directory: 'webhook-spike',
-          manifest: { name: '@jiso/conformance-webhook-spike', scripts: { test: 'vitest --run' } },
+          manifest: {
+            name: '@kovojs/conformance-webhook-spike',
+            scripts: { test: 'vitest --run' },
+          },
         },
       ],
       scriptName: 'test:conformance',
@@ -611,7 +616,7 @@ describe('@jiso/test command fixtures', () => {
           tasks: {
             conformance: {
               command:
-                'pnpm --filter @jiso/conformance-auth-spike test && pnpm --filter @jiso/conformance-webhook-spike test',
+                'pnpm --filter @kovojs/conformance-auth-spike test && pnpm --filter @kovojs/conformance-webhook-spike test',
               input: [
                 { auto: true },
                 { pattern: 'conformance/**/package.json', base: 'workspace' },
@@ -626,16 +631,16 @@ describe('@jiso/test command fixtures', () => {
       everyCommandRunsTest: true,
       everyPackageHasTestScript: true,
       packageEntries: [
-        ['auth-spike', '@jiso/conformance-auth-spike'],
-        ['webhook-spike', '@jiso/conformance-webhook-spike'],
+        ['auth-spike', '@kovojs/conformance-auth-spike'],
+        ['webhook-spike', '@kovojs/conformance-webhook-spike'],
       ],
-      packageNames: ['@jiso/conformance-auth-spike', '@jiso/conformance-webhook-spike'],
+      packageNames: ['@kovojs/conformance-auth-spike', '@kovojs/conformance-webhook-spike'],
       presentInAcceptance: true,
       taskName: 'conformance',
     });
     expect(facts.commands.map(({ packageName }) => packageName)).toEqual([
-      '@jiso/conformance-auth-spike',
-      '@jiso/conformance-webhook-spike',
+      '@kovojs/conformance-auth-spike',
+      '@kovojs/conformance-webhook-spike',
     ]);
     expect(facts.inputFacts).toEqual([
       { auto: true },

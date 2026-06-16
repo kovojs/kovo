@@ -12,17 +12,17 @@ export function stampPendingQueries(
   const affected = new Set(queryNames);
   const stamped: string[] = [];
 
-  for (const element of root.querySelectorAll('[fw-deps]')) {
-    const deps = readDeps(element.getAttribute('fw-deps'));
+  for (const element of root.querySelectorAll('[kovo-deps]')) {
+    const deps = readDeps(element.getAttribute('kovo-deps'));
     if (!deps.some((dep) => affected.has(dep))) continue;
 
     // SPEC.md §10.4: optimistic mutations mark dependent islands pending
     // until server truth settles or the prediction is discarded.
     if (pending) {
-      element.setAttribute('fw-pending', '');
+      element.setAttribute('kovo-pending', '');
       element.setAttribute('aria-busy', 'true');
     } else {
-      element.removeAttribute('fw-pending');
+      element.removeAttribute('kovo-pending');
       element.removeAttribute('aria-busy');
     }
     stamped.push(deps.join(','));

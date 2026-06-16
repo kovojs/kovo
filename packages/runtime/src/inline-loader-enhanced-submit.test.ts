@@ -18,7 +18,7 @@ describe('inline loader enhanced submit source', () => {
         addEventListener: globalRecord.addEventListener,
         document: globalRecord.document,
         fetch: globalRecord.fetch,
-        importModule: globalRecord.__jisoInlineImport,
+        importModule: globalRecord.__kovoInlineImport,
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const attributes = new Map<string, string>();
@@ -42,7 +42,7 @@ describe('inline loader enhanced submit source', () => {
         };
         globalRecord.document = {
           querySelectorAll(selector: string) {
-            return selector === '[fw-deps]' ? [] : [];
+            return selector === '[kovo-deps]' ? [] : [];
           },
         };
         globalRecord.fetch = vi.fn(async () => {
@@ -71,7 +71,7 @@ describe('inline loader enhanced submit source', () => {
         expect(attributes).toEqual(
           new Map([
             ['data-error-code', 'NETWORK_ERROR'],
-            ['fw-error', ''],
+            ['kovo-error', ''],
           ]),
         );
       } finally {
@@ -82,9 +82,9 @@ describe('inline loader enhanced submit source', () => {
           fetch: originals.fetch,
         });
         if (originals.importModule === undefined) {
-          delete globalRecord.__jisoInlineImport;
+          delete globalRecord.__kovoInlineImport;
         } else {
-          globalRecord.__jisoInlineImport = originals.importModule;
+          globalRecord.__kovoInlineImport = originals.importModule;
         }
       }
     },
@@ -99,7 +99,7 @@ describe('inline loader enhanced submit source', () => {
         addEventListener: globalRecord.addEventListener,
         document: globalRecord.document,
         fetch: globalRecord.fetch,
-        importModule: globalRecord.__jisoInlineImport,
+        importModule: globalRecord.__kovoInlineImport,
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const preventDefault = vi.fn();
@@ -148,9 +148,9 @@ describe('inline loader enhanced submit source', () => {
           fetch: originals.fetch,
         });
         if (originals.importModule === undefined) {
-          delete globalRecord.__jisoInlineImport;
+          delete globalRecord.__kovoInlineImport;
         } else {
-          globalRecord.__jisoInlineImport = originals.importModule;
+          globalRecord.__kovoInlineImport = originals.importModule;
         }
       }
     },
@@ -206,7 +206,7 @@ describe('inline loader enhanced submit source', () => {
         addEventListener: globalRecord.addEventListener,
         document: globalRecord.document,
         fetch: globalRecord.fetch,
-        importModule: globalRecord.__jisoInlineImport,
+        importModule: globalRecord.__kovoInlineImport,
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const preventDefault = vi.fn();
@@ -240,12 +240,12 @@ describe('inline loader enhanced submit source', () => {
             return null;
           },
           querySelectorAll(selector: string) {
-            if (selector !== '[fw-deps]') return [];
+            if (selector !== '[kovo-deps]') return [];
             return targetDeps.map((dep) => ({
               getAttribute(name: string) {
-                if (name === 'fw-deps') return dep.deps;
-                if (name === 'fw-fragment-target') return dep.target ?? null;
-                if (name === 'fw-c') return dep.component ?? null;
+                if (name === 'kovo-deps') return dep.deps;
+                if (name === 'kovo-fragment-target') return dep.target ?? null;
+                if (name === 'kovo-c') return dep.component ?? null;
                 return null;
               },
               id: dep.id,
@@ -276,7 +276,7 @@ describe('inline loader enhanced submit source', () => {
         expect(preventDefault).toHaveBeenCalledTimes(1);
         const inlineRequest = inlineFetch.mock.calls[0];
         expect(inlineRequest).toEqual(modularFetch.mock.calls[0]);
-        expect(inlineRequest?.[1].headers['FW-Targets']).toBe(
+        expect(inlineRequest?.[1].headers['Kovo-Targets']).toBe(
           'cart-badge=cart; inventory=inventory stock; standalone-target; cart-summary=cart summary',
         );
       } finally {
@@ -288,9 +288,9 @@ describe('inline loader enhanced submit source', () => {
           fetch: originals.fetch,
         });
         if (originals.importModule === undefined) {
-          delete globalRecord.__jisoInlineImport;
+          delete globalRecord.__kovoInlineImport;
         } else {
-          globalRecord.__jisoInlineImport = originals.importModule;
+          globalRecord.__kovoInlineImport = originals.importModule;
         }
         if (cryptoDescriptor) {
           Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);

@@ -7,9 +7,9 @@ describe('mutation wire headers', () => {
   it('reads enhanced mutation wire headers case-insensitively', () => {
     expect(
       readMutationWireHeaders({
-        'fw-fragment': 'true',
-        'FW-Idem': ' idem_01HX ',
-        'FW-Targets': 'cart-badge=cart; recommendations=product:p1, cart-badge=cart',
+        'kovo-fragment': 'true',
+        'Kovo-Idem': ' idem_01HX ',
+        'Kovo-Targets': 'cart-badge=cart; recommendations=product:p1, cart-badge=cart',
       }),
     ).toEqual({
       fragment: true,
@@ -24,9 +24,9 @@ describe('mutation wire headers', () => {
     expect(
       mutationWireRequestFromHeaders({
         headers: new Map([
-          ['FW-Fragment', 'true'],
-          ['FW-Idem', 'idem_01HY'],
-          ['FW-Targets', 'product-form:p1'],
+          ['Kovo-Fragment', 'true'],
+          ['Kovo-Idem', 'idem_01HY'],
+          ['Kovo-Targets', 'product-form:p1'],
         ]),
         rawInput: { productId: 'p1', quantity: 99 },
         replayStore,

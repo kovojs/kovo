@@ -252,7 +252,7 @@ export async function viteRedGreenBuildFixtureFact(
   options: ViteRedGreenBuildFixtureOptions,
 ): Promise<ViteRedGreenBuildFixtureFact> {
   const fixtureRoot = await mkdtemp(
-    join(options.fixtureParent ?? tmpdir(), options.fixturePrefix ?? 'jiso-vite-build-'),
+    join(options.fixtureParent ?? tmpdir(), options.fixturePrefix ?? 'kovo-vite-build-'),
   );
   const sourcePath = join(fixtureRoot, options.fileName);
 
@@ -261,7 +261,7 @@ export async function viteRedGreenBuildFixtureFact(
     await writeFile(
       join(fixtureRoot, 'package.json'),
       JSON.stringify({
-        name: options.packageName ?? 'jiso-vite-build-fixture',
+        name: options.packageName ?? 'kovo-vite-build-fixture',
         private: true,
         type: 'module',
       }),
@@ -275,13 +275,13 @@ export async function viteRedGreenBuildFixtureFact(
     await writeFile(
       join(fixtureRoot, 'vite.config.mjs'),
       [
-        `import { jisoVitePlugin } from ${JSON.stringify(options.vitePluginImportUrl)};`,
+        `import { kovoVitePlugin } from ${JSON.stringify(options.vitePluginImportUrl)};`,
         '',
         'export default {',
-        "  plugins: [Object.assign(jisoVitePlugin(), { enforce: 'pre' })],",
+        "  plugins: [Object.assign(kovoVitePlugin(), { enforce: 'pre' })],",
         '  resolve: {',
         '    alias: {',
-        `      '@jiso/core': ${JSON.stringify(options.coreAlias)},`,
+        `      '@kovojs/core': ${JSON.stringify(options.coreAlias)},`,
         '    },',
         '  },',
         '};',
@@ -369,7 +369,7 @@ export async function viteProductionEmitContractFact(
 }
 
 const productCardSourceFixture = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import { addToCart } from './cart-actions';
 
 export const ProductCard = component('product-card', {

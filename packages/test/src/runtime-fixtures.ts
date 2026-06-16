@@ -3,8 +3,8 @@ import {
   graphComponentTargetFacts,
   graphOptimisticFacts,
   type GraphComponentTargetFact,
-  type JisoGraphFixture,
-  type JisoGraphOptimisticFact,
+  type KovoGraphFixture,
+  type KovoGraphOptimisticFact,
 } from './graph-fixtures.ts';
 
 export interface LoaderSmokeRuntime {
@@ -17,7 +17,7 @@ export interface LoaderSmokeRuntime {
   createQueryStore: () => {
     get(name: string, key?: string): unknown;
   };
-  installJisoLoader: (options: unknown) => { dispose: () => void; events: string[] };
+  installKovoLoader: (options: unknown) => { dispose: () => void; events: string[] };
   refetchQueries: (options: unknown) => Promise<unknown>;
 }
 
@@ -210,7 +210,7 @@ export interface MorphFragmentBehaviorFact {
 export interface CommerceKeyedOptimisticBehaviorFact {
   graph: {
     componentTargets: GraphComponentTargetFact[];
-    optimistic: JisoGraphOptimisticFact[];
+    optimistic: KovoGraphOptimisticFact[];
   };
   keyedMorph: {
     appendedKeys: string[];
@@ -297,7 +297,7 @@ export async function loaderSmokeBehaviorFact(
   rootElements.set('[on\\:visible]', [visibleElement]);
   let importCount = 0;
 
-  const loader = runtime.installJisoLoader({
+  const loader = runtime.installKovoLoader({
     importModule: async () => {
       importCount += 1;
       return handlers;
@@ -333,7 +333,7 @@ export async function loaderSmokeBehaviorFact(
         ok: true,
         status: 200,
         async text() {
-          return '<fw-query name="cart">{"count":2}</fw-query>';
+          return '<kovo-query name="cart">{"count":2}</kovo-query>';
         },
       };
     },
@@ -442,7 +442,7 @@ export async function morphFragmentBehaviorFact(
   });
 
   const target = {
-    html: '<article fw-key="p1">Old</article>',
+    html: '<article kovo-key="p1">Old</article>',
     appendHtml(html: string) {
       this.html += html;
     },
@@ -461,9 +461,9 @@ export async function morphFragmentBehaviorFact(
   const store = runtime.createQueryStore();
   const result = await runtime.applyMutationResponseToDom({
     body: [
-      '<fw-query name="productGrid" key="category:all">{"count":2}</fw-query>',
-      '<fw-fragment target="products" mode="append"><article fw-key="p2">New</article></fw-fragment>',
-      '<fw-fragment target="missing"><article>Ignored</article></fw-fragment>',
+      '<kovo-query name="productGrid" key="category:all">{"count":2}</kovo-query>',
+      '<kovo-fragment target="products" mode="append"><article kovo-key="p2">New</article></kovo-fragment>',
+      '<kovo-fragment target="missing"><article>Ignored</article></kovo-fragment>',
     ].join('\n'),
     root,
     store,
@@ -484,7 +484,7 @@ export async function morphFragmentBehaviorFact(
 }
 
 export async function commerceKeyedOptimisticBehaviorFact(options: {
-  graph: JisoGraphFixture;
+  graph: KovoGraphFixture;
   runtime: CommerceKeyedOptimisticRuntime;
 }): Promise<CommerceKeyedOptimisticBehaviorFact> {
   // SPEC.md §4.4/§4.8/§9.3: keyed fragments, keyed query instances, and
@@ -532,7 +532,7 @@ export async function commerceKeyedOptimisticBehaviorFact(options: {
   });
   const reserveProduct = runtime.mutation('product/reserve', {
     csrf: false,
-    csrfJustification: 'fw-check synthetic keyed invalidation fixture',
+    csrfJustification: 'kovo-check synthetic keyed invalidation fixture',
     handler(input: { productId: string }) {
       return input.productId;
     },
@@ -545,7 +545,7 @@ export async function commerceKeyedOptimisticBehaviorFact(options: {
   const mutationResult = await runtime.runMutation(reserveProduct, { productId: 'p1' }, {});
   const mutationResponse = await runtime.renderMutationEndpointResponse(reserveProduct, {
     fragmentRenderers: [],
-    headers: { 'FW-Fragment': 'true' },
+    headers: { 'Kovo-Fragment': 'true' },
     rawInput: { productId: 'p1' },
     redirectTo: '/products/p1',
     request: {},
@@ -567,8 +567,8 @@ export async function commerceKeyedOptimisticBehaviorFact(options: {
       return {
         async text() {
           return [
-            '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</fw-query>',
-            '<fw-fragment target="reviews:p1"><section>Reviews ready</section></fw-fragment>',
+            '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</kovo-query>',
+            '<kovo-fragment target="reviews:p1"><section>Reviews ready</section></kovo-fragment>',
           ].join('\n');
         },
       };
@@ -639,10 +639,10 @@ export async function optimismCleanupBehaviorFact(
       if (listeners.get(type) === listener) listeners.delete(type);
     },
   };
-  const pendingElement = new GeneratedFixtureElement({ 'fw-deps': 'cart' });
+  const pendingElement = new GeneratedFixtureElement({ 'kovo-deps': 'cart' });
   const pendingRoot = {
     querySelectorAll(selector: string) {
-      return selector === '[fw-deps]' ? [pendingElement] : [];
+      return selector === '[kovo-deps]' ? [pendingElement] : [];
     },
   };
   const store = runtime.createQueryStore();
@@ -679,7 +679,7 @@ export async function optimismCleanupBehaviorFact(
           resolve({
             headers: { get: () => null },
             async text() {
-              return '<fw-query name="cart">{"count":2}</fw-query>';
+              return '<kovo-query name="cart">{"count":2}</kovo-query>';
             },
           });
         };
@@ -780,13 +780,13 @@ export async function enhancedMutationBehaviorFact(
       return {
         headers: {
           get(name: string) {
-            return name === 'FW-Changes'
+            return name === 'Kovo-Changes'
               ? '[{"domain":"cart","keys":["c1"],"input":"ignored"},{"domain":"bad","keys":[7]},{"keys":["missing-domain"]}]'
               : null;
           },
         },
         async text() {
-          return '<fw-query name="cart" key="cart:c1">{"count":2}</fw-query>';
+          return '<kovo-query name="cart" key="cart:c1">{"count":2}</kovo-query>';
         },
       };
     },
@@ -802,11 +802,11 @@ export async function enhancedMutationBehaviorFact(
     fetch: async () => ({
       headers: {
         get(name: string) {
-          return name === 'FW-Changes' ? '{bad json' : null;
+          return name === 'Kovo-Changes' ? '{bad json' : null;
         },
       },
       async text() {
-        return '<fw-query name="cart">{"count":3}</fw-query>';
+        return '<kovo-query name="cart">{"count":3}</kovo-query>';
       },
     }),
     form: { action: '/_m/cart/add', method: 'post' },
@@ -821,23 +821,23 @@ export async function enhancedMutationBehaviorFact(
   const optimisticStore = runtime.createQueryStore();
   optimisticStore.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
   const rebaser = new runtime.OptimisticRebaser(optimisticStore);
-  const pendingElement = new GeneratedFixtureElement({ 'fw-deps': 'reviews' });
+  const pendingElement = new GeneratedFixtureElement({ 'kovo-deps': 'reviews' });
   let optimisticFetchIdemHeader: unknown;
   let optimisticStoreDuringFetch: unknown;
   let optimisticPendingDuringFetch: string | null = null;
   const optimisticResult = await runtime.submitOptimisticEnhancedMutation({
     fetch: async (_url: string, options: { headers?: Record<string, unknown> }) => {
-      optimisticFetchIdemHeader = options.headers?.['FW-Idem'];
+      optimisticFetchIdemHeader = options.headers?.['Kovo-Idem'];
       optimisticStoreDuringFetch = optimisticStore.get('reviews', 'product:p1');
-      optimisticPendingDuringFetch = pendingElement.getAttribute('fw-pending');
+      optimisticPendingDuringFetch = pendingElement.getAttribute('kovo-pending');
       return {
         headers: {
           get(name: string) {
-            return name === 'FW-Changes' ? '[{"domain":"product","keys":["p1"]}]' : null;
+            return name === 'Kovo-Changes' ? '[{"domain":"product","keys":["p1"]}]' : null;
           },
         },
         async text() {
-          return '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</fw-query>';
+          return '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</kovo-query>';
         },
       };
     },
@@ -856,7 +856,7 @@ export async function enhancedMutationBehaviorFact(
     },
     pendingRoot: {
       querySelectorAll(selector: string) {
-        return selector === '[fw-deps]' ? [pendingElement] : [];
+        return selector === '[kovo-deps]' ? [pendingElement] : [];
       },
     },
     rebaser,
@@ -875,14 +875,14 @@ export async function enhancedMutationBehaviorFact(
     malformedHeader: {
       errorCount: malformedHeaderErrors.length,
       errorMessagePrefixMatches:
-        malformedHeaderErrors[0]?.message.startsWith('Malformed JSON in FW-Changes header:') ??
+        malformedHeaderErrors[0]?.message.startsWith('Malformed JSON in Kovo-Changes header:') ??
         false,
       resultChanges: malformedResult.changes,
       resultQueries: malformedResult.queries,
     },
     optimistic: {
       fetchIdemHeader: optimisticFetchIdemHeader,
-      pendingAfterResponse: pendingElement.getAttribute('fw-pending'),
+      pendingAfterResponse: pendingElement.getAttribute('kovo-pending'),
       pendingDuringFetch: optimisticPendingDuringFetch,
       resultChanges: optimisticResult.changes,
       resultQueries: optimisticResult.queries,
@@ -896,7 +896,7 @@ function assertRefetchOptions(options: unknown): void {
   const expected = {
     headers: {
       Accept: 'text/html',
-      'FW-Fragment': 'true',
+      'Kovo-Fragment': 'true',
     },
     method: 'GET',
   };

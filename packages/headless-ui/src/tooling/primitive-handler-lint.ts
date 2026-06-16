@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-export const primitiveHandlerLintCode = 'JISO_HUI001' as const;
+export const primitiveHandlerLintCode = 'KOVO_HUI001' as const;
 
 export interface PrimitiveHandlerLintInput {
   path: string;

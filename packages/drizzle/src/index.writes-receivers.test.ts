@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractTouchGraphFromProject, extractQueryFactsFromProject } from '@jiso/drizzle/static';
+import { extractTouchGraphFromProject, extractQueryFactsFromProject } from '@kovojs/drizzle/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
-describe('@jiso/drizzle touch graph helpers', () => {
+describe('@kovojs/drizzle touch graph helpers', () => {
   it('extracts project-mode direct Drizzle write calls from typed function declarations', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -16,8 +16,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export async function addItem(db: PgDatabase<any, any, any>) {',
             '  await db.insert(cartItems).values({ productId: "p1" });',
@@ -46,7 +46,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));',
             '',
             'class PgDatabase {',
             '  insert(_table: unknown) {',
@@ -93,7 +93,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('emits FW404 for resolved unannotated pgTable writes without a static table name', () => {
+  it('emits KV404 for resolved unannotated pgTable writes without a static table name', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
@@ -118,7 +118,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW404',
+            code: 'KV404',
             message: 'Write to unmapped table.',
             site: 'audit.domain.ts:6',
           },
@@ -139,8 +139,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export const addItem = async (db: PgDatabase<any, any, any>) => {',
             '  await db.insert(cartItems).values({ productId: "p1" });',
@@ -173,7 +173,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             'declare function makeDb(): PgDatabase<any, any, any>;',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));',
             '',
             'export function addItem(db: PgDatabase<any, any, any> = makeDb()) {',
             '  return db.insert(cartItems).values({ productId: "p1" });',
@@ -205,7 +205,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             'interface Ctx { db: PgDatabase }',
             'declare function makeContext(): Ctx;',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
             'export async function addItem({ db: writer }: Ctx = makeContext(), productId: string) {',
             '  await writer.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
@@ -240,7 +240,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));',
             '',
             'export const addItem = (db: PgDatabase<any, any, any>) => db.insert(cartItems).values({ productId: "p1" });',
           ].join('\n'),
@@ -269,8 +269,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const auditLog = pgTable("audit_log", {}, kovo({ exempt: true }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export async function restockProduct(db: PgDatabase<any, any, any>) {',
             '  await db.insert(auditLog).values({ event: "restock" });',
@@ -303,8 +303,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
           source: [
             'import type { PgDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
-            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
             'export const restockProduct = async function (db: PgDatabase<any, any, any>) {',
             '  await db.update(products).set({ stock: 10 });',
@@ -339,7 +339,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
-  it('recognizes project-mode pgTable initializers with jiso annotations as tables', () => {
+  it('recognizes project-mode pgTable initializers with kovo annotations as tables', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
@@ -350,7 +350,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             '',
             'export const cartItems = pgTable("cart_items", {',
             '  cartId: text("cart_id"),',
-            '}, jiso({ domain: "cart", key: "cartId" }));',
+            '}, kovo({ domain: "cart", key: "cartId" }));',
             '',
             'export async function addItem(db: PgDatabase<any, any, any>) {',
             '  await db.insert(cartItems).values({ productId: "p1" });',
@@ -377,7 +377,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
       'export const products = pg.pgTable("products", {',
       '  id: pg.text("id").primaryKey(),',
       '  stock: pg.integer("stock").notNull(),',
-      '}, jiso({ domain: "product", key: "id" }));',
+      '}, kovo({ domain: "product", key: "id" }));',
       '',
       'export async function restock(db: PgDatabase<any, any, any>, productId: string) {',
       '  await db.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
@@ -438,7 +438,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             '',
             'export const cartItems = pgTable("cart_items", {',
             '  cartId: text("cart_id"),',
-            '}, jiso({ domain: "cart", key: "cartId" }));',
+            '}, kovo({ domain: "cart", key: "cartId" }));',
             '',
             'export async function addItem(db: PgDatabase<any, any, any>, cartId: string) {',
             '  await db.update(cartItems).set({ touched: true }).where(eq(cartItems.cartId, cartId));',

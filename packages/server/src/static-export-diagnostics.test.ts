@@ -10,27 +10,27 @@ import { blockingStaticExportDiagnostics } from './static-export-diagnostics.js'
 import { exportStaticApp } from './static-export.js';
 
 describe('server static export diagnostic boundary', () => {
-  it('coerces only blocking compiler diagnostics into FW229-compatible export diagnostics', () => {
+  it('coerces only blocking compiler diagnostics into KV229-compatible export diagnostics', () => {
     expect(
       blockingStaticExportDiagnostics([
         {
-          code: 'FW201',
+          code: 'KV201',
           fileName: 'src/cart.tsx',
           help: 'Fixes: move the value into component/query state via ctx.',
           message: 'Closure captures unserializable value.',
           start: { column: 12, line: 4 },
         },
         {
-          code: 'FW210',
+          code: 'KV210',
           fileName: 'src/cart.tsx',
           message: 'Anonymous handler; name it for stable identity.',
         },
       ]),
     ).toEqual([
       {
-        code: 'FW201',
+        code: 'KV201',
         message: [
-          'Static export refused error diagnostic FW201 at src/cart.tsx:4:12. Closure captures unserializable value.',
+          'Static export refused error diagnostic KV201 at src/cart.tsx:4:12. Closure captures unserializable value.',
           'Fixes: move the value into component/query state via ctx.',
         ].join('\n'),
         routePath: 'src/cart.tsx',
@@ -39,7 +39,7 @@ describe('server static export diagnostic boundary', () => {
   });
 
   it('blocks error diagnostics before route replay or output writes', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-diagnostics-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-diagnostics-'));
     try {
       const app = createApp({
         routes: [
@@ -55,7 +55,7 @@ describe('server static export diagnostic boundary', () => {
         exportStaticApp(app, {
           diagnostics: [
             {
-              code: 'FW201',
+              code: 'KV201',
               fileName: 'src/cart.tsx',
               message: 'Closure captures unserializable value.',
               start: { column: 12, line: 4 },
@@ -64,10 +64,10 @@ describe('server static export diagnostic boundary', () => {
           outDir,
         }),
       ).rejects.toMatchObject({
-        code: 'FW201',
+        code: 'KV201',
         diagnostics: [
           {
-            code: 'FW201',
+            code: 'KV201',
             message: expect.stringContaining('src/cart.tsx:4:12'),
             routePath: 'src/cart.tsx',
           },
@@ -79,8 +79,8 @@ describe('server static export diagnostic boundary', () => {
     }
   });
 
-  it('blocks FW228 app route-table diagnostics before route replay or output writes', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-fw228-'));
+  it('blocks KV228 app route-table diagnostics before route replay or output writes', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-kv228-'));
     try {
       const app = createApp({
         routes: [
@@ -96,10 +96,10 @@ describe('server static export diagnostic boundary', () => {
       });
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
-        code: 'FW228',
+        code: 'KV228',
         diagnostics: [
           {
-            code: 'FW228',
+            code: 'KV228',
             message: expect.stringContaining('/products/new'),
             routePath: '/products/:id <-> /products/new',
           },
@@ -124,7 +124,7 @@ describe('server static export diagnostic boundary', () => {
       exportStaticApp(app, {
         diagnostics: [
           {
-            code: 'FW210',
+            code: 'KV210',
             fileName: 'src/cart.tsx',
             message: 'Anonymous handler; name it for stable identity.',
           },

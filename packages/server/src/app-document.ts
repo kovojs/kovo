@@ -2,12 +2,12 @@ import { reportServerError } from './diagnostics.js';
 import { renderErrorDocument, renderRouteDocumentResponse } from './document-core.js';
 import { routeResponseToDocumentResponse, type RoutePageResponse } from './response.js';
 import { renderRoutePageResponse, type RouteDeclaration, type RouteRequestInput } from './route.js';
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 
 export interface AppRouteDocumentOptions {
-  app: JisoApp;
+  app: KovoApp;
   params: Record<string, string>;
   request: Request;
   route: AnyRouteDeclaration;
@@ -54,7 +54,7 @@ export async function renderAppRouteDocumentResponse({
 }
 
 export async function renderAppErrorDocumentResponse(
-  app: JisoApp,
+  app: KovoApp,
   request: Request,
   status: 403 | 404 | 500,
 ): Promise<RoutePageResponse> {

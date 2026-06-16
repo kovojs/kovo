@@ -4,10 +4,10 @@ import {
   type DiagnosticSeverity,
   type TouchGraph,
   type TouchSite,
-} from '@jiso/core';
+} from '@kovojs/core';
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 
-export type { DiagnosticCode } from '@jiso/core';
+export type { DiagnosticCode } from '@kovojs/core';
 
 export interface DbVerificationDiagnostic {
   branch?: string;
@@ -47,10 +47,10 @@ export function diagnosticsForObservations(
     .sort((left, right) => left.branch.localeCompare(right.branch))
     .map((touch) => ({
       branch: touch.branch,
-      code: 'FW405' as const,
+      code: 'KV405' as const,
       domain: touch.domain,
-      message: diagnosticDefinitions.FW405.message,
-      severity: diagnosticDefinitions.FW405.severity,
+      message: diagnosticDefinitions.KV405.message,
+      severity: diagnosticDefinitions.KV405.severity,
       site: touch.site,
     }));
 
@@ -58,10 +58,10 @@ export function diagnosticsForObservations(
     .filter((domain) => !observedWrites.has(domain))
     .sort()
     .map((domain) => ({
-      code: 'FW403' as const,
+      code: 'KV403' as const,
       domain,
-      message: diagnosticDefinitions.FW403.message,
-      severity: diagnosticDefinitions.FW403.severity,
+      message: diagnosticDefinitions.KV403.message,
+      severity: diagnosticDefinitions.KV403.severity,
     }));
 
   return [...unobservedBranches, ...unobservedDomains];
@@ -89,7 +89,7 @@ export function assertObservedWritesCovered(
 
   if (unmappedWrites.length > 0) {
     const tables = unmappedWrites.map((operation) => operation.table).join(', ');
-    throw new Error(diagnosticMessage('FW404', tables));
+    throw new Error(diagnosticMessage('KV404', tables));
   }
 
   const entries = Object.values(scopedTouchGraph).filter((entry) => entry !== undefined);
@@ -110,7 +110,7 @@ export function assertObservedWritesCovered(
 
   if (uncovered.length > 0) {
     const domains = uncovered.map((operation) => operation.domain).join(', ');
-    throw new Error(diagnosticMessage('FW402', domains));
+    throw new Error(diagnosticMessage('KV402', domains));
   }
 }
 
@@ -128,7 +128,7 @@ export function assertObservedReadsCovered(
 
   if (unmappedReads.length > 0) {
     const tables = unmappedReads.map((operation) => operation.table).join(', ');
-    throw new Error(diagnosticMessage('FW407', tables));
+    throw new Error(diagnosticMessage('KV407', tables));
   }
 
   const allowedReads = new Set(domains);
@@ -141,7 +141,7 @@ export function assertObservedReadsCovered(
 
   if (uncovered.length > 0) {
     const readDomains = uncovered.map((operation) => operation.domain).join(', ');
-    throw new Error(diagnosticMessage('FW407', readDomains));
+    throw new Error(diagnosticMessage('KV407', readDomains));
   }
 }
 
@@ -183,7 +183,7 @@ function assertKeyedWritesObserved(
         `${operation.table} expected ${config.keyByTable?.[operation.table]} observed <missing>`,
     )
     .join(', ');
-  throw new Error(diagnosticMessage('FW408', details));
+  throw new Error(diagnosticMessage('KV408', details));
 }
 
 function selectTouchGraph(touchGraph: TouchGraph, touchGraphKey: string | undefined): TouchGraph {
@@ -214,7 +214,7 @@ function assertRowKeys(
         `${operation.table} expected ${config.keyByTable?.[operation.table]} observed ${operation.rowKey}`,
     )
     .join(', ');
-  throw new Error(diagnosticMessage('FW408', details));
+  throw new Error(diagnosticMessage('KV408', details));
 }
 
 function observedRowKeys(operation: ObservedDbOperation): ReadonlySet<string> {
@@ -237,7 +237,7 @@ function assertMutationReadsCovered(
 
   if (unmappedReads.length > 0) {
     const tables = unmappedReads.map((operation) => operation.table).join(', ');
-    throw new Error(diagnosticMessage('FW407', tables));
+    throw new Error(diagnosticMessage('KV407', tables));
   }
 
   const allowedReads = new Set(
@@ -258,7 +258,7 @@ function assertMutationReadsCovered(
 
   if (uncovered.length > 0) {
     const readDomains = uncovered.map((operation) => operation.domain).join(', ');
-    throw new Error(diagnosticMessage('FW407', readDomains));
+    throw new Error(diagnosticMessage('KV407', readDomains));
   }
 }
 
@@ -275,7 +275,7 @@ function assertNoExemptReads(
   if (exemptReads.length === 0) return;
 
   const tables = [...new Set(exemptReads.map((operation) => operation.table))].sort().join(', ');
-  throw new Error(diagnosticMessage('FW411', tables));
+  throw new Error(diagnosticMessage('KV411', tables));
 }
 
 function trimDiagnosticSentence(message: string): string {

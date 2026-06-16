@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   contextMenuFocusElement as _contextMenuFocusElement,
@@ -10,7 +10,7 @@ import {
   contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu,
   contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown,
   contextMenuTypeahead as _contextMenuTypeahead,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryContextMenuDemo$div_contextmenu = handler((event, ctx) => {
   const result = _contextMenuTriggerContextMenu(Object(event), {

@@ -1,4 +1,9 @@
-import type { DiagnosticCode, DiagnosticSeverity, EndpointMethod, EndpointMount } from '@jiso/core';
+import type {
+  DiagnosticCode,
+  DiagnosticSeverity,
+  EndpointMethod,
+  EndpointMount,
+} from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
@@ -66,7 +71,7 @@ export interface AppDiagnostic {
 }
 
 /** The assembled app aggregate returned by `createApp`; request dispatch starts here. */
-export interface JisoApp<SessionValue = unknown> {
+export interface KovoApp<SessionValue = unknown> {
   clientModules: VersionedClientModuleRegistry;
   csrf?: CsrfValidationOptions<Request>;
   diagnostics: readonly AppDiagnostic[];

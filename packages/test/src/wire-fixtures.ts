@@ -73,32 +73,32 @@ export interface WireFixtureContentTypesFact {
 export const generatedWireResponseBodies: Record<string, readonly string[]> = {
   'defer-stream.http': [
     `<!doctype html>
-<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer><fw-defer target="recommendations:p1" state="pending"></fw-defer></product-page></main>
+<html><body><main><product-page kovo-deps="product:p1"><kovo-defer target="reviews:p1" state="pending"></kovo-defer><kovo-defer target="recommendations:p1" state="pending"></kovo-defer></product-page></main>
 
---jiso-boundary
-<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>
-<fw-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</fw-query>
-<fw-fragment target="reviews:p1" priority="5"><link rel="stylesheet" href="/assets/reviews.css"><section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section></fw-fragment>
-<fw-fragment target="recommendations:p1"><section fw-c="recommendations" fw-deps="product:p1"><article fw-key="rec-1">Beans</article></section></fw-fragment>
---jiso-boundary--
+--kovo-boundary
+<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</kovo-query>
+<kovo-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</kovo-query>
+<kovo-fragment target="reviews:p1" priority="5"><link rel="stylesheet" href="/assets/reviews.css"><section kovo-c="reviews" kovo-deps="product:p1"><article kovo-key="r1">5</article></section></kovo-fragment>
+<kovo-fragment target="recommendations:p1"><section kovo-c="recommendations" kovo-deps="product:p1"><article kovo-key="rec-1">Beans</article></section></kovo-fragment>
+--kovo-boundary--
 </body></html>
 `,
   ],
   'enhanced-mutation.http': [
-    `<fw-query name="cart" key="cart:c1" version="7">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</fw-query>
-<fw-fragment target="cart-badge"><cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge></fw-fragment>
-<fw-fragment target="recommendations"><section fw-c="recommendations" fw-deps="product:p1"></section></fw-fragment>
+    `<kovo-query name="cart" key="cart:c1" version="7">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</kovo-query>
+<kovo-fragment target="cart-badge"><cart-badge kovo-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge></kovo-fragment>
+<kovo-fragment target="recommendations"><section kovo-c="recommendations" kovo-deps="product:p1"></section></kovo-fragment>
 `,
   ],
   'no-js-post-redirect-get.http': [
     '',
     `<!doctype html>
-<html><body><script type="application/json" fw-query="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</script><cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge></body></html>
+<html><body><script type="application/json" kovo-query="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</script><cart-badge kovo-deps="cart"><span data-bind="cart.count">1</span></cart-badge></body></html>
 `,
   ],
-  'typed-read.http': ['<fw-query name="product:p1">{"name":"Mug","stock":4}</fw-query>\n'],
+  'typed-read.http': ['<kovo-query name="product:p1">{"name":"Mug","stock":4}</kovo-query>\n'],
   'validation-422-fragment.http': [
-    `<fw-fragment target="product-form:p1"><form fw-c="product-form" aria-invalid="true"><output role="alert" data-error-code="OUT_OF_STOCK">Only 5 left.</output><input name="productId" value="p1"><input name="quantity" value="99"></form></fw-fragment>
+    `<kovo-fragment target="product-form:p1"><form kovo-c="product-form" aria-invalid="true"><output role="alert" data-error-code="OUT_OF_STOCK">Only 5 left.</output><input name="productId" value="p1"><input name="quantity" value="99"></form></kovo-fragment>
 `,
   ],
 };
@@ -167,7 +167,7 @@ export function wireFragmentModeFacts(
     const fixture = parseWireFixture(source);
     return {
       accept: fixture.request.headers.Accept,
-      fragment: fixture.request.headers['FW-Fragment'],
+      fragment: fixture.request.headers['Kovo-Fragment'],
       name,
     };
   });

@@ -7,24 +7,24 @@ import { mutation } from './mutation.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 import {
-  createJisoAppShellDevDiagnosticLedger,
-  jisoAppShellVitePlugin,
-  type JisoAppShellViteMiddleware,
+  createKovoAppShellDevDiagnosticLedger,
+  kovoAppShellVitePlugin,
+  type KovoAppShellViteMiddleware,
 } from './api/app-shell/vite.js';
 
 describe('server app shell Vite diagnostics', () => {
   it('gates page-route diagnostics red and green through the dev middleware ledger', async () => {
-    const diagnostics = createJisoAppShellDevDiagnosticLedger();
+    const diagnostics = createKovoAppShellDevDiagnosticLedger();
     const cartRoute = route('/cart', {
       modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
       page() {
         return '<main>Cart</main>';
       },
     });
-    const plugin = jisoAppShellVitePlugin(createApp({ routes: [cartRoute] }), {
+    const plugin = kovoAppShellVitePlugin(createApp({ routes: [cartRoute] }), {
       devDiagnostics: diagnostics,
     });
-    const middlewares: JisoAppShellViteMiddleware[] = [];
+    const middlewares: KovoAppShellViteMiddleware[] = [];
 
     plugin.configureServer({
       middlewares: {
@@ -54,7 +54,7 @@ describe('server app shell Vite diagnostics', () => {
       diagnostics.recordModuleDiagnostics({
         diagnostics: [
           {
-            code: 'FW225',
+            code: 'KV225',
             fileName: 'src/components/cart.tsx',
             message: 'JSX nesting violates the HTML content model.',
           },
@@ -66,7 +66,7 @@ describe('server app shell Vite diagnostics', () => {
       const redResponse = await nodeFetch(`http://127.0.0.1:${port}/cart`);
 
       expect(redResponse).toMatchObject({
-        body: expect.stringContaining('<p class="jiso-diagnostic-code">FW225</p>'),
+        body: expect.stringContaining('<p class="kovo-diagnostic-code">KV225</p>'),
         headers: expect.objectContaining({
           'content-type': 'text/html; charset=utf-8',
         }),
@@ -77,7 +77,7 @@ describe('server app shell Vite diagnostics', () => {
       diagnostics.recordModuleDiagnostics({
         diagnostics: [
           {
-            code: 'FW210',
+            code: 'KV210',
             fileName: 'src/components/cart.tsx',
             message: 'Anonymous handler; name it for stable identity.',
           },
@@ -94,7 +94,7 @@ describe('server app shell Vite diagnostics', () => {
         }),
         status: 200,
       });
-      expect(greenResponse.body).not.toContain('jiso-diagnostic-code');
+      expect(greenResponse.body).not.toContain('kovo-diagnostic-code');
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
@@ -103,7 +103,7 @@ describe('server app shell Vite diagnostics', () => {
   });
 
   it('serves mutation diagnostics as fragment wire or document responses', async () => {
-    const diagnostics = createJisoAppShellDevDiagnosticLedger();
+    const diagnostics = createKovoAppShellDevDiagnosticLedger();
     // SPEC §9.5: the Vite plugin requires a closed createApp() aggregate, so the
     // mutation must be a full declaration, not a bare { key } shell.
     const addToCart = mutation('cart/add', {
@@ -113,10 +113,10 @@ describe('server app shell Vite diagnostics', () => {
         return 'ok';
       },
     });
-    const plugin = jisoAppShellVitePlugin(createApp({ mutations: [addToCart] }), {
+    const plugin = kovoAppShellVitePlugin(createApp({ mutations: [addToCart] }), {
       devDiagnostics: diagnostics,
     });
-    const middlewares: JisoAppShellViteMiddleware[] = [];
+    const middlewares: KovoAppShellViteMiddleware[] = [];
 
     plugin.configureServer({
       middlewares: {
@@ -145,7 +145,7 @@ describe('server app shell Vite diagnostics', () => {
       diagnostics.recordModuleDiagnostics({
         diagnostics: [
           {
-            code: 'FW225',
+            code: 'KV225',
             fileName: 'src/mutations/cart.ts',
             message: 'JSX nesting violates the HTML content model.',
           },
@@ -156,20 +156,20 @@ describe('server app shell Vite diagnostics', () => {
 
       const fragmentResponse = await nodeFetch(`http://127.0.0.1:${port}/_m/cart/add`, {
         headers: {
-          'FW-Fragment': 'true',
-          'FW-Targets': 'cart-errors',
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'cart-errors',
         },
         method: 'POST',
       });
 
       expect(fragmentResponse).toMatchObject({
-        body: expect.stringContaining('<fw-fragment target="cart-errors">'),
+        body: expect.stringContaining('<kovo-fragment target="cart-errors">'),
         headers: expect.objectContaining({
-          'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'content-type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         }),
         status: 500,
       });
-      expect(fragmentResponse.body).toContain('<p class="jiso-diagnostic-code">FW225</p>');
+      expect(fragmentResponse.body).toContain('<p class="kovo-diagnostic-code">KV225</p>');
       expect(fragmentResponse.body).not.toContain('next');
 
       const documentResponse = await nodeFetch(`http://127.0.0.1:${port}/_m/cart/add`, {
@@ -177,13 +177,13 @@ describe('server app shell Vite diagnostics', () => {
       });
 
       expect(documentResponse).toMatchObject({
-        body: expect.stringContaining('<title>FW225 diagnostic</title>'),
+        body: expect.stringContaining('<title>KV225 diagnostic</title>'),
         headers: expect.objectContaining({
           'content-type': 'text/html; charset=utf-8',
         }),
         status: 500,
       });
-      expect(documentResponse.body).not.toContain('<fw-fragment');
+      expect(documentResponse.body).not.toContain('<kovo-fragment');
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

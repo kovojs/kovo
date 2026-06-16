@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 
-import { fwCheck, fwExplain } from '../../../packages/cli/src/index.js';
+import { kovoCheck, kovoExplain } from '../../../packages/cli/src/index.js';
 import {
   createReferenceAuth,
   referenceGraph,
@@ -30,14 +30,14 @@ function cookiePair(setCookie: string): string {
 
 describe('reference auth adoption', () => {
   it('represents authenticated reference flows in the graph audits', () => {
-    expect(fwCheck(referenceGraph)).toEqual({
+    expect(kovoCheck(referenceGraph)).toEqual({
       exitCode: 0,
-      output: 'fw-check/v1\nOK\n',
+      output: 'kovo-check/v1\nOK\n',
     });
-    expect(fwExplain(referenceGraph, { kind: 'page', target: '/account' })).toEqual({
+    expect(kovoExplain(referenceGraph, { kind: 'page', target: '/account' })).toEqual({
       exitCode: 0,
       output: [
-        'fw-explain/v1',
+        'kovo-explain/v1',
         'PAGE /account',
         'prefetch: false',
         'modulepreloads: -',
@@ -47,10 +47,10 @@ describe('reference auth adoption', () => {
         '',
       ].join('\n'),
     });
-    expect(fwExplain(referenceGraph, { kind: 'mutation', target: 'auth/sign-out' })).toEqual({
+    expect(kovoExplain(referenceGraph, { kind: 'mutation', target: 'auth/sign-out' })).toEqual({
       exitCode: 0,
       output: [
-        'fw-explain/v1',
+        'kovo-explain/v1',
         'MUTATION auth/sign-out',
         'guards: authed',
         'session: referenceSession',
@@ -62,10 +62,10 @@ describe('reference auth adoption', () => {
         '',
       ].join('\n'),
     });
-    expect(fwExplain(referenceGraph, { kind: 'mutation', target: 'auth/sign-in' })).toEqual({
+    expect(kovoExplain(referenceGraph, { kind: 'mutation', target: 'auth/sign-in' })).toEqual({
       exitCode: 0,
       output: [
-        'fw-explain/v1',
+        'kovo-explain/v1',
         'MUTATION auth/sign-in',
         'guards: -',
         'auth: custom:better-auth-credential',
@@ -78,17 +78,17 @@ describe('reference auth adoption', () => {
         '',
       ].join('\n'),
     });
-    expect(fwExplain(referenceGraph, { unguarded: true })).toEqual({
+    expect(kovoExplain(referenceGraph, { unguarded: true })).toEqual({
       exitCode: 0,
-      output: 'fw-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
+      output: 'kovo-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
     });
-    expect(fwExplain(referenceGraph, { unscoped: true })).toEqual({
+    expect(kovoExplain(referenceGraph, { unscoped: true })).toEqual({
       exitCode: 0,
-      output: 'fw-explain/v1\nUNSCOPED\nSUMMARY total=0\n',
+      output: 'kovo-explain/v1\nUNSCOPED\nSUMMARY total=0\n',
     });
   });
 
-  it('ships no-JS login and logout forms backed by Jiso credential mutations', () => {
+  it('ships no-JS login and logout forms backed by Kovo credential mutations', () => {
     const request = referenceAuthRequest();
 
     expect(renderReferenceLoginForm(request, { next: '/admin' })).toContain(
@@ -162,7 +162,7 @@ describe('reference auth adoption', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/admin',
-        'Set-Cookie': ['jiso_reference_session=session-u1; Path=/; HttpOnly; SameSite=Lax'],
+        'Set-Cookie': ['kovo_reference_session=session-u1; Path=/; HttpOnly; SameSite=Lax'],
       },
       status: 303,
     });
@@ -227,7 +227,7 @@ describe('reference auth adoption', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/login',
-        'Set-Cookie': ['jiso_reference_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'],
+        'Set-Cookie': ['kovo_reference_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'],
       },
       status: 303,
     });

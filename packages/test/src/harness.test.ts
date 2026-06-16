@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@jiso/server';
+import { mutation, s } from '@kovojs/server';
 
-import { createJisoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './harness.js';
 import { createFakeDb } from './test-fixtures.js';
 
-describe('@jiso/test harness context', () => {
+describe('@kovojs/test harness context', () => {
   it('executes mutations against the provided db context', async () => {
     const addToCart = mutation('cart/add', {
       csrf: false,
@@ -15,7 +15,7 @@ describe('@jiso/test harness context', () => {
         return request.db.cart;
       },
     });
-    const harness = createJisoTestHarness({ db: { cart: [] as string[] } });
+    const harness = createKovoTestHarness({ db: { cart: [] as string[] } });
 
     await expect(harness.exec(addToCart, { productId: 'p1' })).resolves.toEqual({
       changes: [],
@@ -37,7 +37,7 @@ describe('@jiso/test harness context', () => {
         return request.db.cart;
       },
     });
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: { cart: [] as string[] },
       request: { session: { user: { id: 'u1' } } },
     });
@@ -60,7 +60,7 @@ describe('@jiso/test harness context', () => {
         return request.db.cart;
       },
     });
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: { cart: [] as string[] },
       request: { session: { user: { id: 'default-user' } } },
     });
@@ -96,7 +96,7 @@ describe('@jiso/test harness context', () => {
   });
 
   it('exposes a stable db handle for direct harness assertions', async () => {
-    const harness = createJisoTestHarness({ db: { cart: [] as string[] } });
+    const harness = createKovoTestHarness({ db: { cart: [] as string[] } });
 
     expect(harness.dbHandle()).toBe(harness.db);
     harness.dbHandle().cart.push('direct');
@@ -117,7 +117,7 @@ describe('@jiso/test harness context', () => {
   });
 
   it('exposes the verifier-wrapped db handle for direct observed operations', () => {
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart.addItem': {
@@ -138,7 +138,7 @@ describe('@jiso/test harness context', () => {
   });
 
   it('returns no verification diagnostics when verification is not configured', () => {
-    const harness = createJisoTestHarness({ db: createFakeDb() });
+    const harness = createKovoTestHarness({ db: createFakeDb() });
 
     expect(harness.verificationDiagnostics()).toEqual([]);
   });

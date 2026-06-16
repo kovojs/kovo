@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';
@@ -52,7 +52,7 @@ export function validateServerFactsInLocalState(
   if (!access) return [];
 
   const start = generatedOffsetToOriginal(sourceOffsetMap, access.start);
-  return [diagnosticFor(fileName, 'FW301', source, start, access.path.length)];
+  return [diagnosticFor(fileName, 'KV301', source, start, access.path.length)];
 }
 
 export function validateReservedQueryNames(
@@ -63,8 +63,8 @@ export function validateReservedQueryNames(
   return componentOptionObjectKeys(model, 'queries').includes('state')
     ? [
         {
-          ...diagnosticFor(fileName, 'FW304', source),
-          message: `${diagnosticDefinitions.FW304.message} state`,
+          ...diagnosticFor(fileName, 'KV304', source),
+          message: `${diagnosticDefinitions.KV304.message} state`,
         },
       ]
     : [];
@@ -86,8 +86,8 @@ export function validateFragmentTargetInputs(
 
   const missing = renderInputs.filter((input) => !allowedInputs.has(input.name));
   return missing.map((input) => ({
-    ...diagnosticFor(fileName, 'FW303', source, input.start, input.end - input.start),
-    message: `${diagnosticDefinitions.FW303.message} ${input.name}`,
+    ...diagnosticFor(fileName, 'KV303', source, input.start, input.end - input.start),
+    message: `${diagnosticDefinitions.KV303.message} ${input.name}`,
   }));
 }
 
@@ -102,7 +102,7 @@ export function validateFragmentTargetChildren(
   return targetNames.flatMap((name) =>
     fragmentTargetChildBodies(model, name)
       .filter((body) => fragmentTargetChildCapturesUnserializableValue(model, body))
-      .map((body) => fw230Diagnostic(fileName, source, name, body)),
+      .map((body) => kv230Diagnostic(fileName, source, name, body)),
   );
 }
 
@@ -119,8 +119,8 @@ export function validateEventPayloads(
   if (overlapping.length === 0) return [];
 
   return dedupeBy(overlapping, (payload) => payload.path).map((payload) => ({
-    ...diagnosticFor(options.fileName, 'FW320', source, payload.index, payload.length),
-    message: `${diagnosticDefinitions.FW320.message} ${payload.path}`,
+    ...diagnosticFor(options.fileName, 'KV320', source, payload.index, payload.length),
+    message: `${diagnosticDefinitions.KV320.message} ${payload.path}`,
   }));
 }
 
@@ -149,7 +149,7 @@ export function validateDirectDbAccess(
       diagnostics.push(
         diagnosticFor(
           fileName,
-          'FW330',
+          'KV330',
           source,
           span?.start,
           span ? span.end - span.start : undefined,
@@ -161,7 +161,7 @@ export function validateDirectDbAccess(
     if (requestParam && requestDb) {
       const requestDbPath = `${requestParam}.db`;
       diagnostics.push(
-        diagnosticFor(fileName, 'FW330', source, requestDb.start, requestDbPath.length),
+        diagnosticFor(fileName, 'KV330', source, requestDb.start, requestDbPath.length),
       );
     }
   }
@@ -169,7 +169,7 @@ export function validateDirectDbAccess(
   return diagnostics;
 }
 
-// SPEC §5.2 (FW330): explicit typed predicate over the parsed handler parameter NAME (a
+// SPEC §5.2 (KV330): explicit typed predicate over the parsed handler parameter NAME (a
 // model-derived identifier, not a raw source slice). Decides whether a parameter is a
 // request/context object that could own a `.db` handle. This replaces the inline `/request$/i`
 // regex that previously made this decision, while preserving its exact match set: the literal
@@ -191,7 +191,7 @@ export function unhandledUpdateCoverageDiagnostics(
 ): CompilerDiagnostic[] {
   return updateCoverage
     .filter((fact) => fact.status === 'UNHANDLED')
-    .map((fact) => fw311Diagnostic(fileName, source, fact, sourceOffsetMap));
+    .map((fact) => kv311Diagnostic(fileName, source, fact, sourceOffsetMap));
 }
 
 function fragmentTargetUsageNames(model: ComponentModuleModel): string[] {
@@ -220,26 +220,26 @@ function fragmentTargetChildCapturesUnserializableValue(
   return capturesUnserializableReferences(references);
 }
 
-function fw230Diagnostic(
+function kv230Diagnostic(
   fileName: string,
   source: string,
   target: string,
   body: JsxElementChildBody,
 ): CompilerDiagnostic {
-  const definition = diagnosticDefinitions.FW230;
+  const definition = diagnosticDefinitions.KV230;
   const labels = definition.detailLabels;
   return {
-    ...diagnosticFor(fileName, 'FW230', source, body.offset, body.source.length),
+    ...diagnosticFor(fileName, 'KV230', source, body.offset, body.source.length),
     help: [
       `${labels.slotHoist} ${target}$slot_children`,
       `${labels.blockedChildren} ${body.source}`,
       definition.help ?? '',
     ].join('\n'),
-    message: `${diagnosticDefinitions.FW230.message} ${target}`,
+    message: `${diagnosticDefinitions.KV230.message} ${target}`,
   };
 }
 
-function fw311Diagnostic(
+function kv311Diagnostic(
   fileName: string,
   source: string,
   fact: QueryUpdateCoverageFact,
@@ -248,8 +248,8 @@ function fw311Diagnostic(
   const span = fact.sourceSpan;
   const start = generatedOffsetToOriginal(sourceOffsetMap, span?.start);
   return {
-    ...diagnosticFor(fileName, 'FW311', source, start, span?.length),
-    message: `${diagnosticDefinitions.FW311.message} ${fact.componentName} ${fact.query} ${fact.position}`,
+    ...diagnosticFor(fileName, 'KV311', source, start, span?.length),
+    message: `${diagnosticDefinitions.KV311.message} ${fact.componentName} ${fact.query} ${fact.position}`,
   };
 }
 

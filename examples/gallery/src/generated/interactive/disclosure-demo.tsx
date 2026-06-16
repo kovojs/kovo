@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/disclosure-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/disclosure-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryDisclosureDemo$button_aria_expanded_derive = derive(['state'], (state: any) =>
   String(state.open),
@@ -15,12 +15,12 @@ export const GalleryDisclosureDemo$div_hidden_derive = derive(['state'], (state:
   !state.open ? '' : null,
 );
 
-import { component } from '@jiso/core';
-import { disclosureTriggerClick as _disclosureTriggerClick } from '@jiso/headless-ui/primitives';
+import { component } from '@kovojs/core';
+import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/disclosure.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/disclosure.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50';
 const TRIGGER_CLASS =
@@ -33,24 +33,24 @@ export interface GalleryDisclosureDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryDisclosureDemo = component('gallery-disclosure-demo', {
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryDisclosureDemoState) => (
     <section
       class={ROOT_CLASS}
       data-gallery-interactive="disclosure"
-      fw-c="gallery-disclosure-demo"
-      fw-state='{"open":false}'
+      kovo-c="gallery-disclosure-demo"
+      kovo-state='{"open":false}'
     >
       <button
         aria-controls="gallery-interactive-disclosure-panel"
         aria-expanded={String(state.open)}
-        data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=a22e4c3e#GalleryDisclosureDemo$button_aria_expanded_derive"
+        data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_aria_expanded_derive"
         class={TRIGGER_CLASS}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=a22e4c3e#GalleryDisclosureDemo$button_data_state_derive"
-        on:click="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=a22e4c3e#GalleryDisclosureDemo$button_click"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_data_state_derive"
+        on:click="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_click"
         type="button"
       >
         Shipping rules
@@ -58,9 +58,9 @@ export const GalleryDisclosureDemo = component('gallery-disclosure-demo', {
       <div
         class={CONTENT_CLASS}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=a22e4c3e#GalleryDisclosureDemo$div_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$div_data_state_derive"
         hidden={!state.open}
-        data-bind:hidden="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=a22e4c3e#GalleryDisclosureDemo$div_hidden_derive"
+        data-bind:hidden="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$div_hidden_derive"
         id="gallery-interactive-disclosure-panel"
       >
         Orders over $50 ship free.

@@ -117,7 +117,7 @@ describe('query binding helpers', () => {
     const host = new FakeQueryPlanElement({ 'data-plan': 'cart-host' });
     const list = new FakeTemplateStampHost({
       'data-bind-list': 'cart.items',
-      'fw-key': 'productId',
+      'kovo-key': 'productId',
     });
     const observed: string[] = [];
     root.bindings.push(count);
@@ -218,7 +218,7 @@ describe('query binding helpers', () => {
   it('applies same-island state bindings without query dependencies', async () => {
     const host = new FakeStatefulBindingElement({
       'data-bind:data-state': 'state.status',
-      'fw-state': '{"status":"idle"}',
+      'kovo-state': '{"status":"idle"}',
     });
     const count = new FakeStatefulBindingElement(
       { 'data-bind': 'state.count' },
@@ -241,13 +241,13 @@ describe('query binding helpers', () => {
   });
 
   it('keeps state binding walks scoped to the nearest state host', async () => {
-    const host = new FakeStatefulBindingElement({ 'fw-state': '{"count":0}' });
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"count":0}' });
     const count = new FakeStatefulBindingElement(
       { 'data-bind': 'state.count' },
       { parent: host, textContent: '0' },
     );
     const nestedHost = new FakeStatefulBindingElement(
-      { 'fw-state': '{"count":100}' },
+      { 'kovo-state': '{"count":100}' },
       { parent: host },
     );
     const nestedCount = new FakeStatefulBindingElement(
@@ -261,7 +261,7 @@ describe('query binding helpers', () => {
   });
 
   it('applies optional state path empty semantics to text and attributes', async () => {
-    const host = new FakeStatefulBindingElement({ 'fw-state': '{"deal":{}}' });
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"deal":{}}' });
     const name = new FakeStatefulBindingElement(
       { 'data-bind': 'state.deal.contact?.name' },
       { parent: host, textContent: 'Ada' },
@@ -283,7 +283,7 @@ describe('query binding helpers', () => {
   });
 
   it('lazy-imports state derive attribute bindings and removes empty results', async () => {
-    const host = new FakeStatefulBindingElement({ 'fw-state': '{"open":false}' });
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"open":false}' });
     const panel = new FakeStatefulBindingElement(
       {
         'data-bind:hidden': '/c/disclosure.client.js#Disclosure$panel_hidden_derive',
@@ -309,7 +309,7 @@ describe('query binding helpers', () => {
   });
 
   it('reflects state-derived checked bindings to the live input property', async () => {
-    const host = new FakeStatefulBindingElement({ 'fw-state': '{"checked":false}' });
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"checked":false}' });
     const directInput = new FakeStatefulBindingElement(
       {
         checked: '',
@@ -348,7 +348,7 @@ describe('query binding helpers', () => {
   });
 
   it('reflects state-derived value attribute bindings to the live input property', async () => {
-    const host = new FakeStatefulBindingElement({ 'fw-state': '{"value":2}' });
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"value":2}' });
     const input = new FakeStatefulBindingElement(
       {
         'data-bind:value': '/c/number-field.client.js#NumberField$input_value_derive',
@@ -376,7 +376,7 @@ describe('query binding helpers', () => {
   });
 
   it('removes native progress value bindings without restoring determinate state', async () => {
-    const host = new FakeStatefulBindingElement({ 'fw-state': '{"value":40}' });
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"value":40}' });
     const progress = new FakeStatefulBindingElement(
       {
         'data-bind:value': '/c/progress.client.js#Progress$value_derive',
@@ -413,7 +413,7 @@ describe('query binding helpers', () => {
   });
 
   it('reflects state-derived scroll attribute bindings to live scroll properties', async () => {
-    const host = new FakeStatefulBindingElement({ 'fw-state': '{"scrollTop":0}' });
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"scrollTop":0}' });
     const viewport = new FakeStatefulBindingElement(
       {
         'data-bind:scrollleft': 'state.scrollLeft',
@@ -439,7 +439,7 @@ describe('query binding helpers', () => {
   });
 
   it('reflects state-derived indeterminate bindings to the live input property', async () => {
-    const host = new FakeStatefulBindingElement({ 'fw-state': '{"checked":"indeterminate"}' });
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"checked":"indeterminate"}' });
     const input = new FakeStatefulBindingElement(
       {
         'data-bind:indeterminate': '/c/checkbox.client.js#Checkbox$input_indeterminate_derive',
@@ -468,7 +468,7 @@ describe('query binding helpers', () => {
   });
 
   it('lazy-imports state derive text bindings', async () => {
-    const host = new FakeStatefulBindingElement({ 'fw-state': '{"value":""}' });
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"value":""}' });
     const output = new FakeStatefulBindingElement(
       { 'data-bind': '/c/accordion.client.js#Accordion$output_text_derive' },
       { parent: host, textContent: 'old' },

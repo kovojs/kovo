@@ -27,13 +27,13 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toEqual({
       body: [
-        '<fw-query name="cart" key="cart:c1" version="7">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge></fw-fragment>',
-        '<fw-fragment target="recommendations"><section fw-c="recommendations" fw-deps="product:p1"></section></fw-fragment>',
+        '<kovo-query name="cart" key="cart:c1" version="7">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><cart-badge kovo-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge></kovo-fragment>',
+        '<kovo-fragment target="recommendations"><section kovo-c="recommendations" kovo-deps="product:p1"></section></kovo-fragment>',
       ].join('\n'),
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Changes': '[{"domain":"cart"}]',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Changes': '[{"domain":"cart"}]',
       },
       status: 200,
     });
@@ -67,10 +67,10 @@ describe('server mutation primitives', () => {
         targets: ['cart-badge'],
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></fw-fragment>',
+      body: '<kovo-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></kovo-fragment>',
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Changes': '[{"domain":"cart"}]',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Changes': '[{"domain":"cart"}]',
       },
       status: 500,
     });
@@ -113,7 +113,7 @@ describe('server mutation primitives', () => {
         fragmentRenderers: [
           {
             mode: 'append',
-            render: () => '<article fw-key="p3"></article>',
+            render: () => '<article kovo-key="p3"></article>',
             target: 'product-grid',
           },
         ],
@@ -123,7 +123,7 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toMatchObject({
       body: expect.stringContaining(
-        '<fw-fragment target="product-grid" mode="append"><article fw-key="p3"></article></fw-fragment>',
+        '<kovo-fragment target="product-grid" mode="append"><article kovo-key="p3"></article></kovo-fragment>',
       ),
       status: 200,
     });
@@ -167,11 +167,11 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toMatchObject({
       body: [
-        '<fw-query name="cart">{"count":2}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>number:2</cart-badge></fw-fragment>',
+        '<kovo-query name="cart">{"count":2}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><cart-badge>number:2</cart-badge></kovo-fragment>',
       ].join('\n'),
       headers: {
-        'FW-Changes': '[{"domain":"cart"}]',
+        'Kovo-Changes': '[{"domain":"cart"}]',
       },
       status: 200,
     });
@@ -206,7 +206,7 @@ describe('server mutation primitives', () => {
         request: {},
       }),
     ).resolves.toMatchObject({
-      body: '<fw-query name="cart" key="cart:2">{"cartId":2,"type":"number"}</fw-query>',
+      body: '<kovo-query name="cart" key="cart:2">{"cartId":2,"type":"number"}</kovo-query>',
       status: 200,
     });
   });
@@ -237,7 +237,7 @@ describe('server mutation primitives', () => {
         targets: ['cart-drawer'],
       }),
     ).resolves.toMatchObject({
-      body: '<fw-fragment target="cart-drawer"><link rel="stylesheet" href="/assets/cart-drawer.css"><link rel="stylesheet" href="/assets/theme.css"><cart-drawer class="drawer-open">Added</cart-drawer></fw-fragment>',
+      body: '<kovo-fragment target="cart-drawer"><link rel="stylesheet" href="/assets/cart-drawer.css"><link rel="stylesheet" href="/assets/theme.css"><cart-drawer class="drawer-open">Added</cart-drawer></kovo-fragment>',
       status: 200,
     });
   });
@@ -273,10 +273,10 @@ describe('server mutation primitives', () => {
         targets: ['recommendations'],
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="recommendations" error-boundary="recommendations"><link rel="stylesheet" href="/assets/recommendations.css"><section role="alert">recommendations failed</section></fw-fragment>',
+      body: '<kovo-fragment target="recommendations" error-boundary="recommendations"><link rel="stylesheet" href="/assets/recommendations.css"><section role="alert">recommendations failed</section></kovo-fragment>',
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Changes': '[]',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Changes': '[]',
       },
       status: 200,
     });
@@ -309,10 +309,10 @@ describe('server mutation primitives', () => {
         targets: ['recommendations'],
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="recommendations"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></fw-fragment>',
+      body: '<kovo-fragment target="recommendations"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></kovo-fragment>',
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Changes': '[]',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Changes': '[]',
       },
       status: 500,
     });
@@ -342,8 +342,8 @@ describe('server mutation primitives', () => {
         request,
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="error"><output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output></fw-fragment>',
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      body: '<kovo-fragment target="error"><output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output></kovo-fragment>',
+      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
       status: 500,
     });
     expect(onError).toHaveBeenCalledWith(thrown, {
@@ -370,8 +370,8 @@ describe('server mutation primitives', () => {
         request: {},
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>',
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      body: '<kovo-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>',
+      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
       status: 422,
     });
   });
@@ -394,8 +394,8 @@ describe('server mutation primitives', () => {
         request: {},
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></fw-fragment>',
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      body: '<kovo-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
+      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
       status: 422,
     });
   });
@@ -424,8 +424,8 @@ describe('server mutation primitives', () => {
         request: {},
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="product-form:p1"><link rel="stylesheet" href="/assets/product-form.css"><link rel="stylesheet" href="/assets/theme.css"><form>Out of stock</form></fw-fragment>',
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      body: '<kovo-fragment target="product-form:p1"><link rel="stylesheet" href="/assets/product-form.css"><link rel="stylesheet" href="/assets/theme.css"><form>Out of stock</form></kovo-fragment>',
+      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
       status: 422,
     });
   });
@@ -446,12 +446,12 @@ describe('server mutation primitives', () => {
         failureTarget: 'product-form:p1',
         rawInput: { productId: 'p1', quantity: 0 },
         renderFailureFragment: (failure, rawInput) =>
-          `<form fw-c="product-form" aria-invalid="true"><output role="alert" data-error-code="${failure.error.code}">${(rawInput as { quantity: number }).quantity}</output></form>`,
+          `<form kovo-c="product-form" aria-invalid="true"><output role="alert" data-error-code="${failure.error.code}">${(rawInput as { quantity: number }).quantity}</output></form>`,
         request: {},
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="product-form:p1"><form fw-c="product-form" aria-invalid="true"><output role="alert" data-error-code="VALIDATION">0</output></form></fw-fragment>',
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      body: '<kovo-fragment target="product-form:p1"><form kovo-c="product-form" aria-invalid="true"><output role="alert" data-error-code="VALIDATION">0</output></form></kovo-fragment>',
+      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
       status: 422,
     });
   });

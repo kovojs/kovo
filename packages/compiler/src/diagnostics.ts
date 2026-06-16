@@ -1,4 +1,4 @@
-import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
+import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
 
 export interface CompilerDiagnostic {
   code: DiagnosticCode;

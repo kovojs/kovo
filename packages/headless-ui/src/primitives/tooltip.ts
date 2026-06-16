@@ -56,7 +56,7 @@ export function tooltipTriggerAttributes(
 
   return Object.freeze({
     ...mergeDataAttributes(openState(options.open), dataDisabled(options.disabled === true)),
-    ...(enabledContentId === undefined ? {} : { 'jiso-tooltip': enabledContentId }),
+    ...(enabledContentId === undefined ? {} : { 'kovo-tooltip': enabledContentId }),
     ...(enabledContentId === undefined || !options.open
       ? {}
       : { 'aria-describedby': enabledContentId }),
@@ -93,7 +93,7 @@ export function setTooltipOpen(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -109,7 +109,7 @@ export function tooltipTriggerPointerEnter(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -125,7 +125,7 @@ export function tooltipTriggerPointerLeave(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -141,7 +141,7 @@ export function tooltipTriggerFocus(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -157,7 +157,7 @@ export function tooltipTriggerBlur(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.

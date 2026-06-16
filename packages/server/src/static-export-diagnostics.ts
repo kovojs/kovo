@@ -1,7 +1,7 @@
-import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
+import { diagnosticDefinitions, type DiagnosticCode } from '@kovojs/core';
 
 export interface StaticExportDiagnostic {
-  code: DiagnosticCode | 'FW229';
+  code: DiagnosticCode | 'KV229';
   message: string;
   routePath: string;
 }
@@ -17,23 +17,23 @@ export interface StaticExportCompileDiagnostic {
 }
 
 export class StaticExportError extends Error {
-  readonly code: DiagnosticCode | 'FW229';
+  readonly code: DiagnosticCode | 'KV229';
   readonly diagnostics: readonly StaticExportDiagnostic[];
 
   constructor(diagnostics: readonly StaticExportDiagnostic[]) {
     super(
       diagnostics.length === 1
         ? diagnostics[0]?.message
-        : `FW229 static export found ${diagnostics.length} non-exportable routes.`,
+        : `KV229 static export found ${diagnostics.length} non-exportable routes.`,
     );
     this.name = 'StaticExportError';
-    this.code = diagnostics[0]?.code ?? 'FW229';
+    this.code = diagnostics[0]?.code ?? 'KV229';
     this.diagnostics = diagnostics;
   }
 }
 
 export function staticExportDiagnostic(routePath: string, message: string): StaticExportDiagnostic {
-  return { code: 'FW229', message, routePath };
+  return { code: 'KV229', message, routePath };
 }
 
 export function isStaticExportDiagnostic(value: unknown): value is StaticExportDiagnostic {

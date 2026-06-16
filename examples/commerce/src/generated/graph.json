@@ -112,7 +112,7 @@
       "i18n": ["en-US:cartLabel,productStock"],
       "meta": {
         "description": "Browse products and checkout with 0 verifiable cart item.",
-        "title": "Jiso Commerce (0)"
+        "title": "Kovo Commerce (0)"
       },
       "modulepreloads": [],
       "prefetch": false,

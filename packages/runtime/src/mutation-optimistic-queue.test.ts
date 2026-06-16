@@ -41,7 +41,7 @@ describe('optimistic enhanced mutation queueing', () => {
 
       return {
         async text() {
-          return `<fw-query name="cart">{"count":${quantity === '1' ? 1 : 3}}</fw-query>`;
+          return `<kovo-query name="cart">{"count":${quantity === '1' ? 1 : 3}}</kovo-query>`;
         },
       };
     });
@@ -101,7 +101,7 @@ describe('optimistic enhanced mutation queueing', () => {
     store.set('cart', { count: 0 });
     const fetch = vi.fn(async () => ({
       async text() {
-        return '<fw-query name="cart">{"count":2}</fw-query>';
+        return '<kovo-query name="cart">{"count":2}</kovo-query>';
       },
     }));
 

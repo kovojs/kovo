@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
 import {
-  fwResponseBodyFact,
+  kovoResponseBodyFact,
   htmlElementFacts,
   htmlLinkHrefs,
   type HtmlElementSelector,
@@ -98,7 +98,8 @@ export interface GeneratedTypedRouteNavigationBehaviorFact {
   };
 }
 
-const loweredStampAttributePattern = /\b((?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+))=/g;
+const loweredStampAttributePattern =
+  /\b((?:data-bind|kovo-deps|kovo-c|kovo-state|data-p-[\w-]+))=/g;
 
 export function generatedComponentSourceFacts(options: {
   authoredSource: string;
@@ -109,7 +110,7 @@ export function generatedComponentSourceFacts(options: {
       options.authoredSource.matchAll(loweredStampAttributePattern),
       (match) => match[1] ?? '',
     ),
-    generatedHasLoweredIrMarker: options.generatedSource.includes('// @jiso-ir'),
+    generatedHasLoweredIrMarker: options.generatedSource.includes('// @kovojs-ir'),
   };
 }
 
@@ -176,7 +177,7 @@ export function generatedComponentCommittedIrFacts<
 
     const lowered = result.loweredSource ?? result.renderEquivalenceChecks?.[0]?.expected ?? '';
     const expectedGeneratedSource = [
-      `// @jiso-ir — lowered from ${fileName} by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.`,
+      `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.`,
       lowered,
     ].join('\n');
 
@@ -326,7 +327,7 @@ export interface GeneratedRuntimeModule {
   createQueryStore?: () => unknown;
   derive?: unknown;
   handler?: unknown;
-  installJisoLoader?: (options: unknown) => unknown;
+  installKovoLoader?: (options: unknown) => unknown;
   [name: string]: unknown;
 }
 
@@ -590,7 +591,7 @@ const isLowerHex = (value: string): boolean => /^[0-9a-f]+$/.test(value);
 
 export function generatedHandlerReferenceFact(
   href: string,
-  baseUrl = 'http://jiso.test',
+  baseUrl = 'http://kovo.test',
 ): GeneratedHandlerReferenceFact {
   const url = new URL(href, baseUrl);
   const version = url.searchParams.get('v') ?? '';
@@ -606,7 +607,7 @@ export function generatedHandlerReferenceFact(
 
 export function generatedHandlerReferenceSummaryFact(
   href: string,
-  baseUrl = 'http://jiso.test',
+  baseUrl = 'http://kovo.test',
 ): GeneratedHandlerReferenceSummaryFact {
   const fact = generatedHandlerReferenceFact(href, baseUrl);
 
@@ -619,7 +620,7 @@ export function generatedHandlerReferenceSummaryFact(
 
 const rewriteGeneratedRuntimeImports = (source: string): string =>
   source.replace(
-    /import\s+\{([^}]+)\}\s+from\s+['"]@jiso\/runtime['"];\n?/g,
+    /import\s+\{([^}]+)\}\s+from\s+['"]@kovojs\/runtime['"];\n?/g,
     (_match, names: string) => {
       const bindings = names
         .split(',')
@@ -720,7 +721,7 @@ export async function generatedViewTransitionStampBehaviorFact(options: {
   const renderedImage = renderedElements.find((element) => element.tag === 'img');
 
   return {
-    componentAttr: renderedImage?.attrs['fw-c'],
+    componentAttr: renderedImage?.attrs['kovo-c'],
     jsxPropPreserved: Object.hasOwn(renderedImage?.attrs ?? {}, 'viewTransitionName'),
     registryMemberTypes: await options.registryMemberTypes,
     src: renderedImage?.attrs.src,
@@ -748,7 +749,7 @@ const generatedTypedRouteDiagnosticFacts = (
 };
 
 const typedRouteValidSource = `
-import { component, href, Link } from '@jiso/core';
+import { component, href, Link } from '@kovojs/core';
 
 export const ProductLinks = component('product-links', {
   render: () => (
@@ -761,7 +762,7 @@ export const ProductLinks = component('product-links', {
 `;
 
 const typedRouteInvalidSource = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const ProductLinks = component('product-links', {
   render: () => (
@@ -774,7 +775,7 @@ export const ProductLinks = component('product-links', {
 `;
 
 const typedRouteRegistryConsumerSource = `
-import { href, Link, redirect, route } from '@jiso/core';
+import { href, Link, redirect, route } from '@kovojs/core';
 
 href('/cart', {});
 href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } });
@@ -818,7 +819,7 @@ export async function generatedTypedRouteNavigationBehaviorFact(options: {
     source: typedRouteValidSource,
   });
 
-  // SPEC §6.4: typed navigation lowers to plain anchors while residual hrefs validate via FW220.
+  // SPEC §6.4: typed navigation lowers to plain anchors while residual hrefs validate via KV220.
   await options.assertRegistryConsumerTypes(valid.files, typedRouteRegistryConsumerSource);
 
   const invalid = options.compileComponentModule({
@@ -845,7 +846,7 @@ export async function generatedTypedRouteNavigationBehaviorFact(options: {
         (element) => element.attrs.href ?? '',
       ),
     },
-    invalidDiagnostics: generatedTypedRouteDiagnosticFacts(invalid.diagnostics, ['FW220']),
+    invalidDiagnostics: generatedTypedRouteDiagnosticFacts(invalid.diagnostics, ['KV220']),
     provenance: {
       spec: 'SPEC.md section 6.4',
     },
@@ -909,7 +910,7 @@ export function generatedTypedDataParamCoercionBehaviorFact(
   const addParams = options.readElementParams({
     attributes: [{ name: 'data-p-quantity', value: '2' }],
     getAttribute: (name) =>
-      name === 'fw-param-types' ? buttons[0]?.attrs['fw-param-types'] : null,
+      name === 'kovo-param-types' ? buttons[0]?.attrs['kovo-param-types'] : null,
   });
   const selectParams = options.readElementParams({
     attributes: [
@@ -917,7 +918,7 @@ export function generatedTypedDataParamCoercionBehaviorFact(
       { name: 'data-p-id', value: 'p1' },
     ],
     getAttribute: (name) =>
-      name === 'fw-param-types' ? buttons[1]?.attrs['fw-param-types'] : null,
+      name === 'kovo-param-types' ? buttons[1]?.attrs['kovo-param-types'] : null,
   });
   const deselectParams = options.readElementParams({
     attributes: [
@@ -925,7 +926,7 @@ export function generatedTypedDataParamCoercionBehaviorFact(
       { name: 'data-p-id', value: 'p2' },
     ],
     getAttribute: (name) =>
-      name === 'fw-param-types' ? buttons[1]?.attrs['fw-param-types'] : null,
+      name === 'kovo-param-types' ? buttons[1]?.attrs['kovo-param-types'] : null,
   });
   const standaloneParams = options.readElementParams({
     attributes: [
@@ -933,7 +934,8 @@ export function generatedTypedDataParamCoercionBehaviorFact(
       { name: 'data-p-quantity', value: '2' },
       { name: 'data-p-featured', value: 'false' },
     ],
-    getAttribute: (name) => (name === 'fw-param-types' ? 'quantity:number featured:boolean' : null),
+    getAttribute: (name) =>
+      name === 'kovo-param-types' ? 'quantity:number featured:boolean' : null,
   });
   const cartState = { count: 1 };
 
@@ -1105,7 +1107,7 @@ export function generatedBootstrapDeferredBehaviorFact(
   bootstrapRuntime: Required<
     Pick<
       GeneratedRuntimeModule,
-      'applyDeferredStreamResponseToDom' | 'createQueryStore' | 'installJisoLoader'
+      'applyDeferredStreamResponseToDom' | 'createQueryStore' | 'installKovoLoader'
     >
   >,
 ): GeneratedBootstrapDeferredBehaviorFact {
@@ -1148,17 +1150,17 @@ export function generatedBootstrapDeferredBehaviorFact(
     },
     bootstrapRuntime,
   );
-  const applyDeferredStreamResponse = applyingRuntime.exports.applyJisoDeferredStreamResponse as (
+  const applyDeferredStreamResponse = applyingRuntime.exports.applyKovoDeferredStreamResponse as (
     body: string,
     options: { root: GeneratedFixtureMorphRoot },
   ) => { appliedFragments: string[] };
   const applyResult = applyDeferredStreamResponse(
     [
-      '<!doctype html><main><fw-defer target="cart-badge"></fw-defer></main>',
-      '--jiso-boundary',
-      '<fw-query name="cart">{"count":9,"empty":false,"items":[]}</fw-query>',
-      '<fw-fragment target="cart-badge"><cart-badge><span data-bind="cart.count">9</span></cart-badge></fw-fragment>',
-      '--jiso-boundary--',
+      '<!doctype html><main><kovo-defer target="cart-badge"></kovo-defer></main>',
+      '--kovo-boundary',
+      '<kovo-query name="cart">{"count":9,"empty":false,"items":[]}</kovo-query>',
+      '<kovo-fragment target="cart-badge"><cart-badge><span data-bind="cart.count">9</span></cart-badge></kovo-fragment>',
+      '--kovo-boundary--',
     ].join('\n'),
     { root: applyRoot },
   ) as { appliedFragments: string[] };
@@ -1203,7 +1205,7 @@ export function generatedServerDeferredBehaviorFact(
       },
     ],
     closeHtml: '',
-    shell: '<!doctype html><main><fw-defer target="reviews"></fw-defer></main>',
+    shell: '<!doctype html><main><kovo-defer target="reviews"></kovo-defer></main>',
   });
   const root = new GeneratedFixtureMorphRoot();
   root.targets.set('reviews', new GeneratedFixtureMorphTarget('<article>Initial</article>'));
@@ -1237,7 +1239,7 @@ export function generatedWireDeferredBehaviorFact(
     'applyCompiledQueryUpdatePlan' | 'applyDeferredStreamResponseToRuntime' | 'createQueryStore'
   >,
 ): GeneratedWireDeferredBehaviorFact {
-  const response = fwResponseBodyFact(body);
+  const response = kovoResponseBodyFact(body);
   const root = new GeneratedFixtureMorphRoot();
   root.targets.set('reviews:p1', new GeneratedFixtureMorphTarget());
   root.targets.set('recommendations:p1', new GeneratedFixtureMorphTarget());
@@ -1308,9 +1310,9 @@ export async function assertGeneratedRegistryConsumerTypes(
   const workspaceRoot =
     options.workspaceRoot ?? fileURLToPath(new URL('../../../', import.meta.url));
   const registryFileName =
-    options.registryFileName ?? join(workspaceRoot, '.jiso-test-generated', 'registry.ts');
+    options.registryFileName ?? join(workspaceRoot, '.kovo-test-generated', 'registry.ts');
   const consumerFileName =
-    options.consumerFileName ?? join(workspaceRoot, '.jiso-test-generated', 'consumer.ts');
+    options.consumerFileName ?? join(workspaceRoot, '.kovo-test-generated', 'consumer.ts');
 
   await assertTypeScriptProgramHasNoDiagnostics(
     {
@@ -1351,7 +1353,7 @@ function callableGeneratedExport(
 function typedDataParamAttributes(attrs: Record<string, string>): Record<string, string> {
   return Object.fromEntries(
     Object.entries(attrs).filter(
-      ([name]) => name === 'fw-param-types' || name.startsWith('data-p-'),
+      ([name]) => name === 'kovo-param-types' || name.startsWith('data-p-'),
     ),
   );
 }
@@ -1362,7 +1364,7 @@ export function executeGeneratedBootstrapModule(
   runtime: Required<
     Pick<
       GeneratedRuntimeModule,
-      'applyDeferredStreamResponseToDom' | 'createQueryStore' | 'installJisoLoader'
+      'applyDeferredStreamResponseToDom' | 'createQueryStore' | 'installKovoLoader'
     >
   >,
 ): ExecuteGeneratedBootstrapModuleResult {
@@ -1393,9 +1395,9 @@ export function executeGeneratedBootstrapModule(
       createQueryStore() {
         return store;
       },
-      installJisoLoader(options: unknown) {
+      installKovoLoader(options: unknown) {
         calls.push(options);
-        return runtime.installJisoLoader(options);
+        return runtime.installKovoLoader(options);
       },
     },
   });
@@ -1508,16 +1510,16 @@ export async function executeInlineEnhancedFormLoaderFixture(
     {
       id: 'cart-badge',
       getAttribute(name: string) {
-        if (name === 'fw-deps') return 'cart';
-        if (name === 'fw-fragment-target') return null;
+        if (name === 'kovo-deps') return 'cart';
+        if (name === 'kovo-fragment-target') return null;
         return null;
       },
     },
     {
       id: 'inventory-panel',
       getAttribute(name: string) {
-        if (name === 'fw-deps') return 'inventory stock';
-        if (name === 'fw-fragment-target') return 'inventory';
+        if (name === 'kovo-deps') return 'inventory stock';
+        if (name === 'kovo-fragment-target') return 'inventory';
         return null;
       },
     },
@@ -1534,17 +1536,19 @@ export async function executeInlineEnhancedFormLoaderFixture(
     },
     DOMParser: class DOMParser {
       parseFromString(body: string) {
-        const queryElements = htmlElementFacts(body, { tag: 'fw-query' });
-        const fragmentElements = htmlElementFacts(body, { tag: 'fw-fragment' }).map((element) => ({
-          getAttribute(name: string) {
-            return element.attrs[name] ?? null;
-          },
-          innerHTML: element.innerHtml,
-        }));
+        const queryElements = htmlElementFacts(body, { tag: 'kovo-query' });
+        const fragmentElements = htmlElementFacts(body, { tag: 'kovo-fragment' }).map(
+          (element) => ({
+            getAttribute(name: string) {
+              return element.attrs[name] ?? null;
+            },
+            innerHTML: element.innerHtml,
+          }),
+        );
 
         return {
           querySelectorAll(selector: string) {
-            if (selector === 'fw-query') {
+            if (selector === 'kovo-query') {
               return queryElements.map((element) => ({
                 getAttribute(name: string) {
                   return element.attrs[name] ?? null;
@@ -1552,7 +1556,7 @@ export async function executeInlineEnhancedFormLoaderFixture(
                 textContent: element.innerHtml,
               }));
             }
-            if (selector === 'fw-fragment') return fragmentElements;
+            if (selector === 'kovo-fragment') return fragmentElements;
             return [];
           },
         };
@@ -1606,10 +1610,10 @@ export async function executeInlineEnhancedFormLoaderFixture(
         return id === 'cart-badge' ? fragmentTarget : null;
       },
       querySelector(selector: string) {
-        return selector === '[fw-fragment-target="cart-list"]' ? appendTarget : null;
+        return selector === '[kovo-fragment-target="cart-list"]' ? appendTarget : null;
       },
       querySelectorAll(selector: string) {
-        if (selector === '[fw-deps]') return depElements;
+        if (selector === '[kovo-deps]') return depElements;
         return [];
       },
       visibilityState: 'visible',
@@ -1625,9 +1629,9 @@ export async function executeInlineEnhancedFormLoaderFixture(
       return {
         async text() {
           return [
-            '<fw-query name="cart" key="cart:c1">{"count":1}</fw-query>',
-            '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
-            '<fw-fragment target="cart-list" mode="append"><li>2</li></fw-fragment>',
+            '<kovo-query name="cart" key="cart:c1">{"count":1}</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
+            '<kovo-fragment target="cart-list" mode="append"><li>2</li></kovo-fragment>',
           ].join('\n');
         },
       };
@@ -1701,8 +1705,8 @@ function inlineEnhancedFormQueryChunk(
   type: string,
   chunk: { attrs: string; content: string },
 ): { body: string; key: string; name: string; type: string } {
-  const query = htmlElementFacts(`<fw-query ${chunk.attrs}>${chunk.content}</fw-query>`, {
-    tag: 'fw-query',
+  const query = htmlElementFacts(`<kovo-query ${chunk.attrs}>${chunk.content}</kovo-query>`, {
+    tag: 'kovo-query',
   })[0];
   return {
     body: chunk.content,
@@ -1719,9 +1723,9 @@ function inlineEnhancedFormHeaders(
     headers instanceof Headers ? Object.fromEntries(headers.entries()) : { ...headers };
   const canonicalNames: Record<string, string> = {
     accept: 'Accept',
-    'fw-fragment': 'FW-Fragment',
-    'fw-idem': 'FW-Idem',
-    'fw-targets': 'FW-Targets',
+    'kovo-fragment': 'Kovo-Fragment',
+    'kovo-idem': 'Kovo-Idem',
+    'kovo-targets': 'Kovo-Targets',
   };
 
   return Object.fromEntries(

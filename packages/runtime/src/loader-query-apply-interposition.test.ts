@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installJisoLoader } from './index.js';
+import { createQueryStore, installKovoLoader } from './index.js';
 import {
   FakeBroadcastChannel,
   FakeFormElement,
@@ -21,13 +21,13 @@ describe('loader query apply interposition', () => {
 
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":2}',
       },
     ];
     store.subscribe('cart', plan);
 
-    installJisoLoader({ applyQuery, importModule: vi.fn(), queryStore: store, root });
+    installKovoLoader({ applyQuery, importModule: vi.fn(), queryStore: store, root });
 
     // SPEC.md §9.1/§9.4: loader script hydration must enter the same decoded
     // query apply path as mutation responses, typed reads, and inline events.
@@ -47,13 +47,13 @@ describe('loader query apply interposition', () => {
     });
     const fetch = vi.fn(async () => ({
       status: 200,
-      text: async () => '<fw-query name="reviews">{"total":3}</fw-query>',
+      text: async () => '<kovo-query name="reviews">{"total":3}</kovo-query>',
     }));
 
     store.subscribe('cart', cartPlan);
     store.subscribe('reviews', reviewsPlan);
 
-    installJisoLoader({
+    installKovoLoader({
       applyQuery,
       importModule: vi.fn(),
       queryRefetch: { fetch },
@@ -62,7 +62,7 @@ describe('loader query apply interposition', () => {
       root,
     });
 
-    const queryEventListener = root.listeners.get('jiso:query') as
+    const queryEventListener = root.listeners.get('kovo:query') as
       | ((event: { detail?: unknown }) => void)
       | undefined;
     queryEventListener?.({
@@ -104,15 +104,15 @@ describe('loader query apply interposition', () => {
       },
       text: async () =>
         [
-          '<fw-query name="cart">{"count":2}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>server</cart-badge></fw-fragment>',
+          '<kovo-query name="cart">{"count":2}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>server</cart-badge></kovo-fragment>',
         ].join('\n'),
     }));
     const observedDuringMorph: string[] = [];
     mutationRoot.bindings.push(count);
     mutationRoot.targets.set('cart-badge', new FakeMorphTarget());
 
-    installJisoLoader({
+    installKovoLoader({
       applyQuery,
       enhancedMutations: {
         fetch,
@@ -165,7 +165,7 @@ describe('loader query apply interposition', () => {
       });
       mutationRoot.bindings.push(count);
 
-      installJisoLoader({
+      installKovoLoader({
         applyQuery,
         enhancedMutations: {
           fetch: vi.fn(),
@@ -178,9 +178,9 @@ describe('loader query apply interposition', () => {
 
       channels[0]?.onmessage?.({
         data: {
-          body: '<fw-query name="reviews">{"total":3}</fw-query>',
+          body: '<kovo-query name="reviews">{"total":3}</kovo-query>',
           changes: [],
-          type: 'jiso:mutation-response',
+          type: 'kovo:mutation-response',
         },
       });
 
@@ -220,7 +220,7 @@ describe('loader query apply interposition', () => {
       });
       mutationRoot.bindings.push(count);
 
-      installJisoLoader({
+      installKovoLoader({
         applyQuery: loaderApplyQuery,
         enhancedMutations: {
           applyQuery: enhancedApplyQuery,
@@ -234,9 +234,9 @@ describe('loader query apply interposition', () => {
 
       channels[0]?.onmessage?.({
         data: {
-          body: '<fw-query name="cart">{"count":4}</fw-query>',
+          body: '<kovo-query name="cart">{"count":4}</kovo-query>',
           changes: [],
-          type: 'jiso:mutation-response',
+          type: 'kovo:mutation-response',
         },
       });
 

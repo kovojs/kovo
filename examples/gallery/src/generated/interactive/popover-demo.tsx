@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/popover-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/popover-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryPopoverDemo$section_data_state_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
@@ -18,17 +18,17 @@ export const GalleryPopoverDemo$output_text_derive = derive(['state'], (state: a
   state.open ? 'open' : 'closed',
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   popoverBeforeToggle as _popoverBeforeToggle,
   popoverContentAttributes,
   popoverRootAttributes,
   popoverTriggerAttributes,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/popover.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/popover.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS = 'relative inline-block text-sm text-neutral-950 data-[disabled]:opacity-50';
 const TRIGGER_CLASS =
@@ -41,7 +41,7 @@ export interface GalleryPopoverDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryPopoverDemo = component('gallery-popover-demo', {
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryPopoverDemoState) => {
@@ -53,17 +53,17 @@ export const GalleryPopoverDemo = component('gallery-popover-demo', {
         class={ROOT_CLASS}
         data-gallery-interactive="popover"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$section_data_state_derive"
-        fw-c="gallery-popover-demo"
-        fw-state='{"open":false}'
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$section_data_state_derive"
+        kovo-c="gallery-popover-demo"
+        kovo-state='{"open":false}'
       >
         <button
           {...popoverTriggerAttributes({ contentId, open: state.open })}
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$button_aria_expanded_derive"
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$button_aria_expanded_derive"
           class={TRIGGER_CLASS}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$button_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$button_data_state_derive"
         >
           Delivery window
         </button>
@@ -71,14 +71,14 @@ export const GalleryPopoverDemo = component('gallery-popover-demo', {
           {...popoverContentAttributes({ contentId, open: state.open })}
           class={CONTENT_CLASS}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$div_data_state_derive"
-          on:beforetoggle="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$div_beforetoggle"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$div_data_state_derive"
+          on:beforetoggle="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$div_beforetoggle"
         >
           Weekday arrivals are available from 9 AM to 5 PM.
         </div>
         <output
           data-demo-state="popover-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

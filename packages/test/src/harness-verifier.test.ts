@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@jiso/server';
+import { mutation, s } from '@kovojs/server';
 
 import {
   createVerifiedFakeHarness,
@@ -10,7 +10,7 @@ import {
   type FakeDb,
 } from './test-fixtures.js';
 
-describe('@jiso/test harness verifier integration', () => {
+describe('@kovojs/test harness verifier integration', () => {
   it('verifies observed writes against the static touch graph after exec', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
@@ -84,16 +84,16 @@ describe('@jiso/test harness verifier integration', () => {
     expect(harness.verificationDiagnostics()).toEqual([
       {
         branch: 'stock-reserve',
-        code: 'FW405',
+        code: 'KV405',
         domain: 'product',
-        message: expectedDiagnosticMessage('FW405'),
+        message: expectedDiagnosticMessage('KV405'),
         severity: 'warn',
         site: 'cart.domain.ts:2',
       },
       {
-        code: 'FW403',
+        code: 'KV403',
         domain: 'product',
-        message: expectedDiagnosticMessage('FW403'),
+        message: expectedDiagnosticMessage('KV403'),
         severity: 'warn',
       },
     ]);
@@ -129,7 +129,7 @@ describe('@jiso/test harness verifier integration', () => {
     expect(harness.dbHandle().read('cart_items')).toEqual([]);
   });
 
-  it('fails verification when raw SQL writes outside FW406 coverage', async () => {
+  it('fails verification when raw SQL writes outside KV406 coverage', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
@@ -154,7 +154,7 @@ describe('@jiso/test harness verifier integration', () => {
     });
 
     await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-      expectedDiagnostic('FW402', 'audit'),
+      expectedDiagnostic('KV402', 'audit'),
     );
   });
 

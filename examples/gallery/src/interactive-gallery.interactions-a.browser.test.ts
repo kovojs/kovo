@@ -49,7 +49,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
     const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
-    expect(root.getAttribute('fw-state')).toBe('{"activeValue":"shipping","value":"shipping"}');
+    expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"shipping","value":"shipping"}');
     expect(shipping.getAttribute('aria-expanded')).toBe('true');
     expect(shippingPanel.hidden).toBe(false);
     expect(billing.getAttribute('aria-expanded')).toBe('false');
@@ -78,7 +78,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"billing","value":"billing"}');
+      expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"billing","value":"billing"}');
       expect(currentShipping.getAttribute('aria-expanded')).toBe('false');
       expect(currentShippingPanel.hidden).toBe(true);
       expect(currentBilling.getAttribute('aria-expanded')).toBe('true');
@@ -104,7 +104,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
     const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
-    expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+    expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
     expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
     expect(trigger.getAttribute('aria-controls')).toBe('gallery-interactive-alert-dialog-content');
     expect(dialog.open).toBe(false);
@@ -125,7 +125,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(root.getAttribute('kovo-state')).toBe('{"open":true}');
       expect(dialog.open).toBe(true);
     });
 
@@ -141,7 +141,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     cancel.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
       expect(dialog.open).toBe(false);
       expect(output.textContent).toBe('closed');
     });
@@ -149,7 +149,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     trigger.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(root.getAttribute('kovo-state')).toBe('{"open":true}');
       expect(dialog.open).toBe(true);
     });
 
@@ -168,14 +168,14 @@ describe('compiled interactive gallery demos in the browser', () => {
     trigger.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(root.getAttribute('kovo-state')).toBe('{"open":true}');
       expect(dialog.open).toBe(true);
     });
 
     action.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
       expect(dialog.open).toBe(false);
     });
   });
@@ -194,7 +194,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
     const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
-    expect(root.getAttribute('fw-state')).toBe(
+    expect(root.getAttribute('kovo-state')).toBe(
       '{"highlightedValue":"standard","open":false,"value":"standard"}',
     );
     expect(form.dataset.galleryForm).toBe('select');
@@ -220,7 +220,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/select-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"standard","open":true,"value":"standard"}',
       );
       expect(trigger.getAttribute('aria-expanded')).toBe('true');
@@ -233,7 +233,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"express","open":true,"value":"standard"}',
       );
       expect(express.getAttribute('data-highlighted')).toBe('');
@@ -244,7 +244,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"express","open":false,"value":"express"}',
       );
       expect(input.value).toBe('express');
@@ -256,7 +256,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     trigger.click();
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"express","open":true,"value":"express"}',
       );
     });
@@ -265,7 +265,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(disabledClick.defaultPrevented).toBe(true);
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"express","open":true,"value":"express"}',
       );
       expect(input.value).toBe('express');
@@ -293,7 +293,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       events: ['click', 'input', 'keydown'],
     });
 
-    expect(root.getAttribute('fw-state')).toBe(
+    expect(root.getAttribute('kovo-state')).toBe(
       '{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}',
     );
     expect(input.getAttribute('role')).toBe('combobox');
@@ -325,7 +325,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports.at(-1)).toBe(
         '/c/examples/gallery/src/generated/interactive/combobox-demo.client.js',
       );
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"chicago","inputValue":"chi","open":true,"value":"austin"}',
       );
       expect(currentInput.getAttribute('aria-expanded')).toBe('true');
@@ -357,7 +357,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLOutputElement>('[data-demo-state="combobox-value"]'),
       );
 
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"chicago","inputValue":"chicago","open":false,"value":"chicago"}',
       );
       expect(currentInput.getAttribute('aria-expanded')).toBe('false');
@@ -375,7 +375,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
       const currentListbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
 
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}',
       );
       expect(currentInput.value).toBe('austin');
@@ -396,7 +396,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       events: ['click', 'input', 'keydown'],
     });
 
-    expect(root.getAttribute('fw-state')).toBe(
+    expect(root.getAttribute('kovo-state')).toBe(
       '{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}',
     );
     expect(input.getAttribute('role')).toBe('combobox');
@@ -427,7 +427,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports.at(-1)).toBe(
         '/c/examples/gallery/src/generated/interactive/autocomplete-demo.client.js',
       );
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"development","inputValue":"dev","open":true,"value":"design"}',
       );
       expect(currentInput.getAttribute('aria-expanded')).toBe('true');
@@ -459,7 +459,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLOutputElement>('[data-demo-state="autocomplete-value"]'),
       );
 
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"development","inputValue":"development","open":false,"value":"development"}',
       );
       expect(currentInput.getAttribute('aria-expanded')).toBe('false');
@@ -480,7 +480,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLOutputElement>('[data-demo-state="autocomplete-value"]'),
       );
 
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"development","inputValue":"development","open":false,"value":"development"}',
       );
       expect(currentInput.value).toBe('development');
@@ -506,7 +506,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/toggle-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe('{"pressed":true}');
+      expect(root.getAttribute('kovo-state')).toBe('{"pressed":true}');
     });
 
     // SPEC §12.1: the toggle pressed end-state (aria-pressed=true, data-state=on) must stay
@@ -517,7 +517,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await userEvent.keyboard('{Enter}');
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"pressed":false}');
+      expect(root.getAttribute('kovo-state')).toBe('{"pressed":false}');
     });
   });
 
@@ -527,7 +527,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(root.querySelector<HTMLOutputElement>('[data-demo-state="checked"]'));
     installGeneratedGalleryLoader(root);
 
-    expect(root.getAttribute('fw-state')).toBe('{"checked":"indeterminate"}');
+    expect(root.getAttribute('kovo-state')).toBe('{"checked":"indeterminate"}');
     expect(input.getAttribute('aria-checked')).toBe('mixed');
     expect(input.indeterminate).toBe(true);
     expect(output.textContent).toBe('indeterminate');
@@ -539,7 +539,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     input.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"checked":true}');
+      expect(root.getAttribute('kovo-state')).toBe('{"checked":true}');
       expect(input.checked).toBe(true);
       expect(input.indeterminate).toBe(false);
     });
@@ -552,7 +552,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await userEvent.keyboard('{Space}');
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"checked":false}');
+      expect(root.getAttribute('kovo-state')).toBe('{"checked":false}');
       expect(input.checked).toBe(false);
       expect(input.indeterminate).toBe(false);
     });
@@ -571,7 +571,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     expect(root.getAttribute('role')).toBe('group');
     expect(root.getAttribute('aria-labelledby')).toBe('gallery-checkbox-group-label');
-    expect(root.getAttribute('fw-state')).toBe('{"activeValue":"updates","value":"updates"}');
+    expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"updates","value":"updates"}');
     const form = required(root.querySelector<HTMLFormElement>('#gallery-checkbox-group-form'));
     expect(new FormData(form).getAll('gallery-notifications')).toEqual(['updates']);
     expect(updates.name).toBe('gallery-notifications');
@@ -602,7 +602,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLOutputElement>('[data-demo-state="checkbox-group-value"]'),
       );
 
-      expect(root.getAttribute('fw-state')).toBe(
+      expect(root.getAttribute('kovo-state')).toBe(
         '{"activeValue":"billing","value":"updates,billing"}',
       );
       expect(currentAll.getAttribute('aria-checked')).toBe('true');
@@ -618,7 +618,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     all.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"billing","value":""}');
+      expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"billing","value":""}');
       expect(all.getAttribute('aria-checked')).toBe('false');
       expect(all.indeterminate).toBe(false);
       expect(all.checked).toBe(false);
@@ -644,7 +644,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     button.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(root.getAttribute('kovo-state')).toBe('{"open":true}');
     });
 
     // SPEC §12.1: the disclosure open end-state (trigger aria-expanded=true, panel revealed) must
@@ -655,7 +655,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await userEvent.keyboard('{Enter}');
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
     });
   });
 
@@ -667,7 +667,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(root.querySelector<HTMLOutputElement>('[data-demo-state="value"]'));
     const { imports } = installGeneratedGalleryLoader(root);
 
-    expect(root.getAttribute('fw-state')).toBe('{"value":2}');
+    expect(root.getAttribute('kovo-state')).toBe('{"value":2}');
     expect(input.type).toBe('number');
     expect(input.name).toBe('gallery-seat-count');
     expect(input.form).toBe(form);
@@ -683,7 +683,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/number-field-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe('{"value":4}');
+      expect(root.getAttribute('kovo-state')).toBe('{"value":4}');
       expect(output.textContent).toBe('4');
       expect(new FormData(form).get('gallery-seat-count')).toBe('4');
     });
@@ -691,7 +691,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     increment.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"value":5}');
+      expect(root.getAttribute('kovo-state')).toBe('{"value":5}');
       expect(increment.disabled).toBe(true);
       expect(increment.getAttribute('data-disabled')).toBe('');
       expect(new FormData(form).get('gallery-seat-count')).toBe('5');
@@ -701,7 +701,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     decrement.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"value":4}');
+      expect(root.getAttribute('kovo-state')).toBe('{"value":4}');
       expect(increment.disabled).toBe(false);
       expect(increment.hasAttribute('data-disabled')).toBe(false);
       expect(new FormData(form).get('gallery-seat-count')).toBe('4');
@@ -712,7 +712,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"value":0}');
+      expect(root.getAttribute('kovo-state')).toBe('{"value":0}');
       expect(decrement.disabled).toBe(true);
       expect(decrement.getAttribute('data-disabled')).toBe('');
       expect(output.textContent).toBe('0');
@@ -753,13 +753,13 @@ describe('compiled interactive gallery demos in the browser', () => {
       events: ['input', 'change', 'click'],
     });
 
-    expect(root.getAttribute('fw-state')).toBe(
+    expect(root.getAttribute('kovo-state')).toBe(
       '{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}',
     );
     expect(root.id).toBe('gallery-interactive-field-form');
     expect(email.name).toBe('gallery-email');
     expect(email.form).toBe(form);
-    expect(email.pattern).toBe('.+@jiso\\.dev');
+    expect(email.pattern).toBe('.+@kovojs\\.dev');
     expect(email.required).toBe(true);
     expect(email.value).toBe('ada@example');
     expect(email.checkValidity()).toBe(false);
@@ -787,7 +787,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(new FormData(form).get('gallery-plan')).toBe('team');
     expect(new FormData(form).get('gallery-seat')).toBe('window');
 
-    email.value = 'ada@jiso.dev';
+    email.value = 'ada@kovo.sh';
     email.dispatchEvent(new Event('input', { bubbles: true }));
 
     await vi.waitFor(() => {
@@ -804,18 +804,18 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports.at(-1)).toBe(
         '/c/examples/gallery/src/generated/interactive/field-demo.client.js',
       );
-      expect(root.getAttribute('fw-state')).toBe(
-        '{"email":"ada@jiso.dev","invalid":false,"plan":"team","shippingDisabled":false}',
+      expect(root.getAttribute('kovo-state')).toBe(
+        '{"email":"ada@kovo.sh","invalid":false,"plan":"team","shippingDisabled":false}',
       );
-      expect(currentEmail.value).toBe('ada@jiso.dev');
+      expect(currentEmail.value).toBe('ada@kovo.sh');
       expect(currentEmail.checkValidity()).toBe(true);
-      expect(new FormData(form).get('gallery-email')).toBe('ada@jiso.dev');
+      expect(new FormData(form).get('gallery-email')).toBe('ada@kovo.sh');
       expect(currentEmail.getAttribute('aria-describedby')).toBe(
         'gallery-interactive-field-email-description',
       );
       expect(currentEmail.hasAttribute('aria-invalid')).toBe(false);
       expect(currentError.hidden).toBe(true);
-      expect(currentOutput.textContent).toBe('ada@jiso.dev');
+      expect(currentOutput.textContent).toBe('ada@kovo.sh');
     });
 
     const nextPlan = required(
@@ -832,8 +832,8 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLOutputElement>('[data-demo-state="field-plan"]'),
       );
 
-      expect(root.getAttribute('fw-state')).toBe(
-        '{"email":"ada@jiso.dev","invalid":false,"plan":"enterprise","shippingDisabled":false}',
+      expect(root.getAttribute('kovo-state')).toBe(
+        '{"email":"ada@kovo.sh","invalid":false,"plan":"enterprise","shippingDisabled":false}',
       );
       expect(currentPlan.value).toBe('enterprise');
       expect(new FormData(form).get('gallery-plan')).toBe('enterprise');
@@ -850,8 +850,8 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLInputElement>('input[name="gallery-shipping-disabled"]'),
       );
 
-      expect(root.getAttribute('fw-state')).toBe(
-        '{"email":"ada@jiso.dev","invalid":false,"plan":"enterprise","shippingDisabled":true}',
+      expect(root.getAttribute('kovo-state')).toBe(
+        '{"email":"ada@kovo.sh","invalid":false,"plan":"enterprise","shippingDisabled":true}',
       );
       expect(currentFieldset.disabled).toBe(true);
       expect(currentFieldset.getAttribute('data-disabled')).toBe('');
@@ -872,8 +872,8 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLInputElement>('input[name="gallery-shipping-disabled"]'),
       );
 
-      expect(root.getAttribute('fw-state')).toBe(
-        '{"email":"ada@jiso.dev","invalid":false,"plan":"enterprise","shippingDisabled":false}',
+      expect(root.getAttribute('kovo-state')).toBe(
+        '{"email":"ada@kovo.sh","invalid":false,"plan":"enterprise","shippingDisabled":false}',
       );
       expect(currentFieldset.disabled).toBe(false);
       expect(currentFieldset.hasAttribute('data-disabled')).toBe(false);
@@ -904,7 +904,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(root.querySelector<HTMLOutputElement>('[data-demo-state="otp-value"]'));
     const { imports } = installGeneratedGalleryLoader(root, { events: ['input', 'keydown'] });
 
-    expect(root.getAttribute('fw-state')).toBe('{"activeSlot":2,"value":"12"}');
+    expect(root.getAttribute('kovo-state')).toBe('{"activeSlot":2,"value":"12"}');
     expect(root.getAttribute('role')).toBe('group');
     expect(root.getAttribute('aria-labelledby')).toBe('gallery-interactive-otp-label');
     expect(hidden.form).toBe(form);
@@ -923,7 +923,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports.at(-1)).toBe(
         '/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js',
       );
-      expect(root.getAttribute('fw-state')).toBe('{"activeSlot":3,"value":"123"}');
+      expect(root.getAttribute('kovo-state')).toBe('{"activeSlot":3,"value":"123"}');
       expect(hidden.value).toBe('123');
       expect(new FormData(form).get('gallery-otp-code')).toBe('123');
       expect(third.value).toBe('3');
@@ -936,7 +936,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     fourth.dispatchEvent(new Event('input', { bubbles: true }));
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"activeSlot":3,"value":"1234"}');
+      expect(root.getAttribute('kovo-state')).toBe('{"activeSlot":3,"value":"1234"}');
       expect(root.getAttribute('data-complete')).toBe('');
       expect(hidden.value).toBe('1234');
       expect(new FormData(form).get('gallery-otp-code')).toBe('1234');
@@ -973,7 +973,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports.at(-1)).toBe(
         '/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js',
       );
-      expect(root.getAttribute('fw-state')).toBe('{"activeSlot":1,"value":"1"}');
+      expect(root.getAttribute('kovo-state')).toBe('{"activeSlot":1,"value":"1"}');
       expect(root.hasAttribute('data-complete')).toBe(false);
       expect(hidden.value).toBe('1');
       expect(new FormData(form).get('gallery-otp-code')).toBe('1');
@@ -996,7 +996,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(paste.defaultPrevented).toBe(true);
-      expect(root.getAttribute('fw-state')).toBe('{"activeSlot":3,"value":"9876"}');
+      expect(root.getAttribute('kovo-state')).toBe('{"activeSlot":3,"value":"9876"}');
       expect(root.getAttribute('data-complete')).toBe('');
       expect(hidden.value).toBe('9876');
       expect(hidden.getAttribute('data-complete')).toBe('');
@@ -1023,7 +1023,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(root.querySelector<HTMLOutputElement>('[data-demo-state="open"]'));
     const { imports } = installGeneratedGalleryLoader(root);
 
-    expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+    expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(trigger.getAttribute('aria-controls')).toBe('gallery-dialog-content');
     expect(dialog.open).toBe(false);
@@ -1038,7 +1038,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/dialog-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(root.getAttribute('kovo-state')).toBe('{"open":true}');
       expect(dialog.open).toBe(true);
     });
 
@@ -1054,14 +1054,14 @@ describe('compiled interactive gallery demos in the browser', () => {
     close.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
       expect(dialog.open).toBe(false);
     });
 
     trigger.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(root.getAttribute('kovo-state')).toBe('{"open":true}');
       expect(dialog.open).toBe(true);
     });
 
@@ -1103,7 +1103,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const input = required(root.querySelector<HTMLInputElement>('input'));
     installGeneratedGalleryLoader(root);
 
-    expect(root.getAttribute('fw-state')).toBe('{"checked":false}');
+    expect(root.getAttribute('kovo-state')).toBe('{"checked":false}');
     expect(input.form).toBe(form);
     expect(input.getAttribute('role')).toBe('switch');
     expect(input.checked).toBe(false);
@@ -1112,7 +1112,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     input.click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"checked":true}');
+      expect(root.getAttribute('kovo-state')).toBe('{"checked":true}');
       expect(input.checked).toBe(true);
       expect(new FormData(form).get('gallery-notifications')).toBe('enabled');
     });
@@ -1125,7 +1125,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await userEvent.keyboard('{Space}');
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"checked":false}');
+      expect(root.getAttribute('kovo-state')).toBe('{"checked":false}');
       expect(input.checked).toBe(false);
       expect(new FormData(form).get('gallery-notifications')).toBeNull();
     });
@@ -1133,7 +1133,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await userEvent.keyboard('{Enter}');
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"checked":true}');
+      expect(root.getAttribute('kovo-state')).toBe('{"checked":true}');
       expect(input.checked).toBe(true);
       expect(new FormData(form).get('gallery-notifications')).toBe('enabled');
     });

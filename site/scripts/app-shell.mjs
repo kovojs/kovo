@@ -15,7 +15,7 @@ const defaultServerAppShellClientModulesPath = path.join(
   'dist/server/src/api/app-shell/client-modules.mjs',
 );
 const defaultServerAppShellCorePath = path.join(repoRoot, 'dist/server/src/api/app-shell/core.mjs');
-const routeManifestFile = '.jiso-site-routes.json';
+const routeManifestFile = '.kovo-site-routes.json';
 
 const textEncoder = new TextEncoder();
 
@@ -31,7 +31,7 @@ export async function createSiteDistApp({
   const gallerySupport = registerGalleryInteractiveSupportClientModules(clientModules);
   // The folded component pages reference the gallery's compiled interactive
   // client modules (/c/examples/gallery/.../<name>.client.js?v=…). Register them
-  // so the static-export replay can serve and copy them (else FW229).
+  // so the static-export replay can serve and copy them (else KV229).
   mergeModuleHrefs(moduleHrefs, gallerySupport.moduleHrefs);
   mergeModuleHrefs(
     moduleHrefs,
@@ -49,10 +49,10 @@ async function loadDefaultServerApi() {
   const [clientModulesApi, coreApi] = await Promise.all([
     loadAppShellSubpath(
       defaultServerAppShellClientModulesPath,
-      '@jiso/server/app-shell/client-modules',
+      '@kovojs/server/app-shell/client-modules',
       ['createMemoryVersionedClientModuleRegistry'],
     ),
-    loadAppShellSubpath(defaultServerAppShellCorePath, '@jiso/server/app-shell/core', [
+    loadAppShellSubpath(defaultServerAppShellCorePath, '@kovojs/server/app-shell/core', [
       'createApp',
       'route',
       'respond',
@@ -82,7 +82,7 @@ function assertSiteAppShellServerApi(serverApi) {
 
   throw new Error(
     [
-      'site app shell: server API must provide focused @jiso/server app-shell authoring exports.',
+      'site app shell: server API must provide focused @kovojs/server app-shell authoring exports.',
       `Missing exports: ${missing.join(', ')}.`,
       'SPEC §9.5 docs export must replay through createApp(), route(), respond(), and the client-module registry.',
     ].join(' '),
@@ -92,7 +92,7 @@ function assertSiteAppShellServerApi(serverApi) {
 export function siteDocumentRoutes(distDir = defaultDistDir, moduleHrefs = new Map(), server) {
   return siteDocumentRouteEntries(distDir).map(({ file, routePath }) => {
     return server.route(routePath, {
-      meta: { title: routePath === '/' ? 'Jiso' : `Jiso ${routePath}` },
+      meta: { title: routePath === '/' ? 'Kovo' : `Kovo ${routePath}` },
       page() {
         const html = rewriteClientModuleHrefs(
           escapePreClientModuleText(readFileSync(file, 'utf8')),
@@ -151,7 +151,7 @@ function registerGalleryInteractiveSupportClientModules(clientModules) {
     'export const handler = (fn) => fn;',
     '',
   ].join('\n');
-  const runtimePath = '/c/examples/gallery/src/generated/jiso-runtime.client.js';
+  const runtimePath = '/c/examples/gallery/src/generated/kovo-runtime.client.js';
   const runtimeHref = clientModules.put({
     path: runtimePath,
     source: runtimeSource,
@@ -227,9 +227,9 @@ function registerGalleryInteractiveClientModules(clientModules, support) {
 
 function rewriteGalleryClientImports(source, support) {
   return source
-    .replaceAll("from '@jiso/runtime';", `from '${support.runtimeHref}';`)
-    .replaceAll('from "@jiso/headless-ui/primitives";', `from '${support.primitivesHref}';`)
-    .replaceAll("from '@jiso/headless-ui/primitives';", `from '${support.primitivesHref}';`);
+    .replaceAll("from '@kovojs/runtime';", `from '${support.runtimeHref}';`)
+    .replaceAll('from "@kovojs/headless-ui/primitives";', `from '${support.primitivesHref}';`)
+    .replaceAll("from '@kovojs/headless-ui/primitives';", `from '${support.primitivesHref}';`);
 }
 
 function mergeModuleHrefs(target, source) {
@@ -393,7 +393,7 @@ function contentHash(source) {
 }
 
 export const app =
-  process.env.JISO_SITE_APP_SHELL_DEFAULT !== 'off' &&
+  process.env.KOVO_SITE_APP_SHELL_DEFAULT !== 'off' &&
   existsSync(defaultDistDir) &&
   existsSync(defaultServerAppShellCorePath)
     ? await createSiteDistApp()

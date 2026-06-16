@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   cn,
   defineVariants,
@@ -10,7 +10,7 @@ import {
   type TextDirection,
   type ToolbarItem as HeadlessToolbarItem,
   type ToolbarOrientation,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface ToolbarStateProps {
   activeValue?: string;

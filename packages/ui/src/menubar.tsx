@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   cn,
   defineVariants,
@@ -12,8 +12,8 @@ import {
   type CollectionOrientation,
   type MenubarItem as HeadlessMenubarItem,
   type TextDirection,
-} from '@jiso/headless-ui';
-import { escapeHtml } from '@jiso/server';
+} from '@kovojs/headless-ui';
+import { escapeHtml } from '@kovojs/server';
 
 export interface MenubarStateProps {
   activeValue?: string;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installJisoLoader, type EnhancedMutationFetchOptions } from './index.js';
+import { createQueryStore, installKovoLoader, type EnhancedMutationFetchOptions } from './index.js';
 import {
   FakeElement,
   FakeFormElement,
@@ -19,7 +19,7 @@ describe('loader enhanced mutation submits', () => {
     // SPEC.md §4.4: enhanced-form query/fragment effects stay in the always-loaded path.
     const loaderRoot = new FakeRoot();
     const mutationRoot = new FakeMorphRoot();
-    const pendingForm = new FakePendingElement({ 'fw-deps': 'order' });
+    const pendingForm = new FakePendingElement({ 'kovo-deps': 'order' });
     const pendingRoot = new FakePendingRoot([pendingForm]);
     const store = createQueryStore();
     const preventDefault = vi.fn();
@@ -30,14 +30,14 @@ describe('loader enhanced mutation submits', () => {
       {
         enhance: '',
         'data-mutation': 'cart/add',
-        'fw-deps': 'order',
+        'kovo-deps': 'order',
       },
       {
         action: '/_m/cart/add',
         method: 'post',
       },
     );
-    const progressElement = new FakeElement({ 'fw-upload-progress': '', max: '100', value: '0' });
+    const progressElement = new FakeElement({ 'kovo-upload-progress': '', max: '100', value: '0' });
     form.progressElements = [progressElement];
     mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge' }];
     mutationRoot.targets.set('cart-badge', new FakeMorphTarget());
@@ -45,23 +45,23 @@ describe('loader enhanced mutation submits', () => {
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: {
         get(name: string) {
-          return name === 'FW-Changes' ? '[{"domain":"cart","input":{"productId":"p1"}}]' : null;
+          return name === 'Kovo-Changes' ? '[{"domain":"cart","input":{"productId":"p1"}}]' : null;
         },
       },
       async text() {
         options.onUploadProgress?.({ loaded: 512, total: 1024 });
         expect(pendingForm.attributes).toMatchObject({
           'aria-busy': 'true',
-          'fw-pending': '',
+          'kovo-pending': '',
         });
         return [
-          '<fw-query name="cart">{"count":1}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+          '<kovo-query name="cart">{"count":1}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
         ].join('\n');
       },
     }));
 
-    installJisoLoader({
+    installKovoLoader({
       enhancedMutations: {
         fetch,
         formData: () => formData,
@@ -86,10 +86,10 @@ describe('loader enhanced mutation submits', () => {
     expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
       body: formData,
       headers: {
-        Accept: 'text/vnd.jiso.fragment+html',
-        'FW-Fragment': 'true',
-        'FW-Idem': 'idem_loader',
-        'FW-Targets': 'cart-badge=cart',
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_loader',
+        'Kovo-Targets': 'cart-badge=cart',
       },
       keepalive: true,
       method: 'POST',
@@ -100,7 +100,7 @@ describe('loader enhanced mutation submits', () => {
     expect(progressElement.getAttribute('max')).toBe('100');
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(mutationRoot.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
-    expect(pendingForm.attributes).not.toHaveProperty('fw-pending');
+    expect(pendingForm.attributes).not.toHaveProperty('kovo-pending');
     expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
   });
 
@@ -121,7 +121,7 @@ describe('loader enhanced mutation submits', () => {
         method: 'post',
       },
     );
-    const progressElement = new FakeElement({ 'fw-upload-progress': '', max: '100', value: '0' });
+    const progressElement = new FakeElement({ 'kovo-upload-progress': '', max: '100', value: '0' });
     form.progressElements = [progressElement];
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: {
@@ -131,11 +131,11 @@ describe('loader enhanced mutation submits', () => {
       },
       async text() {
         options.onUploadProgress?.({ loaded: 512 });
-        return '<fw-query name="cart">{"count":1}</fw-query>';
+        return '<kovo-query name="cart">{"count":1}</kovo-query>';
       },
     }));
 
-    installJisoLoader({
+    installKovoLoader({
       enhancedMutations: {
         fetch,
         formData: () => formData,

@@ -13,7 +13,7 @@ describe('tutorial step 01 — first page', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers['Content-Type']).toBe('text/html; charset=utf-8');
-    expect(response.body).toContain('<h1>Jiso Shop</h1>');
+    expect(response.body).toContain('<h1>Kovo Shop</h1>');
     for (const product of catalog) {
       expect(response.body).toContain(`href="/products/${product.id}"`);
       expect(response.body).toContain(product.name);

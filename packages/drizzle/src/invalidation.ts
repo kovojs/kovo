@@ -1,4 +1,4 @@
-import type { TouchGraph, TouchSite } from '@jiso/core';
+import type { TouchGraph, TouchSite } from '@kovojs/core';
 
 export interface InvalidationQueryInput {
   domains: readonly string[];

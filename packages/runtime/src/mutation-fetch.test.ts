@@ -30,7 +30,7 @@ class FakeTargetRoot {
 
   querySelectorAll(selector: string): Iterable<FakeTargetElement> {
     this.queries += 1;
-    return selector === '[fw-deps]' ? this.elements : [];
+    return selector === '[kovo-deps]' ? this.elements : [];
   }
 }
 
@@ -39,24 +39,24 @@ describe('enhanced mutation fetch', () => {
     const formData = new FormData();
     const uploadProgress = vi.fn();
     const root = new FakeTargetRoot([
-      new FakeTargetElement('cart-badge', { 'fw-deps': 'cart product:p1' }),
+      new FakeTargetElement('cart-badge', { 'kovo-deps': 'cart product:p1' }),
       new FakeTargetElement(undefined, {
-        'fw-deps': 'recommendations',
-        'fw-fragment-target': 'recommendations:p1',
+        'kovo-deps': 'recommendations',
+        'kovo-fragment-target': 'recommendations:p1',
       }),
-      new FakeTargetElement('cart-badge', { 'fw-deps': 'cart product:p1' }),
+      new FakeTargetElement('cart-badge', { 'kovo-deps': 'cart product:p1' }),
     ]);
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: {
         get(name: string) {
-          return name === 'FW-Changes'
+          return name === 'Kovo-Changes'
             ? '[{"domain":"cart","keys":["c1"],"input":{"unsafe":true}},{"domain":5}]'
             : null;
         },
       },
       async text() {
         options.onUploadProgress?.({ loaded: 5, total: 10 });
-        return '<fw-query name="cart">{"count":1}</fw-query>';
+        return '<kovo-query name="cart">{"count":1}</kovo-query>';
       },
     }));
 
@@ -70,14 +70,14 @@ describe('enhanced mutation fetch', () => {
     });
 
     // SPEC.md §9.1: enhanced mutation requests carry idempotency and live DOM
-    // target metadata, while FW-Changes exposes only sanitized domain/keys.
+    // target metadata, while Kovo-Changes exposes only sanitized domain/keys.
     expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
       body: formData,
       headers: {
-        Accept: 'text/vnd.jiso.fragment+html',
-        'FW-Fragment': 'true',
-        'FW-Idem': 'idem_fetch',
-        'FW-Targets': 'cart-badge=cart product:p1; recommendations:p1=recommendations',
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_fetch',
+        'Kovo-Targets': 'cart-badge=cart product:p1; recommendations:p1=recommendations',
       },
       keepalive: true,
       method: 'PATCH',
@@ -85,7 +85,7 @@ describe('enhanced mutation fetch', () => {
     });
     expect(uploadProgress).toHaveBeenCalledWith({ loaded: 5, total: 10 });
     expect(fetched).toEqual({
-      body: '<fw-query name="cart">{"count":1}</fw-query>',
+      body: '<kovo-query name="cart">{"count":1}</kovo-query>',
       changes: [{ domain: 'cart', keys: ['c1'] }],
       idem: 'idem_fetch',
       response: expect.any(Object),
@@ -112,10 +112,10 @@ describe('enhanced mutation fetch', () => {
     expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
       body: 'body',
       headers: {
-        Accept: 'text/vnd.jiso.fragment+html',
-        'FW-Fragment': 'true',
-        'FW-Idem': 'idem_default',
-        'FW-Targets': '',
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_default',
+        'Kovo-Targets': '',
       },
       keepalive: true,
       method: 'POST',
@@ -131,11 +131,11 @@ describe('enhanced mutation fetch', () => {
       fetch: async () => ({
         headers: {
           get(name: string) {
-            return name === 'FW-Changes' ? '[' : null;
+            return name === 'Kovo-Changes' ? '[' : null;
           },
         },
         async text() {
-          return '<fw-fragment target="cart-form"><form></form></fw-fragment>';
+          return '<kovo-fragment target="cart-form"><form></form></kovo-fragment>';
         },
       }),
       form: { action: '/_m/cart/add', method: 'post' },
@@ -145,10 +145,10 @@ describe('enhanced mutation fetch', () => {
       root: new FakeTargetRoot([]),
     });
 
-    expect(fetched.body).toContain('fw-fragment');
+    expect(fetched.body).toContain('kovo-fragment');
     expect(fetched.changes).toEqual([]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
-    expect(String(onError.mock.calls[0]?.[0])).toContain('Malformed JSON in FW-Changes header');
+    expect(String(onError.mock.calls[0]?.[0])).toContain('Malformed JSON in Kovo-Changes header');
   });
 
   it('classifies enhanced mutation HTTP failures by ok and status', () => {

@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from '@jiso/compiler';
-import { dispatchDelegatedEvent, type EventElementLike } from '@jiso/runtime';
+import { compileComponentModule } from '@kovojs/compiler';
+import { dispatchDelegatedEvent, type EventElementLike } from '@kovojs/runtime';
 
 import { renderProductRoute } from './app.js';
 
@@ -66,7 +66,7 @@ describe('tutorial step 02 — islands', () => {
     );
 
     // Island state is serialized in the markup, not hidden in a JS heap.
-    expect(html).toContain('fw-state="{&quot;saved&quot;:0}"');
+    expect(html).toContain('kovo-state="{&quot;saved&quot;:0}"');
   });
   // /snippet
 
@@ -75,7 +75,7 @@ describe('tutorial step 02 — islands', () => {
     const response = await renderProductRoute('p1');
     const html = bodyText(response.body);
     const element = new FakeElement({
-      'fw-state': attributeFrom(html, 'fw-state'),
+      'kovo-state': attributeFrom(html, 'kovo-state'),
       'on:click': attributeFrom(html, 'on:click'),
     });
     const importedUrls: string[] = [];
@@ -88,19 +88,19 @@ describe('tutorial step 02 — islands', () => {
     await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
 
     expect(importedUrls[0]).toContain('/c/site/tutorial/steps/02-islands/');
-    expect(element.getAttribute('fw-state')).toBe('{"saved":2}');
+    expect(element.getAttribute('kovo-state')).toBe('{"saved":2}');
   });
   // /snippet
 
   // snippet:lint-test
-  it('compiles the authored TSX with the FW210 naming nudge as the only lint', () => {
+  it('compiles the authored TSX with the KV210 naming nudge as the only lint', () => {
     const result = compileComponentModule({
       fileName: 'site/tutorial/steps/02-islands/src/components/product-actions.tsx',
       source: readFileSync(new URL('./components/product-actions.tsx', import.meta.url), 'utf8'),
     });
 
     expect(result.diagnostics).toEqual([
-      expect.objectContaining({ code: 'FW210', severity: 'lint' }),
+      expect.objectContaining({ code: 'KV210', severity: 'lint' }),
     ]);
     expect(result.platformSubstitutions).toEqual([
       { action: 'toggle', event: 'click', kind: 'popover', tag: 'button', target: 'size-guide' },

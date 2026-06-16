@@ -50,7 +50,7 @@ function assertStaticExportRouteDocumentL0L1({
   const diagnostics = collectStaticExportServerEndpointRefs(body, origin).map((ref) =>
     staticExportDiagnostic(
       routePath,
-      `FW229 static export cannot export route '${routePath}' because document attribute '${ref.name}' references server ${ref.phase} endpoint '${ref.path}'. Export is L0/L1 only; serve this route dynamically or replace server-only interaction with an exportable client island.`,
+      `KV229 static export cannot export route '${routePath}' because document attribute '${ref.name}' references server ${ref.phase} endpoint '${ref.path}'. Export is L0/L1 only; serve this route dynamically or replace server-only interaction with an exportable client island.`,
     ),
   );
 

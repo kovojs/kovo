@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@jiso/server';
+import { mutation, s } from '@kovojs/server';
 
-import { createJisoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
 import { expectedDiagnostic } from './test-fixtures.js';
 
-describe('@jiso/test PGlite harness integration', () => {
+describe('@kovojs/test PGlite harness integration', () => {
   it('runs mutation suites against an in-memory pglite database', async () => {
     const db = await createPgliteTestDb();
 
@@ -24,7 +24,7 @@ describe('@jiso/test PGlite harness integration', () => {
           return request.db.read<{ product_id: string; qty: number }>('cart_items');
         },
       });
-      const harness = createJisoTestHarness({
+      const harness = createKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -63,7 +63,7 @@ describe('@jiso/test PGlite harness integration', () => {
 
     try {
       await db.exec('create table audit_log (product_id text not null)');
-      const harness = createJisoTestHarness({
+      const harness = createKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -80,7 +80,7 @@ describe('@jiso/test PGlite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('FW402', 'audit'),
+        expectedDiagnostic('KV402', 'audit'),
       );
     } finally {
       await db.close();
@@ -102,7 +102,7 @@ describe('@jiso/test PGlite harness integration', () => {
 
     try {
       await db.exec('create table cart_items (product_id text primary key, qty integer not null)');
-      const harness = createJisoTestHarness({
+      const harness = createKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -141,7 +141,7 @@ describe('@jiso/test PGlite harness integration', () => {
 
     try {
       await db.exec('create table audit_log (product_id text not null)');
-      const harness = createJisoTestHarness({
+      const harness = createKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -158,7 +158,7 @@ describe('@jiso/test PGlite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('FW402', 'audit'),
+        expectedDiagnostic('KV402', 'audit'),
       );
     } finally {
       await db.close();
@@ -180,7 +180,7 @@ describe('@jiso/test PGlite harness integration', () => {
 
     try {
       await db.exec('create table audit_log (product_id text not null)');
-      const harness = createJisoTestHarness({
+      const harness = createKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -197,7 +197,7 @@ describe('@jiso/test PGlite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('FW402', 'audit'),
+        expectedDiagnostic('KV402', 'audit'),
       );
     } finally {
       await db.close();

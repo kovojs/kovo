@@ -1,4 +1,4 @@
-import { query, type QueryLoadContext } from '@jiso/server';
+import { query, type QueryLoadContext } from '@kovojs/server';
 
 import {
   createShopDb,

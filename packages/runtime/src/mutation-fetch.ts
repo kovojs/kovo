@@ -63,10 +63,10 @@ export async function fetchEnhancedMutation(
   const response = await options.fetch(options.form.action, {
     body: options.formData,
     headers: {
-      Accept: 'text/vnd.jiso.fragment+html',
-      'FW-Fragment': 'true',
-      'FW-Idem': idem,
-      'FW-Targets': targetSnapshot.header,
+      Accept: 'text/vnd.kovo.fragment+html',
+      'Kovo-Fragment': 'true',
+      'Kovo-Idem': idem,
+      'Kovo-Targets': targetSnapshot.header,
     },
     keepalive: true,
     method: (options.form.method ?? 'post').toUpperCase(),

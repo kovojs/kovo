@@ -166,7 +166,7 @@ export function contextMenuTriggerAttributes(
       ? {}
       : {
           'aria-controls': enabledContentId,
-          'jiso-context-menu': enabledContentId,
+          'kovo-context-menu': enabledContentId,
         }),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
@@ -393,7 +393,7 @@ export function contextMenuTypeahead(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -420,7 +420,7 @@ export function contextMenuTriggerContextMenu(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -442,7 +442,7 @@ export function contextMenuTriggerKeyDown(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -463,7 +463,7 @@ export function contextMenuItemClick(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
@@ -483,7 +483,7 @@ export function contextMenuItemKeyDown(
 }
 
 /**
- * @jisoPrimitiveHandler
+ * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.

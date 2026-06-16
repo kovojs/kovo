@@ -16,7 +16,7 @@ registerHooks({
 });
 
 const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
-  await import('@jiso/compiler');
+  await import('@kovojs/compiler');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const galleryRoot = resolve(scriptDir, '..');
@@ -70,7 +70,7 @@ for (const name of demos) {
 
   assert.doesNotMatch(
     source,
-    /(?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+)=/,
+    /(?:data-bind|kovo-deps|kovo-c|kovo-state|data-p-[\w-]+)=/,
     `${sourceFileName} hand-writes compiler stamps`,
   );
 
@@ -79,7 +79,7 @@ for (const name of demos) {
     source,
   });
   const blockingDiagnostics = result.diagnostics.filter(
-    (diagnostic) => diagnostic.code !== 'FW210',
+    (diagnostic) => diagnostic.code !== 'KV210',
   );
   assert.deepEqual(
     blockingDiagnostics,
@@ -87,7 +87,7 @@ for (const name of demos) {
     `${sourceFileName} has blocking compiler diagnostics: ${JSON.stringify(blockingDiagnostics, null, 2)}`,
   );
   assert.ok(
-    result.diagnostics.every((diagnostic) => diagnostic.code === 'FW210'),
+    result.diagnostics.every((diagnostic) => diagnostic.code === 'KV210'),
     `${sourceFileName} emitted unexpected lint diagnostics: ${JSON.stringify(result.diagnostics, null, 2)}`,
   );
   assertFixpoint(result);
@@ -101,7 +101,7 @@ for (const name of demos) {
       `${generatedBase}.tsx`,
       formatGeneratedTsx(
         `${generatedBase}.tsx`,
-        `// @jiso-ir - lowered from ${sourceFileName} by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit:interactive-gallery\`.\n${lowered}`,
+        `// @kovojs-ir - lowered from ${sourceFileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit:interactive-gallery\`.\n${lowered}`,
       ),
     ],
   ]);
@@ -117,7 +117,7 @@ for (const name of demos) {
       assert.equal(
         readFileSync(artifactPath, 'utf8'),
         content,
-        `${relative(repoRoot, artifactPath)} is stale; run \`pnpm --filter @jiso/example-gallery run emit:interactive-gallery\``,
+        `${relative(repoRoot, artifactPath)} is stale; run \`pnpm --filter @kovojs/example-gallery run emit:interactive-gallery\``,
       );
     } else {
       mkdirSync(dirname(artifactPath), { recursive: true });

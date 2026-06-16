@@ -416,7 +416,7 @@ describe('gallery demo fixtures', () => {
     expect(disclosure.html).toContain('id="gallery-disclosure-content"');
 
     expect(hoverCard.html).toContain('data-gallery-demo="hover-card"');
-    expect(hoverCard.html).toContain('jiso-hover-card="gallery-hover-card-content"');
+    expect(hoverCard.html).toContain('kovo-hover-card="gallery-hover-card-content"');
     expect(hoverCard.html).toContain('popover="manual"');
 
     expect(popover.html).toContain('data-gallery-demo="popover"');
@@ -473,7 +473,7 @@ describe('gallery demo fixtures', () => {
     expect(command.html).toContain('id="gallery-command-value">Invite teammate</span>');
 
     expect(contextMenu.html).toContain('data-ui-demo="context-menu"');
-    expect(contextMenu.html).toContain('jiso-context-menu="gallery-context-menu-content"');
+    expect(contextMenu.html).toContain('kovo-context-menu="gallery-context-menu-content"');
     expect(contextMenu.html).toContain('aria-haspopup="menu"');
     expect(contextMenu.html).toContain('data-anchor-x="24" data-anchor-y="32"');
     expect(contextMenu.html).toContain('role="menu" tabIndex="-1"');
@@ -855,14 +855,14 @@ describe('gallery demo fixtures', () => {
   it('renders tooltip fixture with package-prefixed behavior and hidden content', () => {
     const tooltip = findFixture('/components/tooltip');
 
-    expect(tooltip.html).toContain('jiso-tooltip="gallery-tooltip-content"');
+    expect(tooltip.html).toContain('kovo-tooltip="gallery-tooltip-content"');
     expect(tooltip.html).toContain('aria-describedby="gallery-tooltip-content"');
     expect(tooltip.html).toContain('id="gallery-tooltip-content"');
     expect(tooltip.html).not.toContain('popover="manual"');
     expect(tooltip.html).toContain('role="tooltip"');
   });
 
-  it('renders @jiso/ui styled component fixtures from current package exports', () => {
+  it('renders @kovojs/ui styled component fixtures from current package exports', () => {
     const alert = findFixture('/components/alert');
     const button = findFixture('/components/button');
     const badge = findFixture('/components/badge');
@@ -966,7 +966,7 @@ describe('gallery demo fixtures', () => {
     expect(dropdownMenu.html).toContain('gallery-dropdown-menu-rename');
 
     expect(hoverCard.html).toContain('data-ui-demo="hover-card"');
-    expect(hoverCard.html).toContain('jiso-hover-card="gallery-hover-card-content"');
+    expect(hoverCard.html).toContain('kovo-hover-card="gallery-hover-card-content"');
     expect(hoverCard.html).toContain('rounded-md border border-neutral-200 bg-white p-4');
 
     expect(kbd.html).toContain('data-ui-demo="kbd"');
@@ -1018,7 +1018,7 @@ describe('gallery demo fixtures', () => {
     expect(tabs.html).toContain('overview content');
 
     expect(tooltip.html).toContain('data-ui-demo="tooltip"');
-    expect(tooltip.html).toContain('jiso-tooltip="gallery-tooltip-content"');
+    expect(tooltip.html).toContain('kovo-tooltip="gallery-tooltip-content"');
     expect(tooltip.html).toContain('rounded-md bg-neutral-950 px-2.5 py-1.5');
 
     expect(toast.html).toContain('data-ui-demo="toast"');
@@ -1052,7 +1052,7 @@ function readVisualFixture(fileName: string): string {
   return readFileSync(new URL(`./visual-fixtures/${fileName}`, import.meta.url), 'utf8');
 }
 
-const forbiddenAuthoredSourceMarkers = ['fw-c=', 'data-bind=', '__fw', 'generated/interactive'];
+const forbiddenAuthoredSourceMarkers = ['kovo-c=', 'data-bind=', '__kovo', 'generated/interactive'];
 
 const staticRouteFixtureMatrix = expectedRoutes.map((path) => {
   const component = path.slice('/components/'.length) as GalleryRoute['component'];

@@ -21,28 +21,28 @@ export async function exportReferenceStaticApp({
   try {
     const [appShellModule, serverModule] = await Promise.all([
       viteServer.ssrLoadModule('/src/app-shell.ts'),
-      viteServer.ssrLoadModule('@jiso/server'),
+      viteServer.ssrLoadModule('@kovojs/server'),
     ]);
     const { exportStaticApp } = serverModule;
 
     if (typeof exportStaticApp !== 'function') {
-      throw new Error('@jiso/server must export exportStaticApp.');
+      throw new Error('@kovojs/server must export exportStaticApp.');
     }
 
     const app = publicOnly
       ? appShellModule.referencePublicAppShell?.app
       : (appShellModule.default ?? appShellModule.referenceAppShell?.app);
 
-    if (!isJisoApp(app)) {
+    if (!isKovoApp(app)) {
       throw new Error(
         publicOnly
           ? 'src/app-shell.ts must export referencePublicAppShell.app for public export.'
-          : 'src/app-shell.ts must export a Jiso app as default or referenceAppShell.app.',
+          : 'src/app-shell.ts must export a Kovo app as default or referenceAppShell.app.',
       );
     }
 
     // SPEC.md section 9.5: static export replays the same request shell and
-    // refuses session-dependent routes with FW229 instead of writing HTML.
+    // refuses session-dependent routes with KV229 instead of writing HTML.
     return await exportStaticApp(app, { outDir });
   } finally {
     await viteServer.close();
@@ -111,7 +111,7 @@ function parseCliOptions(args) {
   return options;
 }
 
-function isJisoApp(value) {
+function isKovoApp(value) {
   return (
     typeof value === 'object' &&
     value !== null &&

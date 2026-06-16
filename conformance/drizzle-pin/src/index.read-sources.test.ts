@@ -21,9 +21,9 @@ describe('Drizzle pinned subset conformance', () => {
             "import { eq, gt, sql } from 'drizzle-orm';",
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const products = pgTable('products', {}, jiso({ domain: 'product', key: 'id' }));",
-            "export const prices = pgTable('prices', {}, jiso({ domain: 'price', key: 'productId' }));",
-            "export const snapshots = pgTable('product_snapshots', {}, jiso({ domain: 'snapshot', key: 'productId' }));",
+            "export const products = pgTable('products', {}, kovo({ domain: 'product', key: 'id' }));",
+            "export const prices = pgTable('prices', {}, kovo({ domain: 'price', key: 'productId' }));",
+            "export const snapshots = pgTable('product_snapshots', {}, kovo({ domain: 'snapshot', key: 'productId' }));",
             '',
             'export async function syncSnapshots(db: PgDatabase<any, any, any>, productId: string) {',
             "  await db.insert(snapshots).select(db.select().from((products as any)).where(gt(sql.raw('.from(prices)'), 0)));",
@@ -83,7 +83,7 @@ describe('Drizzle pinned subset conformance', () => {
           "export const products = pgTable('products', {",
           "  id: text('id').primaryKey(),",
           "  stock: integer('stock').notNull(),",
-          "}, jiso({ domain: 'product', key: 'id' }));",
+          "}, kovo({ domain: 'product', key: 'id' }));",
           "const productAlias = alias(products, 'p');",
           '',
           'export async function syncProduct(db: PgDatabase<any, any, any>, productId: string) {',
@@ -151,7 +151,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const users = pgTable('users', {
               active: boolean('active').notNull(),
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'user', key: 'id' }));
+            }, kovo({ domain: 'user', key: 'id' }));
 
             export async function loadActiveUsers(db: PgDatabase<any, any, any>) {
               return db.query.users.findMany({ where: eq(users.active, true) });
@@ -178,7 +178,7 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
-  it('pins unresolved project relational query table names as FW406', () => {
+  it('pins unresolved project relational query table names as KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         {
@@ -200,7 +200,7 @@ describe('Drizzle pinned subset conformance', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/users.domain.ts:5',
           },
@@ -219,13 +219,13 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             export const items = pgTable('cart_items', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'cart', key: 'id' }));
+            }, kovo({ domain: 'cart', key: 'id' }));
           `,
         },
         {
           fileName: 'conformance/drizzle-pin/src/order.schema.ts',
           source: `
-            export const items = pgTable('order_items', {}, jiso({ domain: 'order', key: 'id' }));
+            export const items = pgTable('order_items', {}, kovo({ domain: 'order', key: 'id' }));
           `,
         },
         {
@@ -266,7 +266,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW410',
+            code: 'KV410',
             message:
               'Opaque query projection requires a declared output schema. cart/count.count uses sql/raw projection without output.',
             severity: 'error',
@@ -283,7 +283,7 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([
       {
-        code: 'FW410',
+        code: 'KV410',
         message:
           'Opaque query projection requires a declared output schema. cart/count.count uses sql/raw projection without output.',
         severity: 'error',
@@ -302,7 +302,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product/with-read', {
               load(_input, db: PgDatabase) {
@@ -319,7 +319,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.$with().',
             severity: 'warn',
@@ -344,7 +344,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             export const products = pgTable('cart_products', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'cart', key: 'id' }));
+            }, kovo({ domain: 'cart', key: 'id' }));
           `,
         },
         {
@@ -352,7 +352,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             export const products = pgTable('order_products', {
               id: integer('id').primaryKey(),
-            }, jiso({ domain: 'order', key: 'id' }));
+            }, kovo({ domain: 'order', key: 'id' }));
           `,
         },
         {
@@ -396,7 +396,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             export const products = pgTable('cart_products', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'cart', key: 'id' }));
+            }, kovo({ domain: 'cart', key: 'id' }));
           `,
         },
         {
@@ -442,7 +442,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const products = pgTable('cart_products', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'cart', key: 'id' }));
+            }, kovo({ domain: 'cart', key: 'id' }));
           `,
         },
         {
@@ -500,7 +500,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               name: text('name').notNull(),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
           `,
         },
         {
@@ -557,7 +557,7 @@ describe('Drizzle pinned subset conformance', () => {
               id: text('id').primaryKey(),
               note: text('note', { enum: ['.notNull('] }),
               stock: integer('stock' /* .notNull( */),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
           `,
         },
         {
@@ -597,7 +597,7 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('pins custom column builders as FW406 instead of fabricated string shapes', () => {
+  it('pins custom column builders as KV406 instead of fabricated string shapes', () => {
     const point = customType<{ data: { x: number; y: number } }>({
       dataType() {
         return 'point';
@@ -618,7 +618,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               location: point('location'),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
               load(_input, db: PgDatabase) {
@@ -637,7 +637,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query projection product.location could not be resolved to a Drizzle column or typed sql<T> expression.',
             severity: 'warn',
@@ -660,11 +660,11 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/product.queries.ts',
           source: `
-            export const auditLog = pgTable('audit_log', {}, jiso({ exempt: true }));
+            export const auditLog = pgTable('audit_log', {}, kovo({ exempt: true }));
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               name: text('name').notNull(),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
               load(_input, db: PgDatabase) {
@@ -691,7 +691,7 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
-  it('pins computed real Drizzle read sources as FW406 instead of inferred reads', () => {
+  it('pins computed real Drizzle read sources as KV406 instead of inferred reads', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -699,7 +699,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
           `,
         },
         {
@@ -723,7 +723,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
             severity: 'warn',
@@ -749,8 +749,8 @@ describe('Drizzle pinned subset conformance', () => {
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             '',
-            "export const products = pgTable('products', { id: text('id') }, jiso({ domain: 'product', key: 'id' }));",
-            "export const vendors = pgTable('vendors', { id: text('id') }, jiso({ domain: 'vendor', key: 'id' }));",
+            "export const products = pgTable('products', { id: text('id') }, kovo({ domain: 'product', key: 'id' }));",
+            "export const vendors = pgTable('vendors', { id: text('id') }, kovo({ domain: 'vendor', key: 'id' }));",
             '',
             'function tableFor<T>(table: T): T { return table; }',
             '',
@@ -785,12 +785,12 @@ describe('Drizzle pinned subset conformance', () => {
         touches: [],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/catalog.domain.ts:10',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/catalog.domain.ts:11',
           },
@@ -799,7 +799,7 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
-  it('pins opaque real Drizzle write read sources as explicit FW406 surfaces', () => {
+  it('pins opaque real Drizzle write read sources as explicit KV406 surfaces', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         {
@@ -808,8 +808,8 @@ describe('Drizzle pinned subset conformance', () => {
             "import type { PgDatabase } from 'drizzle-orm/pg-core';",
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             '',
-            "export const products = pgTable('products', { id: text('id') }, jiso({ domain: 'product', key: 'id' }));",
-            "export const snapshots = pgTable('product_snapshots', { productId: text('product_id') }, jiso({ domain: 'snapshot', key: 'productId' }));",
+            "export const products = pgTable('products', { id: text('id') }, kovo({ domain: 'product', key: 'id' }));",
+            "export const snapshots = pgTable('product_snapshots', { productId: text('product_id') }, kovo({ domain: 'snapshot', key: 'productId' }));",
             '',
             'function tableFor<T>(name: string): T { return name as T; }',
             '',
@@ -842,13 +842,13 @@ describe('Drizzle pinned subset conformance', () => {
         ],
         unresolved: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
             site: 'conformance/drizzle-pin/src/catalog.domain.ts:10',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Update-from read source could not be resolved to a Drizzle table.',
             site: 'conformance/drizzle-pin/src/catalog.domain.ts:11',
@@ -858,14 +858,14 @@ describe('Drizzle pinned subset conformance', () => {
     });
     expect(diagnosticsForTouchGraph(graph)).toEqual([
       {
-        code: 'FW406',
+        code: 'KV406',
         message:
           'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
         severity: 'warn',
         site: 'conformance/drizzle-pin/src/catalog.domain.ts:10',
       },
       {
-        code: 'FW406',
+        code: 'KV406',
         message:
           'Statically un-analyzable write site; manual touches required. Update-from read source could not be resolved to a Drizzle table.',
         severity: 'warn',
@@ -874,7 +874,7 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('pins real Drizzle raw query execute as an explicit FW406 read surface', () => {
+  it('pins real Drizzle raw query execute as an explicit KV406 read surface', () => {
     expect(sql`select * from users`).toBeDefined();
 
     const facts = extractQueryFactsFromProject({
@@ -884,7 +884,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             import { sql } from 'drizzle-orm';
 
-            export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
+            export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/raw', {
               load(_input, db: PgDatabase) {
@@ -900,7 +900,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.execute().',
             severity: 'warn',
@@ -942,7 +942,7 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
-  it('pins computed real Drizzle query receiver methods as explicit FW406 surfaces', () => {
+  it('pins computed real Drizzle query receiver methods as explicit KV406 surfaces', () => {
     expect(sql`select * from users`).toBeDefined();
 
     const facts = extractQueryFactsFromProject({
@@ -971,7 +971,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db[method]().',
             severity: 'warn',
@@ -986,7 +986,7 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('pins bound and assigned real Drizzle query receiver methods as explicit FW406 surfaces', () => {
+  it('pins bound and assigned real Drizzle query receiver methods as explicit KV406 surfaces', () => {
     expect(sql`select * from users`).toBeDefined();
 
     const facts = extractQueryFactsFromProject({
@@ -1038,49 +1038,49 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
             severity: 'warn',
@@ -1095,7 +1095,7 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('pins array-destructured real Drizzle query receiver methods as explicit FW406 surfaces', () => {
+  it('pins array-destructured real Drizzle query receiver methods as explicit KV406 surfaces', () => {
     expect(sql`select * from users`).toBeDefined();
 
     const facts = extractQueryFactsFromProject({
@@ -1132,21 +1132,21 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
             severity: 'warn',
@@ -1161,7 +1161,7 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('pins direct real Drizzle query carrier members as exact reads with FW406 writes', () => {
+  it('pins direct real Drizzle query carrier members as exact reads with KV406 writes', () => {
     expect(sql`select * from users`).toBeDefined();
 
     const facts = extractQueryFactsFromProject({
@@ -1174,7 +1174,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const users = pgTable('users', {",
             "  id: text('id').primaryKey(),",
-            "}, jiso({ domain: 'user', key: 'id' }));",
+            "}, kovo({ domain: 'user', key: 'id' }));",
             '',
             'interface FakeDb {',
             '  execute(query: unknown): Promise<void>;',
@@ -1203,21 +1203,21 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:14',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.execute().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:14',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.update().',
             severity: 'warn',
@@ -1245,10 +1245,10 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const auditLog = pgTable('audit_log', {
               id: text('id').primaryKey(),
-            }, jiso({ exempt: true }));
+            }, kovo({ exempt: true }));
             export const users = pgTable('users', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'user', key: 'id' }));
+            }, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/non-loader-callback', {
               guard(_input, db: PgDatabase<any, any, any>) {
@@ -1277,7 +1277,7 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
-  it('pins real Drizzle query-loader transaction aliases as explicit FW406 surfaces', () => {
+  it('pins real Drizzle query-loader transaction aliases as explicit KV406 surfaces', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -1287,7 +1287,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const users = pgTable('users', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'user', key: 'id' }));
+            }, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/transaction-write', {
               async load(_input, db: PgDatabase<any, any, any>) {
@@ -1306,14 +1306,14 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.transaction().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:8',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call tx.update().',
             severity: 'warn',
@@ -1338,10 +1338,10 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const auditLog = pgTable('audit_log', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'audit', key: 'id' }));
+            }, kovo({ domain: 'audit', key: 'id' }));
             export const users = pgTable('users', {
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'user', key: 'id' }));
+            }, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/nested-helper', {
               load(_input, db: PgDatabase<any, any, any>) {
@@ -1371,13 +1371,13 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('pins static element-access relational reads as explicit FW406 facts', () => {
+  it('pins static element-access relational reads as explicit KV406 facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
           fileName: 'conformance/drizzle-pin/src/user.queries.ts',
           source: `
-            export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
+            export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users', {
               load(_input, db: PgDatabase) {
@@ -1393,7 +1393,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
             severity: 'warn',
@@ -1408,13 +1408,13 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('pins template-literal element-access relational reads as explicit FW406 facts', () => {
+  it('pins template-literal element-access relational reads as explicit KV406 facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
           fileName: 'conformance/drizzle-pin/src/user.queries.ts',
           source: `
-            export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
+            export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/template-access', {
               load(_input, db: PgDatabase) {
@@ -1430,7 +1430,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
             severity: 'warn',
@@ -1457,7 +1457,7 @@ describe('Drizzle pinned subset conformance', () => {
             const users = pgTable('users', {
               active: boolean('active').notNull(),
               id: text('id').primaryKey(),
-            }, jiso({ domain: 'user', key: 'id' }));
+            }, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/shadowed-relational', {
               load(_input, db: PgDatabase<any, any, any>, fake: { users: unknown }) {
@@ -1477,7 +1477,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
             severity: 'warn',
@@ -1492,13 +1492,13 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('pins unresolved project relational read sources as explicit FW406 facts', () => {
+  it('pins unresolved project relational read sources as explicit KV406 facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
           fileName: 'conformance/drizzle-pin/src/user.queries.ts',
           source: `
-            export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
+            export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users', {
               load(_input, db: PgDatabase) {
@@ -1514,14 +1514,14 @@ describe('Drizzle pinned subset conformance', () => {
       {
         diagnostics: [
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:4',
           },
           {
-            code: 'FW406',
+            code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query relational read source could not be resolved to a Drizzle table.',
             severity: 'warn',
@@ -1542,11 +1542,11 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/product.queries.ts',
           source: `
-            export const auditLog = pgTable('audit_log', {}, jiso({ exempt: true }));
+            export const auditLog = pgTable('audit_log', {}, kovo({ exempt: true }));
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               name: text('name').notNull(),
-            }, jiso({ domain: 'product', key: 'id' }));
+            }, kovo({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
               load(_input, reader: PgDatabase) {

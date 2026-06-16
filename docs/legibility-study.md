@@ -6,7 +6,7 @@ study has been completed.
 
 Protocol version: 2026-06-12
 Status: protocol ready; recruitment, sessions, and results pending
-Required participants: five outside developers who have not worked on Jiso
+Required participants: five outside developers who have not worked on Kovo
 Passing criterion: each participant answers every task from browser devtools
 artifacts alone in under 60 seconds
 
@@ -26,11 +26,11 @@ begin.
 
 Allowed materials:
 
-- Elements panel markup, including `on:*`, `fw-c`, `fw-deps`, `fw-query`,
-  `fw-pending`, and `data-bind` attributes.
+- Elements panel markup, including `on:*`, `kovo-c`, `kovo-deps`, `kovo-query`,
+  `kovo-pending`, and `data-bind` attributes.
 - Network requests and responses, including readable mutation names, response
-  headers, HTML fragments, and `fw-query` JSON payloads.
-- `fw explain` output generated for the same commit.
+  headers, HTML fragments, and `kovo-query` JSON payloads.
+- `kovo explain` output generated for the same commit.
 
 Disallowed materials during timed tasks:
 
@@ -43,7 +43,7 @@ Disallowed materials during timed tasks:
 Before starting the timer, tell each participant:
 
 > You are evaluating whether the app behavior is legible from browser devtools.
-> Use only the page, Elements panel, Network panel, and provided `fw explain`
+> Use only the page, Elements panel, Network panel, and provided `kovo explain`
 > output. Say your answer and the artifact that supports it.
 
 Run the tasks in order. Stop each task at 60 seconds and mark it failed if the
@@ -51,13 +51,13 @@ participant has not answered both the fact and the supporting artifact.
 
 ## Tasks
 
-| Task             | Prompt                                                                                         | Passing answer must identify                                                            | Allowed supporting artifacts                                                           |
-| ---------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Button behavior  | "What does the Add button do, and what named handler or mutation is invoked?"                  | The add-to-cart behavior and the invoked handler or mutation name.                      | `on:*` attribute, form action, request URL, response header, or `fw explain mutation`. |
-| Island data      | "What query data do the cart badge and product grid hold?"                                     | The query names or keys backing both visible regions.                                   | `fw-deps`, `fw-query` JSON, or `fw explain component/page`.                            |
-| Mutation effects | "After an add-to-cart request, which queries and visible regions changed?"                     | The invalidated or patched queries and the visible fragments/regions updated.           | Network fragment response, `fw-query` patches, `FW-Targets`, or `fw explain mutation`. |
-| Optimism         | "For each changed query, is the optimistic status hand-written, await-fragment, or unhandled?" | An explicit status for each changed query, with no unhandled status counted as passing. | `fw explain --optimistic` or `fw check` optimistic output.                             |
-| Failure path     | "Trigger or inspect a validation failure. What is the 422 error shape?"                        | The validation error fields and where the fragment renders.                             | 422 response, fragment HTML, `fw-query` JSON, or form error markup.                    |
+| Task             | Prompt                                                                                         | Passing answer must identify                                                            | Allowed supporting artifacts                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Button behavior  | "What does the Add button do, and what named handler or mutation is invoked?"                  | The add-to-cart behavior and the invoked handler or mutation name.                      | `on:*` attribute, form action, request URL, response header, or `kovo explain mutation`.     |
+| Island data      | "What query data do the cart badge and product grid hold?"                                     | The query names or keys backing both visible regions.                                   | `kovo-deps`, `kovo-query` JSON, or `kovo explain component/page`.                            |
+| Mutation effects | "After an add-to-cart request, which queries and visible regions changed?"                     | The invalidated or patched queries and the visible fragments/regions updated.           | Network fragment response, `kovo-query` patches, `Kovo-Targets`, or `kovo explain mutation`. |
+| Optimism         | "For each changed query, is the optimistic status hand-written, await-fragment, or unhandled?" | An explicit status for each changed query, with no unhandled status counted as passing. | `kovo explain --optimistic` or `kovo check` optimistic output.                               |
+| Failure path     | "Trigger or inspect a validation failure. What is the 422 error shape?"                        | The validation error fields and where the fragment renders.                             | 422 response, fragment HTML, `kovo-query` JSON, or form error markup.                        |
 
 ## Evidence To Record
 
@@ -106,7 +106,7 @@ issue below.
 
 | Step | Local check                                                                 | Evidence to retain outside repo if private                     |
 | ---- | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| 1    | Confirm participant has not worked on Jiso.                                 | Anonymized eligibility note.                                   |
+| 1    | Confirm participant has not worked on Kovo.                                 | Anonymized eligibility note.                                   |
 | 2    | Capture clean checkout commit after `pnpm run acceptance` passes.           | Commit SHA and command log path.                               |
 | 3    | Open commerce page plus Elements and Network panels for the same commit.    | Browser, version, OS, and cache-clear note.                    |
 | 4    | Time all five tasks with no source or test files visible.                   | Per-task time, pass/fail, and supporting devtools artifact.    |

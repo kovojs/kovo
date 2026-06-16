@@ -13,8 +13,8 @@ import {
   type OptimismCleanupRuntime,
 } from './runtime-fixtures.ts';
 
-describe('@jiso/test runtime fixture facts', () => {
-  it('projects loader smoke behavior without keeping fake DOM mechanics in fw-check', async () => {
+describe('@kovojs/test runtime fixture facts', () => {
+  it('projects loader smoke behavior without keeping fake DOM mechanics in kovo-check', async () => {
     const store = {
       value: undefined as unknown,
       get() {
@@ -48,7 +48,7 @@ describe('@jiso/test runtime fixture facts', () => {
       createQueryStore() {
         return store;
       },
-      installJisoLoader(options) {
+      installKovoLoader(options) {
         const loaderOptions = options as {
           importModule(): Promise<
             Record<string, (event: unknown, context: { signal: AbortSignal }) => void>
@@ -176,12 +176,12 @@ describe('@jiso/test runtime fixture facts', () => {
           (candidate) => candidate.instanceKey() === `product:${fixtureOptions.rawInput.productId}`,
         );
         return {
-          body: `<fw-query name="${query?.key}" key="${query?.instanceKey()}">${JSON.stringify(
+          body: `<kovo-query name="${query?.key}" key="${query?.instanceKey()}">${JSON.stringify(
             query?.load(),
-          )}</fw-query>`,
+          )}</kovo-query>`,
           headers: {
-            'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-            'FW-Changes': '[{"domain":"product","keys":["p1"]}]',
+            'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+            'Kovo-Changes': '[{"domain":"product","keys":["p1"]}]',
           },
           status: 200,
         };
@@ -275,10 +275,10 @@ describe('@jiso/test runtime fixture facts', () => {
         reorderedKeys: ['p3', 'p1', 'p2'],
       },
       mutationEndpoint: {
-        body: '<fw-query name="productDetail" key="product:p1">{"id":"p1","stock":0}</fw-query>',
+        body: '<kovo-query name="productDetail" key="product:p1">{"id":"p1","stock":0}</kovo-query>',
         headers: {
-          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'FW-Changes': '[{"domain":"product","keys":["p1"]}]',
+          'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Changes': '[{"domain":"product","keys":["p1"]}]',
         },
         result: {
           changes: [{ domain: 'product', input: { productId: 'p1' }, keys: ['p1'] }],
@@ -299,7 +299,7 @@ describe('@jiso/test runtime fixture facts', () => {
     });
   });
 
-  it('projects keyed morph and fragment behavior without keeping fake DOM mechanics in fw-check', async () => {
+  it('projects keyed morph and fragment behavior without keeping fake DOM mechanics in kovo-check', async () => {
     const values = new Map<string, unknown>();
     const runtime: MorphFragmentRuntime = {
       applyMutationResponseToDom(options) {
@@ -319,7 +319,7 @@ describe('@jiso/test runtime fixture facts', () => {
         }
         fixtureOptions.root
           .findFragmentTarget('products')
-          ?.appendHtml('<article fw-key="p2">New</article>');
+          ?.appendHtml('<article kovo-key="p2">New</article>');
         return { appliedFragments: ['products'] };
       },
       createQueryStore() {
@@ -361,12 +361,13 @@ describe('@jiso/test runtime fixture facts', () => {
         selection: { direction: 'forward', end: 3, start: 1 },
       },
       queryStoreValue: { count: 2 },
-      renderedTargetHtml: '<article fw-key="p1">Old</article><article fw-key="p2">New</article>',
+      renderedTargetHtml:
+        '<article kovo-key="p1">Old</article><article kovo-key="p2">New</article>',
       reorderedText: 'Alpha next',
     });
   });
 
-  it('projects bfcache optimism cleanup without keeping lifecycle mechanics in fw-check', async () => {
+  it('projects bfcache optimism cleanup without keeping lifecycle mechanics in kovo-check', async () => {
     const runtime: OptimismCleanupRuntime = {
       OptimisticRebaser: class {
         private readonly pending = new Map<string, unknown>();
@@ -429,12 +430,12 @@ describe('@jiso/test runtime fixture facts', () => {
               setAttribute(name: string, value: string): void;
             }>;
           }
-        ).querySelectorAll('[fw-deps]')) {
+        ).querySelectorAll('[kovo-deps]')) {
           if (pending) {
-            element.setAttribute('fw-pending', '');
+            element.setAttribute('kovo-pending', '');
             element.setAttribute('aria-busy', 'true');
           } else {
-            element.removeAttribute('fw-pending');
+            element.removeAttribute('kovo-pending');
             element.removeAttribute('aria-busy');
           }
         }
@@ -456,10 +457,10 @@ describe('@jiso/test runtime fixture facts', () => {
         const response = await fixtureOptions.fetch('/_m/cart/add', {
           body: fixtureOptions.formData,
           headers: {
-            Accept: 'text/vnd.jiso.fragment+html',
-            'FW-Fragment': 'true',
-            'FW-Idem': 'idem_bfcache',
-            'FW-Targets': '',
+            Accept: 'text/vnd.kovo.fragment+html',
+            'Kovo-Fragment': 'true',
+            'Kovo-Idem': 'idem_bfcache',
+            'Kovo-Targets': '',
           },
           keepalive: true,
           method: 'POST',
@@ -489,8 +490,8 @@ describe('@jiso/test runtime fixture facts', () => {
         method: 'POST',
       },
       pendingAttributes: {
-        afterSubmit: { 'aria-busy': 'true', 'fw-deps': 'cart', 'fw-pending': '' },
-        afterPagehide: { 'fw-deps': 'cart' },
+        afterSubmit: { 'aria-busy': 'true', 'kovo-deps': 'cart', 'kovo-pending': '' },
+        afterPagehide: { 'kovo-deps': 'cart' },
       },
       pendingCounts: { afterSubmit: 1, afterPagehide: 0, afterResponse: 0 },
       result: { idem: 'idem_bfcache', queries: ['cart'] },
@@ -502,7 +503,7 @@ describe('@jiso/test runtime fixture facts', () => {
     });
   });
 
-  it('projects enhanced mutation behavior without keeping fake DOM mechanics in fw-check', async () => {
+  it('projects enhanced mutation behavior without keeping fake DOM mechanics in kovo-check', async () => {
     const createQueryStore = () => {
       const values = new Map<string, unknown>();
       const keyFor = (name: string, key?: string) => (key === undefined ? name : `${name}:${key}`);
@@ -547,17 +548,17 @@ describe('@jiso/test runtime fixture facts', () => {
         };
         const response = await fixtureOptions.fetch('/_m/cart/add', {
           headers: {
-            Accept: 'text/vnd.jiso.fragment+html',
-            'FW-Fragment': 'true',
-            'FW-Idem': fixtureOptions.idem ?? '',
-            'FW-Targets': '',
+            Accept: 'text/vnd.kovo.fragment+html',
+            'Kovo-Fragment': 'true',
+            'Kovo-Idem': fixtureOptions.idem ?? '',
+            'Kovo-Targets': '',
           },
         });
         const body = await response.text();
-        const changesHeader = response.headers.get('FW-Changes');
+        const changesHeader = response.headers.get('Kovo-Changes');
         let changes: Array<{ domain: string; keys?: string[] }> = [];
         if (changesHeader === '{bad json') {
-          fixtureOptions.onError?.(new Error('Malformed JSON in FW-Changes header: {bad json'));
+          fixtureOptions.onError?.(new Error('Malformed JSON in Kovo-Changes header: {bad json'));
         } else if (changesHeader) {
           changes = [{ domain: 'cart', keys: ['c1'] }];
         }
@@ -591,18 +592,18 @@ describe('@jiso/test runtime fixture facts', () => {
         fixtureOptions.rebaser.applyOptimistic('reviews', 'product:p1', {
           items: [{ id: 'r1' }, { id: 'draft' }],
         });
-        for (const element of fixtureOptions.pendingRoot.querySelectorAll('[fw-deps]')) {
-          element.setAttribute('fw-pending', '');
+        for (const element of fixtureOptions.pendingRoot.querySelectorAll('[kovo-deps]')) {
+          element.setAttribute('kovo-pending', '');
         }
         const response = await fixtureOptions.fetch('/_m/reviews/add', {
-          headers: { 'FW-Idem': 'idem_optimistic_change' },
+          headers: { 'Kovo-Idem': 'idem_optimistic_change' },
         });
         await response.text();
         fixtureOptions.rebaser.settle('reviews', 'product:p1', {
           items: [{ id: 'r1' }, { id: 'server' }],
         });
-        for (const element of fixtureOptions.pendingRoot.querySelectorAll('[fw-deps]')) {
-          element.removeAttribute('fw-pending');
+        for (const element of fixtureOptions.pendingRoot.querySelectorAll('[kovo-deps]')) {
+          element.removeAttribute('kovo-pending');
         }
         return {
           changes: [{ domain: 'product', keys: ['p1'] }],
@@ -615,15 +616,15 @@ describe('@jiso/test runtime fixture facts', () => {
       broadcast: {
         events: [
           {
-            body: '<fw-query name="cart" key="cart:c1">{"count":2}</fw-query>',
+            body: '<kovo-query name="cart" key="cart:c1">{"count":2}</kovo-query>',
             changes: [{ domain: 'cart', keys: ['c1'] }],
           },
         ],
         fetchHeaders: {
-          Accept: 'text/vnd.jiso.fragment+html',
-          'FW-Fragment': 'true',
-          'FW-Idem': 'idem_change_record',
-          'FW-Targets': '',
+          Accept: 'text/vnd.kovo.fragment+html',
+          'Kovo-Fragment': 'true',
+          'Kovo-Idem': 'idem_change_record',
+          'Kovo-Targets': '',
         },
         resultChanges: [{ domain: 'cart', keys: ['c1'] }],
         resultQueries: ['cart:c1'],

@@ -3,11 +3,11 @@ import { reportServerError } from './diagnostics.js';
 import { renderDiagnosticDocument } from './document-diagnostics.js';
 import { matchShellDispatch } from './shell.js';
 import { routeResponseToWebResponse } from './response.js';
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
 
-export async function handleAppRequest(app: JisoApp, request: Request): Promise<Response> {
+export async function handleAppRequest(app: KovoApp, request: Request): Promise<Response> {
   const appDiagnostics = blockingAppDiagnostics(app);
   if (appDiagnostics.length > 0) {
     return routeResponseToWebResponse(renderDiagnosticDocument(appDiagnostics), request);

@@ -1,12 +1,12 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   checkboxRootAttributes,
   cn,
   defineVariants,
   type CheckboxCheckedState,
   type ClassValue,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface CheckboxProps {
   describedBy?: string;

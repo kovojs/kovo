@@ -8,37 +8,37 @@ import { createApp } from './app.js';
 import { route } from './route.js';
 import { staticExportManifest } from './static-export-result.js';
 import {
-  createJisoAppShellViteBuild,
-  createJisoAppShellViteBuildFromManifestFile,
+  createKovoAppShellViteBuild,
+  createKovoAppShellViteBuildFromManifestFile,
 } from './vite-build.js';
 import {
-  jisoAppShellViteOutputDir,
-  writeJisoAppShellViteBuildOutput,
+  kovoAppShellViteOutputDir,
+  writeKovoAppShellViteBuildOutput,
 } from './vite-build-output.js';
 import {
-  jisoAppShellViteClientModuleOutputPlan,
-  writeJisoAppShellViteClientModuleOutput,
+  kovoAppShellViteClientModuleOutputPlan,
+  writeKovoAppShellViteClientModuleOutput,
 } from './vite-client-module-output.js';
 import {
-  exportJisoAppShellViteBuild,
-  staticExportInventoryForJisoAppShellViteBuild,
+  exportKovoAppShellViteBuild,
+  staticExportInventoryForKovoAppShellViteBuild,
 } from './vite-static-export-build.js';
 import {
-  exportJisoAppShellViteBuildFromManifestFile,
-  exportJisoAppShellViteBuildWithManifestFromManifestFile,
-  staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
-  staticExportManifestForJisoAppShellViteBuildFromManifestFile,
+  exportKovoAppShellViteBuildFromManifestFile,
+  exportKovoAppShellViteBuildWithManifestFromManifestFile,
+  staticExportInventoryForKovoAppShellViteBuildFromManifestFile,
+  staticExportManifestForKovoAppShellViteBuildFromManifestFile,
 } from './vite-static-export-manifest-file.js';
 import {
-  jisoAppShellViteBuildStaticExportAssets,
-  jisoAppShellViteManifestFile,
-  jisoAppShellViteStaticExportAssetsFromManifestFile,
+  kovoAppShellViteBuildStaticExportAssets,
+  kovoAppShellViteManifestFile,
+  kovoAppShellViteStaticExportAssetsFromManifestFile,
 } from './vite-build-assets.js';
 
 describe('server app shell Vite build seam', () => {
   it('wires route-entry hints, compiled modules, output files, and static export assets', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-seam-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-seam-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-seam-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-seam-export-'));
 
     try {
       await mkdir(join(distDir, 'assets'), { recursive: true });
@@ -46,7 +46,7 @@ describe('server app shell Vite build seam', () => {
       await writeFile(join(distDir, 'assets/cart.js'), 'export const cartAsset = true;');
       await writeFile(join(distDir, 'assets/catalog.json'), '{"items":2}');
 
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/cart', {
@@ -84,7 +84,7 @@ describe('server app shell Vite build seam', () => {
         },
       ]);
 
-      const output = await writeJisoAppShellViteBuildOutput(build, {
+      const output = await writeKovoAppShellViteBuildOutput(build, {
         outDir: distDir,
         staticExport: {
           assets: [
@@ -153,17 +153,17 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('requires an app when Vite build output is asked to run static export', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-static-export-dist-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-output-static-export-dist-'));
 
     try {
       await expect(
-        writeJisoAppShellViteBuildOutput(
+        writeKovoAppShellViteBuildOutput(
           {
             clientModules: [],
           },
           { outDir: distDir, staticExport: {} },
         ),
-      ).rejects.toThrow('App shell Vite build output static export requires a Jiso app.');
+      ).rejects.toThrow('App shell Vite build output static export requires a Kovo app.');
     } finally {
       await rm(distDir, { force: true, recursive: true });
     }
@@ -171,8 +171,8 @@ describe('server app shell Vite build seam', () => {
 
   it('rejects partial app-shell compatibility shells before Vite build wiring', () => {
     expect(() =>
-      createJisoAppShellViteBuild({
-        app: { routes: [] } as unknown as Parameters<typeof createJisoAppShellViteBuild>[0]['app'],
+      createKovoAppShellViteBuild({
+        app: { routes: [] } as unknown as Parameters<typeof createKovoAppShellViteBuild>[0]['app'],
         clientModules: [
           {
             path: '/c/cart.client.js',
@@ -181,16 +181,16 @@ describe('server app shell Vite build seam', () => {
         ],
       }),
     ).toThrow(
-      'createJisoAppShellViteBuild() requires a Jiso app aggregate. SPEC §9.5 Vite build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
+      'createKovoAppShellViteBuild() requires a Kovo app aggregate. SPEC §9.5 Vite build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
     );
   });
 
   it('does not emit Vite app-shell client modules when plugin-time static export is rejected', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-reject-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-reject-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-output-reject-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-output-reject-export-'));
 
     try {
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/admin', {
@@ -211,15 +211,15 @@ describe('server app shell Vite build seam', () => {
       });
 
       await expect(
-        writeJisoAppShellViteBuildOutput(build, {
+        writeKovoAppShellViteBuildOutput(build, {
           outDir: distDir,
           staticExport: { outDir },
         }),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining("cannot export guarded route '/admin'"),
             routePath: '/admin',
           },
@@ -236,13 +236,13 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('preflights Vite client-module output before plugin-time static export writes', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-preflight-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-preflight-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-output-preflight-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-output-preflight-export-'));
 
     try {
       await writeFile(join(distDir, 'c'), 'blocked parent');
 
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/cart', {
@@ -266,7 +266,7 @@ describe('server app shell Vite build seam', () => {
       });
 
       await expect(
-        writeJisoAppShellViteBuildOutput(build, {
+        writeKovoAppShellViteBuildOutput(build, {
           outDir: distDir,
           staticExport: { outDir },
         }),
@@ -287,13 +287,13 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('validates Vite app-shell client module targets before committing staged output', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-target-dist-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-output-target-dist-'));
 
     try {
       await mkdir(join(distDir, 'c', 'blocked.client.js'), { recursive: true });
 
       await expect(
-        writeJisoAppShellViteClientModuleOutput(distDir, [
+        writeKovoAppShellViteClientModuleOutput(distDir, [
           {
             file: 'c/ok.client.js',
             href: '/c/ok.client.js?v=ok',
@@ -317,11 +317,11 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('plans Vite app-shell client module output through the write helper boundary', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-client-module-plan-dist-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-client-module-plan-dist-'));
 
     try {
       expect(
-        jisoAppShellViteClientModuleOutputPlan(distDir, [
+        kovoAppShellViteClientModuleOutputPlan(distDir, [
           {
             file: 'c/search.client.js',
             href: '/c/search.client.js?v=search-v1',
@@ -342,15 +342,15 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('returns Vite build-backed static export inventory without writing output', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-inventory-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-inventory-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-inventory-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-inventory-export-'));
 
     try {
       await mkdir(join(distDir, 'assets'), { recursive: true });
       await writeFile(join(distDir, 'assets/shop.css'), '.shop{color:green}');
       await writeFile(join(distDir, 'assets/shop.js'), 'export const shopAsset = true;');
 
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/shop', {
@@ -382,7 +382,7 @@ describe('server app shell Vite build seam', () => {
         },
       });
 
-      const inventory = await staticExportInventoryForJisoAppShellViteBuild(build, {
+      const inventory = await staticExportInventoryForKovoAppShellViteBuild(build, {
         distDir,
       });
 
@@ -432,8 +432,8 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('exports from a manifest file with the matching dry-run manifest for consumers', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-result-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-result-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-manifest-result-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-manifest-result-export-'));
 
     try {
       await mkdir(join(distDir, '.vite'), { recursive: true });
@@ -450,7 +450,7 @@ describe('server app shell Vite build seam', () => {
         }),
       );
 
-      const { manifest, result } = await exportJisoAppShellViteBuildWithManifestFromManifestFile({
+      const { manifest, result } = await exportKovoAppShellViteBuildWithManifestFromManifestFile({
         app: createApp({
           routes: [
             route('/cart', {
@@ -491,7 +491,7 @@ describe('server app shell Vite build seam', () => {
 
   it('rejects non-file Vite manifest URLs before manifest-backed build wiring', async () => {
     await expect(
-      createJisoAppShellViteBuildFromManifestFile({
+      createKovoAppShellViteBuildFromManifestFile({
         app: createApp({
           routes: [
             route('/cart', {
@@ -507,10 +507,10 @@ describe('server app shell Vite build seam', () => {
         },
       }),
     ).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'KV229',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message: expect.stringContaining(
             'Vite app-shell manifest files must be filesystem paths or file: URLs',
           ),
@@ -521,21 +521,21 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('keeps Vite output path selection and writes inside the build output directory', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-boundary-dist-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-output-boundary-dist-'));
 
     try {
-      expect(jisoAppShellViteOutputDir({ dir: join(distDir, 'client') })).toBe(
+      expect(kovoAppShellViteOutputDir({ dir: join(distDir, 'client') })).toBe(
         join(distDir, 'client'),
       );
-      expect(jisoAppShellViteOutputDir({ file: join(distDir, 'server/app-shell.js') })).toBe(
+      expect(kovoAppShellViteOutputDir({ file: join(distDir, 'server/app-shell.js') })).toBe(
         join(distDir, 'server'),
       );
-      expect(() => jisoAppShellViteOutputDir({})).toThrow(
+      expect(() => kovoAppShellViteOutputDir({})).toThrow(
         'App shell Vite build output requires output.dir or output.file.',
       );
 
       await expect(
-        writeJisoAppShellViteClientModuleOutput(distDir, [
+        writeKovoAppShellViteClientModuleOutput(distDir, [
           {
             file: '../escape.js',
             href: '/c/escape.js?v=escape',
@@ -554,15 +554,15 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('exports Vite build param routes from staticPaths with manifest assets', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-param-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-param-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-param-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-param-export-'));
 
     try {
       await mkdir(join(distDir, 'assets'), { recursive: true });
       await writeFile(join(distDir, 'assets/product.css'), '.product{color:green}');
       await writeFile(join(distDir, 'assets/product.js'), 'export const productAsset = true;');
 
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/products/:id', {
@@ -585,7 +585,7 @@ describe('server app shell Vite build seam', () => {
         },
       });
 
-      const exported = await exportJisoAppShellViteBuild(build, { distDir, outDir });
+      const exported = await exportKovoAppShellViteBuild(build, { distDir, outDir });
 
       expect(exported.artifacts.map((artifact) => artifact.path)).toEqual([
         '/products/p1/index.html',
@@ -610,10 +610,10 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('returns Vite build static export assets without exposing build internals', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-assets-dist-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-assets-dist-'));
 
     try {
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/cart', {
@@ -635,7 +635,7 @@ describe('server app shell Vite build seam', () => {
       });
 
       expect(
-        jisoAppShellViteBuildStaticExportAssets(build, {
+        kovoAppShellViteBuildStaticExportAssets(build, {
           assets: [
             {
               headers: { 'cache-control': 'public, max-age=60' },
@@ -668,10 +668,10 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('rejects manifest and caller asset collisions during Vite export inventory planning', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-asset-collision-dist-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-asset-collision-dist-'));
 
     try {
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/cart', {
@@ -693,7 +693,7 @@ describe('server app shell Vite build seam', () => {
       });
 
       await expect(
-        staticExportInventoryForJisoAppShellViteBuild(build, {
+        staticExportInventoryForKovoAppShellViteBuild(build, {
           assets: [
             {
               path: '/assets/cart.css',
@@ -703,10 +703,10 @@ describe('server app shell Vite build seam', () => {
           distDir,
         }),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining(
               "static asset '/assets/cart.css' because it conflicts with static asset '/assets/cart.css'",
             ),
@@ -720,8 +720,8 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('returns manifest-file backed static export inventory without writing output', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-inventory-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-inventory-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-manifest-inventory-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-manifest-inventory-export-'));
 
     try {
       await mkdir(join(distDir, '.vite'), { recursive: true });
@@ -737,7 +737,7 @@ describe('server app shell Vite build seam', () => {
         }),
       );
 
-      const inventory = await staticExportInventoryForJisoAppShellViteBuildFromManifestFile({
+      const inventory = await staticExportInventoryForKovoAppShellViteBuildFromManifestFile({
         app: createApp({
           routes: [
             route('/catalog', {
@@ -789,8 +789,8 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('returns manifest-file backed static export manifests matching write export output', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-proof-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-proof-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-manifest-proof-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-manifest-proof-export-'));
 
     try {
       await mkdir(join(distDir, '.vite'), { recursive: true });
@@ -798,7 +798,7 @@ describe('server app shell Vite build seam', () => {
       await writeFile(join(distDir, 'assets/docs.css'), '.docs{display:grid}');
       await writeFile(join(distDir, 'assets/docs.js'), 'export const docs = true;');
       await writeFile(
-        jisoAppShellViteManifestFile(distDir),
+        kovoAppShellViteManifestFile(distDir),
         JSON.stringify({
           'src/docs.client.ts': {
             css: ['assets/docs.css'],
@@ -828,13 +828,13 @@ describe('server app shell Vite build seam', () => {
         '/docs/intro': 'src/docs.client.ts',
       };
 
-      const dryRunManifest = await staticExportManifestForJisoAppShellViteBuildFromManifestFile({
+      const dryRunManifest = await staticExportManifestForKovoAppShellViteBuildFromManifestFile({
         app,
         clientModules,
         distDir,
         routeEntryMap,
       });
-      const written = await exportJisoAppShellViteBuildFromManifestFile({
+      const written = await exportKovoAppShellViteBuildFromManifestFile({
         app,
         clientModules,
         distDir,
@@ -933,8 +933,8 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('returns manifest-file static export assets for task wiring', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-assets-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-assets-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-manifest-assets-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-manifest-assets-export-'));
 
     try {
       await mkdir(join(distDir, '.vite'), { recursive: true });
@@ -942,7 +942,7 @@ describe('server app shell Vite build seam', () => {
       await writeFile(join(distDir, 'assets/catalog.css'), '.catalog{color:blue}');
       await writeFile(join(distDir, 'assets/catalog.js'), 'export const catalog = true;');
       await writeFile(
-        jisoAppShellViteManifestFile(distDir),
+        kovoAppShellViteManifestFile(distDir),
         JSON.stringify({
           'src/catalog.client.ts': {
             css: ['assets/catalog.css'],
@@ -952,7 +952,7 @@ describe('server app shell Vite build seam', () => {
       );
 
       await expect(
-        jisoAppShellViteStaticExportAssetsFromManifestFile({
+        kovoAppShellViteStaticExportAssetsFromManifestFile({
           base: '/shop/',
           distDir,
         }),
@@ -978,11 +978,11 @@ describe('server app shell Vite build seam', () => {
   });
 
   it('rejects non-file Vite distDir URLs before static asset planning', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-bad-dist-url-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-bad-dist-url-'));
 
     try {
       await mkdir(join(distDir, '.vite'), { recursive: true });
-      const manifestFile = jisoAppShellViteManifestFile(distDir);
+      const manifestFile = kovoAppShellViteManifestFile(distDir);
       await writeFile(
         manifestFile,
         JSON.stringify({
@@ -994,15 +994,15 @@ describe('server app shell Vite build seam', () => {
       );
 
       await expect(
-        jisoAppShellViteStaticExportAssetsFromManifestFile({
+        kovoAppShellViteStaticExportAssetsFromManifestFile({
           distDir: new URL('https://cdn.example/dist/'),
           manifestFile,
         }),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining(
               'Vite app-shell filesystem roots must be filesystem paths or file: URLs',
             ),

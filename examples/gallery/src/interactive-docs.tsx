@@ -1,4 +1,4 @@
-/** @jsxImportSource @jiso/server */
+/** @jsxImportSource @kovojs/server */
 import { GalleryAccordionDemo } from './generated/interactive/accordion-demo.js';
 import { GalleryAlertDialogDemo } from './generated/interactive/alert-dialog-demo.js';
 import { GalleryAutocompleteDemo } from './generated/interactive/autocomplete-demo.js';
@@ -226,7 +226,7 @@ export function renderInteractiveGalleryRoute(): string {
     <main data-gallery-route="/gallery/interactive">
       <h1>Interactive Gallery</h1>
       <p data-demo-summary="compiled">
-        Stateful examples below are app-authored TSX compiled through Jiso into checked-in server
+        Stateful examples below are app-authored TSX compiled through Kovo into checked-in server
         artifacts and generated client modules.
       </p>
       <nav aria-label="Interactive demos">

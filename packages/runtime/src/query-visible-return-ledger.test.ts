@@ -5,7 +5,7 @@ import { createRefetchQueryLedger, readVisibleReturnQueryScripts } from './query
 
 // SPEC.md §4.4/§9.4: the visible-return refetch ledger tracks which hydrated and
 // later-applied query names are eligible for the next typed-read refetch,
-// deduping by first-seen order and reading eligibility only from fw-query
+// deduping by first-seen order and reading eligibility only from kovo-query
 // hydration scripts. The installed visible-return refetch lifecycle lives in the
 // sibling query-visible-return-refetch.test.ts file.
 describe('query visible-return refetch ledger', () => {
@@ -19,11 +19,11 @@ describe('query visible-return refetch ledger', () => {
     expect(ledger.eligible(['inventory', 'recommendations'])).toEqual(['cart', 'reviews']);
   });
 
-  it('reads only fw-query hydration scripts from the visible-return root', () => {
+  it('reads only kovo-query hydration scripts from the visible-return root', () => {
     const root = new FakeRoot();
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
         textContent: '{"count":1}',
       },
     ];

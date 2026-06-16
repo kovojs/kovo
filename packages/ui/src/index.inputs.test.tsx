@@ -50,7 +50,7 @@ import {
   sliderTrackClasses,
 } from './index.js';
 
-describe('@jiso/ui styled package foundation', () => {
+describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless scroll-area primitive as styled native scrolling parts', () => {
     const state = {
       dir: 'ltr' as const,

@@ -3,8 +3,8 @@ import {
   type AlgebraicQueryShape,
   type JsonValue,
   type SymbolicEffect,
-} from '@jiso/core';
-import { deriveOptimistic } from '@jiso/drizzle/derive';
+} from '@kovojs/core';
+import { deriveOptimistic } from '@kovojs/drizzle/derive';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';

@@ -1,4 +1,4 @@
-/** @jsxImportSource @jiso/server */
+/** @jsxImportSource @kovojs/server */
 import type { ContactRow, DealRow } from '../queries.js';
 import { money, renderCrmShell, stageBadge } from './chrome.js';
 

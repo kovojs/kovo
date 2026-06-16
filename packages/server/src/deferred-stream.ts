@@ -38,7 +38,7 @@ export interface DeferredStreamResponse extends ServerResponseBase<
 > {}
 
 export function renderDeferredStream(options: DeferredStreamOptions): DeferredStreamResponse {
-  const boundary = options.boundary ?? 'jiso-boundary';
+  const boundary = options.boundary ?? 'kovo-boundary';
   const chunks = sortDeferredChunks(options.chunks).map((chunk) =>
     [
       `--${boundary}`,

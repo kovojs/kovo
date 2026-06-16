@@ -1,11 +1,11 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue, type StaticLiteralValue } from '../scan/object.js';
 import type { JsxAttributeModel, ObjectLiteralEntry } from '../scan/parse.js';
 import { dedupeBy, escapeAttribute, splitDepValue } from '../shared.js';
 
-export type AttributeMergeDiagnosticCode = 'FW231' | 'FW232' | 'FW233';
+export type AttributeMergeDiagnosticCode = 'KV231' | 'KV232' | 'KV233';
 
 export interface MergeableAttribute {
   attribute?: JsxAttributeModel;
@@ -34,9 +34,9 @@ const idrefAttributes = new Set([
   'commandfor',
   'for',
   'htmlFor',
-  'jiso-context-menu',
-  'jiso-hover-card',
-  'jiso-tooltip',
+  'kovo-context-menu',
+  'kovo-hover-card',
+  'kovo-tooltip',
   'popovertarget',
 ]);
 
@@ -186,27 +186,27 @@ function mergeAttribute(
   if (name === 'id') return author;
 
   if (idrefAttributes.has(name)) {
-    diagnostics.push(attributeMergeDiagnostic(options, 'FW231', name, author));
+    diagnostics.push(attributeMergeDiagnostic(options, 'KV231', name, author));
     return author;
   }
 
   if (name.startsWith('aria-') || name === 'role') {
-    diagnostics.push(attributeMergeDiagnostic(options, 'FW232', name, author));
+    diagnostics.push(attributeMergeDiagnostic(options, 'KV232', name, author));
     return author;
   }
 
   if (name === 'data-state' || primitiveOwnedDataStateAttribute(name)) {
-    diagnostics.push(attributeMergeDiagnostic(options, 'FW232', name, author));
+    diagnostics.push(attributeMergeDiagnostic(options, 'KV232', name, author));
     return primitive;
   }
 
   if (name.startsWith('data-p-')) {
-    diagnostics.push(attributeMergeDiagnostic(options, 'FW231', name, author));
+    diagnostics.push(attributeMergeDiagnostic(options, 'KV231', name, author));
     return author;
   }
 
   if (isBindingAttribute(name)) {
-    diagnostics.push(attributeMergeDiagnostic(options, 'FW233', name, author));
+    diagnostics.push(attributeMergeDiagnostic(options, 'KV233', name, author));
     return author;
   }
 
@@ -214,12 +214,12 @@ function mergeAttribute(
     return authorValue(name, logicalOr(primitive.value, author.value), author);
   }
 
-  if (name === 'fw-deps') {
+  if (name === 'kovo-deps') {
     return authorValue(name, mergeDepLists(primitive.value, author.value), author);
   }
 
-  if (name === 'fw-c' || name === 'fw-state') {
-    diagnostics.push(attributeMergeDiagnostic(options, 'FW231', name, author));
+  if (name === 'kovo-c' || name === 'kovo-state') {
+    diagnostics.push(attributeMergeDiagnostic(options, 'KV231', name, author));
     return author;
   }
 

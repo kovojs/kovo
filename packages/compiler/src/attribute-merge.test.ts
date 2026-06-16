@@ -24,7 +24,7 @@ export const PrimitiveMerge = component('primitive-merge', {
           'data-p-id': 'primitive-id',
           'data-bind': 'cart.count',
           required: true,
-          'fw-deps': 'cart',
+          'kovo-deps': 'cart',
           type: 'button',
         }}
       >
@@ -42,7 +42,7 @@ export const PrimitiveMerge = component('primitive-merge', {
             data-bind="cart.total"
             disabled
             required={false}
-            fw-deps="product"
+            kovo-deps="product"
             type="submit"
           >
             Toggle
@@ -68,16 +68,16 @@ export const PrimitiveMerge = component('primitive-merge', {
     expect(serverSource).toContain('data-bind="cart.total"');
     expect(serverSource).toContain('required');
     expect(serverSource).toContain('disabled');
-    expect(serverSource).toContain('fw-deps="cart product"');
+    expect(serverSource).toContain('kovo-deps="cart product"');
     expect(serverSource).toContain('type="submit"');
     expect(serverSource).not.toContain('Tooltip.Trigger');
     expect(serverSource).not.toContain('{...attrs}');
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      'FW231',
-      'FW232',
-      'FW232',
-      'FW231',
-      'FW233',
+      'KV231',
+      'KV232',
+      'KV232',
+      'KV231',
+      'KV233',
     ]);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
       'Unmergeable attribute conflict in primitive composition. aria-controls',
@@ -88,7 +88,7 @@ export const PrimitiveMerge = component('primitive-merge', {
     ]);
   });
 
-  it('reports FW231, FW232, and FW233 for residual attribute merge conflicts', () => {
+  it('reports KV231, KV232, and KV233 for residual attribute merge conflicts', () => {
     const result = compileComponentModule({
       fileName: 'primitive-merge.tsx',
       source: `
@@ -97,7 +97,7 @@ export const PrimitiveMerge = component('primitive-merge', {
     <primitive-merge>
       <dialog id="drawer"></dialog>
       <dialog id="confirm"></dialog>
-      <button commandfor="drawer" commandfor="confirm" data-p-id="one" data-p-id="two" fw-c="primitive-merge" fw-c="primitive-merge">Open</button>
+      <button commandfor="drawer" commandfor="confirm" data-p-id="one" data-p-id="two" kovo-c="primitive-merge" kovo-c="primitive-merge">Open</button>
       <button aria-expanded="false" aria-expanded="true" role="button" role="link" data-state="closed" data-state="open">Toggle</button>
       <span data-bind="cart.count" data-bind="cart.total" data-bind:hidden="cart.empty" data-bind:hidden="cart.loading">2</span>
     </primitive-merge>
@@ -108,7 +108,7 @@ export const PrimitiveMerge = component('primitive-merge', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW231',
+        code: 'KV231',
         fileName: 'primitive-merge.tsx',
         length: 19,
         message: 'Unmergeable attribute conflict in primitive composition. commandfor',
@@ -116,7 +116,7 @@ export const PrimitiveMerge = component('primitive-merge', {
         start: { column: 15, line: 7 },
       },
       {
-        code: 'FW231',
+        code: 'KV231',
         fileName: 'primitive-merge.tsx',
         length: 15,
         message: 'Unmergeable attribute conflict in primitive composition. data-p-id',
@@ -124,15 +124,15 @@ export const PrimitiveMerge = component('primitive-merge', {
         start: { column: 56, line: 7 },
       },
       {
-        code: 'FW231',
+        code: 'KV231',
         fileName: 'primitive-merge.tsx',
-        length: 22,
-        message: 'Unmergeable attribute conflict in primitive composition. fw-c',
+        length: 24,
+        message: 'Unmergeable attribute conflict in primitive composition. kovo-c',
         severity: 'error',
         start: { column: 88, line: 7 },
       },
       {
-        code: 'FW232',
+        code: 'KV232',
         fileName: 'primitive-merge.tsx',
         length: 20,
         message: 'Author overrides a primitive-owned ARIA or state attribute. aria-expanded',
@@ -140,7 +140,7 @@ export const PrimitiveMerge = component('primitive-merge', {
         start: { column: 37, line: 8 },
       },
       {
-        code: 'FW232',
+        code: 'KV232',
         fileName: 'primitive-merge.tsx',
         length: 11,
         message: 'Author overrides a primitive-owned ARIA or state attribute. role',
@@ -148,7 +148,7 @@ export const PrimitiveMerge = component('primitive-merge', {
         start: { column: 72, line: 8 },
       },
       {
-        code: 'FW232',
+        code: 'KV232',
         fileName: 'primitive-merge.tsx',
         length: 17,
         message: 'Author overrides a primitive-owned ARIA or state attribute. data-state',
@@ -156,7 +156,7 @@ export const PrimitiveMerge = component('primitive-merge', {
         start: { column: 104, line: 8 },
       },
       {
-        code: 'FW233',
+        code: 'KV233',
         fileName: 'primitive-merge.tsx',
         length: 22,
         message: 'Two writers target the same binding slot. data-bind',
@@ -164,7 +164,7 @@ export const PrimitiveMerge = component('primitive-merge', {
         start: { column: 13, line: 9 },
       },
       {
-        code: 'FW233',
+        code: 'KV233',
         fileName: 'primitive-merge.tsx',
         length: 29,
         message: 'Two writers target the same binding slot. data-bind:hidden',
@@ -212,7 +212,7 @@ export const PrimitiveMerge = component('primitive-merge', {
 `,
     });
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW232', 'FW233']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV232', 'KV233']);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
       'Author overrides a primitive-owned ARIA or state attribute. role',
       'Two writers target the same binding slot. data-bind',

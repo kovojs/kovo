@@ -29,10 +29,10 @@ describe('query refetch', () => {
       text: async () =>
         url === '/_q/cart'
           ? [
-              '<fw-query name="cart">{"count":2}</fw-query>',
-              '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+              '<kovo-query name="cart">{"count":2}</kovo-query>',
+              '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
             ].join('')
-          : '<fw-query name="reviews">{"total":5}</fw-query>',
+          : '<kovo-query name="reviews">{"total":5}</kovo-query>',
     }));
 
     store.subscribe('cart', cartPlan);
@@ -52,11 +52,11 @@ describe('query refetch', () => {
     ]);
 
     expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
-      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(fetch).toHaveBeenNthCalledWith(2, '/_q/reviews', {
-      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(store.get('cart')).toEqual({ count: 2 });
@@ -76,8 +76,8 @@ describe('query refetch', () => {
       status: 200,
       text: async () =>
         url === '/_q/cart'
-          ? '<fw-query name="cart">{"label":"Cart has items"}</fw-query>'
-          : '<fw-query name="reviews">{"total":8}</fw-query>',
+          ? '<kovo-query name="cart">{"label":"Cart has items"}</kovo-query>'
+          : '<kovo-query name="reviews">{"total":8}</kovo-query>',
     }));
 
     root.bindings.push(badge, meter);
@@ -108,7 +108,7 @@ describe('query refetch', () => {
     const plan = vi.fn();
     const fetch = vi.fn(async () => ({
       status: 200,
-      text: async () => '<fw-query name="product:p1">{"stock":6}</fw-query>',
+      text: async () => '<kovo-query name="product:p1">{"stock":6}</kovo-query>',
     }));
 
     store.subscribe('product', plan, 'p1');
@@ -122,9 +122,9 @@ describe('query refetch', () => {
     ).resolves.toEqual([{ fragments: [], queries: ['product:p1'] }]);
 
     // SPEC.md §9.4/§10.2: typed-read responses carry the canonical query
-    // instance key directly in the fw-query name and still hit the keyed store.
+    // instance key directly in the kovo-query name and still hit the keyed store.
     expect(fetch).toHaveBeenCalledWith('/_q/product%3Ap1', {
-      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(store.get('product', 'p1')).toEqual({ stock: 6 });
@@ -137,7 +137,7 @@ describe('query refetch', () => {
     const fetch = vi.fn(async () => ({
       ok: false,
       status: 500,
-      text: async () => '<fw-query name="cart">{"count":2}</fw-query>',
+      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
     }));
 
     await expect(
@@ -161,8 +161,8 @@ describe('query refetch', () => {
       status: 200,
       text: async () =>
         url === '/_q/cart'
-          ? '<fw-query name="cart">{</fw-query><fw-query name="inventory">{"available":true}</fw-query>'
-          : '<fw-query name="reviews">{"total":2}</fw-query>',
+          ? '<kovo-query name="cart">{</kovo-query><kovo-query name="inventory">{"available":true}</kovo-query>'
+          : '<kovo-query name="reviews">{"total":2}</kovo-query>',
     }));
 
     const applied = await refetchQueries({
@@ -183,7 +183,9 @@ describe('query refetch', () => {
     expect(store.get('inventory')).toEqual({ available: true });
     expect(store.get('reviews')).toEqual({ total: 2 });
     expect(onError).toHaveBeenCalledTimes(1);
-    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed JSON in kovo-query cart',
+    );
   });
 
   it('reports typed read apply hook failures while continuing later chunks in the batch', async () => {
@@ -194,8 +196,8 @@ describe('query refetch', () => {
       status: 200,
       text: async () =>
         url === '/_q/cart'
-          ? '<fw-query name="cart">{"count":2}</fw-query>'
-          : '<fw-query name="reviews">{"total":4}</fw-query>',
+          ? '<kovo-query name="cart">{"count":2}</kovo-query>'
+          : '<kovo-query name="reviews">{"total":4}</kovo-query>',
     }));
 
     const applied = await refetchQueries({
@@ -228,7 +230,7 @@ describe('query refetch', () => {
 
       return {
         status: 200,
-        text: async () => '<fw-query name="reviews">{"total":2}</fw-query>',
+        text: async () => '<kovo-query name="reviews">{"total":2}</kovo-query>',
       };
     });
 

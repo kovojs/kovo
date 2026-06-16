@@ -11,7 +11,7 @@ import { exportStaticApp } from './static-export.js';
 
 describe('server static export', () => {
   it('rejects exported documents that reference server mutation or query endpoints', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
       const app = createApp({
         routes: [
@@ -28,17 +28,17 @@ describe('server static export', () => {
       });
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining(
               "document attribute 'action' references server mutation endpoint '/_m/cart/add'",
             ),
             routePath: '/cart',
           },
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining(
               "document attribute 'href' references server query endpoint '/_q/cart'",
             ),
@@ -68,7 +68,7 @@ describe('server static export', () => {
       clientModules: [],
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           routePath: '/cart',
           message: expect.stringContaining('Export is L0/L1 only'),
         },

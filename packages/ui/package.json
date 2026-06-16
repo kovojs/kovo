@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/ui",
+  "name": "@kovojs/ui",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -50,14 +50,14 @@
     "./toolbar": "./src/toolbar.tsx"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*",
-    "@jiso/headless-ui": "workspace:*",
-    "@jiso/server": "workspace:*"
+    "@kovojs/core": "workspace:*",
+    "@kovojs/headless-ui": "workspace:*",
+    "@kovojs/server": "workspace:*"
   },
   "devDependencies": {
     "vitest": "4.1.8"
   },
-  "jiso": {
+  "kovo": {
     "vendoredSource": true
   }
 }

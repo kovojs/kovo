@@ -1,4 +1,4 @@
-import { renderQueryScript, renderRoutePageResponse, route } from '@jiso/server';
+import { renderQueryScript, renderRoutePageResponse, route } from '@kovojs/server';
 
 import { createShopDb, type ShopDb } from './db.js';
 import { CartBadge } from './generated/cart-badge.js';
@@ -18,7 +18,7 @@ export function renderShopPage(db: ShopDb = createShopDb()): string {
     renderQueryScript({ name: 'cart', value: cart }) +
     renderQueryScript({ name: 'products', value: products });
 
-  return `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1>${queryData}${CartBadge.definition.render({ cart })}${ProductList.definition.render({ products })}</main></body></html>`;
+  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${queryData}${CartBadge.definition.render({ cart })}${ProductList.definition.render({ products })}</main></body></html>`;
 }
 // /snippet
 

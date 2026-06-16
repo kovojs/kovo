@@ -1,4 +1,4 @@
-import { type Guard, guards as serverGuards } from '@jiso/server';
+import { type Guard, guards as serverGuards } from '@kovojs/server';
 import { describe, expect, it } from 'vitest';
 import { type ActiveOrganizationRequest, activeOrganization, authed, role } from './index.js';
 import { type AppRequest } from './test-fakes.js';
@@ -26,7 +26,7 @@ describe('guard bindings', () => {
       },
     } satisfies AppRequest;
 
-    // SPEC.md §6.5 and §10.3: @jiso/server does not export guard-failure constants, so this
+    // SPEC.md §6.5 and §10.3: @kovojs/server does not export guard-failure constants, so this
     // package pins the adapter literals against the canonical server guards instead.
     expect(await role<AppRequest>('admin')(anonymous)).toEqual(
       await serverGuards.role<ServerSessionRequest>('admin')(anonymous),

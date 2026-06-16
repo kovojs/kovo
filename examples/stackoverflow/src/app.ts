@@ -1,5 +1,5 @@
 // SPEC.md §10–§11: the public surface of the Stack Overflow clone — a FOCUSED
-// data + derived-optimism example (schema, queries, mutations, the extracted fw
+// data + derived-optimism example (schema, queries, mutations, the extracted kovo
 // graph, and the compiler-derived optimistic transforms). No TSX/app-shell/
 // browser/static-export here (the commerce example owns the full-UI story).
 
@@ -40,5 +40,5 @@ export { voteUpDerivedOptimistic } from './generated/optimistic/vote-up.js';
 export { soTouchGraph } from './generated/touch-graph.js';
 export { createSoGraph, soGraphDeclarations } from './graph.js';
 
-/** The committed FwExplainInput graph (declarations + the EXTRACTED touch graph). */
+/** The committed KovoExplainInput graph (declarations + the EXTRACTED touch graph). */
 export const soGraph = createSoGraph(soTouchGraph);

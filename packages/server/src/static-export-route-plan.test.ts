@@ -51,26 +51,26 @@ describe('server static export route plan', () => {
       ).diagnostics,
     ).toEqual([
       {
-        code: 'FW229',
+        code: 'KV229',
         message:
-          "FW229 static export cannot export guarded route '/admin'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.",
+          "KV229 static export cannot export guarded route '/admin'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.",
         routePath: '/admin',
       },
       {
-        code: 'FW229',
+        code: 'KV229',
         message:
-          "FW229 static export cannot enumerate param route '/products/:id' without staticPaths metadata. Add explicit staticPaths for every exported concrete URL, or exclude the route from export.",
+          "KV229 static export cannot enumerate param route '/products/:id' without staticPaths metadata. Add explicit staticPaths for every exported concrete URL, or exclude the route from export.",
         routePath: '/products/:id',
       },
       {
-        code: 'FW229',
+        code: 'KV229',
         message:
-          "FW229 static export staticPath '/orders/:id' for param route '/orders/:id' must be a concrete URL, not a route pattern.",
+          "KV229 static export staticPath '/orders/:id' for param route '/orders/:id' must be a concrete URL, not a route pattern.",
         routePath: '/orders/:id',
       },
       {
-        code: 'FW229',
-        message: "FW229 static export staticPath '/cart' does not match param route '/orders/:id'.",
+        code: 'KV229',
+        message: "KV229 static export staticPath '/cart' does not match param route '/orders/:id'.",
         routePath: '/orders/:id',
       },
     ]);
@@ -101,21 +101,21 @@ describe('server static export route plan', () => {
     ).toEqual({
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message:
-            "FW229 static export cannot export '/docs/intro' for route '/docs/intro/' because it duplicates the concrete route target from '/docs/intro'.",
+            "KV229 static export cannot export '/docs/intro' for route '/docs/intro/' because it duplicates the concrete route target from '/docs/intro'.",
           routePath: '/docs/intro/',
         },
         {
-          code: 'FW229',
+          code: 'KV229',
           message:
-            "FW229 static export cannot export '/products/p1' for route '/products/:id' because it duplicates the concrete route target from '/products/:id'.",
+            "KV229 static export cannot export '/products/p1' for route '/products/:id' because it duplicates the concrete route target from '/products/:id'.",
           routePath: '/products/:id',
         },
         {
-          code: 'FW229',
+          code: 'KV229',
           message:
-            "FW229 static export cannot export '/docs/intro' for route '/docs/:slug' because it duplicates the concrete route target from '/docs/intro'.",
+            "KV229 static export cannot export '/docs/intro' for route '/docs/:slug' because it duplicates the concrete route target from '/docs/intro'.",
           routePath: '/docs/:slug',
         },
       ],
@@ -144,21 +144,21 @@ describe('server static export route plan', () => {
     ).toEqual({
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'KV229',
           message:
-            "FW229 static export cannot export concrete route target '/docs/%2e%2e' for route '/docs/%2e%2e' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
+            "KV229 static export cannot export concrete route target '/docs/%2e%2e' for route '/docs/%2e%2e' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
           routePath: '/docs/%2e%2e',
         },
         {
-          code: 'FW229',
+          code: 'KV229',
           message:
-            "FW229 static export cannot export concrete route target '/products/%2f' for route '/products/:id' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
+            "KV229 static export cannot export concrete route target '/products/%2f' for route '/products/:id' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
           routePath: '/products/:id',
         },
         {
-          code: 'FW229',
+          code: 'KV229',
           message:
-            "FW229 static export cannot export concrete route target '/products/%E0%A4%A' for route '/products/:id' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
+            "KV229 static export cannot export concrete route target '/products/%E0%A4%A' for route '/products/:id' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
           routePath: '/products/:id',
         },
       ],

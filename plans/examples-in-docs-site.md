@@ -34,7 +34,7 @@ Done when:
       link-check + smoke gate stay green (`vp run export` → `check:links` OK pages=85; `vp run smoke`
       14/14 ok incl. 3 commerce checks).
 - [x] Source shown is **app-authored** TSX (`examples/commerce/src/components/*.tsx`), never lowered
-      IR / generated stamps (`SPEC.md` §5.2 — hand-authored lowered IR is FW235; we display, not
+      IR / generated stamps (`SPEC.md` §5.2 — hand-authored lowered IR is KV235; we display, not
       author). Read from disk at build time (`loadCommerceSources`) so it cannot drift from what compiles.
 
 Out of scope (this iteration): gallery (already embedded inline via `build.mjs:133`), reference
@@ -44,7 +44,7 @@ generalized `{{example:...}}` embed for those once commerce proves the pattern.
 ## Locked Decisions
 
 - **Embed mechanism: static export in a sandboxed `<iframe>`.** Strong isolation — the commerce app
-  ships its own CSS, client modules, and `@jiso/runtime`, which would otherwise collide with the
+  ships its own CSS, client modules, and `@kovojs/runtime`, which would otherwise collide with the
   docs page scope. This matches how commerce already exports (`examples/commerce/scripts/export-static.mjs`
   → `exportCommerceStaticApp`, producing HTML artifacts + client modules + assets into `dist/`).
 - **Scope: commerce only** for v1. It is the flagship full-stack example with real UI components.
@@ -54,7 +54,7 @@ generalized `{{example:...}}` embed for those once commerce proves the pattern.
 
 ## Architecture / how it slots into the existing build
 
-The docs site (`site/`) is a build-time static generator built with Jiso. `site/scripts/build.mjs`
+The docs site (`site/`) is a build-time static generator built with Kovo. `site/scripts/build.mjs`
 already SSR-loads an example (gallery) and emits pages; the commerce embed follows the same shape but
 loads a **prebuilt export** rather than SSR-rendering inline.
 
@@ -112,7 +112,7 @@ product-grid}.tsx` and run them through the existing Shiki path in `md.mjs`.
       `/examples/<name>/` pages and the `/examples/` index. Commerce migrated onto it (no behaviour
       change — re-verified).
 - [x] CRM + StackOverflow given real multi-page read-only static-export apps (see the sibling commit
-      "Add multi-page UI to crm and stackoverflow examples"): `component`-free `@jiso/server` JSX
+      "Add multi-page UI to crm and stackoverflow examples"): `component`-free `@kovojs/server` JSX
       views, a richer demo-data seed layered on the untouched `createXDb()` seed, an app-shell static
       export + node handler, `export-static.mjs`, `serve.mjs`, `vite.config.ts`, `styles.css`.
 - [x] In-iframe multi-page navigation works: `rerootHtml` now re-roots **every** root-absolute
@@ -146,7 +146,7 @@ product-grid}.tsx` and run them through the existing Shiki path in `md.mjs`.
 
 - [ ] **Live interactivity in the docs iframe.** All embeds are read-only static exports (no server
       on a static host), so mutations/optimism don't run in-iframe — the source tabs tell that story.
-      Each example ships a dynamic node handler + `serve.mjs` (`pnpm --filter @jiso/example-<name>
+      Each example ships a dynamic node handler + `serve.mjs` (`pnpm --filter @kovojs/example-<name>
 start`) for full local interactivity; wiring mutation/optimism client modules into those dynamic
       shells (add-contact, vote, post-answer) is future work.
 - [ ] **reference example** (auth) could opt into the now-generic helper if a public-only export is

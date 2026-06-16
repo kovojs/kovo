@@ -1,4 +1,4 @@
-import { guards, query, type QueryLoadContext } from '@jiso/server';
+import { guards, query, type QueryLoadContext } from '@kovojs/server';
 import { eq, gt, sum } from 'drizzle-orm';
 
 import type { CommerceDb } from './db.js';

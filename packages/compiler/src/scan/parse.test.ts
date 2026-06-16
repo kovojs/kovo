@@ -15,39 +15,39 @@ import {
 describe('compiler scan parser helpers', () => {
   it('records static module specifiers for package prefix discovery', () => {
     const source = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import { Dialog } from '@acme/primitives/dialog';
 export { theme } from '@acme/theme';
 const loader = () => import('@acme/lazy/panel');
 `;
 
     expect(parseComponentModule('imports.tsx', source).moduleSpecifiers).toEqual([
-      { specifier: '@jiso/core' },
+      { specifier: '@kovojs/core' },
       { specifier: '@acme/primitives/dialog' },
       { specifier: '@acme/theme' },
       { specifier: '@acme/lazy/panel' },
     ]);
     expect(parseComponentModule('imports.tsx', source).namedImports).toEqual([
-      { importedName: 'component', localName: 'component', moduleSpecifier: '@jiso/core' },
+      { importedName: 'component', localName: 'component', moduleSpecifier: '@kovojs/core' },
       { importedName: 'Dialog', localName: 'Dialog', moduleSpecifier: '@acme/primitives/dialog' },
     ]);
   });
 
   it('records aliased named imports for client handler dependency emission', () => {
     const source = `
-import { tabsKeyDown as keyDown, tabsTriggerClick } from '@jiso/headless-ui/primitives';
+import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/primitives';
 `;
 
     expect(parseComponentModule('imports.tsx', source).namedImports).toEqual([
       {
         importedName: 'tabsKeyDown',
         localName: 'keyDown',
-        moduleSpecifier: '@jiso/headless-ui/primitives',
+        moduleSpecifier: '@kovojs/headless-ui/primitives',
       },
       {
         importedName: 'tabsTriggerClick',
         localName: 'tabsTriggerClick',
-        moduleSpecifier: '@jiso/headless-ui/primitives',
+        moduleSpecifier: '@kovojs/headless-ui/primitives',
       },
     ]);
   });
@@ -165,13 +165,13 @@ export const CartBadge = component('cart-badge', {
     const source = `
 export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
-  render: () => <section fw-deps="product:p1 cart">Recommended</section>,
+  render: () => <section kovo-deps="product:p1 cart">Recommended</section>,
 });
 `;
     const host = componentRenderHostElement(parseComponentModule('recommendations.tsx', source));
 
     expect(host?.tag).toBe('section');
-    expect(host?.attributes.find((attribute) => attribute.name === 'fw-deps')?.value).toBe(
+    expect(host?.attributes.find((attribute) => attribute.name === 'kovo-deps')?.value).toBe(
       'product:p1 cart',
     );
   });
@@ -420,7 +420,7 @@ export const CartActions = component('cart-actions', {
 export const ExecutionTriggers = component('execution-triggers', {
   render: () => (
     <section>
-      {/* FW211: intentionally eager. */}
+      {/* KV211: intentionally eager. */}
       <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
     </section>
   ),
@@ -440,7 +440,7 @@ export const ExecutionTriggers = component('execution-triggers', {
 export const ExecutionTriggers = component('execution-triggers', {
   render: () => (
     <section>
-      <p>{/* FW211: this paragraph is not the eager trigger. */}</p>
+      <p>{/* KV211: this paragraph is not the eager trigger. */}</p>
       <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
     </section>
   ),

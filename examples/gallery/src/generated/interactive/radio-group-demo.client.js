@@ -1,10 +1,10 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   radioGroupItemClick as _radioGroupItemClick,
   radioGroupKeyDown as _radioGroupKeyDown,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryRadioGroupDemo$div_keydown = handler((event, ctx) => {
   const result = _radioGroupKeyDown(Object(event), {

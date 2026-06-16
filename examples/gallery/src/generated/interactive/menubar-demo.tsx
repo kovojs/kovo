@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/menubar-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/menubar-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryMenubarDemo$section_data_open_derive = derive(
   ['state'],
@@ -47,7 +47,7 @@ export const GalleryMenubarDemo$output_text_derive = derive(
   (state: any) => state.openValue || 'none',
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   menubarFocusElement as _menubarFocusElement,
   menubarItemAttributes,
@@ -60,11 +60,11 @@ import {
   menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick,
   menubarTypeahead as _menubarTypeahead,
   type MenubarItem,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/menubar.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/menubar.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS =
   'inline-flex rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-sm data-[orientation=vertical]:flex-col data-[disabled]:opacity-50';
@@ -87,7 +87,7 @@ const menubarItems: readonly MenubarItem[] = Object.freeze([
 ]);
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryMenubarDemo = component('gallery-menubar-demo', {
   state: () => ({ activeValue: 'file', openValue: '', value: 'new' }),
   render: (_queries: Record<string, never>, state: GalleryMenubarDemoState) => {
@@ -103,10 +103,10 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
         class="grid gap-2"
         data-gallery-interactive="menubar"
         data-open={state.openValue || 'none'}
-        data-bind:data-open="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$section_data_open_derive"
-        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$section_keydown"
-        fw-c="gallery-menubar-demo"
-        fw-state='{"activeValue":"file","openValue":"","value":"new"}'
+        data-bind:data-open="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$section_data_open_derive"
+        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$section_keydown"
+        kovo-c="gallery-menubar-demo"
+        kovo-state='{"activeValue":"file","openValue":"","value":"new"}'
       >
         <div {...menubarRootAttributes(rootState)} class={ROOT_CLASS}>
           <button
@@ -118,16 +118,16 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemValue: 'file',
             })}
             aria-expanded={state.openValue === 'file' ? 'true' : 'false'}
-            data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_aria_expanded_derive"
+            data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_aria_expanded_derive"
             class={ITEM_CLASS}
             data-highlighted={state.activeValue === 'file' ? '' : null}
-            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_data_highlighted_derive"
+            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_highlighted_derive"
             data-state={state.activeValue === 'file' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_data_state_derive"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_state_derive"
             tabIndex={state.activeValue === 'file' ? 0 : -1}
-            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_tabIndex_derive"
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_click"
-            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_keydown"
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_tabIndex_derive"
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_click"
+            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_keydown"
           >
             File
           </button>
@@ -140,12 +140,12 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
             })}
             class={ITEM_CLASS}
             data-highlighted={state.activeValue === 'edit' ? '' : null}
-            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_data_highlighted_derive_2"
+            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_highlighted_derive_2"
             data-state={state.activeValue === 'edit' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_data_state_derive_2"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_state_derive_2"
             tabIndex={state.activeValue === 'edit' ? 0 : -1}
-            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_tabIndex_derive_2"
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_click_2"
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_tabIndex_derive_2"
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_click_2"
           >
             Edit
           </button>
@@ -159,9 +159,9 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
           })}
           class={SUBMENU_CLASS}
           data-state={state.openValue === 'file' ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$div_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$div_data_state_derive"
           hidden={state.openValue !== 'file'}
-          data-bind:hidden="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$div_hidden_derive"
+          data-bind:hidden="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$div_hidden_derive"
         >
           <button
             {...menubarItemAttributes({
@@ -173,13 +173,13 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
             })}
             class={ITEM_CLASS}
             data-highlighted={state.activeValue === 'new' ? '' : null}
-            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_data_highlighted_derive_3"
+            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_highlighted_derive_3"
             data-state={state.activeValue === 'new' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_data_state_derive_3"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_state_derive_3"
             tabIndex={state.activeValue === 'new' ? 0 : -1}
-            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_tabIndex_derive_3"
-            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_keydown_2"
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$button_click_3"
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_tabIndex_derive_3"
+            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_keydown_2"
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_click_3"
           >
             New file
           </button>
@@ -202,7 +202,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
         </output>
         <output
           data-demo-state="menubar-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=676d9617#GalleryMenubarDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$output_text_derive"
         >
           {state.openValue || 'none'}
         </output>

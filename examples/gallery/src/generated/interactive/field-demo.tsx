@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/field-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/field-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryFieldDemo$div_data_invalid_derive = derive(['state'], (state: any) =>
   state.invalid ? '' : null,
@@ -37,7 +37,7 @@ export const GalleryFieldDemo$input_checked_derive = derive(['state'], (state: a
   state.shippingDisabled ? '' : null,
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   fieldControlAttributes,
   fieldDescriptionAttributes,
@@ -46,11 +46,11 @@ import {
   fieldRootAttributes,
   fieldsetLegendAttributes,
   fieldsetRootAttributes,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/field.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/field.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const FIELD_CLASS =
   'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950 data-[required]:font-medium';
@@ -78,7 +78,7 @@ export interface GalleryFieldDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryFieldDemo = component('gallery-field-demo', {
   state: () => ({
     email: 'ada@example',
@@ -101,14 +101,14 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
         data-gallery-interactive="field"
         id="gallery-interactive-field-form"
         class="grid gap-4"
-        fw-c="gallery-field-demo"
-        fw-state='{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}'
+        kovo-c="gallery-field-demo"
+        kovo-state='{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}'
       >
         <div
           {...fieldRootAttributes({ ...emailFieldState, id: 'gallery-interactive-field-email' })}
           class={FIELD_CLASS}
           data-invalid={state.invalid ? '' : null}
-          data-bind:data-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$div_data_invalid_derive"
+          data-bind:data-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$div_data_invalid_derive"
         >
           <label
             {...fieldLabelAttributes({
@@ -128,7 +128,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               form: 'gallery-interactive-field-form',
               id: 'gallery-interactive-field-email-input',
               name: 'gallery-email',
-              pattern: '.+@jiso\\.dev',
+              pattern: '.+@kovo\\.sh',
             })}
             type="email"
             class={CONTROL_CLASS}
@@ -137,14 +137,14 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
                 ? 'gallery-interactive-field-email-description gallery-interactive-field-email-error'
                 : 'gallery-interactive-field-email-description'
             }
-            data-bind:aria-describedby="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$input_aria_describedby_derive"
+            data-bind:aria-describedby="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_aria_describedby_derive"
             aria-invalid={state.invalid ? 'true' : null}
-            data-bind:aria-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$input_aria_invalid_derive"
+            data-bind:aria-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_aria_invalid_derive"
             data-invalid={state.invalid ? '' : null}
-            data-bind:data-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$input_data_invalid_derive"
+            data-bind:data-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_data_invalid_derive"
             value={state.email}
-            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$input_value_derive"
-            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$input_input"
+            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_value_derive"
+            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_input"
           />
           <p
             {...fieldDescriptionAttributes({
@@ -162,7 +162,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             })}
             class={ERROR_CLASS}
             hidden={!state.invalid}
-            data-bind:hidden="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$p_hidden_derive"
+            data-bind:hidden="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$p_hidden_derive"
           >
             Enter a complete email address.
           </p>
@@ -224,13 +224,13 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             })}
             class={SELECT_CLASS}
             value={state.plan}
-            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$select_value_derive"
-            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$select_change"
+            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$select_value_derive"
+            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$select_change"
           >
             <option
               value="team"
               selected={state.plan === 'team'}
-              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$option_selected_derive"
+              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$option_selected_derive"
               class={SELECT_OPTION_CLASS}
             >
               Team
@@ -238,7 +238,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             <option
               value="enterprise"
               selected={state.plan === 'enterprise'}
-              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$option_selected_derive_2"
+              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$option_selected_derive_2"
               class={SELECT_OPTION_CLASS}
             >
               Enterprise
@@ -265,9 +265,9 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
           })}
           class={FIELDSET_CLASS}
           data-disabled={state.shippingDisabled ? '' : null}
-          data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$fieldset_data_disabled_derive"
+          data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$fieldset_data_disabled_derive"
           disabled={state.shippingDisabled}
-          data-bind:disabled="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$fieldset_disabled_derive"
+          data-bind:disabled="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$fieldset_disabled_derive"
         >
           <legend
             {...fieldsetLegendAttributes({
@@ -282,8 +282,8 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
                 name="gallery-shipping-disabled"
                 type="checkbox"
                 checked={state.shippingDisabled}
-                data-bind:checked="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$input_checked_derive"
-                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=31a219f0#GalleryFieldDemo$input_click"
+                data-bind:checked="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_checked_derive"
+                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_click"
               />
               Disable shipping group
             </label>

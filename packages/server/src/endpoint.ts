@@ -3,7 +3,7 @@ import type {
   EndpointAuthDeclaration,
   EndpointMethod,
   EndpointMount,
-} from '@jiso/core';
+} from '@kovojs/core';
 
 /** A `Request` guaranteed to carry no session, as endpoint handlers receive. */
 export type EndpointRequest = Request & { readonly session?: never };
@@ -54,7 +54,7 @@ export interface EndpointDeclaration<
  * @param definition - The `handler`, plus optional `method`, `mount`, `auth`, and CSRF opt-out.
  * @returns An `EndpointDeclaration`.
  * @example
- * import { endpoint } from '@jiso/server';
+ * import { endpoint } from '@kovojs/server';
  *
  * export const health = endpoint('/healthz', {
  *   method: 'GET',

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { installJisoLoader } from './index.js';
+import { installKovoLoader } from './index.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -11,7 +11,7 @@ describe('browser loader behavior', () => {
     const root = document.createElement('main');
     root.innerHTML = [
       '<section aria-label="P2 smoke demo">',
-      '<nav fw-c="catalog-tabs" fw-state="{&quot;selected&quot;:&quot;featured&quot;}">',
+      '<nav kovo-c="catalog-tabs" kovo-state="{&quot;selected&quot;:&quot;featured&quot;}">',
       '<button type="button" aria-controls="featured" aria-selected="true" on:click="/demo/tabs.js#select" data-p-tab="featured">Featured</button>',
       '<button type="button" aria-controls="sale" aria-selected="false" on:click="/demo/tabs.js#select" data-p-tab="sale">Sale</button>',
       '</nav>',
@@ -19,12 +19,12 @@ describe('browser loader behavior', () => {
       '<section id="sale" hidden>Sale products</section>',
       '<button commandfor="details-dialog" command="show-modal">Details</button>',
       '<dialog id="details-dialog"><form method="dialog"><button value="close">Close</button></form></dialog>',
-      '<form fw-c="catalog-filter" fw-state="{&quot;query&quot;:&quot;&quot;}">',
+      '<form kovo-c="catalog-filter" kovo-state="{&quot;query&quot;:&quot;&quot;}">',
       '<label for="filter-query">Filter</label>',
       '<input id="filter-query" name="query" on:input="/demo/filter.js#filter" value="">',
       '<output data-bind="filter.query"></output>',
       '</form>',
-      '<aside fw-c="sales-chart" on:visible="/demo/chart.js#mount" data-chart-mounted="false">Chart</aside>',
+      '<aside kovo-c="sales-chart" on:visible="/demo/chart.js#mount" data-chart-mounted="false">Chart</aside>',
       '</section>',
     ].join('');
     document.body.append(root);
@@ -35,7 +35,7 @@ describe('browser loader behavior', () => {
       throw new Error('missing visible observer callback');
     };
     const imports: string[] = [];
-    const chart = root.querySelector<HTMLElement>('[fw-c="sales-chart"]');
+    const chart = root.querySelector<HTMLElement>('[kovo-c="sales-chart"]');
     const dialog = root.querySelector<HTMLDialogElement>('#details-dialog');
     const filterInput = root.querySelector<HTMLInputElement>('#filter-query');
     const filterOutput = root.querySelector<HTMLOutputElement>('output');
@@ -45,7 +45,7 @@ describe('browser loader behavior', () => {
       throw new Error('missing P2 smoke fixture');
     }
 
-    installJisoLoader({
+    installKovoLoader({
       async importModule(url) {
         imports.push(url);
 
@@ -132,12 +132,12 @@ describe('browser loader behavior', () => {
   it('keeps the loader idle until the first delegated interaction', async () => {
     const root = document.createElement('main');
     root.innerHTML =
-      '<button fw-state="{&quot;count&quot;:0}" on:click="/handlers/cart.js#increment" data-p-product-id="p1">Add</button>';
+      '<button kovo-state="{&quot;count&quot;:0}" on:click="/handlers/cart.js#increment" data-p-product-id="p1">Add</button>';
     document.body.append(root);
     const button = root.querySelector('button');
     let imports = 0;
 
-    installJisoLoader({
+    installKovoLoader({
       async importModule(url) {
         imports += 1;
         expect(url).toBe('/handlers/cart.js');
@@ -157,14 +157,14 @@ describe('browser loader behavior', () => {
 
     await vi.waitFor(() => {
       expect(imports).toBe(1);
-      expect(button?.getAttribute('fw-state')).toBe('{"count":1}');
+      expect(button?.getAttribute('kovo-state')).toBe('{"count":1}');
     });
   });
 
   it('preserves L0 light-DOM IDREF and form behavior without handler imports', async () => {
     const root = document.createElement('main');
     root.innerHTML = [
-      '<cart-filter fw-c="cart-filter">',
+      '<cart-filter kovo-c="cart-filter">',
       '<form id="filters">',
       '<label for="query">Search</label>',
       '<input id="query" name="query" value="coffee">',
@@ -175,7 +175,7 @@ describe('browser loader behavior', () => {
     document.body.append(root);
     let imports = 0;
 
-    installJisoLoader({
+    installKovoLoader({
       async importModule() {
         imports += 1;
         return {};
@@ -205,7 +205,7 @@ describe('browser loader behavior', () => {
     document.body.append(root);
     let imports = 0;
 
-    installJisoLoader({
+    installKovoLoader({
       async importModule() {
         imports += 1;
         return {};

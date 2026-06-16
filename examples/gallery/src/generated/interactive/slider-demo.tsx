@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/slider-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/slider-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GallerySliderDemo$section_data_value_derive = derive(['state'], (state: any) =>
   String(state.value),
@@ -47,7 +47,7 @@ export const GallerySliderDemo$output_text_derive = derive(['state'], (state: an
   String(state.value),
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   sliderHiddenInputAttributes,
   sliderKeyDown as _sliderKeyDown,
@@ -58,11 +58,11 @@ import {
   sliderThumbAttributes,
   sliderTrackPointerDown as _sliderTrackPointerDown,
   sliderTrackAttributes,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/slider.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/slider.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS =
   'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950 data-[orientation=vertical]:inline-grid';
@@ -83,7 +83,7 @@ export interface GallerySliderDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GallerySliderDemo = component('gallery-slider-demo', {
   state: () => ({
     dragging: false,
@@ -109,9 +109,9 @@ export const GallerySliderDemo = component('gallery-slider-demo', {
         class={ROOT_CLASS}
         data-gallery-interactive="slider"
         data-value={String(state.value)}
-        data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$section_data_value_derive"
-        fw-c="gallery-slider-demo"
-        fw-state='{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}'
+        data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$section_data_value_derive"
+        kovo-c="gallery-slider-demo"
+        kovo-state='{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}'
       >
         <form id="gallery-slider-form" data-gallery-form="slider" />
         <label id="gallery-slider-label" class={LABEL_CLASS}>
@@ -121,52 +121,52 @@ export const GallerySliderDemo = component('gallery-slider-demo', {
           {...sliderHiddenInputAttributes(sliderState)}
           id="gallery-slider-input"
           value={state.value}
-          data-bind:value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$input_value_derive"
+          data-bind:value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$input_value_derive"
         />
         <div
           {...sliderTrackAttributes(sliderState)}
           class={TRACK_CLASS}
           data-value={String(state.value)}
-          data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$div_data_value_derive"
+          data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$div_data_value_derive"
           data-value-ratio={String(state.value / 100)}
-          data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$div_data_value_ratio_derive"
-          on:pointerdown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$div_pointerdown"
+          data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$div_data_value_ratio_derive"
+          on:pointerdown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$div_pointerdown"
         >
           <span
             {...sliderRangeAttributes(sliderState)}
             class={RANGE_CLASS}
             data-value={String(state.value)}
-            data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_data_value_derive"
+            data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_data_value_derive"
             data-value-ratio={String(state.value / 100)}
-            data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_data_value_ratio_derive"
+            data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_data_value_ratio_derive"
             style={`width: ${state.value}%;`}
-            data-bind:style="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_style_derive"
+            data-bind:style="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_style_derive"
           />
           <span
             {...sliderThumbAttributes(sliderState)}
             class={THUMB_CLASS}
             aria-valuenow={state.value}
-            data-bind:aria-valuenow="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_aria_valuenow_derive"
+            data-bind:aria-valuenow="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_aria_valuenow_derive"
             aria-valuetext={`${state.value} percent`}
-            data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_aria_valuetext_derive"
+            data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_aria_valuetext_derive"
             data-dragging={state.dragging ? '' : null}
-            data-bind:data-dragging="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_data_dragging_derive"
+            data-bind:data-dragging="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_data_dragging_derive"
             data-value={String(state.value)}
-            data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_data_value_derive_2"
+            data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_data_value_derive_2"
             data-value-ratio={String(state.value / 100)}
-            data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_data_value_ratio_derive_2"
+            data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_data_value_ratio_derive_2"
             style={`left: ${state.value}%; top: 50%; transform: translate(-50%, -50%);`}
-            data-bind:style="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_style_derive_2"
-            on:keydown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_keydown"
-            on:pointerdown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_pointerdown"
-            on:pointermove="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_pointermove"
-            on:pointerup="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$span_pointerup"
+            data-bind:style="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_style_derive_2"
+            on:keydown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_keydown"
+            on:pointerdown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_pointerdown"
+            on:pointermove="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_pointermove"
+            on:pointerup="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_pointerup"
           />
         </div>
         <output
           data-demo-state="slider-value"
           class={OUTPUT_CLASS}
-          data-bind="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e932b130#GallerySliderDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

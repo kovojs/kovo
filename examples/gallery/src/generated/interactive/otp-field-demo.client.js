@@ -1,11 +1,11 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   otpFieldInput as _otpFieldInput,
   otpFieldKeyDown as _otpFieldKeyDown,
   otpFieldPaste as _otpFieldPaste,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryOtpFieldDemo$input_input = handler((event, ctx) => {
   const result = _otpFieldInput(Object(event), {

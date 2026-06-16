@@ -1,2 +1,2 @@
-export const compilerIrHeader = '// @jiso-ir';
-export const cssIrHeader = '/* @jiso-ir */';
+export const compilerIrHeader = '// @kovojs-ir';
+export const cssIrHeader = '/* @kovojs-ir */';

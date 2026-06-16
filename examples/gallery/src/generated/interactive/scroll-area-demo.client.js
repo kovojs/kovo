@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   scrollAreaThumbDrag as _scrollAreaThumbDrag,
@@ -7,7 +7,7 @@ import {
   scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
   scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown,
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryScrollAreaDemo$section_pointerenter = handler((_event, ctx) => {
   ctx.state.hovering = true;

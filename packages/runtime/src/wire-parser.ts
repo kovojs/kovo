@@ -95,7 +95,7 @@ function trimBoundaryPrelude(body: string, markerStart: number): number {
 export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): QueryChunk[] {
   const queries: QueryChunk[] = [];
 
-  for (const chunk of readElementChunks(body, 'fw-query', {
+  for (const chunk of readElementChunks(body, 'kovo-query', {
     onMalformed(reason) {
       reportRuntimeError(onError, malformedQueryError(reason));
     },
@@ -140,7 +140,7 @@ export function readQueryScriptChunk(
   script: QueryScriptChunkLike,
   onError?: RuntimeErrorReporter,
 ): QueryChunk | undefined {
-  const name = script.getAttribute('fw-query');
+  const name = script.getAttribute('kovo-query');
   if (!name) return undefined;
 
   return readQueryChunkPayload(
@@ -171,7 +171,7 @@ function readQueryChunkPayload(
     payload.decodeHtmlEntities ? unescapeHtml(payload.content) : payload.content,
   );
   if (!parsed.ok) {
-    reportMalformedJson(onError, `fw-query ${payload.name}`, parsed.error);
+    reportMalformedJson(onError, `kovo-query ${payload.name}`, parsed.error);
     return undefined;
   }
 
@@ -202,15 +202,15 @@ export function readMutationResponseBodyChunks(
   body: string,
   onError?: RuntimeErrorReporter,
 ): MutationResponseBodyChunks {
-  // SPEC.md §9.1: mutation responses carry fw-query truth and fw-fragment DOM
+  // SPEC.md §9.1: mutation responses carry kovo-query truth and kovo-fragment DOM
   // patches in one wire body, so runtime apply paths consume one decoded shape.
   // SPEC.md §4.4/§9.1: the scan + fragment-decode skeleton is shared with the
   // inline bootstrap via readMutationResponseBodyCore; this modular reader keeps
-  // raw fw-query chunks (deferred by the inline loader for its 4KB gzip budget)
+  // raw kovo-query chunks (deferred by the inline loader for its 4KB gzip budget)
   // and JSON-decodes them here via readQueryElementChunk.
   //
-  // Malformed-reporting ORDER is observable (see wire-parser.test.ts): fw-query
-  // errors are reported during decode below, then fw-fragment errors after, so
+  // Malformed-reporting ORDER is observable (see wire-parser.test.ts): kovo-query
+  // errors are reported during decode below, then kovo-fragment errors after, so
   // fragment malformed reasons are buffered during the shared scan and replayed
   // only once the query decode loop has finished.
   const malformedFragments: string[] = [];
@@ -236,9 +236,9 @@ export function readMutationResponseBodyChunks(
 }
 
 function malformedQueryError(reason: string): Error {
-  return new Error(`Malformed fw-query chunk: ${reason}`);
+  return new Error(`Malformed kovo-query chunk: ${reason}`);
 }
 
 function malformedFragmentError(reason: string): Error {
-  return new Error(`Malformed fw-fragment chunk: ${reason}`);
+  return new Error(`Malformed kovo-fragment chunk: ${reason}`);
 }

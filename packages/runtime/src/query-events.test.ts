@@ -41,7 +41,7 @@ describe('inline query events', () => {
     expect(store.get('cart', 'cart:c1')).toEqual({ count: 3 });
     expect(binding.textContent).toBe('3');
 
-    // SPEC.md §9.1/§9.4: inline enhanced responses publish fw-query wire
+    // SPEC.md §9.1/§9.4: inline enhanced responses publish kovo-query wire
     // chunks, so modular hydration and mutation apply share the same runtime
     // query store/update-plan behavior with no legacy event-shape adapter.
     binding.textContent = '';
@@ -55,7 +55,7 @@ describe('inline query events', () => {
     expect(binding.textContent).toBe('4');
   });
 
-  it('parses wire-shaped inline query events with the shared fw-query chunk parser', () => {
+  it('parses wire-shaped inline query events with the shared kovo-query chunk parser', () => {
     const store = createQueryStore();
     const onError = vi.fn();
 
@@ -89,13 +89,13 @@ describe('inline query events', () => {
       ),
     ).toEqual([]);
 
-    // SPEC.md §9.1/§9.4: inline enhanced responses carry fw-query wire chunks
+    // SPEC.md §9.1/§9.4: inline enhanced responses carry kovo-query wire chunks
     // into the modular parser, so malformed or empty query bodies do not gain
     // a separate inline-only null fallback.
     expect(store.get('empty')).toBeUndefined();
     expect(onError).toHaveBeenCalledTimes(1);
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
-      'Malformed JSON in fw-query empty',
+      'Malformed JSON in kovo-query empty',
     );
   });
 
@@ -116,7 +116,7 @@ describe('inline query events', () => {
       ),
     ).toEqual(['product:p1']);
 
-    // SPEC.md §4.4/§9.4: inline enhanced responses dispatch raw fw-query wire
+    // SPEC.md §4.4/§9.4: inline enhanced responses dispatch raw kovo-query wire
     // chunks, so canonical typed-read keys must normalize before store apply.
     expect(store.get('product', 'p1')).toEqual({ stock: 7 });
     expect(store.get('product')).toBeUndefined();
@@ -146,7 +146,7 @@ describe('inline query events', () => {
       ),
     ).toEqual(['cart:c1', 'product:p1']);
 
-    // SPEC.md §4.4/§9.1: the inline loader publishes one parsed fw-query
+    // SPEC.md §4.4/§9.1: the inline loader publishes one parsed kovo-query
     // batch per enhanced response, so modular hydration shares the batched
     // query apply path used by mutation responses instead of per-query drift.
     expect(seen).toEqual(['cart:cart:c1', 'product:p1']);
@@ -195,7 +195,7 @@ describe('inline query events', () => {
     const removedRuntimeShape: InlineQueryEvent = {
       detail: {
         // @ts-expect-error SPEC.md §9.1: inline query events carry batched
-        // fw-query element chunks, not runtime query values.
+        // kovo-query element chunks, not runtime query values.
         body: '{"count":3}',
         key: 'cart:c1',
         name: 'cart',
@@ -203,7 +203,7 @@ describe('inline query events', () => {
     };
     const removedSingleQueryShape: InlineQueryEvent = {
       detail: {
-        // @ts-expect-error SPEC.md §9.1: a lone fw-query element-like payload
+        // @ts-expect-error SPEC.md §9.1: a lone kovo-query element-like payload
         // is not the batched inline loader event contract.
         attrs: ' name="cart" key="cart:c1"',
         content: '{"count":3}',
@@ -220,7 +220,7 @@ describe('inline query events', () => {
     ).toEqual([]);
 
     // SPEC.md §9.1/§9.4: the inline query event contract is the batched
-    // fw-query wire shape emitted by inline-loader-build.ts, not alternate
+    // kovo-query wire shape emitted by inline-loader-build.ts, not alternate
     // single-query or runtime-only compatibility payloads.
     expect(store.get('cart', 'cart:c1')).toBeUndefined();
   });
@@ -239,7 +239,7 @@ describe('inline query events', () => {
     };
     const dispose = installInlineQueryEventHydration({ onAppliedQueries, store, target });
 
-    listeners.get('jiso:query')?.({
+    listeners.get('kovo:query')?.({
       detail: {
         queries: [{ attrs: ' name="cart"', content: '{"count":1}' }],
       },
@@ -248,12 +248,12 @@ describe('inline query events', () => {
     expect(onAppliedQueries).toHaveBeenCalledWith(['cart']);
 
     dispose();
-    listeners.get('jiso:query')?.({
+    listeners.get('kovo:query')?.({
       detail: {
         queries: [{ attrs: ' name="cart"', content: '{"count":2}' }],
       },
     });
-    expect(listeners.has('jiso:query')).toBe(false);
+    expect(listeners.has('kovo:query')).toBe(false);
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(onAppliedQueries).toHaveBeenCalledTimes(1);
   });

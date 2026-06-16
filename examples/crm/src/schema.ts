@@ -1,8 +1,8 @@
-import { jiso } from '@jiso/drizzle';
+import { kovo } from '@kovojs/drizzle';
 import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core';
 
 // SPEC.md §10.1 (schema as domain registry) + §11.1: the Drizzle-blessed data
-// layer for the CRM example. Each table carries its jiso({ domain, key })
+// layer for the CRM example. Each table carries its kovo({ domain, key })
 // annotation, so the static extractor derives the touch graph, query shapes, and
 // write effects directly from this source. The derived-optimism transforms in
 // generated/optimistic/ are produced from these tables + the query loaders and
@@ -19,7 +19,7 @@ export const contacts = pgTable(
     ownerId: text('owner_id').notNull(),
     dealCount: integer('deal_count').notNull(),
   },
-  jiso({ domain: 'contact', key: 'id' }),
+  kovo({ domain: 'contact', key: 'id' }),
 );
 
 export const deals = pgTable(
@@ -31,7 +31,7 @@ export const deals = pgTable(
     amount: integer('amount').notNull(),
     ownerId: text('owner_id').notNull(),
   },
-  jiso({ domain: 'deal', key: 'id' }),
+  kovo({ domain: 'deal', key: 'id' }),
 );
 
 export const activities = pgTable(
@@ -42,5 +42,5 @@ export const activities = pgTable(
     kind: text('kind').notNull(),
     note: text('note').notNull(),
   },
-  jiso({ domain: 'activity', key: 'id' }),
+  kovo({ domain: 'activity', key: 'id' }),
 );

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { installJisoLoader } from './index.js';
+import { installKovoLoader } from './index.js';
 import { FakeRoot } from './runtime-test-fakes.js';
 
 describe('runtime barrel loader smoke', () => {
@@ -9,7 +9,7 @@ describe('runtime barrel loader smoke', () => {
     const root = new FakeRoot();
     const importModule = vi.fn();
 
-    const loader = installJisoLoader({ importModule, root });
+    const loader = installKovoLoader({ importModule, root });
 
     // SPEC.md §4.4: delegate every on:* event, plus pointerover/pointerout to synthesize
     // pointerenter/pointerleave.

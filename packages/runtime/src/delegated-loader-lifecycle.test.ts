@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installJisoLoader } from './index.js';
+import { createQueryStore, installKovoLoader } from './index.js';
 import {
   FakeElement,
   FakeFormElement,
@@ -26,20 +26,20 @@ describe('delegated loader lifecycle', () => {
     const secondHandler = vi.fn((_event, ctx: { signal: AbortSignal }) => {
       secondSignals.push(ctx.signal);
     });
-    const firstLoader = installJisoLoader({
+    const firstLoader = installKovoLoader({
       importModule: vi.fn(async () => ({ mount: firstHandler })),
       root: firstRoot,
     });
-    const secondLoader = installJisoLoader({
+    const secondLoader = installKovoLoader({
       importModule: vi.fn(async () => ({ mount: secondHandler })),
       root: secondRoot,
     });
     const firstElement = new FakeElement({
-      'fw-c': 'cart-filter',
+      'kovo-c': 'cart-filter',
       'on:click': '/c/cart-filter.client.js#mount',
     });
     const secondElement = new FakeElement({
-      'fw-c': 'cart-filter',
+      'kovo-c': 'cart-filter',
       'on:click': '/c/cart-filter.client.js#mount',
     });
 
@@ -71,7 +71,7 @@ describe('delegated loader lifecycle', () => {
     const mutationRoot = new FakeMorphRoot();
     const store = createQueryStore();
     const element = new FakeElement({
-      'fw-c': 'cart-filter',
+      'kovo-c': 'cart-filter',
       'on:click': '/c/cart-filter.client.js#mount',
     });
     const form = new FakeFormElement(
@@ -83,9 +83,9 @@ describe('delegated loader lifecycle', () => {
     );
     mutationRoot.targets.set(
       'cart-shell',
-      new FakeMorphTarget('<section><cart-filter fw-c="cart-filter"></cart-filter></section>'),
+      new FakeMorphTarget('<section><cart-filter kovo-c="cart-filter"></cart-filter></section>'),
     );
-    const loader = installJisoLoader({
+    const loader = installKovoLoader({
       enhancedMutations: {
         fetch: vi.fn(async () => ({
           headers: {
@@ -94,7 +94,7 @@ describe('delegated loader lifecycle', () => {
             },
           },
           async text() {
-            return '<fw-fragment target="cart-shell"><section></section></fw-fragment>';
+            return '<kovo-fragment target="cart-shell"><section></section></kovo-fragment>';
           },
         })),
         formData: () => new FormData(),
@@ -129,7 +129,7 @@ describe('delegated loader lifecycle', () => {
       'on:click': '/c/cart-badge.client.js#missing',
     });
 
-    installJisoLoader({
+    installKovoLoader({
       importModule: vi.fn(async () => ({})),
       onError,
       root: loaderRoot,

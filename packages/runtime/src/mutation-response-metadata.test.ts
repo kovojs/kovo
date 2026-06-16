@@ -8,16 +8,16 @@ import {
 } from './mutation-response.js';
 
 describe('mutation response metadata', () => {
-  it('reports malformed FW-Changes headers through the mutation response error hook', () => {
+  it('reports malformed Kovo-Changes headers through the mutation response error hook', () => {
     const onError = vi.fn();
 
-    // SPEC.md §9.1: FW-Changes is sanitized mutation response wire metadata.
+    // SPEC.md §9.1: Kovo-Changes is sanitized mutation response wire metadata.
     expect(
       readMutationChangeHeader(
         {
           headers: {
             get(name: string) {
-              return name === 'FW-Changes' ? '[' : null;
+              return name === 'Kovo-Changes' ? '[' : null;
             },
           },
         },
@@ -27,7 +27,7 @@ describe('mutation response metadata', () => {
 
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
-      'Malformed JSON in FW-Changes header',
+      'Malformed JSON in Kovo-Changes header',
     );
   });
 
@@ -48,7 +48,7 @@ describe('mutation response metadata', () => {
         value: undefined,
       });
 
-      // SPEC.md §9.1: generated enhanced mutation requests always carry FW-Idem.
+      // SPEC.md §9.1: generated enhanced mutation requests always carry Kovo-Idem.
       const firstFallback = createMutationIdem();
       const secondFallback = createMutationIdem();
       expect(firstFallback).toMatch(/^idem_loyw3v28_[0-9a-z]+$/);
@@ -76,16 +76,16 @@ describe('mutation response metadata', () => {
     expect(sanitizeMutationChangeRecord({ domain: 'cart', keys: [1] })).toBeNull();
     expect(
       isMutationBroadcastMessage({
-        body: '<fw-query name="cart">{"count":1}</fw-query>',
+        body: '<kovo-query name="cart">{"count":1}</kovo-query>',
         changes: [{ domain: 'cart', keys: ['cart'] }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       }),
     ).toBe(true);
     expect(
       isMutationBroadcastMessage({
-        body: '<fw-query name="cart">{"count":1}</fw-query>',
+        body: '<kovo-query name="cart">{"count":1}</kovo-query>',
         changes: [{ domain: 'cart', keys: [1] }],
-        type: 'jiso:mutation-response',
+        type: 'kovo:mutation-response',
       }),
     ).toBe(false);
   });

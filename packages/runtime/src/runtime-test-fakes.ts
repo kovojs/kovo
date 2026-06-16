@@ -23,7 +23,7 @@ export class FakeRoot {
   querySelectorAll(
     selector: string,
   ): Iterable<QueryScript | FakeElement | FakeQueryBindingElement> {
-    if (selector === 'script[fw-query]') return this.scripts;
+    if (selector === 'script[kovo-query]') return this.scripts;
     if (selector === '[data-bind]') return this.bindings;
     if (selector === '*') return this.bindings;
 
@@ -81,7 +81,7 @@ export class FakeFormElement extends FakeElement {
   }
 
   querySelectorAll(selector: string): Iterable<FakeElement> {
-    return selector === '[fw-upload-progress]' ? this.progressElements : [];
+    return selector === '[kovo-upload-progress]' ? this.progressElements : [];
   }
 
   submit(): void {
@@ -176,8 +176,8 @@ export class FakeMorphRoot {
 
     return this.deps.map((dep) => ({
       getAttribute: (name) => {
-        if (name === 'fw-fragment-target') return dep.target ?? null;
-        if (name === 'fw-deps') return dep.deps ?? null;
+        if (name === 'kovo-fragment-target') return dep.target ?? null;
+        if (name === 'kovo-deps') return dep.deps ?? null;
         return null;
       },
       ...(dep.id ? { id: dep.id } : {}),
@@ -337,7 +337,7 @@ export class FakeStatefulBindingElement extends FakeQueryBindingElement {
   }
 
   closest(selector: string): FakeStatefulBindingElement | null {
-    if (selector === '[fw-state]') return this.closestAttribute('fw-state');
+    if (selector === '[kovo-state]') return this.closestAttribute('kovo-state');
 
     const trigger = /^\[on\\:(.+)\]$/.exec(selector)?.[1];
     if (trigger) return this.closestAttribute(`on:${trigger}`);

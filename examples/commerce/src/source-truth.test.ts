@@ -2,21 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
-import { compileComponentModule, deriveAppGraph } from '@jiso/compiler';
+import { compileComponentModule, deriveAppGraph } from '@kovojs/compiler';
 import {
   commerceFixtureFile,
   commerceHarnessQueryFact,
   commerceMutationQueryAcceptanceFact,
   commerceUpdateIntentFact,
-} from '@jiso/test/commerce-fixtures';
+} from '@kovojs/test/commerce-fixtures';
 import {
-  fwExplainEndpointAssertionFact,
-  fwExplainMutationAssertionFact,
-  fwExplainPageAssertionFact,
-  fwExplainQueryAssertionFact,
-  fwExplainScopeAuditAssertionFact,
-} from '@jiso/test/fw-explain-fixtures';
-import { fwCheckOkAssertionFact } from '@jiso/test/fw-check-fixtures';
+  kovoExplainEndpointAssertionFact,
+  kovoExplainMutationAssertionFact,
+  kovoExplainPageAssertionFact,
+  kovoExplainQueryAssertionFact,
+  kovoExplainScopeAuditAssertionFact,
+} from '@kovojs/test/kovo-explain-fixtures';
+import { kovoCheckOkAssertionFact } from '@kovojs/test/kovo-check-fixtures';
 import {
   commerceGraphBehaviorFact,
   generatedGraphArtifactAcceptanceProjectFact,
@@ -24,9 +24,9 @@ import {
   graphOptimisticStatusMatrix,
   graphPageFact,
   graphStaticBehaviorFact,
-} from '@jiso/test/graph-fixtures';
-import { htmlDocumentFacts } from '@jiso/test/html-fragment';
-import { fwCheck, fwExplain } from 'fw';
+} from '@kovojs/test/graph-fixtures';
+import { htmlDocumentFacts } from '@kovojs/test/html-fragment';
+import { kovoCheck, kovoExplain } from 'kovo';
 
 import {
   addToCart,
@@ -48,7 +48,7 @@ import { createCommerceGraph } from './graph.js';
 const projectRootPath = fileURLToPath(new URL('../../..', import.meta.url));
 
 describe('commerce source-truth graph acceptance', () => {
-  it('ships graph facts for fw check and explain acceptance', async () => {
+  it('ships graph facts for kovo check and explain acceptance', async () => {
     const graphAcceptance = await generatedGraphArtifactAcceptanceProjectFact<typeof commerceGraph>(
       {
         artifactPath: 'examples/commerce/src/generated/graph.json',
@@ -59,7 +59,7 @@ describe('commerce source-truth graph acceptance', () => {
           cwd: join(projectRootPath, 'examples/commerce'),
           env: { ...process.env, CI: '1' },
         },
-        fwCheck,
+        kovoCheck,
         rootPath: projectRootPath,
       },
     );
@@ -87,7 +87,7 @@ describe('commerce source-truth graph acceptance', () => {
     expect(graphAcceptance.checklist).toEqual({
       authoredGraphMatchesArtifact: true,
       emitCheckClean: true,
-      fwCheckOk: true,
+      kovoCheckOk: true,
       invalidationKeys: ['cart/add'],
       staticBehavior: graphStaticBehaviorFact(commerceGraph),
       touchGraph: {
@@ -103,28 +103,28 @@ describe('commerce source-truth graph acceptance', () => {
         unresolvedMutations: [],
       },
     });
-    expect(fwCheckOkAssertionFact(fwCheck(commerceGraph))).toEqual({
+    expect(kovoCheckOkAssertionFact(kovoCheck(commerceGraph))).toEqual({
       exitCode: 0,
       issueCount: 0,
       status: 'ok',
-      version: 'fw-check/v1',
+      version: 'kovo-check/v1',
     });
-    const cartAddExplain = fwExplain(commerceGraph, {
+    const cartAddExplain = kovoExplain(commerceGraph, {
       kind: 'mutation',
       optimistic: true,
       target: 'cart/add',
     });
-    const receiptExplain = fwExplain(commerceGraph, {
+    const receiptExplain = kovoExplain(commerceGraph, {
       kind: 'mutation',
       target: 'order/receipt',
     });
-    const receiptOptimisticExplain = fwExplain(commerceGraph, {
+    const receiptOptimisticExplain = kovoExplain(commerceGraph, {
       kind: 'mutation',
       optimistic: true,
       target: 'order/receipt',
     });
 
-    expect(fwExplainMutationAssertionFact(cartAddExplain)).toEqual({
+    expect(kovoExplainMutationAssertionFact(cartAddExplain)).toEqual({
       exitCode: 0,
       guards: ['authed', 'rateLimit:session'],
       inputFields: ['productId', 'quantity'],
@@ -146,11 +146,11 @@ describe('commerce source-truth graph acceptance', () => {
       session: 'commerceSession',
       subject: 'MUTATION cart/add',
       updateConsumers: graphMutationUpdateConsumers(commerceGraph, 'cart/add'),
-      version: 'fw-explain/v1',
+      version: 'kovo-explain/v1',
       writes: ['cart', 'product', 'order'],
     });
 
-    expect(fwExplainMutationAssertionFact(receiptExplain)).toEqual({
+    expect(kovoExplainMutationAssertionFact(receiptExplain)).toEqual({
       enctype: 'multipart/form-data',
       exitCode: 0,
       fileFields: ['receipt'],
@@ -161,10 +161,10 @@ describe('commerce source-truth graph acceptance', () => {
       session: 'commerceSession',
       subject: 'MUTATION order/receipt',
       updateConsumers: [],
-      version: 'fw-explain/v1',
+      version: 'kovo-explain/v1',
       writes: ['attachment'],
     });
-    expect(fwExplainMutationAssertionFact(receiptOptimisticExplain).optimisticSummary).toEqual({
+    expect(kovoExplainMutationAssertionFact(receiptOptimisticExplain).optimisticSummary).toEqual({
       PUNTED: '0',
       UNHANDLED: '0',
       'await-fragment': '0',
@@ -191,44 +191,44 @@ describe('commerce source-truth graph acceptance', () => {
       },
     };
     for (const [query, expected] of Object.entries(queryExplainExpectations)) {
-      const explanation = fwExplain(commerceGraph, { kind: 'query', target: query });
+      const explanation = kovoExplain(commerceGraph, { kind: 'query', target: query });
 
-      expect(fwExplainQueryAssertionFact(explanation)).toEqual({
+      expect(kovoExplainQueryAssertionFact(explanation)).toEqual({
         consumers: expected.consumers,
         domainWrites: expected.domainWrites,
         exitCode: 0,
         invalidatedBy: ['cart/add'],
         reads: expected.reads,
         subject: `QUERY ${query}`,
-        version: 'fw-explain/v1',
+        version: 'kovo-explain/v1',
       });
     }
 
-    const pageExplain = fwExplain(commerceGraph, { kind: 'page', target: '/cart' });
-    expect(fwExplainPageAssertionFact(pageExplain)).toEqual({
+    const pageExplain = kovoExplain(commerceGraph, { kind: 'page', target: '/cart' });
+    expect(kovoExplainPageAssertionFact(pageExplain)).toEqual({
       exitCode: 0,
       i18n: ['en-US:cartLabel', 'productStock'],
-      meta: 'title=Jiso Commerce (0) description=Browse products and checkout with 0 verifiable cart item. image=-',
+      meta: 'title=Kovo Commerce (0) description=Browse products and checkout with 0 verifiable cart item. image=-',
       modulepreloads: [],
       prefetch: 'false',
       queries: ['cart', 'productGrid', 'orderHistory'],
       stylesheets: ['/assets/tailwind.css'],
       subject: 'PAGE /cart',
-      version: 'fw-explain/v1',
+      version: 'kovo-explain/v1',
       viewTransitions: [],
     });
 
-    const unguardedExplain = fwExplain(commerceGraph, { unguarded: true });
-    expect(fwExplainScopeAuditAssertionFact(unguardedExplain)).toEqual({
+    const unguardedExplain = kovoExplain(commerceGraph, { unguarded: true });
+    expect(kovoExplainScopeAuditAssertionFact(unguardedExplain)).toEqual({
       exitCode: 0,
       records: [],
       subject: 'UNGUARDED',
       summary: { total: '0' },
-      version: 'fw-explain/v1',
+      version: 'kovo-explain/v1',
     });
 
-    const endpointsExplain = fwExplain(commerceGraph, { endpoints: true });
-    expect(fwExplainEndpointAssertionFact(endpointsExplain)).toEqual({
+    const endpointsExplain = kovoExplain(commerceGraph, { endpoints: true });
+    expect(kovoExplainEndpointAssertionFact(endpointsExplain)).toEqual({
       endpoints: [
         {
           auth: 'authed',
@@ -261,19 +261,19 @@ describe('commerce source-truth graph acceptance', () => {
       exitCode: 0,
       subject: 'ENDPOINTS',
       summary: { total: '3' },
-      version: 'fw-explain/v1',
+      version: 'kovo-explain/v1',
     });
 
-    const unscopedExplain = fwExplain(commerceGraph, { unscoped: true });
-    expect(fwExplainScopeAuditAssertionFact(unscopedExplain)).toEqual({
+    const unscopedExplain = kovoExplain(commerceGraph, { unscoped: true });
+    expect(kovoExplainScopeAuditAssertionFact(unscopedExplain)).toEqual({
       exitCode: 0,
       records: [],
       subject: 'UNSCOPED',
       summary: { total: '0' },
-      version: 'fw-explain/v1',
+      version: 'kovo-explain/v1',
     });
 
-    const unscopedAuditExplain = fwExplain(
+    const unscopedAuditExplain = kovoExplain(
       {
         ...commerceGraph,
         scopeAudits: commerceGraph.scopeAudits.map((fact, index) =>
@@ -288,7 +288,7 @@ describe('commerce source-truth graph acceptance', () => {
       },
       { unscoped: true },
     );
-    expect(fwExplainScopeAuditAssertionFact(unscopedAuditExplain)).toEqual({
+    expect(kovoExplainScopeAuditAssertionFact(unscopedAuditExplain)).toEqual({
       exitCode: 0,
       records: [
         {
@@ -302,14 +302,14 @@ describe('commerce source-truth graph acceptance', () => {
       ],
       subject: 'UNSCOPED',
       summary: { total: '1' },
-      version: 'fw-explain/v1',
+      version: 'kovo-explain/v1',
     });
   });
 
-  it('answers cart/add update intent mechanically from fw explain output', () => {
+  it('answers cart/add update intent mechanically from kovo explain output', () => {
     expect(
       commerceUpdateIntentFact({
-        fwExplain,
+        kovoExplain,
         graph: commerceGraph,
         mutation: 'cart/add',
         page: '/cart',
@@ -364,12 +364,12 @@ describe('commerce source-truth graph acceptance', () => {
     });
   });
 
-  it('answers the full commerce mutation-query matrix mechanically from fw explain output', () => {
+  it('answers the full commerce mutation-query matrix mechanically from kovo explain output', () => {
     const fact = commerceGraphBehaviorFact({
       compileComponentModule,
       deriveAppGraph,
-      fwCheck,
-      fwExplain,
+      kovoCheck,
+      kovoExplain,
       graph: commerceGraph,
     });
 
@@ -404,7 +404,7 @@ describe('commerce source-truth graph acceptance', () => {
       commerceCsrfInput,
       commerceTouchGraph,
       createDb: createCommerceDb,
-      fwExplain,
+      kovoExplain,
       graph: commerceGraph,
       receiptFile: commerceFixtureFile('receipt.pdf', 'application/pdf', 2048),
       submitAddToCart,
@@ -439,7 +439,7 @@ describe('commerce source-truth graph acceptance', () => {
     expect(fact.uploadReceipt.diagnostics).toEqual([]);
     expect(fact.fragmentResponse).toMatchObject({
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       },
       status: 200,
     });

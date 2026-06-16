@@ -1,4 +1,4 @@
-import { form } from '@jiso/core';
+import { form } from '@kovojs/core';
 
 // SPEC.md §6.3 / §10.4: typed form references. The input and the invalidated
 // query set come from the mutation + query registries declared by the generated

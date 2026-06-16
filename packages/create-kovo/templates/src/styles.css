@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+
+@source "../index.html";
+@source "./**/*.{ts,tsx,html}";
+@source inline("bg-emerald-50 text-emerald-700 border-emerald-200 bg-amber-50 text-amber-700 border-amber-200");
+
+@theme {
+  --color-kovo-ink: #17202a;
+  --color-kovo-accent: #0f8b8d;
+  --color-kovo-muted: #52606d;
+}

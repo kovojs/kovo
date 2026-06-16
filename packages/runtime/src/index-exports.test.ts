@@ -11,11 +11,11 @@ import {
 } from './handler-context.js';
 import { dispatchDelegatedEvent, handler } from './handlers.js';
 import {
-  createInlineJisoLoaderSource,
-  installInlineJisoLoader,
-  jisoLoaderSource,
+  createInlineKovoLoaderSource,
+  installInlineKovoLoader,
+  kovoLoaderSource,
 } from './inline-loader.js';
-import { installJisoLoader } from './loader.js';
+import { installKovoLoader } from './loader.js';
 import {
   applyFragments,
   DomMorphRoot,
@@ -120,7 +120,7 @@ describe('runtime root exports', () => {
     expect(runtime.writeElementState).toBe(writeElementState);
     expect(runtime.dispatchDelegatedEvent).toBe(dispatchDelegatedEvent);
     expect(runtime.handler).toBe(handler);
-    expect(runtime.installJisoLoader).toBe(installJisoLoader);
+    expect(runtime.installKovoLoader).toBe(installKovoLoader);
     expect(Object.hasOwn(runtime, 'parseHandlerReference')).toBe(false);
     expect(Object.hasOwn(runtime, 'parseHandlerReferences')).toBe(false);
   });
@@ -128,9 +128,9 @@ describe('runtime root exports', () => {
   it('exports inline loader and morph modules without private compatibility barrels', () => {
     // SPEC.md §4.4/§9.1: inline bootstrap and morph exports must remain the
     // canonical modules after deleting private runtime re-export facades.
-    expect(runtime.createInlineJisoLoaderSource).toBe(createInlineJisoLoaderSource);
-    expect(runtime.installInlineJisoLoader).toBe(installInlineJisoLoader);
-    expect(runtime.jisoLoaderSource).toBe(jisoLoaderSource);
+    expect(runtime.createInlineKovoLoaderSource).toBe(createInlineKovoLoaderSource);
+    expect(runtime.installInlineKovoLoader).toBe(installInlineKovoLoader);
+    expect(runtime.kovoLoaderSource).toBe(kovoLoaderSource);
     expect(runtime.applyFragments).toBe(applyFragments);
     expect(runtime.DomMorphRoot).toBe(DomMorphRoot);
     expect(runtime.DomMorphTarget).toBe(DomMorphTarget);

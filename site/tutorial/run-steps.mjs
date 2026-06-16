@@ -13,7 +13,7 @@ import { listSnippetReferences, loadTutorialSnippets } from './extract-snippets.
 
 /**
  * Tutorial step gate (plan W5): every checked-in step state must
- *  1. typecheck against the workspace @jiso/* packages (tsgo per step),
+ *  1. typecheck against the workspace @kovojs/* packages (tsgo per step),
  *  2. compile its TSX components with zero error diagnostics through the
  *     SPEC.md §5.2.3 fixpoint gate, with committed lowered IR proven fresh
  *     (the emit-components.mjs doctrine from examples/commerce),
@@ -54,7 +54,7 @@ function compileStepComponents(step) {
     // SPEC.md §4.8: stamps are derived, never hand-written in authored sugar.
     assert.doesNotMatch(
       source,
-      /(?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+)=/,
+      /(?:data-bind|kovo-deps|kovo-c|kovo-state|data-p-[\w-]+)=/,
       `${fileName} hand-writes stamps`,
     );
 
@@ -77,7 +77,7 @@ function compileStepComponents(step) {
     )?.source;
     assert.ok(clientSource, `${fileName} produced no client module`);
 
-    const loweredFile = `// @jiso-ir — lowered from ${fileName} by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`node site/tutorial/run-steps.mjs --write\`.\n${lowered}`;
+    const loweredFile = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`node site/tutorial/run-steps.mjs --write\`.\n${lowered}`;
     const targets = [
       [path.join(generatedDir, `${name}.tsx`), loweredFile],
       [path.join(generatedDir, `${name}.client.js`), clientSource],

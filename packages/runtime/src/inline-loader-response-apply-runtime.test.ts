@@ -6,7 +6,7 @@ import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
 import type { HtmlResponseFragmentApplyTarget } from './response-fragment-apply.js';
 
 // SPEC.md §4.4/§9.1: the helper extracted into the inline loader owns the tiny
-// response-apply step that bridges decoded query chunks to modular `jiso:query`
+// response-apply step that bridges decoded query chunks to modular `kovo:query`
 // hydration and applies fragment patches, staying in parity with the modular DOM
 // apply path. The build/extract/closure-check behavior lives in sibling
 // inline-loader-response-apply-extract.test.ts.
@@ -67,7 +67,7 @@ describe('inline loader response apply runtime', () => {
         detail: {
           queries: [{ attrs: ' name="cart"', content: 'decoded query' }],
         },
-        type: 'jiso:query',
+        type: 'kovo:query',
       },
     ]);
     expect(appliedFragments).toEqual(['append-second-target', 'append-target']);

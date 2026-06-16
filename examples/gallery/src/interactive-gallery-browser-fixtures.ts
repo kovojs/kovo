@@ -1,6 +1,6 @@
 import axe from 'axe-core';
-import { installJisoLoader, type JisoLoader } from '@jiso/runtime';
-import { applyCheckboxIndeterminate } from '@jiso/headless-ui/primitives';
+import { installKovoLoader, type KovoLoader } from '@kovojs/runtime';
+import { applyCheckboxIndeterminate } from '@kovojs/headless-ui/primitives';
 import { expect, vi } from 'vitest';
 import { page } from 'vitest/browser';
 
@@ -281,10 +281,10 @@ export function installGeneratedGalleryLoader(
   options: { events?: readonly string[] } = {},
 ): {
   imports: string[];
-  loader: JisoLoader;
+  loader: KovoLoader;
 } {
   const imports: string[] = [];
-  const loader = installJisoLoader({
+  const loader = installKovoLoader({
     async importModule(url) {
       const modulePath = url.split('?')[0] ?? url;
       if (!imports.includes(modulePath)) imports.push(modulePath);
@@ -325,7 +325,7 @@ export async function expectGeneratedSideDialog(options: {
   );
   const { imports } = installGeneratedGalleryLoader(root);
 
-  expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+  expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
   expect(root.getAttribute('data-side')).toBe(options.side);
   expect(trigger.getAttribute('aria-expanded')).toBe('false');
   expect(trigger.getAttribute('aria-controls')).toBe(options.contentId);
@@ -339,7 +339,7 @@ export async function expectGeneratedSideDialog(options: {
 
   await vi.waitFor(() => {
     expect(imports).toEqual([options.clientModulePath]);
-    expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+    expect(root.getAttribute('kovo-state')).toBe('{"open":true}');
     expect(dialog.open).toBe(true);
   });
 
@@ -351,7 +351,7 @@ export async function expectGeneratedSideDialog(options: {
   close.click();
 
   await vi.waitFor(() => {
-    expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+    expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
     expect(dialog.open).toBe(false);
   });
 }

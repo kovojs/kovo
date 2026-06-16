@@ -19,16 +19,16 @@ const fixture = [
   '### Enhanced mutation',
   '>>> REQUEST',
   'POST /_m/cart/add HTTP/1.1',
-  'Accept: text/vnd.jiso.fragment+html',
-  'FW-Fragment: true',
+  'Accept: text/vnd.kovo.fragment+html',
+  'Kovo-Fragment: true',
   '',
   'productId=p1',
   '<<< RESPONSE',
   'HTTP/1.1 200 OK',
-  'Content-Type: text/vnd.jiso.fragment+html; charset=utf-8',
-  'FW-Idem: idem_01HX',
+  'Content-Type: text/vnd.kovo.fragment+html; charset=utf-8',
+  'Kovo-Idem: idem_01HX',
   '',
-  '<fw-fragment target="cart"></fw-fragment>',
+  '<kovo-fragment target="cart"></kovo-fragment>',
   '>>> REQUEST',
   'GET /cart HTTP/1.1',
   '',
@@ -58,7 +58,7 @@ const sources = [
   { name: 'cart-redirect.http', source: redirectFixture },
 ];
 
-describe('@jiso/test wire fixture seam', () => {
+describe('@kovojs/test wire fixture seam', () => {
   it('turns titled HTTP wire fixtures into structured exchange facts', () => {
     expect(parseWireFixture(fixture)).toMatchObject({
       exchanges: [
@@ -66,12 +66,12 @@ describe('@jiso/test wire fixture seam', () => {
           request: {
             body: 'productId=p1',
             headers: {
-              Accept: 'text/vnd.jiso.fragment+html',
-              'FW-Fragment': 'true',
+              Accept: 'text/vnd.kovo.fragment+html',
+              'Kovo-Fragment': 'true',
             },
             headersByName: {
-              accept: 'text/vnd.jiso.fragment+html',
-              'fw-fragment': 'true',
+              accept: 'text/vnd.kovo.fragment+html',
+              'kovo-fragment': 'true',
             },
             method: 'POST',
             path: '/_m/cart/add',
@@ -79,10 +79,10 @@ describe('@jiso/test wire fixture seam', () => {
             startLine: 'POST /_m/cart/add HTTP/1.1',
           },
           response: {
-            body: '<fw-fragment target="cart"></fw-fragment>',
+            body: '<kovo-fragment target="cart"></kovo-fragment>',
             headersByName: {
-              'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-              'fw-idem': 'idem_01HX',
+              'content-type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+              'kovo-idem': 'idem_01HX',
             },
             status: 200,
             statusLine: 'HTTP/1.1 200 OK',
@@ -116,11 +116,11 @@ describe('@jiso/test wire fixture seam', () => {
 
   it('keeps response-only convenience parsing for byte-for-byte fixture pins', () => {
     expect(parseWireResponses(fixture).map((response) => response.body)).toEqual([
-      '<fw-fragment target="cart"></fw-fragment>',
+      '<kovo-fragment target="cart"></kovo-fragment>',
       '',
     ]);
     expect(wireFixtureResponseBody(sources, 'enhanced-mutation.http', 1)).toBe(
-      '<fw-fragment target="cart"></fw-fragment>',
+      '<kovo-fragment target="cart"></kovo-fragment>',
     );
     expect(() => wireFixtureResponseBody(sources, 'missing.http', 1)).toThrow(
       'Wire fixture is present: missing.http',
@@ -173,7 +173,7 @@ describe('@jiso/test wire fixture seam', () => {
     ]);
     expect(wireFragmentModeFacts(sources, ['enhanced-mutation.http'])).toEqual([
       {
-        accept: 'text/vnd.jiso.fragment+html',
+        accept: 'text/vnd.kovo.fragment+html',
         fragment: 'true',
         name: 'enhanced-mutation.http',
       },
@@ -184,7 +184,7 @@ describe('@jiso/test wire fixture seam', () => {
     expect(
       wireResponseBodyPinFacts(sources, {
         'cart-redirect.http': [''],
-        'enhanced-mutation.http': ['<fw-fragment target="cart"></fw-fragment>', ''],
+        'enhanced-mutation.http': ['<kovo-fragment target="cart"></kovo-fragment>', ''],
       }),
     ).toEqual([
       {
@@ -195,8 +195,8 @@ describe('@jiso/test wire fixture seam', () => {
         responseIndex: 1,
       },
       {
-        actualBody: '<fw-fragment target="cart"></fw-fragment>',
-        expectedBody: '<fw-fragment target="cart"></fw-fragment>',
+        actualBody: '<kovo-fragment target="cart"></kovo-fragment>',
+        expectedBody: '<kovo-fragment target="cart"></kovo-fragment>',
         matches: true,
         name: 'enhanced-mutation.http',
         responseIndex: 1,
@@ -212,8 +212,8 @@ describe('@jiso/test wire fixture seam', () => {
     expect(wireResponseMetadataFacts(sources)).toEqual([
       {
         headers: {
-          'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'fw-idem': 'idem_01HX',
+          'content-type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'kovo-idem': 'idem_01HX',
         },
         name: 'enhanced-mutation.http',
         responseIndex: 1,
@@ -237,7 +237,7 @@ describe('@jiso/test wire fixture seam', () => {
   it('summarizes content types without local transcript loops', () => {
     expect(wireFixtureContentTypesFacts(sources)).toEqual([
       {
-        contentTypes: ['text/vnd.jiso.fragment+html; charset=utf-8', null],
+        contentTypes: ['text/vnd.kovo.fragment+html; charset=utf-8', null],
         name: 'enhanced-mutation.http',
       },
       { contentTypes: [null], name: 'cart-redirect.http' },

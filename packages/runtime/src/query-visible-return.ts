@@ -76,7 +76,7 @@ export function readVisibleReturnQueryScripts(
   // SPEC.md §4.4/§9.4: visible-return refetch only follows server-authored
   // query hydration scripts; DOM binding scans stay inside the shared query
   // apply path.
-  return (root.querySelectorAll?.('script[fw-query]') ?? []) as Iterable<QueryScriptLike>;
+  return (root.querySelectorAll?.('script[kovo-query]') ?? []) as Iterable<QueryScriptLike>;
 }
 
 export function installQueryVisibleReturnRefetch(

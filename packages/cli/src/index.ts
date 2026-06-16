@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-export type { DiagnosticCode } from '@jiso/core';
+export type { DiagnosticCode } from '@kovojs/core';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import type { CompileComponentOptions, QueryShape, QueryShapeFact } from '@jiso/compiler';
+import type { CompileComponentOptions, QueryShape, QueryShapeFact } from '@kovojs/compiler';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
@@ -12,15 +12,15 @@ import {
   diagnosticDefinitions,
   isDiagnosticCode,
   puntReasonLabel,
-  validateFwExplainInput,
+  validateKovoExplainInput,
   type ComponentExplain,
   type DiagnosticCode,
   type DiagnosticSeverity,
   type EndpointExplain,
   type EventPayloadFact,
   type FixpointCheck,
-  type FwCheckInput,
-  type FwExplainInput,
+  type KovoCheckInput,
+  type KovoExplainInput,
   type GraphInputValidationError,
   type MutationExplain,
   type OptimisticCoverage,
@@ -34,8 +34,8 @@ import {
   type TouchGraph,
   type UpdateCoverageFact,
   type VerificationDiagnosticFact,
-} from '@jiso/core';
-import type { JisoApp, StaticExportCompileDiagnostic } from '@jiso/server';
+} from '@kovojs/core';
+import type { KovoApp, StaticExportCompileDiagnostic } from '@kovojs/server';
 
 import {
   availableAddComponents,
@@ -44,7 +44,7 @@ import {
   type AddComponentName,
 } from './add-catalog.js';
 
-export type { FwCheckInput, FwExplainInput } from '@jiso/core';
+export type { KovoCheckInput, KovoExplainInput } from '@kovojs/core';
 
 interface TouchGraphDiagnosticFact {
   code: DiagnosticCode;
@@ -59,36 +59,36 @@ interface UnguardedAccessFact {
   name: string;
 }
 
-export interface FwCheckResult {
+export interface KovoCheckResult {
   exitCode: 0 | 1;
   output: string;
 }
 
-type FwCheckFamily = 'all' | 'coverage' | 'optimistic';
-type CliCommandResult = FwCheckResult | { error: string; exitCode: 1 };
+type KovoCheckFamily = 'all' | 'coverage' | 'optimistic';
+type CliCommandResult = KovoCheckResult | { error: string; exitCode: 1 };
 
-const outputVersion = 'fw-check/v1';
-const explainOutputVersion = 'fw-explain/v1';
-const auditOutputVersion = 'fw-audit/v1';
+const outputVersion = 'kovo-check/v1';
+const explainOutputVersion = 'kovo-explain/v1';
+const auditOutputVersion = 'kovo-audit/v1';
 const compileOutputVersion = 'compile/v1';
-const addOutputVersion = 'fw-add/v1';
-const mcpOutputVersion = 'fw-mcp/v1';
+const addOutputVersion = 'kovo-add/v1';
+const mcpOutputVersion = 'kovo-mcp/v1';
 
 export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args.length === 0) {
-    process.stdout.write('fw: explain, check, audit, export, mcp\n');
+    process.stdout.write('kovo: explain, check, audit, export, mcp\n');
     return 0;
   }
 
   if (args[0] === 'export' || args[0] === 'mcp') {
-    throw new Error(`fw ${args[0]} is asynchronous; call mainAsync() instead.`);
+    throw new Error(`kovo ${args[0]} is asynchronous; call mainAsync() instead.`);
   }
 
   if (args[0] === 'check') {
     const parsed = parseCheckArgs(args.slice(1));
     if (!parsed.ok) return writeCheckUsageError(parsed);
     const { family, inputPath } = parsed;
-    return writeCommandResult(runGraphCommand(inputPath, (input) => fwCheck(input, { family })));
+    return writeCommandResult(runGraphCommand(inputPath, (input) => kovoCheck(input, { family })));
   }
 
   if (args[0] === 'add') {
@@ -102,7 +102,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(
       runGraphCommand(parsed.inputPath, (input) =>
-        fwAudit(input, { failOnFindings: parsed.failOnFindings }),
+        kovoAudit(input, { failOnFindings: parsed.failOnFindings }),
       ),
     );
   }
@@ -111,12 +111,12 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     const parsed = parseExplainArgs(args.slice(1));
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(
-      runGraphCommand(parsed.inputPath, (input) => fwExplain(input, parsed.options)),
+      runGraphCommand(parsed.inputPath, (input) => kovoExplain(input, parsed.options)),
     );
   }
 
   process.stderr.write(
-    `fw: unknown command ${stableValue(args[0])}. expected add, explain, check, audit, export, or mcp.\n`,
+    `kovo: unknown command ${stableValue(args[0])}. expected add, explain, check, audit, export, or mcp.\n`,
   );
   return 1;
 }
@@ -165,9 +165,9 @@ export interface CompileComponentV1Result {
   viewTransitions: readonly unknown[];
 }
 
-export type FwMcpToolName = 'compile_component' | 'fw_check' | 'fw_explain' | 'list_diagnostics';
+export type KovoMcpToolName = 'compile_component' | 'kovo_check' | 'kovo_explain' | 'list_diagnostics';
 
-export type FwMcpRequest =
+export type KovoMcpRequest =
   | {
       id?: string | number | null;
       jsonrpc?: '2.0';
@@ -180,7 +180,7 @@ export type FwMcpRequest =
       params: { arguments?: unknown; name: string };
     };
 
-export type FwMcpResponse =
+export type KovoMcpResponse =
   | {
       id: string | number | null;
       jsonrpc: '2.0';
@@ -199,7 +199,7 @@ export type FwMcpResponse =
 export async function compileComponentV1(
   input: CompileComponentV1Input,
 ): Promise<CompileComponentV1Result> {
-  const { compileComponentModule } = await import('@jiso/compiler');
+  const { compileComponentModule } = await import('@kovojs/compiler');
   const result = compileComponentModule(compileComponentOptions(input));
 
   return {
@@ -258,7 +258,7 @@ function compileComponentOptions(input: CompileComponentV1Input): CompileCompone
   };
 }
 
-export async function handleFwMcpRequest(request: unknown): Promise<FwMcpResponse> {
+export async function handleKovoMcpRequest(request: unknown): Promise<KovoMcpResponse> {
   if (!isRecord(request)) return mcpError(null, -32600, 'request must be an object');
   const id = mcpRequestId(request.id);
   const method = request.method;
@@ -281,7 +281,7 @@ export async function handleFwMcpRequest(request: unknown): Promise<FwMcpRespons
 
 function runGraphCommand(
   inputPath: string | undefined,
-  run: (input: FwExplainInput) => FwCheckResult,
+  run: (input: KovoExplainInput) => KovoCheckResult,
 ): CliCommandResult {
   const input = readGraphInput(inputPath);
   if (!input.ok) return { error: inputErrorMessage(input.error), exitCode: 1 };
@@ -294,7 +294,7 @@ async function runMcpCommand(args: readonly string[]): Promise<0 | 1> {
     const message =
       first === '--help' || first === '-h'
         ? mcpUsage()
-        : `fw: unknown mcp option ${stableValue(first)}.\n${mcpUsage()}`;
+        : `kovo: unknown mcp option ${stableValue(first)}.\n${mcpUsage()}`;
     return writeUsageError(message);
   }
 
@@ -304,7 +304,7 @@ async function runMcpCommand(args: readonly string[]): Promise<0 | 1> {
 
 function mcpUsage(): string {
   return [
-    'usage: fw mcp',
+    'usage: kovo mcp',
     'Reads newline-delimited JSON-RPC requests from stdin and writes newline-delimited responses.',
     '',
   ].join('\n');
@@ -343,7 +343,7 @@ async function writeMcpLine(
     return;
   }
 
-  output.write(`${JSON.stringify(await handleFwMcpRequest(parsed))}\n`);
+  output.write(`${JSON.stringify(await handleKovoMcpRequest(parsed))}\n`);
 }
 
 export async function runMcpSdkServer(transport?: Transport): Promise<void> {
@@ -363,11 +363,11 @@ async function createMcpSdkServer(): Promise<
       import('@modelcontextprotocol/sdk/types.js'),
     ]);
   const server = new McpSdkServer(
-    { name: 'fw', version: mcpOutputVersion },
+    { name: 'kovo', version: mcpOutputVersion },
     {
       capabilities: { tools: {} },
       instructions:
-        'Jiso diagnostics surface. Tools wrap existing compile/check/explain APIs; SPEC §11.3 keeps severity policy in @jiso/core.',
+        'Kovo diagnostics surface. Tools wrap existing compile/check/explain APIs; SPEC §11.3 keeps severity policy in @kovojs/core.',
     },
   );
 
@@ -422,8 +422,8 @@ function writeCommandResult(result: CliCommandResult): 0 | 1 {
 
 async function callMcpTool(name: string, args: unknown): Promise<unknown> {
   if (name === 'compile_component') return compileComponentV1(assertCompileComponentV1Input(args));
-  if (name === 'fw_check') return runFwCheckTool(args);
-  if (name === 'fw_explain') return runFwExplainTool(args);
+  if (name === 'kovo_check') return runKovoCheckTool(args);
+  if (name === 'kovo_explain') return runKovoExplainTool(args);
   if (name === 'list_diagnostics') return listDiagnosticsV1();
 
   throw new Error(`unknown tool ${stableValue(name)}`);
@@ -433,7 +433,7 @@ function listMcpTools(): {
   tools: readonly {
     description: string;
     inputSchema: Record<string, unknown>;
-    name: FwMcpToolName;
+    name: KovoMcpToolName;
   }[];
   version: typeof mcpOutputVersion;
 } {
@@ -460,17 +460,17 @@ function listMcpTools(): {
         name: 'compile_component',
       },
       {
-        description: 'Run fwCheck against an inline graph or graphPath.',
+        description: 'Run kovoCheck against an inline graph or graphPath.',
         inputSchema: graphToolSchema({ family: { enum: ['all', 'coverage', 'optimistic'] } }),
-        name: 'fw_check',
+        name: 'kovo_check',
       },
       {
-        description: 'Run fwExplain against an inline graph or graphPath.',
+        description: 'Run kovoExplain against an inline graph or graphPath.',
         inputSchema: graphToolSchema({ options: { type: 'object' } }, ['options']),
-        name: 'fw_explain',
+        name: 'kovo_explain',
       },
       {
-        description: 'List shared diagnostic definitions from the @jiso/core registry.',
+        description: 'List shared diagnostic definitions from the @kovojs/core registry.',
         inputSchema: { additionalProperties: false, properties: {}, type: 'object' },
         name: 'list_diagnostics',
       },
@@ -495,22 +495,24 @@ function graphToolSchema(
   };
 }
 
-function runFwCheckTool(args: unknown): FwCheckResult & { version: typeof outputVersion } {
+function runKovoCheckTool(args: unknown): KovoCheckResult & { version: typeof outputVersion } {
   const options = assertGraphToolArgs(args);
   const graph = graphToolInput(options);
   const family = typeof options.family === 'string' ? checkFamilyArg(options.family) : 'all';
-  const result = fwCheck(graph, { family });
+  const result = kovoCheck(graph, { family });
   return { ...result, version: outputVersion };
 }
 
-function runFwExplainTool(args: unknown): FwCheckResult & { version: typeof explainOutputVersion } {
+function runKovoExplainTool(
+  args: unknown,
+): KovoCheckResult & { version: typeof explainOutputVersion } {
   const options = assertGraphToolArgs(args);
-  const explainOptions = assertFwExplainOptions(options.options);
-  const result = fwExplain(graphToolInput(options), explainOptions);
+  const explainOptions = assertKovoExplainOptions(options.options);
+  const result = kovoExplain(graphToolInput(options), explainOptions);
   return { ...result, version: explainOutputVersion };
 }
 
-function graphToolInput(args: Record<string, unknown>): FwExplainInput {
+function graphToolInput(args: Record<string, unknown>): KovoExplainInput {
   if ('graph' in args && 'graphPath' in args) {
     throw new Error('graph tools accept graph or graphPath, not both');
   }
@@ -524,10 +526,10 @@ function graphToolInput(args: Record<string, unknown>): FwExplainInput {
 
   if ('graph' in args) {
     if (!isRecord(args.graph)) throw new Error('graph must be an object');
-    const validationErrors = validateFwExplainInput(args.graph);
+    const validationErrors = validateKovoExplainInput(args.graph);
     if (validationErrors.length > 0)
       throw new Error(validationErrors[0]?.message ?? 'invalid graph');
-    return args.graph as FwExplainInput;
+    return args.graph as KovoExplainInput;
   }
 
   return {};
@@ -574,8 +576,8 @@ function assertCompileComponentV1Input(args: unknown): CompileComponentV1Input {
   return input;
 }
 
-function assertFwExplainOptions(value: unknown): FwExplainOptions {
-  if (!isRecord(value)) throw new Error('fw_explain options must be an object');
+function assertKovoExplainOptions(value: unknown): KovoExplainOptions {
+  if (!isRecord(value)) throw new Error('kovo_explain options must be an object');
 
   if (value.endpoints === true) return { endpoints: true };
   if (value.unguarded === true) {
@@ -593,7 +595,7 @@ function assertFwExplainOptions(value: unknown): FwExplainOptions {
 
   const kind = typeof value.kind === 'string' ? value.kind : undefined;
   if (!isExplainKind(kind) || typeof value.target !== 'string') {
-    throw new Error('fw_explain options require kind and target, or a supported audit flag');
+    throw new Error('kovo_explain options require kind and target, or a supported audit flag');
   }
 
   return {
@@ -634,7 +636,7 @@ function listDiagnosticsV1(): {
 function mcpResult(
   id: string | number | null,
   structuredContent: unknown,
-): Extract<FwMcpResponse, { result: unknown }> {
+): Extract<KovoMcpResponse, { result: unknown }> {
   return {
     id,
     jsonrpc: '2.0',
@@ -658,7 +660,7 @@ function mcpError(
   id: string | number | null,
   code: number,
   message: string,
-): Extract<FwMcpResponse, { error: unknown }> {
+): Extract<KovoMcpResponse, { error: unknown }> {
   return { error: { code, message }, id, jsonrpc: '2.0' };
 }
 
@@ -670,14 +672,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-interface FwExportOptions {
+interface KovoExportOptions {
   appModulePath: string;
   onNonExportable?: 'error' | 'skip';
   origin?: string;
   outDir: string;
 }
 
-type ExportArgParseResult = { ok: true; options: FwExportOptions } | { message: string; ok: false };
+type ExportArgParseResult =
+  | { ok: true; options: KovoExportOptions }
+  | { message: string; ok: false };
 
 interface AddComponentOptions {
   components: readonly AddComponentName[];
@@ -702,7 +706,7 @@ function parseAddArgs(args: readonly string[]): AddArgParseResult {
 
     if (arg === '--out') {
       const value = args[index + 1];
-      if (!value) return { message: 'fw: add --out requires a directory.\n', ok: false };
+      if (!value) return { message: 'kovo: add --out requires a directory.\n', ok: false };
       outDir = value;
       index += 1;
       continue;
@@ -710,20 +714,20 @@ function parseAddArgs(args: readonly string[]): AddArgParseResult {
 
     if (arg.startsWith('--out=')) {
       outDir = arg.slice('--out='.length);
-      if (!outDir) return { message: 'fw: add --out requires a directory.\n', ok: false };
+      if (!outDir) return { message: 'kovo: add --out requires a directory.\n', ok: false };
       continue;
     }
 
     if (arg.startsWith('-')) {
       return {
-        message: `fw: unknown add option ${stableValue(arg)}.\n${addUsage()}`,
+        message: `kovo: unknown add option ${stableValue(arg)}.\n${addUsage()}`,
         ok: false,
       };
     }
 
     if (!isAddComponentName(arg)) {
       return {
-        message: `fw: unknown component ${stableValue(arg)}. available: ${availableAddComponents()}.`,
+        message: `kovo: unknown component ${stableValue(arg)}. available: ${availableAddComponents()}.`,
         ok: false,
       };
     }
@@ -732,7 +736,7 @@ function parseAddArgs(args: readonly string[]): AddArgParseResult {
   }
 
   if (components.length === 0) {
-    return { message: `fw: add requires at least one component.\n${addUsage()}`, ok: false };
+    return { message: `kovo: add requires at least one component.\n${addUsage()}`, ok: false };
   }
 
   return { ok: true, options: { components, outDir } };
@@ -740,7 +744,7 @@ function parseAddArgs(args: readonly string[]): AddArgParseResult {
 
 function addUsage(): string {
   return [
-    `usage: fw add <component...> [--out <dir>]`,
+    `usage: kovo add <component...> [--out <dir>]`,
     `available: ${availableAddComponents()}`,
     '',
   ].join('\n');
@@ -800,7 +804,7 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
 
     if (arg === '--out') {
       const value = args[index + 1];
-      if (!value) return { message: 'fw: export --out requires a directory.\n', ok: false };
+      if (!value) return { message: 'kovo: export --out requires a directory.\n', ok: false };
       outDir = value;
       index += 1;
       continue;
@@ -808,13 +812,13 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
 
     if (arg.startsWith('--out=')) {
       outDir = arg.slice('--out='.length);
-      if (!outDir) return { message: 'fw: export --out requires a directory.\n', ok: false };
+      if (!outDir) return { message: 'kovo: export --out requires a directory.\n', ok: false };
       continue;
     }
 
     if (arg === '--origin') {
       const value = args[index + 1];
-      if (!value) return { message: 'fw: export --origin requires a URL.\n', ok: false };
+      if (!value) return { message: 'kovo: export --origin requires a URL.\n', ok: false };
       origin = value;
       index += 1;
       continue;
@@ -822,7 +826,7 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
 
     if (arg.startsWith('--origin=')) {
       origin = arg.slice('--origin='.length);
-      if (!origin) return { message: 'fw: export --origin requires a URL.\n', ok: false };
+      if (!origin) return { message: 'kovo: export --origin requires a URL.\n', ok: false };
       continue;
     }
 
@@ -833,20 +837,20 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
 
     if (arg.startsWith('-')) {
       return {
-        message: `fw: unknown export option ${stableValue(arg)}.\n${exportUsage()}`,
+        message: `kovo: unknown export option ${stableValue(arg)}.\n${exportUsage()}`,
         ok: false,
       };
     }
 
     if (appModulePath) {
-      return { message: `fw: export accepts one app module path.\n${exportUsage()}`, ok: false };
+      return { message: `kovo: export accepts one app module path.\n${exportUsage()}`, ok: false };
     }
 
     appModulePath = arg;
   }
 
   if (!appModulePath)
-    return { message: `fw: export requires an app module path.\n${exportUsage()}`, ok: false };
+    return { message: `kovo: export requires an app module path.\n${exportUsage()}`, ok: false };
 
   return {
     ok: true,
@@ -861,15 +865,15 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
 
 function exportUsage(): string {
   return [
-    'usage: fw export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]',
+    'usage: kovo export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]',
     '',
   ].join('\n');
 }
 
-async function runExportCommand(options: FwExportOptions): Promise<CliCommandResult> {
+async function runExportCommand(options: KovoExportOptions): Promise<CliCommandResult> {
   try {
     const [{ exportStaticApp }, appModule] = await Promise.all([
-      import('@jiso/server'),
+      import('@kovojs/server'),
       import(pathToFileURL(resolve(options.appModulePath)).href),
     ]);
     const app = appFromModule(appModule, options.appModulePath);
@@ -882,23 +886,23 @@ async function runExportCommand(options: FwExportOptions): Promise<CliCommandRes
       outDir: options.outDir,
     });
 
-    return fwExportResult(result, options);
+    return kovoExportResult(result, options);
   } catch (error) {
     return exportErrorResult(error);
   }
 }
 
-function appFromModule(module: unknown, source: string): JisoApp {
+function appFromModule(module: unknown, source: string): KovoApp {
   if (typeof module === 'object' && module !== null) {
     const exports = module as { app?: unknown; default?: unknown };
     const app = exports.default ?? exports.app;
-    if (isJisoApp(app)) return app;
+    if (isKovoApp(app)) return app;
   }
 
-  throw new Error(`fw export expected ${source} to export a Jiso app as default or named 'app'.`);
+  throw new Error(`kovo export expected ${source} to export a Kovo app as default or named 'app'.`);
 }
 
-function isJisoApp(value: unknown): value is JisoApp {
+function isKovoApp(value: unknown): value is KovoApp {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -930,11 +934,11 @@ function isStaticExportCompileDiagnostic(value: unknown): value is StaticExportC
   );
 }
 
-function fwExportResult(
-  result: Awaited<ReturnType<(typeof import('@jiso/server'))['exportStaticApp']>>,
-  options: FwExportOptions,
-): FwCheckResult {
-  const lines = ['fw-export/v1'];
+function kovoExportResult(
+  result: Awaited<ReturnType<(typeof import('@kovojs/server'))['exportStaticApp']>>,
+  options: KovoExportOptions,
+): KovoCheckResult {
+  const lines = ['kovo-export/v1'];
 
   for (const artifact of result.artifacts) {
     lines.push(
@@ -969,7 +973,7 @@ function exportErrorResult(error: unknown): CliCommandResult {
   if (isStaticExportDiagnosticError(error)) {
     return {
       error: [
-        'fw-export/v1',
+        'kovo-export/v1',
         ...error.diagnostics.map(
           (diagnostic) =>
             `ERROR ${diagnostic.code} route=${diagnostic.routePath} ${stableText(diagnostic.message)}`,
@@ -980,7 +984,7 @@ function exportErrorResult(error: unknown): CliCommandResult {
   }
 
   return {
-    error: `fw: export failed: ${error instanceof Error ? error.message : String(error)}`,
+    error: `kovo: export failed: ${error instanceof Error ? error.message : String(error)}`,
     exitCode: 1,
   };
 }
@@ -1009,7 +1013,7 @@ interface InputReadError {
   path: string;
 }
 
-type InputReadResult = { ok: true; value: FwExplainInput } | { error: InputReadError; ok: false };
+type InputReadResult = { ok: true; value: KovoExplainInput } | { error: InputReadError; ok: false };
 
 function readGraphInput(path: string | undefined): InputReadResult {
   if (!path) return { ok: true, value: {} };
@@ -1035,7 +1039,7 @@ function readGraphInput(path: string | undefined): InputReadResult {
     return { error: { kind: 'invalid-shape', path }, ok: false };
   }
 
-  const validationErrors = validateFwExplainInput(parsed);
+  const validationErrors = validateKovoExplainInput(parsed);
   if (validationErrors.length > 0) {
     const validationError = validationErrors[0];
     if (validationError) {
@@ -1043,17 +1047,17 @@ function readGraphInput(path: string | undefined): InputReadResult {
     }
   }
 
-  return { ok: true, value: parsed as FwExplainInput };
+  return { ok: true, value: parsed as KovoExplainInput };
 }
 
 function inputErrorMessage(error: InputReadError): string {
   const messages: Record<InputReadError['kind'], string> = {
-    'invalid-field-shape': `fw: input JSON field ${error.field ?? '-'} must be an ${error.expected ?? 'object'}: ${error.path}`,
-    'invalid-json': `fw: input file is not valid JSON: ${error.path}`,
-    'invalid-shape': `fw: input JSON must be an object: ${error.path}`,
-    'invalid-value': `fw: input JSON invalid: ${error.path}: ${error.field ?? '$'} ${error.message ?? 'is invalid'}`,
-    'not-found': `fw: input file not found: ${error.path}`,
-    'read-error': `fw: unable to read input file: ${error.path}`,
+    'invalid-field-shape': `kovo: input JSON field ${error.field ?? '-'} must be an ${error.expected ?? 'object'}: ${error.path}`,
+    'invalid-json': `kovo: input file is not valid JSON: ${error.path}`,
+    'invalid-shape': `kovo: input JSON must be an object: ${error.path}`,
+    'invalid-value': `kovo: input JSON invalid: ${error.path}: ${error.field ?? '$'} ${error.message ?? 'is invalid'}`,
+    'not-found': `kovo: input file not found: ${error.path}`,
+    'read-error': `kovo: unable to read input file: ${error.path}`,
   };
   return messages[error.kind];
 }
@@ -1091,34 +1095,34 @@ function isNodeErrorCode(error: unknown, code: string): boolean {
 
 export type ExplainKind = 'component' | 'mutation' | 'page' | 'query';
 
-export type FwExplainOptions =
-  | FwEndpointExplainOptions
-  | FwTargetExplainOptions
-  | FwUnguardedExplainOptions
-  | FwUnscopedExplainOptions;
+export type KovoExplainOptions =
+  | KovoEndpointExplainOptions
+  | KovoTargetExplainOptions
+  | KovoUnguardedExplainOptions
+  | KovoUnscopedExplainOptions;
 
-export interface FwEndpointExplainOptions {
+export interface KovoEndpointExplainOptions {
   endpoints: true;
 }
 
-export interface FwTargetExplainOptions {
+export interface KovoTargetExplainOptions {
   kind: ExplainKind;
   optimistic?: boolean;
   target: string;
 }
 
-export interface FwUnguardedExplainOptions {
+export interface KovoUnguardedExplainOptions {
   failOnFindings?: boolean;
   unguarded: true;
 }
 
-export interface FwUnscopedExplainOptions {
+export interface KovoUnscopedExplainOptions {
   failOnFindings?: boolean;
   unscoped: true;
 }
 
-export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwCheckResult {
-  const validationErrors = validateFwExplainInput(input);
+export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions): KovoCheckResult {
+  const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0)
     return invalidGraphInputResult(explainOutputVersion, validationErrors);
 
@@ -1311,12 +1315,15 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
   return ok(lines);
 }
 
-export interface FwAuditOptions {
+export interface KovoAuditOptions {
   failOnFindings?: boolean;
 }
 
-export function fwAudit(input: FwExplainInput, options: FwAuditOptions = {}): FwCheckResult {
-  const validationErrors = validateFwExplainInput(input);
+export function kovoAudit(
+  input: KovoExplainInput,
+  options: KovoAuditOptions = {},
+): KovoCheckResult {
+  const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0)
     return invalidGraphInputResult(auditOutputVersion, validationErrors);
 
@@ -1357,11 +1364,11 @@ export function fwAudit(input: FwExplainInput, options: FwAuditOptions = {}): Fw
   };
 }
 
-export function fwCheck(
-  input: FwCheckInput,
-  options: { family?: FwCheckFamily } = {},
-): FwCheckResult {
-  const validationErrors = validateFwExplainInput(input);
+export function kovoCheck(
+  input: KovoCheckInput,
+  options: { family?: KovoCheckFamily } = {},
+): KovoCheckResult {
+  const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0) return invalidGraphInputResult(outputVersion, validationErrors);
 
   const lines = [outputVersion];
@@ -1438,8 +1445,8 @@ export function fwCheck(
       input.touchGraph ?? {},
       input.mutations ?? [],
     )) {
-      const message = diagnosticDefinitionText('FW407', { includeHelp: true });
-      pushFinding(`ERROR FW407 ${missed.query} reads ${missed.domain}. ${message}`, true);
+      const message = diagnosticDefinitionText('KV407', { includeHelp: true });
+      pushFinding(`ERROR KV407 ${missed.query} reads ${missed.domain}. ${message}`, true);
     }
 
     for (const access of unguardedAccesses(input)) {
@@ -1476,7 +1483,7 @@ export function fwCheck(
 function invalidGraphInputResult(
   version: string,
   errors: readonly GraphInputValidationError[],
-): FwCheckResult {
+): KovoCheckResult {
   const lines = [version, ...errors.map((error) => `ERROR INPUT ${error.path} ${error.message}`)];
   return {
     exitCode: 1,
@@ -1490,12 +1497,12 @@ function diagnosticSeverity(
   return diagnostic.severity ?? diagnosticDefinitions[diagnostic.code].severity;
 }
 
-function checkFamilyArg(value: string | undefined): FwCheckFamily {
+function checkFamilyArg(value: string | undefined): KovoCheckFamily {
   return value === 'optimistic' || value === 'coverage' ? value : 'all';
 }
 
 type CheckArgParseResult =
-  | { family: FwCheckFamily; inputPath: string | undefined; ok: true }
+  | { family: KovoCheckFamily; inputPath: string | undefined; ok: true }
   | { family: string | undefined; kind: 'too-many-args' | 'unsupported-family'; ok: false };
 
 function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
@@ -1511,8 +1518,8 @@ function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
 function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: false }>): number {
   const message =
     error.kind === 'unsupported-family'
-      ? `fw: unsupported check family ${stableValue(error.family)}. expected optimistic or coverage.\n`
-      : 'fw: usage: fw check [optimistic|coverage] [graph.json]\n';
+      ? `kovo: unsupported check family ${stableValue(error.family)}. expected optimistic or coverage.\n`
+      : 'kovo: usage: kovo check [optimistic|coverage] [graph.json]\n';
   process.stderr.write(message);
   return 1;
 }
@@ -1525,7 +1532,7 @@ function parseAuditArgs(args: readonly string[]): AuditArgParseResult {
   const parsed = parseFlaggedArgs(args, ['--fail-on-findings']);
   if (!parsed.ok) return parsed;
   if (parsed.positional.length > 1) {
-    return { message: 'fw: usage: fw audit [--fail-on-findings] [graph.json]', ok: false };
+    return { message: 'kovo: usage: kovo audit [--fail-on-findings] [graph.json]', ok: false };
   }
 
   return {
@@ -1536,7 +1543,7 @@ function parseAuditArgs(args: readonly string[]): AuditArgParseResult {
 }
 
 type ExplainArgParseResult =
-  | { inputPath: string | undefined; ok: true; options: FwExplainOptions }
+  | { inputPath: string | undefined; ok: true; options: KovoExplainOptions }
   | { message: string; ok: false };
 
 function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
@@ -1583,7 +1590,7 @@ function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
 function explainUsage(): ExplainArgParseResult {
   return {
     message:
-      'fw: usage: fw explain component|mutation|query|page <target> [--optimistic] [graph.json] | fw explain --endpoints [graph.json] | fw explain --unguarded [--fail-on-findings] [graph.json] | fw explain --unscoped [--fail-on-findings] [graph.json]',
+      'kovo: usage: kovo explain component|mutation|query|page <target> [--optimistic] [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]',
     ok: false,
   };
 }
@@ -1602,7 +1609,8 @@ function parseFlaggedArgs(
 
   for (const arg of args) {
     if (arg.startsWith('--')) {
-      if (!allowed.has(arg)) return { message: `fw: unknown flag ${stableValue(arg)}`, ok: false };
+      if (!allowed.has(arg))
+        return { message: `kovo: unknown flag ${stableValue(arg)}`, ok: false };
       flags.add(arg);
     } else {
       positional.push(arg);
@@ -1612,7 +1620,7 @@ function parseFlaggedArgs(
   return { flags, ok: true, positional };
 }
 
-function ok(lines: string[]): FwCheckResult {
+function ok(lines: string[]): KovoCheckResult {
   return {
     exitCode: 0,
     output: `${lines.join('\n')}\n`,
@@ -1623,7 +1631,7 @@ function explainAuditResult(
   lines: string[],
   findingCount: number,
   failOnFindings = false,
-): FwCheckResult {
+): KovoCheckResult {
   return {
     exitCode: failOnFindings && findingCount > 0 ? 1 : 0,
     output: `${lines.join('\n')}\n`,
@@ -1641,17 +1649,17 @@ function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnosticFact[]
     ...entry.touches
       .filter((touch) => touch.predicate === 'non-eq')
       .map((touch) => ({
-        code: 'FW409' as const,
-        message: diagnosticDefinitions.FW409.message,
-        severity: diagnosticDefinitions.FW409.severity,
+        code: 'KV409' as const,
+        message: diagnosticDefinitions.KV409.message,
+        severity: diagnosticDefinitions.KV409.severity,
         site: touch.site,
       })),
     ...(entry.reads ?? [])
       .filter((read) => read.predicate === 'non-eq')
       .map((read) => ({
-        code: 'FW409' as const,
-        message: diagnosticDefinitions.FW409.message,
-        severity: diagnosticDefinitions.FW409.severity,
+        code: 'KV409' as const,
+        message: diagnosticDefinitions.KV409.message,
+        severity: diagnosticDefinitions.KV409.severity,
         site: read.site,
       })),
   ]);
@@ -1683,7 +1691,7 @@ function diagnosticSite(diagnostic: StaticDiagnosticFact): string {
     : diagnostic.site;
 }
 
-function notFound(options: FwTargetExplainOptions): FwCheckResult {
+function notFound(options: KovoTargetExplainOptions): KovoCheckResult {
   return {
     exitCode: 1,
     output: `${explainOutputVersion}\nERROR NOT_FOUND ${options.kind} ${options.target}\n`,
@@ -1706,7 +1714,7 @@ function findComponentExplain(
 function componentPrefixProvenance(
   component: ComponentExplain,
   target: string,
-  input: FwExplainInput,
+  input: KovoExplainInput,
 ): string | null {
   const wireName = target.includes('-') ? target : componentWireName(component.name);
   const owner = packagePrefixOwner(input.packageComponentPrefixes, wireName);
@@ -1756,7 +1764,7 @@ function isExplainKind(value: string | undefined): value is ExplainKind {
   return value === 'component' || value === 'mutation' || value === 'page' || value === 'query';
 }
 
-function invalidatedBy(query: QueryReadSet, input: FwExplainInput): string[] {
+function invalidatedBy(query: QueryReadSet, input: KovoExplainInput): string[] {
   const invalidators = new Set<string>();
 
   for (const mutation of input.mutations ?? []) {
@@ -1770,7 +1778,7 @@ function invalidatedBy(query: QueryReadSet, input: FwExplainInput): string[] {
   return [...invalidators].sort();
 }
 
-function domainWritesFor(query: QueryReadSet, input: FwExplainInput): string[] {
+function domainWritesFor(query: QueryReadSet, input: KovoExplainInput): string[] {
   const writes = new Set<string>();
 
   for (const [writeName, entry] of Object.entries(input.touchGraph ?? {})) {
@@ -1782,7 +1790,7 @@ function domainWritesFor(query: QueryReadSet, input: FwExplainInput): string[] {
   return [...writes].sort();
 }
 
-function queryConsumers(queryName: string, input: FwExplainInput): string[] {
+function queryConsumers(queryName: string, input: KovoExplainInput): string[] {
   const components =
     input.components
       ?.filter((component) => component.queries?.includes(queryName))
@@ -1797,7 +1805,7 @@ function queryConsumers(queryName: string, input: FwExplainInput): string[] {
 
 function mutationUpdates(
   mutation: MutationExplain,
-  input: FwExplainInput,
+  input: KovoExplainInput,
 ): Array<{ consumers: string[]; query: string }> {
   const domains = mutationAffectedDomains(mutation);
   if (domains.size === 0) return [];
@@ -1820,7 +1828,7 @@ function listMutationUpdates(
   return updates.map((update) => `${update.query}->${list(update.consumers)}`).join('; ');
 }
 
-function unguardedAccesses(input: FwExplainInput): UnguardedAccessFact[] {
+function unguardedAccesses(input: KovoExplainInput): UnguardedAccessFact[] {
   return [
     ...(input.endpoints ?? [])
       .filter((endpoint) => !hasEndpointAuth(endpoint))
@@ -2001,7 +2009,7 @@ function optimisticCoverageWarnings(
 }
 
 function optimisticCoverageWarning(mutation: string, query: string): string {
-  return `WARN FW310 ${mutation} -> ${query} ${diagnosticDefinitions.FW310.message}`;
+  return `WARN KV310 ${mutation} -> ${query} ${diagnosticDefinitions.KV310.message}`;
 }
 
 function sortedUpdateCoverage(coverage: readonly UpdateCoverageFact[]): UpdateCoverageFact[] {
@@ -2011,12 +2019,12 @@ function sortedUpdateCoverage(coverage: readonly UpdateCoverageFact[]): UpdateCo
 function updateCoverageLine(fact: UpdateCoverageFact): string {
   if (fact.status === 'UNHANDLED') {
     return [
-      'WARN FW311',
+      'WARN KV311',
       `component=${fact.component}`,
       `query=${fact.query}`,
       fact.source ? `source=${fact.source}` : '',
       `position=${JSON.stringify(fact.position)}`,
-      diagnosticDefinitions.FW311.message,
+      diagnosticDefinitions.KV311.message,
       fact.detail ?? '',
     ]
       .filter(Boolean)
@@ -2036,7 +2044,7 @@ function updateCoverageLine(fact: UpdateCoverageFact): string {
     .join(' ');
 }
 
-function unscopedAccesses(input: FwCheckInput): ScopeAuditFact[] {
+function unscopedAccesses(input: KovoCheckInput): ScopeAuditFact[] {
   const ownerDomains = new Set((input.ownerDomains ?? []).map((owner) => owner.domain));
 
   return (input.scopeAudits ?? [])
@@ -2085,7 +2093,7 @@ function optimisticUnhandledFixLine(): string {
 
 function optimisticCoverageForMutation(
   mutation: MutationExplain,
-  input: FwExplainInput,
+  input: KovoExplainInput,
 ): OptimisticCoverage[] {
   const affectedQueries = new Set(
     mutationAffectedQueries(mutation, input).map((query) => query.query),
@@ -2109,7 +2117,7 @@ function optimisticCoverageForMutation(
 
 function mutationAffectedQueries(
   mutation: MutationExplain,
-  input: FwExplainInput,
+  input: KovoExplainInput,
 ): readonly QueryReadSet[] {
   const domains = mutationAffectedDomains(mutation);
   if (domains.size === 0) return [];
@@ -2218,7 +2226,7 @@ function eventPayloadQueryLints(
 
       return [
         {
-          code: 'FW320',
+          code: 'KV320',
           detail: `event ${event.event} carries ${normalizedField} from query ${[
             ...new Set(queryNames),
           ]

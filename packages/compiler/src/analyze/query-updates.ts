@@ -536,7 +536,7 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
   return elements
     .flatMap((element) => {
       const list = jsxStaticAttributeValue(element, 'data-bind-list');
-      const key = jsxStaticAttributeValue(element, 'fw-key');
+      const key = jsxStaticAttributeValue(element, 'kovo-key');
       if (!list || !key) return [];
 
       const template = templateStampElement(elements, element);
@@ -617,7 +617,7 @@ function templateStampElement(
     (element) =>
       element.tag === 'template' &&
       isWithinElement(element, container) &&
-      hasJsxAttribute(element, 'fw-stamp'),
+      hasJsxAttribute(element, 'kovo-stamp'),
   );
 }
 

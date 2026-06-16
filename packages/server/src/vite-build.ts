@@ -1,75 +1,75 @@
 import { createHash } from 'node:crypto';
 import type { VersionedClientModuleInput } from './client-modules.js';
 import { assertNoBlockingAppDiagnostics } from './app-diagnostics.js';
-import { isJisoApp } from './app-guards.js';
-import type { JisoApp } from './app-types.js';
+import { isKovoApp } from './app-guards.js';
+import type { KovoApp } from './app-types.js';
 import type { PageHintOptions } from './hints.js';
-import type { JisoAppShellViteBuildOutput } from './vite-build-output.js';
-import type { JisoAppShellVitePluginStaticExportOptions } from './vite-static-export-options.js';
+import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
+import type { KovoAppShellVitePluginStaticExportOptions } from './vite-static-export-options.js';
 import {
-  jisoAppShellViteManifestAssets,
-  jisoAppShellViteManifestFromBundle,
-  jisoAppShellViteManifestFromFile,
-  jisoAppShellViteManifestHints,
-  jisoAppShellViteRouteEntries,
+  kovoAppShellViteManifestAssets,
+  kovoAppShellViteManifestFromBundle,
+  kovoAppShellViteManifestFromFile,
+  kovoAppShellViteManifestHints,
+  kovoAppShellViteRouteEntries,
   normalizedDistFile,
-  type JisoAppShellBuildAsset,
-  type JisoAppShellRouteBuildEntry,
-  type JisoAppShellRouteEntryMap,
-  type JisoAppShellViteManifest,
-  type JisoAppShellViteManifestHintOptions,
-  type JisoAppShellViteOutputBundle,
+  type KovoAppShellBuildAsset,
+  type KovoAppShellRouteBuildEntry,
+  type KovoAppShellRouteEntryMap,
+  type KovoAppShellViteManifest,
+  type KovoAppShellViteManifestHintOptions,
+  type KovoAppShellViteOutputBundle,
 } from './vite-manifest.js';
 
-export interface JisoAppShellCompiledClientModule extends Omit<
+export interface KovoAppShellCompiledClientModule extends Omit<
   VersionedClientModuleInput,
   'version'
 > {
   version?: string;
 }
 
-export interface JisoAppShellBuildOptions {
-  app: JisoApp;
+export interface KovoAppShellBuildOptions {
+  app: KovoApp;
   base?: string;
-  clientModules?: readonly JisoAppShellCompiledClientModule[];
-  manifest?: JisoAppShellViteManifest;
-  routeEntries?: readonly JisoAppShellRouteBuildEntry[];
+  clientModules?: readonly KovoAppShellCompiledClientModule[];
+  manifest?: KovoAppShellViteManifest;
+  routeEntries?: readonly KovoAppShellRouteBuildEntry[];
 }
 
-export interface JisoAppShellViteBuildOptions extends Omit<
-  JisoAppShellBuildOptions,
+export interface KovoAppShellViteBuildOptions extends Omit<
+  KovoAppShellBuildOptions,
   'routeEntries'
 > {
   routeEntries?: never;
-  routeEntryMap?: JisoAppShellRouteEntryMap;
+  routeEntryMap?: KovoAppShellRouteEntryMap;
 }
 
-export interface JisoAppShellViteBundleBuildOptions extends Omit<
-  JisoAppShellViteBuildOptions,
+export interface KovoAppShellViteBundleBuildOptions extends Omit<
+  KovoAppShellViteBuildOptions,
   'manifest'
 > {
-  bundle: JisoAppShellViteOutputBundle;
+  bundle: KovoAppShellViteOutputBundle;
   manifest?: never;
 }
 
-export interface JisoAppShellViteManifestFileBuildOptions extends Omit<
-  JisoAppShellViteBuildOptions,
+export interface KovoAppShellViteManifestFileBuildOptions extends Omit<
+  KovoAppShellViteBuildOptions,
   'manifest'
 > {
   manifest?: never;
   manifestFile: string | URL;
 }
 
-export interface JisoAppShellVitePluginBuildOptions extends Omit<
-  JisoAppShellViteBundleBuildOptions,
+export interface KovoAppShellVitePluginBuildOptions extends Omit<
+  KovoAppShellViteBundleBuildOptions,
   'app' | 'bundle' | 'manifest'
 > {
-  onBuild?(build: JisoAppShellBuild, output: JisoAppShellViteBuildOutput): void | Promise<void>;
+  onBuild?(build: KovoAppShellBuild, output: KovoAppShellViteBuildOutput): void | Promise<void>;
   outDir?: string | URL;
-  staticExport?: JisoAppShellVitePluginStaticExportOptions | false;
+  staticExport?: KovoAppShellVitePluginStaticExportOptions | false;
 }
 
-export interface JisoAppShellBuiltClientModule {
+export interface KovoAppShellBuiltClientModule {
   contentType?: string;
   file: string;
   href: string;
@@ -78,20 +78,20 @@ export interface JisoAppShellBuiltClientModule {
   version: string;
 }
 
-export interface JisoAppShellRouteBuildHints {
+export interface KovoAppShellRouteBuildHints {
   hints: PageHintOptions;
   routePath: string;
 }
 
-export interface JisoAppShellBuild {
-  app: JisoApp;
-  assets: readonly JisoAppShellBuildAsset[];
-  clientModules: readonly JisoAppShellBuiltClientModule[];
-  routeHints: readonly JisoAppShellRouteBuildHints[];
+export interface KovoAppShellBuild {
+  app: KovoApp;
+  assets: readonly KovoAppShellBuildAsset[];
+  clientModules: readonly KovoAppShellBuiltClientModule[];
+  routeHints: readonly KovoAppShellRouteBuildHints[];
 }
 
-export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): JisoAppShellBuild {
-  assertJisoAppShellBuildApp(options.app);
+export function createKovoAppShellBuild(options: KovoAppShellBuildOptions): KovoAppShellBuild {
+  assertKovoAppShellBuildApp(options.app);
   assertNoBlockingAppDiagnostics(options.app);
   const manifestOptions = viteManifestOptions(options.base);
   const routeHints = buildRouteHints(options.manifest, options.routeEntries, manifestOptions);
@@ -107,32 +107,32 @@ export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): Jiso
         };
   const clientModules = registerCompiledClientModules(options.app, options.clientModules ?? []);
   const assets = options.manifest
-    ? jisoAppShellViteManifestAssets(options.manifest, manifestOptions)
+    ? kovoAppShellViteManifestAssets(options.manifest, manifestOptions)
     : [];
 
   return { app, assets, clientModules, routeHints };
 }
 
-function assertJisoAppShellBuildApp(app: JisoApp): void {
-  if (isJisoApp(app)) return;
+function assertKovoAppShellBuildApp(app: KovoApp): void {
+  if (isKovoApp(app)) return;
 
   throw new TypeError(
-    'createJisoAppShellViteBuild() requires a Jiso app aggregate. SPEC §9.5 Vite build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
+    'createKovoAppShellViteBuild() requires a Kovo app aggregate. SPEC §9.5 Vite build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
   );
 }
 
-export function createJisoAppShellViteBuild(
-  options: JisoAppShellViteBuildOptions,
-): JisoAppShellBuild {
+export function createKovoAppShellViteBuild(
+  options: KovoAppShellViteBuildOptions,
+): KovoAppShellBuild {
   const routeEntries =
     options.routeEntryMap === undefined
       ? undefined
-      : jisoAppShellViteRouteEntries(options.routeEntryMap, {
+      : kovoAppShellViteRouteEntries(options.routeEntryMap, {
           ...(options.manifest === undefined ? {} : { manifest: options.manifest }),
           routes: options.app.routes,
         });
 
-  return createJisoAppShellBuild({
+  return createKovoAppShellBuild({
     app: options.app,
     ...(options.base === undefined ? {} : { base: options.base }),
     ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
@@ -141,47 +141,47 @@ export function createJisoAppShellViteBuild(
   });
 }
 
-export function createJisoAppShellViteBuildFromBundle(
-  options: JisoAppShellViteBundleBuildOptions,
-): JisoAppShellBuild {
-  return createJisoAppShellViteBuild({
+export function createKovoAppShellViteBuildFromBundle(
+  options: KovoAppShellViteBundleBuildOptions,
+): KovoAppShellBuild {
+  return createKovoAppShellViteBuild({
     app: options.app,
     ...(options.base === undefined ? {} : { base: options.base }),
     ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
-    manifest: jisoAppShellViteManifestFromBundle(options.bundle),
+    manifest: kovoAppShellViteManifestFromBundle(options.bundle),
     ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
   });
 }
 
-export async function createJisoAppShellViteBuildFromManifestFile(
-  options: JisoAppShellViteManifestFileBuildOptions,
-): Promise<JisoAppShellBuild> {
-  return createJisoAppShellViteBuild({
+export async function createKovoAppShellViteBuildFromManifestFile(
+  options: KovoAppShellViteManifestFileBuildOptions,
+): Promise<KovoAppShellBuild> {
+  return createKovoAppShellViteBuild({
     app: options.app,
     ...(options.base === undefined ? {} : { base: options.base }),
     ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
-    manifest: await jisoAppShellViteManifestFromFile(options.manifestFile),
+    manifest: await kovoAppShellViteManifestFromFile(options.manifestFile),
     ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
   });
 }
 
 function buildRouteHints(
-  manifest: JisoAppShellViteManifest | undefined,
-  routeEntries: readonly JisoAppShellRouteBuildEntry[] | undefined,
-  options: JisoAppShellViteManifestHintOptions,
-): JisoAppShellRouteBuildHints[] {
+  manifest: KovoAppShellViteManifest | undefined,
+  routeEntries: readonly KovoAppShellRouteBuildEntry[] | undefined,
+  options: KovoAppShellViteManifestHintOptions,
+): KovoAppShellRouteBuildHints[] {
   if (!manifest || !routeEntries || routeEntries.length === 0) return [];
 
   return routeEntries.map((entry) => ({
-    hints: jisoAppShellViteManifestHints(manifest, entry.entries, options),
+    hints: kovoAppShellViteManifestHints(manifest, entry.entries, options),
     routePath: entry.routePath,
   }));
 }
 
 function registerCompiledClientModules(
-  app: JisoApp,
-  modules: readonly JisoAppShellCompiledClientModule[],
-): JisoAppShellBuiltClientModule[] {
+  app: KovoApp,
+  modules: readonly KovoAppShellCompiledClientModule[],
+): KovoAppShellBuiltClientModule[] {
   return modules.map((module) => {
     // SPEC §6.6: production client module URLs are immutable and versioned.
     const version = module.version ?? sourceVersion(module.source);
@@ -189,9 +189,9 @@ function registerCompiledClientModules(
       ...module,
       version,
     });
-    const url = new URL(href, 'https://jiso.local');
+    const url = new URL(href, 'https://kovo.local');
 
-    const built: JisoAppShellBuiltClientModule = {
+    const built: KovoAppShellBuiltClientModule = {
       file: normalizedDistFile(url.pathname),
       href,
       path: url.pathname,
@@ -204,7 +204,7 @@ function registerCompiledClientModules(
   });
 }
 
-function viteManifestOptions(base: string | undefined): JisoAppShellViteManifestHintOptions {
+function viteManifestOptions(base: string | undefined): KovoAppShellViteManifestHintOptions {
   return base === undefined ? {} : { base };
 }
 

@@ -1,4 +1,4 @@
-import { domain, endpoint, guards, mutation, s } from '@jiso/server';
+import { domain, endpoint, guards, mutation, s } from '@kovojs/server';
 import type {
   AuthenticatedRequest,
   CsrfValidationOptions,
@@ -14,7 +14,7 @@ import type {
   MutationRegistry,
   SessionProvider,
   SessionRequestLike,
-} from '@jiso/server';
+} from '@kovojs/server';
 
 export interface BetterAuthGetSessionOptions {
   headers: Headers;
@@ -242,7 +242,7 @@ export interface BetterAuthSchemaBridgeValidationOptions {
 }
 
 export interface BetterAuthPluginTableDegradation {
-  diagnosticCode: 'FW406';
+  diagnosticCode: 'KV406';
   fields: string[] | null;
   manualBridgeSteps: string[];
   message: string;
@@ -254,7 +254,7 @@ export interface BetterAuthPluginTableDegradation {
 
 export interface BetterAuthSchemaSourceDeclarationDegradation {
   callee: string;
-  diagnosticCode: 'FW406';
+  diagnosticCode: 'KV406';
   manualBridgeSteps: string[];
   message: string;
   physicalTable?: string;
@@ -264,7 +264,7 @@ export interface BetterAuthSchemaSourceDeclarationDegradation {
 
 export interface BetterAuthSchemaSourcePluginTableDegradation {
   callee: string;
-  diagnosticCode: 'FW406';
+  diagnosticCode: 'KV406';
   fields: string[] | null;
   manualBridgeSteps: string[];
   message: string;
@@ -277,7 +277,7 @@ export interface BetterAuthSchemaSourcePluginTableDegradation {
 
 export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
   attemptedImports: readonly string[];
-  diagnosticCode: 'FW406';
+  diagnosticCode: 'KV406';
   legacyPlugin: 'oidcProvider';
   manualBridgeSteps: string[];
   message: string;
@@ -289,7 +289,7 @@ export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
 
 export interface BetterAuthUnavailablePluginMetadataDegradation {
   attemptedImports: readonly string[];
-  diagnosticCode: 'FW406';
+  diagnosticCode: 'KV406';
   manualBridgeSteps: string[];
   message: string;
   packageName: string;
@@ -353,8 +353,8 @@ export interface BetterAuthSchemaSourceAnnotationResult {
   importNote: BetterAuthSchemaSourceImportNote;
   missingSourceTables: string[];
   requiredImport: {
-    module: '@jiso/drizzle';
-    name: 'jiso';
+    module: '@kovojs/drizzle';
+    name: 'kovo';
   };
   source: string;
   unsupportedSourceTables: BetterAuthSchemaSourcePluginTableDegradation[];
@@ -369,7 +369,7 @@ export type BetterAuthGeneratedSchemaTableDegradationReason =
   | 'unsupported-field-type';
 
 export interface BetterAuthGeneratedSchemaTableDegradation {
-  diagnosticCode: 'FW406';
+  diagnosticCode: 'KV406';
   field?: string;
   fields: string[] | null;
   manualBridgeSteps: string[];
@@ -517,22 +517,22 @@ export const betterAuthPasskeyPluginMetadataImportPaths = [
 ] as const;
 
 // Better Auth 1.6.17 deprecates `oidcProvider()` in favor of the successor
-// package. SPEC.md §11.2 keeps successor-owned writes FW406 until its real
+// package. SPEC.md §11.2 keeps successor-owned writes KV406 until its real
 // table metadata and declared touches are pinned.
 export function betterAuthOAuthProviderSuccessorMetadataDegradation(
   attemptedImports: readonly string[] = betterAuthOAuthProviderSuccessorImportPaths,
 ): BetterAuthOAuthProviderSuccessorMetadataDegradation {
   return {
     attemptedImports,
-    diagnosticCode: 'FW406',
+    diagnosticCode: 'KV406',
     legacyPlugin: 'oidcProvider',
     manualBridgeSteps: [
       'Install the Better Auth OAuth-provider successor package and inspect getAuthTables(auth.options) with that plugin enabled.',
       'If the successor reuses oauthApplication/oauthAccessToken/oauthConsent with userId ownership, keep the existing auth-domain bridge and pin the package metadata in conformance.',
-      'If the successor adds or renames tables, add schema.ts jiso({ domain, key }) or jiso({ exempt: true }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+      'If the successor adds or renames tables, add schema.ts kovo({ domain, key }) or kovo({ exempt: true }) annotations and declared Better Auth API touches before relying on runtime coverage.',
     ],
     message:
-      '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain FW406 until a real metadata path is pinned.',
+      '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain KV406 until a real metadata path is pinned.',
     packageName: '@better-auth/oauth-provider',
     reason: 'oauth-provider-successor-metadata-unavailable',
     schemaBridge: null,
@@ -541,7 +541,7 @@ export function betterAuthOAuthProviderSuccessorMetadataDegradation(
 }
 
 // SPEC.md §11.2: plugin writes whose real Better Auth metadata is unavailable
-// cannot be represented by inferred table mappings. Keep them as FW406 facts
+// cannot be represented by inferred table mappings. Keep them as KV406 facts
 // until getAuthTables(auth.options) can be pinned for the installed package.
 export function betterAuthUnavailablePluginMetadataDegradation(options: {
   attemptedImports: readonly string[];
@@ -550,13 +550,13 @@ export function betterAuthUnavailablePluginMetadataDegradation(options: {
 }): BetterAuthUnavailablePluginMetadataDegradation {
   return {
     attemptedImports: options.attemptedImports,
-    diagnosticCode: 'FW406',
+    diagnosticCode: 'KV406',
     manualBridgeSteps: [
       `Install a Better Auth ${options.pluginName} plugin package/export and inspect getAuthTables(auth.options) with that plugin enabled.`,
-      'If the plugin exposes app-visible tables, add schema.ts jiso({ domain, key }) annotations and declared Better Auth API touches before relying on runtime coverage.',
-      'If the plugin exposes only protocol/bookkeeping tables, add jiso({ exempt: true }) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
+      'If the plugin exposes app-visible tables, add schema.ts kovo({ domain, key }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+      'If the plugin exposes only protocol/bookkeeping tables, add kovo({ exempt: true }) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
     ],
-    message: `${options.packageName} metadata is not available from the pinned Better Auth dependency set; ${options.pluginName} writes remain FW406 until real table metadata is pinned.`,
+    message: `${options.packageName} metadata is not available from the pinned Better Auth dependency set; ${options.pluginName} writes remain KV406 until real table metadata is pinned.`,
     packageName: options.packageName,
     pluginName: options.pluginName,
     reason: 'plugin-metadata-unavailable',
@@ -597,7 +597,7 @@ export function createBetterAuthCredentialMutationTouchGraph(
           // Better Auth owns the SQL; the P9 bridge verifies domain/table coverage
           // without pretending row-key predicates are available at this boundary.
           keys: null,
-          site: `@jiso/better-auth:${api}`,
+          site: `@kovojs/better-auth:${api}`,
           via: touch.table,
         })),
         unresolved: [],
@@ -675,7 +675,7 @@ export function validateBetterAuthSchemaBridge(
 }
 
 // Archived D5 auth plan B1 / SPEC.md §14: Better Auth owns the SQL/table metadata, while
-// the app-authored schema.ts must carry explicit Jiso domain/exempt annotations.
+// the app-authored schema.ts must carry explicit Kovo domain/exempt annotations.
 export function annotateBetterAuthSchemaSource(
   source: string,
   tables: Record<string, unknown>,
@@ -713,8 +713,8 @@ export function annotateBetterAuthSchemaSource(
   const annotatedTables: string[] = [];
   const alreadyAnnotatedTables: string[] = [];
   const existingExtraConfigTables: string[] = [];
-  const annotationCallee = options.annotationCallee ?? 'jiso';
-  const hasRequiredImport = hasNamedImportLocal(source, '@jiso/drizzle', annotationCallee);
+  const annotationCallee = options.annotationCallee ?? 'kovo';
+  const hasRequiredImport = hasNamedImportLocal(source, '@kovojs/drizzle', annotationCallee);
 
   for (const call of sourceTables) {
     const table = metadataTableByPhysicalName.get(call.tableName);
@@ -769,8 +769,8 @@ export function annotateBetterAuthSchemaSource(
     },
     missingSourceTables,
     requiredImport: {
-      module: '@jiso/drizzle',
-      name: 'jiso',
+      module: '@kovojs/drizzle',
+      name: 'kovo',
     },
     source: applyBetterAuthSchemaSourceReplacements(source, sourceReplacements),
     unsupportedSourceTables,
@@ -790,7 +790,7 @@ export function generateBetterAuthSchemaSource(
     tables,
     options.schemaBridge === undefined ? {} : { schemaBridge: options.schemaBridge },
   );
-  const annotationCallee = options.annotationCallee ?? 'jiso';
+  const annotationCallee = options.annotationCallee ?? 'kovo';
   const collidingPhysicalTables = betterAuthCollidingPhysicalTableNames(tables, schemaBridge);
   const generatedTables: BetterAuthGeneratedSchemaTable[] = [];
   const skippedTables: BetterAuthGeneratedSchemaTableDegradation[] = [];
@@ -1502,7 +1502,7 @@ function unsupportedPluginTableDegradation(
   const suggestedAnnotation = suggestedUnsupportedPluginTableAnnotation(fieldNames);
 
   return {
-    diagnosticCode: 'FW406',
+    diagnosticCode: 'KV406',
     fields: fieldNames === null ? null : [...fieldNames].sort(),
     manualBridgeSteps: unsupportedPluginTableManualBridgeSteps(
       table,
@@ -1531,12 +1531,12 @@ function unsupportedPluginTableManualBridgeSteps(
     fields === null ? 'unavailable from Better Auth metadata' : [...fields].sort().join(', ');
   const annotationStep =
     suggestedAnnotation === null
-      ? 'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.'
+      ? 'If it is app-visible, add a schema.ts kovo({ domain, key }) annotation; otherwise add kovo({ exempt: true }) with a rationale.'
       : 'domain' in suggestedAnnotation
-        ? `Likely app-visible ownership is jiso(${formatBetterAuthSchemaDomainAnnotation(
+        ? `Likely app-visible ownership is kovo(${formatBetterAuthSchemaDomainAnnotation(
             suggestedAnnotation,
-          )}); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.`
-        : 'Likely Better Auth protocol/bookkeeping state is jiso({ exempt: true }); confirm the app never queries it before adding the bridge.';
+          )}); confirm before adding the bridge, otherwise use kovo({ exempt: true }) with a rationale.`
+        : 'Likely Better Auth protocol/bookkeeping state is kovo({ exempt: true }); confirm the app never queries it before adding the bridge.';
 
   return [
     `Inspect ${betterAuthTableLabel(
@@ -1544,7 +1544,7 @@ function unsupportedPluginTableManualBridgeSteps(
       physicalTable,
     )} fields (${fieldList}) and decide whether the app reads this table.`,
     annotationStep,
-    `Add declared Better Auth API touches for writes that can mutate ${table}; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.`,
+    `Add declared Better Auth API touches for writes that can mutate ${table}; SPEC.md §11.2 keeps observed writes KV406 until declared coverage exists.`,
   ];
 }
 
@@ -1923,7 +1923,7 @@ function generatedSchemaTableDegradation(options: {
   table: string;
 }): BetterAuthGeneratedSchemaTableDegradation {
   return {
-    diagnosticCode: 'FW406',
+    diagnosticCode: 'KV406',
     ...(options.field === undefined ? {} : { field: options.field }),
     fields: options.fields === null ? null : [...options.fields].sort(),
     manualBridgeSteps: generatedSchemaTableManualBridgeSteps(
@@ -1952,13 +1952,13 @@ function generatedSchemaTableManualBridgeSteps(
       : `Inspect Better Auth metadata for ${label} and write the Drizzle declaration manually.`;
   const fieldStep =
     field === undefined
-      ? 'Add the matching jiso({ domain, key }) or jiso({ exempt: true }) annotation once the table declaration is explicit.'
-      : `Verify field ${field} in Better Auth metadata before adding the matching Jiso annotation.`;
+      ? 'Add the matching kovo({ domain, key }) or kovo({ exempt: true }) annotation once the table declaration is explicit.'
+      : `Verify field ${field} in Better Auth metadata before adding the matching Kovo annotation.`;
 
   return [
     firstStep,
     fieldStep,
-    'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+    'Keep observed writes KV406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
   ];
 }
 
@@ -2169,7 +2169,7 @@ function unsupportedSchemaSourcePluginTableDegradation(
 
   return {
     callee: call.callee,
-    diagnosticCode: 'FW406',
+    diagnosticCode: 'KV406',
     fields: degradation.fields,
     manualBridgeSteps: [
       `${betterAuthTableLabel(
@@ -2198,11 +2198,11 @@ function unrecognizedSchemaTableDeclarationDegradation(
 
   return {
     callee: call.callee,
-    diagnosticCode: 'FW406',
+    diagnosticCode: 'KV406',
     manualBridgeSteps: [
       `Import the Drizzle table factory that declares ${physicalTable}, or pass it through tableFactories when the factory is intentionally wrapped.`,
-      `Add the Better Auth jiso(...) annotation manually if ${call.callee} is not a Drizzle table factory.`,
-      'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+      `Add the Better Auth kovo(...) annotation manually if ${call.callee} is not a Drizzle table factory.`,
+      'Keep observed writes KV406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
     ],
     message: `${betterAuthTableLabel(
       table,
@@ -2247,26 +2247,26 @@ function isBetterAuthSchemaAnnotationText(
 }
 
 function betterAuthSchemaImportStatement(localName: string): string {
-  const specifier = localName === 'jiso' ? 'jiso' : `jiso as ${localName}`;
+  const specifier = localName === 'kovo' ? 'kovo' : `kovo as ${localName}`;
 
-  return `import { ${specifier} } from '@jiso/drizzle';`;
+  return `import { ${specifier} } from '@kovojs/drizzle';`;
 }
 
 function betterAuthSchemaImportReplacement(
   source: string,
   localName: string,
 ): { end: number; start: number; value: string } {
-  const jisoDrizzleImport = findNamedImportFromModule(source, '@jiso/drizzle');
-  const specifier = localName === 'jiso' ? 'jiso' : `jiso as ${localName}`;
+  const kovoDrizzleImport = findNamedImportFromModule(source, '@kovojs/drizzle');
+  const specifier = localName === 'kovo' ? 'kovo' : `kovo as ${localName}`;
 
-  if (jisoDrizzleImport !== null) {
-    const existingSpecifiers = jisoDrizzleImport.specifiersText.trim();
+  if (kovoDrizzleImport !== null) {
+    const existingSpecifiers = kovoDrizzleImport.specifiersText.trim();
     const specifiers =
       existingSpecifiers.length === 0 ? specifier : `${existingSpecifiers}, ${specifier}`;
 
     return {
-      end: jisoDrizzleImport.specifiersEnd,
-      start: jisoDrizzleImport.specifiersStart,
+      end: kovoDrizzleImport.specifiersEnd,
+      start: kovoDrizzleImport.specifiersStart,
       value: ` ${specifiers} `,
     };
   }

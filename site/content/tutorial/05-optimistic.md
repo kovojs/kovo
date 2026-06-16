@@ -15,7 +15,7 @@ property-tested optimistic transform. Step state: `site/tutorial/steps/05-optimi
 
 There is no `invalidate()` call in the happy path. A write's touch set — which domains it writes,
 keyed how — meets each query's read set from chapter 3, and the intersection is the invalidation
-graph. With `@jiso/drizzle`, touch sites are extracted from the write ASTs and committed as a
+graph. With `@kovojs/drizzle`, touch sites are extracted from the write ASTs and committed as a
 reviewable graph; the tutorial's plain store has no ASTs, so you declare the touches — the floor
 every adapter shares:
 
@@ -28,12 +28,12 @@ lifecycle orders `COMMIT` before query re-runs so responses can never show pre-c
 {{snippet:05-optimistic/src/queries.ts#queries}}
 
 Now the enhanced response carries server truth for every invalidated query alongside the
-fragments — plus `FW-Changes`, the sanitized write summary (domains and keys, never input
+fragments — plus `Kovo-Changes`, the sanitized write summary (domains and keys, never input
 values):
 
 {{snippet:05-optimistic/src/app.test.ts#rerun-test}}
 
-The loader's side is mechanical: each `<fw-query>` replaces the shared value and runs that
+The loader's side is mechanical: each `<kovo-query>` replaces the shared value and runs that
 query's update plan — the bindings and stamps chapter 3 derived — across every dependent island.
 
 ## Key optimism to queries, not islands
@@ -86,10 +86,10 @@ render learns the same trick — streaming expensive fragments without blocking 
 
 No `invalidate()` in the happy path; transaction lifecycle orders `COMMIT` before re-runs: SPEC
 §10.3. Touch extraction committed as a reviewable graph: SPEC §11.1. Declared touches as the
-adapter floor: SPEC §14. `FW-Changes` sanitized write summary: SPEC §9.1. Derived update plan
+adapter floor: SPEC §14. `Kovo-Changes` sanitized write summary: SPEC §9.1. Derived update plan
 across islands: SPEC §4.8. Optimism keyed per (mutation × query): SPEC §10.4. Future-derived
 transforms sharing the IR: SPEC §10.5. Exhaustiveness requirement: SPEC §10.6; a missing
-optimistic entry is **FW310** at the editor and in `fw check`. Registries as generated files:
+optimistic entry is **KV310** at the editor and in `kovo check`. Registries as generated files:
 SPEC §6.1. Transform/handler commutation proven over generated states: SPEC §11.4.
 
 </details>

@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
@@ -51,13 +51,13 @@ export function validateStaticIds(
 
   for (const id of literalIdValues(model)) {
     if (seen.has(id.value)) {
-      diagnostics.push(fw224Diagnostic(fileName, source, `duplicate id="${id.value}"`, id));
+      diagnostics.push(kv224Diagnostic(fileName, source, `duplicate id="${id.value}"`, id));
     }
     seen.add(id.value);
   }
 
   for (const id of repeatableLiteralIds(model)) {
-    diagnostics.push(fw224Diagnostic(fileName, source, `repeatable id="${id.value}"`, id));
+    diagnostics.push(kv224Diagnostic(fileName, source, `repeatable id="${id.value}"`, id));
   }
 
   return dedupeBy(diagnostics, diagnosticKey);
@@ -111,7 +111,7 @@ export function validateHtmlContentModel(
 
     if (
       tag === 'tr' &&
-      !hasJsxAttribute(element, 'fw-c') &&
+      !hasJsxAttribute(element, 'kovo-c') &&
       !hasAnyJsxAncestor(element, ['table', 'tbody', 'thead', 'tfoot'])
     ) {
       diagnostics.push(
@@ -145,14 +145,14 @@ export function validateResidualStamps(
     ...(options.registryFacts?.components ?? []),
   ]);
   for (const attribute of jsxAttributes(model)) {
-    if (attribute.name === 'fw-c') {
+    if (attribute.name === 'kovo-c') {
       const component = attribute.value;
       if (component && !knownComponents.has(component)) {
         diagnostics.push(
-          fw226Diagnostic(
+          kv226Diagnostic(
             options.fileName,
             source,
-            `fw-c="${component}"`,
+            `kovo-c="${component}"`,
             attribute.start,
             attribute.end - attribute.start,
           ),
@@ -160,16 +160,16 @@ export function validateResidualStamps(
       }
     }
 
-    if (attribute.name !== 'fw-deps') continue;
+    if (attribute.name !== 'kovo-deps') continue;
 
     for (const dep of splitDepValue(attribute.value ?? '')) {
       const query = dep.split(':', 1)[0] ?? dep;
       if (!knownQueries.has(query)) {
         diagnostics.push(
-          fw226Diagnostic(
+          kv226Diagnostic(
             options.fileName,
             source,
-            `fw-deps="${dep}"`,
+            `kovo-deps="${dep}"`,
             attribute.start,
             attribute.end - attribute.start,
           ),
@@ -213,17 +213,17 @@ export function validateAttributeMergeConflicts(
       if (!attribute) continue;
 
       if (isBindingAttribute(name)) {
-        diagnostics.push(attributeMergeDiagnostic(source, fileName, 'FW233', name, attribute));
+        diagnostics.push(attributeMergeDiagnostic(source, fileName, 'KV233', name, attribute));
         continue;
       }
 
       if (
         ambiguousRelationshipAttributes.has(name) ||
         name.startsWith('data-p-') ||
-        name === 'fw-c' ||
-        name === 'fw-state'
+        name === 'kovo-c' ||
+        name === 'kovo-state'
       ) {
-        diagnostics.push(attributeMergeDiagnostic(source, fileName, 'FW231', name, attribute));
+        diagnostics.push(attributeMergeDiagnostic(source, fileName, 'KV231', name, attribute));
         continue;
       }
 
@@ -232,7 +232,7 @@ export function validateAttributeMergeConflicts(
           attributeMergeDiagnostic(
             source,
             fileName,
-            'FW232',
+            'KV232',
             name,
             duplicateAttributes[1] ?? attribute,
           ),
@@ -276,7 +276,7 @@ function validateIdrefsInElementScope(
   const missing = ids.size === 0 ? values : values.filter((value) => !ids.has(value.value));
 
   return dedupeBy(missing, (value) => `${value.index}\0${value.value}`).map((value) =>
-    fw221Diagnostic(fileName, source, value),
+    kv221Diagnostic(fileName, source, value),
   );
 }
 
@@ -291,7 +291,7 @@ function repeatableLiteralIds(model: ComponentModuleModel): LiteralIdValue[] {
           element.tag === 'template' &&
           !element.selfClosing &&
           isWithinElement(element, container) &&
-          hasJsxAttribute(element, 'fw-stamp'),
+          hasJsxAttribute(element, 'kovo-stamp'),
       ),
     )
     .map((template) => ({ end: template.closingStart, start: template.openingEnd }));
@@ -301,15 +301,15 @@ function repeatableLiteralIds(model: ComponentModuleModel): LiteralIdValue[] {
   );
 }
 
-function fw224Diagnostic(
+function kv224Diagnostic(
   fileName: string,
   source: string,
   detail: string,
   id: LiteralIdValue,
 ): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW224', source, id.index, id.length),
-    message: `${diagnosticDefinitions.FW224.message} ${detail}`,
+    ...diagnosticFor(fileName, 'KV224', source, id.index, id.length),
+    message: `${diagnosticDefinitions.KV224.message} ${detail}`,
   };
 }
 
@@ -320,8 +320,8 @@ function htmlContentModelDiagnostic(
   detail: string,
 ): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW225', source, element.start, element.openingEnd - element.start),
-    message: `${diagnosticDefinitions.FW225.message} ${detail}`,
+    ...diagnosticFor(fileName, 'KV225', source, element.start, element.openingEnd - element.start),
+    message: `${diagnosticDefinitions.KV225.message} ${detail}`,
   };
 }
 
@@ -346,7 +346,7 @@ function isBindingAttribute(name: string): boolean {
 function attributeMergeDiagnostic(
   source: string,
   fileName: string,
-  code: 'FW231' | 'FW232' | 'FW233',
+  code: 'KV231' | 'KV232' | 'KV233',
   detail: string,
   attribute: JsxAttributeModel,
 ): CompilerDiagnostic {
@@ -356,7 +356,7 @@ function attributeMergeDiagnostic(
   };
 }
 
-function fw226Diagnostic(
+function kv226Diagnostic(
   fileName: string,
   source: string,
   detail: string,
@@ -364,8 +364,8 @@ function fw226Diagnostic(
   length: number,
 ): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW226', source, index, length),
-    message: `${diagnosticDefinitions.FW226.message} ${detail}`,
+    ...diagnosticFor(fileName, 'KV226', source, index, length),
+    message: `${diagnosticDefinitions.KV226.message} ${detail}`,
   };
 }
 
@@ -373,10 +373,10 @@ function diagnosticKey(diagnostic: CompilerDiagnostic): string {
   return `${diagnostic.code}\0${diagnostic.message}`;
 }
 
-function fw221Diagnostic(fileName: string, source: string, value: IdrefValue): CompilerDiagnostic {
+function kv221Diagnostic(fileName: string, source: string, value: IdrefValue): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW221', source, value.index, value.length),
-    message: `${diagnosticDefinitions.FW221.message} ${value.value}`,
+    ...diagnosticFor(fileName, 'KV221', source, value.index, value.length),
+    message: `${diagnosticDefinitions.KV221.message} ${value.value}`,
   };
 }
 
@@ -456,7 +456,7 @@ function packageBehaviorIdrefAttributeNames(
 
   for (const fact of facts) {
     const prefix = fact.effectivePrefix ?? fact.prefix;
-    if (!prefix || prefix.startsWith('fw-')) continue;
+    if (!prefix || prefix.startsWith('kovo-')) continue;
 
     for (const behaviorName of fact.idrefBehaviorAttributes ?? []) {
       names.add(`${prefix}${behaviorName}`);

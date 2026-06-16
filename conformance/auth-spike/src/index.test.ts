@@ -54,7 +54,7 @@ class FakeBetterAuthApi implements BetterAuthLikeApi {
   private readonly sessions = new Map<string, Session>();
 
   async getSession(options: { headers: Headers }): Promise<Session | null> {
-    const sessionId = readCookie(options.headers, 'jiso_session');
+    const sessionId = readCookie(options.headers, 'kovo_session');
 
     return sessionId ? (this.sessions.get(sessionId) ?? null) : null;
   }
@@ -79,8 +79,8 @@ class FakeBetterAuthApi implements BetterAuthLikeApi {
     });
 
     const headers = new Headers();
-    headers.append('Set-Cookie', 'jiso_session=session-1; Path=/; HttpOnly; SameSite=Lax');
-    headers.append('Set-Cookie', 'jiso_session_data=user-1; Path=/; HttpOnly; SameSite=Lax');
+    headers.append('Set-Cookie', 'kovo_session=session-1; Path=/; HttpOnly; SameSite=Lax');
+    headers.append('Set-Cookie', 'kovo_session_data=user-1; Path=/; HttpOnly; SameSite=Lax');
 
     return new Response(null, { headers, status: 204 });
   }
@@ -88,14 +88,14 @@ class FakeBetterAuthApi implements BetterAuthLikeApi {
   async signOut(options: { asResponse: true; headers: Headers }): Promise<Response> {
     expect(options.asResponse).toBe(true);
 
-    const sessionId = readCookie(options.headers, 'jiso_session');
+    const sessionId = readCookie(options.headers, 'kovo_session');
     if (sessionId) {
       this.sessions.delete(sessionId);
     }
 
     const headers = new Headers();
-    headers.append('Set-Cookie', 'jiso_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
-    headers.append('Set-Cookie', 'jiso_session_data=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+    headers.append('Set-Cookie', 'kovo_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+    headers.append('Set-Cookie', 'kovo_session_data=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
 
     return new Response(null, { headers, status: 204 });
   }
@@ -255,8 +255,8 @@ describe('wrapped Better Auth credential mutation spike', () => {
 
       expect(result).toEqual({
         headers: [
-          'jiso_session=session-1; Path=/; HttpOnly; SameSite=Lax',
-          'jiso_session_data=user-1; Path=/; HttpOnly; SameSite=Lax',
+          'kovo_session=session-1; Path=/; HttpOnly; SameSite=Lax',
+          'kovo_session_data=user-1; Path=/; HttpOnly; SameSite=Lax',
         ],
         kind: 'redirect',
         location: '/account',
@@ -264,7 +264,7 @@ describe('wrapped Better Auth credential mutation spike', () => {
       expectRedirect(result);
       expect(ctx.cookies).toEqual(result.headers);
 
-      const session = await betterAuthSession(auth, requestHeaders('jiso_session=session-1'));
+      const session = await betterAuthSession(auth, requestHeaders('kovo_session=session-1'));
 
       expect(session).toEqual({
         user: {
@@ -314,20 +314,20 @@ describe('wrapped Better Auth credential mutation spike', () => {
     const signOutCtx = createMutationContext();
     const result = await signOutMutation(
       auth,
-      requestHeaders('jiso_session=session-1'),
+      requestHeaders('kovo_session=session-1'),
       signOutCtx,
     );
 
     expect(result).toEqual({
       headers: [
-        'jiso_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
-        'jiso_session_data=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+        'kovo_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+        'kovo_session_data=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
       ],
       kind: 'redirect',
       location: '/login',
     });
     expect(signOutCtx.cookies).toEqual(result.headers);
-    await expect(betterAuthSession(auth, requestHeaders('jiso_session=session-1'))).resolves.toBe(
+    await expect(betterAuthSession(auth, requestHeaders('kovo_session=session-1'))).resolves.toBe(
       null,
     );
   });

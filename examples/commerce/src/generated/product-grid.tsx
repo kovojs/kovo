@@ -1,8 +1,8 @@
-// @jiso-ir — lowered from examples/commerce/src/components/product-grid.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
-/** @jsxImportSource @jiso/server */
-import { escapeText } from '@jiso/server';
-import { component } from '@jiso/core';
-import { csrfField } from '@jiso/server';
+// @kovojs-ir — lowered from examples/commerce/src/components/product-grid.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
+/** @jsxImportSource @kovojs/server */
+import { escapeText } from '@kovojs/server';
+import { component } from '@kovojs/core';
+import { csrfField } from '@kovojs/server';
 
 import {
   commerceCsrf,
@@ -14,15 +14,15 @@ import {
 import { productGridQuery } from '../queries.js';
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native
-// <section> host gets its product-grid fw-c identity stamp and the
-// fw-deps stamp (from the queries declaration) from the compiler (section
+// <section> host gets its product-grid kovo-c identity stamp and the
+// kovo-deps stamp (from the queries declaration) from the compiler (section
 // 4.8); grid updates flow as server fragments (the section 4.8 ceiling:
 // keyed per-item markup with request-scoped forms is beyond paths, derives,
 // and keyed lists), declared await-fragment in addToCartOptimistic.
 //
 // The render context (per-request CSRF fields and the no-JS add-to-cart
 // failure state) is mutation-form infrastructure, not query data; SPEC.md
-// Appendix A assigns form rendering to <f.Form>, which @jiso/server does not
+// Appendix A assigns form rendering to <f.Form>, which @kovojs/server does not
 // provide yet, so app.ts passes the context as an explicit second render
 // argument alongside the declared queries (recorded in the archived v1 roadmap).
 // The lowered IR is committed at src/generated/product-grid.tsx and is what
@@ -43,7 +43,7 @@ export const ProductGrid = component('product-grid', {
   ) => {
     const { nextCursor } = productGrid;
     return (
-      <section data-page-cursor={nextCursor ?? ''} fw-c="product-grid" fw-deps="productGrid">
+      <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid">
         {renderProductGridItems(productGrid, context.failure, context.request, {
           readOnly: context.readOnly,
         })}
@@ -90,7 +90,7 @@ function renderProductCard(
   options: { readOnly?: boolean | undefined } = {},
 ): string {
   return (
-    <article fw-key={item.id} class="rounded border border-slate-200 bg-white p-4">
+    <article kovo-key={item.id} class="rounded border border-slate-200 bg-white p-4">
       <h2 class="font-semibold">{escapeText(item.id)}</h2>
       <p>{escapeText(item.stock)} in stock</p>
       {options.readOnly ? '' : renderAddToCartForm(item, failure, request)}
@@ -100,7 +100,7 @@ function renderProductCard(
 
 // SPEC.md section 6.3: the no-JS add-to-cart form posts to the mutation
 // endpoint; `enhance` upgrades it to the section 9.1 fragment wire. Rendered
-// standalone as the failure-rerender fragment (fw-fragment-target).
+// standalone as the failure-rerender fragment (kovo-fragment-target).
 export function renderAddToCartForm(
   item: { id: string; stock: number },
   failure?: AddToCartFailure,
@@ -112,7 +112,7 @@ export function renderAddToCartForm(
       action="/_m/cart/add"
       enhance
       data-mutation="cart/add"
-      fw-fragment-target={productFormTarget(item.id)}
+      kovo-fragment-target={productFormTarget(item.id)}
       class="mt-3 flex flex-wrap items-end gap-2"
     >
       {request?.session?.id ? csrfField(request, commerceCsrf) : ''}

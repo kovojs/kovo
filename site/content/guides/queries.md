@@ -7,10 +7,10 @@ order: 1
 # Queries & invalidation
 
 Your cart badge shows an item count. When someone adds an item, the badge should update — but you
-never want to be the one wiring "add to cart" to "refresh the badge." In Jiso you aren't.
+never want to be the one wiring "add to cart" to "refresh the badge." In Kovo you aren't.
 
 You write two things: a query that loads the cart, and a component that says it reads that query.
-That's the whole connection. Add an item anywhere in the app and this badge refreshes, because Jiso
+That's the whole connection. Add an item anywhere in the app and this badge refreshes, because Kovo
 traced the path from the write back to the badge for you. This guide shows how that tracing works,
 and how to check it.
 
@@ -19,7 +19,7 @@ and how to check it.
 A query couples a name, a loader, and the domains it reads:
 
 ```ts
-import { domain, query } from '@jiso/server';
+import { domain, query } from '@kovojs/server';
 
 export const cart = domain('cart');
 export const product = domain('product');
@@ -44,7 +44,7 @@ same response. You don't list those writes anywhere.
 A component declares the queries it uses and renders with their values:
 
 ```tsx
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   queries: { cart: cartQuery },
@@ -59,12 +59,12 @@ export const CartBadge = component('cart-badge', {
 You write the JSX. The compiler derives the wiring and stamps it into the rendered HTML:
 
 ```html
-<cart-badge fw-deps="cart">Cart: <span data-bind="cart.count">2</span></cart-badge>
+<cart-badge kovo-deps="cart">Cart: <span data-bind="cart.count">2</span></cart-badge>
 ```
 
 Two attributes carry the whole dependency story:
 
-- `fw-deps="cart"` — this element depends on the `cart` query. Mutations read these stamps off the
+- `kovo-deps="cart"` — this element depends on the `cart` query. Mutations read these stamps off the
   live DOM to decide which fragments to refresh.
 - `data-bind="cart.count"` — when the `cart` value changes, the loader writes the new `count` here.
   The path is checked against the query's result type, so binding a field that doesn't exist is a
@@ -73,12 +73,12 @@ Two attributes carry the whole dependency story:
 The value itself ships once per page, as JSON:
 
 ```html
-<script type="application/json" fw-query="cart">
+<script type="application/json" kovo-query="cart">
   { "count": 2 }
 </script>
 ```
 
-Open View Source on any Jiso page and its complete data-dependency story is right there.
+Open View Source on any Kovo page and its complete data-dependency story is right there.
 
 ## Where invalidation comes from
 
@@ -101,13 +101,13 @@ export const cartItems = pgTable(
   {
     /* … */
   },
-  jiso({ domain: 'cart' }),
+  kovo({ domain: 'cart' }),
 );
 
 export const products = pgTable(
   'products',
   { id: text('id').primaryKey(), stock: integer('stock').notNull() },
-  jiso({ domain: 'product', key: (t) => t.id }), // row-level granularity
+  kovo({ domain: 'product', key: (t) => t.id }), // row-level granularity
 );
 ```
 
@@ -140,7 +140,7 @@ they're complete.
 The derived graph is queryable as plain text. This is real output from the commerce reference app:
 
 ```sh
-fw explain query cart graph.json
+kovo explain query cart graph.json
 ```
 
 ```txt
@@ -169,7 +169,7 @@ export const productQuery = query('product', {
 ```
 
 Each instance has one canonical key — `name:value`, like `product:p1` — and that one string keys
-everything: the client store, the `fw-deps` stamps, the mutation's refresh targets, and optimistic
+everything: the client store, the `kovo-deps` stamps, the mutation's refresh targets, and optimistic
 transforms. A component binds its arguments from its own props, so any page that renders it satisfies
 the dependency without the page knowing anything about it. No call site ever enumerates query
 dependencies.
@@ -181,14 +181,14 @@ when a stale tab comes back), and GET forms use it for fragment responses:
 
 ```http
 GET /_q/product?id=p1
-FW-Fragment: true
+Kovo-Fragment: true
 ```
 
 ```http
 HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
 
-<fw-query name="product:p1">{ "name": "Mug", "stock": 4 }</fw-query>
+<kovo-query name="product:p1">{ "name": "Mug", "stock": 4 }</kovo-query>
 ```
 
 Arguments arrive as search params through the query's `args` schema, and the query's `guard` runs on
@@ -197,7 +197,7 @@ every read.
 ## How an update reaches the DOM
 
 When a fresh query value arrives — from a mutation response or a refetch — the loader walks the
-self-describing attributes under each `fw-deps` element and applies the update: path bindings first,
+self-describing attributes under each `kovo-deps` element and applies the update: path bindings first,
 then derived values, then keyed list stamps. There's no separate plan to keep in sync; the DOM is the
 plan. Anything too complex for that grammar falls back to a server-rendered fragment.
 
@@ -208,7 +208,7 @@ Each of these is a bug class in other stacks:
 - **No `invalidate()` calls.** Refreshes are derived from the write code; the manual call survives
   only as a linted escape hatch for external systems.
 - **No tag lists on queries.** The read set is the domains behind the query.
-- **No refresh targets at mutation sites.** Targets are read off the live DOM's `fw-deps` stamps at
+- **No refresh targets at mutation sites.** Targets are read off the live DOM's `kovo-deps` stamps at
   request time, so a component added later participates automatically.
 - **No client cache to evict.** Server truth is morphed in; there's no consistency protocol.
 
@@ -219,16 +219,16 @@ refresh behavior from every cart mutation ever written, with nothing to remember
 
 - [Mutations & forms](/guides/mutations/) — the write side of this graph.
 - [Optimistic updates](/guides/optimistic/) — predicting results before the server confirms.
-- [Reading fw check & fw explain](/guides/fw-explain/) — asserting these facts in CI.
+- [Reading kovo check & kovo explain](/guides/kovo-explain/) — asserting these facts in CI.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
-Queries and the touch graph: SPEC §10.1–10.3, §11.1. Derived stamps (`fw-deps`, `data-bind`):
-SPEC §4.8. Binding a path through a nullable segment without `?.` is **FW227**. A query reading an
-`exempt` table is **FW411** (nothing could invalidate it). Manual touches at an opaque write are
-**FW406**, verified by `observed ⊆ static ∪ declared` in tests. Update-status coverage on every
-query-dependent position is **FW311**. The typed read endpoint: SPEC §9.4. Reconciliation by morph:
+Queries and the touch graph: SPEC §10.1–10.3, §11.1. Derived stamps (`kovo-deps`, `data-bind`):
+SPEC §4.8. Binding a path through a nullable segment without `?.` is **KV227**. A query reading an
+`exempt` table is **KV411** (nothing could invalidate it). Manual touches at an opaque write are
+**KV406**, verified by `observed ⊆ static ∪ declared` in tests. Update-status coverage on every
+query-dependent position is **KV311**. The typed read endpoint: SPEC §9.4. Reconciliation by morph:
 SPEC §2 (design test 5).
 
 </details>

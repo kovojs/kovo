@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { parseMutationFailure } from './mutation-failure.js';
 
 describe('mutation failure parser', () => {
-  it('parses fw-error chunks with shared tag-close attribute scanning', () => {
+  it('parses kovo-error chunks with shared tag-close attribute scanning', () => {
     // SPEC.md §9.2: enhanced failure payloads are mutation wire HTML, not regex HTML.
     expect(
       parseMutationFailure(
-        '<fw-error data-debug="quantity > stock">{"code":"OUT_OF_STOCK","data":{"availableQuantity":0}}</fw-error>',
+        '<kovo-error data-debug="quantity > stock">{"code":"OUT_OF_STOCK","data":{"availableQuantity":0}}</kovo-error>',
       ),
     ).toEqual({ code: 'OUT_OF_STOCK', data: { availableQuantity: 0 } });
   });
@@ -25,7 +25,7 @@ describe('mutation failure parser', () => {
     // but typed form errors still prefer declared failures over field maps.
     expect(
       parseMutationFailure(
-        '<output data-error-path="quantity">Expected number &gt;= 1</output><fw-fragment target="error"><output data-debug="quantity > stock" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>',
+        '<output data-error-path="quantity">Expected number &gt;= 1</output><kovo-fragment target="error"><output data-debug="quantity > stock" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>',
       ),
     ).toEqual({ code: 'OUT_OF_STOCK', data: { availableQuantity: 0 } });
   });
@@ -33,7 +33,7 @@ describe('mutation failure parser', () => {
   it('collects validation output paths and unescapes field messages', () => {
     expect(
       parseMutationFailure(
-        '<fw-fragment target="product-form:p1"><output role="alert" data-debug="quantity > min" data-error-path="quantity">Expected number &gt;= 1</output></fw-fragment>',
+        '<kovo-fragment target="product-form:p1"><output role="alert" data-debug="quantity > min" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
       ),
     ).toEqual({
       code: 'VALIDATION',

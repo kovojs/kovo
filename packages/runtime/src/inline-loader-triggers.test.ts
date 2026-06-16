@@ -12,7 +12,7 @@ describe('inline loader execution triggers', () => {
         IntersectionObserver: globalRecord.IntersectionObserver,
         addEventListener: globalRecord.addEventListener,
         document: globalRecord.document,
-        importModule: globalRecord.__jisoInlineImport,
+        importModule: globalRecord.__kovoInlineImport,
         requestIdleCallback: globalRecord.requestIdleCallback,
       };
       const listeners = new Map<string, unknown>();
@@ -108,9 +108,9 @@ describe('inline loader execution triggers', () => {
           requestIdleCallback: originals.requestIdleCallback,
         });
         if (originals.importModule === undefined) {
-          delete globalRecord.__jisoInlineImport;
+          delete globalRecord.__kovoInlineImport;
         } else {
-          globalRecord.__jisoInlineImport = originals.importModule;
+          globalRecord.__kovoInlineImport = originals.importModule;
         }
       }
     },

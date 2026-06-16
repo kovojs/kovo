@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   navigationMenuFocusElement as _navigationMenuFocusElement,
@@ -10,7 +10,7 @@ import {
   navigationMenuTriggerFocus as _navigationMenuTriggerFocus,
   navigationMenuTriggerPointerEnter as _navigationMenuTriggerPointerEnter,
   navigationMenuTypeahead as _navigationMenuTypeahead,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryNavigationMenuDemo$section_keydown = handler((event, ctx) => {
   const keyResult = _navigationMenuKeyDown(Object(event), {

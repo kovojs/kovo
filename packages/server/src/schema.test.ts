@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { File } from 'node:buffer';
-import { createMemoryStorage, storageBodyToBytes } from '@jiso/core';
+import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core';
 
 import { runMutation } from './mutation.js';
 import { s } from './schema.js';

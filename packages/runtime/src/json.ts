@@ -1,4 +1,4 @@
-import type { JsonValue } from '@jiso/core';
+import type { JsonValue } from '@kovojs/core';
 
 export function parseJsonValue(
   raw: string,

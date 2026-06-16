@@ -20,11 +20,11 @@ describe('query script hydration ledger', () => {
     const ledger = createQueryScriptHydrationLedger(store);
     const cartPlan = vi.fn();
     const originalScript: QueryScript = {
-      getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+      getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
       textContent: '{"count":1}',
     };
     const laterScript = {
-      getAttribute: (name: string) => (name === 'fw-query' ? 'cart' : null),
+      getAttribute: (name: string) => (name === 'kovo-query' ? 'cart' : null),
       textContent: '{"count":2}',
     };
 
@@ -49,7 +49,7 @@ describe('query script hydration ledger', () => {
     const onError = vi.fn();
     const cartPlan = vi.fn();
     const script: QueryScript = {
-      getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+      getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
       textContent: '{',
     };
 
@@ -79,7 +79,7 @@ describe('query script hydration ledger', () => {
     const cartPlan = vi.fn();
     const applyError = new Error('transient query apply failure');
     const script: QueryScript = {
-      getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+      getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
       textContent: '{"count":2}',
     };
     let attempts = 0;
@@ -122,15 +122,15 @@ describe('query script hydration ledger', () => {
       'data-bind:aria-label': 'product.label',
     });
     const malformedScript: QueryScript = {
-      getAttribute: (name) => (name === 'fw-query' ? 'inventory' : null),
+      getAttribute: (name) => (name === 'kovo-query' ? 'inventory' : null),
       textContent: '{',
     };
     const cartScript: QueryScript = {
-      getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+      getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
       textContent: '{"label":"Cart ready"}',
     };
     const productScript: QueryScript = {
-      getAttribute: (name) => (name === 'fw-query' ? 'product' : null),
+      getAttribute: (name) => (name === 'kovo-query' ? 'product' : null),
       textContent: '{"label":"Product ready"}',
     };
     const onError = vi.fn();

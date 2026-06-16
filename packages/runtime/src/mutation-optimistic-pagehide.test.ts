@@ -18,7 +18,7 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     const root = new FakeMorphRoot();
-    const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
+    const cartBadge = new FakePendingElement({ 'kovo-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartBadge]);
     let releaseFetch: (() => void) | undefined;
     store.set('cart', { count: 1 });
@@ -41,7 +41,7 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
           releaseFetch = () => {
             resolve({
               async text() {
-                return '<fw-query name="cart">{"count":2}</fw-query>';
+                return '<kovo-query name="cart">{"count":2}</kovo-query>';
               },
             });
           };
@@ -75,7 +75,7 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
     expect(rebaser.pendingCount('cart')).toBe(1);
     expect(cartBadge.attributes).toMatchObject({
       'aria-busy': 'true',
-      'fw-pending': '',
+      'kovo-pending': '',
     });
 
     // SPEC.md §8/§10.4: pagehide is the bfcache-safe teardown point; the
@@ -84,15 +84,15 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
 
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(rebaser.pendingCount('cart')).toBe(0);
-    expect(cartBadge.attributes).not.toHaveProperty('fw-pending');
+    expect(cartBadge.attributes).not.toHaveProperty('kovo-pending');
     expect(cartBadge.attributes).not.toHaveProperty('aria-busy');
     expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
       body: formData,
       headers: {
-        Accept: 'text/vnd.jiso.fragment+html',
-        'FW-Fragment': 'true',
-        'FW-Idem': 'idem_bfcache',
-        'FW-Targets': '',
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_bfcache',
+        'Kovo-Targets': '',
       },
       keepalive: true,
       method: 'POST',
@@ -106,7 +106,7 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
     });
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(rebaser.pendingCount('cart')).toBe(0);
-    expect(cartBadge.attributes).not.toHaveProperty('fw-pending');
+    expect(cartBadge.attributes).not.toHaveProperty('kovo-pending');
     expect(cartBadge.attributes).not.toHaveProperty('aria-busy');
   });
 });

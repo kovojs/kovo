@@ -1,10 +1,10 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
 
-const fw301 = diagnosticDefinitions.FW301;
-const fw320 = diagnosticDefinitions.FW320;
+const kv301 = diagnosticDefinitions.KV301;
+const kv320 = diagnosticDefinitions.KV320;
 
 describe('compiler state and event diagnostics', () => {
   it('stamps static island-local state onto rendered component markup', () => {
@@ -23,7 +23,7 @@ export const CartBadge = component('cart-badge', {
     });
 
     expect(result.files[0]?.source).toContain(
-      'fw-state="{&quot;bouncing&quot;:false,&quot;count&quot;:2}"',
+      'kovo-state="{&quot;bouncing&quot;:false,&quot;count&quot;:2}"',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -40,11 +40,11 @@ export const CartBadge = component('cart-badge', {
     });
 
     expect(result.files[0]?.source).toContain(
-      'fw-state="{&quot;label&quot;:&quot;it\'s ready&quot;,&quot;open&quot;:false}"',
+      'kovo-state="{&quot;label&quot;:&quot;it\'s ready&quot;,&quot;open&quot;:false}"',
     );
   });
 
-  it('reports FW301 when island-local state stores a query fact', () => {
+  it('reports KV301 when island-local state stores a query fact', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
@@ -58,17 +58,17 @@ export const CartBadge = component('cart-badge', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW301',
+        code: 'KV301',
         fileName: 'cart-badge.tsx',
-        message: fw301.message,
-        severity: fw301.severity,
+        message: kv301.message,
+        severity: kv301.severity,
         start: { column: 26, line: 4 },
         length: 10,
       },
     ]);
   });
 
-  it('does not report FW301 for state keys merely prefixed by a declared query name', () => {
+  it('does not report KV301 for state keys merely prefixed by a declared query name', () => {
     const result = compileComponentModule({
       fileName: 'account-menu.tsx',
       source: `
@@ -83,7 +83,7 @@ export const AccountMenu = component('account-menu', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('does not report FW301 for local UI-only state with declared queries', () => {
+  it('does not report KV301 for local UI-only state with declared queries', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
@@ -98,7 +98,7 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('reports FW320 when event payload fields overlap query data', () => {
+  it('reports KV320 when event payload fields overlap query data', () => {
     const result = compileComponentModule({
       fileName: 'cart.events.tsx',
       queryShapes: {
@@ -116,17 +116,17 @@ export function notifyPrice(product, emit) {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW320',
+        code: 'KV320',
         fileName: 'cart.events.tsx',
-        message: `${fw320.message} product.unitPrice`,
-        severity: fw320.severity,
+        message: `${kv320.message} product.unitPrice`,
+        severity: kv320.severity,
         start: { column: 22, line: 3 },
         length: 45,
       },
     ]);
   });
 
-  it('reports FW320 when renamed event payload fields carry query values', () => {
+  it('reports KV320 when renamed event payload fields carry query values', () => {
     const result = compileComponentModule({
       fileName: 'order.events.tsx',
       queryShapes: {
@@ -144,17 +144,17 @@ export function notifyOrder(order, emit) {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW320',
+        code: 'KV320',
         fileName: 'order.events.tsx',
-        message: `${fw320.message} order.total`,
-        severity: fw320.severity,
+        message: `${kv320.message} order.total`,
+        severity: kv320.severity,
         start: { column: 24, line: 3 },
         length: 30,
       },
     ]);
   });
 
-  it('does not report FW320 for same-named client intent payload fields', () => {
+  it('does not report KV320 for same-named client intent payload fields', () => {
     const result = compileComponentModule({
       fileName: 'order.events.tsx',
       queryShapes: {
@@ -173,7 +173,7 @@ export function notifyIntent(quantity, emit) {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('does not report FW320 for event payloads that carry client intent only', () => {
+  it('does not report KV320 for event payloads that carry client intent only', () => {
     const result = compileComponentModule({
       fileName: 'cart.events.tsx',
       queryShapes: {

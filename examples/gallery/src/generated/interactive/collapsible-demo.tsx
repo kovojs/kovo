@@ -1,6 +1,6 @@
-// @jiso-ir - lowered from examples/gallery/src/interactive/collapsible-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
-/** @jsxImportSource @jiso/server */
-import { derive } from '@jiso/runtime';
+// @kovojs-ir - lowered from examples/gallery/src/interactive/collapsible-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
+/** @jsxImportSource @kovojs/server */
+import { derive } from '@kovojs/runtime';
 
 export const GalleryCollapsibleDemo$details_data_state_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
@@ -18,17 +18,17 @@ export const GalleryCollapsibleDemo$div_data_state_derive = derive(['state'], (s
   state.open ? 'open' : 'closed',
 );
 
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
   collapsibleTriggerClick as _collapsibleTriggerClick,
   collapsibleTriggerAttributes,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/collapsible.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/collapsible.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS =
   'rounded-md border border-neutral-200 bg-white text-sm text-neutral-950 data-[disabled]:opacity-50';
@@ -41,7 +41,7 @@ export interface GalleryCollapsibleDemoState {
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryCollapsibleDemo = component('gallery-collapsible-demo', {
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryCollapsibleDemoState) => {
@@ -53,20 +53,20 @@ export const GalleryCollapsibleDemo = component('gallery-collapsible-demo', {
         class={ROOT_CLASS}
         data-gallery-interactive="collapsible"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$details_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$details_data_state_derive"
         open={state.open}
-        data-bind:open="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$details_open_derive"
-        fw-c="gallery-collapsible-demo"
-        fw-state='{"open":false}'
+        data-bind:open="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$details_open_derive"
+        kovo-c="gallery-collapsible-demo"
+        kovo-state='{"open":false}'
       >
         <summary
           {...collapsibleTriggerAttributes({ contentId, open: state.open })}
           aria-expanded={String(state.open)}
-          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$summary_aria_expanded_derive"
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$summary_aria_expanded_derive"
           class={TRIGGER_CLASS}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$summary_data_state_derive"
-          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$summary_click"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$summary_data_state_derive"
+          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$summary_click"
         >
           Release notes
         </summary>
@@ -74,7 +74,7 @@ export const GalleryCollapsibleDemo = component('gallery-collapsible-demo', {
           {...collapsibleContentAttributes({ contentId, open: state.open })}
           class={CONTENT_CLASS}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$div_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$div_data_state_derive"
         >
           Added browser-backed compiled coverage.
         </div>

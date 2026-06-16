@@ -114,8 +114,8 @@ function missingClientModuleResponse(): VersionedClientModuleResponse {
 }
 
 function clientModuleUrl(href: string): URL {
-  const url = new URL(href, 'https://jiso.local');
-  if (url.origin !== 'https://jiso.local') {
+  const url = new URL(href, 'https://kovo.local');
+  if (url.origin !== 'https://kovo.local') {
     throw new Error(`Client module href must be same-origin: ${href}`);
   }
   if (!url.pathname.startsWith('/c/')) {

@@ -1,4 +1,4 @@
-import { domain } from '@jiso/server';
+import { domain } from '@kovojs/server';
 
 // Domains are the invalidation currency (SPEC.md section 10.1); unchanged
 // from step 03.

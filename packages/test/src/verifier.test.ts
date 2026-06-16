@@ -3,16 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { createFakeDb, expectedDiagnostic, expectedDiagnosticMessage } from './test-fixtures.js';
 import { createDbVerifier } from './verifier.js';
 
-describe('@jiso/test DB verifier', () => {
-  it('rejects observed writes covered only by unscoped FW406 static analysis', () => {
+describe('@kovojs/test DB verifier', () => {
+  it('rejects observed writes covered only by unscoped KV406 static analysis', () => {
     const verifier = createDbVerifier(
       {
         'cart.addItem': {
           touches: [],
           unresolved: [
             {
-              code: 'FW406',
-              message: expectedDiagnosticMessage('FW406'),
+              code: 'KV406',
+              message: expectedDiagnosticMessage('KV406'),
               site: 'cart.domain.ts:9',
             },
           ],
@@ -24,18 +24,18 @@ describe('@jiso/test DB verifier', () => {
 
     db.write('audit_log', 'p1');
 
-    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('FW402', 'audit'));
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'audit'));
   });
 
-  it('allows observed writes when unscoped FW406 is backed by declared touches', () => {
+  it('allows observed writes when unscoped KV406 is backed by declared touches', () => {
     const verifier = createDbVerifier(
       {
         'cart.addItem': {
           touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:8', via: 'audit_log' }],
           unresolved: [
             {
-              code: 'FW406',
-              message: expectedDiagnosticMessage('FW406'),
+              code: 'KV406',
+              message: expectedDiagnosticMessage('KV406'),
               site: 'cart.domain.ts:9',
             },
           ],
@@ -50,16 +50,16 @@ describe('@jiso/test DB verifier', () => {
     expect(() => verifier.assertCovered()).not.toThrow();
   });
 
-  it('limits domain-scoped FW406 coverage to the annotated domain', () => {
+  it('limits domain-scoped KV406 coverage to the annotated domain', () => {
     const verifier = createDbVerifier(
       {
         'cart.addItem': {
           touches: [],
           unresolved: [
             {
-              code: 'FW406',
+              code: 'KV406',
               domain: 'audit',
-              message: expectedDiagnosticMessage('FW406'),
+              message: expectedDiagnosticMessage('KV406'),
               site: 'cart.domain.ts:9',
             },
           ],
@@ -72,7 +72,7 @@ describe('@jiso/test DB verifier', () => {
     db.write('audit_log', 'p1');
     db.write('products', 'p1');
 
-    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('FW402', 'product'));
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'product'));
   });
 
   it('warns when a declared write domain is never observed', () => {
@@ -94,9 +94,9 @@ describe('@jiso/test DB verifier', () => {
 
     expect(verifier.diagnostics()).toEqual([
       {
-        code: 'FW403',
+        code: 'KV403',
         domain: 'product',
-        message: expectedDiagnosticMessage('FW403'),
+        message: expectedDiagnosticMessage('KV403'),
         severity: 'warn',
       },
     ]);
@@ -141,16 +141,16 @@ describe('@jiso/test DB verifier', () => {
     expect(verifier.diagnostics()).toEqual([
       {
         branch: 'stock-reserve',
-        code: 'FW405',
+        code: 'KV405',
         domain: 'product',
-        message: expectedDiagnosticMessage('FW405'),
+        message: expectedDiagnosticMessage('KV405'),
         severity: 'warn',
         site: 'cart.domain.ts:12',
       },
       {
-        code: 'FW403',
+        code: 'KV403',
         domain: 'product',
-        message: expectedDiagnosticMessage('FW403'),
+        message: expectedDiagnosticMessage('KV403'),
         severity: 'warn',
       },
     ]);
@@ -239,7 +239,7 @@ describe('@jiso/test DB verifier', () => {
     db.read('audit_log');
 
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      expectedDiagnostic('FW411', 'audit_log'),
+      expectedDiagnostic('KV411', 'audit_log'),
     );
   });
 

@@ -17,8 +17,8 @@ import {
   v1AcceptanceLedgerGateFact,
 } from './markdown-fixtures.js';
 
-describe('@jiso/test markdown fixture seam', () => {
-  it('normalizes markdown cells without making fw-check parse inline markup', () => {
+describe('@kovojs/test markdown fixture seam', () => {
+  it('normalizes markdown cells without making kovo-check parse inline markup', () => {
     expect(normalizeMarkdownCell(' **Local rule** with `code` \n spacing ')).toBe(
       'Local rule with code spacing',
     );
@@ -154,7 +154,7 @@ describe('@jiso/test markdown fixture seam', () => {
             files: [
               {
                 kind: 'css',
-                source: '@scope (doc-card) to (:scope [fw-c]) {\n.title { color: teal; }',
+                source: '@scope (doc-card) to (:scope [kovo-c]) {\n.title { color: teal; }',
               },
             ],
             handlerExports: ['DocCard$choose'],
@@ -197,14 +197,14 @@ describe('@jiso/test markdown fixture seam', () => {
       cssContractHeadings: [{ number: '13.1', title: 'CSS' }],
       cssScopeRules: [
         {
-          limit: ':scope [fw-c]',
-          raw: '@scope (doc-card) to (:scope [fw-c]) {',
+          limit: ':scope [kovo-c]',
+          raw: '@scope (doc-card) to (:scope [kovo-c]) {',
           scope: 'doc-card',
         },
       ],
       cssStylesheet: {
         fragmentTargets: ['doc-card'],
-        href: '/_jiso/components/docs/doc-card.css',
+        href: '/_kovo/components/docs/doc-card.css',
       },
       handlerExports: ['DocCard$choose'],
       hardRuleTitlesCovered: ['Source-derived names', '1:1 file mapping'],
@@ -239,7 +239,7 @@ describe('@jiso/test markdown fixture seam', () => {
           '| Check | Status |',
           '| --- | --- |',
           '| build | pending |',
-          '| fw-check | pending |',
+          '| kovo-check | pending |',
         ].join('\n'),
         spec: [
           '# SPEC',
@@ -353,7 +353,7 @@ describe('@jiso/test markdown fixture seam', () => {
           '## Domain Evidence Ledger',
           '| Domain | Date | Reviewer | Status |',
           '| --- | --- | --- | --- |',
-          '| jiso.dev | 2026-06-12 | TBD | pending |',
+          '| kovo.sh | 2026-06-12 | TBD | pending |',
           '## Linguistic Evidence Ledger',
           '| Markets or languages | Date | Reviewer | Status |',
           '| --- | --- | --- | --- |',
@@ -361,7 +361,7 @@ describe('@jiso/test markdown fixture seam', () => {
           '## npm Scope Evidence Ledger',
           '| Scope | Date | Reviewer | Status |',
           '| --- | --- | --- | --- |',
-          '| @jiso | 2026-06-12 | TBD | pending |',
+          '| @kovojs | 2026-06-12 | TBD | pending |',
           '## Trademark Evidence Ledger',
           '| Sources | Date | Reviewer | Status |',
           '| --- | --- | --- | --- |',
@@ -371,7 +371,7 @@ describe('@jiso/test markdown fixture seam', () => {
     ).toMatchObject({
       auditReadyCount: 1,
       auditStatuses: { Codex: 'packet ready; external evidence pending' },
-      domain: 'jiso.dev',
+      domain: 'kovo.sh',
       evidenceReviewFacts: {
         Domain: { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
         'Linguistic screen': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
@@ -388,7 +388,7 @@ describe('@jiso/test markdown fixture seam', () => {
         'npm scope': 'pending',
       },
       runnableStatuses: ['pending', 'pending'],
-      scope: '@jiso',
+      scope: '@kovojs',
       trademarkSources: 'TBD',
     });
   });

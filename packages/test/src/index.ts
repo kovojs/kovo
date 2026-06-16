@@ -7,15 +7,15 @@ export type {
   PropertyTestOptions,
   PropertyTestResult,
 } from './assertions.js';
-export { createJisoTestHarness } from './harness.js';
+export { createKovoTestHarness } from './harness.js';
 export type {
-  JisoTestContext,
-  JisoTestExecOptions,
-  JisoTestHarnessOptions,
-  JisoTestRequest,
+  KovoTestContext,
+  KovoTestExecOptions,
+  KovoTestHarnessOptions,
+  KovoTestRequest,
 } from './harness.js';
-export { jisoTest } from './test-case.js';
-export type { JisoTestCase, JisoTestRunner } from './test-case.js';
+export { kovoTest } from './test-case.js';
+export type { KovoTestCase, KovoTestRunner } from './test-case.js';
 export { createPgliteTestDb } from './pglite.js';
 export type { PgliteTestDb } from './pglite.js';
 export type { PageAssertion } from './page.js';
@@ -28,7 +28,7 @@ export type {
   ObservedDbOperation,
 } from './verifier.js';
 // SPEC §5.2: mechanical guard that post-parse compiler phases consume typed model facts, not raw
-// source strings. Asserted in tests/fw-check.node.mjs.
+// source strings. Asserted in tests/kovo-check.node.mjs.
 export { postParseSourceStringFacts, postParseSourceStringProjectFact } from './source-fixtures.js';
 export type {
   PostParseSourceStringFact,

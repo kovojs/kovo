@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   toastActionClick as _toastActionClick,
@@ -7,7 +7,7 @@ import {
   toastCloseClick as _toastCloseClick,
   toastEscapeKeyDown as _toastEscapeKeyDown,
   toastViewportKeyDown as _toastViewportKeyDown,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryToastDemo$section_keydown = handler((event, ctx) => {
   if (_toastViewportKeyDown(Object(event))) return;

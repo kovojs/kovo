@@ -1,12 +1,12 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   autocompleteInput as _autocompleteInput,
   autocompleteKeyDown as _autocompleteKeyDown,
   autocompleteOptionClick as _autocompleteOptionClick,
   autocompleteSuggestions as _autocompleteSuggestions,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryAutocompleteDemo$input_input = handler((event, ctx) => {
   const result = _autocompleteInput(Object(event), {

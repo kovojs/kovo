@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 
-import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from '@jiso/compiler';
-import { generatedComponentCommittedIrFacts } from '@jiso/test/generated-module-fixtures';
-import { htmlDocumentFacts, htmlElementFacts } from '@jiso/test/html-fragment';
+import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from '@kovojs/compiler';
+import { generatedComponentCommittedIrFacts } from '@kovojs/test/generated-module-fixtures';
+import { htmlDocumentFacts, htmlElementFacts } from '@kovojs/test/html-fragment';
 
 import {
   commerceMessageCatalog,
@@ -29,7 +29,7 @@ describe('commerce example', () => {
     expect(commercePageHints.earlyHints).toEqual({
       Link: '</assets/tailwind.css>; rel=preload; as=style',
     });
-    expect(pageHints.title).toBe('Jiso Commerce (0)');
+    expect(pageHints.title).toBe('Kovo Commerce (0)');
     expect(pageHints.metas).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -68,7 +68,7 @@ describe('commerce example', () => {
 
     expect(await loadCartQuery(db)).toEqual({ count: 5 });
     expect(htmlDocumentFacts(renderCommercePageHints(await loadCartQuery(db)).html).title).toBe(
-      'Jiso Commerce (5)',
+      'Kovo Commerce (5)',
     );
     expect(htmlDocumentFacts(await renderCartPage(db)).metas).toEqual(
       expect.arrayContaining([
@@ -85,7 +85,7 @@ describe('commerce example', () => {
   it('builds the linked Tailwind stylesheet for commerce utility classes', () => {
     rmSync('examples/commerce/dist', { force: true, recursive: true });
 
-    execFileSync('corepack', ['pnpm', '--filter', '@jiso/example-commerce', 'run', 'build'], {
+    execFileSync('corepack', ['pnpm', '--filter', '@kovojs/example-commerce', 'run', 'build'], {
       stdio: 'pipe',
     });
 

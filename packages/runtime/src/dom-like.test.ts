@@ -5,7 +5,7 @@ import { domAttributes } from './dom-like.js';
 describe('DOM-like helpers', () => {
   it('normalizes iterable and array-like attribute collections', () => {
     const countAttribute = { name: 'data-p-count', value: '3' };
-    const typeAttribute = { name: 'fw-param-types', value: 'count:number' };
+    const typeAttribute = { name: 'kovo-param-types', value: 'count:number' };
     const attributes = [countAttribute, typeAttribute];
     const arrayLike: ArrayLike<{ name: string; value: string }> = {
       0: countAttribute,

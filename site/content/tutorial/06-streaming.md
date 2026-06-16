@@ -8,19 +8,19 @@ order: 6
 
 Suppose the product list gets expensive — a slow join, a recommendations service. Blocking the
 whole document on it would trade away the MPA's instant first paint. In this chapter you use
-`<fw-defer>` to render a fallback in the shell and stream the real fragment later, in the same
+`<kovo-defer>` to render a fallback in the shell and stream the real fragment later, in the same
 response. Step state: `site/tutorial/steps/06-streaming/`.
 
 ## Defer an expensive fragment
 
 Deferred content reuses a mechanism you already have. The chunks that arrive after the shell are
-the same `<fw-query>` and `<fw-fragment>` elements the mutation wire used in chapters 4 and 5 —
+the same `<kovo-query>` and `<kovo-fragment>` elements the mutation wire used in chapters 4 and 5 —
 the fragment protocol, reused within first render. Nothing new ships in the loader, and nothing
 new needs auditing on the wire.
 
 {{snippet:06-streaming/src/app.ts#deferred-stream}}
 
-The shell carries the cart badge (cheap, rendered inline) and a `<fw-defer>` placeholder with
+The shell carries the cart badge (cheap, rendered inline) and a `<kovo-defer>` placeholder with
 declared fallback content. The stream then appends the products query value and the product-list
 fragment; the loader morphs the fragment over the placeholder exactly as it would morph a
 mutation response.
@@ -40,7 +40,7 @@ not hold yet:
 
 ## When to defer
 
-`<fw-defer>` is the relief valve for expensive subtrees, and it's the only lazy-content
+`<kovo-defer>` is the relief valve for expensive subtrees, and it's the only lazy-content
 mechanism — projected children otherwise ship in the initial HTML, which is the MPA model, not an
 oversight. Reach for it when a fragment's render cost would delay first paint; skip it when the
 data is cheap, because a placeholder that flashes for 10ms is worse than content. The [streaming
@@ -52,9 +52,9 @@ framework's biggest claim: proving all of this behavior, mechanically, without a
 <details>
 <summary>Spec & diagnostics</summary>
 
-`<fw-defer>` and streaming within first render: SPEC §8. Reused fragment protocol and morph over
+`<kovo-defer>` and streaming within first render: SPEC §8. Reused fragment protocol and morph over
 the placeholder: SPEC §9.1. Deferred query JSON ordered before or with its consumers: SPEC §8.
-Projected children ship in initial HTML; `<fw-defer>` is the only lazy-content mechanism: SPEC
+Projected children ship in initial HTML; `<kovo-defer>` is the only lazy-content mechanism: SPEC
 §4.5. Priority and HTTP/1.1 considerations: SPEC §13.3.
 
 </details>

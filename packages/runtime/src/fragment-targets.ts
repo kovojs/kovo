@@ -7,13 +7,13 @@ export function findFragmentTargetElement(
   target: string,
 ): Element | null {
   // SPEC.md §9.1: fragment targets are live DOM targets. Component stamps remain
-  // the primary runtime identity, with id/fw-fragment-target matching the
-  // FW-Targets collection and inline-loader apply path.
+  // the primary runtime identity, with id/kovo-fragment-target matching the
+  // Kovo-Targets collection and inline-loader apply path.
   return (
-    findRootOrDescendant(root, `[fw-c="${escapeCssString(target)}"]`) ??
+    findRootOrDescendant(root, `[kovo-c="${escapeCssString(target)}"]`) ??
     root.getElementById?.(target) ??
     findRootOrDescendant(root, `[id="${escapeCssString(target)}"]`) ??
-    findRootOrDescendant(root, `[fw-fragment-target="${escapeCssString(target)}"]`)
+    findRootOrDescendant(root, `[kovo-fragment-target="${escapeCssString(target)}"]`)
   );
 }
 

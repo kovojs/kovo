@@ -113,7 +113,7 @@ export interface WriteDefinition<
  * @param definition - The write's `key`, `touches` domains, and `run` body.
  * @returns The same `WriteDefinition`, typed.
  * @example
- * import { domain, write } from '@jiso/server';
+ * import { domain, write } from '@kovojs/server';
  *
  * const cart = domain('cart');
  *
@@ -190,7 +190,7 @@ export interface RunMutationOptions<
  * @param definition - Input schema, handler, and optional errors/guard/transaction/csrf.
  * @returns A `MutationDefinition` carrying `key`.
  * @example
- * import { mutation, s } from '@jiso/server';
+ * import { mutation, s } from '@kovojs/server';
  *
  * interface CartRequest {
  *   db: { add(productId: string, quantity: number): void };
@@ -425,7 +425,7 @@ export async function renderMutationResponse<
   }
 
   // Security finding M4: reserve the replay record BEFORE running the handler
-  // (mirroring the webhook get→reserve→run order) so concurrent FW-Idem
+  // (mirroring the webhook get→reserve→run order) so concurrent Kovo-Idem
   // duplicates coalesce onto one handler execution. The replay scope folds in the
   // mutation key (see mutationReplayContext) so the reservation is per-(session,
   // mutation, idem).
@@ -518,7 +518,7 @@ export async function renderMutationResponse<
       headers: mergeMutationResponseHeaders(
         mutationWireResponseHeaders(wireRequest),
         {
-          'FW-Changes': mutationWireChangeHeader(result.changes),
+          'Kovo-Changes': mutationWireChangeHeader(result.changes),
         },
         result.responseHeaders,
       ),
@@ -537,7 +537,7 @@ function mutationRenderErrorResponse<Request>(
     headers: mergeMutationResponseHeaders(
       mutationWireResponseHeaders(wireRequest),
       {
-        'FW-Changes': mutationWireChangeHeader(changes),
+        'Kovo-Changes': mutationWireChangeHeader(changes),
       },
       responseHeaders,
     ),
@@ -565,7 +565,7 @@ function mutationServerErrorResponse<Request>(
  * @param endpointRequest - Raw input, request, wire headers, `redirectTo`, fragment renderers, and failure renderers.
  * @returns A `MutationEndpointResponse` (status, headers, body).
  * @example
- * import { mutation, renderMutationEndpointResponse, s } from '@jiso/server';
+ * import { mutation, renderMutationEndpointResponse, s } from '@kovojs/server';
  *
  * interface Req { db: { add(id: string): void } }
  *
@@ -988,7 +988,7 @@ function mutationWireResponseHeaders<Request>(
   wireRequest: MutationWireRequest<Request>,
 ): Record<string, string> {
   return {
-    'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-    ...(wireRequest.idem ? { 'FW-Idem': wireRequest.idem } : {}),
+    'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+    ...(wireRequest.idem ? { 'Kovo-Idem': wireRequest.idem } : {}),
   };
 }

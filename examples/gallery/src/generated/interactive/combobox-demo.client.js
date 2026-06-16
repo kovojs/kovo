@@ -1,12 +1,12 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   comboboxFilteredItems as _comboboxFilteredItems,
   comboboxInput as _comboboxInput,
   comboboxKeyDown as _comboboxKeyDown,
   comboboxOptionClick as _comboboxOptionClick,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryComboboxDemo$input_input = handler((event, ctx) => {
   const result = _comboboxInput(Object(event), { value: ctx.state.inputValue });

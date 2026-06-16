@@ -9,12 +9,12 @@ HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
 
 <!doctype html>
-<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer><fw-defer target="recommendations:p1" state="pending"></fw-defer></product-page></main>
+<html><body><main><product-page kovo-deps="product:p1"><kovo-defer target="reviews:p1" state="pending"></kovo-defer><kovo-defer target="recommendations:p1" state="pending"></kovo-defer></product-page></main>
 
---jiso-boundary
-<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>
-<fw-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</fw-query>
-<fw-fragment target="reviews:p1" priority="5"><link rel="stylesheet" href="/assets/reviews.css"><section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section></fw-fragment>
-<fw-fragment target="recommendations:p1"><section fw-c="recommendations" fw-deps="product:p1"><article fw-key="rec-1">Beans</article></section></fw-fragment>
---jiso-boundary--
+--kovo-boundary
+<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</kovo-query>
+<kovo-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</kovo-query>
+<kovo-fragment target="reviews:p1" priority="5"><link rel="stylesheet" href="/assets/reviews.css"><section kovo-c="reviews" kovo-deps="product:p1"><article kovo-key="r1">5</article></section></kovo-fragment>
+<kovo-fragment target="recommendations:p1"><section kovo-c="recommendations" kovo-deps="product:p1"><article kovo-key="rec-1">Beans</article></section></kovo-fragment>
+--kovo-boundary--
 </body></html>

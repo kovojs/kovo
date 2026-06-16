@@ -14,11 +14,11 @@ describe('server wire html emitters', () => {
         },
       }),
     ).toBe(
-      '<script type="application/json" fw-query="cart" key="cart:c1">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>","items":[{"productId":"p1","qty":1}]}</script>',
+      '<script type="application/json" kovo-query="cart" key="cart:c1">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>","items":[{"productId":"p1","qty":1}]}</script>',
     );
   });
 
-  it('renders fw-fragment wrappers with escaped wire attributes and raw html content', () => {
+  it('renders kovo-fragment wrappers with escaped wire attributes and raw html content', () => {
     expect(
       renderFragmentWireHtml({
         errorBoundary: 'error&panel',
@@ -28,7 +28,7 @@ describe('server wire html emitters', () => {
         target: 'cart&badge',
       }),
     ).toBe(
-      '<fw-fragment target="cart&amp;badge" mode="append" priority="5&amp;up" error-boundary="error&amp;panel"><section data-ready="true">Ready</section></fw-fragment>',
+      '<kovo-fragment target="cart&amp;badge" mode="append" priority="5&amp;up" error-boundary="error&amp;panel"><section data-ready="true">Ready</section></kovo-fragment>',
     );
   });
 
@@ -44,7 +44,7 @@ describe('server wire html emitters', () => {
         target: 'cart-drawer',
       }),
     ).toBe(
-      '<fw-fragment target="cart-drawer"><link rel="stylesheet" href="/assets/cart-drawer.css"><link rel="stylesheet" href="/assets/theme.css?mode=screen&amp;print=1"><cart-drawer>Ready</cart-drawer></fw-fragment>',
+      '<kovo-fragment target="cart-drawer"><link rel="stylesheet" href="/assets/cart-drawer.css"><link rel="stylesheet" href="/assets/theme.css?mode=screen&amp;print=1"><cart-drawer>Ready</cart-drawer></kovo-fragment>',
     );
   });
 
@@ -55,6 +55,6 @@ describe('server wire html emitters', () => {
         mode: 'replace',
         target: 'content',
       }),
-    ).toBe('<fw-fragment target="content"><main>Updated</main></fw-fragment>');
+    ).toBe('<kovo-fragment target="content"><main>Updated</main></kovo-fragment>');
   });
 });

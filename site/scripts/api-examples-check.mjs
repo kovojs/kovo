@@ -6,14 +6,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * `@example` typecheck gate (plan Goal 2): every `@example` block in the
- * generated API reference must compile against the real workspace `@jiso/*`
+ * generated API reference must compile against the real workspace `@kovojs/*`
  * packages, so the refs cannot lie. Mirrors the tutorial's
  * `extract-snippets.mjs` + `run-steps.mjs`: extract → write → typecheck.
  *
  * The generator (`api-ref.mjs`) renders each `@example` as a fenced `ts` block
  * immediately after an `**Example**` marker. We extract exactly those blocks
  * (never the type-signature fences), write one `.ts` file per example into a
- * scratch dir inside the repo (so `@jiso/*` resolve through the workspace), and
+ * scratch dir inside the repo (so `@kovojs/*` resolve through the workspace), and
  * run `tsgo` once over all of them. Determinism: scratch files are derived only
  * from the markdown; no timestamps or absolute paths leak into them.
  */
@@ -115,11 +115,11 @@ async function main() {
   }
 
   // Drizzle is not symlinked under site/node_modules; map it to its source so
-  // `@jiso/drizzle` examples resolve like the others (the rest resolve via the
+  // `@kovojs/drizzle` examples resolve like the others (the rest resolve via the
   // workspace node_modules). Reuse the tutorial step compiler options verbatim.
   const tsconfig = {
     compilerOptions: {
-      paths: { '@jiso/drizzle': ['../../../packages/drizzle/src/runtime.ts'] },
+      paths: { '@kovojs/drizzle': ['../../../packages/drizzle/src/runtime.ts'] },
     },
     extends: path.relative(scratchDir, stepsTsconfig),
     include: ['*.ts'],
@@ -149,7 +149,7 @@ async function main() {
   // Clean up on success so the scratch dir is not committed.
   rmSync(scratchDir, { force: true, recursive: true });
   process.stdout.write(
-    `api-examples/v1 examples=${examples.length} OK\napi-examples/v1 all @example blocks typecheck against @jiso/*\n`,
+    `api-examples/v1 examples=${examples.length} OK\napi-examples/v1 all @example blocks typecheck against @kovojs/*\n`,
   );
 }
 

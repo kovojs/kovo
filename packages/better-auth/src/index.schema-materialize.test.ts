@@ -21,7 +21,7 @@ describe('schema.ts materialization', () => {
     } as const;
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable, text } from 'drizzle-orm/pg-core';",
         '',
         "export const authPasskeyCredentials = pgTable('auth_passkey_credentials', {",
@@ -52,7 +52,7 @@ describe('schema.ts materialization', () => {
         "  id: text('id').primaryKey(),\n" +
         "  credentialId: text('credential_id').notNull(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, jiso({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(createBetterAuthDbVerificationConfig(schemaBridge, tables)).toMatchObject({
       domainByTable: {
@@ -72,9 +72,9 @@ describe('schema.ts materialization', () => {
     });
   });
 
-  it('materializes Jiso annotations into an app schema.ts source fixture', () => {
+  it('materializes Kovo annotations into an app schema.ts source fixture', () => {
     const source = [
-      "import { jiso } from '@jiso/drizzle';",
+      "import { kovo } from '@kovojs/drizzle';",
       "import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
       '',
       "export const user = pgTable('user', {",
@@ -110,11 +110,11 @@ describe('schema.ts materialization', () => {
     expect(result.importNote).toEqual({
       hasRequiredImport: true,
       insertedImport: false,
-      localName: 'jiso',
+      localName: 'kovo',
       shouldAddRequiredImport: false,
-      suggestedImport: "import { jiso } from '@jiso/drizzle';",
+      suggestedImport: "import { kovo } from '@kovojs/drizzle';",
     });
-    expect(result.requiredImport).toEqual({ module: '@jiso/drizzle', name: 'jiso' });
+    expect(result.requiredImport).toEqual({ module: '@kovojs/drizzle', name: 'kovo' });
     expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
     expect(result.alreadyAnnotatedTables).toEqual([]);
     expect(result.existingExtraConfigTables).toEqual([]);
@@ -123,27 +123,27 @@ describe('schema.ts materialization', () => {
       "export const user = pgTable('user', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  email: text('email').notNull(),\n" +
-        "}, jiso({ domain: 'user', key: 'id' }));",
+        "}, kovo({ domain: 'user', key: 'id' }));",
     );
     expect(result.source).toContain(
       "export const session = pgTable('session', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
         "  expiresAt: timestamp('expires_at').notNull(),\n" +
-        "}, jiso({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
       "export const verification = pgTable('verification', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  identifier: text('identifier').notNull(),\n" +
-        '}, jiso({ exempt: true }));',
+        '}, kovo({ exempt: true }));',
     );
   });
 
   it('materializes explicit plugin-table bridge extensions into app schema.ts source', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable, text } from 'drizzle-orm/pg-core';",
         '',
         "export const webauthnCredential = pgTable('webauthnCredential', {",
@@ -180,14 +180,14 @@ describe('schema.ts materialization', () => {
         "  id: text('id').primaryKey(),\n" +
         "  credentialId: text('credential_id').notNull(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, jiso({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId' }));",
     );
   });
 
   it('keeps token-only plugin metadata under the exempt verification bridge', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
         '',
         "export const account = pgTable('account', {",
@@ -235,14 +235,14 @@ describe('schema.ts materialization', () => {
         "  identifier: text('identifier').notNull(),\n" +
         "  value: text('value').notNull(),\n" +
         "  expiresAt: timestamp('expires_at').notNull(),\n" +
-        '}, jiso({ exempt: true }));',
+        '}, kovo({ exempt: true }));',
     );
   });
 
   it('materializes a bridged two-factor plugin table into an app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable, text } from 'drizzle-orm/pg-core';",
         '',
         "export const twoFactor = pgTable('twoFactor', {",
@@ -268,14 +268,14 @@ describe('schema.ts materialization', () => {
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
         "  secret: text('secret').notNull(),\n" +
-        "}, jiso({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId' }));",
     );
   });
 
   it('materializes the device-authorization code table as an exempt app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
         '',
         "export const deviceCode = pgTable('deviceCode', {",
@@ -325,14 +325,14 @@ describe('schema.ts materialization', () => {
         "  pollingInterval: integer('polling_interval'),\n" +
         "  clientId: text('client_id'),\n" +
         "  scope: text('scope'),\n" +
-        '}, jiso({ exempt: true }));',
+        '}, kovo({ exempt: true }));',
     );
   });
 
   it('materializes bridged OIDC provider plugin tables into app schema.ts source fixtures', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable, text } from 'drizzle-orm/pg-core';",
         '',
         "export const oauthApplication = pgTable('oauthApplication', {",
@@ -372,14 +372,14 @@ describe('schema.ts materialization', () => {
       "export const oauthApplication = pgTable('oauthApplication', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, jiso({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId' }));",
     );
   });
 
   it('materializes a bridged SIWE wallet table into an app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable, text } from 'drizzle-orm/pg-core';",
         '',
         "export const walletAddress = pgTable('walletAddress', {",
@@ -405,14 +405,14 @@ describe('schema.ts materialization', () => {
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
         "  address: text('address').notNull(),\n" +
-        "}, jiso({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId' }));",
     );
   });
 
   it('keeps plugin-added user fields under the bridged user domain', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { boolean, pgTable, text } from 'drizzle-orm/pg-core';",
         '',
         "export const user = pgTable('user', {",
@@ -462,14 +462,14 @@ describe('schema.ts materialization', () => {
         "  lastLoginMethod: text('last_login_method'),\n" +
         "  phoneNumber: text('phone_number'),\n" +
         "  phoneNumberVerified: boolean('phone_number_verified'),\n" +
-        "}, jiso({ domain: 'user', key: 'id' }));",
+        "}, kovo({ domain: 'user', key: 'id' }));",
     );
   });
 
   it('materializes the JWT signing-key table as an exempt app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
         '',
         "export const jwks = pgTable('jwks', {",
@@ -497,14 +497,14 @@ describe('schema.ts materialization', () => {
         "  publicKey: text('public_key').notNull(),\n" +
         "  privateKey: text('private_key').notNull(),\n" +
         "  expiresAt: timestamp('expires_at'),\n" +
-        '}, jiso({ exempt: true }));',
+        '}, kovo({ exempt: true }));',
     );
   });
 
   it('materializes the database-backed rate-limit table as an exempt app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
         '',
         "export const rateLimit = pgTable('rateLimit', {",
@@ -532,17 +532,17 @@ describe('schema.ts materialization', () => {
         "  key: text('key').notNull(),\n" +
         "  count: integer('count').notNull(),\n" +
         "  lastRequest: timestamp('last_request').notNull(),\n" +
-        '}, jiso({ exempt: true }));',
+        '}, kovo({ exempt: true }));',
     );
   });
 
   it('reports schema.ts tables it cannot safely annotate', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
         'const auditConfig = () => [];',
-        "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+        "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
         "export const session = pgTable('session', {}, auditConfig);",
         "export const account = pgTable('account', {});",
       ].join('\n'),
@@ -561,7 +561,7 @@ describe('schema.ts materialization', () => {
     expect(result.existingExtraConfigTables).toEqual(['session']);
     expect(result.missingSourceTables).toEqual(['verification']);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain("export const session = pgTable('session', {}, auditConfig);");
   });
@@ -589,11 +589,11 @@ describe('schema.ts materialization', () => {
     expect(result.unrecognizedSourceTables).toEqual([
       {
         callee: 'pgTable',
-        diagnosticCode: 'FW406',
+        diagnosticCode: 'KV406',
         manualBridgeSteps: [
           'Import the Drizzle table factory that declares user, or pass it through tableFactories when the factory is intentionally wrapped.',
-          'Add the Better Auth jiso(...) annotation manually if pgTable is not a Drizzle table factory.',
-          'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+          'Add the Better Auth kovo(...) annotation manually if pgTable is not a Drizzle table factory.',
+          'Keep observed writes KV406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
         ],
         message:
           'user appears in schema.ts through unrecognized table factory pgTable; the Better Auth adapter did not synthesize a schema annotation.',
@@ -605,14 +605,14 @@ describe('schema.ts materialization', () => {
     expect(explicit.annotatedTables).toEqual(['user']);
     expect(explicit.unrecognizedSourceTables).toEqual([]);
     expect(explicit.source).toContain(
-      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+      "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
     );
   });
 
   it('does not report column builders as unrecognized schema table declarations', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable, text } from 'drizzle-orm/pg-core';",
         "export const account = pgTable('account', {",
         "  user: text('user'),",
@@ -634,7 +634,7 @@ describe('schema.ts materialization', () => {
   it('reports duplicate schema.ts table declarations without annotating ambiguous tables', () => {
     const result = annotateBetterAuthSchemaSource(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
         '',
         "export const primaryUser = pgTable('user', {});",
@@ -658,12 +658,12 @@ describe('schema.ts materialization', () => {
     expect(result.duplicateSourceTables).toEqual(['user']);
     expect(result.missingSourceTables).toEqual(['session', 'verification']);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain("export const primaryUser = pgTable('user', {});");
     expect(result.source).toContain("export const auditUser = pgTable('user', {});");
     expect(result.source).not.toContain(
-      "export const primaryUser = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+      "export const primaryUser = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
     );
   });
 
@@ -685,60 +685,60 @@ describe('schema.ts materialization', () => {
     expect(result.importNote).toEqual({
       hasRequiredImport: false,
       insertedImport: true,
-      localName: 'jiso',
+      localName: 'kovo',
       shouldAddRequiredImport: false,
-      suggestedImport: "import { jiso } from '@jiso/drizzle';",
+      suggestedImport: "import { kovo } from '@kovojs/drizzle';",
     });
     expect(result.source).toBe(
       [
-        "import { jiso } from '@jiso/drizzle';",
+        "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
-        "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+        "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
       ].join('\n'),
     );
 
     const aliased = annotateBetterAuthSchemaSource(
       [
-        "import { jiso as markJiso } from '@jiso/drizzle';",
+        "import { kovo as markKovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
         "export const account = pgTable('account', {});",
       ].join('\n'),
       metadata,
-      { annotationCallee: 'markJiso' },
+      { annotationCallee: 'markKovo' },
     );
 
     expect(aliased.importNote).toEqual({
       hasRequiredImport: true,
       insertedImport: false,
-      localName: 'markJiso',
+      localName: 'markKovo',
       shouldAddRequiredImport: false,
-      suggestedImport: "import { jiso as markJiso } from '@jiso/drizzle';",
+      suggestedImport: "import { kovo as markKovo } from '@kovojs/drizzle';",
     });
     expect(aliased.source).toContain(
-      "export const account = pgTable('account', {}, markJiso({ domain: 'auth', key: 'userId' }));",
+      "export const account = pgTable('account', {}, markKovo({ domain: 'auth', key: 'userId' }));",
     );
 
-    const existingJisoModuleImport = annotateBetterAuthSchemaSource(
+    const existingKovoModuleImport = annotateBetterAuthSchemaSource(
       [
-        "import { domain } from '@jiso/drizzle';",
+        "import { domain } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
         "export const account = pgTable('account', {});",
       ].join('\n'),
       metadata,
     );
 
-    expect(existingJisoModuleImport.importNote).toEqual({
+    expect(existingKovoModuleImport.importNote).toEqual({
       hasRequiredImport: false,
       insertedImport: true,
-      localName: 'jiso',
+      localName: 'kovo',
       shouldAddRequiredImport: false,
-      suggestedImport: "import { jiso } from '@jiso/drizzle';",
+      suggestedImport: "import { kovo } from '@kovojs/drizzle';",
     });
-    expect(existingJisoModuleImport.source).toBe(
+    expect(existingKovoModuleImport.source).toBe(
       [
-        "import { domain, jiso } from '@jiso/drizzle';",
+        "import { domain, kovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
-        "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+        "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
       ].join('\n'),
     );
   });
@@ -770,16 +770,16 @@ describe('schema.ts materialization', () => {
     expect(result.missingSourceTables).toEqual([]);
     expect(result.importNote).toMatchObject({
       insertedImport: true,
-      localName: 'jiso',
+      localName: 'kovo',
     });
     expect(result.source).toContain(
-      "export const user = authPgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+      "export const user = authPgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
     );
     expect(result.source).toContain(
-      "export const session = sqlite.sqliteTable('session', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      "export const session = sqlite.sqliteTable('session', {}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
-      "export const verification = sqlite.sqliteTable('verification', {}, jiso({ exempt: true }));",
+      "export const verification = sqlite.sqliteTable('verification', {}, kovo({ exempt: true }));",
     );
   });
 
@@ -811,7 +811,7 @@ describe('schema.ts materialization', () => {
     });
 
     // SPEC.md §10.1 / §11.2: generated schema.ts is bounded to real
-    // Better Auth fields and explicit Jiso bridge annotations.
+    // Better Auth fields and explicit Kovo bridge annotations.
     expect(result.validation.ok).toBe(true);
     expect(result.generatedTables.map((table) => table.table)).toEqual([
       'account',
@@ -821,7 +821,7 @@ describe('schema.ts materialization', () => {
     ]);
     expect(result.skippedTables).toEqual([]);
     expect(result.requiredImports).toEqual([
-      "import { jiso } from '@jiso/drizzle';",
+      "import { kovo } from '@kovojs/drizzle';",
       "import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
     ]);
     expect(result.source).toContain(
@@ -831,7 +831,7 @@ describe('schema.ts materialization', () => {
         "  email: text('email').notNull(),\n" +
         "  emailVerified: boolean('emailVerified').notNull(),\n" +
         "  name: text('name').notNull(),\n" +
-        "}, jiso({ domain: 'user', key: 'id' }));",
+        "}, kovo({ domain: 'user', key: 'id' }));",
     );
     expect(result.source).toContain(
       "export const session = pgTable('session', {\n" +
@@ -839,7 +839,7 @@ describe('schema.ts materialization', () => {
         "  expiresAt: timestamp('expiresAt').notNull(),\n" +
         "  token: text('token').notNull(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, jiso({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
       "export const verification = pgTable('verification', {\n" +
@@ -847,7 +847,7 @@ describe('schema.ts materialization', () => {
         "  expiresAt: timestamp('expiresAt').notNull(),\n" +
         "  identifier: text('identifier').notNull(),\n" +
         "  value: text('value').notNull(),\n" +
-        '}, jiso({ exempt: true }));',
+        '}, kovo({ exempt: true }));',
     );
   });
 
@@ -873,20 +873,20 @@ describe('schema.ts materialization', () => {
     expect(result.validation.ok).toBe(true);
     expect(result.skippedTables).toEqual([]);
     expect(result.requiredImports).toEqual([
-      "import { jiso } from '@jiso/drizzle';",
+      "import { kovo } from '@kovojs/drizzle';",
       "import { integer, pgTable, text } from 'drizzle-orm/pg-core';",
     ]);
     expect(result.source).toContain(
       "export const session = pgTable('session', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, jiso({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain(
       "export const user = pgTable('user', {\n" +
         "  id: integer('auth_user_id').primaryKey(),\n" +
         "  email: text('email_address').notNull(),\n" +
-        "}, jiso({ domain: 'user', key: 'id' }));",
+        "}, kovo({ domain: 'user', key: 'id' }));",
     );
   });
 
@@ -904,13 +904,13 @@ describe('schema.ts materialization', () => {
 
     expect(result.source).not.toContain('export const user');
     expect(result.skippedTables).toContainEqual({
-      diagnosticCode: 'FW406',
+      diagnosticCode: 'KV406',
       field: 'id',
       fields: ['id'],
       manualBridgeSteps: [
         'Inspect Better Auth metadata for user and write the Drizzle declaration manually.',
-        'Verify field id in Better Auth metadata before adding the matching Jiso annotation.',
-        'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+        'Verify field id in Better Auth metadata before adding the matching Kovo annotation.',
+        'Keep observed writes KV406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
       ],
       message: 'user cannot be generated because field id has unsupported Better Auth type json.',
       reason: 'unsupported-field-type',
@@ -918,7 +918,7 @@ describe('schema.ts materialization', () => {
     });
   });
 
-  it('keeps unsupported plugin tables out of generated schema.ts with FW406 facts', () => {
+  it('keeps unsupported plugin tables out of generated schema.ts with KV406 facts', () => {
     const result = generateBetterAuthSchemaSource({
       account: authTable(['userId']),
       session: authTable(['userId']),
@@ -937,12 +937,12 @@ describe('schema.ts materialization', () => {
     expect(result.source).not.toContain('webauthnCredential');
     expect(result.unsupportedPluginTables).toEqual([
       {
-        diagnosticCode: 'FW406',
+        diagnosticCode: 'KV406',
         fields: ['credentialId', 'id', 'userId'],
         manualBridgeSteps: [
           'Inspect webauthnCredential fields (credentialId, id, userId) and decide whether the app reads this table.',
-          "Likely app-visible ownership is jiso({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
-          'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+          "Likely app-visible ownership is kovo({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use kovo({ exempt: true }) with a rationale.",
+          'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes KV406 until declared coverage exists.',
         ],
         message:
           'webauthnCredential is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
@@ -968,12 +968,12 @@ describe('schema.ts materialization', () => {
     ]);
     expect(result.source).not.toContain('export const session');
     expect(result.skippedTables).toContainEqual({
-      diagnosticCode: 'FW406',
+      diagnosticCode: 'KV406',
       fields: null,
       manualBridgeSteps: [
         'Inspect Better Auth metadata for session and write the Drizzle declaration manually.',
-        'Add the matching jiso({ domain, key }) or jiso({ exempt: true }) annotation once the table declaration is explicit.',
-        'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+        'Add the matching kovo({ domain, key }) or kovo({ exempt: true }) annotation once the table declaration is explicit.',
+        'Keep observed writes KV406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
       ],
       message:
         'session cannot be generated because Better Auth table field metadata is unavailable.',
@@ -996,13 +996,13 @@ describe('schema.ts materialization', () => {
 
     expect(result.source).not.toContain('export const user');
     expect(result.skippedTables).toContainEqual({
-      diagnosticCode: 'FW406',
+      diagnosticCode: 'KV406',
       field: 'metadata',
       fields: ['id', 'metadata'],
       manualBridgeSteps: [
         'Inspect Better Auth metadata for user and write the Drizzle declaration manually.',
-        'Verify field metadata in Better Auth metadata before adding the matching Jiso annotation.',
-        'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+        'Verify field metadata in Better Auth metadata before adding the matching Kovo annotation.',
+        'Keep observed writes KV406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
       ],
       message:
         'user cannot be generated because field metadata has unsupported Better Auth type json.',

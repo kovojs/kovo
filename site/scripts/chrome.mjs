@@ -1,8 +1,8 @@
 import { component } from '../../dist/core/src/index.mjs';
-import { jisoLoaderSource } from '../../dist/runtime/src/index.mjs';
+import { kovoLoaderSource } from '../../dist/runtime/src/index.mjs';
 
 /**
- * Site chrome: jiso components (runtime IR form, SPEC §4.1/§4.5 — layouts are
+ * Site chrome: kovo components (runtime IR form, SPEC §4.1/§4.5 — layouts are
  * render-time function composition) plus the document assembly the D8 shell
  * will own once R2/R3 land; until then this is the site-local equivalent,
  * using the same inline-loader placement as tests/p10-perf.node.mjs.
@@ -23,7 +23,7 @@ function escapeHtml(value) {
 }
 
 const NAV = [
-  { href: '/docs/why-jiso/', label: 'Docs' },
+  { href: '/docs/why-kovo/', label: 'Docs' },
   { href: '/tutorial/', label: 'Tutorial' },
   { href: '/guides/', label: 'Guides' },
   { href: '/gallery/', label: 'Gallery' },
@@ -49,7 +49,7 @@ export const SiteHeader = component('site-header', {
   render: (_, _state, { activePath = '' } = {}) =>
     `<header class="site-bar">
       <div class="site-bar-inner">
-        <a href="/" class="site-logo"><span class="mark">&#9670;</span> JISO</a>
+        <a href="/" class="site-logo"><span class="mark">&#9670;</span> KOVO</a>
         <nav class="site-nav">
           ${NAV.map((item) => {
             const section = item.href.split('/')[1];
@@ -64,7 +64,7 @@ export const SiteHeader = component('site-header', {
           <button type="button" class="icon-btn" on:click="/c/theme.js#toggle" aria-label="Toggle dark mode">
             ${SUN_ICON}${MOON_ICON}
           </button>
-          <a class="icon-btn" href="https://github.com/jiso-sh/jiso" rel="external">GitHub</a>
+          <a class="icon-btn" href="https://github.com/kovojs/kovo" rel="external">GitHub</a>
         </div>
       </div>
     </header>`,
@@ -75,11 +75,11 @@ export const SiteFooter = component('site-footer', {
   render: () =>
     `<footer class="site-footer">
       <div class="site-footer-inner">
-        <span><span class="mark">&#9670;</span> Jiso &mdash; interactive at first paint &middot; legible at every layer &middot; statically verifiable</span>
+        <span><span class="mark">&#9670;</span> Kovo &mdash; interactive at first paint &middot; legible at every layer &middot; statically verifiable</span>
         <span class="links">
           <a href="/spec/">Spec</a>
           <a href="/llms.txt">llms.txt</a>
-          <a href="https://github.com/jiso-sh/jiso" rel="external">GitHub</a>
+          <a href="https://github.com/kovojs/kovo" rel="external">GitHub</a>
         </span>
       </div>
     </footer>`,
@@ -151,7 +151,7 @@ const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label
     class="search-input"
     placeholder="Search docs&hellip;"
     on:input="/c/search.js#query"
-    fw-state="{}"
+    kovo-state="{}"
   />
   <ul class="search-results" id="site-search-results"></ul>
 </dialog>`;
@@ -188,7 +188,7 @@ export function renderDocument({
     <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/assets/site.css" />
-    ${preloadLinks ? `${preloadLinks}\n    ` : ''}<script>${jisoLoaderSource}</script>
+    ${preloadLinks ? `${preloadLinks}\n    ` : ''}<script>${kovoLoaderSource}</script>
   </head>
   <body class="font-sans antialiased">
     ${chromeless ? '' : SiteHeader.definition.render({}, {}, { activePath: path })}
@@ -230,9 +230,9 @@ export function renderDocsPage({
 
 const SECTION_INTROS = {
   api: 'Generated reference for every public package — types, functions, and the contracts they keep.',
-  docs: 'Install Jiso, absorb the mental model, and find your way around a project.',
+  docs: 'Install Kovo, absorb the mental model, and find your way around a project.',
   examples:
-    'Complete Jiso apps you can run in the browser, embedded beside the authored source that renders them.',
+    'Complete Kovo apps you can run in the browser, embedded beside the authored source that renders them.',
   gallery:
     'Rendered component fixtures covering the headless primitive contracts and the styled UI package.',
   guides: 'Task-focused deep dives into each part of the framework, from queries to deployment.',

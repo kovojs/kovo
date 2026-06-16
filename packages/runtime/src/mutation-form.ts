@@ -24,7 +24,7 @@ export function fallbackEnhancedMutationSubmit(form: EnhancedFormElementLike): v
   }
 
   form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
-  form.setAttribute?.('fw-error', '');
+  form.setAttribute?.('kovo-error', '');
 }
 
 export function isEnhancedForm(form: EventElementLike): boolean {
@@ -39,7 +39,7 @@ export function updateUploadProgressElements(
   form: EventElementLike,
   progress: UploadProgress,
 ): void {
-  const progressElements = form.querySelectorAll?.('[fw-upload-progress]') ?? [];
+  const progressElements = form.querySelectorAll?.('[kovo-upload-progress]') ?? [];
   const total = progress.total;
   const value =
     total !== undefined && total > 0

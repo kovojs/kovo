@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@jiso/server';
-import { propertyTest } from '@jiso/test';
+import { csrfToken } from '@kovojs/server';
+import { propertyTest } from '@kovojs/test';
 
 import {
   addToCart,
@@ -23,7 +23,7 @@ function shopRequest(db = createShopDb()): ShopRequest {
 }
 
 function formInput(request: ShopRequest, fields: Record<string, string>) {
-  return { ...fields, 'fw-csrf': csrfToken(request, shopCsrf) };
+  return { ...fields, 'kovo-csrf': csrfToken(request, shopCsrf) };
 }
 
 interface ShopPropertyState {
@@ -85,20 +85,20 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
       formInput(request, { productId: 'p1', quantity: '2' }),
       request,
       {
-        'FW-Fragment': 'true',
-        'FW-Targets': 'cart-badge,product-list',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'cart-badge,product-list',
       },
     );
 
     expect(response.status).toBe(200);
     // Server truth for every invalidated query, as readable chunks: the
     // loader replaces each value and runs its update plan (SPEC.md §9.1).
-    expect(response.body).toContain('<fw-query name="cart">{"count":2}</fw-query>');
-    expect(response.body).toContain('<fw-query name="products">');
-    expect(response.body).toContain('<fw-fragment target="cart-badge">');
-    expect(response.body).toContain('<fw-fragment target="product-list">');
+    expect(response.body).toContain('<kovo-query name="cart">{"count":2}</kovo-query>');
+    expect(response.body).toContain('<kovo-query name="products">');
+    expect(response.body).toContain('<kovo-fragment target="cart-badge">');
+    expect(response.body).toContain('<kovo-fragment target="product-list">');
     // The sanitized write summary: domains and keys, never input values.
-    expect(response.headers['FW-Changes']).toBe(
+    expect(response.headers['Kovo-Changes']).toBe(
       '[{"domain":"cart"},{"domain":"product","keys":["p1"]}]',
     );
   });

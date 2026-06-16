@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   hoverCardContentPointerEnter as _hoverCardContentPointerEnter,
@@ -9,7 +9,7 @@ import {
   hoverCardTriggerFocus as _hoverCardTriggerFocus,
   hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
   hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryHoverCardDemo$a_blur = handler((event, ctx) => {
   const result = _hoverCardTriggerBlur(Object(event), { open: ctx.state.open });

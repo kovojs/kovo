@@ -7,10 +7,10 @@ export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
   'PostgresJsDatabase',
 ]);
 
-export const JISO_EXTRA_CONFIG_CALL_NAME = 'jiso';
+export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
 
-/** A Jiso annotation on a Drizzle table: a `domain` (with optional row `key`), or an `exempt` marker. */
-export type JisoTableAnnotation =
+/** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key`), or an `exempt` marker. */
+export type KovoTableAnnotation =
   | {
       domain: string;
       key?: string;
@@ -20,13 +20,13 @@ export type JisoTableAnnotation =
     };
 
 /** The domain-bearing form of a table annotation: its `domain` and optional `key` column. */
-export interface JisoDomainTableAnnotation {
+export interface KovoDomainTableAnnotation {
   domain: string;
   key?: string;
 }
 
-/** The value `jiso(...)` returns: a Drizzle extra-config callback carrying the annotation. */
-export type JisoTableExtraConfig = JisoDomainTableAnnotation &
+/** The value `kovo(...)` returns: a Drizzle extra-config callback carrying the annotation. */
+export type KovoTableExtraConfig = KovoDomainTableAnnotation &
   ((self: unknown) => []) & {
     exempt?: true;
   };
@@ -38,14 +38,14 @@ export type JisoTableExtraConfig = JisoDomainTableAnnotation &
  * Drizzle-blessed path to schema-as-domain-registry (SPEC §10.1).
  *
  * @param annotation - A `{ domain, key? }` binding, or `{ exempt: true }`.
- * @returns A `JisoTableExtraConfig` to return from the table's extra-config callback.
+ * @returns A `KovoTableExtraConfig` to return from the table's extra-config callback.
  * @example
- * import { jiso } from '@jiso/drizzle';
+ * import { kovo } from '@kovojs/drizzle';
  *
- * export const cartConfig = () => jiso({ domain: 'cart', key: 'id' });
+ * export const cartConfig = () => kovo({ domain: 'cart', key: 'id' });
  */
-export function jiso(annotation: JisoTableAnnotation): JisoTableExtraConfig {
-  return Object.assign((() => []) as (self: unknown) => [], annotation) as JisoTableExtraConfig;
+export function kovo(annotation: KovoTableAnnotation): KovoTableExtraConfig {
+  return Object.assign((() => []) as (self: unknown) => [], annotation) as KovoTableExtraConfig;
 }
 
 export function isDrizzleDatabaseTypeName(name: string): boolean {
@@ -56,18 +56,18 @@ export function isDrizzleTableFactoryName(name: string): boolean {
   return DRIZZLE_TABLE_FACTORY_NAMES.has(name);
 }
 
-export function isJisoExtraConfigCallName(name: string): boolean {
-  return name === JISO_EXTRA_CONFIG_CALL_NAME;
+export function isKovoExtraConfigCallName(name: string): boolean {
+  return name === KOVO_EXTRA_CONFIG_CALL_NAME;
 }
 
 export function isDomainTableAnnotation(
-  annotation: JisoTableAnnotation & { name?: string },
-): annotation is JisoDomainTableAnnotation & { name: string } {
+  annotation: KovoTableAnnotation & { name?: string },
+): annotation is KovoDomainTableAnnotation & { name: string } {
   return 'domain' in annotation;
 }
 
 export function isExemptTableAnnotation(
-  annotation: JisoTableAnnotation & { name?: string },
+  annotation: KovoTableAnnotation & { name?: string },
 ): annotation is { exempt: true; name: string } {
   return 'exempt' in annotation && annotation.exempt === true;
 }

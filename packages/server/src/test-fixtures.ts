@@ -17,10 +17,10 @@ export const cartFixtureValue = {
 } as const;
 
 export const cartBadgeFragmentHtml =
-  '<cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge>';
+  '<cart-badge kovo-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge>';
 
 export const recommendationsFragmentHtml =
-  '<section fw-c="recommendations" fw-deps="product:p1"></section>';
+  '<section kovo-c="recommendations" kovo-deps="product:p1"></section>';
 
 export const cartMutationTargets = ['cart-badge', 'recommendations'] as const;
 

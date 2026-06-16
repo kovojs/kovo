@@ -1,6 +1,6 @@
 // v1-cleanup item 1: kept whole intentionally. This is a single cohesive
 // public-API acceptance surface — its assertions all depend on one full-surface
-// import manifest of every @jiso/test root + subpath export, so splitting would
+// import manifest of every @kovojs/test root + subpath export, so splitting would
 // only duplicate that manifest and fragment a deliberately holistic "every
 // subpath resolves and type-matches the root barrel" check into pieces that
 // individually assert nothing meaningful.
@@ -8,18 +8,18 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   assertMutationError as rootAssertMutationError,
   createDbVerifier as rootCreateDbVerifier,
-  createJisoTestHarness as rootCreateJisoTestHarness,
+  createKovoTestHarness as rootCreateKovoTestHarness,
   createPgliteTestDb as rootCreatePgliteTestDb,
-  jisoTest as rootJisoTest,
+  kovoTest as rootKovoTest,
   propertyTest as rootPropertyTest,
-} from '@jiso/test';
+} from '@kovojs/test';
 import {
   assertMutationError,
   propertyTest,
   type MutationErrorExpectation,
   type PropertyTestOptions,
   type PropertyTestResult,
-} from '@jiso/test/assertions';
+} from '@kovojs/test/assertions';
 import {
   commerceDeclaredQueriesHarnessFact,
   commerceFixtureFile,
@@ -34,7 +34,7 @@ import {
   type CommerceMutationQueryAcceptanceOptions,
   type CommerceUpdateIntentFact,
   type CommerceUpdateIntentOptions,
-} from '@jiso/test/commerce-fixtures';
+} from '@kovojs/test/commerce-fixtures';
 import {
   assertOrderedItems,
   browserSuiteAcceptanceGateFact,
@@ -78,25 +78,25 @@ import {
   type VitePlusConfig,
   type VitePlusTask,
   type WorkflowStepCommand,
-} from '@jiso/test/command-fixtures';
+} from '@kovojs/test/command-fixtures';
 import {
   compilerDataBindBehaviorFact,
   compilerDiagnosticMessageFacts,
   compilerDiagnosticFacts,
   compilerGeneratedQueryShapeFact,
-  compilerLoweredIrFwCheckBehaviorFact,
+  compilerLoweredIrKovoCheckBehaviorFact,
   compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
   type CompilerDataBindBehaviorFact,
   type CompilerDeriveFact,
   type CompilerDiagnosticFact,
   type CompilerDiagnosticMessageFact,
-  type CompilerLoweredIrFwCheckBehaviorFact,
+  type CompilerLoweredIrKovoCheckBehaviorFact,
   type CompilerQueryUpdatePlanFact,
   type CompilerQueryShapeFact,
   type CompilerStampFact,
   type CompilerUpdateCoverageFact,
-} from '@jiso/test/compiler-fixtures';
+} from '@kovojs/test/compiler-fixtures';
 import {
   viteLoweredEventDiagnosticFact,
   viteDiagnosticMessageFacts,
@@ -105,81 +105,81 @@ import {
   type DiagnosticOutputFact,
   type ViteLoweredEventDiagnosticFact,
   type ViteDiagnosticMessageFacts,
-} from '@jiso/test/diagnostic-output-fixtures';
+} from '@kovojs/test/diagnostic-output-fixtures';
 import {
-  fwExportCliResultFact,
-  fwExportStaticBehaviorFact,
-  parseFwExportOutput,
-  type FwExportCliArtifactFact,
-  type FwExportCliResultFact,
-  type FwExportCliResultLike,
-  type FwExportError,
-  type FwExportHtmlArtifact,
-  type FwExportOutput,
-  type FwExportStaticBehaviorFact,
-  type FwExportStaticBehaviorOptions,
-  type FwExportStaticDiagnosticLike,
-  type FwExportSummary,
-} from '@jiso/test/fw-export-fixtures';
+  kovoExportCliResultFact,
+  kovoExportStaticBehaviorFact,
+  parseKovoExportOutput,
+  type KovoExportCliArtifactFact,
+  type KovoExportCliResultFact,
+  type KovoExportCliResultLike,
+  type KovoExportError,
+  type KovoExportHtmlArtifact,
+  type KovoExportOutput,
+  type KovoExportStaticBehaviorFact,
+  type KovoExportStaticBehaviorOptions,
+  type KovoExportStaticDiagnosticLike,
+  type KovoExportSummary,
+} from '@kovojs/test/kovo-export-fixtures';
 import {
-  fwCheckAssertionFact,
-  fwCheckCoverageAssertionFacts,
-  fwCheckCoverageFacts,
-  fwCheckDiagnosticAssertionFacts,
-  fwCheckDiagnosticFacts,
-  fwCheckOkAssertionFact,
-  fwCheckResultFact,
-  fwCheckUnguardedAuditBehaviorFact,
-  parseFwCheckOutput,
-  type FwCheckAssertionFact,
-  type FwCheckCoverageAssertionFact,
-  type FwCheckCoverageFact,
-  type FwCheckDiagnosticAssertionFact,
-  type FwCheckDiagnosticFact,
-  type FwCheckOkAssertionFact,
-  type FwCheckOutput,
-  type FwCheckResultFact,
-  type FwCheckUnguardedAuditBehaviorFact,
-} from '@jiso/test/fw-check-fixtures';
+  kovoCheckAssertionFact,
+  kovoCheckCoverageAssertionFacts,
+  kovoCheckCoverageFacts,
+  kovoCheckDiagnosticAssertionFacts,
+  kovoCheckDiagnosticFacts,
+  kovoCheckOkAssertionFact,
+  kovoCheckResultFact,
+  kovoCheckUnguardedAuditBehaviorFact,
+  parseKovoCheckOutput,
+  type KovoCheckAssertionFact,
+  type KovoCheckCoverageAssertionFact,
+  type KovoCheckCoverageFact,
+  type KovoCheckDiagnosticAssertionFact,
+  type KovoCheckDiagnosticFact,
+  type KovoCheckOkAssertionFact,
+  type KovoCheckOutput,
+  type KovoCheckResultFact,
+  type KovoCheckUnguardedAuditBehaviorFact,
+} from '@kovojs/test/kovo-check-fixtures';
 import {
-  fwExplainComponentAssertionFact,
-  fwExplainComponentDeriveFacts,
-  fwExplainComponentHandlerFacts,
-  fwExplainComponentMergeFacts,
-  fwExplainComponentTriggerFacts,
-  fwExplainEndpointFacts,
-  fwExplainField,
-  fwExplainListField,
-  fwExplainMutationAssertionFact,
-  fwExplainMutationQueryMatrixFact,
-  fwExplainOptimisticStatuses,
-  fwExplainPageAssertionFact,
-  fwExplainQueryAssertionFact,
-  fwExplainRecords,
-  fwExplainScopeAuditFacts,
-  fwExplainSummary,
-  fwExplainUnguardedAssertionFact,
-  fwExplainUnguardedFacts,
-  fwExplainUpdateConsumerMap,
-  fwExplainUpdateConsumers,
-  fwExplainUpdateTargets,
-  parseFwExplainOutput,
-  type FwExplainComponentAssertionFact,
-  type FwExplainComponentDeriveFact,
-  type FwExplainComponentHandlerFact,
-  type FwExplainComponentMergeFact,
-  type FwExplainComponentTriggerFact,
-  type FwExplainEndpointFact,
-  type FwExplainMutationAssertionFact,
-  type FwExplainOutput,
-  type FwExplainPageAssertionFact,
-  type FwExplainQueryAssertionFact,
-  type FwExplainResultLike,
-  type FwExplainScopeAuditFact,
-  type FwExplainUnguardedAssertionFact,
-  type FwExplainUnguardedFact,
-  type FwExplainUpdateConsumerFact,
-} from '@jiso/test/fw-explain-fixtures';
+  kovoExplainComponentAssertionFact,
+  kovoExplainComponentDeriveFacts,
+  kovoExplainComponentHandlerFacts,
+  kovoExplainComponentMergeFacts,
+  kovoExplainComponentTriggerFacts,
+  kovoExplainEndpointFacts,
+  kovoExplainField,
+  kovoExplainListField,
+  kovoExplainMutationAssertionFact,
+  kovoExplainMutationQueryMatrixFact,
+  kovoExplainOptimisticStatuses,
+  kovoExplainPageAssertionFact,
+  kovoExplainQueryAssertionFact,
+  kovoExplainRecords,
+  kovoExplainScopeAuditFacts,
+  kovoExplainSummary,
+  kovoExplainUnguardedAssertionFact,
+  kovoExplainUnguardedFacts,
+  kovoExplainUpdateConsumerMap,
+  kovoExplainUpdateConsumers,
+  kovoExplainUpdateTargets,
+  parseKovoExplainOutput,
+  type KovoExplainComponentAssertionFact,
+  type KovoExplainComponentDeriveFact,
+  type KovoExplainComponentHandlerFact,
+  type KovoExplainComponentMergeFact,
+  type KovoExplainComponentTriggerFact,
+  type KovoExplainEndpointFact,
+  type KovoExplainMutationAssertionFact,
+  type KovoExplainOutput,
+  type KovoExplainPageAssertionFact,
+  type KovoExplainQueryAssertionFact,
+  type KovoExplainResultLike,
+  type KovoExplainScopeAuditFact,
+  type KovoExplainUnguardedAssertionFact,
+  type KovoExplainUnguardedFact,
+  type KovoExplainUpdateConsumerFact,
+} from '@kovojs/test/kovo-explain-fixtures';
 import {
   assertGeneratedRegistryConsumerTypes,
   executeGeneratedBootstrapModule,
@@ -222,7 +222,7 @@ import {
   type GeneratedHandlerReferenceSummaryFact,
   type GeneratedRenderedElementFact,
   type InlineEnhancedFormLoaderFact,
-} from '@jiso/test/generated-module-fixtures';
+} from '@kovojs/test/generated-module-fixtures';
 import {
   commerceGraphBehaviorFact,
   generatedGraphArtifactAcceptanceChecklistFact,
@@ -257,35 +257,35 @@ import {
   type GraphInvalidationMatrix,
   type GraphQueryConsumerFact,
   type ProjectGraphFixture,
-} from '@jiso/test/graph-fixtures';
+} from '@kovojs/test/graph-fixtures';
 import {
-  createJisoTestHarness,
-  type JisoTestContext,
-  type JisoTestExecOptions,
-  type JisoTestHarnessOptions,
-  type JisoTestRequest,
-} from '@jiso/test/harness';
+  createKovoTestHarness,
+  type KovoTestContext,
+  type KovoTestExecOptions,
+  type KovoTestHarnessOptions,
+  type KovoTestRequest,
+} from '@kovojs/test/harness';
 import {
   executeHarnessMutation,
   executeHarnessQuery,
   loadHarnessPage,
   type HarnessMutationOptions,
   type HarnessOperationVerifier,
-} from '@jiso/test/harness-operations';
+} from '@kovojs/test/harness-operations';
 import {
   cookiePair,
   firstSetCookiePair,
   headerValues,
   setCookieValues,
   type HeaderRecord,
-} from '@jiso/test/headers';
+} from '@kovojs/test/headers';
 import {
   documentQueryScriptBehaviorFact,
   fragmentHtml,
-  fwFragmentFacts,
-  fwQueryFacts,
-  fwQueryJsonValues,
-  fwResponseBodyFact,
+  kovoFragmentFacts,
+  kovoQueryFacts,
+  kovoQueryJsonValues,
+  kovoResponseBodyFact,
   htmlDocumentFacts,
   htmlDocumentRegions,
   htmlElementCount,
@@ -302,7 +302,7 @@ import {
   htmlMainMarkerFact,
   htmlTextContent,
   type DocumentQueryScriptBehaviorFact,
-} from '@jiso/test/html-fragment';
+} from '@kovojs/test/html-fragment';
 import {
   markdownBoldSectionHeadings,
   markdownCanonicalSpecRuleTitle,
@@ -325,16 +325,16 @@ import {
   type NormativeDocsGateFact,
   type PrelaunchChecklistGateFact,
   type V1AcceptanceLedgerGateFact,
-} from '@jiso/test/markdown-fixtures';
+} from '@kovojs/test/markdown-fixtures';
 import {
   mcpCompileResponseFacts,
   mcpJsonRpcResponseFacts,
   type McpCompileDiagnosticFact,
   type McpCompileResponseFact,
   type McpJsonRpcResponseFact,
-} from '@jiso/test/mcp-fixtures';
-import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
-import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
+} from '@kovojs/test/mcp-fixtures';
+import { createPageAssertion, type PageAssertion } from '@kovojs/test/page';
+import { createPgliteTestDb, type PgliteTestDb } from '@kovojs/test/pglite';
 import {
   enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
@@ -348,7 +348,7 @@ import {
   type MorphFragmentRuntime,
   type OptimismCleanupBehaviorFact,
   type OptimismCleanupRuntime,
-} from '@jiso/test/runtime-fixtures';
+} from '@kovojs/test/runtime-fixtures';
 import {
   serverCommerceAdoptDontInventBehaviorFact,
   serverCommerceStylesheetBehaviorFact,
@@ -367,7 +367,7 @@ import {
   type ServerMutationLifecycleRuntime,
   type ServerPageHintsBehaviorFact,
   type ServerPageHintsRuntime,
-} from '@jiso/test/server-fixtures';
+} from '@kovojs/test/server-fixtures';
 import {
   cssScopeRules,
   cssSourceDirectives,
@@ -399,7 +399,7 @@ import {
   type ProjectSourceLineFact,
   type ProjectSourceSiteFact,
   type ProjectTouchGraphBehaviorFact,
-} from '@jiso/test/source-fixtures';
+} from '@kovojs/test/source-fixtures';
 import {
   executeStarterClientTemplate,
   runPnpmFilterTaskCommand,
@@ -417,13 +417,13 @@ import {
   type StarterTemplateIndexHtmlFacts,
   type StarterTemplatePackageFacts,
   type StarterTemplateSources,
-} from '@jiso/test/starter-template-fixtures';
+} from '@kovojs/test/starter-template-fixtures';
 import {
   observeSqlStatementArgument,
   observeSqlStatementIfString,
   sqlStatementText,
-} from '@jiso/test/sql-observer';
-import { jisoTest, type JisoTestCase, type JisoTestRunner } from '@jiso/test/test-case';
+} from '@kovojs/test/sql-observer';
+import { kovoTest, type KovoTestCase, type KovoTestRunner } from '@kovojs/test/test-case';
 import {
   touchGraphProvenanceFact,
   touchGraphProvenanceHonestyFact,
@@ -434,12 +434,12 @@ import {
   type TouchGraphProvenanceFact,
   type TouchGraphSourceFact,
   type TouchGraphSummaryEntryFact,
-} from '@jiso/test/touch-graph-fixtures';
+} from '@kovojs/test/touch-graph-fixtures';
 import {
   assertTypeScriptProgramHasNoDiagnostics,
   type TypeScriptInterfaceMemberTypes,
   typeScriptInterfaceMemberTypes,
-} from '@jiso/test/typescript-fixtures';
+} from '@kovojs/test/typescript-fixtures';
 import {
   createDbVerifier,
   type DbObservationOptions,
@@ -447,23 +447,23 @@ import {
   type DbVerificationDiagnostic,
   type DbVerifier,
   type ObservedDbOperation,
-} from '@jiso/test/verifier';
+} from '@kovojs/test/verifier';
 import {
   diagnosticMessage,
   diagnosticsForObservations,
   type DiagnosticCode,
   type DbVerificationDiagnostic as DirectDbVerificationDiagnostic,
-} from '@jiso/test/verifier-diagnostics';
+} from '@kovojs/test/verifier-diagnostics';
 import {
   createVerificationFakeDb,
   verificationLayerBehaviorFact,
-  verificationLayerFwCheckDiagnosticsFact,
+  verificationLayerKovoCheckDiagnosticsFact,
   type VerificationLayerBehaviorFact,
-  type VerificationLayerFwCheckDiagnosticsFact,
-  type VerificationLayerFwCheckDiagnosticsRuntime,
+  type VerificationLayerKovoCheckDiagnosticsFact,
+  type VerificationLayerKovoCheckDiagnosticsRuntime,
   type VerificationLayerRuntime,
-} from '@jiso/test/verification-fixtures';
-import { parseSqlOperations, type ParsedSqlOperation } from '@jiso/test/verifier-sql';
+} from '@kovojs/test/verification-fixtures';
+import { parseSqlOperations, type ParsedSqlOperation } from '@kovojs/test/verifier-sql';
 import {
   viteGeneratedHandlerMiddlewareFact,
   viteHandlerTransformFact,
@@ -479,7 +479,7 @@ import {
   type ViteProductionEmitContractOptions,
   type ViteRedGreenBuildFixtureFact,
   type ViteTransformElementFact,
-} from '@jiso/test/vite-fixtures';
+} from '@kovojs/test/vite-fixtures';
 import {
   generatedWireResponseBodies,
   loadWireFixtureSources,
@@ -501,20 +501,20 @@ import {
   type WireResponseMetadataFact,
   type WireTranscriptExchange,
   type WireTranscriptResponse,
-} from '@jiso/test/wire-fixtures';
-import type { DiagnosticCode as RootDiagnosticCode } from '@jiso/test';
+} from '@kovojs/test/wire-fixtures';
+import type { DiagnosticCode as RootDiagnosticCode } from '@kovojs/test';
 
-describe('@jiso/test package subpath exports', () => {
+describe('@kovojs/test package subpath exports', () => {
   it('resolves seam-specific public modules alongside the root barrel', () => {
-    expect(createJisoTestHarness).toBe(rootCreateJisoTestHarness);
+    expect(createKovoTestHarness).toBe(rootCreateKovoTestHarness);
     expect(assertMutationError).toBe(rootAssertMutationError);
     expect(propertyTest).toBe(rootPropertyTest);
     expect(createPgliteTestDb).toBe(rootCreatePgliteTestDb);
-    expect(jisoTest).toBe(rootJisoTest);
+    expect(kovoTest).toBe(rootKovoTest);
     expect(createDbVerifier).toBe(rootCreateDbVerifier);
     expect(createVerificationFakeDb().read('cart_items')).toEqual([]);
     expect(verificationLayerBehaviorFact).toBeTypeOf('function');
-    expect(verificationLayerFwCheckDiagnosticsFact).toBeTypeOf('function');
+    expect(verificationLayerKovoCheckDiagnosticsFact).toBeTypeOf('function');
     expect(commerceDeclaredQueriesHarnessFact).toBeTypeOf('function');
     expect(commerceFixtureFile).toBeTypeOf('function');
     expect(commerceHarnessQueryFact).toBeTypeOf('function');
@@ -604,12 +604,12 @@ describe('@jiso/test package subpath exports', () => {
     expectTypeOf<VerificationLayerRuntime>().toMatchTypeOf<{
       createDbVerifier: (...args: any[]) => unknown;
     }>();
-    expectTypeOf<VerificationLayerFwCheckDiagnosticsFact>().toMatchTypeOf<{
+    expectTypeOf<VerificationLayerKovoCheckDiagnosticsFact>().toMatchTypeOf<{
       exemptTableDiagnostic: { diagnostics: unknown[] };
       verificationDiagnostics: { diagnostics: unknown[] };
     }>();
-    expectTypeOf<VerificationLayerFwCheckDiagnosticsRuntime>().toMatchTypeOf<{
-      fwCheck: (...args: any[]) => { exitCode: number; output: string };
+    expectTypeOf<VerificationLayerKovoCheckDiagnosticsRuntime>().toMatchTypeOf<{
+      kovoCheck: (...args: any[]) => { exitCode: number; output: string };
     }>();
     expectTypeOf<CommerceMutationQueryAcceptanceFact>().toMatchTypeOf<{
       addToCart: { updateQueries: string[] };
@@ -617,7 +617,7 @@ describe('@jiso/test package subpath exports', () => {
       uploadReceipt: { invalidates: string[] };
     }>();
     expectTypeOf<CommerceMutationQueryAcceptanceOptions<unknown, { components: [] }>>()
-      .toHaveProperty('fwExplain')
+      .toHaveProperty('kovoExplain')
       .toMatchTypeOf<unknown>();
     expectTypeOf<CommerceHarnessQueryFact>().toMatchTypeOf<{
       diagnostics: readonly unknown[];
@@ -637,7 +637,7 @@ describe('@jiso/test package subpath exports', () => {
       pageQueries: string[];
     }>();
     expectTypeOf<CommerceUpdateIntentOptions<{ components: [] }>>()
-      .toHaveProperty('fwExplain')
+      .toHaveProperty('kovoExplain')
       .toMatchTypeOf<unknown>();
   });
 
@@ -646,7 +646,10 @@ describe('@jiso/test package subpath exports', () => {
       '<main id="cart">Cart</main>',
     );
     expect(
-      fragmentHtml('<fw-fragment target="cart"><cart-badge>1</cart-badge></fw-fragment>', 'cart'),
+      fragmentHtml(
+        '<kovo-fragment target="cart"><cart-badge>1</cart-badge></kovo-fragment>',
+        'cart',
+      ),
     ).toBe('<cart-badge>1</cart-badge>');
     expect(
       htmlElementFacts('<a href="/cart">Cart</a>', { attrs: { href: '/cart' }, tag: 'a' }),
@@ -678,20 +681,20 @@ describe('@jiso/test package subpath exports', () => {
         { rel: 'stylesheet' },
       ),
     ).toEqual(['/assets/tailwind.css']);
-    expect(htmlMainMarkerFact('<main data-fw-check-export="api"></main>')).toEqual({
-      attribute: 'data-fw-check-export',
+    expect(htmlMainMarkerFact('<main data-kovo-check-export="api"></main>')).toEqual({
+      attribute: 'data-kovo-check-export',
       mainCount: 1,
       marker: 'api',
     });
     expect(
       documentQueryScriptBehaviorFact(
-        '<html><head><script type="application/json" fw-query="cart">{"count":1}</script></head><body><main></main></body></html>',
+        '<html><head><script type="application/json" kovo-query="cart">{"count":1}</script></head><body><main></main></body></html>',
         {
           queryName: 'cart',
           renderedDocumentQueryScript:
-            '<script type="application/json" fw-query="cart">{"count":1}</script>',
+            '<script type="application/json" kovo-query="cart">{"count":1}</script>',
           renderedQueryScript:
-            '<script type="application/json" fw-query="cart">{"count":1}</script>',
+            '<script type="application/json" kovo-query="cart">{"count":1}</script>',
         },
       ),
     ).toMatchObject({
@@ -703,18 +706,18 @@ describe('@jiso/test package subpath exports', () => {
         'data-id': 'cart',
       }),
     ).toMatchObject([{ json: { count: 1 }, rawJson: '{"count":1}' }]);
-    expect(fwQueryFacts('<fw-query name="cart">{"count":1}</fw-query>', 'cart')).toMatchObject([
-      { json: { count: 1 }, name: 'cart' },
-    ]);
     expect(
-      fwFragmentFacts(
-        '<fw-fragment target="cart"><link rel="stylesheet" href="/assets/tailwind.css"></fw-fragment>',
+      kovoQueryFacts('<kovo-query name="cart">{"count":1}</kovo-query>', 'cart'),
+    ).toMatchObject([{ json: { count: 1 }, name: 'cart' }]);
+    expect(
+      kovoFragmentFacts(
+        '<kovo-fragment target="cart"><link rel="stylesheet" href="/assets/tailwind.css"></kovo-fragment>',
         'cart',
       ),
     ).toMatchObject([{ stylesheetHrefs: ['/assets/tailwind.css'], target: 'cart' }]);
     expect(
-      fwResponseBodyFact(
-        '<fw-query name="cart">{"count":1}</fw-query><fw-fragment target="cart"><article fw-key="order-1">Order</article></fw-fragment>',
+      kovoResponseBodyFact(
+        '<kovo-query name="cart">{"count":1}</kovo-query><kovo-fragment target="cart"><article kovo-key="order-1">Order</article></kovo-fragment>',
       ),
     ).toMatchObject({
       fragmentTargets: ['cart'],
@@ -722,9 +725,9 @@ describe('@jiso/test package subpath exports', () => {
       queryJsonByName: { cart: [{ count: 1 }] },
       queryNames: ['cart'],
     });
-    expect(fwQueryJsonValues('<fw-query name="cart">{"count":1}</fw-query>', 'cart')).toEqual([
-      { count: 1 },
-    ]);
+    expect(kovoQueryJsonValues('<kovo-query name="cart">{"count":1}</kovo-query>', 'cart')).toEqual(
+      [{ count: 1 }],
+    );
     expect(
       htmlFormFacts(
         '<form method="post" action="/_m/cart/add"><input name="productId" value="p1"></form>',
@@ -744,11 +747,11 @@ describe('@jiso/test package subpath exports', () => {
     expect(
       htmlFormFieldsByName(htmlFormFacts('<form><input name="productId" value="p1"></form>')[0]),
     ).toMatchObject({ productId: { value: 'p1' } });
-    expect(htmlKeyFacts('<li fw-key="order-1"><span>Order</span></li>', 'order-1')).toMatchObject([
-      { key: 'order-1', text: 'Order' },
-    ]);
-    expect(htmlKeyValues('<li fw-key="order-1">Order</li>')).toEqual(['order-1']);
-    expect(htmlKeyTextMap('<li fw-key="order-1"><span>Order</span></li>')).toEqual({
+    expect(htmlKeyFacts('<li kovo-key="order-1"><span>Order</span></li>', 'order-1')).toMatchObject(
+      [{ key: 'order-1', text: 'Order' }],
+    );
+    expect(htmlKeyValues('<li kovo-key="order-1">Order</li>')).toEqual(['order-1']);
+    expect(htmlKeyTextMap('<li kovo-key="order-1"><span>Order</span></li>')).toEqual({
       'order-1': 'Order',
     });
     expect(htmlTextContent('<p>Cart &amp; checkout</p>')).toBe('Cart & checkout');
@@ -796,21 +799,21 @@ describe('@jiso/test package subpath exports', () => {
           id: 'compile',
           result: {
             structuredContent: {
-              diagnostics: [{ code: 'FW201', severity: 'error' }],
+              diagnostics: [{ code: 'KV201', severity: 'error' }],
               ok: false,
               version: 'compile/v1',
             },
-            version: 'fw-mcp/v1',
+            version: 'kovo-mcp/v1',
           },
         }),
       ),
     ).toEqual([
       {
         contentVersion: 'compile/v1',
-        diagnostics: [{ code: 'FW201', severity: 'error' }],
+        diagnostics: [{ code: 'KV201', severity: 'error' }],
         id: 'compile',
         ok: false,
-        version: 'fw-mcp/v1',
+        version: 'kovo-mcp/v1',
       },
     ]);
     expect(mcpJsonRpcResponseFacts).toBeTypeOf('function');
@@ -824,8 +827,12 @@ describe('@jiso/test package subpath exports', () => {
     expect(generatedViewTransitionStampBehaviorFact).toBeTypeOf('function');
     expect(generatedWireDeferredBehaviorFact).toBeTypeOf('function');
     expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
-    expect(cssScopeRules('@scope (doc-card) to (:scope [fw-c]) {')).toEqual([
-      { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },
+    expect(cssScopeRules('@scope (doc-card) to (:scope [kovo-c]) {')).toEqual([
+      {
+        limit: ':scope [kovo-c]',
+        raw: '@scope (doc-card) to (:scope [kovo-c]) {',
+        scope: 'doc-card',
+      },
     ]);
     expect(drizzleQueryBehaviorSourceFixtures().selectShape[0]?.fileName).toBe('cart.queries.ts');
     expect(
@@ -837,7 +844,7 @@ describe('@jiso/test package subpath exports', () => {
       projectQueryDiagnosticFacts([
         {
           diagnostics: [
-            { code: 'FW410', message: 'message', severity: 'error', site: 'cart.ts:1' },
+            { code: 'KV410', message: 'message', severity: 'error', site: 'cart.ts:1' },
           ],
           query: 'cart',
           reads: ['cart'],
@@ -845,7 +852,7 @@ describe('@jiso/test package subpath exports', () => {
           site: 'cart.ts:1',
         },
       ]),
-    ).toEqual([{ code: 'FW410', message: 'message', severity: 'error', site: 'cart.ts:1' }]);
+    ).toEqual([{ code: 'KV410', message: 'message', severity: 'error', site: 'cart.ts:1' }]);
     expect(projectTouchGraphBehaviorFacts({ addItem: {} })).toEqual({
       addItem: { reads: [], touches: [], unresolved: [] },
     });
@@ -884,7 +891,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(graphFixtureFile).toBeTypeOf('function');
     expect(commerceGraphBehaviorFact).toBeTypeOf('function');
     expect(generatedGraphArtifactAcceptanceProjectFact).toBeTypeOf('function');
-    expectTypeOf<CommerceGraphBehaviorFact>().toHaveProperty('fwCheck').toMatchTypeOf<unknown>();
+    expectTypeOf<CommerceGraphBehaviorFact>().toHaveProperty('kovoCheck').toMatchTypeOf<unknown>();
     expectTypeOf<CommerceGraphBehaviorOptions<ProjectGraphFixture>>()
       .toHaveProperty('graph')
       .toMatchTypeOf<ProjectGraphFixture>();
@@ -943,24 +950,24 @@ describe('@jiso/test package subpath exports', () => {
     expect(
       viteDiagnosticMessageFacts(
         [
-          'Jiso Vite transform failed with 1 error diagnostic.',
+          'Kovo Vite transform failed with 1 error diagnostic.',
           '',
-          'FW201 routes/card.tsx:1:1 message.',
+          'KV201 routes/card.tsx:1:1 message.',
           '  help: Element params: -',
         ].join('\n'),
       ).diagnostics[0]?.help,
     ).toEqual([{ label: 'Element params', text: '-' }]);
     expect(
       viteDiagnosticMessageFactsFromOutput(
-        'prefix\nJiso Vite transform failed with 1 error diagnostic.\n\nFW201 x.ts:1:1 message.',
+        'prefix\nKovo Vite transform failed with 1 error diagnostic.\n\nKV201 x.ts:1:1 message.',
       ).summary,
-    ).toBe('Jiso Vite transform failed with 1 error diagnostic.');
+    ).toBe('Kovo Vite transform failed with 1 error diagnostic.');
     expect(
       viteLoweredEventDiagnosticFact(
         [
-          'Jiso Vite transform failed with 1 error diagnostic.',
+          'Kovo Vite transform failed with 1 error diagnostic.',
           '',
-          'FW201 routes/card.tsx:1:1 message.',
+          'KV201 routes/card.tsx:1:1 message.',
           '  help: Would lower to: on:click="/c/routes/card.client.js?v=1234abcd#Card$click"',
           '  help: Element params: -',
         ].join('\n'),
@@ -978,7 +985,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(runStarterTemplateGraphAssertions).toBeTypeOf('function');
     expect(runStarterTemplateViteTaskCommand).toBeTypeOf('function');
     expect(runPnpmFilterTaskCommand).toBeTypeOf('function');
-    expect(diagnosticMessage('FW403', 'cart_items')).toContain('cart_items');
+    expect(diagnosticMessage('KV403', 'cart_items')).toContain('cart_items');
     expect(diagnosticsForObservations([], {})).toEqual([]);
     expect(executeHarnessMutation).toBeTypeOf('function');
     expect(executeHarnessQuery).toBeTypeOf('function');
@@ -1000,15 +1007,15 @@ describe('@jiso/test package subpath exports', () => {
     expect(viteGeneratedHandlerMiddlewareFact).toBeTypeOf('function');
     expect(viteProductionEmitContractFact).toBeTypeOf('function');
     expect(viteRedGreenBuildFixtureFact).toBeTypeOf('function');
-    expect(commandSequence('vp run fw-check')).toMatchObject([
-      { args: ['run', 'fw-check'], executable: 'vp' },
+    expect(commandSequence('vp run kovo-check')).toMatchObject([
+      { args: ['run', 'kovo-check'], executable: 'vp' },
     ]);
     expect(
-      compilerDiagnosticFacts([{ code: 'FW311', message: 'coverage', severity: 'warn' }]),
-    ).toEqual([{ code: 'FW311', message: 'coverage', severity: 'warn' }]);
+      compilerDiagnosticFacts([{ code: 'KV311', message: 'coverage', severity: 'warn' }]),
+    ).toEqual([{ code: 'KV311', message: 'coverage', severity: 'warn' }]);
     expect(
-      compilerDiagnosticMessageFacts([{ code: 'FW302', message: 'binding', severity: 'error' }]),
-    ).toEqual([{ code: 'FW302', message: 'binding' }]);
+      compilerDiagnosticMessageFacts([{ code: 'KV302', message: 'binding', severity: 'error' }]),
+    ).toEqual([{ code: 'KV302', message: 'binding' }]);
     expect(compilerGeneratedQueryShapeFact({ query: 'cart', shape: { count: 'number' } })).toEqual({
       query: 'cart',
       shape: { count: 'number' },
@@ -1024,33 +1031,33 @@ describe('@jiso/test package subpath exports', () => {
     expect(
       compilerDataBindBehaviorFact({
         compileComponentModule: () => ({ diagnostics: [], queryUpdatePlans: [] }),
-        diagnosticDefinitions: { FW227: { help: 'Use ?.' }, FW302: { message: 'missing path' } },
+        diagnosticDefinitions: { KV227: { help: 'Use ?.' }, KV302: { message: 'missing path' } },
         queryShapesFromFacts: (facts) => facts.map((fact) => fact.query),
       }),
     ).toMatchObject({
-      diagnostics: { FW227Help: 'Use ?.', FW302Message: 'missing path' },
+      diagnostics: { KV227Help: 'Use ?.', KV302Message: 'missing path' },
       optionalNullablePathDiagnostics: [],
       queryShapes: ['cart'],
     });
     expect(
-      compilerLoweredIrFwCheckBehaviorFact({
+      compilerLoweredIrKovoCheckBehaviorFact({
         compileComponentModule: () => ({
           diagnostics: [
             {
-              code: 'FW235',
+              code: 'KV235',
               fileName: 'cart-badge.tsx',
               message: 'lowered IR is not app source',
               severity: 'error',
             },
           ],
         }),
-        fwCheck: () => ({
+        kovoCheck: () => ({
           exitCode: 1,
-          output: 'fw-check/v1\nERROR FW235 cart-badge.tsx lowered IR is not app source\n',
+          output: 'kovo-check/v1\nERROR KV235 cart-badge.tsx lowered IR is not app source\n',
         }),
       }),
     ).toMatchObject({
-      fwCheck: { exitCode: 1, status: 'issues' },
+      kovoCheck: { exitCode: 1, status: 'issues' },
       specSection: 'SPEC §5.2',
     });
     expect(
@@ -1064,86 +1071,93 @@ describe('@jiso/test package subpath exports', () => {
     expectTypeOf<CompilerDeriveFact>().toHaveProperty('selector').toEqualTypeOf<string>();
     expectTypeOf<CompilerDiagnosticFact>().toHaveProperty('code').toEqualTypeOf<string>();
     expectTypeOf<CompilerDiagnosticMessageFact>().toHaveProperty('message').toEqualTypeOf<string>();
-    expectTypeOf<CompilerLoweredIrFwCheckBehaviorFact>()
+    expectTypeOf<CompilerLoweredIrKovoCheckBehaviorFact>()
       .toHaveProperty('specSection')
       .toEqualTypeOf<'SPEC §5.2'>();
     expectTypeOf<CompilerQueryShapeFact>().toHaveProperty('source').toEqualTypeOf<string>();
     expectTypeOf<CompilerStampFact>().toHaveProperty('derive').toEqualTypeOf<CompilerDeriveFact>();
     expectTypeOf<CompilerUpdateCoverageFact>().toHaveProperty('component').toEqualTypeOf<string>();
     expect(commandOutputLines('one\r\ntwo\n')).toEqual(['one', 'two']);
-    expect(commandSequenceWithoutLast('vp run build && vp run fw-check')).toBe('vp run build');
+    expect(commandSequenceWithoutLast('vp run build && vp run kovo-check')).toBe('vp run build');
     expect(pnpmRunScriptNames('pnpm run build && pnpm run test:browser')).toEqual([
       'build',
       'test:browser',
     ]);
-    expect(requiredVpRunTaskName('check:fw', { scripts: { 'check:fw': 'vp run fw-check' } })).toBe(
-      'fw-check',
-    );
+    expect(
+      requiredVpRunTaskName('check:kovo', { scripts: { 'check:kovo': 'vp run kovo-check' } }),
+    ).toBe('kovo-check');
     expect(vpRunTaskName('vp run build')).toBe('build');
     expect(vitestTaskCommand('vitest --run --config vitest.browser.config.ts')).toEqual({
       configPath: 'vitest.browser.config.ts',
     });
     expect(nodeTaskCommand('node scripts/perf.mjs')).toEqual({ modulePath: 'scripts/perf.mjs' });
-    expect(pnpmFilterTestCommands('pnpm --filter @jiso/conformance-auth-spike test')).toEqual([
+    expect(pnpmFilterTestCommands('pnpm --filter @kovojs/conformance-auth-spike test')).toEqual([
       {
-        argv: ['pnpm', '--filter', '@jiso/conformance-auth-spike', 'test'],
-        packageName: '@jiso/conformance-auth-spike',
+        argv: ['pnpm', '--filter', '@kovojs/conformance-auth-spike', 'test'],
+        packageName: '@kovojs/conformance-auth-spike',
         script: 'test',
       },
     ]);
-    expect(parseFwExplainOutput).toBeTypeOf('function');
-    expect(fwExplainField('fw-explain/v1\nQUERY cart\nreads: cart\n', 'reads')).toBe('cart');
+    expect(parseKovoExplainOutput).toBeTypeOf('function');
+    expect(kovoExplainField('kovo-explain/v1\nQUERY cart\nreads: cart\n', 'reads')).toBe('cart');
     expect(
-      fwExplainListField(
-        'fw-explain/v1\nMUTATION cart/add\ninput-fields: productId,quantity\n',
+      kovoExplainListField(
+        'kovo-explain/v1\nMUTATION cart/add\ninput-fields: productId,quantity\n',
         'input-fields',
       ),
     ).toEqual(['productId', 'quantity']);
     expect(
-      fwExplainRecords('fw-explain/v1\nMUTATION cart/add\nOPTIMISTIC cart plan\n', 'OPTIMISTIC'),
+      kovoExplainRecords(
+        'kovo-explain/v1\nMUTATION cart/add\nOPTIMISTIC cart plan\n',
+        'OPTIMISTIC',
+      ),
     ).toEqual(['cart plan']);
     expect(
-      fwExplainOptimisticStatuses(
-        'fw-explain/v1\nMUTATION cart/add\nOPTIMISTIC cart await-fragment\n',
+      kovoExplainOptimisticStatuses(
+        'kovo-explain/v1\nMUTATION cart/add\nOPTIMISTIC cart await-fragment\n',
       ),
     ).toEqual({ cart: 'await-fragment' });
     expect(
-      fwExplainSummary(
-        'fw-explain/v1\nMUTATION cart/add\nOPTIMISTIC-SUMMARY total=1 UNHANDLED=0\n',
+      kovoExplainSummary(
+        'kovo-explain/v1\nMUTATION cart/add\nOPTIMISTIC-SUMMARY total=1 UNHANDLED=0\n',
         'OPTIMISTIC-SUMMARY',
       ),
     ).toMatchObject({ UNHANDLED: '0', total: '1' });
     expect(
-      fwExplainUpdateTargets(
-        'fw-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart; product->page:/products\n',
+      kovoExplainUpdateTargets(
+        'kovo-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart; product->page:/products\n',
       ),
     ).toEqual(['cart->page:/cart', 'product->page:/products']);
-    expect(fwExplainUpdateTargets('fw-explain/v1\nMUTATION cart/add\nupdates: -\n')).toEqual([]);
+    expect(kovoExplainUpdateTargets('kovo-explain/v1\nMUTATION cart/add\nupdates: -\n')).toEqual(
+      [],
+    );
     expect(
-      fwExplainUpdateConsumers(
-        'fw-explain/v1\nMUTATION cart/add\nupdates: cart->component:CartBadge,page:/cart\n',
+      kovoExplainUpdateConsumers(
+        'kovo-explain/v1\nMUTATION cart/add\nupdates: cart->component:CartBadge,page:/cart\n',
       ),
     ).toEqual([{ consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' }]);
     expect(
       Object.fromEntries(
-        fwExplainUpdateConsumerMap('fw-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart\n'),
+        kovoExplainUpdateConsumerMap(
+          'kovo-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart\n',
+        ),
       ),
     ).toEqual({ cart: ['page:/cart'] });
     expect(
-      fwExplainMutationQueryMatrixFact({
+      kovoExplainMutationQueryMatrixFact({
         explainMutation: () => ({
           exitCode: 0,
           output:
-            'fw-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart\nOPTIMISTIC cart hand-written\nOPTIMISTIC-SUMMARY total=1 UNHANDLED=0\n',
+            'kovo-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart\nOPTIMISTIC cart hand-written\nOPTIMISTIC-SUMMARY total=1 UNHANDLED=0\n',
         }),
         graph: { mutations: [{ key: 'cart/add' }], queries: [{ query: 'cart' }] },
       }).matrix,
     ).toEqual({ 'cart/add': { cart: 'hand-written' } });
     expect(
-      fwExplainComponentAssertionFact({
+      kovoExplainComponentAssertionFact({
         exitCode: 0,
         output: [
-          'fw-explain/v1',
+          'kovo-explain/v1',
           'COMPONENT CartBadge',
           'queries: cart',
           'fragments: -',
@@ -1163,8 +1177,8 @@ describe('@jiso/test package subpath exports', () => {
       triggers: [{ deps: ['cart'], trigger: 'visible' }],
     });
     expect(
-      fwExplainComponentHandlerFacts(
-        'fw-explain/v1\nCOMPONENT CartBadge\nHANDLER click export=CartBadge$button_click ref=/cart.js#CartBadge$button_click captures=ctx params=- substitution=-\n',
+      kovoExplainComponentHandlerFacts(
+        'kovo-explain/v1\nCOMPONENT CartBadge\nHANDLER click export=CartBadge$button_click ref=/cart.js#CartBadge$button_click captures=ctx params=- substitution=-\n',
       ),
     ).toEqual([
       {
@@ -1177,8 +1191,8 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(
-      fwExplainComponentDeriveFacts(
-        'fw-explain/v1\nCOMPONENT CartBadge\nDERIVE CartBadge$isEmpty inputs=cart ref=/cart.js#CartBadge$isEmpty target=data-bind:hidden\n',
+      kovoExplainComponentDeriveFacts(
+        'kovo-explain/v1\nCOMPONENT CartBadge\nDERIVE CartBadge$isEmpty inputs=cart ref=/cart.js#CartBadge$isEmpty target=data-bind:hidden\n',
       ),
     ).toEqual([
       {
@@ -1189,8 +1203,8 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(
-      fwExplainComponentTriggerFacts(
-        'fw-explain/v1\nCOMPONENT CartBadge\nTRIGGER visible export=CartBadge$mount ref=/cart.js#CartBadge$mount deps=cart justification=below the fold\n',
+      kovoExplainComponentTriggerFacts(
+        'kovo-explain/v1\nCOMPONENT CartBadge\nTRIGGER visible export=CartBadge$mount ref=/cart.js#CartBadge$mount deps=cart justification=below the fold\n',
       ),
     ).toEqual([
       {
@@ -1202,8 +1216,8 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(
-      fwExplainComponentMergeFacts(
-        'fw-explain/v1\nCOMPONENT CartBadge\nMERGE button attr=aria-expanded rule=primitive-owned decision=primitive diagnostics=-\n',
+      kovoExplainComponentMergeFacts(
+        'kovo-explain/v1\nCOMPONENT CartBadge\nMERGE button attr=aria-expanded rule=primitive-owned decision=primitive diagnostics=-\n',
       ),
     ).toEqual([
       {
@@ -1215,9 +1229,9 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(
-      fwExplainEndpointFacts(
+      kovoExplainEndpointFacts(
         [
-          'fw-explain/v1',
+          'kovo-explain/v1',
           'ENDPOINTS',
           'ENDPOINT orders/export method=GET path=/exports/orders.csv mount=exact auth=authed csrf=checked writes=-',
           '',
@@ -1235,8 +1249,8 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(
-      fwExplainScopeAuditFacts(
-        'fw-explain/v1\nUNSCOPED\nUNSCOPED QUERY cart domain=cart scope=unscoped site=src/app.ts:1 missing tenant filter\n',
+      kovoExplainScopeAuditFacts(
+        'kovo-explain/v1\nUNSCOPED\nUNSCOPED QUERY cart domain=cart scope=unscoped site=src/app.ts:1 missing tenant filter\n',
         'UNSCOPED',
       ),
     ).toEqual([
@@ -1250,8 +1264,8 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(
-      fwExplainUnguardedFacts(
-        'fw-explain/v1\nUNGUARDED\nQUERY cart guards=- reads=cart\nSUMMARY total=1\n',
+      kovoExplainUnguardedFacts(
+        'kovo-explain/v1\nUNGUARDED\nQUERY cart guards=- reads=cart\nSUMMARY total=1\n',
       ),
     ).toEqual([
       {
@@ -1261,9 +1275,9 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(
-      fwExplainUnguardedAssertionFact({
+      kovoExplainUnguardedAssertionFact({
         exitCode: 0,
-        output: 'fw-explain/v1\nUNGUARDED\nQUERY cart guards=- reads=cart\nSUMMARY total=1\n',
+        output: 'kovo-explain/v1\nUNGUARDED\nQUERY cart guards=- reads=cart\nSUMMARY total=1\n',
       }),
     ).toEqual({
       exitCode: 0,
@@ -1276,7 +1290,7 @@ describe('@jiso/test package subpath exports', () => {
       ],
       subject: 'UNGUARDED',
       summary: { total: '1' },
-      version: 'fw-explain/v1',
+      version: 'kovo-explain/v1',
     });
     const graph = {
       components: [{ fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] }],
@@ -1305,11 +1319,11 @@ describe('@jiso/test package subpath exports', () => {
     ).toBe(true);
     const acceptanceEvidence: GeneratedGraphArtifactAcceptanceEvidenceFact =
       generatedGraphArtifactAcceptanceEvidenceFact({
-        fwCheck: {
+        kovoCheck: {
           exitCode: 0,
           issueCount: 0,
           status: 'ok',
-          version: 'fw-check/v1',
+          version: 'kovo-check/v1',
         },
         staticBehavior: graphStaticBehaviorFact(graph),
         summary: {
@@ -1330,11 +1344,11 @@ describe('@jiso/test package subpath exports', () => {
     expect(acceptanceEvidence.emitCheck.clean).toBe(true);
     const acceptanceChecklist: GeneratedGraphArtifactAcceptanceChecklistFact =
       generatedGraphArtifactAcceptanceChecklistFact({
-        fwCheck: {
+        kovoCheck: {
           exitCode: 0,
           issueCount: 0,
           status: 'ok',
-          version: 'fw-check/v1',
+          version: 'kovo-check/v1',
         },
         staticBehavior: graphStaticBehaviorFact(graph),
         summary: {
@@ -1389,8 +1403,8 @@ describe('@jiso/test package subpath exports', () => {
         ['steps:', '  - uses: actions/checkout@v4', '  - run: vp check'].join('\n'),
       ),
     ).toEqual([{ uses: 'actions/checkout@v4' }, { run: 'vp check' }]);
-    expect(workflowVpRunTaskNames('steps:\n  - run: vp run fw-check')).toEqual(['fw-check']);
-    expect(() => assertOrderedItems(['build', 'fw-check'], 'build', 'fw-check')).not.toThrow();
+    expect(workflowVpRunTaskNames('steps:\n  - run: vp run kovo-check')).toEqual(['kovo-check']);
+    expect(() => assertOrderedItems(['build', 'kovo-check'], 'build', 'kovo-check')).not.toThrow();
     expect(browserSuiteAcceptanceGateFact).toBeTypeOf('function');
     expect(browserSuiteAcceptanceModulePath).toBeTypeOf('function');
     expect(browserSuiteAcceptanceProjectFact).toBeTypeOf('function');
@@ -1403,49 +1417,49 @@ describe('@jiso/test package subpath exports', () => {
     expect(vitePlusAcceptanceTaskFacts).toBeTypeOf('function');
     expect(vitePlusTaskInputFacts).toBeTypeOf('function');
     expect(vitePlusTaskInputPatternEndingWith).toBeTypeOf('function');
-    expect(parseFwExportOutput('fw-export/v1\nSUMMARY html=0')).toMatchObject({
+    expect(parseKovoExportOutput('kovo-export/v1\nSUMMARY html=0')).toMatchObject({
       summary: { html: '0' },
     });
     expect(
-      fwExportCliResultFact({
+      kovoExportCliResultFact({
         exitCode: 0,
         stderr: '',
-        stdout: 'fw-export/v1\nHTML /index.html status=200 bytes=1\n',
+        stdout: 'kovo-export/v1\nHTML /index.html status=200 bytes=1\n',
       }),
     ).toMatchObject({
       exitCode: 0,
       html: [{ bytesArePositive: true, path: '/index.html', status: 200 }],
       outputStream: 'stdout',
     });
-    expect(fwExportStaticBehaviorFact).toBeTypeOf('function');
-    expect(parseFwCheckOutput('fw-check/v1\nOK\n')).toMatchObject({ status: 'ok' });
-    expect(fwCheckResultFact({ exitCode: 0, output: 'fw-check/v1\nOK\n' })).toMatchObject({
+    expect(kovoExportStaticBehaviorFact).toBeTypeOf('function');
+    expect(parseKovoCheckOutput('kovo-check/v1\nOK\n')).toMatchObject({ status: 'ok' });
+    expect(kovoCheckResultFact({ exitCode: 0, output: 'kovo-check/v1\nOK\n' })).toMatchObject({
       exitCode: 0,
       status: 'ok',
     });
-    expect(fwCheckAssertionFact({ exitCode: 0, output: 'fw-check/v1\nOK\n' })).toMatchObject({
+    expect(kovoCheckAssertionFact({ exitCode: 0, output: 'kovo-check/v1\nOK\n' })).toMatchObject({
       diagnostics: [],
       exitCode: 0,
     });
-    expect(fwCheckOkAssertionFact({ exitCode: 0, output: 'fw-check/v1\nOK\n' })).toEqual({
+    expect(kovoCheckOkAssertionFact({ exitCode: 0, output: 'kovo-check/v1\nOK\n' })).toEqual({
       exitCode: 0,
       issueCount: 0,
       status: 'ok',
-      version: 'fw-check/v1',
+      version: 'kovo-check/v1',
     });
-    expect(fwCheckUnguardedAuditBehaviorFact).toBeTypeOf('function');
+    expect(kovoCheckUnguardedAuditBehaviorFact).toBeTypeOf('function');
     expect(
-      fwCheckDiagnosticFacts(
-        'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
+      kovoCheckDiagnosticFacts(
+        'kovo-check/v1\nWARN KV310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
       ),
-    ).toMatchObject([{ code: 'FW310', target: 'cart/add -> cart' }]);
+    ).toMatchObject([{ code: 'KV310', target: 'cart/add -> cart' }]);
     expect(
-      fwCheckDiagnosticAssertionFacts(
-        'fw-check/v1\nWARN FW311 component=Cart query=cart.count position="conditional <dot>" Query/state-dependent DOM position has no update status.\n',
+      kovoCheckDiagnosticAssertionFacts(
+        'kovo-check/v1\nWARN KV311 component=Cart query=cart.count position="conditional <dot>" Query/state-dependent DOM position has no update status.\n',
       ),
     ).toEqual([
       {
-        code: 'FW311',
+        code: 'KV311',
         message: 'Query/state-dependent DOM position has no update status.',
         properties: {
           component: 'Cart',
@@ -1457,13 +1471,13 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(
-      fwCheckCoverageFacts(
-        'fw-check/v1\nCOVERAGE component=Cart query=cart position=replace status=fragment\n',
+      kovoCheckCoverageFacts(
+        'kovo-check/v1\nCOVERAGE component=Cart query=cart position=replace status=fragment\n',
       ),
     ).toMatchObject([{ properties: { component: 'Cart', status: 'fragment' } }]);
     expect(
-      fwCheckCoverageAssertionFacts(
-        'fw-check/v1\nCOVERAGE component=Cart query=cart position=replace status=fragment detail="text binding"\n',
+      kovoCheckCoverageAssertionFacts(
+        'kovo-check/v1\nCOVERAGE component=Cart query=cart position=replace status=fragment detail="text binding"\n',
       ),
     ).toEqual([
       {
@@ -1477,10 +1491,10 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(
-      fwExplainMutationAssertionFact({
+      kovoExplainMutationAssertionFact({
         exitCode: 0,
         output: [
-          'fw-explain/v1',
+          'kovo-explain/v1',
           'MUTATION cart/add',
           'guards: authed',
           'session: starterSession',
@@ -1501,17 +1515,17 @@ describe('@jiso/test package subpath exports', () => {
       updateConsumers: [{ consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' }],
     });
     expect(
-      fwExplainQueryAssertionFact({
+      kovoExplainQueryAssertionFact({
         exitCode: 0,
         output:
-          'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
+          'kovo-explain/v1\nQUERY cart\nreads: cart\nconsumers: page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
       }),
     ).toMatchObject({ consumers: ['page:/cart'], domainWrites: ['cart.addItem'] });
     expect(
-      fwExplainPageAssertionFact({
+      kovoExplainPageAssertionFact({
         exitCode: 0,
         output:
-          'fw-explain/v1\nPAGE /cart\nprefetch: false\nmeta: title=Cart description=Ready image=-\ni18n: -\nmodulepreloads: -\nstylesheets: /src/styles.css\nqueries: cart\nview-transitions: -\n',
+          'kovo-explain/v1\nPAGE /cart\nprefetch: false\nmeta: title=Cart description=Ready image=-\ni18n: -\nmodulepreloads: -\nstylesheets: /src/styles.css\nqueries: cart\nview-transitions: -\n',
       }),
     ).toMatchObject({ queries: ['cart'], stylesheets: ['/src/styles.css'] });
     expect(executeGeneratedClientModule).toBeTypeOf('function');
@@ -1520,7 +1534,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(
       generatedComponentSourceFacts({
         authoredSource: '<cart-badge></cart-badge>',
-        generatedSource: '// @jiso-ir',
+        generatedSource: '// @kovojs-ir',
       }),
     ).toEqual({
       authoredLoweredStampAttributes: [],
@@ -1582,12 +1596,12 @@ describe('@jiso/test package subpath exports', () => {
     ).toEqual([{ attrs: {}, innerHtml: '', tag: 'main' }]);
     expect(
       generatedCssScopeRulesFromArtifact([
-        { kind: 'css', source: '@scope (doc-card) to (:scope [fw-c]) {' },
+        { kind: 'css', source: '@scope (doc-card) to (:scope [kovo-c]) {' },
       ]),
     ).toEqual([
       {
-        limit: ':scope [fw-c]',
-        raw: '@scope (doc-card) to (:scope [fw-c]) {',
+        limit: ':scope [kovo-c]',
+        raw: '@scope (doc-card) to (:scope [kovo-c]) {',
         scope: 'doc-card',
       },
     ]);
@@ -1646,7 +1660,7 @@ describe('@jiso/test package subpath exports', () => {
       wireResponseBodyPinFacts(wireSources, { 'cart-read.http': ['<main>Cart</main>'] }),
     ).toHaveProperty('0.matches', true);
     expect(generatedWireResponseBodies['typed-read.http']).toEqual([
-      '<fw-query name="product:p1">{"name":"Mug","stock":4}</fw-query>\n',
+      '<kovo-query name="product:p1">{"name":"Mug","stock":4}</kovo-query>\n',
     ]);
     expect(loadWireFixtureSources).toBeTypeOf('function');
     expect(wireFixtureResponseBody(wireSources, 'cart-read.http', 1)).toBe('<main>Cart</main>');
@@ -1662,8 +1676,8 @@ describe('@jiso/test package subpath exports', () => {
   });
 
   it('keeps harness exec options on the operation module surface', () => {
-    expectTypeOf<JisoTestExecOptions<JisoTestRequest<{ cart: string[] }>>>().toEqualTypeOf<
-      HarnessMutationOptions<JisoTestRequest<{ cart: string[] }>>
+    expectTypeOf<KovoTestExecOptions<KovoTestRequest<{ cart: string[] }>>>().toEqualTypeOf<
+      HarnessMutationOptions<KovoTestRequest<{ cart: string[] }>>
     >();
     expectTypeOf<DiagnosticCode>().toEqualTypeOf<RootDiagnosticCode>();
   });
@@ -1698,40 +1712,40 @@ type _PublicSubpathTypes = [
   CompilerQueryUpdatePlanFact,
   CompilerQueryShapeFact,
   CompilerUpdateCoverageFact,
-  FwExplainComponentAssertionFact,
-  FwExplainComponentDeriveFact,
-  FwExplainComponentHandlerFact,
-  FwExplainComponentMergeFact,
-  FwExplainComponentTriggerFact,
-  FwExplainEndpointFact,
-  FwExplainMutationAssertionFact,
-  FwExplainOutput,
-  FwExplainPageAssertionFact,
-  FwExplainQueryAssertionFact,
-  FwExplainResultLike,
-  FwExplainScopeAuditFact,
-  FwExplainUnguardedAssertionFact,
-  FwExplainUnguardedFact,
-  FwExplainUpdateConsumerFact,
-  FwExportCliArtifactFact,
-  FwExportCliResultFact,
-  FwExportCliResultLike,
-  FwExportError,
-  FwExportHtmlArtifact,
-  FwExportOutput,
-  FwExportStaticBehaviorFact,
-  FwExportStaticBehaviorOptions,
-  FwExportStaticDiagnosticLike,
-  FwExportSummary,
-  FwCheckAssertionFact,
-  FwCheckCoverageAssertionFact,
-  FwCheckCoverageFact,
-  FwCheckDiagnosticAssertionFact,
-  FwCheckDiagnosticFact,
-  FwCheckOkAssertionFact,
-  FwCheckOutput,
-  FwCheckResultFact,
-  FwCheckUnguardedAuditBehaviorFact,
+  KovoExplainComponentAssertionFact,
+  KovoExplainComponentDeriveFact,
+  KovoExplainComponentHandlerFact,
+  KovoExplainComponentMergeFact,
+  KovoExplainComponentTriggerFact,
+  KovoExplainEndpointFact,
+  KovoExplainMutationAssertionFact,
+  KovoExplainOutput,
+  KovoExplainPageAssertionFact,
+  KovoExplainQueryAssertionFact,
+  KovoExplainResultLike,
+  KovoExplainScopeAuditFact,
+  KovoExplainUnguardedAssertionFact,
+  KovoExplainUnguardedFact,
+  KovoExplainUpdateConsumerFact,
+  KovoExportCliArtifactFact,
+  KovoExportCliResultFact,
+  KovoExportCliResultLike,
+  KovoExportError,
+  KovoExportHtmlArtifact,
+  KovoExportOutput,
+  KovoExportStaticBehaviorFact,
+  KovoExportStaticBehaviorOptions,
+  KovoExportStaticDiagnosticLike,
+  KovoExportSummary,
+  KovoCheckAssertionFact,
+  KovoCheckCoverageAssertionFact,
+  KovoCheckCoverageFact,
+  KovoCheckDiagnosticAssertionFact,
+  KovoCheckDiagnosticFact,
+  KovoCheckOkAssertionFact,
+  KovoCheckOutput,
+  KovoCheckResultFact,
+  KovoCheckUnguardedAuditBehaviorFact,
   DocumentQueryScriptBehaviorFact,
   CommerceGraphBehaviorFact,
   CommerceGraphBehaviorOptions<ProjectGraphFixture>,
@@ -1745,15 +1759,15 @@ type _PublicSubpathTypes = [
   ProjectFileTreeOptions,
   ServerCommerceAdoptDontInventBehaviorFact,
   ServerCommerceAdoptDontInventRuntime,
-  JisoTestContext<{ cart: string[] }>,
-  JisoTestExecOptions<JisoTestRequest<{ cart: string[] }>>,
-  JisoTestHarnessOptions<{ cart: string[] }>,
-  JisoTestRequest<{ cart: string[] }>,
+  KovoTestContext<{ cart: string[] }>,
+  KovoTestExecOptions<KovoTestRequest<{ cart: string[] }>>,
+  KovoTestHarnessOptions<{ cart: string[] }>,
+  KovoTestRequest<{ cart: string[] }>,
   PageAssertion,
   PgliteTestDb,
-  JisoTestCase,
-  JisoTestRunner,
-  HarnessMutationOptions<JisoTestRequest<{ cart: string[] }>>,
+  KovoTestCase,
+  KovoTestRunner,
+  HarnessMutationOptions<KovoTestRequest<{ cart: string[] }>>,
   HarnessOperationVerifier,
   MarkdownFields,
   MarkdownTableRow,

@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { compilerIrHeader, cssIrHeader } from '../ir.js';
@@ -20,7 +20,7 @@ export function validateAuthoringSurface(
 
   if (isCompilerIrArtifact(options.source)) {
     return [
-      fw235Diagnostic({
+      kv235Diagnostic({
         fileName: options.fileName,
         source: options.source,
         start: 0,
@@ -34,7 +34,7 @@ export function validateAuthoringSurface(
   const renders = model ? stringRendersFromModel(model) : [];
 
   return renders.map((render) =>
-    fw235Diagnostic({
+    kv235Diagnostic({
       fileName: options.fileName,
       source: options.source,
       start: render.start,
@@ -60,7 +60,7 @@ function stringRendersFromModel(model: ComponentModuleModel): StringRender[] {
   }));
 }
 
-function fw235Diagnostic({
+function kv235Diagnostic({
   fileName,
   length,
   source,
@@ -78,8 +78,8 @@ function fw235Diagnostic({
     : 'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.';
 
   return {
-    ...diagnosticFor(fileName, 'FW235', source, start, length),
-    help: [diagnosticDefinitions.FW235.help, tsxDirection].join('\n'),
+    ...diagnosticFor(fileName, 'KV235', source, start, length),
+    help: [diagnosticDefinitions.KV235.help, tsxDirection].join('\n'),
   };
 }
 

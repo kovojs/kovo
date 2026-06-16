@@ -1,10 +1,10 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   accordionKeyDown as _accordionKeyDown,
   accordionTriggerClick as _accordionTriggerClick,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryAccordionDemo$section_keydown = handler((event, ctx) => {
   const result = _accordionKeyDown(Object(event), {

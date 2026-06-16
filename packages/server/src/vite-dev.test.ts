@@ -7,11 +7,11 @@ import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import {
-  createJisoAppShellDevDiagnosticLedger,
-  jisoAppShellViteDevPlugin,
-  renderJisoAppShellViteDevDiagnosticResponse,
-  type JisoAppShellViteMiddleware,
-  shouldHandleJisoAppShellViteRequest,
+  createKovoAppShellDevDiagnosticLedger,
+  kovoAppShellViteDevPlugin,
+  renderKovoAppShellViteDevDiagnosticResponse,
+  type KovoAppShellViteMiddleware,
+  shouldHandleKovoAppShellViteRequest,
 } from './vite-dev.js';
 
 describe('server app shell Vite dev seam', () => {
@@ -22,28 +22,28 @@ describe('server app shell Vite dev seam', () => {
     });
 
     expect(
-      shouldHandleJisoAppShellViteRequest(request('/products/p1', { method: 'GET' }), app),
+      shouldHandleKovoAppShellViteRequest(request('/products/p1', { method: 'GET' }), app),
     ).toBe(true);
     expect(
-      shouldHandleJisoAppShellViteRequest(request('/products/p1', { method: 'HEAD' }), app),
+      shouldHandleKovoAppShellViteRequest(request('/products/p1', { method: 'HEAD' }), app),
     ).toBe(true);
     expect(
-      shouldHandleJisoAppShellViteRequest(request('/products/p1', { method: 'POST' }), app),
+      shouldHandleKovoAppShellViteRequest(request('/products/p1', { method: 'POST' }), app),
     ).toBe(false);
     expect(
-      shouldHandleJisoAppShellViteRequest(request('/_m/cart/add', { method: 'POST' }), app),
+      shouldHandleKovoAppShellViteRequest(request('/_m/cart/add', { method: 'POST' }), app),
     ).toBe(true);
-    expect(shouldHandleJisoAppShellViteRequest(request('/c/dev.client.js?v=r7'), app)).toBe(true);
-    expect(shouldHandleJisoAppShellViteRequest(request('/c/dev.client.js'), app)).toBe(false);
-    expect(shouldHandleJisoAppShellViteRequest(request('/src/styles.css'), app)).toBe(false);
+    expect(shouldHandleKovoAppShellViteRequest(request('/c/dev.client.js?v=r7'), app)).toBe(true);
+    expect(shouldHandleKovoAppShellViteRequest(request('/c/dev.client.js'), app)).toBe(false);
+    expect(shouldHandleKovoAppShellViteRequest(request('/src/styles.css'), app)).toBe(false);
   });
 
   it('renders route diagnostics directly from the dev ledger', () => {
-    const diagnostics = createJisoAppShellDevDiagnosticLedger();
+    const diagnostics = createKovoAppShellDevDiagnosticLedger();
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
         {
-          code: 'FW225',
+          code: 'KV225',
           fileName: 'src/components/cart.tsx',
           message: 'JSX nesting violates the HTML content model.',
         },
@@ -51,7 +51,7 @@ describe('server app shell Vite dev seam', () => {
       fileName: 'src/components/cart.tsx',
     });
 
-    const response = renderJisoAppShellViteDevDiagnosticResponse(
+    const response = renderKovoAppShellViteDevDiagnosticResponse(
       createApp({
         routes: [
           route('/cart', {
@@ -64,7 +64,7 @@ describe('server app shell Vite dev seam', () => {
     );
 
     expect(response).toMatchObject({
-      body: expect.stringContaining('<p class="jiso-diagnostic-code">FW225</p>'),
+      body: expect.stringContaining('<p class="kovo-diagnostic-code">KV225</p>'),
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
       },
@@ -73,11 +73,11 @@ describe('server app shell Vite dev seam', () => {
   });
 
   it('renders mutation diagnostics as fragment wire responses when requested', () => {
-    const diagnostics = createJisoAppShellDevDiagnosticLedger();
+    const diagnostics = createKovoAppShellDevDiagnosticLedger();
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
         {
-          code: 'FW225',
+          code: 'KV225',
           fileName: 'src/mutations/cart.ts',
           message: 'JSX nesting violates the HTML content model.',
         },
@@ -86,14 +86,14 @@ describe('server app shell Vite dev seam', () => {
       moduleHrefs: ['/_m/cart/add'],
     });
 
-    const response = renderJisoAppShellViteDevDiagnosticResponse(
+    const response = renderKovoAppShellViteDevDiagnosticResponse(
       createApp({
         mutations: [{ key: 'cart/add' }],
       }),
       request('/_m/cart/add', {
         headers: {
-          'FW-Fragment': 'true',
-          'FW-Targets': 'cart-errors;cart-summary',
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'cart-errors;cart-summary',
         },
         method: 'POST',
       }),
@@ -101,9 +101,9 @@ describe('server app shell Vite dev seam', () => {
     );
 
     expect(response).toMatchObject({
-      body: expect.stringContaining('<fw-fragment target="cart-errors">'),
+      body: expect.stringContaining('<kovo-fragment target="cart-errors">'),
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       },
       status: 500,
     });
@@ -127,8 +127,8 @@ describe('server app shell Vite dev seam', () => {
         }),
       ],
     });
-    let middleware: JisoAppShellViteMiddleware | undefined;
-    const plugin = jisoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
 
     plugin.configureServer({
       middlewares: {
@@ -203,15 +203,15 @@ describe('server app shell Vite dev seam', () => {
     }
   });
 
-  it('serves FW228 route-table diagnostics through the default dev handler', async () => {
+  it('serves KV228 route-table diagnostics through the default dev handler', async () => {
     const app = createApp({
       routes: [
         route('/products/:id', { page: () => '<main>Param</main>' }),
         route('/products/new', { page: () => '<main>New</main>' }),
       ],
     });
-    let middleware: JisoAppShellViteMiddleware | undefined;
-    const plugin = jisoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
 
     plugin.configureServer({
       middlewares: {
@@ -254,7 +254,7 @@ describe('server app shell Vite dev seam', () => {
       const body = await response.text();
 
       expect(response.status).toBe(500);
-      expect(body).toContain('<p class="jiso-diagnostic-code">FW228</p>');
+      expect(body).toContain('<p class="kovo-diagnostic-code">KV228</p>');
       expect(body).not.toContain('<main>New</main>');
     } finally {
       await new Promise<void>((resolve, reject) => {
@@ -265,9 +265,9 @@ describe('server app shell Vite dev seam', () => {
 
   it('keeps unversioned client modules on the Vite fallback even with a custom predicate', async () => {
     const app = createApp({ routes: [route('/cart', {})] });
-    let middleware: JisoAppShellViteMiddleware | undefined;
+    let middleware: KovoAppShellViteMiddleware | undefined;
     let customPredicateCalls = 0;
-    const plugin = jisoAppShellViteDevPlugin({
+    const plugin = kovoAppShellViteDevPlugin({
       moduleId: '/src/app-shell.ts',
       shouldHandleRequest() {
         customPredicateCalls += 1;
@@ -290,7 +290,7 @@ describe('server app shell Vite dev seam', () => {
       new Promise<void>((resolve, reject) => {
         middleware?.(
           request('/c/cart.client.js'),
-          {} as Parameters<JisoAppShellViteMiddleware>[1],
+          {} as Parameters<KovoAppShellViteMiddleware>[1],
           (error) => (error ? reject(error) : resolve()),
         );
       }),
@@ -300,8 +300,8 @@ describe('server app shell Vite dev seam', () => {
 
   it('rejects Request -> Response exports at the explicit node handler boundary', async () => {
     const app = createApp({ routes: [route('/cart', {})] });
-    let middleware: JisoAppShellViteMiddleware | undefined;
-    const plugin = jisoAppShellViteDevPlugin({
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({
       moduleId: '/src/app-shell.ts',
       nodeHandlerExportName: 'handler',
     });
@@ -324,7 +324,7 @@ describe('server app shell Vite dev seam', () => {
 
     await expect(
       new Promise<void>((resolve, reject) => {
-        middleware?.(request('/cart'), {} as Parameters<JisoAppShellViteMiddleware>[1], (error) =>
+        middleware?.(request('/cart'), {} as Parameters<KovoAppShellViteMiddleware>[1], (error) =>
           error ? reject(error) : resolve(),
         );
       }),

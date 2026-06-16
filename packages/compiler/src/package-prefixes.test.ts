@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { deriveAppGraph } from './graph.js';
@@ -10,7 +10,7 @@ import { compileComponentModule } from './index.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 
 const prefixFixtureSource = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const Shell = component('shell', {
   render: () => <section></section>,
@@ -18,10 +18,10 @@ export const Shell = component('shell', {
 `;
 
 const fileName = 'components/shell.tsx';
-const fw234 = diagnosticDefinitions.FW234;
+const kv234 = diagnosticDefinitions.KV234;
 
 describe('package component prefixes', () => {
-  it('reports FW234 when component packages claim the same effective prefix', () => {
+  it('reports KV234 when component packages claim the same effective prefix', () => {
     const diagnostics = validatePackageComponentPrefixes(
       [
         { packageName: '@acme/primitives', prefix: 'acme-' },
@@ -32,15 +32,15 @@ describe('package component prefixes', () => {
 
     expect(diagnostics).toEqual([
       expect.objectContaining({
-        code: 'FW234',
+        code: 'KV234',
         fileName,
-        help: expect.stringContaining(fw234.help),
-        message: `${fw234.message} Effective package prefix "acme-" is claimed by @acme/primitives and @other/acme-widgets.`,
-        severity: fw234.severity,
+        help: expect.stringContaining(kv234.help),
+        message: `${kv234.message} Effective package prefix "acme-" is claimed by @acme/primitives and @other/acme-widgets.`,
+        severity: kv234.severity,
       }),
     ]);
     expect(diagnostics[0]?.help).toContain(
-      'SPEC §6.1.1 keeps package prefixes app-wide unique because the effective prefix is emitted into rendered hosts, residual fw-c values, scoped CSS, and package behavior attributes.',
+      'SPEC §6.1.1 keeps package prefixes app-wide unique because the effective prefix is emitted into rendered hosts, residual kovo-c values, scoped CSS, and package behavior attributes.',
     );
     expect(diagnostics[0]?.help).toContain('effectivePrefix: "other-acme-"');
   });
@@ -63,15 +63,15 @@ describe('package component prefixes', () => {
   });
 
   it('discovers imported package prefixes from real package manifests', () => {
-    const root = mkdtempSync(join(tmpdir(), 'jiso-prefix-discovery-'));
+    const root = mkdtempSync(join(tmpdir(), 'kovo-prefix-discovery-'));
 
     try {
       writePackageManifest(root, '@acme/primitives', {
-        jiso: { prefix: 'acme-' },
+        kovo: { prefix: 'acme-' },
         name: '@acme/primitives',
       });
       writePackageManifest(root, '@other/acme-widgets', {
-        jiso: { prefix: 'acme-' },
+        kovo: { prefix: 'acme-' },
         name: '@other/acme-widgets',
       });
 
@@ -79,7 +79,7 @@ describe('package component prefixes', () => {
         fileName,
         packagePrefixDiscoveryRoot: root,
         source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import { Dialog } from '@acme/primitives/dialog';
 import '@other/acme-widgets';
 
@@ -91,9 +91,9 @@ export const Shell = component('shell', {
 
       expect(result.diagnostics).toEqual([
         expect.objectContaining({
-          code: 'FW234',
-          message: `${fw234.message} Effective package prefix "acme-" is claimed by @acme/primitives and @other/acme-widgets.`,
-          severity: fw234.severity,
+          code: 'KV234',
+          message: `${kv234.message} Effective package prefix "acme-" is claimed by @acme/primitives and @other/acme-widgets.`,
+          severity: kv234.severity,
         }),
       ]);
     } finally {
@@ -102,15 +102,15 @@ export const Shell = component('shell', {
   });
 
   it('merges explicit effective-prefix aliases with discovered package manifests', () => {
-    const root = mkdtempSync(join(tmpdir(), 'jiso-prefix-alias-'));
+    const root = mkdtempSync(join(tmpdir(), 'kovo-prefix-alias-'));
 
     try {
       writePackageManifest(root, '@acme/primitives', {
-        jiso: { prefix: 'acme-' },
+        kovo: { prefix: 'acme-' },
         name: '@acme/primitives',
       });
       writePackageManifest(root, '@other/acme-widgets', {
-        jiso: { prefix: 'acme-' },
+        kovo: { prefix: 'acme-' },
         name: '@other/acme-widgets',
       });
 
@@ -124,7 +124,7 @@ export const Shell = component('shell', {
         ],
         packagePrefixDiscoveryRoot: root,
         source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 import '@acme/primitives';
 import '@other/acme-widgets';
 
@@ -143,71 +143,71 @@ export const Shell = component('shell', {
   it('carries explicit package prefix facts into the app explain graph', () => {
     const derived = deriveAppGraph({
       graph: {
-        components: [{ name: 'JisoDialog' }],
+        components: [{ name: 'KovoDialog' }],
       },
       packageComponentPrefixes: [
         {
-          packageName: '@jiso/headless-ui',
-          prefix: 'jiso-',
+          packageName: '@kovojs/headless-ui',
+          prefix: 'kovo-',
         },
       ],
     });
 
     expect(derived.graph).toEqual({
-      components: [{ name: 'JisoDialog' }],
+      components: [{ name: 'KovoDialog' }],
       packageComponentPrefixes: [
         {
-          packageName: '@jiso/headless-ui',
-          prefix: 'jiso-',
+          packageName: '@kovojs/headless-ui',
+          prefix: 'kovo-',
         },
       ],
     });
   });
 
-  it('reports FW234 when non-jiso packages use the reserved jiso prefix family', () => {
+  it('reports KV234 when non-kovo packages use the reserved kovo prefix family', () => {
     const diagnostics = validatePackageComponentPrefixes(
       [
-        { packageName: '@jiso/headless-ui', prefix: 'jiso-' },
-        { packageName: '@acme/widgets', prefix: 'acme-', effectivePrefix: 'jiso-widgets-' },
+        { packageName: '@kovojs/headless-ui', prefix: 'kovo-' },
+        { packageName: '@acme/widgets', prefix: 'acme-', effectivePrefix: 'kovo-widgets-' },
       ],
       fileName,
     );
 
     expect(diagnostics).toEqual([
       expect.objectContaining({
-        code: 'FW234',
+        code: 'KV234',
         fileName,
-        help: expect.stringContaining(fw234.help),
-        message: `${fw234.message} @acme/widgets cannot use reserved jiso-* package prefix "jiso-widgets-".`,
-        severity: fw234.severity,
+        help: expect.stringContaining(kv234.help),
+        message: `${kv234.message} @acme/widgets cannot use reserved kovo-* package prefix "kovo-widgets-".`,
+        severity: kv234.severity,
       }),
     ]);
     expect(diagnostics[0]?.help).toContain(
-      'SPEC §6.1.1 reserves the jiso-* prefix family for packages whose manifest name is in the @jiso/* scope.',
+      'SPEC §6.1.1 reserves the kovo-* prefix family for packages whose manifest name is in the @kovojs/* scope.',
     );
   });
 
-  it('reports FW234 when packages try to claim the framework fw attribute namespace', () => {
+  it('reports KV234 when packages try to claim the framework kovo attribute namespace', () => {
     const diagnostics = validatePackageComponentPrefixes(
-      [{ packageName: '@acme/widgets', prefix: 'fw-' }],
+      [{ packageName: '@acme/widgets', prefix: 'kovo-' }],
       fileName,
     );
 
     expect(diagnostics).toEqual([
       expect.objectContaining({
-        code: 'FW234',
+        code: 'KV234',
         fileName,
-        help: expect.stringContaining(fw234.help),
-        message: `${fw234.message} @acme/widgets cannot use reserved fw-* package prefix "fw-".`,
-        severity: fw234.severity,
+        help: expect.stringContaining(kv234.help),
+        message: `${kv234.message} @acme/widgets cannot use reserved kovo-* package prefix "kovo-".`,
+        severity: kv234.severity,
       }),
     ]);
     expect(diagnostics[0]?.help).toContain(
-      'SPEC §6.1.1 reserves the fw-* attribute namespace for framework-owned attributes and future loader/compiler growth.',
+      'SPEC §6.1.1 reserves the kovo-* attribute namespace for framework-owned attributes and future loader/compiler growth.',
     );
   });
 
-  it('reports FW234 for missing or invalid package prefix facts', () => {
+  it('reports KV234 for missing or invalid package prefix facts', () => {
     const diagnostics = validatePackageComponentPrefixes(
       [{ packageName: '@missing/prefix' }, { packageName: '@bad/prefix', prefix: 'BadPrefix' }],
       fileName,
@@ -215,14 +215,14 @@ export const Shell = component('shell', {
 
     expect(diagnostics).toEqual([
       expect.objectContaining({
-        code: 'FW234',
-        message: `${fw234.message} @missing/prefix is imported as a component package but does not declare package.json jiso.prefix.`,
-        severity: fw234.severity,
+        code: 'KV234',
+        message: `${kv234.message} @missing/prefix is imported as a component package but does not declare package.json kovo.prefix.`,
+        severity: kv234.severity,
       }),
       expect.objectContaining({
-        code: 'FW234',
-        message: `${fw234.message} @bad/prefix declares invalid package.json jiso.prefix "BadPrefix".`,
-        severity: fw234.severity,
+        code: 'KV234',
+        message: `${kv234.message} @bad/prefix declares invalid package.json kovo.prefix "BadPrefix".`,
+        severity: kv234.severity,
       }),
     ]);
   });

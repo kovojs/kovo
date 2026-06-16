@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  assertInlineJisoLoaderInstallerResponseApplyParity,
-  assertMinifiedInlineJisoLoaderInstallerResponseApplyParity,
-  buildInlineJisoLoaderInstallerReadableSource,
-  buildInlineJisoLoaderInstallerSource,
+  assertInlineKovoLoaderInstallerResponseApplyParity,
+  assertMinifiedInlineKovoLoaderInstallerResponseApplyParity,
+  buildInlineKovoLoaderInstallerReadableSource,
+  buildInlineKovoLoaderInstallerSource,
   extractInlineResponseApplyReadableSource,
   inlineResponseApplyReadableSource,
   inlineWireParserReadableSource,
@@ -18,7 +18,7 @@ describe('inline loader response apply source', () => {
   it('generates readable inline loader source around the canonical response apply helper', () => {
     const alternateReadableApply = [
       'function applyInlineMutationResponseChunks(chunks, options) {',
-      '  options.dispatchQueryEvent("jiso:query", { detail: { queries: chunks.queries } });',
+      '  options.dispatchQueryEvent("kovo:query", { detail: { queries: chunks.queries } });',
       '  return applyHtmlResponseFragments(chunks.fragments, options.findFragmentTarget);',
       '}',
       'function applyHtmlResponseFragments(fragments, findFragmentTarget) {',
@@ -26,8 +26,8 @@ describe('inline loader response apply source', () => {
       '}',
     ].join('\n');
 
-    const defaultReadable = buildInlineJisoLoaderInstallerReadableSource();
-    const alternateReadable = buildInlineJisoLoaderInstallerReadableSource(
+    const defaultReadable = buildInlineKovoLoaderInstallerReadableSource();
+    const alternateReadable = buildInlineKovoLoaderInstallerReadableSource(
       inlineWireParserReadableSource,
       alternateReadableApply,
     );
@@ -66,7 +66,7 @@ describe('inline loader response apply source', () => {
       '  return applyHtmlResponseFragments(chunks.fragments, (target) => options.findFragmentTarget(target));',
       '}',
       'function dispatchInlineMutationQueries(queries, options) {',
-      '  options.dispatchQueryEvent("jiso:query", {',
+      '  options.dispatchQueryEvent("kovo:query", {',
       '    detail: {',
       '      queries: queries.map((query) => ({ attrs: query.attrs, content: query.content })),',
       '    },',
@@ -104,28 +104,28 @@ describe('inline loader response apply source', () => {
       '}',
     ].join('\n');
     const canonicalReadable = extractInlineResponseApplyReadableSource(canonicalApply);
-    const readableInstaller = buildInlineJisoLoaderInstallerReadableSource(
+    const readableInstaller = buildInlineKovoLoaderInstallerReadableSource(
       inlineWireParserReadableSource,
       canonicalReadable,
     );
-    const minifiedInstaller = buildInlineJisoLoaderInstallerSource(readableInstaller);
+    const minifiedInstaller = buildInlineKovoLoaderInstallerSource(readableInstaller);
 
     expect(canonicalReadable).toMatch(
       /^function dispatchInlineMutationQueries\(queries, options\).*function applyInlineMutationResponseChunks\(chunks, options\)/s,
     );
     expect(canonicalReadable).toContain('function dispatchInlineMutationQueries(queries, options)');
-    expect(canonicalReadable).toContain('options.dispatchQueryEvent("jiso:query", {');
+    expect(canonicalReadable).toContain('options.dispatchQueryEvent("kovo:query", {');
     expect(canonicalReadable).toContain(
       'return applyHtmlResponseFragments(chunks.fragments, (target) => options.findFragmentTarget(target));',
     );
     expect(() =>
-      assertInlineJisoLoaderInstallerResponseApplyParity(readableInstaller, canonicalApply),
+      assertInlineKovoLoaderInstallerResponseApplyParity(readableInstaller, canonicalApply),
     ).not.toThrow();
     expect(() =>
-      assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(minifiedInstaller, canonicalApply),
+      assertMinifiedInlineKovoLoaderInstallerResponseApplyParity(minifiedInstaller, canonicalApply),
     ).not.toThrow();
     expect(() =>
-      assertInlineJisoLoaderInstallerResponseApplyParity(
+      assertInlineKovoLoaderInstallerResponseApplyParity(
         readableInstaller.replace(
           'options.replaceFragment(element, fragment.html);',
           'options.appendFragment(element, fragment.html);',
@@ -134,7 +134,7 @@ describe('inline loader response apply source', () => {
       ),
     ).toThrow('canonical response apply helper closure exactly once; found 0');
     expect(() =>
-      assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(
+      assertMinifiedInlineKovoLoaderInstallerResponseApplyParity(
         minifiedInstaller.replace(
           'options.replaceFragment(element,fragment.html)',
           'options.appendFragment(element,fragment.html)',
@@ -164,7 +164,7 @@ describe('inline loader response apply source', () => {
       '  return [];',
       '}',
       'function dispatchInlineMutationQueries(queries, options) {',
-      '  options.dispatchQueryEvent("jiso:query", { detail: { queries } });',
+      '  options.dispatchQueryEvent("kovo:query", { detail: { queries } });',
       '}',
       'function applyHtmlResponseFragments(fragments, findFragmentTarget) {',
       '  return fragments.map((fragment) => findFragmentTarget(fragment.target));',
@@ -187,8 +187,8 @@ describe('inline loader response apply source', () => {
 
   it('keeps freshly minified response apply source compact before parity execution', () => {
     // SPEC.md §4.4/§9.1: minification cannot fork the inline mutation response
-    // scanner or the batched `jiso:query` event handoff used by runtime query apply.
-    const minifiedSource = buildInlineJisoLoaderInstallerSource();
+    // scanner or the batched `kovo:query` event handoff used by runtime query apply.
+    const minifiedSource = buildInlineKovoLoaderInstallerSource();
 
     expect(minifiedSource).toBe(minifiedSource.trim());
     expect(minifiedSource).not.toMatch(/\n|\s{2,}/);
@@ -201,7 +201,7 @@ describe('inline loader response apply source', () => {
     const topLevelHelperSource = [
       'const applyTarget = (target, html) => { target.innerHTML = html; };',
       'export function applyInlineMutationResponseChunks(chunks, options) {',
-      '  options.dispatchQueryEvent("jiso:query", { detail: { queries: chunks.queries } });',
+      '  options.dispatchQueryEvent("kovo:query", { detail: { queries: chunks.queries } });',
       '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
       '}',
       'function applyInlineFragment(fragment, findFragmentTarget) {',
@@ -241,7 +241,7 @@ describe('inline loader response apply source', () => {
       'const applyTarget = (target, html) => { target.innerHTML = html; };',
       'export function applyInlineMutationResponseChunks(chunks, options) {',
       '  const applyResponseFragments = (fragments) => fragments.map((fragment) => fragment.target);',
-      '  options.dispatchQueryEvent("jiso:query", { detail: { queries: chunks.queries } });',
+      '  options.dispatchQueryEvent("kovo:query", { detail: { queries: chunks.queries } });',
       '  return applyResponseFragments(chunks.fragments).map((target) =>',
       '    applyInlineFragment(target, options.findFragmentTarget),',
       '  );',

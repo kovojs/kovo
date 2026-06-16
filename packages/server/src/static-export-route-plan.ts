@@ -1,4 +1,4 @@
-import type { JisoApp } from './app-types.js';
+import type { KovoApp } from './app-types.js';
 import { matchRoute, normalizePathname } from './match.js';
 import {
   staticExportDiagnostic,
@@ -15,7 +15,7 @@ export interface StaticExportRoutePlan {
   targets: readonly StaticExportRouteTarget[];
 }
 
-export function staticExportRoutePlan(app: JisoApp): StaticExportRoutePlan {
+export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
   const diagnostics: StaticExportDiagnostic[] = [];
   const targets: StaticExportRouteTarget[] = [];
   const targetPaths = new Map<string, StaticExportRouteTarget>();
@@ -25,7 +25,7 @@ export function staticExportRoutePlan(app: JisoApp): StaticExportRoutePlan {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
-          `FW229 static export cannot prove '${route.path}' is session-independent while the app has a sessionProvider. Exported sites have no server-side sessions; split this route into an explicitly public app shell or wait for compiler-backed session-dependence metadata.`,
+          `KV229 static export cannot prove '${route.path}' is session-independent while the app has a sessionProvider. Exported sites have no server-side sessions; split this route into an explicitly public app shell or wait for compiler-backed session-dependence metadata.`,
         ),
       );
       continue;
@@ -35,7 +35,7 @@ export function staticExportRoutePlan(app: JisoApp): StaticExportRoutePlan {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
-          `FW229 static export cannot export guarded route '${route.path}'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.`,
+          `KV229 static export cannot export guarded route '${route.path}'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.`,
         ),
       );
       continue;
@@ -58,7 +58,7 @@ export function staticExportRoutePlan(app: JisoApp): StaticExportRoutePlan {
 }
 
 function staticExportParamRouteTargets(
-  route: JisoApp['routes'][number],
+  route: KovoApp['routes'][number],
   targetPaths: Map<string, StaticExportRouteTarget>,
 ): StaticExportRoutePlan {
   const staticPaths = route.staticPaths;
@@ -67,7 +67,7 @@ function staticExportParamRouteTargets(
       diagnostics: [
         staticExportDiagnostic(
           route.path,
-          `FW229 static export cannot enumerate param route '${route.path}' without staticPaths metadata. Add explicit staticPaths for every exported concrete URL, or exclude the route from export.`,
+          `KV229 static export cannot enumerate param route '${route.path}' without staticPaths metadata. Add explicit staticPaths for every exported concrete URL, or exclude the route from export.`,
         ),
       ],
       targets: [],
@@ -79,7 +79,7 @@ function staticExportParamRouteTargets(
       diagnostics: [
         staticExportDiagnostic(
           route.path,
-          `FW229 static export cannot enumerate param route '${route.path}' because staticPaths is empty. Add at least one concrete exported URL, or exclude the route from export.`,
+          `KV229 static export cannot enumerate param route '${route.path}' because staticPaths is empty. Add at least one concrete exported URL, or exclude the route from export.`,
         ),
       ],
       targets: [],
@@ -94,7 +94,7 @@ function staticExportParamRouteTargets(
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
-          `FW229 static export staticPath '${staticPath}' for param route '${route.path}' must be an absolute pathname without search or hash.`,
+          `KV229 static export staticPath '${staticPath}' for param route '${route.path}' must be an absolute pathname without search or hash.`,
         ),
       );
       continue;
@@ -104,7 +104,7 @@ function staticExportParamRouteTargets(
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
-          `FW229 static export staticPath '${staticPath}' for param route '${route.path}' must be a concrete URL, not a route pattern.`,
+          `KV229 static export staticPath '${staticPath}' for param route '${route.path}' must be a concrete URL, not a route pattern.`,
         ),
       );
       continue;
@@ -114,7 +114,7 @@ function staticExportParamRouteTargets(
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
-          `FW229 static export staticPath '${staticPath}' does not match param route '${route.path}'.`,
+          `KV229 static export staticPath '${staticPath}' does not match param route '${route.path}'.`,
         ),
       );
       continue;
@@ -147,7 +147,7 @@ function addStaticExportRouteTarget(
     diagnostics.push(
       staticExportDiagnostic(
         target.routePath,
-        `FW229 static export cannot export '${target.path}' for route '${target.routePath}' because it duplicates the concrete route target from '${existing.routePath}'.`,
+        `KV229 static export cannot export '${target.path}' for route '${target.routePath}' because it duplicates the concrete route target from '${existing.routePath}'.`,
       ),
     );
     return;
@@ -183,7 +183,7 @@ function unsafeStaticExportRouteTargetDiagnostic(
 ): StaticExportDiagnostic {
   return staticExportDiagnostic(
     routePath,
-    `FW229 static export cannot export concrete route target '${targetPath}' for route '${routePath}' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.`,
+    `KV229 static export cannot export concrete route target '${targetPath}' for route '${routePath}' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.`,
   );
 }
 

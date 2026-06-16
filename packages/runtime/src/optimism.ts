@@ -1,4 +1,4 @@
-import type { Form, FormInput, InvalidationSets, JsonValue, QueryRegistry } from '@jiso/core';
+import type { Form, FormInput, InvalidationSets, JsonValue, QueryRegistry } from '@kovojs/core';
 import { queryIdentityFromStoreKey, queryStoreKey } from './query-store.js';
 import type { QuerySnapshot, QueryStore } from './query-store.js';
 
@@ -58,8 +58,8 @@ type InvalidatedQueryValues<Definition> = {
  * (SPEC §10.4, §10.6).
  *
  * @example
- * import { form } from '@jiso/core';
- * import type { OptimisticFor } from '@jiso/runtime';
+ * import { form } from '@kovojs/core';
+ * import type { OptimisticFor } from '@kovojs/runtime';
  *
  * const addToCart = form('cart/add');
  *
@@ -271,11 +271,11 @@ let derivedTempIdCounter = 0;
  * (SPEC.md §10.5 INSERT × AGG): a tempId placeholder, pending-styled and
  * content-matched against server truth on reconcile. Re-running the transform
  * during rebase mints a new id — safe because the row is a prediction until the
- * server's `<fw-query>` truth replaces it.
+ * server's `<kovo-query>` truth replaces it.
  */
 export function tempId(): string {
   derivedTempIdCounter += 1;
-  return `fw-tmp-${derivedTempIdCounter}`;
+  return `kovo-tmp-${derivedTempIdCounter}`;
 }
 
 /** Client clock for `now()` placeholders in derived optimistic transforms (SPEC.md §10.5). */

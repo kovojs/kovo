@@ -8,7 +8,7 @@ import type { CartResult, OrderHistoryResult, ProductsResult } from './queries.j
 // makes TypeScript demand a transform (or 'await-fragment') per query.
 
 // snippet:registries
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface QueryRegistry {
     cart: CartResult;
     orderHistory: OrderHistoryResult;

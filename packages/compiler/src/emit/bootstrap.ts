@@ -32,14 +32,14 @@ export function emitQueryPlanBootstrapModule(
     fileName,
     kind: 'client',
     source: `${compilerIrHeader}
-import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
+import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 ${imports ? `${imports}\n` : ''}
 const store = createQueryStore();
 const queryPlans = {
 ${spreads}
 };
 
-installJisoLoader({
+installKovoLoader({
   importModule: (specifier) => import(specifier),
   root: document,
   queryStore: store,
@@ -51,7 +51,7 @@ installJisoLoader({
   },
 });
 
-export function applyJisoDeferredStreamResponse(body, options = {}) {
+export function applyKovoDeferredStreamResponse(body, options = {}) {
   return applyDeferredStreamResponseToDom({
     body,
     ...(options.boundary ? { boundary: options.boundary } : {}),

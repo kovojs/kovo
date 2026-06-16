@@ -1,10 +1,10 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   checkboxGroupItemClick as _checkboxGroupItemClick,
   checkboxTriggerClick as _checkboxTriggerClick,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryCheckboxGroupDemo$input_click = handler((event, ctx) => {
   const result = _checkboxTriggerClick(Object(event), {

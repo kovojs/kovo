@@ -4,74 +4,74 @@ import type {
   StaticExportResult,
 } from './static-export-types.js';
 import {
-  createJisoAppShellViteStaticExportBuildFromManifestFile,
-  jisoAppShellViteManifestFileDryRunStaticExportOptions,
-  jisoAppShellViteManifestFileWriteStaticExportOptions,
-  type JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
-  type JisoAppShellViteManifestFileBuildStaticExportOptions,
+  createKovoAppShellViteStaticExportBuildFromManifestFile,
+  kovoAppShellViteManifestFileDryRunStaticExportOptions,
+  kovoAppShellViteManifestFileWriteStaticExportOptions,
+  type KovoAppShellViteManifestFileBuildStaticExportInventoryOptions,
+  type KovoAppShellViteManifestFileBuildStaticExportOptions,
 } from './vite-static-export-options.js';
-import type { JisoAppShellViteStaticExportWithManifestResult } from './vite-static-export-result.js';
+import type { KovoAppShellViteStaticExportWithManifestResult } from './vite-static-export-result.js';
 import {
-  exportJisoAppShellViteBuild,
-  exportJisoAppShellViteBuildWithManifest,
-  staticExportInventoryForJisoAppShellViteBuild,
-  staticExportManifestForJisoAppShellViteBuild,
+  exportKovoAppShellViteBuild,
+  exportKovoAppShellViteBuildWithManifest,
+  staticExportInventoryForKovoAppShellViteBuild,
+  staticExportManifestForKovoAppShellViteBuild,
 } from './vite-static-export-build.js';
-import type { JisoAppShellBuild } from './vite-build.js';
+import type { KovoAppShellBuild } from './vite-build.js';
 
-export async function exportJisoAppShellViteBuildFromManifestFile(
-  options: JisoAppShellViteManifestFileBuildStaticExportOptions,
+export async function exportKovoAppShellViteBuildFromManifestFile(
+  options: KovoAppShellViteManifestFileBuildStaticExportOptions,
 ): Promise<StaticExportResult> {
-  return replayJisoAppShellViteManifestFileBuild(options, (build) =>
-    exportJisoAppShellViteBuild(
+  return replayKovoAppShellViteManifestFileBuild(options, (build) =>
+    exportKovoAppShellViteBuild(
       build,
-      jisoAppShellViteManifestFileWriteStaticExportOptions(options),
+      kovoAppShellViteManifestFileWriteStaticExportOptions(options),
     ),
   );
 }
 
-export async function exportJisoAppShellViteBuildWithManifestFromManifestFile(
-  options: JisoAppShellViteManifestFileBuildStaticExportOptions,
-): Promise<JisoAppShellViteStaticExportWithManifestResult> {
-  return replayJisoAppShellViteManifestFileBuild(options, (build) =>
-    exportJisoAppShellViteBuildWithManifest(
+export async function exportKovoAppShellViteBuildWithManifestFromManifestFile(
+  options: KovoAppShellViteManifestFileBuildStaticExportOptions,
+): Promise<KovoAppShellViteStaticExportWithManifestResult> {
+  return replayKovoAppShellViteManifestFileBuild(options, (build) =>
+    exportKovoAppShellViteBuildWithManifest(
       build,
-      jisoAppShellViteManifestFileWriteStaticExportOptions(options),
+      kovoAppShellViteManifestFileWriteStaticExportOptions(options),
     ),
   );
 }
 
-export async function staticExportInventoryForJisoAppShellViteBuildFromManifestFile(
-  options: JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
+export async function staticExportInventoryForKovoAppShellViteBuildFromManifestFile(
+  options: KovoAppShellViteManifestFileBuildStaticExportInventoryOptions,
 ): Promise<StaticExportInventoryItem[]> {
-  return replayJisoAppShellViteManifestFileBuild(options, (build) =>
-    staticExportInventoryForJisoAppShellViteBuild(
+  return replayKovoAppShellViteManifestFileBuild(options, (build) =>
+    staticExportInventoryForKovoAppShellViteBuild(
       build,
-      jisoAppShellViteManifestFileDryRunStaticExportOptions(options),
+      kovoAppShellViteManifestFileDryRunStaticExportOptions(options),
     ),
   );
 }
 
-export async function staticExportManifestForJisoAppShellViteBuildFromManifestFile(
-  options: JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
+export async function staticExportManifestForKovoAppShellViteBuildFromManifestFile(
+  options: KovoAppShellViteManifestFileBuildStaticExportInventoryOptions,
 ): Promise<StaticExportManifest> {
-  return replayJisoAppShellViteManifestFileBuild(options, (build) =>
-    staticExportManifestForJisoAppShellViteBuild(
+  return replayKovoAppShellViteManifestFileBuild(options, (build) =>
+    staticExportManifestForKovoAppShellViteBuild(
       build,
-      jisoAppShellViteManifestFileDryRunStaticExportOptions(options),
+      kovoAppShellViteManifestFileDryRunStaticExportOptions(options),
     ),
   );
 }
 
-async function replayJisoAppShellViteManifestFileBuild<T>(
+async function replayKovoAppShellViteManifestFileBuild<T>(
   options:
-    | JisoAppShellViteManifestFileBuildStaticExportOptions
-    | JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
-  replay: (build: JisoAppShellBuild) => Promise<T>,
+    | KovoAppShellViteManifestFileBuildStaticExportOptions
+    | KovoAppShellViteManifestFileBuildStaticExportInventoryOptions,
+  replay: (build: KovoAppShellBuild) => Promise<T>,
 ): Promise<T> {
   // SPEC §9.5: manifest-file export tasks first close over one built app shell,
   // then run write or dry-run replay through the same Vite build boundary.
-  const build = await createJisoAppShellViteStaticExportBuildFromManifestFile(options);
+  const build = await createKovoAppShellViteStaticExportBuildFromManifestFile(options);
 
   return replay(build);
 }

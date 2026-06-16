@@ -1,6 +1,6 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
-import { cn, defineVariants, switchRootAttributes, type ClassValue } from '@jiso/headless-ui';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { cn, defineVariants, switchRootAttributes, type ClassValue } from '@kovojs/headless-ui';
 
 export interface SwitchProps {
   describedBy?: string;

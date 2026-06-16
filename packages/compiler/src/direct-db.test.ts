@@ -1,12 +1,12 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from './index.js';
 
-const fw330 = diagnosticDefinitions.FW330;
+const kv330 = diagnosticDefinitions.KV330;
 
 describe('compiler direct db diagnostics', () => {
-  it('reports FW330 when mutation handlers access request db directly', () => {
+  it('reports KV330 when mutation handlers access request db directly', () => {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
       source: `
@@ -22,17 +22,17 @@ export const addToCart = mutation('cart/add', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW330',
+        code: 'KV330',
         fileName: 'cart.mutation.ts',
-        message: fw330.message,
-        severity: fw330.severity,
+        message: kv330.message,
+        severity: kv330.severity,
         start: { column: 5, line: 5 },
         length: 10,
       },
     ]);
   });
 
-  it('reports FW330 for arrow mutation handlers that receive db directly', () => {
+  it('reports KV330 for arrow mutation handlers that receive db directly', () => {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
       source: `
@@ -48,17 +48,17 @@ export const addToCart = mutation('cart/add', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW330',
+        code: 'KV330',
         fileName: 'cart.mutation.ts',
-        message: fw330.message,
-        severity: fw330.severity,
+        message: kv330.message,
+        severity: kv330.severity,
         start: { column: 26, line: 4 },
         length: 2,
       },
     ]);
   });
 
-  it('reports FW330 for every mutation handler with direct db access', () => {
+  it('reports KV330 for every mutation handler with direct db access', () => {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
       source: `
@@ -80,25 +80,25 @@ export const clearCart = mutation('cart/clear', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW330',
+        code: 'KV330',
         fileName: 'cart.mutation.ts',
         length: 10,
-        message: fw330.message,
-        severity: fw330.severity,
+        message: kv330.message,
+        severity: kv330.severity,
         start: { column: 5, line: 5 },
       },
       {
-        code: 'FW330',
+        code: 'KV330',
         fileName: 'cart.mutation.ts',
         length: 2,
-        message: fw330.message,
-        severity: fw330.severity,
+        message: kv330.message,
+        severity: kv330.severity,
         start: { column: 18, line: 11 },
       },
     ]);
   });
 
-  it('does not report FW330 for domain-routed mutation handlers', () => {
+  it('does not report KV330 for domain-routed mutation handlers', () => {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
       source: `

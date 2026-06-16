@@ -43,7 +43,7 @@ describe('server static export', () => {
   });
 
   it('copies referenced versioned client modules through the same handler bytes', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
       const registry = createMemoryVersionedClientModuleRegistry();
       const cartHref = registry.put({
@@ -78,8 +78,8 @@ describe('server static export', () => {
         '/c/menu.client.js',
       ]);
 
-      const cartResponse = await handler(new Request(`https://jiso.local${cartHref}`));
-      const menuResponse = await handler(new Request(`https://jiso.local${menuHref}`));
+      const cartResponse = await handler(new Request(`https://kovo.local${cartHref}`));
+      const menuResponse = await handler(new Request(`https://kovo.local${menuHref}`));
       await expect(readFile(path.join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
         await cartResponse.text(),
       );
@@ -92,7 +92,7 @@ describe('server static export', () => {
   });
 
   it('copies same-origin absolute client module refs from exported documents and Link headers', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
       const registry = createMemoryVersionedClientModuleRegistry();
       const cartHref = registry.put({
@@ -138,7 +138,7 @@ describe('server static export', () => {
   });
 
   it('rejects referenced client modules that replay to non-JavaScript before writing files', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
       const app = createApp({
         clientModules: {
@@ -162,10 +162,10 @@ describe('server static export', () => {
       });
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining(
               "client module '/c/cart.client.js?v=cart-1' because the app handler returned status 200 with Content-Type 'text/html; charset=utf-8'",
             ),
@@ -181,7 +181,7 @@ describe('server static export', () => {
   });
 
   it('refuses unsafe client module output paths', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
       const badHref = '/c/%2Fescape.client.js?v=v1';
       const app = createApp({
@@ -206,10 +206,10 @@ describe('server static export', () => {
       });
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             message: expect.stringContaining('unsafe client module path segment'),
             routePath: '/c/%2Fescape.client.js',
           },

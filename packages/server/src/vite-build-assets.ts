@@ -4,29 +4,29 @@ import { fileURLToPath } from 'node:url';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import type { StaticExportAssetInput } from './static-export-types.js';
 import {
-  jisoAppShellViteManifestAssets,
-  jisoAppShellViteManifestFromFile,
+  kovoAppShellViteManifestAssets,
+  kovoAppShellViteManifestFromFile,
   normalizedDistFile,
-  type JisoAppShellBuildAsset,
-  type JisoAppShellViteManifestHintOptions,
+  type KovoAppShellBuildAsset,
+  type KovoAppShellViteManifestHintOptions,
 } from './vite-manifest.js';
 
-export interface JisoAppShellViteStaticExportAssetOptions {
+export interface KovoAppShellViteStaticExportAssetOptions {
   distDir: string | URL;
 }
 
-export interface JisoAppShellViteBuildStaticExportAssetOptions extends JisoAppShellViteStaticExportAssetOptions {
+export interface KovoAppShellViteBuildStaticExportAssetOptions extends KovoAppShellViteStaticExportAssetOptions {
   assets?: readonly StaticExportAssetInput[];
 }
 
-export interface JisoAppShellViteManifestFileStaticExportAssetOptions extends JisoAppShellViteStaticExportAssetOptions {
+export interface KovoAppShellViteManifestFileStaticExportAssetOptions extends KovoAppShellViteStaticExportAssetOptions {
   base?: string;
   manifestFile?: string | URL;
 }
 
-export function jisoAppShellViteStaticExportAssets(
-  assets: readonly JisoAppShellBuildAsset[],
-  options: JisoAppShellViteStaticExportAssetOptions,
+export function kovoAppShellViteStaticExportAssets(
+  assets: readonly KovoAppShellBuildAsset[],
+  options: KovoAppShellViteStaticExportAssetOptions,
 ): StaticExportAssetInput[] {
   return assets.map((asset) => {
     const contentType = viteAssetContentType(asset.file);
@@ -39,13 +39,13 @@ export function jisoAppShellViteStaticExportAssets(
   });
 }
 
-export async function jisoAppShellViteStaticExportAssetsFromManifestFile(
-  options: JisoAppShellViteManifestFileStaticExportAssetOptions,
+export async function kovoAppShellViteStaticExportAssetsFromManifestFile(
+  options: KovoAppShellViteManifestFileStaticExportAssetOptions,
 ): Promise<StaticExportAssetInput[]> {
-  return jisoAppShellViteStaticExportAssets(
-    jisoAppShellViteManifestAssets(
-      await jisoAppShellViteManifestFromFile(
-        options.manifestFile ?? jisoAppShellViteManifestFile(options.distDir),
+  return kovoAppShellViteStaticExportAssets(
+    kovoAppShellViteManifestAssets(
+      await kovoAppShellViteManifestFromFile(
+        options.manifestFile ?? kovoAppShellViteManifestFile(options.distDir),
       ),
       viteManifestOptions(options.base),
     ),
@@ -53,17 +53,17 @@ export async function jisoAppShellViteStaticExportAssetsFromManifestFile(
   );
 }
 
-export function jisoAppShellViteBuildStaticExportAssets(
-  build: { assets: readonly JisoAppShellBuildAsset[] },
-  options: JisoAppShellViteBuildStaticExportAssetOptions,
+export function kovoAppShellViteBuildStaticExportAssets(
+  build: { assets: readonly KovoAppShellBuildAsset[] },
+  options: KovoAppShellViteBuildStaticExportAssetOptions,
 ): StaticExportAssetInput[] {
   return [
-    ...jisoAppShellViteStaticExportAssets(build.assets, { distDir: options.distDir }),
+    ...kovoAppShellViteStaticExportAssets(build.assets, { distDir: options.distDir }),
     ...(options.assets ?? []),
   ];
 }
 
-export function jisoAppShellViteManifestFile(distDir: string | URL): string {
+export function kovoAppShellViteManifestFile(distDir: string | URL): string {
   return path.join(resolvedFileSystemPath(distDir), '.vite', 'manifest.json');
 }
 
@@ -74,7 +74,7 @@ export function resolvedFileSystemPath(value: string | URL): string {
     throw new StaticExportError([
       staticExportDiagnostic(
         'vite-distDir',
-        `FW229 Vite app-shell filesystem roots must be filesystem paths or file: URLs, received '${value.href}'. SPEC §9.5 static export copies Vite assets from a local output directory.`,
+        `KV229 Vite app-shell filesystem roots must be filesystem paths or file: URLs, received '${value.href}'. SPEC §9.5 static export copies Vite assets from a local output directory.`,
       ),
     ]);
   }
@@ -90,7 +90,7 @@ export function viteDistSourcePath(distDir: string | URL, file: string): string 
   throw new Error(`App shell build asset must stay within the Vite output directory: ${file}`);
 }
 
-function viteManifestOptions(base: string | undefined): JisoAppShellViteManifestHintOptions {
+function viteManifestOptions(base: string | undefined): KovoAppShellViteManifestHintOptions {
   return base === undefined ? {} : { base };
 }
 

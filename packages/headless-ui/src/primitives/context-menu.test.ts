@@ -76,7 +76,7 @@ describe('headless-ui context-menu primitive', () => {
       'aria-haspopup': 'menu',
       'aria-labelledby': 'editor-label',
       'data-state': 'open',
-      'jiso-context-menu': 'editor-menu',
+      'kovo-context-menu': 'editor-menu',
       id: 'editor-surface',
       role: 'button',
     });

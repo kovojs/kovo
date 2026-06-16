@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { event } from '@jiso/core';
+import { event } from '@kovojs/core';
 
 import { createEventBus } from './events.js';
 

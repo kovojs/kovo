@@ -26,7 +26,7 @@ describe('server static export', () => {
       routes: [
         route('/about', {
           meta: { title: 'About' },
-          page: () => '<main>About Jiso</main>',
+          page: () => '<main>About Kovo</main>',
         }),
       ],
     });
@@ -42,7 +42,7 @@ describe('server static export', () => {
       status: 200,
     });
     expect(result.artifacts[0]?.body).toContain('<title>About</title>');
-    expect(result.artifacts[0]?.body).toContain('<body data-export-shell><main>About Jiso</main>');
+    expect(result.artifacts[0]?.body).toContain('<body data-export-shell><main>About Kovo</main>');
   });
 
   it('uses the same handler and document assembly rather than a second render path', async () => {
@@ -59,17 +59,17 @@ describe('server static export', () => {
     const handler = createRequestHandler(app);
 
     const exported = await exportStaticApp(app);
-    const handled = await handler(new Request('https://jiso.local/'));
+    const handled = await handler(new Request('https://kovo.local/'));
 
     expect(exported.artifacts[0]?.path).toBe('/index.html');
     expect(exported.clientModules).toEqual([]);
     await expect(handled.text()).resolves.toBe(exported.artifacts[0]?.body);
     expect(exported.artifacts[0]?.body).toContain('<main data-url="/">from-page</main>');
-    expect(exported.artifacts[0]?.body).toContain('installInlineJisoLoader');
+    expect(exported.artifacts[0]?.body).toContain('installInlineKovoLoader');
   });
 
   it('writes replayed html artifacts under the configured output directory', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
       const app = createApp({
         renderRoute(value, context) {

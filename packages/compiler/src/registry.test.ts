@@ -8,7 +8,7 @@ import {
 } from './index.js';
 
 const cartBadgeSource = `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
@@ -62,7 +62,7 @@ describe('compiler registry and graph emission', () => {
     expect(registry).toContain(`export interface InvalidationSets {
   'cart/add': 'cart' | 'orderHistory' | 'productGrid';
 }`);
-    expect(registry).toContain(`declare module '@jiso/core' {
+    expect(registry).toContain(`declare module '@kovojs/core' {
   interface FragmentTargets {
   'cart-badge': {};
   }
@@ -78,8 +78,8 @@ describe('compiler registry and graph emission', () => {
   }
 
   interface RouteRegistry {
-  '/cart': import('@jiso/core').Route<'/cart'>;
-  '/products/:id': import('@jiso/core').Route<'/products/:id'>;
+  '/cart': import('@kovojs/core').Route<'/cart'>;
+  '/products/:id': import('@kovojs/core').Route<'/products/:id'>;
   }
 
   interface InvalidationSets {
@@ -137,8 +137,8 @@ describe('compiler registry and graph emission', () => {
     const registry = result.files[2]?.source ?? '';
 
     expect(registry).toContain(`export interface RouteRegistry {
-  '/cart': import('@jiso/core').Route<'/cart'>;
-  '/products/:id': import('@jiso/core').Route<'/products/:id'>;
+  '/cart': import('@kovojs/core').Route<'/cart'>;
+  '/products/:id': import('@kovojs/core').Route<'/products/:id'>;
 }`);
     expect(registry).toContain(`export interface InvalidationSets {
   'cart/add': 'cart';
@@ -156,7 +156,7 @@ describe('compiler registry and graph emission', () => {
     const productGrid = compileComponentModule({
       fileName: 'components/products/product-grid.tsx',
       source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 export const ProductGrid = component('product-grid', {
   queries: { productGrid: {} },

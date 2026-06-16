@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
 
-import * as headlessPrimitives from '@jiso/headless-ui/primitives';
+import * as headlessPrimitives from '@kovojs/headless-ui/primitives';
 
 export const galleryRoot = resolve(import.meta.dirname, '..');
 
@@ -87,8 +87,8 @@ export function evaluateClientModule(
   globals: Record<string, unknown> = {},
 ): ClientExports {
   const source = readGenerated(fileName)
-    .replace(/import \{[\s\S]*?\} from '@jiso\/runtime';\n\n?/, '')
-    .replace(/import \{[\s\S]*?\} from '@jiso\/headless-ui\/primitives';\n\n?/, '')
+    .replace(/import \{[\s\S]*?\} from '@kovojs\/runtime';\n\n?/, '')
+    .replace(/import \{[\s\S]*?\} from '@kovojs\/headless-ui\/primitives';\n\n?/, '')
     .replaceAll('export const ', 'exports.');
   const exports: ClientExports = {};
   vm.runInNewContext(source, {

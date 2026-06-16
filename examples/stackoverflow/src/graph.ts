@@ -1,10 +1,10 @@
-import type { FwExplainInput, TouchGraph } from '@jiso/core';
+import type { KovoExplainInput, TouchGraph } from '@kovojs/core';
 
-// SPEC.md §10.2 / §11.2: the Stack Overflow graph facts consumed by `fw check`
-// and `fw explain`. The optimistic[] coverage is entirely compiler-DERIVED
+// SPEC.md §10.2 / §11.2: the Stack Overflow graph facts consumed by `kovo check`
+// and `kovo explain`. The optimistic[] coverage is entirely compiler-DERIVED
 // (generated/optimistic/*.ts): every (mutation × invalidated-query) pair carries
 // status 'derived' with derivation metadata { status: 'derived' } — zero
-// UNHANDLED (FW310), zero punts. The touchGraph is EXTRACTED from src by
+// UNHANDLED (KV310), zero punts. The touchGraph is EXTRACTED from src by
 // scripts/emit-graph.mjs (extractTouchGraphFromProject), not hand-authored.
 
 // SPEC.md §10.5: each pair is proven derivable by deriveOptimistic (see the
@@ -57,7 +57,7 @@ export function soGraphDeclarations() {
       { domains: ['answer'], query: 'answerList' },
       { domains: ['vote'], query: 'questionScore' },
     ],
-  } satisfies Omit<FwExplainInput, 'touchGraph'>;
+  } satisfies Omit<KovoExplainInput, 'touchGraph'>;
 }
 
 export function createSoGraph(touchGraph: TouchGraph) {
@@ -66,5 +66,5 @@ export function createSoGraph(touchGraph: TouchGraph) {
     touchGraph,
   };
 
-  return graph satisfies FwExplainInput;
+  return graph satisfies KovoExplainInput;
 }

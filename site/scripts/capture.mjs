@@ -2,8 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 
 import { compileComponentModule } from '../../dist/compiler/src/index.mjs';
-import { fwExplain } from '../../dist/cli/src/index.mjs';
-import { jisoLoaderSource } from '../../dist/runtime/src/index.mjs';
+import { kovoExplain } from '../../dist/cli/src/index.mjs';
+import { kovoLoaderSource } from '../../dist/runtime/src/index.mjs';
 
 /**
  * Artifact-capture harness (plan W3). Every landing/docs visual is regenerated
@@ -32,7 +32,7 @@ function artifactFrame(title, bodyHtml) {
 }
 
 /**
- * The FW227 golden teaching error (SPEC §4.8), produced by the real compiler
+ * The KV227 golden teaching error (SPEC §4.8), produced by the real compiler
  * against the same nullable-shape fixture the compiler test suite pins.
  */
 export function captureTeachingError() {
@@ -52,10 +52,10 @@ export const ProductCard = component('product-card', {
 `,
   });
 
-  const diagnostic = result.diagnostics.find((entry) => entry.code === 'FW227');
+  const diagnostic = result.diagnostics.find((entry) => entry.code === 'KV227');
   if (!diagnostic) {
     throw new Error(
-      'capture: the FW227 fixture no longer produces its teaching error — update the capture or the landing claim',
+      'capture: the KV227 fixture no longer produces its teaching error — update the capture or the landing claim',
     );
   }
 
@@ -102,19 +102,19 @@ export async function captureWireTrace(repoRoot) {
   return artifactFrame('fixtures/wire/enhanced-mutation.http — pinned byte-for-byte in CI', body);
 }
 
-/** fw explain against the commerce app graph — the queryable behavior surface. */
-export async function captureFwExplain(repoRoot) {
+/** kovo explain against the commerce app graph — the queryable behavior surface. */
+export async function captureKovoExplain(repoRoot) {
   const graph = JSON.parse(
     await readFile(new URL('examples/commerce/src/generated/graph.json', repoRoot), 'utf8'),
   );
 
-  const result = fwExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' });
+  const result = kovoExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' });
   if (result.exitCode !== 0) {
-    throw new Error(`capture: fw explain failed:\n${result.output}`);
+    throw new Error(`capture: kovo explain failed:\n${result.output}`);
   }
 
   const body = [
-    `<span class="tok-dim">$ fw explain mutation cart/add --optimistic graph.json</span>`,
+    `<span class="tok-dim">$ kovo explain mutation cart/add --optimistic graph.json</span>`,
     '',
     ...result.output
       .trimEnd()
@@ -126,13 +126,13 @@ export async function captureFwExplain(repoRoot) {
       ),
   ].join('\n');
 
-  return artifactFrame('fw explain — the commerce reference app, real output', body);
+  return artifactFrame('kovo explain — the commerce reference app, real output', body);
 }
 
 /** The inline loader budget, measured from the artifact that actually ships. */
 export function captureLoaderBudget() {
-  const rawBytes = Buffer.byteLength(jisoLoaderSource, 'utf8');
-  const gzipBytes = gzipSync(jisoLoaderSource).byteLength;
+  const rawBytes = Buffer.byteLength(kovoLoaderSource, 'utf8');
+  const gzipBytes = gzipSync(kovoLoaderSource).byteLength;
   if (gzipBytes > LOADER_BUDGET_BYTES) {
     throw new Error(
       `capture: inline loader is ${gzipBytes}B gzipped, over its ${LOADER_BUDGET_BYTES}B budget — the landing claim would be false`,
@@ -147,7 +147,7 @@ export function captureLoaderBudget() {
  * docs can never drift from what the compiler actually produces (SPEC §5.2).
  */
 export function captureLowering() {
-  const source = `import { component } from '@jiso/core';
+  const source = `import { component } from '@kovojs/core';
 
 export const CartBadge = component('cart-badge', {
   queries: { cart: cartQuery },
@@ -170,7 +170,7 @@ export const CartBadge = component('cart-badge', {
   const client = result.files.find((file) => file.kind === 'client')?.source;
   if (!server || !client) throw new Error('capture: lowering example emitted no server/client IR');
 
-  const lint = result.diagnostics.find((entry) => entry.code === 'FW210');
+  const lint = result.diagnostics.find((entry) => entry.code === 'KV210');
 
   return {
     client: client.trim(),
@@ -182,7 +182,7 @@ export const CartBadge = component('cart-badge', {
 
 export async function captureAll(repoRoot) {
   return {
-    fwExplain: await captureFwExplain(repoRoot),
+    kovoExplain: await captureKovoExplain(repoRoot),
     loader: captureLoaderBudget(),
     lowering: captureLowering(),
     teachingError: captureTeachingError(),

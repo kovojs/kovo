@@ -4,9 +4,9 @@
  * (SPEC §7 L0: zero JavaScript), the agents/users split, and the ledger strip.
  *
  * Honesty note: the loader byte count comes from the W3 capture (measured
- * from the shipping artifact every build). The cascade, FW402/FW223 panels,
+ * from the shipping artifact every build). The cascade, KV402/KV223 panels,
  * and the `BRAND_CLI check` framing are *designed illustrations* of the
- * intended DX — FW227 is a real diagnostic today (SPEC §4.8); the cascade
+ * intended DX — KV227 is a real diagnostic today (SPEC §4.8); the cascade
  * codes and code-frame presentation are aspirational and not claimed as
  * live captures anywhere in the copy.
  *
@@ -33,7 +33,7 @@ function landingHeader() {
       <nav>${NAV.map((item) => `<a href="${item.href}">${item.label}</a>`).join('')}</nav>
       <span class="right">
         <button type="button" on:click="/c/search.js#open">&#8984;K</button>
-        <a href="https://github.com/jiso-sh/jiso" rel="external">GitHub</a>
+        <a href="https://github.com/kovojs/kovo" rel="external">GitHub</a>
       </span>
     </div>
   </header>`;
@@ -99,15 +99,15 @@ function breakIt() {
   details: <span class="hl">nullable</span>(json),
   price: <span class="fn">integer</span>()
 })</pre></div>
-      <div class="link link-1"><span class="chk chk-ok">&#10003; typed</span><span class="chk chk-bad">&#10007; FW402</span><span class="wire"></span></div>
+      <div class="link link-1"><span class="chk chk-ok">&#10003; typed</span><span class="chk chk-bad">&#10007; KV402</span><span class="wire"></span></div>
       <div class="node node-2"><p class="nl">Server query</p><pre><span class="fn">query</span>(<span class="st">'product'</span>, {
   reads: [product],
   load: &hellip;  <span class="hl">&rarr; shape</span>
 })</pre></div>
-      <div class="link link-2"><span class="chk chk-ok">&#10003; typed</span><span class="chk chk-bad">&#10007; FW223</span><span class="wire"></span></div>
-      <div class="node node-3"><p class="nl">Client data</p><pre>&lt;script fw-query=<span class="st">"product"</span>&gt;
+      <div class="link link-2"><span class="chk chk-ok">&#10003; typed</span><span class="chk chk-bad">&#10007; KV223</span><span class="wire"></span></div>
+      <div class="node node-3"><p class="nl">Client data</p><pre>&lt;script kovo-query=<span class="st">"product"</span>&gt;
 {"price": <span class="hl">1299</span>}</pre></div>
-      <div class="link link-3"><span class="chk chk-ok">&#10003; typed</span><span class="chk chk-bad">&#10007; FW227</span><span class="wire"></span></div>
+      <div class="link link-3"><span class="chk chk-ok">&#10003; typed</span><span class="chk chk-bad">&#10007; KV227</span><span class="wire"></span></div>
       <div class="node node-4"><p class="nl">Rendered UI</p><pre>&lt;h2 data-bind=
   <span class="st">"product.price"</span>&gt;</pre></div>
     </div>
@@ -115,7 +115,7 @@ function breakIt() {
     <div class="caught">
       <div class="case case-col term">
         <div class="term-head"><span>${BRAND_CLI} check &mdash; caught at the database &rarr; query junction</span></div>
-        <pre><span class="t-err">&#10007; FW402</span> &mdash; <b>query 'product' reads a column that no longer exists</b>
+        <pre><span class="t-err">&#10007; KV402</span> &mdash; <b>query 'product' reads a column that no longer exists</b>
 
   server/queries/product.ts:14 &mdash; <span class="t-loc">select(products.<span class="sq">price</span>)</span>
   <span class="t-fix">&rarr; the column is now priceCents &mdash; select it, or alias: price: products.priceCents</span>
@@ -123,7 +123,7 @@ function breakIt() {
       </div>
       <div class="case case-query term">
         <div class="term-head"><span>${BRAND_CLI} check &mdash; caught at the query &rarr; client junction</span></div>
-        <pre><span class="t-err">&#10007; FW223</span> &mdash; <b>the page depends on data the query no longer ships</b>
+        <pre><span class="t-err">&#10007; KV223</span> &mdash; <b>the page depends on data the query no longer ships</b>
 
   src/product-card.tsx:13 &mdash; <span class="t-loc">data-bind="product.<span class="sq">price</span>"</span>
   <span class="t-fix">&rarr; the projection now ships priceCents &mdash; update the binding, or restore the field</span>
@@ -131,7 +131,7 @@ function breakIt() {
       </div>
       <div class="case case-bind term">
         <div class="term-head"><span>${BRAND_CLI} check &mdash; caught at the client &rarr; UI junction</span></div>
-        <pre><span class="t-err">&#10007; FW227</span> &mdash; <b>binding path 'product.pricee' does not exist</b>
+        <pre><span class="t-err">&#10007; KV227</span> &mdash; <b>binding path 'product.pricee' does not exist</b>
 
   src/product-card.tsx:13 &mdash; <span class="t-loc">data-bind="product.<span class="sq">pricee</span>"</span>
   <span class="t-fix">&rarr; did you mean product.price?</span>
@@ -152,7 +152,7 @@ function split() {
         <div class="term-head">$ ${BRAND_CLI} check</div>
         <pre><span class="t-dim">13 &#9474;</span>  render: () =&gt; &lt;h2&gt;{product.<span class="sq">details.name</span>}&lt;/h2&gt;
 
-<span class="t-err">&#10007; FW227</span> &mdash; <b>product.details can be null here</b>
+<span class="t-err">&#10007; KV227</span> &mdash; <b>product.details can be null here</b>
   <span class="t-fix">fix 1</span>  {product.details<span class="t-ok">?.</span>name}
   <span class="t-fix">fix 2</span>  make the projection non-null in the query
 
@@ -198,7 +198,7 @@ function landingFooter() {
     <span class="links">
       <a href="/spec/">Spec</a>
       <a href="/llms.txt">llms.txt</a>
-      <a href="https://github.com/jiso-sh/jiso" rel="external">GitHub</a>
+      <a href="https://github.com/kovojs/kovo" rel="external">GitHub</a>
     </span>
   </footer>`;
 }

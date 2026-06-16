@@ -82,8 +82,8 @@ describe('server static export', () => {
   });
 
   it('plans dry-run and write export targets through the same output planner', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-plan-'));
-    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-plan-assets-'));
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-plan-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-plan-assets-'));
     try {
       const registry = createMemoryVersionedClientModuleRegistry();
       const cartHref = registry.put({
@@ -270,8 +270,8 @@ describe('server static export', () => {
 
   it('formats static export diagnostics for starter and example export tasks', () => {
     const diagnostic = {
-      code: 'FW229' as const,
-      message: "FW229 static export cannot export guarded route '/admin'.\nServe dynamically.",
+      code: 'KV229' as const,
+      message: "KV229 static export cannot export guarded route '/admin'.\nServe dynamically.",
       routePath: '/admin',
     };
     const error = new StaticExportError([diagnostic]);
@@ -281,10 +281,10 @@ describe('server static export', () => {
     expect(isStaticExportDiagnosticError(error)).toBe(true);
     expect(isStaticExportDiagnosticError(new Error('plain'))).toBe(false);
     expect(formatStaticExportDiagnostic(diagnostic, 'ERROR')).toBe(
-      "ERROR FW229 route=/admin FW229 static export cannot export guarded route '/admin'. Serve dynamically.",
+      "ERROR KV229 route=/admin KV229 static export cannot export guarded route '/admin'. Serve dynamically.",
     );
     expect(formatStaticExportDiagnostics([diagnostic], 'WARN')).toEqual([
-      "WARN FW229 route=/admin FW229 static export cannot export guarded route '/admin'. Serve dynamically.",
+      "WARN KV229 route=/admin KV229 static export cannot export guarded route '/admin'. Serve dynamically.",
     ]);
   });
 });

@@ -87,7 +87,7 @@ function removeIgnoredSpans(
 function normalizeRenderEquivalenceSource(source: string): string {
   return source
     .replace(
-      /\s+(?:fw-c|fw-deps|fw-state|fw-param-types|data-p-[\w-]+|on:[\w-]+)=(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+)/g,
+      /\s+(?:kovo-c|kovo-deps|kovo-state|kovo-param-types|data-p-[\w-]+|on:[\w-]+)=(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+)/g,
       '',
     )
     .replace(/\s+(data-bind(?::[\w-]+)?)(?:=(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+))?/g, ' $1')
@@ -240,7 +240,7 @@ function renderHostStampPatches(
   if (componentIdentity) insertedAttributes.push(componentIdentity);
 
   if (declaredQueryDeps) {
-    const existing = hostElement.attributes.find((attribute) => attribute.name === 'fw-deps');
+    const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-deps');
     if (existing) {
       patches.push({
         end: existing.end,
@@ -252,7 +252,7 @@ function renderHostStampPatches(
     }
   }
 
-  if (stateJson) insertedAttributes.push(`fw-state="${escapeAttribute(stateJson)}"`);
+  if (stateJson) insertedAttributes.push(`kovo-state="${escapeAttribute(stateJson)}"`);
 
   if (insertedAttributes.length > 0) {
     const insertion = openingTagAttributeInsertion(hostElement, insertedAttributes);
@@ -266,9 +266,9 @@ function renderHostStampPatches(
   return patches;
 }
 
-// SPEC.md §4.2: component identity is the fw-c stamp. The compiler omits it
+// SPEC.md §4.2: component identity is the kovo-c stamp. The compiler omits it
 // when the host tag already spells the component name (dashed tags are inert
-// sugar) and emits it explicitly on native hosts (`<tr fw-c="cart-row">`), so
+// sugar) and emits it explicitly on native hosts (`<tr kovo-c="cart-row">`), so
 // authored sugar never hand-writes the stamp (§4.8 residual-string rule).
 function componentIdentityStamp(
   model: ComponentModuleModel,
@@ -280,9 +280,9 @@ function componentIdentityStamp(
   const tagName = hostElement.tag;
   if (tagName !== tagName.toLowerCase()) return null;
   if (tagName === componentName || tagName.includes('-')) return null;
-  if (hostElement.attributes.some((attribute) => attribute.name === 'fw-c')) return null;
+  if (hostElement.attributes.some((attribute) => attribute.name === 'kovo-c')) return null;
 
-  return `fw-c="${escapeAttribute(componentName)}"`;
+  return `kovo-c="${escapeAttribute(componentName)}"`;
 }
 
 function declaredQueryDepsStamp(
@@ -292,10 +292,10 @@ function declaredQueryDepsStamp(
   const deps = componentOptionObjectKeys(model, 'queries');
   if (deps.length === 0) return null;
 
-  const existing = hostElement.attributes.find((attribute) => attribute.name === 'fw-deps');
+  const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-deps');
   const existingDeps = splitDepValue(existing?.value ?? '');
   const depValue = mergeDepValues(existingDeps, deps).join(' ');
-  return `fw-deps="${escapeAttribute(depValue)}"`;
+  return `kovo-deps="${escapeAttribute(depValue)}"`;
 }
 
 function mergeDepValues(existing: readonly string[], declared: readonly string[]): string[] {

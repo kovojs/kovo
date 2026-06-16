@@ -66,7 +66,7 @@ export interface CommerceInvalidationSets {
   'cart/add': 'cart' | 'orderHistory' | 'productGrid';
 }
 
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface QueryRegistry {
     cart: CartQueryResult;
     productGrid: ProductGridResult;

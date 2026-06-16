@@ -1,8 +1,8 @@
 /**
- * Shared safe-URL helper for `@jiso/ui` anchor primitives and the headless
+ * Shared safe-URL helper for `@kovojs/ui` anchor primitives and the headless
  * navigation-menu link attributes.
  *
- * Addresses SECURITY_FINDINGS.md H3: `escapeAttribute` (`@jiso/server`
+ * Addresses SECURITY_FINDINGS.md H3: `escapeAttribute` (`@kovojs/server`
  * `packages/server/src/html.ts`) only neutralizes `& < > "` and does NOT strip
  * dangerous URL schemes, so a caller `href="javascript:..."` survives byte-for-
  * byte and executes on click. There was previously no safe-URL helper anywhere

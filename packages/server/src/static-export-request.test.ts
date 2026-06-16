@@ -68,8 +68,8 @@ describe('server static export synthetic request boundary', () => {
     });
 
     await expect(response.text()).resolves.toContain('<main>context shell</main>');
-    expect(context.origin).toBe('https://jiso.local');
-    expect(url.href).toBe('https://jiso.local/context');
+    expect(context.origin).toBe('https://kovo.local');
+    expect(url.href).toBe('https://kovo.local/context');
   });
 
   it('normalizes replay origins to an absolute http(s) origin boundary', () => {
@@ -88,7 +88,7 @@ describe('server static export synthetic request boundary', () => {
     for (const origin of [
       'docs.example.test',
       '/relative',
-      'file:///tmp/jiso-export',
+      'file:///tmp/kovo-export',
       'https://docs.example.test/base',
       'https://docs.example.test?preview=1',
       'https://docs.example.test#preview',

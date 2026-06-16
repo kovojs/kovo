@@ -2,12 +2,12 @@
 
 ## Framework Source of Truth
 
-- Treat `SPEC.md` as the normative source of truth for how the Jiso framework should behave.
+- Treat `SPEC.md` as the normative source of truth for how the Kovo framework should behave.
 - Use active files under `plans/` as the implementation roadmap and sequencing plan. Completed or
   retired ledgers are listed in `plans/archive.md`; if a plan conflicts with `SPEC.md`, follow
   `SPEC.md` for behavior and update the plan or ask before coding through the conflict.
 - When implementing or reviewing framework behavior, cite the relevant `SPEC.md` section in comments, tests, diagnostics, or handoff notes where that context would prevent ambiguity.
-- Emit app components as TSX/JSX source. Treat lowered IR, generated stamps, and emitted server/client modules as artifacts to inspect for verification, not as app-authored code to write by hand; `SPEC.md` §5.2 makes hand-authored lowered IR FW235.
+- Emit app components as TSX/JSX source. Treat lowered IR, generated stamps, and emitted server/client modules as artifacts to inspect for verification, not as app-authored code to write by hand; `SPEC.md` §5.2 makes hand-authored lowered IR KV235.
 
 ## Progress Discipline
 
@@ -23,7 +23,7 @@
   docs/plan cleanup, mechanical export assertions, and other low-risk changes with clear ownership
   and expected output.
 - Each implementation sub-agent should work in its own git worktree and branch, with explicit file/module ownership and instructions not to revert others' work. Sub-agents should hand off the branch, commit range, verification results, and any integration notes to the main agent; the main agent remains responsible for merging worktrees back, resolving conflicts, running final gates, and creating checkpoint commits unless the delegation explicitly says otherwise.
-- To set up a sub-agent worktree, create a unique branch and sibling directory from the current `HEAD`, for example `git worktree add ../jiso-agent-compiler -b agent/compiler-phase-0 HEAD`. Run package install/setup in that worktree if needed, do the delegated edits there, commit only that slice on the agent branch, then report the worktree path, branch name, commit SHA/range, tests run, and remaining risks back to the main agent. The main agent should merge or cherry-pick from that branch, run integration gates in the primary worktree, and remove the sub-agent worktree only after the work is integrated or abandoned.
+- To set up a sub-agent worktree, create a unique branch and sibling directory from the current `HEAD`, for example `git worktree add ../kovo-agent-compiler -b agent/compiler-phase-0 HEAD`. Run package install/setup in that worktree if needed, do the delegated edits there, commit only that slice on the agent branch, then report the worktree path, branch name, commit SHA/range, tests run, and remaining risks back to the main agent. The main agent should merge or cherry-pick from that branch, run integration gates in the primary worktree, and remove the sub-agent worktree only after the work is integrated or abandoned.
 - Run the relevant tests or checks before each checkpoint commit.
 - Use the narrowest useful verification for the change just made, then broaden verification when touching shared behavior, package boundaries, or docs/runtime behavior.
 - If a check cannot be run, record why in the handoff/final response and do not imply the checkpoint is fully verified.

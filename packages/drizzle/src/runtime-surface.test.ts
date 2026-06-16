@@ -31,19 +31,19 @@ function drizzleCompatibilityBarrelSource(): string {
   return readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf8');
 }
 
-describe('@jiso/drizzle runtime surface', () => {
+describe('@kovojs/drizzle runtime surface', () => {
   it('keeps the runtime annotation entrypoint separate from static extraction', async () => {
-    const runtime = await import('@jiso/drizzle');
-    const staticExtraction = await import('@jiso/drizzle/static');
+    const runtime = await import('@kovojs/drizzle');
+    const staticExtraction = await import('@kovojs/drizzle/static');
     const compatibilityBarrel = await import('./index.js');
     const packageJson = drizzlePackageJson();
     const compatibilityBarrelSource = drizzleCompatibilityBarrelSource();
     const runtimeSource = drizzleRuntimeSource();
     const staticSource = drizzleStaticSource();
 
-    expect(runtime.jiso({ domain: 'cart', key: 'id' }).domain).toBe('cart');
+    expect(runtime.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
     expect('extractTouchGraphFromSource' in runtime).toBe(false);
-    expect(compatibilityBarrel.jiso({ domain: 'cart', key: 'id' }).domain).toBe('cart');
+    expect(compatibilityBarrel.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
     expect('extractTouchGraphFromSource' in compatibilityBarrel).toBe(false);
     // SPEC §11.1 (v1 scope): source-mode extraction was removed in v1-cleanup item 4; only the
     // project-mode ts-morph entry points remain on the static surface.
@@ -68,7 +68,7 @@ describe('@jiso/drizzle runtime surface', () => {
     expect(runtimeSource).not.toContain('./invalidation.js');
     expect(staticSource).toContain("from 'ts-morph'");
     expect(staticSource).not.toContain('SOURCE_EXTRACTION_FILE_NAME');
-    expect(staticSource).not.toContain('__jiso_source.ts');
+    expect(staticSource).not.toContain('__kovo_source.ts');
     expect(staticSource).toContain(
       'createSourceFile(projectSourceFileName(file.fileName), file.source',
     );

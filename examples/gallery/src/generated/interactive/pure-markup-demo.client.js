@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 export const GalleryPureMarkupDemo$button_click = handler((_event, ctx) => {
   ctx.state.submitted = true;

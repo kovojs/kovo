@@ -28,7 +28,7 @@ import {
   type StaticExportClientModuleArtifact,
 } from './static-export-types.js';
 
-export const STATIC_EXPORT_DRY_RUN_ROOT = '/__jiso_static_export_plan__';
+export const STATIC_EXPORT_DRY_RUN_ROOT = '/__kovo_static_export_plan__';
 
 export type { StaticExportOutputPlanItem, StaticExportOutputPlanItemKind };
 
@@ -86,7 +86,7 @@ export function staticExportOutputRoot(outDir: string | URL): string {
     throw new StaticExportError([
       staticExportDiagnostic(
         'outDir',
-        `FW229 static export cannot write to '${outDir.href}'. SPEC §9.5 static export output directories must be filesystem paths or file: URLs.`,
+        `KV229 static export cannot write to '${outDir.href}'. SPEC §9.5 static export output directories must be filesystem paths or file: URLs.`,
       ),
     ]);
   }
@@ -172,7 +172,7 @@ async function assertReadableStaticExportAssetSource(
     throw new StaticExportError([
       staticExportDiagnostic(
         artifact.path,
-        `FW229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a readable file.`,
+        `KV229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a readable file.`,
       ),
     ]);
   }
@@ -181,7 +181,7 @@ async function assertReadableStaticExportAssetSource(
     throw new StaticExportError([
       staticExportDiagnostic(
         artifact.path,
-        `FW229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a file.`,
+        `KV229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a file.`,
       ),
     ]);
   }
@@ -192,7 +192,7 @@ async function assertReadableStaticExportAssetSource(
     throw new StaticExportError([
       staticExportDiagnostic(
         artifact.path,
-        `FW229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a readable file.`,
+        `KV229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a readable file.`,
       ),
     ]);
   }
@@ -245,7 +245,7 @@ async function assertStaticExportTargetParentDirectories(
       throw new StaticExportError([
         staticExportDiagnostic(
           write.diagnosticPath,
-          `FW229 static export cannot write ${write.kind} '${write.diagnosticPath}' because output parent '${current}' is not a directory.`,
+          `KV229 static export cannot write ${write.kind} '${write.diagnosticPath}' because output parent '${current}' is not a directory.`,
         ),
       ]);
     }
@@ -267,14 +267,14 @@ async function assertStaticExportTargetIsNotDirectory(
   throw new StaticExportError([
     staticExportDiagnostic(
       write.diagnosticPath,
-      `FW229 static export cannot write ${write.kind} '${write.diagnosticPath}' because target '${write.targetPath}' is a directory.`,
+      `KV229 static export cannot write ${write.kind} '${write.diagnosticPath}' because target '${write.targetPath}' is a directory.`,
     ),
   ]);
 }
 
 async function createStaticExportStagingRoot(root: string): Promise<string> {
   await mkdir(path.dirname(root), { recursive: true });
-  return await mkdtemp(path.join(path.dirname(root), '.jiso-static-export-'));
+  return await mkdtemp(path.join(path.dirname(root), '.kovo-static-export-'));
 }
 
 function staticExportStagedTargetPath(
@@ -309,7 +309,7 @@ function staticExportSourcePath(asset: StaticExportAssetInput): string {
     throw new StaticExportError([
       staticExportDiagnostic(
         asset.path,
-        `FW229 static export cannot copy static asset '${asset.path}' from '${asset.source.href}'. Static asset sources must be filesystem paths or file: URLs.`,
+        `KV229 static export cannot copy static asset '${asset.path}' from '${asset.source.href}'. Static asset sources must be filesystem paths or file: URLs.`,
       ),
     ]);
   }

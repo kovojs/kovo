@@ -11,7 +11,7 @@ describe('deferred streams', () => {
           {
             fragments: [
               {
-                html: '<section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section>',
+                html: '<section kovo-c="reviews" kovo-deps="product:p1"><article kovo-key="r1">5</article></section>',
                 target: 'reviews:p1',
               },
             ],
@@ -21,15 +21,15 @@ describe('deferred streams', () => {
           },
         ],
         shell:
-          '<!doctype html>\n<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer></product-page></main>',
+          '<!doctype html>\n<html><body><main><product-page kovo-deps="product:p1"><kovo-defer target="reviews:p1" state="pending"></kovo-defer></product-page></main>',
       }),
     ).toEqual({
       body: [
-        '<!doctype html>\n<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer></product-page></main>',
-        '--jiso-boundary',
-        '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>',
-        '<fw-fragment target="reviews:p1"><section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section></fw-fragment>',
-        '--jiso-boundary--',
+        '<!doctype html>\n<html><body><main><product-page kovo-deps="product:p1"><kovo-defer target="reviews:p1" state="pending"></kovo-defer></product-page></main>',
+        '--kovo-boundary',
+        '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</kovo-query>',
+        '<kovo-fragment target="reviews:p1"><section kovo-c="reviews" kovo-deps="product:p1"><article kovo-key="r1">5</article></section></kovo-fragment>',
+        '--kovo-boundary--',
         '</body></html>',
       ].join('\n'),
       headers: {
@@ -57,19 +57,19 @@ describe('deferred streams', () => {
             queries: [{ name: 'criticalQuery', value: { ready: true } }],
           },
         ],
-        shell: '<!doctype html><html><body><fw-defer target="critical&details"></fw-defer>',
+        shell: '<!doctype html><html><body><kovo-defer target="critical&details"></kovo-defer>',
       }),
     ).toEqual({
       body: [
-        '<!doctype html><html><body><fw-defer target="critical&details"></fw-defer>',
-        '--jiso-boundary',
-        '<fw-query name="criticalQuery">{"ready":true}</fw-query>',
-        '<fw-fragment target="critical&amp;details" priority="5"><section>critical</section></fw-fragment>',
-        '<fw-fragment target="normal"><section>normal</section></fw-fragment>',
-        '--jiso-boundary',
-        '<fw-query name="lowQuery">{"ready":true}</fw-query>',
-        '<fw-fragment target="low"><section>low</section></fw-fragment>',
-        '--jiso-boundary--',
+        '<!doctype html><html><body><kovo-defer target="critical&details"></kovo-defer>',
+        '--kovo-boundary',
+        '<kovo-query name="criticalQuery">{"ready":true}</kovo-query>',
+        '<kovo-fragment target="critical&amp;details" priority="5"><section>critical</section></kovo-fragment>',
+        '<kovo-fragment target="normal"><section>normal</section></kovo-fragment>',
+        '--kovo-boundary',
+        '<kovo-query name="lowQuery">{"ready":true}</kovo-query>',
+        '<kovo-fragment target="low"><section>low</section></kovo-fragment>',
+        '--kovo-boundary--',
         '',
       ].join('\n'),
       headers: {
@@ -89,15 +89,15 @@ describe('deferred streams', () => {
           },
         ],
         closeHtml: '',
-        shell: '<!doctype html><html><body><fw-defer target="normal"></fw-defer>',
+        shell: '<!doctype html><html><body><kovo-defer target="normal"></kovo-defer>',
       }).body,
     ).toBe(
       [
-        '<!doctype html><html><body><fw-defer target="normal"></fw-defer>',
-        '--jiso-boundary',
-        '<fw-query name="cart">{"count":1}</fw-query>',
-        '<fw-fragment target="normal" priority="0"><section>normal</section></fw-fragment>',
-        '--jiso-boundary--',
+        '<!doctype html><html><body><kovo-defer target="normal"></kovo-defer>',
+        '--kovo-boundary',
+        '<kovo-query name="cart">{"count":1}</kovo-query>',
+        '<kovo-fragment target="normal" priority="0"><section>normal</section></kovo-fragment>',
+        '--kovo-boundary--',
         '',
       ].join('\n'),
     );
@@ -110,7 +110,7 @@ describe('deferred streams', () => {
           {
             fragments: [
               {
-                html: '<article fw-key="p3">Third</article>',
+                html: '<article kovo-key="p3">Third</article>',
                 mode: 'append',
                 target: 'product-grid',
               },
@@ -118,14 +118,14 @@ describe('deferred streams', () => {
           },
         ],
         closeHtml: '',
-        shell: '<!doctype html><html><body><fw-defer target="product-grid"></fw-defer>',
+        shell: '<!doctype html><html><body><kovo-defer target="product-grid"></kovo-defer>',
       }).body,
     ).toBe(
       [
-        '<!doctype html><html><body><fw-defer target="product-grid"></fw-defer>',
-        '--jiso-boundary',
-        '<fw-fragment target="product-grid" mode="append"><article fw-key="p3">Third</article></fw-fragment>',
-        '--jiso-boundary--',
+        '<!doctype html><html><body><kovo-defer target="product-grid"></kovo-defer>',
+        '--kovo-boundary',
+        '<kovo-fragment target="product-grid" mode="append"><article kovo-key="p3">Third</article></kovo-fragment>',
+        '--kovo-boundary--',
         '',
       ].join('\n'),
     );
@@ -145,10 +145,10 @@ describe('deferred streams', () => {
             ],
           },
         ],
-        shell: '<!doctype html><html><body><fw-defer target="reviews:p1"></fw-defer>',
+        shell: '<!doctype html><html><body><kovo-defer target="reviews:p1"></kovo-defer>',
       }).body,
     ).toContain(
-      '<fw-fragment target="reviews:p1"><link rel="stylesheet" href="/assets/reviews.css"><section class="reviews-card">Ready</section></fw-fragment>',
+      '<kovo-fragment target="reviews:p1"><link rel="stylesheet" href="/assets/reviews.css"><section class="reviews-card">Ready</section></kovo-fragment>',
     );
   });
 });

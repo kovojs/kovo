@@ -1,5 +1,5 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   menubarFocusElement as _menubarFocusElement,
@@ -9,7 +9,7 @@ import {
   menubarMove as _menubarMove,
   menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick,
   menubarTypeahead as _menubarTypeahead,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryMenubarDemo$section_keydown = handler((event, ctx) => {
   const keyResult = _menubarKeyDown(Object(event), {

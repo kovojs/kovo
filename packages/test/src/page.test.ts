@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { createJisoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './harness.js';
 import { createPageAssertion } from './page.js';
 
-describe('@jiso/test page assertions', () => {
+describe('@kovojs/test page assertions', () => {
   it('creates page assertions that preserve the rendered HTML', () => {
     const page = createPageAssertion(
-      '<main><fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment></main>',
+      '<main><kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment></main>',
     );
 
     expect(page.html).toContain('<main>');
@@ -14,11 +14,11 @@ describe('@jiso/test page assertions', () => {
   });
 
   it('asserts fragments from rendered HTML without a browser', async () => {
-    const harness = createJisoTestHarness({
+    const harness = createKovoTestHarness({
       db: {},
       pages: {
         '/cart':
-          '<html><body><fw-fragment target="cart-badge"><cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge></fw-fragment></body></html>',
+          '<html><body><kovo-fragment target="cart-badge"><cart-badge kovo-deps="cart"><span data-bind="cart.count">1</span></cart-badge></kovo-fragment></body></html>',
       },
     });
 
@@ -30,13 +30,13 @@ describe('@jiso/test page assertions', () => {
     ).resolves.toContain('data-bind="cart.count"');
   });
 
-  it('asserts runtime-style id and fw-fragment-target fragments through harness pages', async () => {
-    const harness = createJisoTestHarness({
+  it('asserts runtime-style id and kovo-fragment-target fragments through harness pages', async () => {
+    const harness = createKovoTestHarness({
       db: {},
       pages: {
         '/cart': [
-          '<section id="cart-badge" fw-deps="cart"><span>1</span></section>',
-          '<aside fw-fragment-target="cart-summary" fw-deps="cart"><span>2</span></aside>',
+          '<section id="cart-badge" kovo-deps="cart"><span>1</span></section>',
+          '<aside kovo-fragment-target="cart-summary" kovo-deps="cart"><span>2</span></aside>',
         ].join(''),
       },
     });
@@ -44,10 +44,10 @@ describe('@jiso/test page assertions', () => {
     const page = await harness.page('/cart');
 
     expect(page.fragment('cart-badge')).toBe(
-      '<section id="cart-badge" fw-deps="cart"><span>1</span></section>',
+      '<section id="cart-badge" kovo-deps="cart"><span>1</span></section>',
     );
     expect(page.fragment('cart-summary')).toBe(
-      '<aside fw-fragment-target="cart-summary" fw-deps="cart"><span>2</span></aside>',
+      '<aside kovo-fragment-target="cart-summary" kovo-deps="cart"><span>2</span></aside>',
     );
     expect(page.fragment('missing-target')).toBe('');
   });

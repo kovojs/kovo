@@ -15,9 +15,9 @@ export const CartBadge = component('cart-badge', {
       <span data-bind="cart.total">2998</span>
       <span data-bind="product.name">Coffee</span>
       <span data-bind="cart.count">2</span>
-      <ul data-bind-list="cart.items" fw-key="productId">
-        <template fw-stamp>
-          <li fw-key="">
+      <ul data-bind-list="cart.items" kovo-key="productId">
+        <template kovo-stamp>
+          <li kovo-key="">
             <span data-bind=".qty">0</span> × <span data-bind=".name">Item</span>
           </li>
         </template>
@@ -42,16 +42,16 @@ export const CartBadge = component('cart-badge', {
                 path: '.name',
                 readPath: 'name',
                 readSegments: [{ name: 'name', optional: false }],
-                templateEnd: 89,
-                templateStart: 85,
+                templateEnd: 91,
+                templateStart: 87,
                 value: 'Item',
               },
               {
                 path: '.qty',
                 readPath: 'qty',
                 readSegments: [{ name: 'qty', optional: false }],
-                templateEnd: 51,
-                templateStart: 50,
+                templateEnd: 53,
+                templateStart: 52,
                 value: '0',
               },
             ],
@@ -61,7 +61,7 @@ export const CartBadge = component('cart-badge', {
             listReadSegments: [{ name: 'items', optional: false }],
             selector: '[data-bind-list="cart.items"]',
             template:
-              '<li fw-key="">\n            <span data-bind=".qty">0</span> × <span data-bind=".name">Item</span>\n          </li>',
+              '<li kovo-key="">\n            <span data-bind=".qty">0</span> × <span data-bind=".name">Item</span>\n          </li>',
           },
         ],
       },
@@ -71,12 +71,14 @@ export const CartBadge = component('cart-badge', {
         query: 'product',
       },
     ]);
-    expect(clientSource).toContain("import { applyCompiledQueryUpdatePlan } from '@jiso/runtime';");
+    expect(clientSource).toContain(
+      "import { applyCompiledQueryUpdatePlan } from '@kovojs/runtime';",
+    );
     expect(clientSource).toContain('export const CartBadge$queryUpdatePlans = {');
     expect(clientSource).toContain(
       'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [{ key: "productId", list: "items", selector: "[data-bind-list=\\"cart.items\\"]", render(item) {',
     );
-    expect(clientSource).toContain('return ["<li fw-key=\\"\\">');
+    expect(clientSource).toContain('return ["<li kovo-key=\\"\\">');
     expect(clientSource).toContain('String(read(["qty"]) ?? "")');
     expect(clientSource).toContain('String(read(["name"]) ?? "")');
     expect(clientSource).not.toContain('html.replace');
@@ -162,7 +164,7 @@ export const CartBadge = component('cart-badge', {
       },
     ]);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, derive } from '@jiso/runtime';",
+      "import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime';",
     );
     expect(clientSource).toContain(
       'export const CartBadge$isEmpty = derive(["cart"], (cart) => cart.count === 0);',

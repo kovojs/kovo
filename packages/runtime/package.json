@@ -1,5 +1,5 @@
 {
-  "name": "@jiso/runtime",
+  "name": "@kovojs/runtime",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -12,7 +12,7 @@
     "check:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts --check"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*"
+    "@kovojs/core": "workspace:*"
   },
   "devDependencies": {
     "vitest": "4.1.8"

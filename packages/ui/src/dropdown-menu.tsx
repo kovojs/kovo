@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   cn,
   defineVariants,
@@ -11,7 +11,7 @@ import {
   dropdownMenuTriggerAttributes,
   type ClassValue,
   type DropdownMenuItem as HeadlessDropdownMenuItem,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface DropdownMenuStateProps {
   disabled?: boolean;

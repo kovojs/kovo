@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
-import { packageComponentPrefixFactFromPackageManifest } from '@jiso/core';
+import { packageComponentPrefixFactFromPackageManifest } from '@kovojs/core';
 
 import type { ComponentModuleModel } from './scan/parse.js';
 import type { PackageComponentPrefixFact } from './types.js';
@@ -16,7 +16,7 @@ export function packageComponentPrefixesForModule(
   options: PackageComponentPrefixDiscoveryOptions,
   model: ComponentModuleModel,
 ): PackageComponentPrefixFact[] {
-  // SPEC §6.1.1 makes package.json jiso.prefix the source of package wire names.
+  // SPEC §6.1.1 makes package.json kovo.prefix the source of package wire names.
   return staticImportPackageNames(model).flatMap((packageName) => {
     const manifest = readPackageManifest(packageName, options);
     const fact = packageComponentPrefixFactFromPackageManifest(manifest);

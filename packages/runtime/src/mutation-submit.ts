@@ -96,7 +96,7 @@ export async function dispatchEnhancedFormSubmit(
         broadcast: options.broadcast,
         idem: options.idem?.(),
         morph: options.morph,
-        pendingQueries: options.pendingRoot ? readDeps(form.getAttribute('fw-deps')) : undefined,
+        pendingQueries: options.pendingRoot ? readDeps(form.getAttribute('kovo-deps')) : undefined,
         pendingRoot: options.pendingRoot,
         queryPlans: options.queryPlans,
       }),

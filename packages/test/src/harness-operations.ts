@@ -4,8 +4,8 @@ import type {
   MutationResult,
   QueryDefinition,
   Schema,
-} from '@jiso/server';
-import { runMutation } from '@jiso/server';
+} from '@kovojs/server';
+import { runMutation } from '@kovojs/server';
 import { createPageAssertion, type PageAssertion } from './page.js';
 import { diagnosticMessage } from './verifier-diagnostics.js';
 import type { ObservedDbOperation } from './verifier-observation.js';
@@ -105,7 +105,7 @@ export async function executeHarnessQuery<Db>(
   } catch (error) {
     throw new Error(
       diagnosticMessage(
-        'FW410',
+        'KV410',
         `${query.key} ${error instanceof Error ? error.message : String(error)}`,
       ),
     );

@@ -40,7 +40,7 @@ export function readMutationResponseBodyCore(
   // SPEC.md §4.4/§9.1: the inline bootstrap and the modular runtime share this
   // single scan+fragment-decode skeleton; both project the wire body through the
   // canonical element scanner and the shared fragment decoder. Queries are kept
-  // as raw element chunks here so the inline reader can defer fw-query JSON
+  // as raw element chunks here so the inline reader can defer kovo-query JSON
   // decoding to the modular runtime to stay under the SPEC.md §4.4 4KB gzip
   // budget, while wire-parser.ts JSON-decodes the same raw chunks itself.
   const chunks = readMutationResponseElementChunks(body, options);
@@ -55,7 +55,7 @@ export function readInlineMutationResponseBodyChunks(
   body: string,
 ): InlineMutationResponseBodyChunks {
   // SPEC.md §4.4/§9.1: thin inline wrapper over the shared scan+fragment core.
-  // The inline bootstrap intentionally returns fw-query chunks UNDECODED and
+  // The inline bootstrap intentionally returns kovo-query chunks UNDECODED and
   // defers JSON decode to the modular runtime, keeping the always-loaded loader
   // under the SPEC.md §4.4 4KB gzip budget; wire-parser.ts decodes the same
   // chunks via readQueryElementChunk.
@@ -76,8 +76,8 @@ export function readMutationResponseElementChunks(
     : { nested: true };
 
   return {
-    queries: readElementChunks(body, 'fw-query', queryOptions),
-    fragments: readElementChunks(body, 'fw-fragment', fragmentOptions),
+    queries: readElementChunks(body, 'kovo-query', queryOptions),
+    fragments: readElementChunks(body, 'kovo-fragment', fragmentOptions),
   };
 }
 

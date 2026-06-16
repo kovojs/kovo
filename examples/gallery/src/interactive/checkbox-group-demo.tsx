@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   checkboxGroupItemClick as _checkboxGroupItemClick,
   checkboxGroupControlAttributes,
@@ -7,11 +7,11 @@ import {
   checkboxGroupLabelAttributes,
   checkboxGroupRootAttributes,
   checkboxTriggerClick as _checkboxTriggerClick,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/checkbox-group.tsx)
-// so this interactive demo matches the component-gallery look. Importing @jiso/ui
-// directly is FW234 (component package without a prefix), so the classes are
+// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/checkbox-group.tsx)
+// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
+// directly is KV234 (component package without a prefix), so the classes are
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS =
   'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[orientation=horizontal]:flex data-[orientation=horizontal]:flex-wrap data-[orientation=horizontal]:items-center data-[invalid]:text-red-950';
@@ -29,7 +29,7 @@ export interface GalleryCheckboxGroupDemoState {
 const checkboxItems = Object.freeze([{ value: 'updates' }, { value: 'billing' }]);
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
-// generated artifacts prove the gallery path is compiled through Jiso.
+// generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo', {
   state: () => ({ activeValue: 'updates', value: 'updates' }),
   render: (_queries: Record<string, never>, state: GalleryCheckboxGroupDemoState) => {

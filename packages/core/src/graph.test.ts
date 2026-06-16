@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateFwExplainInput } from './graph.js';
+import { validateKovoExplainInput } from './graph.js';
 
-describe('fw graph input validation', () => {
+describe('kovo graph input validation', () => {
   it('reports unknown diagnostic codes at the element path', () => {
     expect(
-      validateFwExplainInput({
-        lints: [{ code: 'FW999', site: 'cart.tsx:1' }],
+      validateKovoExplainInput({
+        lints: [{ code: 'KV999', site: 'cart.tsx:1' }],
       }),
     ).toEqual([
       {
-        message: 'unknown diagnostic code "FW999"',
+        message: 'unknown diagnostic code "KV999"',
         path: 'lints[0].code',
       },
     ]);
@@ -18,17 +18,17 @@ describe('fw graph input validation', () => {
 
   it('validates unresolved touch graph diagnostic codes before rendering', () => {
     expect(
-      validateFwExplainInput({
+      validateKovoExplainInput({
         touchGraph: {
           'cart.add': {
             touches: [],
-            unresolved: [{ code: 'FW999', message: 'unknown', site: 'cart.ts:1' }],
+            unresolved: [{ code: 'KV999', message: 'unknown', site: 'cart.ts:1' }],
           },
         },
       }),
     ).toEqual([
       {
-        message: 'unknown diagnostic code "FW999"',
+        message: 'unknown diagnostic code "KV999"',
         path: 'touchGraph."cart.add".unresolved[0].code',
       },
     ]);
@@ -36,8 +36,8 @@ describe('fw graph input validation', () => {
 
   it('requires package component prefix facts to be an array', () => {
     expect(
-      validateFwExplainInput({
-        packageComponentPrefixes: { packageName: '@jiso/headless-ui', prefix: 'jiso-' },
+      validateKovoExplainInput({
+        packageComponentPrefixes: { packageName: '@kovojs/headless-ui', prefix: 'kovo-' },
       }),
     ).toEqual([
       {

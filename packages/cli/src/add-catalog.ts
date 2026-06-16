@@ -10,7 +10,7 @@ export interface VendoredUiComponent {
 
 interface UiPackageManifest {
   exports?: Record<string, string>;
-  jiso?: { vendoredSource?: boolean };
+  kovo?: { vendoredSource?: boolean };
   name?: string;
 }
 
@@ -45,10 +45,12 @@ export function isAddComponentName(value: string): value is AddComponentName {
 function readUiPackageManifest(): UiPackageManifest {
   const parsed = JSON.parse(readFileSync(uiPackageManifestPath, 'utf8')) as unknown;
   if (!isUiPackageManifest(parsed)) {
-    throw new Error(`@jiso/ui vendored catalog manifest is invalid: ${uiPackageManifestPath}`);
+    throw new Error(`@kovojs/ui vendored catalog manifest is invalid: ${uiPackageManifestPath}`);
   }
-  if (parsed.name !== '@jiso/ui' || parsed.jiso?.vendoredSource !== true) {
-    throw new Error(`@jiso/ui package must declare jiso.vendoredSource: ${uiPackageManifestPath}`);
+  if (parsed.name !== '@kovojs/ui' || parsed.kovo?.vendoredSource !== true) {
+    throw new Error(
+      `@kovojs/ui package must declare kovo.vendoredSource: ${uiPackageManifestPath}`,
+    );
   }
   return parsed;
 }
@@ -64,12 +66,12 @@ function findUiPackageRoot(moduleDir: string): string {
     if (existsSync(join(candidate, 'package.json'))) return candidate;
   }
 
-  throw new Error(`@jiso/ui package source was not found from ${moduleDir}`);
+  throw new Error(`@kovojs/ui package source was not found from ${moduleDir}`);
 }
 
 function resolveInstalledUiPackageRoot(): string | undefined {
   try {
-    return findPackageRoot(dirname(realpathSync(catalogRequire.resolve('@jiso/ui'))));
+    return findPackageRoot(dirname(realpathSync(catalogRequire.resolve('@kovojs/ui'))));
   } catch {
     return undefined;
   }
@@ -92,7 +94,7 @@ function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [strin
       if (subpath === '.' || !subpath.startsWith('./')) return [];
       const name = subpath.slice(2);
       if (!isAddComponentFileName(name) || target !== `./src/${name}.tsx`) {
-        throw new Error(`@jiso/ui export ${subpath} must point at ./src/${name}.tsx`);
+        throw new Error(`@kovojs/ui export ${subpath} must point at ./src/${name}.tsx`);
       }
       return [[name, join(uiPackageRoot, target)]];
     })
@@ -101,12 +103,16 @@ function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [strin
 
 function readVendoredSource(sourcePath: string): string {
   const source = readFileSync(sourcePath, 'utf8');
-  if (source.includes('@jiso/ui')) {
-    throw new Error(`vendored @jiso/ui source must not import @jiso/ui: ${sourcePath}`);
+  if (source.includes('@kovojs/ui')) {
+    throw new Error(`vendored @kovojs/ui source must not import @kovojs/ui: ${sourcePath}`);
   }
-  // SPEC.md §5.2 requires fw add to vendor app-authored TSX source, not lowered IR artifacts.
-  if (source.includes('fw-c=') || source.includes('data-bind=') || source.includes('@jiso-ir')) {
-    throw new Error(`vendored @jiso/ui source must be TSX, not lowered IR: ${sourcePath}`);
+  // SPEC.md §5.2 requires kovo add to vendor app-authored TSX source, not lowered IR artifacts.
+  if (
+    source.includes('kovo-c=') ||
+    source.includes('data-bind=') ||
+    source.includes('@kovojs-ir')
+  ) {
+    throw new Error(`vendored @kovojs/ui source must be TSX, not lowered IR: ${sourcePath}`);
   }
   return source.endsWith('\n') ? source : `${source}\n`;
 }
@@ -114,15 +120,15 @@ function readVendoredSource(sourcePath: string): string {
 function isUiPackageManifest(value: unknown): value is UiPackageManifest {
   if (!isRecord(value)) return false;
   const exportsValue = value.exports;
-  const jisoValue = value.jiso;
+  const kovoValue = value.kovo;
   return (
     typeof value.name === 'string' &&
     (exportsValue === undefined ||
       (isRecord(exportsValue) &&
         Object.values(exportsValue).every((entry) => typeof entry === 'string'))) &&
-    (jisoValue === undefined ||
-      (isRecord(jisoValue) &&
-        (jisoValue.vendoredSource === undefined || typeof jisoValue.vendoredSource === 'boolean')))
+    (kovoValue === undefined ||
+      (isRecord(kovoValue) &&
+        (kovoValue.vendoredSource === undefined || typeof kovoValue.vendoredSource === 'boolean')))
   );
 }
 

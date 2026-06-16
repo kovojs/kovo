@@ -1,11 +1,11 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   dialogCancel as _dialogCancel,
   dialogCloseClick as _dialogCloseClick,
   dialogTriggerClick as _dialogTriggerClick,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GallerySheetDemo$button_click = handler((event, ctx) => {
   const result = _dialogTriggerClick(Object(event), { open: ctx.state.open });

@@ -1,10 +1,10 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from './index.js';
 
-const fw230 = diagnosticDefinitions.FW230;
-const fw303 = diagnosticDefinitions.FW303;
+const kv230 = diagnosticDefinitions.KV230;
+const kv303 = diagnosticDefinitions.KV303;
 
 describe('fragment target validation', () => {
   it('accepts fragment target render inputs declared as queries or stamped props', () => {
@@ -15,7 +15,7 @@ export const CartRow = component('cart-row', {
   fragmentTarget: true,
   props: { rowId: String, quantity: Number, selected: Boolean },
   queries: { cart: cartQuery },
-  render: ({ cart, rowId }) => <tr fw-c="cart-row" data-row={rowId}>{renderOnce(cart.count)}</tr>,
+  render: ({ cart, rowId }) => <tr kovo-c="cart-row" data-row={rowId}>{renderOnce(cart.count)}</tr>,
 });
 `,
     });
@@ -38,7 +38,7 @@ const jsonProp = createJsonProp();
 export const CartRow = component('cart-row', {
   fragmentTarget: true,
   props: { rowId: String, payload: jsonProp },
-  render: ({ rowId, payload }) => <tr fw-c="cart-row" data-row={rowId}>{renderOnce(payload.label)}</tr>,
+  render: ({ rowId, payload }) => <tr kovo-c="cart-row" data-row={rowId}>{renderOnce(payload.label)}</tr>,
 });
 `,
     });
@@ -48,24 +48,24 @@ export const CartRow = component('cart-row', {
     expect(result.files[2]?.source).not.toContain("'cart-row': {};");
   });
 
-  it('reports FW303 when fragment target render inputs cannot be rerendered from queries or stamped props', () => {
+  it('reports KV303 when fragment target render inputs cannot be rerendered from queries or stamped props', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component('cart-row', {
   fragmentTarget: true,
   queries: { cart: cartQuery },
-  render: ({ cart, priceList }) => <tr fw-c="cart-row">{renderOnce(cart.count)}{priceList.version}</tr>,
+  render: ({ cart, priceList }) => <tr kovo-c="cart-row">{renderOnce(cart.count)}{priceList.version}</tr>,
 });
 `,
     });
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW303',
+        code: 'KV303',
         fileName: 'cart-row.tsx',
-        message: `${fw303.message} priceList`,
-        severity: fw303.severity,
+        message: `${kv303.message} priceList`,
+        severity: kv303.severity,
         // SECURITY_FINDINGS.md C1: the escapeText import prepended for the escaped static text
         // child (`priceList.version`) shifts the lowered-artifact diagnostic down one line.
         start: { column: 20, line: 6 },
@@ -81,7 +81,7 @@ export const CartRow = component('cart-row', {
 export const CartRow = component('cart-row', {
   fragmentTarget: true,
   props: { rowId: String },
-  render: ({ rowId }) => <tr fw-c="cart-row" data-row={rowId}></tr>,
+  render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
 export const CartTable = component('cart-table', {
@@ -99,14 +99,14 @@ export const CartTable = component('cart-table', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('reports FW230 when fragment target children capture unserializable values', () => {
+  it('reports KV230 when fragment target children capture unserializable values', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component('cart-row', {
   fragmentTarget: true,
   props: { rowId: String },
-  render: ({ rowId }) => <tr fw-c="cart-row" data-row={rowId}></tr>,
+  render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
 export const CartTable = component('cart-table', {
@@ -123,15 +123,15 @@ export const CartTable = component('cart-table', {
 
     expect(result.diagnostics).toEqual([
       {
-        code: 'FW230',
+        code: 'KV230',
         fileName: 'cart-row.tsx',
         help: [
-          `${fw230.detailLabels.slotHoist} CartRow$slot_children`,
-          `${fw230.detailLabels.blockedChildren} <span>{escapeText(window.location.href)}</span>`,
-          fw230.help,
+          `${kv230.detailLabels.slotHoist} CartRow$slot_children`,
+          `${kv230.detailLabels.blockedChildren} <span>{escapeText(window.location.href)}</span>`,
+          kv230.help,
         ].join('\n'),
-        message: `${fw230.message} CartRow`,
-        severity: fw230.severity,
+        message: `${kv230.message} CartRow`,
+        severity: kv230.severity,
         // SECURITY_FINDINGS.md C1: the static text child is wrapped in escapeText(...) during
         // lowering (and the escapeText import prepended), so the blocked-children snippet shows the
         // escaped form and the diagnostic shifts down one line.
@@ -141,14 +141,14 @@ export const CartTable = component('cart-table', {
     ]);
   });
 
-  it('does not report FW230 for local child variables named like non-serializable captures', () => {
+  it('does not report KV230 for local child variables named like non-serializable captures', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component('cart-row', {
   fragmentTarget: true,
   props: { rowId: String },
-  render: ({ rowId }) => <tr fw-c="cart-row" data-row={rowId}></tr>,
+  render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
 export const CartTable = component('cart-table', {
@@ -175,7 +175,7 @@ export const CartTable = component('cart-table', {
 export const CartRow = component('cart-row', {
   fragmentTarget: true,
   props: { rowId: String },
-  render: ({ rowId }) => <tr fw-c="cart-row" data-row={rowId}></tr>,
+  render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
 export const CartTable = component('cart-table', {

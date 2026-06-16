@@ -275,7 +275,7 @@ export function normativeDocsGateFact<T extends NormativeDocsCompileResult>(opti
   const behaviorFixture = options.compileComponentModule({
     fileName: 'components/docs/doc-card.tsx',
     source: `
-import { component } from '@jiso/core';
+import { component } from '@kovojs/core';
 
 function choose() {}
 
@@ -288,7 +288,7 @@ export const DocCard = component('doc-card', {
 });
 `,
   });
-  const cssManifest = options.collectCssAssetManifest(behaviorFixture, { baseHref: '/_jiso/' });
+  const cssManifest = options.collectCssAssetManifest(behaviorFixture, { baseHref: '/_kovo/' });
   options.assertRenderEquivalence(behaviorFixture);
 
   return {

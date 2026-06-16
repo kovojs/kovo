@@ -5,15 +5,15 @@ import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 import {
-  assertInlineJisoLoaderModuleArtifactParity,
-  buildInlineJisoLoaderModuleSource,
-  buildInlineJisoLoaderInstallerReadableSource,
-  buildInlineJisoLoaderInstallerSource,
-  emitInlineJisoLoaderModule,
-  inlineJisoLoaderGzipByteBudget,
-  inlineJisoLoaderInstallerReadableSource,
+  assertInlineKovoLoaderModuleArtifactParity,
+  buildInlineKovoLoaderModuleSource,
+  buildInlineKovoLoaderInstallerReadableSource,
+  buildInlineKovoLoaderInstallerSource,
+  emitInlineKovoLoaderModule,
+  inlineKovoLoaderGzipByteBudget,
+  inlineKovoLoaderInstallerReadableSource,
 } from './inline-loader-build.js';
-import { createInlineJisoLoaderSource, inlineJisoLoaderInstallerSource } from './inline-loader.js';
+import { createInlineKovoLoaderSource, inlineKovoLoaderInstallerSource } from './inline-loader.js';
 
 function createOversizedInlineLoaderSource(): string {
   let state = 0x12345678;
@@ -23,7 +23,7 @@ function createOversizedInlineLoaderSource(): string {
   }).join(',');
 
   return [
-    'function installInlineJisoLoader(importModule) {',
+    'function installInlineKovoLoader(importModule) {',
     `  const payload = [${payload}];`,
     '  return payload.length + Boolean(importModule);',
     '}',
@@ -33,22 +33,22 @@ function createOversizedInlineLoaderSource(): string {
 describe('inline loader build source', () => {
   it('pins the shipped minified installer to the deterministic source helper', () => {
     // SPEC.md §4.4: drift checks must compare the shipped bootstrap to readable source.
-    expect(inlineJisoLoaderInstallerReadableSource).toBe(
-      buildInlineJisoLoaderInstallerReadableSource(),
+    expect(inlineKovoLoaderInstallerReadableSource).toBe(
+      buildInlineKovoLoaderInstallerReadableSource(),
     );
-    expect(inlineJisoLoaderInstallerReadableSource).toContain('\nfunction installInlineJisoLoader');
-    expect(inlineJisoLoaderInstallerReadableSource).toContain("join('; ')");
-    expect(buildInlineJisoLoaderInstallerSource()).toBe(inlineJisoLoaderInstallerSource);
+    expect(inlineKovoLoaderInstallerReadableSource).toContain('\nfunction installInlineKovoLoader');
+    expect(inlineKovoLoaderInstallerReadableSource).toContain("join('; ')");
+    expect(buildInlineKovoLoaderInstallerSource()).toBe(inlineKovoLoaderInstallerSource);
   });
 
   it('emits the checked-in runtime module from the readable inline loader source', () => {
     // SPEC.md §4.4: build-time emission must keep the shipped bootstrap tied to readable source.
-    const moduleSource = buildInlineJisoLoaderModuleSource();
+    const moduleSource = buildInlineKovoLoaderModuleSource();
 
-    expect(() => assertInlineJisoLoaderModuleArtifactParity(moduleSource)).not.toThrow();
+    expect(() => assertInlineKovoLoaderModuleArtifactParity(moduleSource)).not.toThrow();
     expect(moduleSource).toBe(readFileSync(new URL('./inline-loader.ts', import.meta.url), 'utf8'));
-    expect(moduleSource).toContain('const inlineJisoLoaderInstaller = (');
-    expect(moduleSource).toContain('inlineJisoLoaderInstaller(importModule);');
+    expect(moduleSource).toContain('const inlineKovoLoaderInstaller = (');
+    expect(moduleSource).toContain('inlineKovoLoaderInstaller(importModule);');
     expect(moduleSource).toContain('importModule: ImportHandlerModule,');
     expect(moduleSource).not.toContain('InlineImportHandlerModule');
     expect(moduleSource).not.toContain('eval');
@@ -56,22 +56,22 @@ describe('inline loader build source', () => {
 
   it('checks the shipped source literal against the executable installer artifact', () => {
     // SPEC.md §4.4: the readable build, shipped source string, and callable inline loader are one artifact.
-    const moduleSource = buildInlineJisoLoaderModuleSource();
+    const moduleSource = buildInlineKovoLoaderModuleSource();
     const driftedModuleSource = moduleSource.replace(
       'const doc=document;',
       'const doc=globalThis.document;',
     );
-    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-inline-loader-'));
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-inline-loader-'));
     const targetPath = join(tempDir, 'inline-loader.ts');
 
     try {
-      expect(() => assertInlineJisoLoaderModuleArtifactParity(moduleSource)).not.toThrow();
-      expect(() => assertInlineJisoLoaderModuleArtifactParity(driftedModuleSource)).toThrow(
+      expect(() => assertInlineKovoLoaderModuleArtifactParity(moduleSource)).not.toThrow();
+      expect(() => assertInlineKovoLoaderModuleArtifactParity(driftedModuleSource)).toThrow(
         'embedded installer artifacts drifted',
       );
 
       writeFileSync(targetPath, driftedModuleSource, 'utf8');
-      expect(() => emitInlineJisoLoaderModule({ check: true, targetPath })).toThrow(
+      expect(() => emitInlineKovoLoaderModule({ check: true, targetPath })).toThrow(
         'embedded installer artifacts drifted',
       );
     } finally {
@@ -97,7 +97,7 @@ describe('inline loader build source', () => {
       'node --experimental-strip-types src/inline-loader-build.ts --check',
     );
     expect(rootManifest.scripts?.['check:inline-loader']).toBe(
-      'pnpm --filter @jiso/runtime run check:inline-loader',
+      'pnpm --filter @kovojs/runtime run check:inline-loader',
     );
     expect(rootManifest.scripts?.check).toContain('pnpm run check:inline-loader');
     expect(rootManifest.scripts?.['check:build']).toContain('pnpm run check:inline-loader');
@@ -106,7 +106,7 @@ describe('inline loader build source', () => {
   it('rejects template interpolation instead of silently rewriting it', () => {
     // SPEC.md §4.4: inline-loader generation must fail closed on unsupported source syntax.
     expect(() =>
-      buildInlineJisoLoaderInstallerSource(
+      buildInlineKovoLoaderInstallerSource(
         ['function unsupportedTemplate(value) {', '  return `loader ${value}`;', '}'].join('\n'),
       ),
     ).toThrow('template interpolation');
@@ -114,7 +114,7 @@ describe('inline loader build source', () => {
 
   it('rejects invalid inline loader JavaScript at build time', () => {
     // SPEC.md §4.4: generated bootstrap source must be syntax-checked before shipping.
-    expect(() => buildInlineJisoLoaderInstallerSource('function invalidInlineLoader(')).toThrow(
+    expect(() => buildInlineKovoLoaderInstallerSource('function invalidInlineLoader(')).toThrow(
       'invalid JavaScript',
     );
   });
@@ -122,18 +122,18 @@ describe('inline loader build source', () => {
   it('rejects generated inline loader modules that exceed the gzip budget', () => {
     // SPEC.md §4.4: the package build/check path enforces the always-loaded 4KB bootstrap budget.
     const source = createOversizedInlineLoaderSource();
-    const minifiedSource = buildInlineJisoLoaderInstallerSource(source);
+    const minifiedSource = buildInlineKovoLoaderInstallerSource(source);
     const bootstrapSource = `(${minifiedSource})((url)=>import(url));`;
 
-    expect(gzipSync(bootstrapSource).byteLength).toBeGreaterThan(inlineJisoLoaderGzipByteBudget);
-    expect(() => buildInlineJisoLoaderModuleSource(source)).toThrow(
+    expect(gzipSync(bootstrapSource).byteLength).toBeGreaterThan(inlineKovoLoaderGzipByteBudget);
+    expect(() => buildInlineKovoLoaderModuleSource(source)).toThrow(
       'exceeds SPEC.md §4.4 gzip budget',
     );
   });
 
   it('trims custom import expressions in generated public bootstrap source', () => {
-    expect(createInlineJisoLoaderSource(' globalThis.__jisoInlineImport ')).toContain(
-      ')(globalThis.__jisoInlineImport);',
+    expect(createInlineKovoLoaderSource(' globalThis.__kovoInlineImport ')).toContain(
+      ')(globalThis.__kovoInlineImport);',
     );
   });
 });

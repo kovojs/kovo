@@ -33,8 +33,8 @@ export async function exportSiteStaticApp({
     root: siteRoot,
     server: { middlewareMode: true },
   });
-  const previousDefaultApp = process.env.JISO_SITE_APP_SHELL_DEFAULT;
-  process.env.JISO_SITE_APP_SHELL_DEFAULT = 'off';
+  const previousDefaultApp = process.env.KOVO_SITE_APP_SHELL_DEFAULT;
+  process.env.KOVO_SITE_APP_SHELL_DEFAULT = 'off';
 
   try {
     const [
@@ -45,10 +45,10 @@ export async function exportSiteStaticApp({
       serverViteModule,
     ] = await Promise.all([
       viteServer.ssrLoadModule('/scripts/app-shell.mjs'),
-      viteServer.ssrLoadModule('@jiso/server/app-shell/client-modules'),
-      viteServer.ssrLoadModule('@jiso/server/app-shell/core'),
-      viteServer.ssrLoadModule('@jiso/server/app-shell/static-export'),
-      viteServer.ssrLoadModule('@jiso/server/app-shell/vite'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/client-modules'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/core'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/static-export'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
     ]);
     const serverApi = {
       ...serverClientModulesModule,
@@ -58,45 +58,45 @@ export async function exportSiteStaticApp({
     };
     const { createSiteDistApp } = appShellModule;
     const {
-      exportJisoAppShellViteBuildWithManifestFromManifestFile,
+      exportKovoAppShellViteBuildWithManifestFromManifestFile,
       formatStaticExportDiagnostics,
       isStaticExportDiagnosticError,
-      jisoAppShellViteManifestStylesheetHrefFromFile,
+      kovoAppShellViteManifestStylesheetHrefFromFile,
     } = serverApi;
 
     if (typeof createSiteDistApp !== 'function') {
       throw new Error('scripts/app-shell.mjs must export createSiteDistApp.');
     }
 
-    if (typeof exportJisoAppShellViteBuildWithManifestFromManifestFile !== 'function') {
+    if (typeof exportKovoAppShellViteBuildWithManifestFromManifestFile !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildWithManifestFromManifestFile.',
+        '@kovojs/server/app-shell/vite must export exportKovoAppShellViteBuildWithManifestFromManifestFile.',
       );
     }
     if (typeof formatStaticExportDiagnostics !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/static-export must export formatStaticExportDiagnostics.',
+        '@kovojs/server/app-shell/static-export must export formatStaticExportDiagnostics.',
       );
     }
     if (typeof isStaticExportDiagnosticError !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/static-export must export isStaticExportDiagnosticError.',
+        '@kovojs/server/app-shell/static-export must export isStaticExportDiagnosticError.',
       );
     }
-    if (typeof jisoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
+    if (typeof kovoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/vite must export jisoAppShellViteManifestStylesheetHrefFromFile.',
+        '@kovojs/server/app-shell/vite must export kovoAppShellViteManifestStylesheetHrefFromFile.',
       );
     }
     staticExportTaskHelpers = { formatStaticExportDiagnostics, isStaticExportDiagnosticError };
 
-    await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
+    await kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
     const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
     // SPEC.md section 9.5 static export owns the final static host bytes:
     // replay route documents, copy versioned /c/ modules, and copy the Vite
     // manifest assets through the public app-shell export bridge.
-    const { manifest, result } = await exportJisoAppShellViteBuildWithManifestFromManifestFile({
+    const { manifest, result } = await exportKovoAppShellViteBuildWithManifestFromManifestFile({
       app,
       distDir: cssDistDir,
       manifestFile,
@@ -106,9 +106,9 @@ export async function exportSiteStaticApp({
     return { ...result, manifest };
   } finally {
     if (previousDefaultApp === undefined) {
-      delete process.env.JISO_SITE_APP_SHELL_DEFAULT;
+      delete process.env.KOVO_SITE_APP_SHELL_DEFAULT;
     } else {
-      process.env.JISO_SITE_APP_SHELL_DEFAULT = previousDefaultApp;
+      process.env.KOVO_SITE_APP_SHELL_DEFAULT = previousDefaultApp;
     }
     await viteServer.close();
   }

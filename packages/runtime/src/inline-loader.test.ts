@@ -1,7 +1,7 @@
 import { runInThisContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createInlineJisoLoaderSource } from './inline-loader.js';
+import { createInlineKovoLoaderSource } from './inline-loader.js';
 
 describe('inline loader source', () => {
   it('installs from a generated custom import expression without importing handlers eagerly', () => {
@@ -9,13 +9,13 @@ describe('inline loader source', () => {
     const originals = {
       addEventListener: globalRecord.addEventListener,
       document: globalRecord.document,
-      importModule: globalRecord.__jisoInlineImport,
+      importModule: globalRecord.__kovoInlineImport,
     };
     const listeners = new Map<string, unknown>();
     const importModule = vi.fn(async () => ({}));
 
     try {
-      globalRecord.__jisoInlineImport = importModule;
+      globalRecord.__kovoInlineImport = importModule;
       globalRecord.addEventListener = (type: string, listener: unknown) => {
         listeners.set(type, listener);
       };
@@ -25,7 +25,7 @@ describe('inline loader source', () => {
         },
       };
 
-      runInThisContext(createInlineJisoLoaderSource(' globalThis.__jisoInlineImport '));
+      runInThisContext(createInlineKovoLoaderSource(' globalThis.__kovoInlineImport '));
 
       expect([...listeners.keys()]).toEqual([
         'click',
@@ -55,9 +55,9 @@ describe('inline loader source', () => {
         document: originals.document,
       });
       if (originals.importModule === undefined) {
-        delete globalRecord.__jisoInlineImport;
+        delete globalRecord.__kovoInlineImport;
       } else {
-        globalRecord.__jisoInlineImport = originals.importModule;
+        globalRecord.__kovoInlineImport = originals.importModule;
       }
     }
   });

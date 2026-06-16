@@ -1,5 +1,5 @@
-import { form } from '@jiso/core';
-import type { OptimisticFor } from '@jiso/runtime';
+import { form } from '@kovojs/core';
+import type { OptimisticFor } from '@kovojs/runtime';
 import {
   mutation,
   renderDeferredStream,
@@ -10,7 +10,7 @@ import {
   s,
   type MutationFail,
   type MutationWireHeaderSource,
-} from '@jiso/server';
+} from '@kovojs/server';
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
@@ -52,7 +52,7 @@ export const addToCartForm = form<'cart/add', AddToCartInput>('cart/add');
 // /snippet
 
 // snippet:touches
-// SPEC.md section 11.1: with the blessed @jiso/drizzle adapter these touch
+// SPEC.md section 11.1: with the blessed @kovojs/drizzle adapter these touch
 // sites are extracted from the write ASTs and committed as a reviewable
 // graph. The tutorial's plain in-memory db has no ASTs to analyze, so it
 // declares the touches — the SPEC.md section 14 v1 floor — and chapter 7
@@ -141,10 +141,10 @@ export function renderShopPage(
   const queryData =
     renderQueryScript({ name: 'cart', value: cart }) +
     renderQueryScript({ name: 'products', value: products });
-  const badge = `<fw-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</fw-fragment>`;
-  const list = `<fw-fragment target="product-list">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</fw-fragment>`;
+  const badge = `<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment>`;
+  const list = `<kovo-fragment target="product-list">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</kovo-fragment>`;
 
-  return `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1>${queryData}${badge}${list}</main></body></html>`;
+  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${queryData}${badge}${list}</main></body></html>`;
 }
 
 export const homeRoute = route('/', {
@@ -161,11 +161,11 @@ export function renderHomeRoute() {
 // Tutorial step 06 (chapter 6): out-of-order streaming (SPEC.md section 8).
 // The shell ships immediately with a declared fallback; the expensive product
 // list streams later in the same response using the same fragment/query
-// vocabulary as mutation responses — <fw-defer> is the section 9.1 wire
+// vocabulary as mutation responses — <kovo-defer> is the section 9.1 wire
 // reused within first render, not a second mechanism.
 export function renderShopPageDeferredStream(db: ShopDb = createShopDb(), request?: ShopRequest) {
   const cart = loadCart(db);
-  const shell = `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1>${renderQueryScript({ name: 'cart', value: cart })}<fw-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</fw-fragment><fw-defer target="product-list" state="pending">Loading products…</fw-defer>`;
+  const shell = `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${renderQueryScript({ name: 'cart', value: cart })}<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment><kovo-defer target="product-list" state="pending">Loading products…</kovo-defer>`;
   const products = loadProducts(db);
 
   return renderDeferredStream({

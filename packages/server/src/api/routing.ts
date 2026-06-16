@@ -1,4 +1,4 @@
-export { Link, href, redirect } from '@jiso/core';
+export { Link, href, redirect } from '@kovojs/core';
 export type {
   DiagnosticCode,
   Endpoint,
@@ -10,7 +10,7 @@ export type {
   LinkDescriptor,
   Redirect,
   Route,
-} from '@jiso/core';
+} from '@kovojs/core';
 export type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
 export { endpoint, endpointMatches, runEndpoint } from '../endpoint.js';
 export type {

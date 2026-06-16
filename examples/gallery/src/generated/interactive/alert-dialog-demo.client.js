@@ -1,12 +1,12 @@
-// @jiso-ir
-import { derive, handler } from '@jiso/runtime';
+// @kovojs-ir
+import { derive, handler } from '@kovojs/runtime';
 
 import {
   alertDialogActionClick as _alertDialogActionClick,
   alertDialogCancel as _alertDialogCancel,
   alertDialogCancelClick as _alertDialogCancelClick,
   alertDialogTriggerClick as _alertDialogTriggerClick,
-} from '@jiso/headless-ui/primitives';
+} from '@kovojs/headless-ui/primitives';
 
 export const GalleryAlertDialogDemo$button_click = handler((event, ctx) => {
   const result = _alertDialogTriggerClick(Object(event), { open: ctx.state.open });

@@ -3,10 +3,10 @@
 >>> REQUEST
 GET /_q/product?id=p1 HTTP/1.1
 Accept: text/html
-FW-Fragment: true
+Kovo-Fragment: true
 
 <<< RESPONSE
 HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
 
-<fw-query name="product:p1">{"name":"Mug","stock":4}</fw-query>
+<kovo-query name="product:p1">{"name":"Mug","stock":4}</kovo-query>

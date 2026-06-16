@@ -1,5 +1,5 @@
-/** @jsxImportSource @jiso/server */
-import { component } from '@jiso/core';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
 import {
   cn,
   contextMenuContentAttributes,
@@ -12,7 +12,7 @@ import {
   type ClassValue,
   type ContextMenuItem as HeadlessContextMenuItem,
   type ContextMenuPoint,
-} from '@jiso/headless-ui';
+} from '@kovojs/headless-ui';
 
 export interface ContextMenuStateProps {
   disabled?: boolean;
@@ -149,7 +149,7 @@ export const ContextMenuTrigger = component('context-menu-trigger', {
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
-        jiso-context-menu={attrs['jiso-context-menu']}
+        kovo-context-menu={attrs['kovo-context-menu']}
         role={attrs.role}
         tabIndex={props.disabled === true ? -1 : 0}
       >

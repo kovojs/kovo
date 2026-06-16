@@ -131,7 +131,7 @@ import {
 } from './index.js';
 import { readSource } from './test-source.js';
 
-describe('@jiso/ui styled package foundation', () => {
+describe('@kovojs/ui styled package foundation', () => {
   it('exports pure-markup button, badge, and card TSX components', () => {
     expect(Button.name).toBe('button');
     expect(Accordion.name).toBe('accordion');
@@ -415,7 +415,7 @@ describe('@jiso/ui styled package foundation', () => {
         href: '/team/ada',
         open: true,
       }),
-    ).toContain('jiso-hover-card="profile-card"');
+    ).toContain('kovo-hover-card="profile-card"');
     const disabledHoverCardTrigger = HoverCardTrigger.definition.render({
       children: 'Ada',
       contentId: 'profile-card',
@@ -426,7 +426,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(disabledHoverCardTrigger).toContain('aria-disabled="true"');
     expect(disabledHoverCardTrigger).toContain('data-disabled="" data-state="closed"');
     expect(disabledHoverCardTrigger).not.toContain('href=');
-    expect(disabledHoverCardTrigger).not.toContain('jiso-hover-card=');
+    expect(disabledHoverCardTrigger).not.toContain('kovo-hover-card=');
     expect(HoverCardContent.definition.render({ contentId: 'profile-card', open: true })).toContain(
       'popover="manual"',
     );
@@ -441,7 +441,7 @@ describe('@jiso/ui styled package foundation', () => {
     );
     expect(
       TooltipTrigger.definition.render({ children: 'Help', contentId: 'tip', open: true }),
-    ).toContain('jiso-tooltip="tip"');
+    ).toContain('kovo-tooltip="tip"');
     const disabledTooltipTrigger = TooltipTrigger.definition.render({
       children: 'Help',
       contentId: 'tip',
@@ -449,7 +449,7 @@ describe('@jiso/ui styled package foundation', () => {
       open: false,
     });
     expect(disabledTooltipTrigger).toContain('data-disabled="" data-state="closed" disabled');
-    expect(disabledTooltipTrigger).not.toContain('jiso-tooltip=');
+    expect(disabledTooltipTrigger).not.toContain('kovo-tooltip=');
     expect(TooltipContent.definition.render({ contentId: 'tip', open: true })).toContain(
       'role="tooltip"',
     );
@@ -541,11 +541,11 @@ describe('@jiso/ui styled package foundation', () => {
       .map(readSource)
       .join('\n');
 
-    expect(sources).toContain('/** @jsxImportSource @jiso/server */');
-    expect(sources).toContain("import { component } from '@jiso/core';");
-    expect(sources).toContain("from '@jiso/headless-ui'");
-    expect(sources).not.toContain('fw-c=');
+    expect(sources).toContain('/** @jsxImportSource @kovojs/server */');
+    expect(sources).toContain("import { component } from '@kovojs/core';");
+    expect(sources).toContain("from '@kovojs/headless-ui'");
+    expect(sources).not.toContain('kovo-c=');
     expect(sources).not.toContain('data-bind');
-    expect(sources).not.toContain('@jiso-ir');
+    expect(sources).not.toContain('@kovojs-ir');
   });
 });

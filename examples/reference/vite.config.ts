@@ -53,7 +53,7 @@ function referenceAppShellDevPlugin(): ReferenceDevPlugin {
         });
       };
     },
-    name: 'jiso-reference-app-shell-dev',
+    name: 'kovo-reference-app-shell-dev',
   };
 }
 
@@ -71,7 +71,7 @@ async function loadReferenceNodeHandler(server: ReferenceDevServer): Promise<Dev
 function isReferenceShellRequest(request: IncomingMessage): boolean {
   if (!request.url) return false;
 
-  const pathname = new URL(request.url, 'http://jiso.local').pathname;
+  const pathname = new URL(request.url, 'http://kovo.local').pathname;
 
   if (request.method === 'GET' || request.method === 'HEAD') {
     return pathname === '/login' || pathname === '/account' || pathname === '/admin';

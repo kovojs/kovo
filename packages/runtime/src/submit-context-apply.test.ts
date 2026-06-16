@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { form, formFields, href, Link, redirect, type Route } from '@jiso/core';
+import { form, formFields, href, Link, redirect, type Route } from '@kovojs/core';
 
 import {
   createQueryStore,
@@ -14,7 +14,7 @@ import {
   FakeQueryPlanElement,
 } from './runtime-test-fakes.js';
 
-declare module '@jiso/core' {
+declare module '@kovojs/core' {
   interface RouteRegistry {
     '/cart': Route<'/cart'>;
     '/catalog': Route<'/catalog', {}, { max: number; sort: string }>;
@@ -51,8 +51,8 @@ describe('submit context apply', () => {
       return {
         async text() {
           return [
-            '<fw-query name="cart">{"count":2}</fw-query>',
-            '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+            '<kovo-query name="cart">{"count":2}</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
           ].join('\n');
         },
       };
@@ -85,10 +85,10 @@ describe('submit context apply', () => {
     expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
       body: expect.any(FormData),
       headers: {
-        Accept: 'text/vnd.jiso.fragment+html',
-        'FW-Fragment': 'true',
-        'FW-Idem': 'idem_ctx',
-        'FW-Targets': 'cart-badge',
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_ctx',
+        'Kovo-Targets': 'cart-badge',
       },
       keepalive: true,
       method: 'POST',

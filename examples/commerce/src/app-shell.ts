@@ -3,10 +3,14 @@ import {
   route,
   type CsrfValidationOptions,
   type ServerErrorHandler,
-} from '@jiso/server';
-import { createMemoryVersionedClientModuleRegistry } from '@jiso/server/app-shell/client-modules';
-import { createApp, createRequestHandler, type RequestHandler } from '@jiso/server/app-shell/core';
-import { toNodeHandler } from '@jiso/server/app-shell/node';
+} from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
+import {
+  createApp,
+  createRequestHandler,
+  type RequestHandler,
+} from '@kovojs/server/app-shell/core';
+import { toNodeHandler } from '@kovojs/server/app-shell/node';
 import { eq } from 'drizzle-orm';
 
 import {
@@ -80,7 +84,7 @@ export const commerceHomeRoute = route('/', {
   i18n: commerceMessages,
   meta: {
     description: 'Browse products and checkout with verifiable cart state.',
-    title: 'Jiso Commerce',
+    title: 'Kovo Commerce',
   },
   async page(_context, request: CommerceShellRequest) {
     return `<div data-commerce-shell="cart">${await renderCartPageBody(request.db, undefined, request)}</div>`;
@@ -92,7 +96,7 @@ export const commerceCartRoute = route('/cart', {
   i18n: commerceMessages,
   meta: {
     description: 'Browse products and checkout with verifiable cart state.',
-    title: 'Jiso Commerce',
+    title: 'Kovo Commerce',
   },
   async page(_context, request: CommerceShellRequest) {
     return `<div data-commerce-shell="cart">${await renderCartPageBody(request.db, undefined, request)}</div>`;
@@ -102,8 +106,8 @@ export const commerceCartRoute = route('/cart', {
 
 export const commerceLoginRoute = route('/login', {
   meta: {
-    description: 'Sign in to the Jiso commerce reference app.',
-    title: 'Jiso Commerce Sign In',
+    description: 'Sign in to the Kovo commerce reference app.',
+    title: 'Kovo Commerce Sign In',
   },
   page(context, request: CommerceShellRequest) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/cart';
@@ -122,7 +126,7 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
         i18n: commerceMessages,
         meta: {
           description: 'Browse products and checkout with verifiable cart state.',
-          title: 'Jiso Commerce',
+          title: 'Kovo Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
         async page() {
@@ -141,7 +145,7 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
         i18n: commerceMessages,
         meta: {
           description: 'Browse products and checkout with verifiable cart state.',
-          title: 'Jiso Commerce',
+          title: 'Kovo Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
         async page() {
@@ -158,11 +162,11 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
       }),
       route('/login', {
         meta: {
-          description: 'Sign in to the Jiso commerce reference app.',
-          title: 'Jiso Commerce Sign In',
+          description: 'Sign in to the Kovo commerce reference app.',
+          title: 'Kovo Commerce Sign In',
         },
         page() {
-          return '<main class="mx-auto max-w-md p-6"><h1>Jiso Commerce Sign In</h1><p>Sign in is available on the dynamic commerce server.</p></main>';
+          return '<main class="mx-auto max-w-md p-6"><h1>Kovo Commerce Sign In</h1><p>Sign in is available on the dynamic commerce server.</p></main>';
         },
         stylesheets: commerceStylesheets,
       }),

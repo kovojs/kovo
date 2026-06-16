@@ -7,25 +7,25 @@ import { createApp } from './app.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 import {
-  createJisoAppShellViteBuild,
-  exportJisoAppShellViteBuild,
-  exportJisoAppShellViteBuildFromManifestFile,
-  jisoAppShellVitePlugin,
-  type JisoAppShellViteBuildOutput,
+  createKovoAppShellViteBuild,
+  exportKovoAppShellViteBuild,
+  exportKovoAppShellViteBuildFromManifestFile,
+  kovoAppShellVitePlugin,
+  type KovoAppShellViteBuildOutput,
 } from './api/app-shell/vite.js';
-import { jisoAppShellViteStaticExportAssets } from './vite-build-assets.js';
+import { kovoAppShellViteStaticExportAssets } from './vite-build-assets.js';
 
 describe('server app shell Vite plugin', () => {
   it('turns Vite build asset plans into static-export copy inputs', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-export-'));
 
     try {
       await mkdir(join(distDir, 'assets'), { recursive: true });
       await writeFile(join(distDir, 'assets/cart.css'), '.cart{color:oklch(50% 0.1 180)}');
       await writeFile(join(distDir, 'assets/cart.js'), 'export const cart = true;');
 
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/cart', {
@@ -45,7 +45,7 @@ describe('server app shell Vite plugin', () => {
           '/cart': 'src/cart.client.ts',
         },
       });
-      const assets = jisoAppShellViteStaticExportAssets(build.assets, { distDir });
+      const assets = kovoAppShellViteStaticExportAssets(build.assets, { distDir });
 
       expect(assets).toEqual([
         {
@@ -91,15 +91,15 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('exports a Vite app-shell build with route-entry hints and copied dist assets', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-dist-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-export-'));
 
     try {
       await mkdir(join(distDir, 'assets'), { recursive: true });
       await writeFile(join(distDir, 'assets/cart.css'), '.cart{display:grid}');
       await writeFile(join(distDir, 'assets/cart.js'), 'export const cart = "manifest";');
 
-      const build = createJisoAppShellViteBuild({
+      const build = createKovoAppShellViteBuild({
         app: createApp({
           routes: [
             route('/cart', {
@@ -120,7 +120,7 @@ describe('server app shell Vite plugin', () => {
         },
       });
 
-      const result = await exportJisoAppShellViteBuild(build, { distDir, outDir });
+      const result = await exportKovoAppShellViteBuild(build, { distDir, outDir });
 
       expect(result.artifacts).toHaveLength(1);
       expect(result.artifacts[0]?.path).toBe('/cart/index.html');
@@ -162,8 +162,8 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('exports a Vite app-shell build directly from the dist manifest file', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-dist-manifest-export-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-manifest-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-dist-manifest-export-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-manifest-export-'));
 
     try {
       await mkdir(join(distDir, '.vite'), { recursive: true });
@@ -180,7 +180,7 @@ describe('server app shell Vite plugin', () => {
         }),
       );
 
-      const result = await exportJisoAppShellViteBuildFromManifestFile({
+      const result = await exportKovoAppShellViteBuildFromManifestFile({
         app: createApp({
           routes: [
             route('/cart', {
@@ -262,8 +262,8 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('rejects non-file Vite distDir URLs before manifest-file export replay', async () => {
-    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-bad-dist-url-manifest-'));
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-bad-dist-url-export-'));
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-bad-dist-url-manifest-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-bad-dist-url-export-'));
     let rendered = false;
 
     try {
@@ -280,7 +280,7 @@ describe('server app shell Vite plugin', () => {
       );
 
       await expect(
-        exportJisoAppShellViteBuildFromManifestFile({
+        exportKovoAppShellViteBuildFromManifestFile({
           app: createApp({
             routes: [
               route('/cart', {
@@ -299,10 +299,10 @@ describe('server app shell Vite plugin', () => {
           },
         }),
       ).rejects.toMatchObject({
-        code: 'FW229',
+        code: 'KV229',
         diagnostics: [
           {
-            code: 'FW229',
+            code: 'KV229',
             routePath: 'vite-distDir',
           },
         ],
@@ -319,16 +319,16 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('runs app-shell static export from the Vite plugin writeBundle hook', async () => {
-    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-plugin-build-export-dist-'));
-    const exportDir = await mkdtemp(join(tmpdir(), 'jiso-vite-plugin-build-export-out-'));
-    const outputs: JisoAppShellViteBuildOutput[] = [];
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-plugin-build-export-dist-'));
+    const exportDir = await mkdtemp(join(tmpdir(), 'kovo-vite-plugin-build-export-out-'));
+    const outputs: KovoAppShellViteBuildOutput[] = [];
 
     try {
       await mkdir(join(outDir, 'assets'), { recursive: true });
       await writeFile(join(outDir, 'assets/cart.css'), '.cart{display:grid}');
       await writeFile(join(outDir, 'assets/cart.js'), 'export const cartAsset = true;');
 
-      const plugin = jisoAppShellVitePlugin(
+      const plugin = kovoAppShellVitePlugin(
         createApp({
           routes: [
             route('/cart', {

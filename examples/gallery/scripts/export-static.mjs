@@ -26,18 +26,18 @@ export async function exportGalleryInteractiveStatic({
   try {
     const [appShellModule, serverModule] = await Promise.all([
       viteServer.ssrLoadModule('/src/app-shell.ts'),
-      viteServer.ssrLoadModule('@jiso/server'),
+      viteServer.ssrLoadModule('@kovojs/server'),
     ]);
     const { exportStaticApp } = serverModule;
 
     if (typeof exportStaticApp !== 'function') {
-      throw new Error('@jiso/server must export exportStaticApp.');
+      throw new Error('@kovojs/server must export exportStaticApp.');
     }
 
     const app = appShellModule.default ?? appShellModule.galleryInteractiveAppShell?.app;
-    if (!isJisoApp(app)) {
+    if (!isKovoApp(app)) {
       throw new Error(
-        'src/app-shell.ts must export a Jiso app as default or galleryInteractiveAppShell.app.',
+        'src/app-shell.ts must export a Kovo app as default or galleryInteractiveAppShell.app.',
       );
     }
 
@@ -49,7 +49,7 @@ export async function exportGalleryInteractiveStatic({
 }
 
 async function readGalleryStylesheetAssets() {
-  // StaticExportAssetInput.source is a filesystem path the export reads + copies (FW229 requires a
+  // StaticExportAssetInput.source is a filesystem path the export reads + copies (KV229 requires a
   // readable file path, not inline content).
   try {
     await readFile(galleryStylesheetSource);
@@ -108,7 +108,7 @@ function parseCliOptions(args) {
   return options;
 }
 
-function isJisoApp(value) {
+function isKovoApp(value) {
   return (
     typeof value === 'object' &&
     value !== null &&

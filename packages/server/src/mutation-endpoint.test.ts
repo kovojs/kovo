@@ -7,7 +7,7 @@ import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server mutation endpoint routing', () => {
-  it('routes mutation endpoints without FW-Fragment through the no-JS POST redirect', async () => {
+  it('routes mutation endpoints without Kovo-Fragment through the no-JS POST redirect', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
       handler(input) {
@@ -32,7 +32,7 @@ describe('server mutation endpoint routing', () => {
     });
   });
 
-  it('routes mutation endpoints with FW-Fragment through enhanced fragment wire responses', async () => {
+  it('routes mutation endpoints with Kovo-Fragment through enhanced fragment wire responses', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
       load: () => ({ count: 1 }),
@@ -53,8 +53,8 @@ describe('server mutation endpoint routing', () => {
       renderMutationEndpointResponse(addToCart, {
         fragmentRenderers: [{ render: () => '<cart-badge>1</cart-badge>', target: 'cart-badge' }],
         headers: {
-          'FW-Fragment': 'true',
-          'FW-Targets': 'cart-badge',
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'cart-badge',
         },
         rawInput: { productId: 'p1' },
         redirectTo: '/cart',
@@ -62,11 +62,11 @@ describe('server mutation endpoint routing', () => {
       }),
     ).resolves.toMatchObject({
       body: [
-        '<fw-query name="cart">{"count":1}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+        '<kovo-query name="cart">{"count":1}</kovo-query>',
+        '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
       ].join('\n'),
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       },
       status: 200,
     });
@@ -99,14 +99,14 @@ describe('server mutation endpoint routing', () => {
       renderMutationEndpointResponse(reserveProduct, {
         fragmentRenderers: [],
         headers: {
-          'FW-Fragment': 'true',
+          'Kovo-Fragment': 'true',
         },
         rawInput: { productId: 'p1' },
         redirectTo: '/products/p1',
         request: {},
       }),
     ).resolves.toMatchObject({
-      body: '<fw-query name="productDetail" key="product:p1">{"id":"p1","stock":0}</fw-query>',
+      body: '<kovo-query name="productDetail" key="product:p1">{"id":"p1","stock":0}</kovo-query>',
       status: 200,
     });
   });
@@ -125,15 +125,15 @@ describe('server mutation endpoint routing', () => {
     await expect(
       renderMutationEndpointResponse(addToCart, {
         failureTarget: 'cart-form',
-        headers: { 'FW-Fragment': 'true' },
+        headers: { 'Kovo-Fragment': 'true' },
         rawInput: { productId: 'p1', quantity: 0 },
         redirectTo: '/cart',
         request: {},
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="cart-form"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></fw-fragment>',
+      body: '<kovo-fragment target="cart-form"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
       headers: {
-        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       },
       status: 422,
     });

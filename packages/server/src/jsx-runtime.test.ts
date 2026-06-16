@@ -32,14 +32,14 @@ describe('server jsx runtime', () => {
   it('flattens array children and skips nullish or boolean children', () => {
     const list = jsx('ol', {
       children: [
-        ['p1', 'p2'].map((id) => jsx('li', { 'fw-key': id, children: id })),
+        ['p1', 'p2'].map((id) => jsx('li', { 'kovo-key': id, children: id })),
         null,
         undefined,
         false,
       ],
     });
 
-    expect(list).toBe('<ol><li fw-key="p1">p1</li><li fw-key="p2">p2</li></ol>');
+    expect(list).toBe('<ol><li kovo-key="p1">p1</li><li kovo-key="p2">p2</li></ol>');
   });
 
   it('renders fragments and function components', () => {

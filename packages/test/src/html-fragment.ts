@@ -51,7 +51,7 @@ export interface HtmlMainMarkerFact {
   marker: string | undefined;
 }
 
-export interface FwQueryFact {
+export interface KovoQueryFact {
   attrs: Record<string, string>;
   html: string;
   json: unknown;
@@ -60,7 +60,7 @@ export interface FwQueryFact {
   tag: string;
 }
 
-export interface FwFragmentFact {
+export interface KovoFragmentFact {
   attrs: Record<string, string>;
   html: string;
   innerHtml: string;
@@ -68,11 +68,11 @@ export interface FwFragmentFact {
   target: string;
 }
 
-export interface FwResponseBodyFact {
+export interface KovoResponseBodyFact {
   fragmentTargets: string[];
-  fragments: FwFragmentFact[];
+  fragments: KovoFragmentFact[];
   keyValues: string[];
-  queries: FwQueryFact[];
+  queries: KovoQueryFact[];
   queryJsonByName: Record<string, unknown[]>;
   queryNames: string[];
   stylesheetHrefsByTarget: Record<string, string[]>;
@@ -80,9 +80,9 @@ export interface FwResponseBodyFact {
 
 export interface DocumentQueryScriptBehaviorFact {
   bodyElements: HtmlElementFact[];
-  bodyQueryScripts: Array<Pick<FwQueryFact, 'attrs' | 'rawJson'>>;
-  documentQueryScripts: Array<Pick<FwQueryFact, 'attrs' | 'rawJson'>>;
-  headQueryScripts: Array<Pick<FwQueryFact, 'attrs' | 'rawJson'>>;
+  bodyQueryScripts: Array<Pick<KovoQueryFact, 'attrs' | 'rawJson'>>;
+  documentQueryScripts: Array<Pick<KovoQueryFact, 'attrs' | 'rawJson'>>;
+  headQueryScripts: Array<Pick<KovoQueryFact, 'attrs' | 'rawJson'>>;
   renderedDocumentQueryScript: string;
   renderedQueryScript: string;
 }
@@ -207,7 +207,7 @@ export function htmlDocumentRegions(html: string): HtmlDocumentRegions {
 
 export function htmlMainMarkerFact(
   html: string,
-  attribute = 'data-fw-check-export',
+  attribute = 'data-kovo-check-export',
 ): HtmlMainMarkerFact {
   const mainElements = htmlElementFacts(html, { tag: 'main' });
 
@@ -224,15 +224,15 @@ export function htmlLinkHrefs(html: string, attrs: Record<string, string | true>
     .filter((href) => href !== '');
 }
 
-export function fwQueryFacts(html: string, name?: string): FwQueryFact[] {
+export function kovoQueryFacts(html: string, name?: string): KovoQueryFact[] {
   return htmlElementFacts(html)
     .filter(
       (element) =>
-        element.tag === 'fw-query' ||
-        (element.tag === 'script' && element.attrs['fw-query'] !== undefined),
+        element.tag === 'kovo-query' ||
+        (element.tag === 'script' && element.attrs['kovo-query'] !== undefined),
     )
     .map((element) => {
-      const queryName = element.attrs.name ?? element.attrs['fw-query'] ?? '';
+      const queryName = element.attrs.name ?? element.attrs['kovo-query'] ?? '';
       return {
         attrs: element.attrs,
         html: element.html,
@@ -245,8 +245,8 @@ export function fwQueryFacts(html: string, name?: string): FwQueryFact[] {
     .filter((fact) => name === undefined || fact.name === name);
 }
 
-export function fwFragmentFacts(html: string, target?: string): FwFragmentFact[] {
-  return htmlElementFacts(html, { tag: 'fw-fragment' })
+export function kovoFragmentFacts(html: string, target?: string): KovoFragmentFact[] {
+  return htmlElementFacts(html, { tag: 'kovo-fragment' })
     .map((element) => ({
       attrs: element.attrs,
       html: element.html,
@@ -260,9 +260,9 @@ export function fwFragmentFacts(html: string, target?: string): FwFragmentFact[]
     .filter((fact) => target === undefined || fact.target === target);
 }
 
-export function fwResponseBodyFact(html: string): FwResponseBodyFact {
-  const queries = fwQueryFacts(html);
-  const fragments = fwFragmentFacts(html);
+export function kovoResponseBodyFact(html: string): KovoResponseBodyFact {
+  const queries = kovoQueryFacts(html);
+  const fragments = kovoFragmentFacts(html);
 
   return {
     fragmentTargets: fragments.map((fragment) => fragment.target),
@@ -277,8 +277,8 @@ export function fwResponseBodyFact(html: string): FwResponseBodyFact {
   };
 }
 
-export function fwQueryJsonValues(html: string, name: string): unknown[] {
-  return fwResponseBodyFact(html).queryJsonByName[name] ?? [];
+export function kovoQueryJsonValues(html: string, name: string): unknown[] {
+  return kovoResponseBodyFact(html).queryJsonByName[name] ?? [];
 }
 
 export function documentQueryScriptBehaviorFact(
@@ -290,9 +290,9 @@ export function documentQueryScriptBehaviorFact(
   },
 ): DocumentQueryScriptBehaviorFact {
   const documentRegions = htmlDocumentRegions(renderedDocument);
-  const documentQueryScripts = fwQueryFacts(renderedDocument, options.queryName);
-  const bodyQueryScripts = fwQueryFacts(documentRegions.body.innerHtml, options.queryName);
-  const headQueryScripts = fwQueryFacts(documentRegions.head.innerHtml, options.queryName);
+  const documentQueryScripts = kovoQueryFacts(renderedDocument, options.queryName);
+  const bodyQueryScripts = kovoQueryFacts(documentRegions.body.innerHtml, options.queryName);
+  const headQueryScripts = kovoQueryFacts(documentRegions.head.innerHtml, options.queryName);
 
   return {
     bodyElements: htmlElementFacts(documentRegions.body.innerHtml),
@@ -343,12 +343,12 @@ export function htmlFormFieldsByName(
 
 export function htmlKeyFacts(html: string, key?: string): HtmlKeyFact[] {
   return htmlElementFacts(html)
-    .filter((element) => element.attrs['fw-key'] !== undefined)
+    .filter((element) => element.attrs['kovo-key'] !== undefined)
     .map((element) => ({
       attrs: element.attrs,
       html: element.html,
       innerHtml: element.innerHtml,
-      key: element.attrs['fw-key'] ?? '',
+      key: element.attrs['kovo-key'] ?? '',
       tag: element.tag,
       text: htmlTextContent(element.innerHtml),
     }))
@@ -363,7 +363,7 @@ export function htmlKeyTextMap(html: string): Record<string, string> {
   return Object.fromEntries(htmlKeyFacts(html).map((fact) => [fact.key, fact.text]));
 }
 
-function groupQueryJsonByName(queries: FwQueryFact[]): Record<string, unknown[]> {
+function groupQueryJsonByName(queries: KovoQueryFact[]): Record<string, unknown[]> {
   const grouped: Record<string, unknown[]> = {};
 
   for (const query of queries) {
@@ -375,8 +375,8 @@ function groupQueryJsonByName(queries: FwQueryFact[]): Record<string, unknown[]>
 }
 
 function compactQueryScriptFacts(
-  queries: FwQueryFact[],
-): Array<Pick<FwQueryFact, 'attrs' | 'rawJson'>> {
+  queries: KovoQueryFact[],
+): Array<Pick<KovoQueryFact, 'attrs' | 'rawJson'>> {
   return queries.map((query) => ({
     attrs: query.attrs,
     rawJson: query.rawJson,
@@ -412,14 +412,14 @@ function explicitFragmentHtml(html: string, target: string): string | undefined 
   const fragmentStart = findOpeningElement(
     html,
     (element) =>
-      element.tag === 'fw-fragment' && readHtmlAttribute(element.attrs, 'target') === target,
+      element.tag === 'kovo-fragment' && readHtmlAttribute(element.attrs, 'target') === target,
   );
   if (!fragmentStart) return undefined;
 
   const end = matchingElementEnd(html, fragmentStart);
   if (end === undefined) return undefined;
 
-  return html.slice(fragmentStart.end, end - '</fw-fragment>'.length);
+  return html.slice(fragmentStart.end, end - '</kovo-fragment>'.length);
 }
 
 interface OpeningElement {
@@ -431,11 +431,11 @@ interface OpeningElement {
 
 function findFragmentTargetElement(html: string, target: string): OpeningElement | undefined {
   return findOpeningElement(html, (element) => {
-    const fragmentTarget = readHtmlAttribute(element.attrs, 'fw-fragment-target');
+    const fragmentTarget = readHtmlAttribute(element.attrs, 'kovo-fragment-target');
     const id = readHtmlAttribute(element.attrs, 'id');
 
     // SPEC.md §9.1: fragment chunks address the runtime target by name; the
-    // browser runtime resolves that name with id / fw-fragment-target only.
+    // browser runtime resolves that name with id / kovo-fragment-target only.
     return fragmentTarget === target || id === target;
   });
 }

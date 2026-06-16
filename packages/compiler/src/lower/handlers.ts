@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
@@ -53,13 +53,13 @@ export function lowerEventHandlers(
     const diagnostics: CompilerDiagnostic[] = [];
     if (!namedHandler) {
       diagnostics.push(
-        diagnosticFor(options.fileName, 'FW210', options.source, attributeStart, eventName.length),
+        diagnosticFor(options.fileName, 'KV210', options.source, attributeStart, eventName.length),
       );
     }
 
     if (capturesUnserializableReferences(eventAttributeReferences(eventAttribute), model, params)) {
       diagnostics.push(
-        fw201Diagnostic(options.fileName, options.source, attributeStart, {
+        kv201Diagnostic(options.fileName, options.source, attributeStart, {
           attributeName: `on:${eventName}`,
           exportName,
           expression,
@@ -315,7 +315,7 @@ interface ElementParamCandidate {
   type?: ElementParamType;
 }
 
-function fw201Diagnostic(
+function kv201Diagnostic(
   fileName: string,
   source: string,
   offset: number,
@@ -326,10 +326,10 @@ function fw201Diagnostic(
     params: readonly ElementParam[];
   },
 ): CompilerDiagnostic {
-  const definition = diagnosticDefinitions.FW201;
+  const definition = diagnosticDefinitions.KV201;
   const labels = definition.detailLabels;
   return {
-    ...diagnosticFor(fileName, 'FW201', source, offset, lowering.attributeName.length),
+    ...diagnosticFor(fileName, 'KV201', source, offset, lowering.attributeName.length),
     help: [
       `${labels.handlerLowering} ${lowering.attributeName}="${clientModuleUrl(fileName)}#${lowering.exportName}"`,
       `${labels.blockedExpression} ${lowering.expression}`,

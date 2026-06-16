@@ -64,7 +64,7 @@ function assertPrintedInlineJavaScriptParity(
 
 function parseInlineJavaScriptSource(source: string, label: string): ts.SourceFile {
   const sourceFile = ts.createSourceFile(
-    'inline-jiso-loader.js',
+    'inline-kovo-loader.js',
     source,
     ts.ScriptTarget.Latest,
     true,

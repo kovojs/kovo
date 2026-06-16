@@ -55,7 +55,7 @@ describe('compiled interactive gallery demos', () => {
     const toastClient = readGenerated('toast-demo.client.js');
 
     expect(accordion).toContain('data-gallery-interactive="accordion"');
-    expect(accordion).toContain('fw-state=\'{"activeValue":"shipping","value":"shipping"}\'');
+    expect(accordion).toContain('kovo-state=\'{"activeValue":"shipping","value":"shipping"}\'');
     expect(accordion).toContain('accordionTriggerAttributes({');
     expect(accordion).toContain('accordionKeyDown as _accordionKeyDown');
     expect(accordion).toContain('accordionTriggerClick as _accordionTriggerClick');
@@ -78,7 +78,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(alertDialog).toContain('data-gallery-interactive="alert-dialog"');
-    expect(alertDialog).toContain('fw-state=\'{"open":false}\'');
+    expect(alertDialog).toContain('kovo-state=\'{"open":false}\'');
     expect(alertDialog).toContain('alertDialogTriggerAttributes({ contentId, open: state.open })');
     expect(alertDialog).toContain('alertDialogCancelAttributes({');
     expect(alertDialog).toContain("intent: 'destructive'");
@@ -104,7 +104,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(autocomplete).toContain('data-gallery-interactive="autocomplete"');
     expect(autocomplete).toContain(
-      'fw-state=\'{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}\'',
+      'kovo-state=\'{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}\'',
     );
     expect(autocomplete).toContain('autocompleteInputAttributes({');
     expect(autocomplete).toContain(
@@ -134,19 +134,19 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(toggle).toContain('data-gallery-interactive="toggle"');
-    expect(toggle).toContain('fw-state=\'{"pressed":false}\'');
+    expect(toggle).toContain('kovo-state=\'{"pressed":false}\'');
     expect(toggle).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toggle-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToggleDemo\$button_click"/,
     );
 
     expect(checkbox).toContain('data-gallery-interactive="checkbox"');
-    expect(checkbox).toContain('fw-state=\'{"checked":"indeterminate"}\'');
+    expect(checkbox).toContain('kovo-state=\'{"checked":"indeterminate"}\'');
     expect(checkbox).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/checkbox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCheckboxDemo\$input_click"/,
     );
 
     expect(checkboxGroup).toContain('data-gallery-interactive="checkbox-group"');
-    expect(checkboxGroup).toContain('fw-state=\'{"activeValue":"updates","value":"updates"}\'');
+    expect(checkboxGroup).toContain('kovo-state=\'{"activeValue":"updates","value":"updates"}\'');
     expect(checkboxGroup).toContain('id="gallery-checkbox-group-form"');
     expect(checkboxGroup).toContain("form: 'gallery-checkbox-group-form'");
     expect(checkboxGroup).toContain('checkboxGroupControlAttributes({');
@@ -161,7 +161,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(combobox).toContain('data-gallery-interactive="combobox"');
     expect(combobox).toContain(
-      'fw-state=\'{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}\'',
+      'kovo-state=\'{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}\'',
     );
     expect(combobox).toContain('comboboxInputAttributes({');
     expect(combobox).toContain('id="gallery-combobox-form" data-gallery-form="combobox"');
@@ -188,7 +188,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(command).toContain('data-gallery-interactive="command"');
     expect(command).toContain(
-      'fw-state=\'{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":false,"value":"dashboard"}\'',
+      'kovo-state=\'{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":false,"value":"dashboard"}\'',
     );
     expect(command).toContain(
       "{ id: 'gallery-command-listbox-item-1', label: 'Invite teammate', value: 'invite' }",
@@ -221,7 +221,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(contextMenu).toContain('data-gallery-interactive="context-menu"');
     expect(contextMenu).toContain(
-      'fw-state=\'{"highlightedValue":"copy","open":false,"point":{"x":24,"y":40},"value":"copy"}\'',
+      'kovo-state=\'{"highlightedValue":"copy","open":false,"point":{"x":24,"y":40},"value":"copy"}\'',
     );
     expect(contextMenu).toContain('contextMenuTriggerAttributes({');
     expect(contextMenu).toContain('contextMenuFocusElement as _contextMenuFocusElement');
@@ -265,13 +265,13 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(disclosure).toContain('data-gallery-interactive="disclosure"');
-    expect(disclosure).toContain('fw-state=\'{"open":false}\'');
+    expect(disclosure).toContain('kovo-state=\'{"open":false}\'');
     expect(disclosure).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/disclosure-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDisclosureDemo\$button_click"/,
     );
 
     expect(dialog).toContain('data-gallery-interactive="dialog"');
-    expect(dialog).toContain('fw-state=\'{"open":false}\'');
+    expect(dialog).toContain('kovo-state=\'{"open":false}\'');
     expect(dialog).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
     expect(dialog).toContain('dialogCloseAttributes({ contentId, open: state.open })');
     expect(dialog).toContain('dialogTriggerClick as _dialogTriggerClick');
@@ -292,7 +292,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(drawer).toContain('data-gallery-interactive="drawer"');
     expect(drawer).toContain('data-side="bottom"');
-    expect(drawer).toContain('fw-state=\'{"open":false}\'');
+    expect(drawer).toContain('kovo-state=\'{"open":false}\'');
     expect(drawer).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
     expect(drawer).toContain('dialogCloseAttributes({ contentId, open: state.open })');
     expect(drawer).toContain('dialogTriggerClick as _dialogTriggerClick');
@@ -314,7 +314,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(dropdownMenu).toContain('data-gallery-interactive="dropdown-menu"');
     expect(dropdownMenu).toContain(
-      'fw-state=\'{"highlightedValue":"duplicate","open":false,"value":"duplicate"}\'',
+      'kovo-state=\'{"highlightedValue":"duplicate","open":false,"value":"duplicate"}\'',
     );
     expect(dropdownMenu).toContain('dropdownMenuContentAttributes({');
     expect(dropdownMenu).toContain('dropdownMenuFocusElement as _dropdownMenuFocusElement');
@@ -359,7 +359,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(field).toContain('data-gallery-interactive="field"');
     expect(field).toContain(
-      'fw-state=\'{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}\'',
+      'kovo-state=\'{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}\'',
     );
     expect(field).toContain('fieldControlAttributes({');
     expect(field).toContain('fieldsetRootAttributes({');
@@ -386,7 +386,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(hoverCard).toContain('data-gallery-interactive="hover-card"');
-    expect(hoverCard).toContain('fw-state=\'{"open":false}\'');
+    expect(hoverCard).toContain('kovo-state=\'{"open":false}\'');
     expect(hoverCard).toContain('hoverCardTriggerAttributes({ contentId, open: state.open })');
     expect(hoverCard).toContain('hoverCardContentPointerEnter as _hoverCardContentPointerEnter');
     expect(hoverCard).toContain('data-bind:data-state=');
@@ -414,7 +414,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(menubar).toContain('data-gallery-interactive="menubar"');
-    expect(menubar).toContain('fw-state=\'{"activeValue":"file","openValue":"","value":"new"}\'');
+    expect(menubar).toContain('kovo-state=\'{"activeValue":"file","openValue":"","value":"new"}\'');
     expect(menubar).toContain('menubarSubmenuAttributes({');
     expect(menubar).toContain('menubarFocusElement as _menubarFocusElement');
     expect(menubar).toContain('menubarItemClick as _menubarItemClick');
@@ -454,7 +454,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(meter).toContain('data-gallery-interactive="meter"');
-    expect(meter).toContain('fw-state=\'{"dataState":"suboptimum","value":72}\'');
+    expect(meter).toContain('kovo-state=\'{"dataState":"suboptimum","value":72}\'');
     expect(meter).toContain('meterRootAttributes(meterState)');
     expect(meter).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/meter-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMeterDemo\$button_click"/,
@@ -462,7 +462,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(navigationMenu).toContain('data-gallery-interactive="navigation-menu"');
     expect(navigationMenu).toContain(
-      'fw-state=\'{"activeValue":"products","openValue":"","value":"none"}\'',
+      'kovo-state=\'{"activeValue":"products","openValue":"","value":"none"}\'',
     );
     expect(navigationMenu).toContain('navigationMenuTriggerAttributes({');
     expect(navigationMenu).toContain('navigationMenuFocusElement as _navigationMenuFocusElement');
@@ -507,7 +507,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(numberField).toContain('data-gallery-interactive="number-field"');
-    expect(numberField).toContain('fw-state=\'{"value":2}\'');
+    expect(numberField).toContain('kovo-state=\'{"value":2}\'');
     expect(numberField).toContain('numberFieldInput as _numberFieldInput');
     expect(numberField).toContain('numberFieldKeyDown as _numberFieldKeyDown');
     expect(numberField).toContain('data-bind:value=');
@@ -532,7 +532,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(otpField).toContain('data-gallery-interactive="otp-field"');
-    expect(otpField).toContain('fw-state=\'{"activeSlot":2,"value":"12"}\'');
+    expect(otpField).toContain('kovo-state=\'{"activeSlot":2,"value":"12"}\'');
     expect(otpField).toContain("const formId = 'gallery-otp-form'");
     expect(otpField).toContain('<form id={formId} data-gallery-form="otp-field" />');
     expect(otpField).toContain('otpFieldHiddenInputAttributes({');
@@ -549,13 +549,13 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(collapsible).toContain('data-gallery-interactive="collapsible"');
-    expect(collapsible).toContain('fw-state=\'{"open":false}\'');
+    expect(collapsible).toContain('kovo-state=\'{"open":false}\'');
     expect(collapsible).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/collapsible-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCollapsibleDemo\$summary_click"/,
     );
 
     expect(popover).toContain('data-gallery-interactive="popover"');
-    expect(popover).toContain('fw-state=\'{"open":false}\'');
+    expect(popover).toContain('kovo-state=\'{"open":false}\'');
     expect(popover).toContain('data-demo-state="popover-open"');
     expect(popover).toContain('popoverBeforeToggle as _popoverBeforeToggle');
     expect(popover).toContain('data-bind:aria-expanded=');
@@ -571,7 +571,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(progress).toContain('data-gallery-interactive="progress"');
-    expect(progress).toContain('fw-state=\'{"value":40}\'');
+    expect(progress).toContain('kovo-state=\'{"value":40}\'');
     expect(progress).toContain(
       'progressRootAttributes({ max: 100, value: state.value, valueText })',
     );
@@ -585,7 +585,7 @@ describe('compiled interactive gallery demos', () => {
     expect(radioGroup).toContain('data-gallery-interactive="radio-group"');
     expect(radioGroup).toContain('id="gallery-radio-form" data-gallery-form="radio-group"');
     expect(radioGroup).toContain("form: 'gallery-radio-form'");
-    expect(radioGroup).toContain('fw-state=\'{"value":"email"}\'');
+    expect(radioGroup).toContain('kovo-state=\'{"value":"email"}\'');
     expect(radioGroup).toContain('radioGroupRadioAttributes({');
     expect(radioGroup).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryRadioGroupDemo\$div_keydown"/,
@@ -596,7 +596,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(scrollArea).toContain('data-gallery-interactive="scroll-area"');
     expect(scrollArea).toContain(
-      'fw-state=\'{"dragging":false,"dragPointerStart":0,"dragScrollTop":0,"dragThumbSize":28,"dragTrackSize":72,"hasOverflowY":true,"hovering":false,"scrolling":false,"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}\'',
+      'kovo-state=\'{"dragging":false,"dragPointerStart":0,"dragScrollTop":0,"dragThumbSize":28,"dragTrackSize":72,"hasOverflowY":true,"hovering":false,"scrolling":false,"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}\'',
     );
     expect(scrollArea).toContain('scrollAreaViewportAttributes({');
     expect(scrollArea).toContain('scrollAreaThumbAttributes({');
@@ -621,7 +621,7 @@ describe('compiled interactive gallery demos', () => {
     expect(select).toContain('id="gallery-select-form" data-gallery-form="select"');
     expect(select).toContain("form: 'gallery-select-form'");
     expect(select).toContain(
-      'fw-state=\'{"highlightedValue":"standard","open":false,"value":"standard"}\'',
+      'kovo-state=\'{"highlightedValue":"standard","open":false,"value":"standard"}\'',
     );
     expect(select).toContain('selectHiddenInputAttributes(selectState)');
     expect(select).toContain('selectTriggerAttributes({');
@@ -638,7 +638,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(sheet).toContain('data-gallery-interactive="sheet"');
     expect(sheet).toContain('data-side="right"');
-    expect(sheet).toContain('fw-state=\'{"open":false}\'');
+    expect(sheet).toContain('kovo-state=\'{"open":false}\'');
     expect(sheet).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
     expect(sheet).toContain('dialogCloseAttributes({ contentId, open: state.open })');
     expect(sheet).toContain('dialogTriggerClick as _dialogTriggerClick');
@@ -660,7 +660,7 @@ describe('compiled interactive gallery demos', () => {
     expect(slider).toContain('id="gallery-slider-form" data-gallery-form="slider"');
     expect(slider).toContain("form: 'gallery-slider-form'");
     expect(slider).toContain(
-      'fw-state=\'{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}\'',
+      'kovo-state=\'{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}\'',
     );
     expect(slider).toContain('sliderHiddenInputAttributes(sliderState)');
     expect(slider).toContain('sliderThumbAttributes(sliderState)');
@@ -677,13 +677,13 @@ describe('compiled interactive gallery demos', () => {
 
     expect(switchDemo).toContain('data-gallery-interactive="switch"');
     expect(switchDemo).toContain('form="gallery-switch-form"');
-    expect(switchDemo).toContain('fw-state=\'{"checked":false}\'');
+    expect(switchDemo).toContain('kovo-state=\'{"checked":false}\'');
     expect(switchDemo).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/switch-demo\.client\.js\?v=[0-9a-f]{8}#GallerySwitchDemo\$input_click"/,
     );
 
     expect(tabs).toContain('data-gallery-interactive="tabs"');
-    expect(tabs).toContain('fw-state=\'{"activeValue":"overview","value":"overview"}\'');
+    expect(tabs).toContain('kovo-state=\'{"activeValue":"overview","value":"overview"}\'');
     expect(tabs).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/tabs-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTabsDemo\$section_keydown"/,
     );
@@ -692,7 +692,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(toolbar).toContain('data-gallery-interactive="toolbar"');
-    expect(toolbar).toContain('fw-state=\'{"activeValue":"bold","pressedValue":"bold"}\'');
+    expect(toolbar).toContain('kovo-state=\'{"activeValue":"bold","pressedValue":"bold"}\'');
     expect(toolbar).toContain('toolbarButtonAttributes({');
     expect(toolbar).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToolbarDemo\$div_keydown"/,
@@ -709,7 +709,7 @@ describe('compiled interactive gallery demos', () => {
     expect(toolbarClient).not.toMatch(/Reflect|getElementById|setAttribute|document|globalThis/);
 
     expect(tooltip).toContain('data-gallery-interactive="tooltip"');
-    expect(tooltip).toContain('fw-state=\'{"open":false}\'');
+    expect(tooltip).toContain('kovo-state=\'{"open":false}\'');
     expect(tooltip).toContain('tooltipTriggerAttributes({ contentId, open: state.open })');
     expect(tooltip).toContain('tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter');
     expect(tooltip).toContain('data-bind:aria-describedby=');
@@ -732,7 +732,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(toggleGroup).toContain('data-gallery-interactive="toggle-group"');
-    expect(toggleGroup).toContain('fw-state=\'{"activeValue":"bold","value":"bold"}\'');
+    expect(toggleGroup).toContain('kovo-state=\'{"activeValue":"bold","value":"bold"}\'');
     expect(toggleGroup).toContain('toggleGroupButtonAttributes({');
     expect(toggleGroup).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/toggle-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToggleGroupDemo\$section_keydown"/,
@@ -751,7 +751,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(toast).toContain('data-gallery-interactive="toast"');
     expect(toast).toContain(
-      'fw-state=\'{"activeCount":0,"activeOpen":false,"previousCount":0,"previousOpen":false}\'',
+      'kovo-state=\'{"activeCount":0,"activeOpen":false,"previousCount":0,"previousOpen":false}\'',
     );
     expect(toast).toContain('toastRootAttributes(activeToastState)');
     expect(toast).toContain('toastRootAttributes(previousToastState)');

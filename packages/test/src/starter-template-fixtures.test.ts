@@ -15,9 +15,9 @@ import {
   starterTemplateAcceptanceFact,
   starterTemplateDevDependencyCoverage,
   starterTemplateFacts,
-} from '@jiso/test/starter-template-fixtures';
+} from '@kovojs/test/starter-template-fixtures';
 
-describe('@jiso/test starter template fixtures', () => {
+describe('@kovojs/test starter template fixtures', () => {
   it('collects package, task, CI, CSS, graph, and HTML facts through reusable seams', async () => {
     const templateSources = {
       appSource: 'export const app = true;',
@@ -27,14 +27,14 @@ describe('@jiso/test starter template fixtures', () => {
         '  check:',
         '    steps:',
         '      - run: vp install',
-        '      - run: vp run fw-check',
+        '      - run: vp run kovo-check',
       ].join('\n'),
       clientSource: 'export const client = true;',
       graphSource: '{"queries":[{"query":"cart","domains":["cart"]}]}',
       indexHtmlSource:
         '<html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="/src/styles.css"></head><body></body></html>',
       packageJsonSource: JSON.stringify({
-        dependencies: { '@jiso/core': 'workspace:*' },
+        dependencies: { '@kovojs/core': 'workspace:*' },
         devDependencies: { typescript: '^5.9.0', vite: '^7.0.0' },
         scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
       }),
@@ -44,8 +44,8 @@ describe('@jiso/test starter template fixtures', () => {
         'export default defineConfig({',
         '  run: {',
         '    tasks: {',
-        "      'fw-check': {",
-        "        command: 'node scripts/emit-graph.mjs && fw check graph.json',",
+        "      'kovo-check': {",
+        "        command: 'node scripts/emit-graph.mjs && kovo check graph.json',",
         "        input: [{ pattern: 'src/**/*', base: 'workspace' }],",
         "        output: ['graph.json'],",
         '      },',
@@ -58,7 +58,7 @@ describe('@jiso/test starter template fixtures', () => {
 
     expect(facts).toMatchObject({
       appSource: 'export const app = true;',
-      ciRunCommands: ['vp install', 'vp run fw-check'],
+      ciRunCommands: ['vp install', 'vp run kovo-check'],
       clientSource: 'export const client = true;',
       cssDirectives: ['"../index.html"'],
       graph: { queries: [{ domains: ['cart'], query: 'cart' }] },
@@ -70,13 +70,13 @@ describe('@jiso/test starter template fixtures', () => {
         tags: ['html', 'head', 'meta', 'link', 'body'],
       },
       package: {
-        dependencies: ['@jiso/core'],
+        dependencies: ['@kovojs/core'],
         devDependencies: ['typescript', 'vite'],
         scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
       },
       viteTasks: {
-        'fw-check': {
-          command: 'node scripts/emit-graph.mjs && fw check graph.json',
+        'kovo-check': {
+          command: 'node scripts/emit-graph.mjs && kovo check graph.json',
           input: [{ base: 'workspace', pattern: 'src/**/*' }],
           output: ['graph.json'],
         },
@@ -92,14 +92,14 @@ describe('@jiso/test starter template fixtures', () => {
   });
 
   it('loads starter template files before deriving reusable facts', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'jiso-test-starter-template-facts-'));
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-starter-template-facts-'));
 
     try {
       await mkdir(join(root, '.github/workflows'), { recursive: true });
       await mkdir(join(root, 'src'), { recursive: true });
       await writeFile(
         join(root, '.github/workflows/ci.yml'),
-        'jobs:\n  check:\n    steps:\n      - run: vp run fw-check\n',
+        'jobs:\n  check:\n    steps:\n      - run: vp run kovo-check\n',
       );
       await writeFile(join(root, 'graph.json'), '{"pages":[{"route":"/"}]}');
       await writeFile(
@@ -109,8 +109,8 @@ describe('@jiso/test starter template fixtures', () => {
       await writeFile(
         join(root, 'package.json'),
         JSON.stringify({
-          dependencies: { '@jiso/core': 'workspace:*' },
-          devDependencies: { fw: 'workspace:*', vite: '^7.0.0' },
+          dependencies: { '@kovojs/core': 'workspace:*' },
+          devDependencies: { kovo: 'workspace:*', vite: '^7.0.0' },
           scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
         }),
       );
@@ -129,14 +129,14 @@ describe('@jiso/test starter template fixtures', () => {
         loadStarterTemplateFacts({ projectRoot: root, templateRoot: root }),
       ).resolves.toMatchObject({
         appSource: 'export const app = "loaded";',
-        ciRunCommands: ['vp run fw-check'],
+        ciRunCommands: ['vp run kovo-check'],
         clientSource: 'export const client = "loaded";',
         cssDirectives: ['"./src/**/*"'],
         graph: { pages: [{ route: '/' }] },
         indexHtml: { scriptAttrs: [{ type: 'module' }] },
         package: {
-          dependencies: ['@jiso/core'],
-          devDependencies: ['fw', 'vite'],
+          dependencies: ['@kovojs/core'],
+          devDependencies: ['kovo', 'vite'],
           scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
         },
         viteTasks: {},
@@ -148,13 +148,13 @@ describe('@jiso/test starter template fixtures', () => {
 
   it('executes the starter browser client template and records loader behavior', async () => {
     const fixture = await executeStarterClientTemplate(`
-import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
+import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 
 const store = createQueryStore();
 const queryPlans = {};
 const root = {
   findFragmentTarget(target) {
-    const element = document.getElementById(target) ?? document.querySelector('[fw-fragment-target="' + CSS.escape(target) + '"]');
+    const element = document.getElementById(target) ?? document.querySelector('[kovo-fragment-target="' + CSS.escape(target) + '"]');
     return element ? {
       appendHtml(html) { element.insertAdjacentHTML('beforeend', html); },
       readHtml() { return element.innerHTML; },
@@ -166,7 +166,7 @@ const root = {
   },
 };
 
-installJisoLoader({
+installKovoLoader({
   root: document,
   queryStore: store,
   enhancedMutations: {
@@ -177,7 +177,7 @@ installJisoLoader({
   },
 });
 
-export function applyJisoDeferredStreamResponse(body) {
+export function applyKovoDeferredStreamResponse(body) {
   return applyDeferredStreamResponseToDom({ body, root, store });
 }
 `);
@@ -210,25 +210,25 @@ export function applyJisoDeferredStreamResponse(body) {
     });
     expect(fixture.fetchCalls).toEqual([['/_m/cart/add', { method: 'POST' }]]);
     expect(
-      (fixture.exports.applyJisoDeferredStreamResponse as (body: string) => unknown)(
-        '<fw-fragment></fw-fragment>',
+      (fixture.exports.applyKovoDeferredStreamResponse as (body: string) => unknown)(
+        '<kovo-fragment></kovo-fragment>',
       ),
     ).toEqual({ applied: true });
     expect(fixture.deferredApplications).toMatchObject([
-      { body: '<fw-fragment></fw-fragment>', root: loaderOptions.enhancedMutations.root },
+      { body: '<kovo-fragment></kovo-fragment>', root: loaderOptions.enhancedMutations.root },
     ]);
   });
 
-  it('projects starter browser client behavior into fw-check facts', async () => {
+  it('projects starter browser client behavior into kovo-check facts', async () => {
     await expect(
       starterClientTemplateBehaviorFact(`
-import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
+import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 
 const store = createQueryStore();
 const queryPlans = {};
 const root = {
   findFragmentTarget(target) {
-    const element = document.getElementById(target) ?? document.querySelector('[fw-fragment-target="' + CSS.escape(target) + '"]');
+    const element = document.getElementById(target) ?? document.querySelector('[kovo-fragment-target="' + CSS.escape(target) + '"]');
     return element ? {
       appendHtml(html) { element.insertAdjacentHTML('beforeend', html); },
       readHtml() { return element.innerHTML; },
@@ -240,7 +240,7 @@ const root = {
   },
 };
 
-installJisoLoader({
+installKovoLoader({
   root: document,
   queryStore: store,
   enhancedMutations: {
@@ -252,14 +252,14 @@ installJisoLoader({
   importModule: (path) => import(path),
 });
 
-export function applyJisoDeferredStreamResponse(body, options = {}) {
+export function applyKovoDeferredStreamResponse(body, options = {}) {
   return applyDeferredStreamResponseToDom({ body, root, store, queryPlans, ...options });
 }
 `),
     ).resolves.toEqual({
       appendedHtml: [['beforeend', '<li>p1</li>']],
       deferredApplication: {
-        body: '<fw-fragment></fw-fragment>',
+        body: '<kovo-fragment></kovo-fragment>',
         boundary: 'starter-boundary',
         morph: 'structural',
         queryPlansMatch: true,
@@ -269,7 +269,7 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
       deferredApplied: true,
       fetchCall: {
         body: 'productId=p1',
-        headers: { Accept: 'text/vnd.jiso.fragment+html' },
+        headers: { Accept: 'text/vnd.kovo.fragment+html' },
         keepalive: true,
         method: 'POST',
         url: '/_m/cart/add',
@@ -291,8 +291,8 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
     });
   });
 
-  it('runs starter template graph tasks in a copied fixture with compiler and fw shims', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'jiso-test-starter-fixture-'));
+  it('runs starter template graph tasks in a copied fixture with compiler and kovo shims', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-starter-fixture-'));
     const templateRoot = join(root, 'template');
     const compilerRoot = join(root, 'compiler');
     const graph = { mutations: [{ key: 'cart/add' }], queries: [{ query: 'cart' }] };
@@ -309,7 +309,7 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
         join(templateRoot, 'scripts/emit-graph.mjs'),
         [
           "import { writeFileSync } from 'node:fs';",
-          "import { graphFixture } from '@jiso/compiler';",
+          "import { graphFixture } from '@kovojs/compiler';",
           "writeFileSync('graph.json', JSON.stringify(graphFixture));",
           "process.stdout.write('emit-graph/v1\\nOK\\n');",
         ].join('\n'),
@@ -319,8 +319,8 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
         join(templateRoot, 'scripts/graph-assertions.mjs'),
         [
           "import { execFileSync } from 'node:child_process';",
-          "const output = execFileSync('fw', ['explain', 'query', 'cart', 'graph.json'], { encoding: 'utf8' });",
-          "if (output !== 'fw-explain/v1\\nQUERY cart\\n') throw new Error(output);",
+          "const output = execFileSync('kovo', ['explain', 'query', 'cart', 'graph.json'], { encoding: 'utf8' });",
+          "if (output !== 'kovo-explain/v1\\nQUERY cart\\n') throw new Error(output);",
           "process.stdout.write('graph-assertions/v1\\nOK\\n');",
         ].join('\n'),
         'utf8',
@@ -331,9 +331,12 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
         projectRoot: root,
         templateRoot,
       };
-      const fwOutputs = [
-        { args: ['check', 'graph.json'], output: 'fw-check/v1\nOK\n' },
-        { args: ['explain', 'query', 'cart', 'graph.json'], output: 'fw-explain/v1\nQUERY cart\n' },
+      const kovoOutputs = [
+        { args: ['check', 'graph.json'], output: 'kovo-check/v1\nOK\n' },
+        {
+          args: ['explain', 'query', 'cart', 'graph.json'],
+          output: 'kovo-explain/v1\nQUERY cart\n',
+        },
       ];
 
       await expect(runStarterTemplateEmitGraph(paths)).resolves.toEqual({
@@ -342,15 +345,15 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
       });
       await expect(
         runStarterTemplateViteTaskCommand(
-          'node scripts/emit-graph.mjs && fw check graph.json',
+          'node scripts/emit-graph.mjs && kovo check graph.json',
           paths,
-          fwOutputs,
+          kovoOutputs,
         ),
       ).resolves.toEqual({
         graph,
-        output: 'emit-graph/v1\nOK\nfw-check/v1\nOK\n',
+        output: 'emit-graph/v1\nOK\nkovo-check/v1\nOK\n',
       });
-      await expect(runStarterTemplateGraphAssertions(paths, fwOutputs)).resolves.toBe(
+      await expect(runStarterTemplateGraphAssertions(paths, kovoOutputs)).resolves.toBe(
         'graph-assertions/v1\nOK\n',
       );
     } finally {
@@ -359,7 +362,7 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
   });
 
   it('projects starter acceptance through one package-owned fixture seam', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'jiso-test-starter-acceptance-'));
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-starter-acceptance-'));
     const templateRoot = join(root, 'template');
     const compilerRoot = join(root, 'compiler');
     const graph = {
@@ -376,13 +379,13 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
     };
     const appSource = "export const App = component('starter-app', { render: () => <main /> });";
     const clientSource = `
-import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
+import { applyDeferredStreamResponseToDom, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 
 const store = createQueryStore();
 const queryPlans = {};
 const root = {
   findFragmentTarget(target) {
-    const element = document.getElementById(target) ?? document.querySelector('[fw-fragment-target="' + CSS.escape(target) + '"]');
+    const element = document.getElementById(target) ?? document.querySelector('[kovo-fragment-target="' + CSS.escape(target) + '"]');
     return element ? {
       appendHtml(html) { element.insertAdjacentHTML('beforeend', html); },
       readHtml() { return element.innerHTML; },
@@ -394,7 +397,7 @@ const root = {
   },
 };
 
-installJisoLoader({
+installKovoLoader({
   root: document,
   queryStore: store,
   enhancedMutations: {
@@ -406,7 +409,7 @@ installJisoLoader({
   importModule: (path) => import(path),
 });
 
-export function applyJisoDeferredStreamResponse(body, options = {}) {
+export function applyKovoDeferredStreamResponse(body, options = {}) {
   return applyDeferredStreamResponseToDom({ body, root, store, queryPlans, ...options });
 }
 `;
@@ -428,15 +431,15 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
           '  check:',
           '    steps:',
           '      - run: vp install',
-          '      - run: vp run fw-check',
+          '      - run: vp run kovo-check',
           '      - run: vp run graph-assertions',
         ].join('\n'),
       );
       await writeFile(
         join(templateRoot, 'package.json'),
         JSON.stringify({
-          dependencies: { '@jiso/core': 'workspace:*', '@jiso/runtime': 'workspace:*' },
-          devDependencies: { '@jiso/compiler': 'workspace:*', fw: 'workspace:*' },
+          dependencies: { '@kovojs/core': 'workspace:*', '@kovojs/runtime': 'workspace:*' },
+          devDependencies: { '@kovojs/compiler': 'workspace:*', kovo: 'workspace:*' },
           scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
         }),
       );
@@ -446,7 +449,7 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
           "import { defineConfig } from 'vite-plus';",
           'export default defineConfig({',
           '  run: { tasks: {',
-          "    'fw-check': { command: 'node scripts/emit-graph.mjs && fw check graph.json', input: [{ pattern: 'src/**/*', base: 'workspace' }], output: ['graph.json'] },",
+          "    'kovo-check': { command: 'node scripts/emit-graph.mjs && kovo check graph.json', input: [{ pattern: 'src/**/*', base: 'workspace' }], output: ['graph.json'] },",
           "    'graph-assertions': { command: 'node scripts/emit-graph.mjs && node scripts/graph-assertions.mjs', input: [{ pattern: 'graph.json', base: 'workspace' }] },",
           '  } },',
           '});',
@@ -456,7 +459,7 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
         join(templateRoot, 'scripts/emit-graph.mjs'),
         [
           "import { writeFileSync } from 'node:fs';",
-          "import { graphFixture } from '@jiso/compiler';",
+          "import { graphFixture } from '@kovojs/compiler';",
           "writeFileSync('graph.json', JSON.stringify(graphFixture));",
           "process.stdout.write('emit-graph/v1\\nOK\\n');",
         ].join('\n'),
@@ -465,7 +468,7 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
         join(templateRoot, 'scripts/graph-assertions.mjs'),
         [
           "import { execFileSync } from 'node:child_process';",
-          "execFileSync('fw', ['explain', 'query', 'cart', 'graph.json']);",
+          "execFileSync('kovo', ['explain', 'query', 'cart', 'graph.json']);",
           "process.stdout.write('graph-assertions/v1\\nOK\\n');",
         ].join('\n'),
       );
@@ -479,12 +482,12 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
       await writeFile(join(templateRoot, 'src/styles.css'), '@source "../index.html";\n');
 
       const compiled = { files: ['compiled'] };
-      const fwOutputs = [
-        { args: ['check', 'graph.json'], output: 'fw-check/v1\nOK\n' },
+      const kovoOutputs = [
+        { args: ['check', 'graph.json'], output: 'kovo-check/v1\nOK\n' },
         {
           args: ['explain', 'query', 'cart', 'graph.json'],
           output:
-            'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
+            'kovo-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
         },
       ];
 
@@ -501,33 +504,33 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
             return compiled;
           },
           compilerModuleUrl: pathToFileURL(join(compilerRoot, 'index.mjs')).href,
-          expectedDevDependencies: ['@jiso/compiler', 'fw'],
-          fwCheck(candidateGraph) {
+          expectedDevDependencies: ['@kovojs/compiler', 'kovo'],
+          kovoCheck(candidateGraph) {
             expect(candidateGraph).toEqual(graph);
-            return { exitCode: 0, output: 'fw-check/v1\nOK\n' };
+            return { exitCode: 0, output: 'kovo-check/v1\nOK\n' };
           },
-          fwExplain(_candidateGraph, options) {
+          kovoExplain(_candidateGraph, options) {
             if (options.kind === 'mutation') {
               return {
                 exitCode: 0,
                 output:
-                  'fw-explain/v1\nMUTATION cart/add\nguards: authed\nsession: starterSession\ninput-fields: productId\nwrites: cart\ninvalidates: cart\nmanual-invalidates: -\nupdates: cart->component:CartBadge\nOPTIMISTIC cart await-fragment\nOPTIMISTIC-SUMMARY total=1 derived=0 hand-written=0 await-fragment=1 UNHANDLED=0 PUNTED=0\n',
+                  'kovo-explain/v1\nMUTATION cart/add\nguards: authed\nsession: starterSession\ninput-fields: productId\nwrites: cart\ninvalidates: cart\nmanual-invalidates: -\nupdates: cart->component:CartBadge\nOPTIMISTIC cart await-fragment\nOPTIMISTIC-SUMMARY total=1 derived=0 hand-written=0 await-fragment=1 UNHANDLED=0 PUNTED=0\n',
               };
             }
             if (options.kind === 'page') {
               return {
                 exitCode: 0,
                 output:
-                  'fw-explain/v1\nPAGE /cart\nprefetch: false\nmeta: title=Cart description=- image=-\ni18n: -\nmodulepreloads: -\nstylesheets: /src/styles.css\nqueries: cart\nview-transitions: -\n',
+                  'kovo-explain/v1\nPAGE /cart\nprefetch: false\nmeta: title=Cart description=- image=-\ni18n: -\nmodulepreloads: -\nstylesheets: /src/styles.css\nqueries: cart\nview-transitions: -\n',
               };
             }
             return {
               exitCode: 0,
               output:
-                'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
+                'kovo-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
             };
           },
-          fwOutputs,
+          kovoOutputs,
           projectRoot: root,
           templateRoot,
         }),
@@ -537,11 +540,11 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
           deferredApplied: true,
           loader: { hasEnhancedFetch: true, hasImportModule: true },
         },
-        ciRunCommands: ['vp install', 'vp run fw-check', 'vp run graph-assertions'],
+        ciRunCommands: ['vp install', 'vp run kovo-check', 'vp run graph-assertions'],
         devDependencyCoverage: {
-          expected: ['@jiso/compiler', 'fw'],
+          expected: ['@kovojs/compiler', 'kovo'],
           missing: [],
-          present: ['@jiso/compiler', 'fw'],
+          present: ['@kovojs/compiler', 'kovo'],
         },
         emittedGraph: { graph, output: 'emit-graph/v1\nOK\n' },
         graph: {
@@ -550,13 +553,13 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
           touchGraphSites: { 'cart.addItem': graph.touchGraph['cart.addItem'].touches },
         },
         graphAssertionsOutput: 'graph-assertions/v1\nOK\n',
-        graphCheck: { exitCode: 0, issueCount: 0, status: 'ok', version: 'fw-check/v1' },
+        graphCheck: { exitCode: 0, issueCount: 0, status: 'ok', version: 'kovo-check/v1' },
         package: {
-          dependencies: ['@jiso/core', '@jiso/runtime'],
+          dependencies: ['@kovojs/core', '@kovojs/runtime'],
           scripts: { emitGraph: 'node scripts/emit-graph.mjs' },
         },
         taskOutputs: [
-          { graph, output: 'emit-graph/v1\nOK\nfw-check/v1\nOK\n' },
+          { graph, output: 'emit-graph/v1\nOK\nkovo-check/v1\nOK\n' },
           { graph, output: 'emit-graph/v1\nOK\ngraph-assertions/v1\nOK\n' },
         ],
       });
@@ -566,17 +569,17 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
   });
 
   it('runs pnpm-filter conformance task commands and rejects missing packages', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'jiso-test-conformance-fixture-'));
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-conformance-fixture-'));
     const packages = [
       {
         manifest: {
-          name: '@jiso/conformance-auth-spike',
+          name: '@kovojs/conformance-auth-spike',
           scripts: { test: 'vitest --run src/index.test.ts' },
         },
       },
       {
         manifest: {
-          name: '@jiso/conformance-drizzle-pin',
+          name: '@kovojs/conformance-drizzle-pin',
           scripts: { test: 'vitest --run src/index.test.ts' },
         },
       },
@@ -586,22 +589,22 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
       await expect(
         runPnpmFilterTaskCommand(
           [
-            'pnpm --filter @jiso/conformance-auth-spike test',
-            'pnpm --filter @jiso/conformance-drizzle-pin test',
+            'pnpm --filter @kovojs/conformance-auth-spike test',
+            'pnpm --filter @kovojs/conformance-drizzle-pin test',
           ].join(' && '),
           packages,
           { cwd: root },
         ),
       ).resolves.toEqual({
         observed: [
-          { packageName: '@jiso/conformance-auth-spike', script: 'test' },
-          { packageName: '@jiso/conformance-drizzle-pin', script: 'test' },
+          { packageName: '@kovojs/conformance-auth-spike', script: 'test' },
+          { packageName: '@kovojs/conformance-drizzle-pin', script: 'test' },
         ],
         output:
-          'pnpm-filter-test @jiso/conformance-auth-spike\npnpm-filter-test @jiso/conformance-drizzle-pin\n',
+          'pnpm-filter-test @kovojs/conformance-auth-spike\npnpm-filter-test @kovojs/conformance-drizzle-pin\n',
       });
       await expect(
-        runPnpmFilterTaskCommand('pnpm --filter @jiso/conformance-auth-spike test', packages, {
+        runPnpmFilterTaskCommand('pnpm --filter @kovojs/conformance-auth-spike test', packages, {
           cwd: root,
         }),
       ).rejects.toThrow('conformance task executes every discovered conformance package test');

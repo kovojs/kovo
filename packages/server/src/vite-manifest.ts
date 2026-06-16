@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { PageHintOptions } from './hints.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
-export interface JisoAppShellViteManifestChunk {
+export interface KovoAppShellViteManifestChunk {
   css?: readonly string[];
   file?: string;
   imports?: readonly string[];
@@ -11,49 +11,49 @@ export interface JisoAppShellViteManifestChunk {
   src?: string;
 }
 
-export type JisoAppShellViteManifest = Record<string, JisoAppShellViteManifestChunk>;
+export type KovoAppShellViteManifest = Record<string, KovoAppShellViteManifestChunk>;
 
-export interface JisoAppShellViteManifestHintOptions {
+export interface KovoAppShellViteManifestHintOptions {
   base?: string;
 }
 
-export interface JisoAppShellViteOutputAsset {
+export interface KovoAppShellViteOutputAsset {
   fileName: string;
   source: string | Uint8Array;
   type: 'asset';
 }
 
-export interface JisoAppShellViteOutputChunk {
+export interface KovoAppShellViteOutputChunk {
   fileName: string;
   type: 'chunk';
 }
 
-export type JisoAppShellViteOutputBundle = Readonly<
-  Record<string, JisoAppShellViteOutputAsset | JisoAppShellViteOutputChunk>
+export type KovoAppShellViteOutputBundle = Readonly<
+  Record<string, KovoAppShellViteOutputAsset | KovoAppShellViteOutputChunk>
 >;
 
-export interface JisoAppShellRouteBuildEntry {
+export interface KovoAppShellRouteBuildEntry {
   entries: readonly string[];
   routePath: string;
 }
 
-export type JisoAppShellRouteEntryMap = Readonly<Record<string, string | readonly string[]>>;
+export type KovoAppShellRouteEntryMap = Readonly<Record<string, string | readonly string[]>>;
 
-export interface JisoAppShellViteRouteEntryOptions {
-  manifest?: JisoAppShellViteManifest;
+export interface KovoAppShellViteRouteEntryOptions {
+  manifest?: KovoAppShellViteManifest;
   routes?: readonly { path: string }[];
 }
 
-export interface JisoAppShellBuildAsset {
+export interface KovoAppShellBuildAsset {
   file: string;
   href: string;
   path: string;
 }
 
-export function jisoAppShellViteManifestHints(
-  manifest: JisoAppShellViteManifest,
+export function kovoAppShellViteManifestHints(
+  manifest: KovoAppShellViteManifest,
   entries: readonly string[],
-  options: JisoAppShellViteManifestHintOptions = {},
+  options: KovoAppShellViteManifestHintOptions = {},
 ): PageHintOptions {
   const modulepreloads: string[] = [];
   const stylesheets: string[] = [];
@@ -69,10 +69,10 @@ export function jisoAppShellViteManifestHints(
   return hints;
 }
 
-export function jisoAppShellViteRouteEntries(
-  routeEntryMap: JisoAppShellRouteEntryMap,
-  options: JisoAppShellViteRouteEntryOptions = {},
-): JisoAppShellRouteBuildEntry[] {
+export function kovoAppShellViteRouteEntries(
+  routeEntryMap: KovoAppShellRouteEntryMap,
+  options: KovoAppShellViteRouteEntryOptions = {},
+): KovoAppShellRouteBuildEntry[] {
   const knownRoutes = options.routes
     ? new Set(options.routes.map((route) => route.path))
     : undefined;
@@ -113,7 +113,7 @@ export function jisoAppShellViteRouteEntries(
   }
 
   if (options.routes) {
-    const ordered: JisoAppShellRouteBuildEntry[] = [];
+    const ordered: KovoAppShellRouteBuildEntry[] = [];
     const seenRoutePaths = new Set<string>();
     for (const route of options.routes) {
       if (seenRoutePaths.has(route.path)) continue;
@@ -130,11 +130,11 @@ export function jisoAppShellViteRouteEntries(
     .map(([routePath, entries]) => ({ entries, routePath }));
 }
 
-export function jisoAppShellViteManifestAssets(
-  manifest: JisoAppShellViteManifest,
-  options: JisoAppShellViteManifestHintOptions = {},
-): JisoAppShellBuildAsset[] {
-  const assets = new Map<string, JisoAppShellBuildAsset>();
+export function kovoAppShellViteManifestAssets(
+  manifest: KovoAppShellViteManifest,
+  options: KovoAppShellViteManifestHintOptions = {},
+): KovoAppShellBuildAsset[] {
+  const assets = new Map<string, KovoAppShellBuildAsset>();
 
   for (const chunk of Object.values(manifest)) {
     addManifestBuildAsset(assets, chunk.file, options);
@@ -144,30 +144,30 @@ export function jisoAppShellViteManifestAssets(
   return [...assets.values()].sort((left, right) => left.file.localeCompare(right.file));
 }
 
-export async function jisoAppShellViteManifestFromFile(
+export async function kovoAppShellViteManifestFromFile(
   manifestFile: string | URL,
-): Promise<JisoAppShellViteManifest> {
+): Promise<KovoAppShellViteManifest> {
   const source = await readFile(resolvedManifestFile(manifestFile), 'utf8');
-  return jisoAppShellViteManifestFromSource(source);
+  return kovoAppShellViteManifestFromSource(source);
 }
 
-export async function jisoAppShellViteManifestAssetsFromFile(
+export async function kovoAppShellViteManifestAssetsFromFile(
   manifestFile: string | URL,
-  options: JisoAppShellViteManifestHintOptions = {},
-): Promise<JisoAppShellBuildAsset[]> {
-  return jisoAppShellViteManifestAssets(
-    await jisoAppShellViteManifestFromFile(manifestFile),
+  options: KovoAppShellViteManifestHintOptions = {},
+): Promise<KovoAppShellBuildAsset[]> {
+  return kovoAppShellViteManifestAssets(
+    await kovoAppShellViteManifestFromFile(manifestFile),
     options,
   );
 }
 
-export function jisoAppShellViteManifestStylesheetHref(
-  manifest: JisoAppShellViteManifest,
-  options: JisoAppShellViteManifestHintOptions = {},
+export function kovoAppShellViteManifestStylesheetHref(
+  manifest: KovoAppShellViteManifest,
+  options: KovoAppShellViteManifestHintOptions = {},
 ): string {
   let stylesheetHref: string | undefined;
   let stylesheetCount = 0;
-  for (const asset of jisoAppShellViteManifestAssets(manifest, options)) {
+  for (const asset of kovoAppShellViteManifestAssets(manifest, options)) {
     if (!asset.file.endsWith('.css')) continue;
     stylesheetHref = asset.href;
     stylesheetCount += 1;
@@ -182,21 +182,21 @@ export function jisoAppShellViteManifestStylesheetHref(
   return stylesheetHref;
 }
 
-export async function jisoAppShellViteManifestStylesheetHrefFromFile(
+export async function kovoAppShellViteManifestStylesheetHrefFromFile(
   manifestFile: string | URL,
-  options: JisoAppShellViteManifestHintOptions = {},
+  options: KovoAppShellViteManifestHintOptions = {},
 ): Promise<string> {
-  return jisoAppShellViteManifestStylesheetHref(
-    await jisoAppShellViteManifestFromFile(manifestFile),
+  return kovoAppShellViteManifestStylesheetHref(
+    await kovoAppShellViteManifestFromFile(manifestFile),
     options,
   );
 }
 
-export function jisoAppShellViteManifestFromBundle(
-  bundle: JisoAppShellViteOutputBundle,
-): JisoAppShellViteManifest {
+export function kovoAppShellViteManifestFromBundle(
+  bundle: KovoAppShellViteOutputBundle,
+): KovoAppShellViteManifest {
   const manifestAsset = Object.values(bundle).find(
-    (asset): asset is JisoAppShellViteOutputAsset =>
+    (asset): asset is KovoAppShellViteOutputAsset =>
       asset.type === 'asset' && asset.fileName.replaceAll('\\', '/') === '.vite/manifest.json',
   );
   if (!manifestAsset) throw new Error('App shell Vite build requires .vite/manifest.json.');
@@ -206,7 +206,7 @@ export function jisoAppShellViteManifestFromBundle(
       ? manifestAsset.source
       : Buffer.from(manifestAsset.source).toString('utf8');
 
-  return jisoAppShellViteManifestFromSource(source);
+  return kovoAppShellViteManifestFromSource(source);
 }
 
 export function normalizedDistFile(file: string): string {
@@ -220,7 +220,7 @@ export function normalizedDistFile(file: string): string {
   return segments.join('/');
 }
 
-function jisoAppShellViteManifestFromSource(source: string): JisoAppShellViteManifest {
+function kovoAppShellViteManifestFromSource(source: string): KovoAppShellViteManifest {
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);
@@ -232,13 +232,13 @@ function jisoAppShellViteManifestFromSource(source: string): JisoAppShellViteMan
     );
   }
 
-  return jisoAppShellViteManifestFromUnknown(parsed);
+  return kovoAppShellViteManifestFromUnknown(parsed);
 }
 
 function addManifestBuildAsset(
-  assets: Map<string, JisoAppShellBuildAsset>,
+  assets: Map<string, KovoAppShellBuildAsset>,
   file: string | undefined,
-  options: JisoAppShellViteManifestHintOptions,
+  options: KovoAppShellViteManifestHintOptions,
 ): void {
   if (!file || isExternalAssetHref(file)) return;
 
@@ -246,7 +246,7 @@ function addManifestBuildAsset(
   if (assets.has(normalizedFile)) return;
 
   const href = manifestAssetHref(normalizedFile, options.base);
-  const url = new URL(href, 'https://jiso.local');
+  const url = new URL(href, 'https://kovo.local');
 
   assets.set(normalizedFile, {
     file: normalizedFile,
@@ -256,9 +256,9 @@ function addManifestBuildAsset(
 }
 
 function collectManifestHints(
-  manifest: JisoAppShellViteManifest,
+  manifest: KovoAppShellViteManifest,
   entry: string,
-  options: JisoAppShellViteManifestHintOptions,
+  options: KovoAppShellViteManifestHintOptions,
   visited: Set<string>,
   modulepreloads: string[],
   stylesheets: string[],
@@ -278,9 +278,9 @@ function collectManifestHints(
 }
 
 function resolveManifestChunk(
-  manifest: JisoAppShellViteManifest,
+  manifest: KovoAppShellViteManifest,
   entry: string,
-): { chunk: JisoAppShellViteManifestChunk; key: string } | undefined {
+): { chunk: KovoAppShellViteManifestChunk; key: string } | undefined {
   const direct = manifest[entry];
   if (direct) return { chunk: direct, key: entry };
 
@@ -312,23 +312,23 @@ function resolvedManifestFile(manifestFile: string | URL): string | URL {
   throw new StaticExportError([
     staticExportDiagnostic(
       'vite-manifestFile',
-      `FW229 Vite app-shell manifest files must be filesystem paths or file: URLs, received '${manifestFile.href}'. SPEC §9.5 static export reads Vite manifests from a local output file.`,
+      `KV229 Vite app-shell manifest files must be filesystem paths or file: URLs, received '${manifestFile.href}'. SPEC §9.5 static export reads Vite manifests from a local output file.`,
     ),
   ]);
 }
 
-function jisoAppShellViteManifestFromUnknown(value: unknown): JisoAppShellViteManifest {
+function kovoAppShellViteManifestFromUnknown(value: unknown): KovoAppShellViteManifest {
   if (!isRecord(value)) {
     throw new Error('App shell Vite build manifest must be a JSON object.');
   }
 
-  const manifest: JisoAppShellViteManifest = {};
+  const manifest: KovoAppShellViteManifest = {};
   for (const [entry, rawChunk] of Object.entries(value)) {
     if (!isRecord(rawChunk)) {
       throw new Error(`App shell Vite build manifest entry '${entry}' must be a JSON object.`);
     }
 
-    const chunk: JisoAppShellViteManifestChunk = {};
+    const chunk: KovoAppShellViteManifestChunk = {};
     const file = optionalManifestString(rawChunk, entry, 'file');
     const src = optionalManifestString(rawChunk, entry, 'src');
     const css = optionalManifestStringArray(rawChunk, entry, 'css');
