@@ -478,6 +478,26 @@ borrowing its concrete API/spike detail.
     `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.visual.browser.test.ts`, `pnpm exec tsc --noEmit`, and `git diff --check`
     pass.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/switch.tsx` now uses `@kovojs/style`, exports
+    `switchStyles`, accepts `styles?: SwitchStyleOverrides` for `root`/`input` slot overrides, and
+    drops `defineVariants`/`cn` plus the `class`/`inputClass` escape hatches while preserving
+    `switchRootAttributes(...)` checked/disabled/form output. `packages/ui/src/switch.stylex.test.tsx`
+    snapshots checked, unchecked, disabled, exported style groups, and author-last slot override output.
+  - Evidence (partial, 2026-06-16): `packages/ui/registry.json` records Switch's copied-source
+    dependency on `@kovojs/style`; `packages/cli/src/index.kovo-add.test.ts` asserts copied
+    `switch.tsx` contains StyleX imports, `switchStyles`, and typed `styles` overrides. The gallery
+    Switch visual fixture is refreshed with `kv-switch-*` classes and `data-style-src`; shared markup
+    tests keep semantic Switch checks and move generated class coverage to the Vitest snapshot.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/ui/src/switch.stylex.test.tsx
+    packages/ui/src/toggle.stylex.test.tsx packages/ui/src/index.form-controls.test.tsx
+    packages/ui/src/copy-in.test.ts packages/cli/src/index.kovo-add.test.ts`, `node
+    packages/ui/scripts/build-registry.mjs`, `pnpm --filter @kovojs/example-gallery exec vitest --run
+    src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.axe.browser.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.visual.browser.test.ts`, `pnpm exec tsc --noEmit`, and `git diff --check`
+    pass.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

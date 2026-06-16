@@ -426,12 +426,11 @@ export type {
 } from './select.js';
 export {
   Switch,
-  switchClassNames,
   switchClasses,
-  switchInputClassNames,
   switchInputClasses,
+  switchStyles,
 } from './switch.js';
-export type { SwitchProps } from './switch.js';
+export type { SwitchProps, SwitchStyleOverrides } from './switch.js';
 export {
   Table,
   TableBody,

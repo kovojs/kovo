@@ -1,34 +1,70 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, defineVariants, switchRootAttributes, type ClassValue } from '@kovojs/headless-ui';
+import { switchRootAttributes } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface SwitchStyleOverrides {
+  input?: style.StyleInput;
+  root?: style.StyleInput;
+}
 
 export interface SwitchProps {
   describedBy?: string;
   checked?: boolean;
   children?: string;
-  class?: ClassValue;
   disabled?: boolean;
   form?: string;
   id?: string;
-  inputClass?: ClassValue;
   labelledBy?: string;
   name?: string;
   required?: boolean;
+  styles?: SwitchStyleOverrides;
   value?: string;
 }
 
-export const switchClassNames = defineVariants({
-  base: 'inline-flex items-center gap-2 text-sm text-neutral-950 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
-  variants: {},
-});
+export const switchStyles = style.create(
+  {
+    input: {
+      accentColor: '#0a0a0a',
+      backgroundColor: '#e5e5e5',
+      borderColor: '#d4d4d4',
+      borderRadius: 9999,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      height: 20,
+      transitionProperty: 'background-color, border-color, color, box-shadow',
+      width: 36,
+      ':checked': {
+        backgroundColor: '#0a0a0a',
+      },
+      ':disabled': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+    root: {
+      alignItems: 'center',
+      color: '#0a0a0a',
+      columnGap: 8,
+      display: 'inline-flex',
+      fontSize: 14,
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+    },
+  },
+  { namespace: 'switch', source: 'switch.tsx' },
+);
 
-export const switchInputClassNames = defineVariants({
-  base: 'h-5 w-9 rounded-full border border-neutral-300 bg-neutral-200 accent-neutral-950 transition-colors checked:bg-neutral-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50',
-  variants: {},
-});
-
-export const switchClasses = switchClassNames.classes;
-export const switchInputClasses = switchInputClassNames.classes;
+export const switchClasses = [style.attrs(switchStyles.root).class ?? ''] as const;
+export const switchInputClasses = [style.attrs(switchStyles.input).class ?? ''] as const;
 
 export const Switch = component({
   render(props: SwitchProps) {
@@ -40,19 +76,21 @@ export const Switch = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const rootStyleAttrs = style.attrs(switchStyles.root, props.styles?.root);
+    const inputStyleAttrs = style.attrs(switchStyles.input, props.styles?.input);
 
     return (
       <label
-        class={cn(switchClassNames(), props.class)}
+        {...rootStyleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
       >
         <input
+          {...inputStyleAttrs}
           aria-checked={attrs['aria-checked']}
           aria-describedby={props.describedBy}
           aria-labelledby={props.labelledBy}
           checked={attrs.checked}
-          class={cn(switchInputClassNames(), props.inputClass)}
           data-disabled={attrs['data-disabled']}
           data-state={attrs['data-state']}
           disabled={attrs.disabled}

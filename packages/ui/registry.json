@@ -778,7 +778,8 @@
       "files": ["src/switch.tsx"],
       "exports": ["Switch"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants", "switchRootAttributes"],
+        "@kovojs/headless-ui": ["switchRootAttributes"],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

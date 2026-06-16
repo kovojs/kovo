@@ -294,7 +294,9 @@ describe('kovo add', () => {
       expect(slider).toContain('export const Slider = component({');
       expect(slider).toContain('export const sliderClassNames = defineVariants');
       expect(switchSource).toContain('export const Switch = component({');
-      expect(switchSource).toContain('export const switchClassNames = defineVariants');
+      expect(switchSource).toContain("import * as style from '@kovojs/style';");
+      expect(switchSource).toContain('export const switchStyles = style.create');
+      expect(switchSource).toContain('styles?: SwitchStyleOverrides');
       expect(table).toContain('export const Table = component({');
       expect(table).toContain('export const TableHead = component({');
       expect(tabs).toContain("import * as style from '@kovojs/style';");

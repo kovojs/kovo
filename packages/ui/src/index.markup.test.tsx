@@ -118,7 +118,6 @@ import {
   tabsClasses,
   tooltipClasses,
   tooltipContentClasses,
-  switchClasses,
   tableClasses,
   sliderClasses,
   sliderInputClasses,
@@ -254,7 +253,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(hoverCardClasses.join(' ')).toContain('relative inline-block');
     expect(hoverCardContentClasses.join(' ')).toContain('w-72');
     expect(radioGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
-    expect(switchClasses.join(' ')).toContain('inline-flex items-center gap-2');
     expect(tabsClasses.join(' ')).toContain('w-full text-neutral-950');
     expect(toggleGroupClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(toolbarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
