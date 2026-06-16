@@ -3,3 +3,4 @@ packages:
   - 'examples/*'
   - 'conformance/*'
   - 'site'
+  - 'tests/integration'

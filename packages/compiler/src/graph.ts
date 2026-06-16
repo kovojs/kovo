@@ -163,9 +163,9 @@ function deriveComponentFactsFromGraph(graph: RegistryGraphInput): string[] {
 }
 
 function deriveFragmentTargetsFromGraph(graph: RegistryGraphInput): string[] {
-  return [...new Set((graph.components ?? []).flatMap((component) => component.fragments ?? []))].sort(
-    (left, right) => left.localeCompare(right),
-  );
+  return [
+    ...new Set((graph.components ?? []).flatMap((component) => component.fragments ?? [])),
+  ].sort((left, right) => left.localeCompare(right));
 }
 
 function deriveViewTransitionsFromGraph(graph: RegistryGraphInput): string[] {

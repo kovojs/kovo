@@ -5,3 +5,5 @@ coverage/
 .vitest/
 .vp/
 *.tsbuildinfo
+test-results/
+.playwright/

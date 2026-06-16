@@ -13,10 +13,7 @@ import {
   queryPathUsesKnownQuery,
 } from '../analyze/query-shapes.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
-import {
-  runtimeOutputHelpers,
-  stylePropertyExpression,
-} from '../security/output-context.js';
+import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import type { CompileComponentOptions, StateDeriveFact } from '../types.js';
 
 type InlineDeriveLoweringOptions = Pick<

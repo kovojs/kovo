@@ -1,0 +1,4 @@
+test-results/
+playwright-report/
+.last-run.json
+fixtures/*/dist/

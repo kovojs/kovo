@@ -52,7 +52,9 @@ export function validateDuplicateComponentNames(
       continue;
     }
 
-    diagnostics.push(duplicateComponentNameDiagnostic(source, options.fileName, previous, registration));
+    diagnostics.push(
+      duplicateComponentNameDiagnostic(source, options.fileName, previous, registration),
+    );
   }
 
   return diagnostics;
@@ -69,7 +71,9 @@ export function validateDuplicateFragmentTargetNames(
 
   for (const registration of fragmentTargetRegistrations(model)) {
     if (registryNames.has(registration.targetName)) {
-      diagnostics.push(registryFragmentTargetNameDiagnostic(source, options.fileName, registration));
+      diagnostics.push(
+        registryFragmentTargetNameDiagnostic(source, options.fileName, registration),
+      );
     }
 
     const previous = byName.get(registration.targetName);
@@ -97,7 +101,9 @@ export function validateDuplicateStaticViewTransitionNames(
 
   for (const registration of viewTransitionRegistrations(model)) {
     if (registryNames.has(registration.name)) {
-      diagnostics.push(registryViewTransitionNameDiagnostic(source, options.fileName, registration));
+      diagnostics.push(
+        registryViewTransitionNameDiagnostic(source, options.fileName, registration),
+      );
     }
 
     const previous = byName.get(registration.name);
@@ -318,7 +324,9 @@ function registryViewTransitionNameDiagnostic(
 
 function componentLabel(component: ComponentModel): string {
   const local = component.localName ?? 'anonymous component';
-  return component.explicitName ? `${local} component(${JSON.stringify(component.explicitName)})` : local;
+  return component.explicitName
+    ? `${local} component(${JSON.stringify(component.explicitName)})`
+    : local;
 }
 
 function effectiveComponentName(component: ComponentModel): string {
@@ -347,9 +355,12 @@ function viewTransitionLabel(registration: ViewTransitionRegistration): string {
 }
 
 function registryFragmentTargetSnapshot(targetName: string): string {
-  return [`Would emit registry:`, `interface FragmentTargets {`, `  '${targetName}': ...;`, `}`].join(
-    '\n',
-  );
+  return [
+    `Would emit registry:`,
+    `interface FragmentTargets {`,
+    `  '${targetName}': ...;`,
+    `}`,
+  ].join('\n');
 }
 
 function registryViewTransitionSnapshot(name: string): string {

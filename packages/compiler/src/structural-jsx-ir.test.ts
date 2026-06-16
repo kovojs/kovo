@@ -53,9 +53,7 @@ export const ProductPage = component('product-page', {
     expect(serverSource).toContain('data-derive-attr="style"');
     expect(serverSource).toContain('data-bind:title="product.ProductPage$a_title_derive"');
     expect(serverSource).toContain('data-bind:hidden="/c/product-page.client.js?v=');
-    expect(serverSource).toContain(
-      'Product <span data-bind="product.name">{product.name}</span>',
-    );
+    expect(serverSource).toContain('Product <span data-bind="product.name">{product.name}</span>');
     expect(serverSource).toContain('#ProductPage$span_text_derive');
     expect(clientSource).toContain(
       'export const ProductPage$a_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));',
@@ -67,7 +65,7 @@ export const ProductPage = component('product-page', {
       'export const ProductPage$a_title_derive = derive(["product"], (product) => product.name.toUpperCase());',
     );
     expect(clientSource).toContain(
-      "export const ProductPage$a_hidden_derive = derive([\"state\"], (state) => ((!state.open) ? \"\" : null));",
+      'export const ProductPage$a_hidden_derive = derive(["state"], (state) => ((!state.open) ? "" : null));',
     );
     expect(clientSource).toContain(
       "export const ProductPage$span_text_derive = derive([\"state\"], (state) => state.open ? 'open' : 'closed');",

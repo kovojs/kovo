@@ -60,7 +60,7 @@ borrowing its concrete API/spike detail.
       Open measurement: CSS bytes, HTML bytes, build time vs. the Tailwind baseline on a CSS-heavy
       fixture (Phase 6).
 - [ ] **Theme-ability (#3): strong.** `defineVars` → CSS custom properties and `createTheme` → override
-      classes are *exactly* §13.1's "tokens are ordinary CSS custom properties; theming is document CSS,"
+      classes are _exactly_ §13.1's "tokens are ordinary CSS custom properties; theming is document CSS,"
       and need no shadow boundary (§3.1).
 
 ## SPEC Tensions & Positions
@@ -115,27 +115,36 @@ borrowing its concrete API/spike detail.
       helper** — defaults via destructuring, selection via typed index, compounds via inline conditionals
       (Phase 0). The variant helper was a Tailwind/CVA workaround for un-composable class strings; StyleX +
       compiler lowering makes it redundant.
+
   ```tsx
   import * as style from '@kovojs/style';
   import { tokens } from './button.tokens.js'; // token/theme defs live in `*.tokens.ts` files
 
   // Group by variant axis (separate create() calls) so keys don't collide and grouping stays legible.
-  const base     = style.create({ root: { display: 'inline-flex', alignItems: 'center', borderRadius: 6, fontSize: 14 } });
-  const variants = style.create({
-    primary:   { backgroundColor: tokens.accent, color: tokens.onAccent },
-    secondary: { backgroundColor: tokens.surface, color: tokens.text },
-    ghost:     { backgroundColor: 'transparent', color: tokens.text },
+  const base = style.create({
+    root: { display: 'inline-flex', alignItems: 'center', borderRadius: 6, fontSize: 14 },
   });
-  const sizes = style.create({ sm: { height: 32, paddingInline: 10 }, md: { height: 36, paddingInline: 12 } });
+  const variants = style.create({
+    primary: { backgroundColor: tokens.accent, color: tokens.onAccent },
+    secondary: { backgroundColor: tokens.surface, color: tokens.text },
+    ghost: { backgroundColor: 'transparent', color: tokens.text },
+  });
+  const sizes = style.create({
+    sm: { height: 32, paddingInline: 10 },
+    md: { height: 36, paddingInline: 12 },
+  });
 
   export const Button = component('button', {
     render({ variant = 'primary', size = 'md', style: override, children }: ButtonProps) {
       // `style={[...]}`: array of style objects, override last (wins by position). Compiler merges
       // statically to `class="kv-button-…"` when nothing is dynamic; emits a §4.8 toggle when it is.
-      return <button style={[base.root, variants[variant], sizes[size], override]}>{children}</button>;
+      return (
+        <button style={[base.root, variants[variant], sizes[size], override]}>{children}</button>
+      );
     },
   });
   ```
+
 - [ ] **Override prop = typed style object, author-last in the array.** `props.style` (single-root) or a
       per-component `styles` slot map (multi-part) is the override channel and comes **last in the
       `style={[...]}` array** so app customizations win by position. Both props are `style.Style` objects —
@@ -154,7 +163,7 @@ borrowing its concrete API/spike detail.
   - Cons: weaker payoff from "official StyleX"; copied components still need the StyleX build; manual
     updates/drift.
 - [ ] **Model L — publish `@kovojs/ui` as an installable library with style-object overrides.**
-  - Enabled *specifically* by StyleX's deterministic last-wins merge: a published component can accept a
+  - Enabled _specifically_ by StyleX's deterministic last-wins merge: a published component can accept a
     typed `style`/`styles` override that reliably wins — impossible cleanly with Tailwind specificity.
   - Pros: real dependency, central updates, smaller surface, typed overrides replace source edits.
   - Cons: needs `kovo.prefix` (§6.1.1), public-API stability, package-style extraction, strong theming.
@@ -199,7 +208,7 @@ borrowing its concrete API/spike detail.
 - [ ] **Deferred — CSS splitting (opt-in, gated on measurement).** Compute base/route/fragment chunks
       from the attribution map (Phase 2 invariant (a)), keyed off the route registry (§6.4); the manifest
       (invariant (c)) returns per-render asset sets; fragment/defer responses declare their required
-      assets. **No architecture change required** — only chunk computation + manifest population — *because*
+      assets. **No architecture change required** — only chunk computation + manifest population — _because_
       invariants (a)/(b)/(c) were preserved from v1. Trigger: a measured page/route where the single asset
       ships meaningfully more CSS than the route needs.
 
@@ -249,7 +258,7 @@ borrowing its concrete API/spike detail.
       co-located-CSS `@scope` path is redundant for normal styling. Retain it (the compiler code exists)
       for raw CSS that StyleX can't express well (deep/`:has()` selectors, hand-written keyframes,
       third-party widget theming); do not teach it or use it in starters/UI.
-- [x] **One app-wide StyleX asset for now — as a *packaging* default, not an architecture assumption.**
+- [x] **One app-wide StyleX asset for now — as a _packaging_ default, not an architecture assumption.**
       Ship a single declared stylesheet in v1; revisit route/fragment/chunk splitting only if measured
       (Phase 6). Splitting optionality is **preserved by three day-one invariants** (don't foreclose it):
   - **(a) Rule→usage attribution map.** The extraction pass records which atoms each
@@ -264,7 +273,7 @@ borrowing its concrete API/spike detail.
     the shell/server/fragment paths, so v2 can return `[base.css, route-x.css]` with no caller change.
 - [x] **Fragments/defer: declare required assets, don't assume the page already has all CSS.** Under the
       single-asset model a late fragment can only reference already-present atoms (correct by construction),
-      but that is a property of *packaging*, not a permanent guarantee. Fragment/defer responses retain the
+      but that is a property of _packaging_, not a permanent guarantee. Fragment/defer responses retain the
       ability to declare their required stylesheet assets (§13.1 fragment-target metadata), resolved via the
       attribution map (a) — so splitting later stays sound.
 - [x] **Migrate everything.** Tailwind removed from all examples (gallery, commerce, crm, stackoverflow),

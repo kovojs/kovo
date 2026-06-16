@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
 
-const kv236 =
-  'Unsafe output context requires an explicit trusted Kovo escape hatch.';
+const kv236 = 'Unsafe output context requires an explicit trusted Kovo escape hatch.';
 
 describe('compiler output-context security', () => {
   it('keeps text and title/aria attributes in safe output contexts', () => {
@@ -108,9 +107,7 @@ export const ProductCard = component('product-card', {
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
     const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
-    expect(serverSource).toContain(
-      `import { derive, kovoStyleProperty } from '@kovojs/runtime';`,
-    );
+    expect(serverSource).toContain(`import { derive, kovoStyleProperty } from '@kovojs/runtime';`);
     expect(serverSource).toContain(
       `derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));`,
     );

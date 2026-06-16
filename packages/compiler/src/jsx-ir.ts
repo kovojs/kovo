@@ -155,7 +155,12 @@ export function createJsxIrTree(
   );
 
   for (const element of elements) {
-    element.children = childrenForElement(element, elementsByStart, expressionsByContainer, options);
+    element.children = childrenForElement(
+      element,
+      elementsByStart,
+      expressionsByContainer,
+      options,
+    );
   }
 
   return { elements, roots, source: options.source };
@@ -197,7 +202,8 @@ export function printJsxIrElement(element: JsxIrElement): string {
   const attributes = [...element.attributes, ...element.generatedAttributes]
     .filter((attribute) => attribute.value.kind !== 'boolean' || attribute.value.value)
     .map(printJsxIrAttribute);
-  const open = attributes.length > 0 ? `<${element.tag} ${attributes.join(' ')}` : `<${element.tag}`;
+  const open =
+    attributes.length > 0 ? `<${element.tag} ${attributes.join(' ')}` : `<${element.tag}`;
 
   if (element.selfClosing) return `${open} />`;
 
@@ -340,7 +346,11 @@ function jsxIrExpression(
   options: { fileName: string; source: string },
 ): JsxIrExpression {
   return {
-    anchor: { end: expression.containerEnd, fileName: options.fileName, start: expression.containerStart },
+    anchor: {
+      end: expression.containerEnd,
+      fileName: options.fileName,
+      start: expression.containerStart,
+    },
     expression,
     kind: 'expression',
     ownership: 'author',
@@ -383,7 +393,8 @@ function jsxIrSpreadAttribute(
 
 function attributeValue(attribute: JsxAttributeModel): JsxIrAttributeValue {
   if (attribute.value !== undefined) return { kind: 'string', value: attribute.value };
-  if (attribute.expression !== undefined) return { kind: 'expression', source: attribute.expression };
+  if (attribute.expression !== undefined)
+    return { kind: 'expression', source: attribute.expression };
   return { kind: 'boolean', value: true };
 }
 
@@ -400,7 +411,11 @@ function printJsxIrAttribute(attribute: JsxIrAttribute): string {
 function rootChanged(element: JsxIrElement): boolean {
   return (
     elementOwnChanged(element) ||
-    element.children.some((child) => child.kind !== 'text' && (child.kind === 'expression' ? child.replacement !== undefined : rootChanged(child)))
+    element.children.some(
+      (child) =>
+        child.kind !== 'text' &&
+        (child.kind === 'expression' ? child.replacement !== undefined : rootChanged(child)),
+    )
   );
 }
 
@@ -414,11 +429,18 @@ function elementOwnChanged(element: JsxIrElement): boolean {
 }
 
 function contains(parent: JsxIrElement, child: JsxIrElement): boolean {
-  return parent !== child && parent.element.start < child.element.start && parent.element.end > child.element.end;
+  return (
+    parent !== child &&
+    parent.element.start < child.element.start &&
+    parent.element.end > child.element.end
+  );
 }
 
 function containsExpression(parent: JsxIrElement, child: JsxIrExpression): boolean {
-  return child.expression.containerStart >= parent.element.start && child.expression.containerEnd <= parent.element.end;
+  return (
+    child.expression.containerStart >= parent.element.start &&
+    child.expression.containerEnd <= parent.element.end
+  );
 }
 
 function expressionReplacements(elements: readonly JsxIrElement[]): JsxIrExpression[] {
