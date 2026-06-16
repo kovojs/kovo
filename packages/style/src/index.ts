@@ -24,7 +24,7 @@ export type StyleInput = Style | ReadonlyArray<StyleInput> | readonly [Style, In
 
 /** Compiler-produced atomic style record keyed by CSS-property conflict group. */
 export interface CompiledStyle {
-  readonly [CSS_MARKER]: true;
+  readonly [CSS_MARKER]: true | string;
   readonly [STYLE_SRC]?: string;
   readonly __rules?: readonly AtomicRule[];
   readonly __styleKey?: string;
@@ -40,14 +40,14 @@ export type StyleNamespaces<Styles extends Record<string, StyleObject>> = {
 export type Vars<Tokens extends Record<string, CssValue>> = {
   readonly [Key in keyof Tokens]: string;
 } & {
-  readonly [CSS_MARKER]: true;
+  readonly [CSS_MARKER]: true | string;
   readonly __vars: true;
   readonly __rules?: readonly AtomicRule[];
 };
 
 /** Theme class returned by `createTheme`, with extracted custom-property override rules. */
 export interface Theme {
-  readonly [CSS_MARKER]: true;
+  readonly [CSS_MARKER]: true | string;
   readonly [STYLE_SRC]?: string;
   readonly __rules?: readonly AtomicRule[];
   readonly __theme: true;
@@ -161,7 +161,7 @@ export function props(...styles: readonly StyleInput[]): PropsResult {
   const merged = mergeStyles(styles);
   const result: { className?: string; [STYLE_SRC]?: string; style?: InlineStyle } = {};
   if (merged.className.length > 0) result.className = merged.className;
-  if (merged.styleSources.length > 0) result[STYLE_SRC] = merged.styleSources.join(' ');
+  if (merged.styleSources.length > 0) result[STYLE_SRC] = merged.styleSources.join('; ');
   if (Object.keys(merged.inlineStyle).length > 0) result.style = merged.inlineStyle;
   return result;
 }
@@ -452,6 +452,8 @@ function mergeStyleInput(style: StyleInput, state: MergeState): void {
   if (isCompiledStyle(style)) {
     const styleSource = style[STYLE_SRC];
     if (typeof styleSource === 'string' && styleSource.length > 0) state.styleSources.push(styleSource);
+    const cssMarker = style[CSS_MARKER];
+    if (typeof cssMarker === 'string' && cssMarker.length > 0) state.styleSources.push(cssMarker);
     for (const [property, className] of Object.entries(style)) {
       if (property === CSS_MARKER || property === STYLE_SRC || property.startsWith('__')) continue;
       if (typeof className !== 'string') continue;
@@ -483,7 +485,7 @@ function serializeInlineStyle(style: InlineStyle): string {
 }
 
 function isCompiledStyle(value: unknown): value is CompiledStyle {
-  return Boolean(value && typeof value === 'object' && (value as Record<string, unknown>)[CSS_MARKER] === true);
+  return Boolean(value && typeof value === 'object' && (value as Record<string, unknown>)[CSS_MARKER]);
 }
 
 function isStyleOrFalsy(value: unknown): value is Style {

@@ -191,6 +191,11 @@ borrowing its concrete API/spike detail.
   - Evidence (partial, 2026-06-16): `pnpm exec tsc --noEmit`,
     `pnpm exec vitest --run scripts/public-packages.test.mjs`, and
     `pnpm --filter @kovojs/style run build:dist` pass for the new package and package registration.
+  - Evidence (partial, 2026-06-16): ported a focused subset from
+    `../stylex/packages/@stylexjs/stylex/__tests__/stylex-test.js` into
+    `packages/style/src/index.test.ts`; `pnpm --filter @kovojs/style test` now covers upstream basic
+    resolve, array merge order, same-property override, nested pseudo override, source-map data, and the
+    dynamic attrs fixture through Kovo's explicit `raw(...)` escape hatch.
   - [ ] Port the broader upstream StyleX shared/runtime fixture set before checking Phase 1 complete.
   - [ ] Replace the current curated priority-property subset with the full forked
     `property-priorities` table before checking Phase 1 complete.

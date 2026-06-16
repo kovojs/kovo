@@ -35,7 +35,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     const result = attrs(base.root, override.root);
 
     expect(result.class).toMatch(/^kv-button-fg-[a-z0-9]+ kv-button-override-bg-[a-z0-9]+$/);
-    expect(result['data-style-src']).toBe('button.tsx#root button.override.tsx#root');
+    expect(result['data-style-src']).toBe('button.tsx#root; button.override.tsx#root');
   });
 
   it('flattens arrays and serializes the explicit raw inline escape hatch', () => {
@@ -101,5 +101,81 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(theme.className).toMatch(/^kv-success-theme-[a-z0-9]+$/);
     expect(theme.__rules?.[0]?.rule).toContain('--kovo-ui-accent:#16a34a');
     expect(props(styles.root).className).toMatch(/^kv-button-bg-[a-z0-9]+ kv-button-fg-[a-z0-9]+$/);
+  });
+});
+
+describe('ported upstream StyleX runtime fixtures', () => {
+  it('matches upstream basic props resolution', () => {
+    // Ported from ../stylex/packages/@stylexjs/stylex/__tests__/stylex-test.js "basic resolve".
+    expect(props({ a: 'aaa', b: 'bbb', $$css: true }).className).toBe('aaa bbb');
+  });
+
+  it('matches upstream array merge order', () => {
+    // Ported from StyleX "merge order": classes keep first-seen property order unless replaced.
+    expect(
+      props([
+        { a: 'a', ':hover__aa': 'aa', $$css: true },
+        { b: 'b', $$css: true },
+        { c: 'c', ':hover__cc': 'cc', $$css: true },
+      ]).className,
+    ).toBe('a aa b c cc');
+  });
+
+  it('matches upstream same-property override behavior', () => {
+    // Ported from StyleX "top-level array of simple overridden classes".
+    expect(
+      props([
+        { backgroundColor: 'nu7423ey', $$css: true },
+        { backgroundColor: 'gh25dzvf', $$css: true },
+      ]).className,
+    ).toBe('gh25dzvf');
+  });
+
+  it('matches upstream nested arrays and pseudo-class override behavior', () => {
+    // Ported from StyleX "nested arrays and pseudoClasses overriding things".
+    expect(
+      props([
+        { backgroundColor: 'nu7423ey', $$css: true },
+        [{ backgroundColor: 'abcdefg', ':hover__backgroundColor': 'ksdfmwjs', $$css: true }],
+        { color: 'gofk2cf1', ':hover__backgroundColor': 'rse6dlih', $$css: true },
+      ]).className,
+    ).toBe('abcdefg gofk2cf1 rse6dlih');
+  });
+
+  it('matches upstream data-style-src collection with the Kovo attrs shape', () => {
+    // Ported from StyleX "data prop for source map data"; Kovo keeps `class`, not `className`.
+    expect(
+      attrs([
+        { backgroundColor: 'backgroundColor-red', $$css: 'components/Foo.react.js:1' },
+        { color: 'color-blue', $$css: 'components/Bar.react.js:3' },
+        [{ display: 'display-block', $$css: 'components/Baz.react.js:5' }],
+      ]),
+    ).toEqual({
+      class: 'backgroundColor-red color-blue display-block',
+      'data-style-src':
+        'components/Foo.react.js:1; components/Bar.react.js:3; components/Baz.react.js:5',
+    });
+  });
+
+  it('ports upstream dynamic attrs fixture through Kovo raw inline style', () => {
+    // Upstream accepts a bare inline object; Kovo requires the explicit `raw(...)` escape hatch.
+    expect(
+      attrs([
+        { backgroundColor: 'backgroundColor-red', $$css: 'components/Foo.react.js:1' },
+        raw({
+          color: 'red',
+          marginTop: '10px',
+          opacity: 0.5,
+          '--foo': 2,
+          MsTransition: 'none',
+          WebkitTapHighlightColor: 'transparent',
+        }),
+      ]),
+    ).toEqual({
+      class: 'backgroundColor-red',
+      'data-style-src': 'components/Foo.react.js:1',
+      style:
+        'color:red;margin-top:10px;opacity:0.5;--foo:2;-ms-transition:none;-webkit-tap-highlight-color:transparent',
+    });
   });
 });
