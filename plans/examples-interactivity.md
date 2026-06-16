@@ -1,17 +1,18 @@
 # Make the example apps interactive (real mutations round-trip in the static export)
 
-Status: **active.** Created 2026-06-15. Worktree `agent/examples-interactivity`.
-`SPEC.md` is the source of truth for framework behavior; this plan changes the **example apps**
-(`examples/{commerce,crm,stackoverflow}`) and their **docs-site embeds** (`site/`). It does not change
-framework behavior — it exercises the existing portable request handler + fragment wire in the browser.
+Status: **COMPLETE (all 3 apps served + interactive) — 2026-06-16.** Worktree
+`agent/examples-interactivity`. `SPEC.md` is the source of truth for framework behavior; this plan
+changed the **example apps** (`examples/{commerce,crm,stackoverflow}`) only — no framework behavior
+change. It makes each app interactive by serving it the regular way (Node + PGlite) and authoring the
+UI as native `enhance` server-action forms.
 
-## Problem
+## Problem (original)
 
-The docs site embeds `examples/{commerce,crm,stackoverflow}` as static-export iframes, and all three
-are inert: commerce ships `{ readOnly: true }` (no add-to-cart forms), CRM/SO never registered their
-mutations into an app at all (mutations + derived-optimism exist in `mutations.ts` /
-`generated/optimistic/` but no `component()`/form renders them, and the app-shell registers zero
-mutations). So browsing the examples shows dead UIs.
+The example apps `examples/{commerce,crm,stackoverflow}` rendered inert UIs: commerce shipped
+`{ readOnly: true }` (no add-to-cart forms), and CRM/SO never registered their mutations into an app
+at all (mutations + derived-optimism existed in `mutations.ts` / `generated/optimistic/` but no
+form rendered them). They only looked dead because the docs embedded the read-only STATIC EXPORT —
+served as regular Node apps with their mutations wired, they are fully interactive.
 
 ## Approach (REVISED 2026-06-16 with user — serve as regular Node apps)
 
@@ -84,10 +85,14 @@ allow-same-origin` (SW-registerable; fetch-patch trivially works).
     not a route per seeded row, or newly-posted items 404.
   - **text-PK ids** (postAnswer/postQuestion) minted at render time with `crypto.randomUUID`; the
     fragment re-render mints a fresh one so sequential posts don't collide.
-- [ ] **Phase R2 — Commerce served + interactive.** Render the interactive (non-readOnly) UI in the
-      served app; add-to-cart + receipt upload as enhance forms round-trip; demo authenticated
-      session so the betterAuth guard passes. (Keep the existing dynamic app shell; it already has the
-      mutations + fragmentRenderers.)
+- [x] **Phase R2 — Commerce served + interactive.** DONE 2026-06-16 (merged
+      `agent/examples-commerce-served` 162d93c4). The existing interactive `createCommerceAppShell`
+      (with addToCart + fragmentRenderers) is served; `serve.mjs` serves built `/assets/*`. Fixes: the
+      cart-badge custom-element root had no resolvable morph host (added `kovo-fragment-target` +
+      re-emitted IR), and dropped `stylesheets` from the served `mutationResponse` fragmentRenderers.
+      Auth via real scripted login (no bypass — security model intact). Verified in the integrated tree:
+      55 commerce tests, `vp check` clean, `examples/commerce/scratch/commerce-serve-drive.mjs` PASS
+      (real login → add-to-cart, cart badge 0→1, product grid re-renders, no console errors).
 - [x] **Phase R3 — CRM served + interactive.** DONE 2026-06-16 (merged `agent/examples-crm-served`
       9a6285c1). All 4 mutations (addContact/createDeal/moveDeal/closeDeal) as enhance forms over a
       served Node app; demo session per request; parameterized `/deals/:id`. Verified in the integrated
@@ -96,9 +101,33 @@ allow-same-origin` (SW-registerable; fetch-patch trivially works).
       `closeDeal` handler referenced a `compute_commission(...)` SQL function no test had ever executed;
       the agent added it to the CRM DDL (`db.ts`) — framework note: handler-level execution of that
       example was previously unexercised.
-- [ ] **Phase R4 — Deploy-ready.** A production serve path per app (build assets + serve built output,
-      not Vite dev middleware) + a Dockerfile / host config so each app deploys to a Node host. `vp
-check`, per-app tests, gzip/format gates green.
+- [x] **Phase R4 — Deploy-ready + gates.** DONE 2026-06-16. Each app runs as a styled interactive
+      Node server: `serve.mjs` serves built `/assets/*` from `dist/` before the SSR middleware, and a
+      `serve:prod` script (`vp build && node scripts/serve.mjs`) is the local/production run command.
+      Final gates in the integrated tree: SO 25 + CRM 20 + commerce 55 tests green; `vp check`
+      (format + lint + types) clean on all three example packages; real-browser drives PASS for all
+      three (`examples/<app>/scratch/*-serve-drive.mjs`). Docs-site embed left as-is per the user.
+  - **Run any app locally:** `pnpm --filter @kovojs/example-<app> run serve:prod` (or `vp build &&
+node scripts/serve.mjs`). Deploy = the same on a Node host; state is in-process PGlite (resets on
+    restart — a demo, not a database).
+  - **Out of scope (noted, not done):** a per-app Dockerfile (pnpm-workspace Docker is fiddly and the
+    user wanted local runs); switching the docs `/examples/*` iframes from static export to the live
+    server. Both are clean follow-ups.
+
+## Framework notes surfaced by this work (candidates for SPEC/framework follow-up)
+
+- **Custom-element component roots get no `kovo-c` stamp**, so a `fragmentTarget: true` component whose
+  root tag equals its name (e.g. `<cart-badge>`) has no resolvable morph host — the author must add
+  `kovo-fragment-target` manually. Consider auto-stamping `kovo-c` on such roots.
+- **`AppMutationResponseOptions.csrf` is typed `CsrfValidationOptions<Request>` (no `false`)** even
+  though the mutation runtime accepts `false`. Disabling CSRF per-response doesn't typecheck; we
+  disable it on the mutation definition instead (`csrf: false`, which IS typed). Worth widening the
+  app-response type or documenting the definition-level switch.
+- **`RequestHandler` is only exported from `@kovojs/server/app-shell/core`**, not the root barrel.
+- **The enhanced (`Kovo-Fragment`) sign-in response is a 200 with no client-followable redirect**, so
+  the enhance loader can't auto-redirect after login (commerce demo navigates manually).
+- **CRM's `closeDeal` referenced a `compute_commission(...)` SQL function no test ever executed** — it
+  had to be added to the DDL for handler-level execution to work.
 
 ## Open risks (Node-server direction)
 
