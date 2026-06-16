@@ -230,17 +230,17 @@ describe('server guard and session primitives', () => {
 
     expect(keyed({ ip: '203.0.113.1' })).toBe(true);
     expect(keyed({ ip: '203.0.113.2' })).toBe(true);
-    expect(keyed({ ip: '203.0.113.1' })).toMatchObject({ code: 'RATE_LIMITED' });
+    expect(keyed({ ip: '203.0.113.1' })).toMatchObject({ kind: 'rateLimited' });
 
     expect(global({})).toBe(true);
-    expect(global({})).toMatchObject({ code: 'RATE_LIMITED' });
+    expect(global({})).toMatchObject({ kind: 'rateLimited' });
   });
 
   it('keys default-scoped rate limiting by the authenticated session id', () => {
     const guard = guards.rateLimit<{ session?: { id?: string } }>({ max: 1, per: 'session' });
 
     expect(guard({ session: { id: 's1' } })).toBe(true);
-    expect(guard({ session: { id: 's1' } })).toMatchObject({ code: 'RATE_LIMITED' });
+    expect(guard({ session: { id: 's1' } })).toMatchObject({ kind: 'rateLimited' });
     expect(guard({ session: { id: 's2' } })).toBe(true);
   });
 

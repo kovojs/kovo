@@ -317,13 +317,11 @@ describe('@kovojs/test server fixture facts', () => {
     expect(fact.guards).toEqual({
       authenticatedSession: { id: 's1', user: { id: 'u1' } },
       authedFailure: {
-        auth: 'unauthenticated',
-        code: 'UNAUTHORIZED',
+        kind: 'unauthenticated',
         payload: {},
-        status: 422,
       },
       firstRateLimitPasses: true,
-      secondRateLimitFailure: 'RATE_LIMITED',
+      secondRateLimitFailure: 'rateLimited',
     });
     expect(fact.upload.result).toEqual({
       changes: [

@@ -7,7 +7,7 @@ import type {
   EndpointDeclaration,
   EndpointMethod,
   Guard,
-  GuardFailure,
+  GuardDenial,
   MaybePromise,
   MutationDefinition,
   MutationFail,
@@ -1256,22 +1256,19 @@ export function activeOrganization<Request extends BetterAuthOrganizationRequest
   };
 }
 
-// SPEC.md §6.5 and §10.3: adapter guards preserve anonymous vs unauthorized failures.
-function unauthenticatedGuardFailure(): GuardFailure {
+// SPEC.md §6.5 and §10.3: adapter guards preserve the unauthenticated (→ login
+// redirect) vs forbidden (→ 403 shell) intent the framework maps to HTTP.
+function unauthenticatedGuardFailure(): GuardDenial {
   return {
-    auth: 'unauthenticated',
-    code: 'UNAUTHORIZED',
+    kind: 'unauthenticated',
     payload: {},
-    status: 422,
   };
 }
 
-function unauthorizedGuardFailure(): GuardFailure {
+function unauthorizedGuardFailure(): GuardDenial {
   return {
-    auth: 'unauthorized',
-    code: 'UNAUTHORIZED',
+    kind: 'forbidden',
     payload: {},
-    status: 422,
   };
 }
 

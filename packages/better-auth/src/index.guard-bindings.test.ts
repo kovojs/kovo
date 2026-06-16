@@ -43,10 +43,8 @@ describe('guard bindings', () => {
     const guard = authed<AppRequest>();
 
     expect(await guard({ session: null })).toEqual({
-      auth: 'unauthenticated',
-      code: 'UNAUTHORIZED',
+      kind: 'unauthenticated',
       payload: {},
-      status: 422,
     });
     expect(
       await guard({
@@ -78,10 +76,8 @@ describe('guard bindings', () => {
     };
 
     expect(await admin(memberOnly)).toEqual({
-      auth: 'unauthorized',
-      code: 'UNAUTHORIZED',
+      kind: 'forbidden',
       payload: {},
-      status: 422,
     });
     expect(
       await admin({
@@ -119,10 +115,8 @@ describe('guard bindings', () => {
         },
       }),
     ).toEqual({
-      auth: 'unauthorized',
-      code: 'UNAUTHORIZED',
+      kind: 'forbidden',
       payload: {},
-      status: 422,
     });
     expect(
       await typedGuard({

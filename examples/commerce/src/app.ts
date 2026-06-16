@@ -329,11 +329,11 @@ function sameOriginHost(request: { headers?: Headers; url?: string }): string | 
 }
 
 function sameOriginGuardFailure(): GuardResult {
+  // SPEC §6.5: a cross-origin sign-in POST is rejected as forbidden (the framework
+  // maps `forbidden` to the §9.2 typed-error path on mutations, wire code UNAUTHORIZED).
   return {
-    auth: 'unauthorized',
-    code: 'UNAUTHORIZED',
+    kind: 'forbidden',
     payload: { reason: 'cross-origin sign-in rejected' },
-    status: 422,
   };
 }
 

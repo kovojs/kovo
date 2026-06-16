@@ -726,7 +726,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
       firstRateLimitPasses: firstRateLimit === true,
       secondRateLimitFailure:
         typeof secondRateLimit === 'object' && secondRateLimit !== null
-          ? String((secondRateLimit as { code?: unknown }).code)
+          ? String((secondRateLimit as { kind?: unknown }).kind)
           : undefined,
     },
     pageHints: {
