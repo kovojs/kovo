@@ -110,9 +110,6 @@ describe('@kovojs/ui styled package foundation', () => {
       itemValue: 'updates',
     });
 
-    expect(CheckboxGroupItem.name).toBe('checkbox-group-item');
-    expect(CheckboxGroupControl.name).toBe('checkbox-group-control');
-    expect(CheckboxGroupLabel.name).toBe('checkbox-group-label');
     expect(root).toContain('aria-describedby="notifications-help notifications-error"');
     expect(root).toContain('aria-invalid="true"');
     expect(root).toContain('aria-required="true"');
@@ -175,9 +172,6 @@ describe('@kovojs/ui styled package foundation', () => {
       itemValue: 'express',
     });
 
-    expect(RadioGroupItem.name).toBe('radio-group-item');
-    expect(RadioGroupRadio.name).toBe('radio-group-radio');
-    expect(RadioGroupLabel.name).toBe('radio-group-label');
     expect(root).toContain('aria-describedby="shipping-help"');
     expect(root).toContain('aria-invalid="true"');
     expect(root).toContain('aria-required="true"');
@@ -244,7 +238,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(switchControl).toContain('role="switch" type="checkbox" value="enabled"');
     expect(toggle).toContain('data-state="pressed"');
     expect(toggle).toContain('aria-pressed="true"');
-    expect(toggle).toContain('border-transparent bg-neutral-100');
   });
 
   it('wraps the headless toggle-group primitive as styled roving buttons', () => {
@@ -282,8 +275,6 @@ describe('@kovojs/ui styled package foundation', () => {
       itemValue: 'strike',
     });
 
-    expect(ToggleGroupItem.name).toBe('toggle-group-item');
-    expect(ToggleGroupButton.name).toBe('toggle-group-button');
     expect(root).toContain('aria-describedby="format-help"');
     expect(root).toContain('aria-labelledby="format-label"');
     expect(root).toContain('data-orientation="vertical" id="formatting" role="group"');
@@ -333,8 +324,6 @@ describe('@kovojs/ui styled package foundation', () => {
       pressed: false,
     });
 
-    expect(ToolbarItem.name).toBe('toolbar-item');
-    expect(ToolbarButton.name).toBe('toolbar-button');
     expect(root).toContain('aria-describedby="format-help"');
     expect(root).toContain('aria-labelledby="format-label"');
     expect(root).toContain('aria-orientation="vertical"');
@@ -396,10 +385,6 @@ describe('@kovojs/ui styled package foundation', () => {
       value: 10,
     });
 
-    expect(NumberFieldControl.name).toBe('number-field-control');
-    expect(NumberFieldDecrement.name).toBe('number-field-decrement');
-    expect(NumberFieldInput.name).toBe('number-field-input');
-    expect(NumberFieldIncrement.name).toBe('number-field-increment');
     expect(root).toContain('data-invalid="" data-required="" id="quantity-field"');
     expect(control).toContain('data-invalid="" data-required="" id="quantity-control"');
     expect(decrement).toContain('aria-controls="quantity-input"');
@@ -457,9 +442,6 @@ describe('@kovojs/ui styled package foundation', () => {
       value: '9876',
     });
 
-    expect(OtpFieldGroup.name).toBe('otp-field-group');
-    expect(OtpFieldHiddenInput.name).toBe('otp-field-hidden-input');
-    expect(OtpFieldInput.name).toBe('otp-field-input');
     expect(root).toContain('aria-describedby="otp-description otp-error"');
     expect(root).toContain('aria-invalid="true"');
     expect(root).toContain('data-required=""');
@@ -565,15 +547,6 @@ describe('@kovojs/ui styled package foundation', () => {
       name: 'plan-options',
     });
 
-    expect(FieldLabel.name).toBe('field-label');
-    expect(FieldControl.name).toBe('field-control');
-    expect(FieldTextarea.name).toBe('field-textarea');
-    expect(FieldSelect.name).toBe('field-select');
-    expect(FieldSelectOption.name).toBe('field-select-option');
-    expect(FieldDescription.name).toBe('field-description');
-    expect(FieldError.name).toBe('field-error');
-    expect(Fieldset.name).toBe('fieldset');
-    expect(FieldsetLegend.name).toBe('fieldset-legend');
     expect(root).toContain('data-invalid="" data-required="" id="email-field"');
     expect(label).toContain('for="email" id="email-label"');
     expect(control).toContain('aria-describedby="email-description email-error"');

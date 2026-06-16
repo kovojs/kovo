@@ -122,7 +122,6 @@ import {
   tableClasses,
   sliderClasses,
   sliderInputClasses,
-  toggleClasses,
   toggleGroupClasses,
   toastClasses,
   toastViewportClasses,
@@ -257,7 +256,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(radioGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
     expect(switchClasses.join(' ')).toContain('inline-flex items-center gap-2');
     expect(tabsClasses.join(' ')).toContain('w-full text-neutral-950');
-    expect(toggleClasses.join(' ')).toContain('data-[state=pressed]:bg-neutral-950');
     expect(toggleGroupClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(toolbarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(numberFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');

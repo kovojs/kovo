@@ -487,7 +487,7 @@ export type {
   TabsStyleOverrides,
   TabsTriggerProps,
 } from './tabs.js';
-export { Toggle, toggleClassNames, toggleClasses } from './toggle.js';
+export { Toggle, toggleClasses, toggleStyles } from './toggle.js';
 export type { ToggleProps, ToggleVariant } from './toggle.js';
 export {
   ToggleGroup,

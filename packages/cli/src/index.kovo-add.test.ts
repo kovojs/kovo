@@ -301,7 +301,9 @@ describe('kovo add', () => {
       expect(tabs).toContain('export const tabsStyles = style.create');
       expect(tabs).toContain('styles?: TabsStyleOverrides');
       expect(toggle).toContain('export const Toggle = component({');
-      expect(toggle).toContain('export const toggleClassNames = defineVariants');
+      expect(toggle).toContain("import * as style from '@kovojs/style';");
+      expect(toggle).toContain('export const toggleStyles =');
+      expect(toggle).toContain('style?: style.StyleInput');
       expect(toggleGroup).toContain('export const ToggleGroup = component({');
       expect(toggleGroup).toContain('export const toggleGroupClassNames = defineVariants');
       expect(toast).toContain('export const Toast = component({');

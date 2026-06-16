@@ -1,0 +1,28 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Toggle StyleX styles > exports StyleX style groups 1`] = `
+{
+  "baseKeys": [
+    "root",
+  ],
+  "marker": true,
+  "variantKeys": [
+    "outline",
+    "subtle",
+  ],
+}
+`;
+
+exports[`@kovojs/ui Toggle StyleX styles > matches author-last override output 1`] = `"<button class="kv-toggle-align-pcwyi kv-toggle-bd-135gc1 kv-toggle-bd-17dppo kv-toggle-bd-5grtwb kv-toggle-d-1j551m kv-toggle-font-ms8kpd kv-toggle-font-pksaee kv-toggle-h-1h3ikl kv-toggle-justify-1j5cpq kv-toggle-pad-zilh05 kv-toggle-transition-124mp1 kv-toggle-opacity-34wn81 kv-toggle-pointer-rixc76 kv-toggle-outline-1cgnuo kv-toggle-outline-32eszf kv-toggle-outline-1nmx8l kv-toggle-bg-7er2nc kv-toggle-fg-1celip kv-toggle-variant-bd-ezy27e kv-toggle-variant-box-lifs7o kv-toggle-variant-fg-15qihe kv-toggle-variant-outline-g2ljub kv-toggle-variant-bg-1hzslf kv-app-toggle-bg-rwih5 kv-app-toggle-min-7tz79d" data-style-src="toggle.tsx#root; toggle.tsx#outline; app-toggle.tsx#root" aria-pressed="true" data-state="pressed" type="button">Custom</button>"`;
+
+exports[`@kovojs/ui Toggle StyleX styles > matches native toggle states with StyleX output 1`] = `
+{
+  "classes": [
+    "kv-toggle-align-pcwyi kv-toggle-bd-135gc1 kv-toggle-bd-17dppo kv-toggle-bd-5grtwb kv-toggle-d-1j551m kv-toggle-font-ms8kpd kv-toggle-font-pksaee kv-toggle-h-1h3ikl kv-toggle-justify-1j5cpq kv-toggle-pad-zilh05 kv-toggle-transition-124mp1 kv-toggle-opacity-34wn81 kv-toggle-pointer-rixc76 kv-toggle-outline-1cgnuo kv-toggle-outline-32eszf kv-toggle-outline-1nmx8l kv-toggle-bg-7er2nc kv-toggle-fg-1celip kv-toggle-variant-bg-j1uhj0 kv-toggle-variant-bd-ezy27e kv-toggle-variant-box-lifs7o kv-toggle-variant-fg-15qihe kv-toggle-variant-outline-g2ljub kv-toggle-variant-bg-1hzslf",
+    "kv-toggle-variant-bg-10xicm kv-toggle-variant-bd-a3mdie kv-toggle-variant-fg-15qihe kv-toggle-variant-outline-g2ljub kv-toggle-variant-bg-5i0g89",
+  ],
+  "disabled": "<button class="kv-toggle-align-pcwyi kv-toggle-bd-135gc1 kv-toggle-bd-17dppo kv-toggle-bd-5grtwb kv-toggle-d-1j551m kv-toggle-font-ms8kpd kv-toggle-font-pksaee kv-toggle-h-1h3ikl kv-toggle-justify-1j5cpq kv-toggle-pad-zilh05 kv-toggle-transition-124mp1 kv-toggle-opacity-34wn81 kv-toggle-pointer-rixc76 kv-toggle-outline-1cgnuo kv-toggle-outline-32eszf kv-toggle-outline-1nmx8l kv-toggle-bg-7er2nc kv-toggle-fg-1celip kv-toggle-variant-bg-j1uhj0 kv-toggle-variant-bd-ezy27e kv-toggle-variant-box-lifs7o kv-toggle-variant-fg-15qihe kv-toggle-variant-outline-g2ljub kv-toggle-variant-bg-1hzslf" data-style-src="toggle.tsx#root; toggle.tsx#outline" aria-pressed="false" data-disabled="" data-state="off" disabled type="button">Disabled</button>",
+  "off": "<button class="kv-toggle-align-pcwyi kv-toggle-bd-135gc1 kv-toggle-bd-17dppo kv-toggle-bd-5grtwb kv-toggle-d-1j551m kv-toggle-font-ms8kpd kv-toggle-font-pksaee kv-toggle-h-1h3ikl kv-toggle-justify-1j5cpq kv-toggle-pad-zilh05 kv-toggle-transition-124mp1 kv-toggle-opacity-34wn81 kv-toggle-pointer-rixc76 kv-toggle-outline-1cgnuo kv-toggle-outline-32eszf kv-toggle-outline-1nmx8l kv-toggle-bg-7er2nc kv-toggle-fg-1celip kv-toggle-variant-bg-10xicm kv-toggle-variant-bd-a3mdie kv-toggle-variant-fg-15qihe kv-toggle-variant-outline-g2ljub kv-toggle-variant-bg-5i0g89" data-style-src="toggle.tsx#root; toggle.tsx#subtle" aria-pressed="false" data-state="off" type="button">Save view</button>",
+  "pressed": "<button class="kv-toggle-align-pcwyi kv-toggle-bd-135gc1 kv-toggle-bd-17dppo kv-toggle-bd-5grtwb kv-toggle-d-1j551m kv-toggle-font-ms8kpd kv-toggle-font-pksaee kv-toggle-h-1h3ikl kv-toggle-justify-1j5cpq kv-toggle-pad-zilh05 kv-toggle-transition-124mp1 kv-toggle-opacity-34wn81 kv-toggle-pointer-rixc76 kv-toggle-outline-1cgnuo kv-toggle-outline-32eszf kv-toggle-outline-1nmx8l kv-toggle-bg-7er2nc kv-toggle-fg-1celip kv-toggle-variant-bg-j1uhj0 kv-toggle-variant-bd-ezy27e kv-toggle-variant-box-lifs7o kv-toggle-variant-fg-15qihe kv-toggle-variant-outline-g2ljub kv-toggle-variant-bg-1hzslf" data-style-src="toggle.tsx#root; toggle.tsx#outline" aria-pressed="true" data-state="pressed" type="button">Saved</button>",
+}
+`;

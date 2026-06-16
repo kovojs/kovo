@@ -876,7 +876,8 @@
       "files": ["src/toggle.tsx"],
       "exports": ["Toggle"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants", "toggleRootAttributes"],
+        "@kovojs/headless-ui": ["toggleRootAttributes"],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

@@ -1,33 +1,88 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, defineVariants, toggleRootAttributes, type ClassValue } from '@kovojs/headless-ui';
+import { toggleRootAttributes } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
 
 export type ToggleVariant = 'outline' | 'subtle';
 
 export interface ToggleProps {
   children?: string;
-  class?: ClassValue;
   disabled?: boolean;
   pressed?: boolean;
+  style?: style.StyleInput;
   variant?: ToggleVariant;
 }
 
-export const toggleClassNames = defineVariants({
-  base: 'inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=pressed]:bg-neutral-950 data-[state=pressed]:text-white',
-  variants: {
-    variant: {
-      outline:
-        'border-neutral-300 bg-white text-neutral-950 shadow-sm hover:bg-neutral-50 focus-visible:outline-neutral-400',
-      subtle:
-        'border-transparent bg-neutral-100 text-neutral-950 hover:bg-neutral-200 focus-visible:outline-neutral-400',
+const base = style.create(
+  {
+    root: {
+      alignItems: 'center',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 36,
+      justifyContent: 'center',
+      paddingInline: 12,
+      transitionProperty: 'background-color, border-color, color',
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      ':focus-visible': {
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      '[data-state=pressed]': {
+        backgroundColor: '#0a0a0a',
+        color: '#ffffff',
+      },
     },
   },
-  defaultVariants: {
-    variant: 'outline',
-  },
-});
+  { namespace: 'toggle', source: 'toggle.tsx' },
+);
 
-export const toggleClasses = toggleClassNames.classes;
+const variants = style.create(
+  {
+    outline: {
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      ':focus-visible': {
+        outlineColor: '#a3a3a3',
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
+    },
+    subtle: {
+      backgroundColor: '#f5f5f5',
+      borderColor: 'transparent',
+      color: '#0a0a0a',
+      ':focus-visible': {
+        outlineColor: '#a3a3a3',
+      },
+      ':hover': {
+        backgroundColor: '#e5e5e5',
+      },
+    },
+  },
+  { namespace: 'toggleVariant', source: 'toggle.tsx' },
+);
+
+export const toggleStyles = {
+  base,
+  variants,
+} as const;
+
+export const toggleClasses = [
+  style.attrs(base.root, variants.outline).class ?? '',
+  style.attrs(variants.subtle).class ?? '',
+] as const;
 
 export const Toggle = component({
   render(props: ToggleProps) {
@@ -35,11 +90,16 @@ export const Toggle = component({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       pressed: props.pressed ?? false,
     });
+    const styleAttrs = style.attrs(
+      base.root,
+      variants[props.variant ?? 'outline'],
+      props.style,
+    );
 
     return (
       <button
+        {...styleAttrs}
         aria-pressed={attrs['aria-pressed']}
-        class={cn(toggleClassNames({ variant: props.variant }), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
