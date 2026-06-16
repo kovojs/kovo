@@ -507,7 +507,8 @@
       "files": ["src/meter.tsx"],
       "exports": ["Meter"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants", "meterRootAttributes"],
+        "@kovojs/headless-ui": ["meterRootAttributes"],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

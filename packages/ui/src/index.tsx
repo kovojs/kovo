@@ -690,7 +690,7 @@ export type {
   HoverCardStateProps,
   HoverCardTriggerProps,
 } from './hover-card.js';
-export { Meter, meterClassNames, meterClasses } from './meter.js';
+export { Meter, meterClasses, meterStyles } from './meter.js';
 export type { MeterProps } from './meter.js';
 export {
   Popover,

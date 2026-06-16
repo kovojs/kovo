@@ -1,25 +1,38 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, defineVariants, meterRootAttributes, type ClassValue } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+import { meterRootAttributes } from '@kovojs/headless-ui';
 
 export interface MeterProps {
   children?: string;
-  class?: ClassValue;
   high?: number;
   low?: number;
   max?: number;
   min?: number;
   optimum?: number;
+  style?: style.StyleInput;
   value?: number;
   valueText?: string;
 }
 
-export const meterClassNames = defineVariants({
-  base: 'h-2 w-full accent-emerald-600 data-[state=suboptimum]:accent-amber-500 data-[state=even-less-good]:accent-red-600',
-  variants: {},
-});
+export const meterStyles = style.create(
+  {
+    root: {
+      accentColor: '#059669',
+      height: 8,
+      width: '100%',
+      '[data-state=suboptimum]': {
+        accentColor: '#f59e0b',
+      },
+      '[data-state=even-less-good]': {
+        accentColor: '#dc2626',
+      },
+    },
+  },
+  { namespace: 'meter', source: 'meter.tsx' },
+);
 
-export const meterClasses = meterClassNames.classes;
+export const meterClasses = [style.attrs(meterStyles.root).class ?? ''] as const;
 
 export const Meter = component({
   render(props: MeterProps) {
@@ -32,11 +45,12 @@ export const Meter = component({
       ...(props.value === undefined ? {} : { value: props.value }),
       ...(props.valueText === undefined ? {} : { valueText: props.valueText }),
     });
+    const styleAttrs = style.attrs(meterStyles.root, props.style);
 
     return (
       <meter
+        {...styleAttrs}
         aria-valuetext={attrs['aria-valuetext']}
-        class={cn(meterClassNames(), props.class)}
         data-high={attrs['data-high']}
         data-low={attrs['data-low']}
         data-max={attrs['data-max']}

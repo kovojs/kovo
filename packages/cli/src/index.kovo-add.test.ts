@@ -83,6 +83,7 @@ describe('kovo add', () => {
           'dropdown-menu',
           'kbd',
           'menubar',
+          'meter',
           'navigation-menu',
           'progress',
           'radio-group',
@@ -149,6 +150,9 @@ describe('kovo add', () => {
         `ADD menubar path=${JSON.stringify(join(outDir, 'menubar.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD meter path=${JSON.stringify(join(outDir, 'meter.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD navigation-menu path=${JSON.stringify(join(outDir, 'navigation-menu.tsx'))} source=tsx`,
       );
       expect(output).toContain(
@@ -208,6 +212,7 @@ describe('kovo add', () => {
       const dropdownMenu = readFileSync(join(outDir, 'dropdown-menu.tsx'), 'utf8');
       const kbd = readFileSync(join(outDir, 'kbd.tsx'), 'utf8');
       const menubar = readFileSync(join(outDir, 'menubar.tsx'), 'utf8');
+      const meter = readFileSync(join(outDir, 'meter.tsx'), 'utf8');
       const navigationMenu = readFileSync(join(outDir, 'navigation-menu.tsx'), 'utf8');
       const progress = readFileSync(join(outDir, 'progress.tsx'), 'utf8');
       const radioGroup = readFileSync(join(outDir, 'radio-group.tsx'), 'utf8');
@@ -262,6 +267,10 @@ describe('kovo add', () => {
       expect(kbd).toContain('style?: style.StyleInput');
       expect(menubar).toContain('export const Menubar = component({');
       expect(menubar).toContain('export const menubarClassNames = defineVariants');
+      expect(meter).toContain('export const Meter = component({');
+      expect(meter).toContain("import * as style from '@kovojs/style';");
+      expect(meter).toContain('export const meterStyles = style.create');
+      expect(meter).toContain('style?: style.StyleInput');
       expect(navigationMenu).toContain('export const NavigationMenu = component({');
       expect(navigationMenu).toContain('export const navigationMenuClassNames = defineVariants');
       expect(progress).toContain('export const Progress = component({');
@@ -314,6 +323,7 @@ describe('kovo add', () => {
         dropdownMenu,
         kbd,
         menubar,
+        meter,
         navigationMenu,
         progress,
         radioGroup,

@@ -107,7 +107,6 @@ import {
   hoverCardContentClasses,
   menubarClasses,
   navigationMenuClasses,
-  meterClasses,
   numberFieldClasses,
   otpFieldClasses,
   popoverClasses,
@@ -281,7 +280,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(menubarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(navigationMenuClasses.join(' ')).toContain('data-[orientation=vertical]');
     expect(commandClasses.join(' ')).toContain('grid gap-2');
-    expect(meterClasses.join(' ')).toContain('data-[state=suboptimum]');
     expect(popoverClasses.join(' ')).toContain('relative inline-block');
     expect(popoverContentClasses.join(' ')).toContain('w-64');
     expect(tooltipClasses.join(' ')).toContain('relative inline-block');
