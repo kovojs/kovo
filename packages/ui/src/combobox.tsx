@@ -1,18 +1,24 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
   comboboxInputAttributes,
   comboboxListboxAttributes,
   comboboxOptionAttributes,
   comboboxRootAttributes,
   comboboxValueAttributes,
   comboboxValueText,
-  defineVariants,
-  type ClassValue,
   type ComboboxItem as HeadlessComboboxItem,
 } from '@kovojs/headless-ui';
 import { escapeHtml } from '@kovojs/server';
+import * as style from '@kovojs/style';
+
+export interface ComboboxStyleOverrides {
+  input?: style.StyleInput;
+  listbox?: style.StyleInput;
+  option?: style.StyleInput;
+  root?: style.StyleInput;
+  value?: style.StyleInput;
+}
 
 export interface ComboboxStateProps {
   disabled?: boolean;
@@ -30,69 +36,133 @@ export interface ComboboxStateProps {
 
 export interface ComboboxProps extends ComboboxStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: ComboboxStyleOverrides;
 }
 
 export interface ComboboxInputProps extends ComboboxStateProps {
-  class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   id?: string;
   labelledBy?: string;
+  styles?: ComboboxStyleOverrides;
 }
 
 export interface ComboboxListboxProps extends ComboboxStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   labelledBy?: string;
+  styles?: ComboboxStyleOverrides;
 }
 
 export interface ComboboxOptionProps extends ComboboxStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;
   itemValue: string;
+  styles?: ComboboxStyleOverrides;
 }
 
 export interface ComboboxValueProps extends ComboboxStateProps {
-  class?: ClassValue;
   id?: string;
+  styles?: ComboboxStyleOverrides;
 }
 
-export const comboboxClassNames = defineVariants({
-  base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950',
-  variants: {},
-});
+export const comboboxStyles = style.create(
+  {
+    input: {
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      fontSize: 14,
+      height: 36,
+      outlineStyle: 'none',
+      paddingInline: 12,
+      transitionProperty: 'background-color, border-color, color, box-shadow',
+      width: '100%',
+      '[data-placeholder]': {
+        color: '#737373',
+      },
+      '[aria-invalid=true]': {
+        borderColor: '#f87171',
+      },
+      ':disabled': {
+        backgroundColor: '#f5f5f5',
+        color: '#737373',
+        cursor: 'not-allowed',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+    listbox: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      maxHeight: 224,
+      overflow: 'auto',
+      padding: 4,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+    },
+    option: {
+      borderRadius: 4,
+      color: '#404040',
+      fontSize: 14,
+      paddingBlock: 6,
+      paddingInline: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      '[data-highlighted]': {
+        backgroundColor: '#f5f5f5',
+      },
+      '[data-state=checked]': {
+        color: '#0a0a0a',
+        fontWeight: 500,
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-invalid]': {
+        color: '#450a0a',
+      },
+    },
+    value: {
+      color: '#404040',
+      fontSize: 14,
+      '[data-placeholder]': {
+        color: '#737373',
+      },
+    },
+  },
+  { namespace: 'combobox', source: 'combobox.tsx' },
+);
 
-export const comboboxInputClassNames = defineVariants({
-  base: 'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:border-red-400 data-[placeholder]:text-neutral-500',
-  variants: {},
-});
-
-export const comboboxListboxClassNames = defineVariants({
-  base: 'max-h-56 overflow-auto rounded-md border border-neutral-200 bg-white p-1 shadow-sm data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const comboboxOptionClassNames = defineVariants({
-  base: 'rounded px-2 py-1.5 text-sm text-neutral-700 data-[highlighted]:bg-neutral-100 data-[state=checked]:font-medium data-[state=checked]:text-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const comboboxValueClassNames = defineVariants({
-  base: 'text-sm text-neutral-700 data-[placeholder]:text-neutral-500',
-  variants: {},
-});
-
-export const comboboxClasses = comboboxClassNames.classes;
-export const comboboxInputClasses = comboboxInputClassNames.classes;
-export const comboboxListboxClasses = comboboxListboxClassNames.classes;
-export const comboboxOptionClasses = comboboxOptionClassNames.classes;
-export const comboboxValueClasses = comboboxValueClassNames.classes;
+export const comboboxClasses = [style.attrs(comboboxStyles.root).class ?? ''] as const;
+export const comboboxInputClasses = [style.attrs(comboboxStyles.input).class ?? ''] as const;
+export const comboboxListboxClasses = [style.attrs(comboboxStyles.listbox).class ?? ''] as const;
+export const comboboxOptionClasses = [style.attrs(comboboxStyles.option).class ?? ''] as const;
+export const comboboxValueClasses = [style.attrs(comboboxStyles.value).class ?? ''] as const;
 
 export const Combobox = component({
   render(props: ComboboxProps) {
@@ -110,10 +180,11 @@ export const Combobox = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(comboboxStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(comboboxClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-placeholder={attrs['data-placeholder']}
@@ -146,9 +217,11 @@ export const ComboboxInput = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(comboboxStyles.input, props.styles?.input);
 
     return (
       <input
+        {...styleAttrs}
         aria-activedescendant={attrs['aria-activedescendant']}
         aria-autocomplete={attrs['aria-autocomplete']}
         aria-controls={attrs['aria-controls']}
@@ -156,7 +229,6 @@ export const ComboboxInput = component({
         aria-expanded={attrs['aria-expanded']}
         aria-invalid={attrs['aria-invalid']}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(comboboxInputClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-placeholder={attrs['data-placeholder']}
@@ -194,11 +266,12 @@ export const ComboboxListbox = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(comboboxStyles.listbox, props.styles?.listbox);
 
     return (
       <div
+        {...styleAttrs}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(comboboxListboxClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-placeholder={attrs['data-placeholder']}
@@ -233,12 +306,13 @@ export const ComboboxOption = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(comboboxStyles.option, props.styles?.option);
 
     return (
       <div
+        {...styleAttrs}
         aria-disabled={attrs['aria-disabled']}
         aria-selected={attrs['aria-selected']}
-        class={cn(comboboxOptionClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -268,10 +342,11 @@ export const ComboboxValue = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(comboboxStyles.value, props.styles?.value);
 
     return (
       <span
-        class={cn(comboboxValueClassNames(), props.class)}
+        {...styleAttrs}
         data-placeholder={attrs['data-placeholder']}
         id={attrs.id}
       >

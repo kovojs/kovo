@@ -1,8 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   selectContentAttributes,
   selectHiddenInputAttributes,
   selectItemAttributes,
@@ -10,10 +8,19 @@ import {
   selectTriggerAttributes,
   selectValueAttributes,
   selectValueText,
-  type ClassValue,
   type SelectItem as HeadlessSelectItem,
 } from '@kovojs/headless-ui';
 import { escapeHtml } from '@kovojs/server';
+import * as style from '@kovojs/style';
+
+export interface SelectStyleOverrides {
+  content?: style.StyleInput;
+  hiddenInput?: style.StyleInput;
+  item?: style.StyleInput;
+  root?: style.StyleInput;
+  trigger?: style.StyleInput;
+  value?: style.StyleInput;
+}
 
 export interface SelectStateProps {
   disabled?: boolean;
@@ -31,75 +38,129 @@ export interface SelectStateProps {
 
 export interface SelectProps extends SelectStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: SelectStyleOverrides;
 }
 
 export interface SelectTriggerProps extends SelectStateProps {
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   id?: string;
   labelledBy?: string;
+  styles?: SelectStyleOverrides;
 }
 
 export interface SelectHiddenInputProps extends SelectStateProps {
-  class?: ClassValue;
   id?: string;
+  styles?: SelectStyleOverrides;
 }
 
 export interface SelectContentProps extends SelectStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   label?: string;
   labelledBy?: string;
+  styles?: SelectStyleOverrides;
 }
 
 export interface SelectItemProps extends SelectStateProps {
   children?: string;
-  class?: ClassValue;
   itemDisabled?: boolean;
   itemLabel?: string;
   itemValue: string;
+  styles?: SelectStyleOverrides;
 }
 
 export interface SelectValueProps extends SelectStateProps {
-  class?: ClassValue;
   id?: string;
+  styles?: SelectStyleOverrides;
 }
 
-export const selectClassNames = defineVariants({
-  base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950',
-  variants: {},
-});
+export const selectStyles = style.create(
+  {
+    content: {
+      backgroundColor: '#ffffff',
+      color: '#0a0a0a',
+      fontSize: 14,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+      '[data-state=open]': {
+        display: 'block',
+      },
+    },
+    hiddenInput: {},
+    item: {
+      color: '#0a0a0a',
+      '[data-disabled]': {
+        color: '#a3a3a3',
+      },
+      '[data-state=checked]': {
+        fontWeight: 500,
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-invalid]': {
+        color: '#450a0a',
+      },
+    },
+    trigger: {
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      fontSize: 14,
+      height: 36,
+      outlineStyle: 'none',
+      paddingInline: 12,
+      transitionProperty: 'background-color, border-color, color, box-shadow',
+      width: '100%',
+      '[data-placeholder]': {
+        color: '#737373',
+      },
+      '[aria-invalid=true]': {
+        borderColor: '#f87171',
+      },
+      ':disabled': {
+        backgroundColor: '#f5f5f5',
+        color: '#737373',
+        cursor: 'not-allowed',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+    value: {
+      color: '#404040',
+      fontSize: 14,
+      '[data-placeholder]': {
+        color: '#737373',
+      },
+    },
+  },
+  { namespace: 'select', source: 'select.tsx' },
+);
 
-export const selectTriggerClassNames = defineVariants({
-  base: 'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:border-red-400 data-[placeholder]:text-neutral-500',
-  variants: {},
-});
-
-export const selectContentClassNames = defineVariants({
-  base: 'bg-white text-sm text-neutral-950 data-[state=open]:block data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const selectItemClassNames = defineVariants({
-  base: 'text-neutral-950 data-[state=checked]:font-medium disabled:text-neutral-400',
-  variants: {},
-});
-
-export const selectValueClassNames = defineVariants({
-  base: 'text-sm text-neutral-700 data-[placeholder]:text-neutral-500',
-  variants: {},
-});
-
-export const selectClasses = selectClassNames.classes;
-export const selectTriggerClasses = selectTriggerClassNames.classes;
-export const selectContentClasses = selectContentClassNames.classes;
-export const selectItemClasses = selectItemClassNames.classes;
-export const selectValueClasses = selectValueClassNames.classes;
+export const selectClasses = [style.attrs(selectStyles.root).class ?? ''] as const;
+export const selectTriggerClasses = [style.attrs(selectStyles.trigger).class ?? ''] as const;
+export const selectContentClasses = [style.attrs(selectStyles.content).class ?? ''] as const;
+export const selectItemClasses = [style.attrs(selectStyles.item).class ?? ''] as const;
+export const selectValueClasses = [style.attrs(selectStyles.value).class ?? ''] as const;
+export const selectHiddenInputClasses = [style.attrs(selectStyles.hiddenInput).class ?? ''] as const;
 
 export const Select = component({
   render(props: SelectProps) {
@@ -116,10 +177,11 @@ export const Select = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(selectStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(selectClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-placeholder={attrs['data-placeholder']}
@@ -152,16 +214,17 @@ export const SelectTrigger = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(selectStyles.trigger, props.styles?.trigger);
 
     return (
       <button
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         aria-haspopup={attrs['aria-haspopup']}
         aria-invalid={attrs['aria-invalid']}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(selectTriggerClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-placeholder={attrs['data-placeholder']}
@@ -185,10 +248,11 @@ export const SelectHiddenInput = component({
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(selectStyles.hiddenInput, props.styles?.hiddenInput);
 
     return (
       <input
-        class={props.class}
+        {...styleAttrs}
         disabled={attrs.disabled}
         form={attrs.form}
         id={props.id}
@@ -216,11 +280,12 @@ export const SelectContent = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(selectStyles.content, props.styles?.content);
 
     return (
       <div
+        {...styleAttrs}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(selectContentClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-placeholder={attrs['data-placeholder']}
@@ -253,12 +318,13 @@ export const SelectItem = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(selectStyles.item, props.styles?.item);
 
     return (
       <div
+        {...styleAttrs}
         aria-disabled={attrs['aria-disabled']}
         aria-selected={attrs['aria-selected']}
-        class={cn(selectItemClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -288,10 +354,11 @@ export const SelectValue = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(selectStyles.value, props.styles?.value);
 
     return (
       <span
-        class={cn(selectValueClassNames(), props.class)}
+        {...styleAttrs}
         data-placeholder={attrs['data-placeholder']}
         id={attrs.id}
       >

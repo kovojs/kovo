@@ -1,0 +1,53 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Autocomplete StyleX slots > accepts author-last StyleX slot overrides 1`] = `
+{
+  "input": "<input class="kv-autocomplete-bd-1q3pu6 kv-autocomplete-bd-1dgij3 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-font-1rygq8 kv-autocomplete-h-1crj27 kv-autocomplete-outline-1ipo24 kv-autocomplete-pad-13ileu kv-autocomplete-transition-1nf16q kv-autocomplete-w-lhhf6b kv-autocomplete-fg-exm43b kv-autocomplete-bd-anjfiu kv-autocomplete-bg-1nj58e kv-autocomplete-fg-1k3no8 kv-autocomplete-cursor-1puzf0 kv-autocomplete-outline-nj20g6 kv-autocomplete-outline-1ag1xs kv-autocomplete-outline-piwjfh kv-autocomplete-outline-1y03xn kv-app-autocomplete-bg-1g4u11 kv-app-autocomplete-fg-7nf2yr" data-style-src="autocomplete.tsx#input; app-autocomplete.tsx#input" aria-autocomplete="list" aria-expanded="false" autocomplete="off" data-placeholder="" data-state="closed" role="combobox" type="text" value="">",
+  "list": "<div class="kv-autocomplete-bd-3jjuvk kv-autocomplete-bd-1dgij3 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-1qpiwv kv-autocomplete-font-1rygq8 kv-autocomplete-d-nhbelo kv-app-autocomplete-bg-1nd8rc" data-style-src="autocomplete.tsx#list; app-autocomplete.tsx#list" data-placeholder="" data-state="closed" hidden role="listbox">options</div>",
+  "option": "<div class="kv-autocomplete-fg-vadri7 kv-autocomplete-font-1r1rh9 kv-autocomplete-font-1wefqf kv-app-autocomplete-fg-7nf2yr" data-style-src="autocomplete.tsx#option; app-autocomplete.tsx#option" aria-selected="false" data-state="unchecked" role="option" value="design">design</div>",
+  "root": "<div class="kv-autocomplete-d-1mghfj kv-autocomplete-font-1rygq8 kv-autocomplete-row-1m16zq kv-autocomplete-opacity-1wmp2v kv-autocomplete-fg-84gjdm kv-app-autocomplete-fg-7nf2yr" data-style-src="autocomplete.tsx#root; app-autocomplete.tsx#root" data-placeholder="" data-state="closed">autocomplete body</div>",
+  "value": "<span class="kv-autocomplete-font-1rygq8 kv-autocomplete-fg-exm43b kv-app-autocomplete-fg-7nf2yr" data-style-src="autocomplete.tsx#value; app-autocomplete.tsx#value">design</span>",
+}
+`;
+
+exports[`@kovojs/ui Autocomplete StyleX slots > exports StyleX slot objects instead of variant helpers 1`] = `
+{
+  "inputMarker": true,
+  "keys": [
+    "input",
+    "list",
+    "option",
+    "root",
+    "value",
+  ],
+  "listMarker": true,
+  "optionMarker": true,
+  "rootMarker": true,
+  "valueMarker": true,
+}
+`;
+
+exports[`@kovojs/ui Autocomplete StyleX slots > renders headless autocomplete attrs with StyleX slot classes 1`] = `
+{
+  "classes": [
+    "kv-autocomplete-fg-1qpiwv kv-autocomplete-d-1mghfj kv-autocomplete-font-1rygq8 kv-autocomplete-row-1m16zq kv-autocomplete-opacity-1wmp2v kv-autocomplete-fg-84gjdm",
+  ],
+  "input": "<input class="kv-autocomplete-bg-1r5soy kv-autocomplete-bd-1q3pu6 kv-autocomplete-bd-1dgij3 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-1qpiwv kv-autocomplete-font-1rygq8 kv-autocomplete-h-1crj27 kv-autocomplete-outline-1ipo24 kv-autocomplete-pad-13ileu kv-autocomplete-transition-1nf16q kv-autocomplete-w-lhhf6b kv-autocomplete-fg-exm43b kv-autocomplete-bd-anjfiu kv-autocomplete-bg-1nj58e kv-autocomplete-fg-1k3no8 kv-autocomplete-cursor-1puzf0 kv-autocomplete-outline-nj20g6 kv-autocomplete-outline-1ag1xs kv-autocomplete-outline-piwjfh kv-autocomplete-outline-1y03xn" data-style-src="autocomplete.tsx#input" aria-activedescendant="team-list-option-0" aria-autocomplete="list" aria-controls="team-list" aria-describedby="team-help" aria-expanded="true" aria-labelledby="team-label" autocomplete="off" data-state="open" id="team-input" name="team" placeholder="Choose team" role="combobox" type="text" value="des">",
+  "inputClasses": [
+    "kv-autocomplete-bg-1r5soy kv-autocomplete-bd-1q3pu6 kv-autocomplete-bd-1dgij3 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-1qpiwv kv-autocomplete-font-1rygq8 kv-autocomplete-h-1crj27 kv-autocomplete-outline-1ipo24 kv-autocomplete-pad-13ileu kv-autocomplete-transition-1nf16q kv-autocomplete-w-lhhf6b kv-autocomplete-fg-exm43b kv-autocomplete-bd-anjfiu kv-autocomplete-bg-1nj58e kv-autocomplete-fg-1k3no8 kv-autocomplete-cursor-1puzf0 kv-autocomplete-outline-nj20g6 kv-autocomplete-outline-1ag1xs kv-autocomplete-outline-piwjfh kv-autocomplete-outline-1y03xn",
+  ],
+  "list": "<div class="kv-autocomplete-bg-1r5soy kv-autocomplete-bd-3jjuvk kv-autocomplete-bd-1dgij3 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-1qpiwv kv-autocomplete-font-1rygq8 kv-autocomplete-d-nhbelo" data-style-src="autocomplete.tsx#list" aria-labelledby="team-input" data-state="open" id="team-list" role="listbox">options</div>",
+  "listClasses": [
+    "kv-autocomplete-bg-1r5soy kv-autocomplete-bd-3jjuvk kv-autocomplete-bd-1dgij3 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-1qpiwv kv-autocomplete-font-1rygq8 kv-autocomplete-d-nhbelo",
+  ],
+  "option": "<div class="kv-autocomplete-fg-1qpiwv kv-autocomplete-fg-vadri7 kv-autocomplete-font-1r1rh9 kv-autocomplete-font-1wefqf" data-style-src="autocomplete.tsx#option" aria-selected="true" data-highlighted="" data-state="checked" role="option" value="design">design</div>",
+  "optionClasses": [
+    "kv-autocomplete-fg-1qpiwv kv-autocomplete-fg-vadri7 kv-autocomplete-font-1r1rh9 kv-autocomplete-font-1wefqf",
+  ],
+  "root": "<div class="kv-autocomplete-fg-1qpiwv kv-autocomplete-d-1mghfj kv-autocomplete-font-1rygq8 kv-autocomplete-row-1m16zq kv-autocomplete-opacity-1wmp2v kv-autocomplete-fg-84gjdm" data-style-src="autocomplete.tsx#root" data-invalid="" data-required="" data-state="open" id="team-autocomplete">autocomplete body</div>",
+  "value": "<span class="kv-autocomplete-fg-gr6xd0 kv-autocomplete-font-1rygq8 kv-autocomplete-fg-exm43b" data-style-src="autocomplete.tsx#value" id="team-value">Design</span>",
+  "valueClasses": [
+    "kv-autocomplete-fg-gr6xd0 kv-autocomplete-font-1rygq8 kv-autocomplete-fg-exm43b",
+  ],
+}
+`;
