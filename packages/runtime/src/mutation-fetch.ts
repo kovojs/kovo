@@ -9,8 +9,8 @@ import { definedProps } from './defined-props.js';
 export interface EnhancedFormLike {
   action: string;
   getAttribute?(name: string): string | null;
-  id?: string;
-  method?: string;
+  id?: string | undefined;
+  method?: string | undefined;
 }
 
 /** @internal */

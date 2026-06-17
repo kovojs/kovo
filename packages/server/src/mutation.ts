@@ -967,7 +967,7 @@ async function renderFragmentChunks(
 
 interface MutationResponseSelectionInput {
   fragmentRenderers: readonly FragmentRenderer[];
-  liveTargets?: readonly MutationLiveTarget[];
+  liveTargets?: readonly MutationLiveTarget[] | undefined;
   rerunQueries: readonly QueryRerun[];
   targets: readonly string[];
 }

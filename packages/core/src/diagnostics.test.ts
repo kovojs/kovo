@@ -258,7 +258,7 @@ describe('diagnostic registry', () => {
           "code": "KV238",
           "help": "Would lower to: one derived fragment-target registry key that maps to exactly one component render entry.
       Blocked reason: duplicate fragment-target wire names make enhanced fragment patch routing ambiguous.
-      Fixes: rename the exported component binding, move one component so its derived module path namespace differs, or remove fragmentTarget from the component that should not receive enhanced patches.
+      Fixes: rename the exported component binding, add stable authored key identity for repeated instances, move one component so its derived module path namespace differs, or set disableServerRefresh: true on the query-backed component that should not receive enhanced patches.
       SPEC §4.5, §4.8, and §6.2 make fragment-target names derived registry-visible identities; duplicate keys make enhanced fragment patches ambiguous.",
           "message": "Duplicate fragment-target wire name.",
           "severity": "error",

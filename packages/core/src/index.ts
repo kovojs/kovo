@@ -147,7 +147,10 @@ export interface ComponentDefinition<
   Queries = Record<string, unknown>,
   State extends JsonValue = JsonValue,
 > {
-  fragmentTarget?: boolean;
+  /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
+  disableServerRefresh?: boolean;
+  /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
+  fragmentTarget?: never;
   queries?: Queries;
   state?: () => State;
   render: (queries: Queries, state: State, slots: ComponentRenderSlots) => ComponentRenderResult;
@@ -155,7 +158,10 @@ export interface ComponentDefinition<
 
 /** Loosely-typed input accepted by `component()` before inference narrows it. */
 export interface ComponentDefinitionInput {
-  fragmentTarget?: boolean;
+  /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
+  disableServerRefresh?: boolean;
+  /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
+  fragmentTarget?: never;
   queries?: unknown;
   state?: () => JsonValue;
   render: (...args: never[]) => ComponentRenderResult;
@@ -170,13 +176,14 @@ export interface Component<Definition extends ComponentDefinitionInput> {
 /**
  * Declare a UI component with optional query bindings, optional serializable
  * island state, and a render function. The compiler derives the component's
- * load-bearing name from the exported binding and module path; queries and
- * state are passed to `render` at runtime. Authored components are plain TSX —
- * the compiler derives stamps, bindings, names, and the client module, so you
- * never write derivable `data-bind`/`kovo-*` attributes by hand (SPEC §4.1,
- * §4.8).
+ * load-bearing name and live refresh target from the exported binding, module
+ * path, queries, and authored keys; queries and state are passed to `render` at
+ * runtime. Authored components are plain TSX — the compiler derives stamps,
+ * bindings, names, and the client module, so you never write derivable
+ * `data-bind`/`kovo-*` attributes by hand (SPEC §4.1, §4.8).
  *
- * @param definition - `render` plus optional `queries`, `state`, and `fragmentTarget`.
+ * @param definition - `render` plus optional `queries`, `state`, and
+ * `disableServerRefresh`.
  * @returns A `Component` descriptor the compiler lowers and the server renders.
  * @example
  * import { component } from '@kovojs/core';

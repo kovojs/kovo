@@ -73,7 +73,7 @@ describe('enhanced mutation fetch', () => {
 
     const fetched = await fetchEnhancedMutation({
       fetch,
-      form: { action: '/_m/cart/add', method: 'patch' },
+      form: { action: '/_m/cart/add', getAttribute: () => null, method: 'patch' },
       formData,
       idem: 'idem_fetch',
       onUploadProgress: uploadProgress,

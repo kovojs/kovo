@@ -230,7 +230,7 @@ export const AddToCartForm = component({
     `disableServerRefresh: true` force-off escape hatch.
   - Evidence:
     - Pending.
-- [ ] **5. Runtime/server response selection: invalidation intersects live targets.**
+- [x] **5. Runtime/server response selection: invalidation intersects live targets.**
   - Ensure `Kovo-Targets` continues to read `kovo-deps` from the live DOM and uses
     derived target names.
   - Add a server-side selection helper that takes committed `Kovo-Changes`, live
@@ -243,7 +243,20 @@ export const AddToCartForm = component({
   - Keep dev legible: full `<kovo-query>` and full `<kovo-fragment>` where a
     fragment is selected; prod may use §9.1.1 deltas.
   - Evidence:
-    - Pending.
+    - Integrated commit `7a72498a` (`server: select mutation response targets
+      from live deps`) from `agent/runtime-selection`.
+    - `packages/server/src/mutation-wire.ts` parses structured live target deps
+      from `Kovo-Targets` while preserving legacy target strings.
+    - `packages/server/src/mutation.ts` selects response chunks from committed
+      rerun queries intersected with live target deps, sends plan-covered targets
+      through query chunks, and keeps reconstructible uncovered targets on the
+      fragment path.
+    - `packages/runtime/src/mutation-fetch.ts` sends structured live targets from
+      the live DOM and includes submitted form target metadata in modular
+      enhanced submits.
+    - Verified with `pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-form.test.ts packages/server/src/mutation*.test.ts packages/server/src/wire-fixtures.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `git diff --check` on 2026-06-17.
 - [ ] **6. Enhanced form-target inference and typed failure rerender.**
   - Lower enhanced mutation forms to carry a derived submitted-form target without
     app-authored `kovo-fragment-target`.
@@ -257,7 +270,12 @@ export const AddToCartForm = component({
   - Remove manual `failureTarget` requirements where the submitted form target can
     be inferred from the request.
   - Evidence:
-    - Pending.
+    - Partial runtime/server evidence: integrated commit `7a72498a` adds
+      `submittedFormTarget` parsing and failure fallback order
+      `failureTarget ?? submittedFormTarget ?? first target ?? error`.
+    - Remaining gap: compiler lowering for `<form enhance mutation={...}
+      key={...}>`, typed render-context failure state, and inline-loader
+      `Kovo-Form-Target` emission are not complete.
 - [ ] **7. Type registry and breaking migration.**
   - Generate `FragmentTargets` facts for inferred targets so existing typed APIs
     keep working.
@@ -267,7 +285,20 @@ export const AddToCartForm = component({
     `disableServerRefresh: true`, and keyed form/component identity where
     applicable.
   - Evidence:
-    - Pending.
+    - Partial core API evidence: `packages/core/src/index.ts` removes
+      `fragmentTarget?: boolean` from component definitions by making the removed
+      option `never`, adds typed `disableServerRefresh?: boolean`, and updates
+      component docs to describe inferred live targets.
+    - `packages/core/src/index.test.ts` covers preserving
+      `disableServerRefresh: true` and compile-time rejection of
+      `fragmentTarget: true`.
+    - `packages/core/src/diagnostics.ts` updates KV238 help to point to stable
+      keyed identity and `disableServerRefresh: true`, not the removed option.
+    - Verified with `pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `git diff --check` on 2026-06-17.
+    - Remaining gap: compiler diagnostics for removed `fragmentTarget` usage and
+      hand-authored derivable `kovo-fragment-target` are still open.
 - [ ] **8. Commerce reference cleanup.**
   - Remove `fragmentTarget: true` and `kovo-fragment-target="cart-badge"` from
     `examples/commerce/src/components/cart-badge.tsx` once inference covers it.
@@ -347,7 +378,10 @@ export const AddToCartForm = component({
 - [ ] Compiler graph/lowering/query-coverage tests green: command pending.
 - [ ] Enhanced form target inference and typed failure rerender tests green:
       command pending.
-- [ ] Runtime/server mutation response tests green: command pending.
+- [x] Runtime/server mutation response tests green:
+      `pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-form.test.ts packages/server/src/mutation*.test.ts packages/server/src/wire-fixtures.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `git diff --check` passed on 2026-06-17.
 - [ ] Commerce generated artifacts and interactive mutation tests green: command
       pending.
 - [ ] Broad `pnpm run acceptance` green after shared behavior changes: command

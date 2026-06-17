@@ -80,20 +80,39 @@ describe('core authoring APIs', () => {
   it('preserves component definitions for compiler analysis', () => {
     const cart = query<'cart', { count: number }>('cart');
     const CartBadge = component({
-      fragmentTarget: true,
       queries: { cart },
       state: () => ({ bouncing: false }) satisfies JsonValue,
       render: ({ cart: cartQuery }, state) => ({ cartQuery, state }),
     });
 
     expect(CartBadge.name).toBeUndefined();
-    expect(CartBadge.definition.fragmentTarget).toBe(true);
     expect(CartBadge.definition.queries?.cart.key).toBe('cart');
 
     const assertRegisteredComponent = (
       value: import('./index.js').ComponentRegistry['components/cart/cart-badge/cart-badge'],
     ) => value;
     expect(assertRegisteredComponent(CartBadge)).toBe(CartBadge);
+  });
+
+  it('preserves disableServerRefresh and rejects removed fragmentTarget authoring', () => {
+    const cart = query<'cart', { count: number }>('cart');
+    const LocalOnlyCartBadge = component({
+      disableServerRefresh: true,
+      queries: { cart },
+      render: () => null,
+    });
+
+    expect(LocalOnlyCartBadge.definition.disableServerRefresh).toBe(true);
+
+    const assertRemovedFragmentTargetOption = () => {
+      component({
+        // @ts-expect-error fragmentTarget was removed; query-backed targets are inferred.
+        fragmentTarget: true,
+        queries: { cart },
+        render: () => null,
+      });
+    };
+    expect(assertRemovedFragmentTargetOption).toBeTypeOf('function');
   });
 
   it('rejects non-JsonValue component state at authoring time', () => {
