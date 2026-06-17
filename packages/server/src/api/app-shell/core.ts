@@ -20,6 +20,7 @@ export type { RouteResponseOutcome, RouteStreamOptions, RouteFileOptions } from 
 export type {
   LayoutDeclaration,
   LayoutDefinition,
+  LayoutFactory,
   LayoutQueryResults,
   LayoutRenderSlots,
   RouteDeclaration,

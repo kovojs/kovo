@@ -67,6 +67,7 @@ export {
 export type {
   LayoutDeclaration,
   LayoutDefinition,
+  LayoutFactory,
   LayoutQueryResults,
   LayoutRenderSlots,
   RouteDeclaration,

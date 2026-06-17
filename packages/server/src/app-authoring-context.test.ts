@@ -5,7 +5,7 @@ import { domain } from './domain.js';
 import { s } from './schema.js';
 
 describe('createApp provider-typed authoring context', () => {
-  it('infers db and session in app-scoped query, mutation, and route callbacks', () => {
+  it('infers db and session in app-scoped query, mutation, layout, and route callbacks', () => {
     const cart = domain('cart');
     const app = createApp({
       db: () => ({ cart: [] as string[], stock: 3 }),
@@ -42,21 +42,41 @@ describe('createApp provider-typed authoring context', () => {
           reads: [cart],
         }),
       ],
-      routes: ({ route }) => [
-        route('/cart', {
+      routes: ({ layout, route }) => {
+        const CartLayout = layout({
           guard(request) {
-            return request.session?.user.id ? true : { kind: 'unauthenticated' };
+            const stock: number = request.db.stock;
+            return request.session?.user.id || stock > 0
+              ? true
+              : { kind: 'unauthenticated' };
           },
-          page(_context, request) {
-            const count: number = request.db.cart.length;
+          render(_queries, _state, { children, request }) {
+            const userId: string | undefined = request.session?.user.id;
 
-            // @ts-expect-error provider shape exposes `user.id`, not a renamed `user.uuid`.
-            const userUuid: string = request.session?.user.uuid;
+            // @ts-expect-error provider shape exposes `stock`, not a renamed `inventory`.
+            const inventory: number = request.db.inventory;
 
-            return `${count}:${request.session?.user.id}`;
+            return `${children}:${userId}:${request.db.stock}`;
           },
-        }),
-      ],
+        });
+
+        return [
+          route('/cart', {
+            layout: CartLayout,
+            guard(request) {
+              return request.session?.user.id ? true : { kind: 'unauthenticated' };
+            },
+            page(_context, request) {
+              const count: number = request.db.cart.length;
+
+              // @ts-expect-error provider shape exposes `user.id`, not a renamed `user.uuid`.
+              const userUuid: string = request.session?.user.uuid;
+
+              return `${count}:${request.session?.user.id}`;
+            },
+          }),
+        ];
+      },
       sessionProvider: () => ({ user: { id: 'u1' } }),
     });
 

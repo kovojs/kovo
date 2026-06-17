@@ -83,6 +83,16 @@ export interface LayoutDeclaration<
   Page = unknown,
 > extends LayoutDefinition<Request, Queries, Page> {}
 
+/** App-scoped layout factory whose guards and render slots see the configured request shape. */
+export interface LayoutFactory<Request = unknown> {
+  <
+    const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
+    Page = unknown,
+  >(
+    definition: LayoutDefinition<Request, Queries, Page>,
+  ): LayoutDeclaration<Request, Queries, Page>;
+}
+
 /** The typed context a route `page` receives: parsed `params`, `search`, and the `path`. */
 export interface RouteRequest<
   Path extends string,

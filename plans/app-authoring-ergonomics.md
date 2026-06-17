@@ -214,6 +214,11 @@ item inherits from rather than re-deciding it:
       and `route(..., { layout })`; `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/route.test.ts packages/server/src/app.test.ts`
       passes with nested parent output, layout query loading from the route
       request, and layout guard composition.
+    - `createApp()` app-scoped authoring now exposes a provider-typed `layout`
+      factory alongside `query`, `mutation`, and `route`; `pnpm exec vitest
+      --run packages/server/src/app-authoring-context.test.ts` and `pnpm exec
+      tsc -p tsconfig.json --noEmit --pretty false` prove layout guards/renders
+      see inferred `db`/`session` request providers.
     - Route compilation derives parent-first layout-chain facts from local
       `layout({ parent, queries })` declarations; `pnpm exec vitest --run
       packages/compiler/src/route-pages.test.ts` passes with a fixture asserting
