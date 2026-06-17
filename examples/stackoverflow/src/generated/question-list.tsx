@@ -22,8 +22,8 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 // answerCount — each a column the postQuestion / postAnswer / voteUp derived
 // optimistic transforms patch) and the `questionScore` scalar (SUM over votes).
 // SPEC.md §4.8: the query-backed component root derives its `kovo-fragment-target`
-// in the generated module, so the voteUp / postQuestion mutationResponse can
-// re-render this region with server-truth scores — no hand-authored target string.
+// in the generated module, so generated enhanced refresh can re-render this
+// region with server-truth scores — no hand-authored target string.
 //
 // Restyled with @kovojs/ui (SPEC.md §6.1.1): each row is a Card, tags are Badges,
 // the composer uses a Button, and authors get an Avatar byline. The presentational

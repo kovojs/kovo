@@ -85,8 +85,8 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
   const auth = options.auth ?? createReferenceAuth(createReferenceBetterAuth());
   const app = createApp({
     document: { lang: 'en-US' },
-    mutationResponse({ key, rawInput, request }) {
-      if (key === referenceSignIn.key) {
+    mutationResponses: {
+      [referenceSignIn.key]: ({ rawInput, request }) => {
         return {
           csrf: shellReferenceAuthCsrf,
           redirectTo: (result) => authRedirectTo(result.value),
@@ -101,14 +101,11 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
               },
             )}</main></body></html>`,
         };
-      }
-
-      if (key !== referenceSignOut.key) return undefined;
-
-      return {
+      },
+      [referenceSignOut.key]: {
         csrf: shellReferenceAuthCsrf,
         redirectTo: (result) => authRedirectTo(result.value),
-      };
+      },
     },
     mutations: [auth.signIn, auth.signOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),

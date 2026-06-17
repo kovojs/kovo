@@ -12,7 +12,7 @@ import type { EndpointDeclaration } from './endpoint.js';
 import type { SessionProvider } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
-import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
+import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
@@ -51,7 +51,6 @@ export interface CreateAppOptions<SessionValue = unknown> {
   endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells?: AppErrorShellOptions;
   liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
-  mutationResponse?: AppMutationResponseResolver;
   mutationResponses?: AppMutationResponses;
   mutations?: readonly AppMutationDeclaration[];
   mutationReplayStore?: MutationReplayStore;
@@ -86,7 +85,6 @@ export interface KovoApp<SessionValue = unknown> {
   endpoints: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells: AppErrorShellOptions;
   liveTargetRenderers: readonly LiveTargetRenderer<Request>[];
-  mutationResponse?: AppMutationResponseResolver;
   mutationResponses: AppMutationResponses;
   mutations: readonly AppMutationDeclaration[];
   mutationReplayStore?: MutationReplayStore;
@@ -116,7 +114,6 @@ export interface AppMutationResponseOptions {
   csrf?: CsrfValidationOptions<Request>;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
-  fragmentRenderers?: readonly FragmentRenderer[];
   redirectTo?: string | ((result: MutationSuccess<unknown>) => string);
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   renderFailurePage?: (failure: MutationFail) => string | Promise<string>;

@@ -7,7 +7,7 @@ import { mutation } from './mutation.js';
 import { s } from './schema.js';
 
 describe('server app mutation request boundary', () => {
-  it('resolves mutation response options from exact-key policies before the legacy resolver', async () => {
+  it('resolves mutation response options from exact-key policies', async () => {
     const seen: string[] = [];
     const addToCart = mutation('cart/add', {
       csrf: false,
@@ -18,10 +18,6 @@ describe('server app mutation request boundary', () => {
       },
     });
     const app = createApp({
-      mutationResponse() {
-        seen.push('fallback');
-        return { redirectTo: '/fallback' };
-      },
       mutationResponses: {
         'cart/add': ({ rawInput }) => {
           seen.push(`policy:${rawInput instanceof FormData}`);
@@ -60,12 +56,14 @@ describe('server app mutation request boundary', () => {
       },
     });
     const app = createApp({
-      mutationResponse({ currentUrl, rawInput, request }) {
-        const session = (
-          request as Request & { session?: { user?: { id?: string } | null } | null }
-        ).session;
-        seen.push(`response:${session?.user?.id}:${currentUrl}:${rawInput instanceof FormData}`);
-        return { redirectTo: '/cart' };
+      mutationResponses: {
+        'cart/add': ({ currentUrl, rawInput, request }) => {
+          const session = (
+            request as Request & { session?: { user?: { id?: string } | null } | null }
+          ).session;
+          seen.push(`response:${session?.user?.id}:${currentUrl}:${rawInput instanceof FormData}`);
+          return { redirectTo: '/cart' };
+        },
       },
       mutations: [addToCart],
       sessionProvider() {

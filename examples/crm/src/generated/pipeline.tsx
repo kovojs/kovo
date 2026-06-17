@@ -34,9 +34,9 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 // stage — the out-of-grammar GROUP BY query whose optimism is hand-written in
 // mutations.ts) and the `openDeals` rowset, joining deals to their contact for
 // display. Each open deal links to its `/deals/:id` detail page. The whole region
-// is a `kovo-fragment-target` host so the createDeal / moveDeal / closeDeal
-// mutationResponse can re-render the pipeline from server truth: opening a new
-// deal morphs the bucket totals and the open-deals table in place (SPEC.md §9.1).
+// is a `kovo-fragment-target` host so generated enhanced refresh can re-render
+// the pipeline from server truth: opening a new deal morphs the bucket totals and
+// the open-deals table in place (SPEC.md §9.1).
 
 // The stages a new deal can start in (mirrors the demo data / pipelineByStage
 // buckets). A new deal opens in one of these; 'won' is reached via closeDeal.

@@ -16,7 +16,7 @@ import { money, stageBadge } from '../components/chrome.js';
 // Deal detail (route `/deals/:id`). Joins a single deal to its contact and the
 // activity timeline. This is the page the pipeline's open-deal rows link into.
 // The whole region is a `kovo-fragment-target` host so the moveDeal / closeDeal
-// mutationResponse can re-render it from server truth: moving the deal to a new
+// generated refresh can re-render it from server truth: moving the deal to a new
 // stage or closing it (won, server-computed commission) both morph this region
 // in place (SPEC.md §9.1).
 //

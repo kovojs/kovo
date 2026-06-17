@@ -388,11 +388,15 @@ describe('server createApp request shell', () => {
     });
     const handler = createRequestHandler(
       createApp({
-        mutationResponse() {
-          return {
-            fragmentRenderers: [{ render: () => '<cart-badge>1</cart-badge>', target: 'cart' }],
-            redirectTo: '/cart',
-          };
+        liveTargetRenderers: [
+          {
+            component: 'components/cart/badge',
+            queries: ['cart'],
+            render: () => '<cart-badge>1</cart-badge>',
+          },
+        ],
+        mutationResponses: {
+          'cart/add': { redirectTo: '/cart' },
         },
         mutations: [addToCart],
       }),
@@ -406,7 +410,8 @@ describe('server createApp request shell', () => {
         body: enhancedForm,
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Targets': 'cart',
+          'Kovo-Live-Targets': 'cart#components/cart/badge:{}',
+          'Kovo-Targets': 'cart=cart',
         },
         method: 'POST',
       }),

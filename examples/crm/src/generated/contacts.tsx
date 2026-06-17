@@ -18,7 +18,7 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 // each contact with their owner and rolling deal count (the `contacts.dealCount`
 // column the createDeal mutation increments — see mutations.ts / the custom
 // optimism that bumps contactList). The whole region is a `kovo-fragment-target`
-// host so the addContact mutationResponse can re-render it from server truth: a
+// host so generated enhanced refresh can re-render it from server truth: a
 // no-JS POST to `/_m/addContact` morphs the list with the new person in place
 // (SPEC.md §9.1). The presentational company / job-title columns are intentionally
 // NOT in this rowset query (they would leak placeholder tempIds into derived

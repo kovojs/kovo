@@ -14,7 +14,6 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isAppErrorShellOptions(value.errorShells) &&
     isLiveTargetRenderers(value.liveTargetRenderers) &&
     isVersionedClientModuleRegistry(value.clientModules) &&
-    isOptionalFunction(value.mutationResponse) &&
     isMutationResponses(value.mutationResponses) &&
     isOptionalMutationReplayStore(value.mutationReplayStore) &&
     isOptionalFunction(value.onError) &&
@@ -91,11 +90,12 @@ function isMutationResponses(value: unknown): value is KovoApp['mutationResponse
 function isMutationResponseOptions(value: unknown): boolean {
   return (
     isRecord(value) &&
-    isOptionalFunction(value.redirectTo) &&
+    (value.redirectTo === undefined ||
+      typeof value.redirectTo === 'string' ||
+      typeof value.redirectTo === 'function') &&
     isOptionalFunction(value.renderFailureFragment) &&
     isOptionalFunction(value.renderFailurePage) &&
     (value.failureTarget === undefined || typeof value.failureTarget === 'string') &&
-    (value.fragmentRenderers === undefined || Array.isArray(value.fragmentRenderers)) &&
     (value.failureStylesheets === undefined || Array.isArray(value.failureStylesheets)) &&
     (value.csrf === undefined || isOptionalCsrfOptions(value.csrf))
   );

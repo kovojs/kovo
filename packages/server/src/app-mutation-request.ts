@@ -60,7 +60,7 @@ export async function handleAppMutationRequest(
   // identical for the page render and this mutation response (SPEC §5.1, §9.1.1).
   const buildToken = app.clientModules.buildToken();
 
-  const mutationResponse = await renderMutationEndpointResponse(requestMutation, {
+  const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
     ...(buildToken !== '' ? { buildToken } : {}),
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
@@ -72,9 +72,6 @@ export async function handleAppMutationRequest(
     ...(mutationResponseOptions?.failureStylesheets === undefined
       ? {}
       : { failureStylesheets: mutationResponseOptions.failureStylesheets }),
-    ...(mutationResponseOptions?.fragmentRenderers === undefined
-      ? {}
-      : { fragmentRenderers: mutationResponseOptions.fragmentRenderers }),
     headers: request.headers,
     liveTargetRenderers: app.liveTargetRenderers,
     rawInput,
@@ -89,17 +86,14 @@ export async function handleAppMutationRequest(
     request: mutationRequest,
   });
 
-  return serverResponseToWebResponse(mutationResponse, mutationRequest);
+  return serverResponseToWebResponse(endpointResponse, mutationRequest);
 }
 
 async function resolveAppMutationResponsePolicy(
   app: KovoApp,
   context: AppMutationResponseContext,
 ): Promise<AppMutationResponseOptions | undefined> {
-  return (
-    (await resolveMutationResponsePolicy(app.mutationResponses[context.key], context)) ??
-    (await app.mutationResponse?.(context))
-  );
+  return resolveMutationResponsePolicy(app.mutationResponses[context.key], context);
 }
 
 async function resolveMutationResponsePolicy(

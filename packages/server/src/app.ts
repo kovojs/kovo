@@ -56,9 +56,6 @@ export function createApp<SessionValue = unknown>(
     ...(options.mutationReplayStore === undefined
       ? {}
       : { mutationReplayStore: options.mutationReplayStore }),
-    ...(options.mutationResponse === undefined
-      ? {}
-      : { mutationResponse: options.mutationResponse }),
     mutationResponses: options.mutationResponses ?? {},
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),

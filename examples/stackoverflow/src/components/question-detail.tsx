@@ -18,8 +18,8 @@ import {
 // Question detail (route `/questions/:id`). Shows the question and its answers
 // (filtered from `answerList` by questionId), with the accepted answer flagged.
 // SPEC.md §4.8: the query-backed component root derives its `kovo-fragment-target`
-// in the generated module, so the voteUp / postAnswer mutationResponse can
-// re-render this region from server truth — no hand-authored target string.
+// in the generated module, so generated enhanced refresh can re-render this
+// region from server truth — no hand-authored target string.
 //
 // Restyled with @kovojs/ui (SPEC.md §6.1.1): the question and each answer are
 // Cards, tags + the accepted state are Badges, and the composer uses a Button.

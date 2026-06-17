@@ -401,7 +401,7 @@ removes app-authored bookkeeping from the enhanced path.
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
     - Remaining gap: legacy target-only compatibility remains until examples and
       app-shell integration finish migrating to generated live-target registries.
-- [ ] **6. Server: auto-render affected targets.**
+- [x] **6. Server: auto-render affected targets.**
   - Add a generated-registry-aware response selector to `createApp()` /
     mutation response handling.
   - The selector should run all declared queries for each selected target and
@@ -498,6 +498,25 @@ removes app-authored bookkeeping from the enhanced path.
     - Verified with
       `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts packages/server/src/live-target-registry.test.ts`
       and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
+    - Additional progress 2026-06-17:
+      the legacy broad `createApp({ mutationResponse })` resolver was removed
+      from `CreateAppOptions`, `KovoApp`, app aggregate validation, and app
+      mutation dispatch. App-shell policies are now exact-key
+      `createApp({ mutationResponses })` entries only, and those policies no
+      longer expose app-authored `fragmentRenderers`; ordinary enhanced success
+      fragments come from generated live-target renderers.
+    - `examples/reference/src/app-shell.ts` migrated its auth redirects from a
+      broad `mutationResponse({ key })` switch to keyed `mutationResponses`
+      entries, matching Commerce.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/app-mutation-request.test.ts packages/server/src/app.test.ts`,
+      `pnpm --filter @kovojs/example-reference test`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
     - Earlier gap now closed below: generated renderer exports and ordinary
       example success routing no longer require app-authored `createApp()`
       registry wiring.
@@ -679,7 +698,7 @@ removes app-authored bookkeeping from the enhanced path.
     - Remaining gap: none recorded for the explicit generated live-target
       registry import; keep this phase open until a final no-match pass verifies
       all CRM authoring-surface claims together.
-- [ ] **9. Migrate commerce.**
+- [x] **9. Migrate commerce.**
   - Split the large commerce integration module so app-authored page/mutation
     code is separate from auth/webhook/test helpers.
   - Remove ordinary success fragment renderer routing from `app.ts` and
@@ -821,9 +840,17 @@ removes app-authored bookkeeping from the enhanced path.
       `node scripts/api-surface-gate.mjs`,
       `rg -n "renderCartPageBody|render[A-Za-z]+Region|mutationResponse\\(|fragmentRenderers|liveTargetRenderers|generated/live-targets|_TARGET" examples/commerce/src/app.ts examples/commerce/src/app-shell.tsx examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx`,
       and `git diff --check`.
-    - Remaining gap: the legacy broad `mutationResponse` compatibility API
-      still exists in the framework and tests until follow-up cleanup removes or
-      retires it.
+    - Final gap closed 2026-06-17: the legacy broad `mutationResponse`
+      compatibility API was removed from the app-shell framework and tests.
+      Keyed `mutationResponses` remains for Commerce auth redirects, CSRF
+      overrides, and failure page/fragment handling.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/app-mutation-request.test.ts packages/server/src/app.test.ts`,
+      `pnpm --filter @kovojs/example-reference test`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
 - [x] **10. Docs/tutorial update.**
   - Teach the authoring model as "declare queries and serializable props; Kovo
     updates enhanced mutations from server truth automatically."
@@ -881,7 +908,7 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/compile-component.test.ts`
       and
       `git diff --check -- packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts`.
-- [ ] **Runtime/server tests prove no app-authored fragment renderers are needed.**
+- [x] **Runtime/server tests prove no app-authored fragment renderers are needed.**
   - Enhanced mutation success should update visible query-backed targets using the
     generated registry.
   - Progress 2026-06-17:
@@ -914,6 +941,20 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
       `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
       and `rg -n "liveTargetRenderers|generated/live-targets" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`.
+  - Evidence 2026-06-17:
+    - `packages/server/src/app.test.ts` now proves app-shell enhanced mutation
+      success through generated live-target renderers and keyed
+      `mutationResponses` redirect policy, with no app-shell
+      `fragmentRenderers`.
+    - `packages/server/src/app-mutation-request.test.ts` proves keyed
+      `mutationResponses` policies receive session-refined requests before
+      guarded mutation handlers.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/app-mutation-request.test.ts packages/server/src/app.test.ts`,
+      `pnpm --filter @kovojs/example-reference test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and
+      `rg -n "mutationResponse\\b|fragmentRenderers" packages/server/src/app-types.ts packages/server/src/app.ts packages/server/src/app-guards.ts packages/server/src/app-mutation-request.ts examples/reference/src examples/stackoverflow/src examples/crm/src examples/commerce/src --glob '!**/generated/**'`.
 - [x] **Example no-match checks prove the DX outcome.**
   - `rg -n 'fragmentRenderers|mutationResponse\\(|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb' examples/stackoverflow/src examples/crm/src examples/commerce/src`
     should have no ordinary app-authored success-routing hits after migration
