@@ -34,7 +34,7 @@ const {
   extractAlgebraicShapesFromProject,
 } = await import('@kovojs/drizzle/static');
 const { deriveOptimistic, serializeDerivedOptimistic } = await import('@kovojs/drizzle/derive');
-const { puntReasonLabel } = await import('@kovojs/core');
+const { puntReasonLabel } = await import('@kovojs/core/internal/derivation');
 const { createCrmGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));

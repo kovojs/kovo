@@ -1,4 +1,5 @@
-import { applyPatchProgram, type JsonValue } from '@kovojs/core';
+import type { JsonValue } from '@kovojs/core';
+import { applyPatchProgram } from '@kovojs/core/internal/derivation';
 import { deriveOptimistic, lowerTransform } from '@kovojs/drizzle/derive';
 import { describe, expect, it } from 'vitest';
 

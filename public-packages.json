@@ -6,6 +6,11 @@
       "dir": "core",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": ["."],
+        "generated": [],
+        "internal": ["./internal/derivation", "./internal/graph", "./internal/package-prefix"]
+      },
       "apiRef": {
         "order": 1,
         "slug": "core",

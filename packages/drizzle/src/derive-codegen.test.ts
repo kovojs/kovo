@@ -1,4 +1,4 @@
-import type { PatchProgram } from '@kovojs/core';
+import type { PatchProgram } from '@kovojs/core/internal/derivation';
 import { describe, expect, it } from 'vitest';
 
 import { lowerTransform, serializeDerivedOptimistic } from './derive-codegen.js';
@@ -87,7 +87,7 @@ describe('serializeDerivedOptimistic', () => {
 
 describe('lowerTransform — codegen ≡ interpreter parity', () => {
   it('produces an executable transform equivalent to applyPatchProgram', async () => {
-    const { applyPatchProgram } = await import('@kovojs/core');
+    const { applyPatchProgram } = await import('@kovojs/core/internal/derivation');
     const program: PatchProgram = {
       ops: [
         {

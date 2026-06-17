@@ -1,4 +1,4 @@
-import type { KovoExplainInput, TouchGraph } from '@kovojs/core';
+import type { KovoExplainInput, TouchGraph } from '@kovojs/core/internal/graph';
 
 // SPEC.md §10.2 / §11.2: the Stack Overflow graph facts consumed by `kovo check`
 // and `kovo explain`. The optimistic[] coverage is entirely compiler-DERIVED

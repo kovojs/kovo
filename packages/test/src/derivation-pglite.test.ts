@@ -1,9 +1,9 @@
+import type { JsonValue } from '@kovojs/core';
 import {
   applyPatchProgram,
   type AlgebraicQueryShape,
-  type JsonValue,
   type SymbolicEffect,
-} from '@kovojs/core';
+} from '@kovojs/core/internal/derivation';
 import { deriveOptimistic } from '@kovojs/drizzle/derive';
 import { afterEach, describe, expect, it } from 'vitest';
 

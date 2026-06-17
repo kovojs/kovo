@@ -3,11 +3,11 @@ import {
   puntReasonLabel,
   type AlgebraicQueryShape,
   type DerivationStatus,
-  type JsonValue,
-  type OptimisticCoverage,
   type PatchProgram,
   type SymbolicEffect,
-} from '@kovojs/core';
+} from '@kovojs/core/internal/derivation';
+import type { JsonValue } from '@kovojs/core';
+import type { OptimisticCoverage } from '@kovojs/core/internal/graph';
 
 // SPEC.md §10.5 / derived-optimism plan Phase 0: a single, formatting-resistant
 // contract shared by the shape, effect, derivation, codegen, diagnostics, and

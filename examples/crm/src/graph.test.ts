@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
-import type { KovoExplainInput } from '@kovojs/core';
+import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 import { kovoCheckOkAssertionFact } from '@kovojs/conformance-fixtures/kovo-check-fixtures';
 import { kovoExplainMutationAssertionFact } from '@kovojs/conformance-fixtures/kovo-explain-fixtures';
 import {

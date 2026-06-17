@@ -1,4 +1,4 @@
-import { type TouchGraph } from '@kovojs/core';
+import type { TouchGraph } from '@kovojs/core/internal/graph';
 import {
   assertObservedReadsCovered,
   assertObservedWritesCovered,

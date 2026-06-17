@@ -19,7 +19,7 @@ import {
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
 } from '@kovojs/better-auth';
-import type { KovoExplainInput } from '@kovojs/core';
+import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 
 export type ReferenceRole = 'admin' | 'member';
 

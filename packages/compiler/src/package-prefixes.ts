@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
-import { packageComponentPrefixFactFromPackageManifest } from '@kovojs/core';
+import { packageComponentPrefixFactFromPackageManifest } from '@kovojs/core/internal/package-prefix';
 
 import type { ComponentModuleModel } from './scan/parse.js';
 import type { PackageComponentPrefixFact } from './types.js';

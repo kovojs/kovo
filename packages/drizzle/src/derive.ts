@@ -12,7 +12,7 @@ import {
   type SymbolicEffect,
   type SymbolicMatch,
   type SymbolicValue,
-} from '@kovojs/core';
+} from '@kovojs/core/internal/derivation';
 
 // SPEC.md §10.5 Stage 3 — push each write effect through a query's algebraic
 // shape to produce a JSON-patch program, or a named punt. The deriver is

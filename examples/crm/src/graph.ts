@@ -1,4 +1,4 @@
-import type { KovoExplainInput, OptimisticCoverage, TouchGraph } from '@kovojs/core';
+import type { KovoExplainInput, OptimisticCoverage, TouchGraph } from '@kovojs/core/internal/graph';
 
 // SPEC.md §10.2/§10.5/§11.2: the CRM graph facts. The static declarations
 // (mutations, queries, endpoints) are authored once; the touch graph and the

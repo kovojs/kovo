@@ -112,6 +112,16 @@ already excludes `@internal`, but the root barrels can still export those names.
   - Prove: `pnpm --filter @kovojs/core exec vitest run`, affected package tests,
     `node scripts/api-surface-gate.mjs`, and
     `pnpm --filter @kovojs/site run api:check`.
+  - Evidence 2026-06-17 (`agent/api-boundary-core`): root `@kovojs/core` no longer
+    re-exports the `graph`, `derivation`, or `package-prefix` `@internal`
+    declarations; new narrow subpaths are `@kovojs/core/internal/graph`,
+    `@kovojs/core/internal/derivation`, and
+    `@kovojs/core/internal/package-prefix`, with sibling import sites updated to
+    the narrowest subpath. Prove ran green: core vitest (65 tests), API surface
+    gate, core dist build, Drizzle vitest (251 tests), and focused formatting /
+    lint / type checks over touched files. Gap: site API check and broader
+    non-Drizzle affected package suites were not run in this slice, so the
+    checkbox remains open.
 - [ ] **Migrate `@kovojs/server` internals to `@kovojs/server/internal` or narrower existing subpaths.**
   - Move escape helpers, mutation-wire parsers, route-dispatch internals, static
     export helpers not intended for app authors, and other `@internal` exports

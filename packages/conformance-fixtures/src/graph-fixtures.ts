@@ -1,7 +1,11 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import type { ComponentExplain, KovoCheckInput, KovoExplainInput } from '@kovojs/core';
+import type {
+  ComponentExplain,
+  KovoCheckInput,
+  KovoExplainInput,
+} from '@kovojs/core/internal/graph';
 
 import { projectJsonFile } from './source-fixtures.ts';
 import {
