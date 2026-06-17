@@ -83,6 +83,8 @@ import {
   autocompleteInputClasses,
   checkboxGroupClasses,
   collapsibleClasses,
+  collapsibleContentClasses,
+  collapsibleStyles,
   collapsibleTriggerClasses,
   comboboxClasses,
   comboboxInputClasses,
@@ -92,6 +94,8 @@ import {
   dialogClasses,
   dialogContentClasses,
   disclosureClasses,
+  disclosureContentClasses,
+  disclosureStyles,
   disclosureTriggerClasses,
   dropdownMenuClasses,
   fieldClasses,
@@ -184,12 +188,14 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(alertDialogContentClasses.join(' ')).toContain('max-w-md');
     expect(alertDialogActionClasses.join(' ')).toContain('data-[intent=destructive]');
     expect(checkboxGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
-    expect(collapsibleClasses.join(' ')).toContain('border-neutral-200');
-    expect(collapsibleTriggerClasses.join(' ')).toContain('cursor-pointer');
+    expect(collapsibleClasses[0]).toContain('kv-collapsible');
+    expect(collapsibleTriggerClasses[0]).toContain('kv-collapsible');
+    expect(collapsibleContentClasses[0]).toContain('kv-collapsible');
     expect(dialogClasses.join(' ')).toContain('contents');
     expect(dialogContentClasses.join(' ')).toContain('backdrop:bg-black/30');
-    expect(disclosureClasses.join(' ')).toContain('grid gap-2');
-    expect(disclosureTriggerClasses.join(' ')).toContain('data-[state=open]');
+    expect(disclosureClasses[0]).toContain('kv-disclosure');
+    expect(disclosureTriggerClasses[0]).toContain('kv-disclosure');
+    expect(disclosureContentClasses[0]).toContain('kv-disclosure');
     expect(hoverCardClasses.join(' ')).toContain('relative inline-block');
     expect(hoverCardContentClasses.join(' ')).toContain('w-72');
     expect(toggleGroupClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');

@@ -1,0 +1,33 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Collapsible StyleX styles > exports StyleX style groups 1`] = `
+{
+  "contentMarker": true,
+  "keys": [
+    "content",
+    "root",
+    "trigger",
+  ],
+  "rootMarker": true,
+  "triggerMarker": true,
+}
+`;
+
+exports[`@kovojs/ui Collapsible StyleX styles > matches author-last slot override output 1`] = `"<details class="kv-collapsible-bg-1e9h7l kv-collapsible-bd-135gc1 kv-collapsible-bd-17dppo kv-collapsible-bd-5grtwb kv-collapsible-fg-1vjxc5 kv-collapsible-font-1cumtw kv-collapsible-opacity-1wmp2v kv-app-collapsible-bd-pwomy8" data-style-src="collapsible.tsx#root; app-collapsible.tsx#root" data-state="open" open><summary aria-controls="custom-collapsible-content" aria-expanded="true" class="kv-collapsible-fg-1vjxc5 kv-collapsible-cursor-1hnxaw kv-collapsible-font-pbx8x4 kv-collapsible-outline-19nyy6 kv-collapsible-pad-1a6773 kv-collapsible-pad-1k7bkc kv-collapsible-cursor-12le8t kv-collapsible-opacity-1wmp2v kv-collapsible-bg-1gqa1b kv-collapsible-outline-1yt6dx kv-collapsible-outline-1iz9f5 kv-collapsible-outline-iee2jp kv-collapsible-outline-1bfidg kv-app-collapsible-bg-zqd7av" data-style-src="collapsible.tsx#trigger; app-collapsible.tsx#trigger" data-state="open">Custom release notes</summary><div class="kv-collapsible-font-1cumtw kv-collapsible-pad-2f880g kv-collapsible-pad-1k7bkc kv-collapsible-d-1que9w kv-app-collapsible-fg-1hqf9w" data-style-src="collapsible.tsx#content; app-collapsible.tsx#content" data-state="open" id="custom-collapsible-content">Overrides should win by slot.</div></details>"`;
+
+exports[`@kovojs/ui Collapsible StyleX styles > matches native details states with StyleX output 1`] = `
+{
+  "classes": [
+    "kv-collapsible-bg-1e9h7l kv-collapsible-bd-1nros8 kv-collapsible-bd-135gc1 kv-collapsible-bd-17dppo kv-collapsible-bd-5grtwb kv-collapsible-fg-1vjxc5 kv-collapsible-font-1cumtw kv-collapsible-opacity-1wmp2v",
+  ],
+  "closed": "<details class="kv-collapsible-bg-1e9h7l kv-collapsible-bd-1nros8 kv-collapsible-bd-135gc1 kv-collapsible-bd-17dppo kv-collapsible-bd-5grtwb kv-collapsible-fg-1vjxc5 kv-collapsible-font-1cumtw kv-collapsible-opacity-1wmp2v" data-style-src="collapsible.tsx#root" data-state="closed" id="collapsible-closed"><summary aria-controls="archived-notes" aria-expanded="false" class="kv-collapsible-fg-1vjxc5 kv-collapsible-cursor-1hnxaw kv-collapsible-font-pbx8x4 kv-collapsible-outline-19nyy6 kv-collapsible-pad-1a6773 kv-collapsible-pad-1k7bkc kv-collapsible-cursor-12le8t kv-collapsible-opacity-1wmp2v kv-collapsible-bg-1gqa1b kv-collapsible-outline-1yt6dx kv-collapsible-outline-1iz9f5 kv-collapsible-outline-iee2jp kv-collapsible-outline-1bfidg" data-style-src="collapsible.tsx#trigger" data-state="closed">Archived notes</summary><div class="kv-collapsible-fg-1mu4zg kv-collapsible-font-1cumtw kv-collapsible-pad-2f880g kv-collapsible-pad-1k7bkc kv-collapsible-d-1que9w" data-style-src="collapsible.tsx#content" data-state="closed" id="archived-notes">Older notes stay available without JavaScript.</div></details>",
+  "contentClasses": [
+    "kv-collapsible-fg-1mu4zg kv-collapsible-font-1cumtw kv-collapsible-pad-2f880g kv-collapsible-pad-1k7bkc kv-collapsible-d-1que9w",
+  ],
+  "disabled": "<details class="kv-collapsible-bg-1e9h7l kv-collapsible-bd-1nros8 kv-collapsible-bd-135gc1 kv-collapsible-bd-17dppo kv-collapsible-bd-5grtwb kv-collapsible-fg-1vjxc5 kv-collapsible-font-1cumtw kv-collapsible-opacity-1wmp2v" data-style-src="collapsible.tsx#root" data-disabled="" data-state="closed" id="collapsible-disabled"><summary aria-controls="disabled-notes" aria-expanded="false" class="kv-collapsible-fg-1vjxc5 kv-collapsible-cursor-1hnxaw kv-collapsible-font-pbx8x4 kv-collapsible-outline-19nyy6 kv-collapsible-pad-1a6773 kv-collapsible-pad-1k7bkc kv-collapsible-cursor-12le8t kv-collapsible-opacity-1wmp2v kv-collapsible-bg-1gqa1b kv-collapsible-outline-1yt6dx kv-collapsible-outline-1iz9f5 kv-collapsible-outline-iee2jp kv-collapsible-outline-1bfidg" data-style-src="collapsible.tsx#trigger" data-disabled="" data-state="closed">Disabled notes</summary><div class="kv-collapsible-fg-1mu4zg kv-collapsible-font-1cumtw kv-collapsible-pad-2f880g kv-collapsible-pad-1k7bkc kv-collapsible-d-1que9w" data-style-src="collapsible.tsx#content" data-state="closed" id="disabled-notes">Disabled content remains in the document.</div></details>",
+  "open": "<details class="kv-collapsible-bg-1e9h7l kv-collapsible-bd-1nros8 kv-collapsible-bd-135gc1 kv-collapsible-bd-17dppo kv-collapsible-bd-5grtwb kv-collapsible-fg-1vjxc5 kv-collapsible-font-1cumtw kv-collapsible-opacity-1wmp2v" data-style-src="collapsible.tsx#root" data-state="open" id="collapsible-open" open><summary aria-controls="release-notes" aria-expanded="true" class="kv-collapsible-fg-1vjxc5 kv-collapsible-cursor-1hnxaw kv-collapsible-font-pbx8x4 kv-collapsible-outline-19nyy6 kv-collapsible-pad-1a6773 kv-collapsible-pad-1k7bkc kv-collapsible-cursor-12le8t kv-collapsible-opacity-1wmp2v kv-collapsible-bg-1gqa1b kv-collapsible-outline-1yt6dx kv-collapsible-outline-1iz9f5 kv-collapsible-outline-iee2jp kv-collapsible-outline-1bfidg" data-style-src="collapsible.tsx#trigger" data-state="open">Release notes</summary><div class="kv-collapsible-fg-1mu4zg kv-collapsible-font-1cumtw kv-collapsible-pad-2f880g kv-collapsible-pad-1k7bkc kv-collapsible-d-1que9w" data-style-src="collapsible.tsx#content" data-state="open" id="release-notes">Includes dependency updates and migration notes.</div></details>",
+  "triggerClasses": [
+    "kv-collapsible-fg-1vjxc5 kv-collapsible-cursor-1hnxaw kv-collapsible-font-pbx8x4 kv-collapsible-outline-19nyy6 kv-collapsible-pad-1a6773 kv-collapsible-pad-1k7bkc kv-collapsible-cursor-12le8t kv-collapsible-opacity-1wmp2v kv-collapsible-bg-1gqa1b kv-collapsible-outline-1yt6dx kv-collapsible-outline-1iz9f5 kv-collapsible-outline-iee2jp kv-collapsible-outline-1bfidg",
+  ],
+}
+`;

@@ -654,6 +654,27 @@ borrowing its concrete API/spike detail.
     `../../node_modules/.bin/vitest run -u src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
     `node packages/ui/scripts/build-registry.mjs --write`, `pnpm exec tsc --noEmit`, and
     `git diff --check` pass.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/collapsible.tsx` and
+    `packages/ui/src/disclosure.tsx` now use `@kovojs/style`, export `collapsibleStyles` /
+    `disclosureStyles`, accept `styles?: { root?, trigger?, content? }` slot overrides, and drop
+    `defineVariants`/`cn` plus the `class` escape hatch while preserving
+    `collapsible*Attributes(...)` and `disclosure*Attributes(...)` state, IDREF, hidden, disabled,
+    and native `<details>` / button semantics. `packages/ui/src/collapsible.stylex.test.tsx` and
+    `packages/ui/src/disclosure.stylex.test.tsx` snapshot generated StyleX output, exported style
+    groups, and author-last slot overrides.
+  - Evidence (partial, 2026-06-16): `packages/ui/registry.json` records the copied-source StyleX
+    dependency for Collapsible and Disclosure; `examples/gallery/src/demo-fixtures.test.ts`,
+    `examples/gallery/src/visual-fixtures/collapsible.html.txt`, and
+    `examples/gallery/src/visual-fixtures/disclosure.html.txt` refresh the gallery fixture surface
+    to `kv-collapsible-*` / `kv-disclosure-*` classes with `data-style-src`, while shared fixture
+    checks keep semantic assertions and drop brittle Tailwind fragment pins for these two routes.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run
+    packages/ui/src/collapsible.stylex.test.tsx packages/ui/src/disclosure.stylex.test.tsx
+    packages/ui/src/copy-in.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest --run
+    src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.visual.browser.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
+    `pnpm exec tsc --noEmit`, and `git diff --check` pass.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

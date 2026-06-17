@@ -1,56 +1,97 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
   collapsibleContentAttributes,
   collapsibleRootAttributes,
   collapsibleTriggerAttributes,
-  defineVariants,
-  type ClassValue,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
 
 export interface CollapsibleStateProps {
   disabled?: boolean;
   open?: boolean;
 }
 
+export interface CollapsibleStyleOverrides {
+  content?: style.StyleInput;
+  root?: style.StyleInput;
+  trigger?: style.StyleInput;
+}
+
 export interface CollapsibleProps extends CollapsibleStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: CollapsibleStyleOverrides;
 }
 
 export interface CollapsibleTriggerProps extends CollapsibleStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   id?: string;
+  styles?: CollapsibleStyleOverrides;
 }
 
 export interface CollapsibleContentProps extends CollapsibleStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
+  styles?: CollapsibleStyleOverrides;
 }
 
-export const collapsibleClassNames = defineVariants({
-  base: 'rounded-md border border-neutral-200 bg-white text-sm text-neutral-950 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const collapsibleStyles = style.create(
+  {
+    content: {
+      color: '#404040',
+      fontSize: 14,
+      paddingBottom: 12,
+      paddingInline: 12,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+    },
+    root: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      fontSize: 14,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    trigger: {
+      color: '#0a0a0a',
+      cursor: 'pointer',
+      fontWeight: 500,
+      outlineStyle: 'none',
+      paddingBlock: 8,
+      paddingInline: 12,
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+      '[data-state=open]': {
+        backgroundColor: '#fafafa',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+  },
+  { namespace: 'collapsible', source: 'collapsible.tsx' },
+);
 
-export const collapsibleTriggerClassNames = defineVariants({
-  base: 'cursor-pointer px-3 py-2 font-medium text-neutral-950 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 data-[state=open]:bg-neutral-50 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const collapsibleContentClassNames = defineVariants({
-  base: 'px-3 pb-3 text-sm text-neutral-700 data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const collapsibleClasses = collapsibleClassNames.classes;
-export const collapsibleTriggerClasses = collapsibleTriggerClassNames.classes;
-export const collapsibleContentClasses = collapsibleContentClassNames.classes;
+export const collapsibleClasses = [style.attrs(collapsibleStyles.root).class ?? ''] as const;
+export const collapsibleTriggerClasses = [
+  style.attrs(collapsibleStyles.trigger).class ?? '',
+] as const;
+export const collapsibleContentClasses = [
+  style.attrs(collapsibleStyles.content).class ?? '',
+] as const;
 
 function collapsibleState(props: CollapsibleStateProps) {
   return {
@@ -62,10 +103,11 @@ function collapsibleState(props: CollapsibleStateProps) {
 export const Collapsible = component({
   render(props: CollapsibleProps) {
     const attrs = collapsibleRootAttributes(collapsibleState(props));
+    const styleAttrs = style.attrs(collapsibleStyles.root, props.styles?.root);
 
     return (
       <details
-        class={cn(collapsibleClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -83,12 +125,13 @@ export const CollapsibleTrigger = component({
       ...collapsibleState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(collapsibleStyles.trigger, props.styles?.trigger);
 
     return (
       <summary
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
-        class={cn(collapsibleTriggerClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -105,10 +148,11 @@ export const CollapsibleContent = component({
       ...collapsibleState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(collapsibleStyles.content, props.styles?.content);
 
     return (
       <div
-        class={cn(collapsibleContentClassNames(), props.class)}
+        {...styleAttrs}
         data-state={attrs['data-state']}
         id={attrs.id}
       >

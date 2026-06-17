@@ -213,13 +213,11 @@
       "exports": ["Collapsible", "CollapsibleTrigger", "CollapsibleContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
           "collapsibleContentAttributes",
           "collapsibleRootAttributes",
-          "collapsibleTriggerAttributes",
-          "defineVariants"
+          "collapsibleTriggerAttributes"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []
@@ -345,13 +343,11 @@
       "exports": ["Disclosure", "DisclosureTrigger", "DisclosureContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
-          "defineVariants",
           "disclosureContentAttributes",
           "disclosureRootAttributes",
           "disclosureTriggerAttributes"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

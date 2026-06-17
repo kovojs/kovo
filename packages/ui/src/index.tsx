@@ -617,18 +617,17 @@ export {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  collapsibleClassNames,
   collapsibleClasses,
-  collapsibleContentClassNames,
   collapsibleContentClasses,
-  collapsibleTriggerClassNames,
   collapsibleTriggerClasses,
+  collapsibleStyles,
 } from './collapsible.js';
 export type {
   CollapsibleContentProps,
   CollapsibleProps,
   CollapsibleStateProps,
   CollapsibleTriggerProps,
+  CollapsibleStyleOverrides,
 } from './collapsible.js';
 export {
   Dialog,
@@ -655,18 +654,17 @@ export {
   Disclosure,
   DisclosureContent,
   DisclosureTrigger,
-  disclosureClassNames,
   disclosureClasses,
-  disclosureContentClassNames,
   disclosureContentClasses,
-  disclosureTriggerClassNames,
   disclosureTriggerClasses,
+  disclosureStyles,
 } from './disclosure.js';
 export type {
   DisclosureContentProps,
   DisclosureProps,
   DisclosureStateProps,
   DisclosureTriggerProps,
+  DisclosureStyleOverrides,
 } from './disclosure.js';
 export {
   HoverCard,

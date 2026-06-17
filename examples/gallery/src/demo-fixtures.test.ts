@@ -929,9 +929,10 @@ describe('gallery demo fixtures', () => {
     expect(checkboxGroup.html).toContain('gallery-checkbox-group-updates');
 
     expect(collapsible.html).toContain('data-ui-demo="collapsible"');
-    expect(collapsible.html).toContain('rounded-md border border-neutral-200');
-    expect(collapsible.html).toContain('cursor-pointer px-3 py-2 font-medium');
-    expect(collapsible.html).toContain('data-[state=closed]:hidden');
+    expect(collapsible.html).toContain('kv-collapsible-');
+    expect(collapsible.html).toContain('data-style-src="collapsible.tsx#root"');
+    expect(collapsible.html).toContain('data-style-src="collapsible.tsx#trigger"');
+    expect(collapsible.html).toContain('data-style-src="collapsible.tsx#content"');
 
     expect(autocomplete.html).toContain('data-ui-demo="autocomplete"');
     expect(autocomplete.html).toContain('rounded-md border border-neutral-300');
@@ -952,7 +953,10 @@ describe('gallery demo fixtures', () => {
     expect(contextMenu.html).toContain('gallery-context-menu-inspect');
 
     expect(disclosure.html).toContain('data-ui-demo="disclosure"');
-    expect(disclosure.html).toContain('rounded-md border border-neutral-200');
+    expect(disclosure.html).toContain('kv-disclosure-');
+    expect(disclosure.html).toContain('data-style-src="disclosure.tsx#root"');
+    expect(disclosure.html).toContain('data-style-src="disclosure.tsx#trigger"');
+    expect(disclosure.html).toContain('data-style-src="disclosure.tsx#content"');
     expect(disclosure.html).toContain('aria-controls="gallery-disclosure-content"');
 
     expect(drawer.html).toContain('data-ui-demo="drawer"');

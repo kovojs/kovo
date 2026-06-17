@@ -1,56 +1,106 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   disclosureContentAttributes,
   disclosureRootAttributes,
   disclosureTriggerAttributes,
-  type ClassValue,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
 
 export interface DisclosureStateProps {
   disabled?: boolean;
   open?: boolean;
 }
 
+export interface DisclosureStyleOverrides {
+  content?: style.StyleInput;
+  root?: style.StyleInput;
+  trigger?: style.StyleInput;
+}
+
 export interface DisclosureProps extends DisclosureStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: DisclosureStyleOverrides;
 }
 
 export interface DisclosureTriggerProps extends DisclosureStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   id?: string;
+  styles?: DisclosureStyleOverrides;
 }
 
 export interface DisclosureContentProps extends DisclosureStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
+  styles?: DisclosureStyleOverrides;
 }
 
-export const disclosureClassNames = defineVariants({
-  base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const disclosureStyles = style.create(
+  {
+    content: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#404040',
+      fontSize: 14,
+      padding: 12,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    trigger: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 36,
+      justifyContent: 'center',
+      paddingInline: 12,
+      transitionProperty: 'background-color',
+      width: 'fit-content',
+      '[data-state=open]': {
+        backgroundColor: '#f5f5f5',
+      },
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
+    },
+  },
+  { namespace: 'disclosure', source: 'disclosure.tsx' },
+);
 
-export const disclosureTriggerClassNames = defineVariants({
-  base: 'inline-flex h-9 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50 data-[state=open]:bg-neutral-100',
-  variants: {},
-});
-
-export const disclosureContentClassNames = defineVariants({
-  base: 'rounded-md border border-neutral-200 bg-white p-3 text-sm text-neutral-700 data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const disclosureClasses = disclosureClassNames.classes;
-export const disclosureTriggerClasses = disclosureTriggerClassNames.classes;
-export const disclosureContentClasses = disclosureContentClassNames.classes;
+export const disclosureClasses = [style.attrs(disclosureStyles.root).class ?? ''] as const;
+export const disclosureTriggerClasses = [style.attrs(disclosureStyles.trigger).class ?? ''] as const;
+export const disclosureContentClasses = [style.attrs(disclosureStyles.content).class ?? ''] as const;
 
 function disclosureState(props: DisclosureStateProps) {
   return {
@@ -62,10 +112,11 @@ function disclosureState(props: DisclosureStateProps) {
 export const Disclosure = component({
   render(props: DisclosureProps) {
     const attrs = disclosureRootAttributes(disclosureState(props));
+    const styleAttrs = style.attrs(disclosureStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(disclosureClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -82,12 +133,13 @@ export const DisclosureTrigger = component({
       ...disclosureState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(disclosureStyles.trigger, props.styles?.trigger);
 
     return (
       <button
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
-        class={cn(disclosureTriggerClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
@@ -106,10 +158,11 @@ export const DisclosureContent = component({
       ...disclosureState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(disclosureStyles.content, props.styles?.content);
 
     return (
       <div
-        class={cn(disclosureContentClassNames(), props.class)}
+        {...styleAttrs}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
         id={attrs.id}
