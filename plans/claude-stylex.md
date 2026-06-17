@@ -808,6 +808,19 @@ borrowing its concrete API/spike detail.
     prefix.
   - Evidence (partial, 2026-06-16): `rg -n "Tailwind|tailwind|headless-ui|StyleX|@kovojs/style|kovo-ui-"
     SPEC.md` returns only the new StyleX / `@kovojs/style` / `kovo-ui-` references.
+  - Evidence (partial, 2026-06-17): `site/content/guides/styling.md` and
+    `site/content/guides/components.md` describe `@kovojs/style` as the default component styling
+    package, StyleX `style`/`styles` override objects, plain document CSS for page chrome, and the
+    copy-in `@kovojs/ui` flow that builds against public packages only.
+  - Evidence (partial, 2026-06-17): `site/content/docs/stability.md` includes `@kovojs/style` in the
+    public package table and keeps `@kovojs/ui` documented as a private copy-in starter; `STABILITY.md`
+    and the site page both state the `@internal` boundary is enforced by API docs/gates rather than a
+    `.d.ts` stripping promise.
+  - Evidence (partial, 2026-06-17): `pnpm exec vitest --run scripts/public-packages.test.mjs
+    site/scripts/api-ref.test.mjs packages/server/src/component-render.test.tsx`,
+    `pnpm run check:api-surface`, and `git diff --check` pass for the new public style API docs and
+    server render signature documentation. `pnpm --filter @kovojs/site run check:links` remains
+    blocked on existing `/examples/crm/app/` and `/examples/stackoverflow/app/` generated links.
 - [ ] **Deferred — CSS splitting (opt-in, gated on measurement).** Compute base/route/fragment chunks
       from the attribution map (Phase 2 invariant (a)), keyed off the route registry (§6.4); the manifest
       (invariant (c)) returns per-render asset sets; fragment/defer responses declare their required

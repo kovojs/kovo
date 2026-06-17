@@ -5,8 +5,17 @@ import type {
   JsonValue,
 } from '@kovojs/core';
 
+/**
+ * Runtime inputs for rendering a component outside the full document pipeline.
+ *
+ * This mirrors the SPEC §4.5 composition call shape: callers may provide
+ * compiler-hoisted slots and a serializable component state value, while query
+ * data stays the explicit second argument to `renderComponent(...)`.
+ */
 export interface ComponentRenderOptions<State extends JsonValue = JsonValue> {
+  /** Named slot renderers hoisted from fragment-target children. */
   slots?: ComponentRenderSlots;
+  /** Serializable component state for stateful server component renders. */
   state?: State;
 }
 
