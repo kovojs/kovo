@@ -188,6 +188,7 @@ describe('tutorial step 07 — testing & verification', () => {
     // Same mutation key — and therefore the same named POST: /_m/cart/add.
     expect(addToCart.key).toBe('cart/add');
     expect(renderShopPage()).toContain('action="/_m/cart/add"');
+    expect(renderShopPage()).toContain('kovo-fragment-target="add-to-cart:p1"');
 
     // Same input field vocabulary and write set.
     expect(shopCartAdd?.inputFields).toEqual(commerceCartAdd?.inputFields);
@@ -238,7 +239,11 @@ describe('tutorial step 07 — testing & verification', () => {
     const failure = await submitAddToCart(
       formInput(request, { productId: 'p2', quantity: '3' }),
       request,
-      { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'product-form:p2' },
+      {
+        'Kovo-Form-Target': 'add-to-cart:p2',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'add-to-cart:p2',
+      },
     );
     expect(failure.status).toBe(422);
     expect(failure.body).toContain('data-error-code="OUT_OF_STOCK"');
@@ -261,7 +266,11 @@ describe('tutorial step 07 — testing & verification', () => {
     const response = await submitAddToCart(
       { productId: 'p1', quantity: '1', 'kovo-csrf': 'irrelevant' },
       { db, session: { id: 's-anon', user: null } },
-      { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'product-form:p1' },
+      {
+        'Kovo-Form-Target': 'add-to-cart:p1',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'add-to-cart:p1',
+      },
     );
 
     expect(response.status).toBe(422);

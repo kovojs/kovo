@@ -254,7 +254,7 @@ export const CartBadge = component({
   queries: { cart: {} },
   render: ({ cart }) => (
     <cart-badge kovo-deps="cart" kovo-state="{&quot;open&quot;:true}">
-      <button on:click="/c/cart.client.js#CartBadge$button_click" kovo-param-types="id:string" data-p-id="{cart.id}">Save</button>
+      <button on:click="/c/cart.client.js#CartBadge$button_click" kovo-param-types="id:string" data-p-id="{cart.id}" commandfor="cart-dialog" command="show-modal" popovertarget="cart-popover" popovertargetaction="toggle">Save</button>
       <span data-bind="cart.count">{cart.count}</span>
     </cart-badge>
   ),

@@ -483,10 +483,30 @@ export const AddToCartForm = component({
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
       `rg -n 'fragmentTarget: true' site/tutorial/steps/*/src/components site/tutorial/steps/*/src/generated`
       on 2026-06-17.
-    - Remaining gap: tutorial add-to-cart form source/generated artifacts,
-      StackOverflow, CRM, starter/reference auth forms, and remaining commerce
-      auth/upload forms still need migration after typed failure-state support
-      lands.
+    - Tutorial add-to-cart form source now uses typed mutation values and keyed
+      form identity: `site/tutorial/steps/{04-mutations,05-optimistic,06-streaming,07-verification}/src/components/product-list.tsx`
+      writes `mutation={addToCart}` and `key={item.id}`, while the corresponding
+      app files no longer pass manual `failureTarget`.
+    - `site/tutorial/run-steps.mjs` now uses the workspace source compiler with
+      mutation registry facts so checked-in tutorial generated artifacts are
+      refreshed from current compiler behavior.
+    - `packages/compiler/src/emit/server.ts` treats platform-generated invoker
+      attributes as generated-only for SPEC §5.2 render-equivalence checks,
+      allowing the source compiler tutorial gate to run through the step 02
+      platform lowering.
+    - Regenerated tutorial product-list artifacts carry compiler-emitted
+      `action`, `data-mutation`, `kovo-fragment-target="add-to-cart:..."`, and
+      `kovo-key` while source stays free of manual action/target wiring.
+    - Verified with `node site/tutorial/run-steps.mjs`,
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/platform-lowering.test.ts packages/compiler/src/stamps.test.ts`,
+      `pnpm exec vitest --run site/tutorial/steps/04-mutations/src/app.test.ts site/tutorial/steps/07-verification/src/app.test.ts`,
+      `pnpm --filter @kovojs/site run content`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
+      `rg -n 'failureTarget|productFormTarget|action="/_m/cart/add"|data-mutation="cart/add"|kovo-fragment-target=\\{productFormTarget|fragmentTarget: true' site/tutorial/steps/{04-mutations,05-optimistic,06-streaming,07-verification}/src/components site/tutorial/steps/{04-mutations,05-optimistic,06-streaming,07-verification}/src/app.ts`
+      on 2026-06-17.
+    - Remaining gap: StackOverflow, CRM, starter/reference auth forms, and
+      remaining commerce auth/upload forms still need migration after typed
+      failure-state support lands.
 - [ ] **10. Final gates.**
   - Run focused compiler/runtime/server/example tests for inferred targets,
     form-target inference, mutation responses, query coverage, and commerce.

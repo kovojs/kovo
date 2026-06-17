@@ -406,6 +406,10 @@ function isGeneratedOnlyRenderAttribute(name: string): boolean {
     name === 'data-bind' ||
     name === 'data-derive' ||
     name === 'data-derive-attr' ||
+    name === 'command' ||
+    name === 'commandfor' ||
+    name === 'popovertarget' ||
+    name === 'popovertargetaction' ||
     name.startsWith('data-bind:') ||
     name.startsWith('data-p-') ||
     name.startsWith('on:')

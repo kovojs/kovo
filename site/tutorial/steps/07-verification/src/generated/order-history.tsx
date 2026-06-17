@@ -15,7 +15,7 @@ import { orderHistoryQuery, type OrderHistoryResult } from '../queries.js';
 export const OrderHistory = component({
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
-    <ol kovo-c="order-history" kovo-deps="orderHistory">
+    <ol kovo-c="order-history" kovo-deps="orderHistory" kovo-fragment-target="order-history">
       {orderHistory.items.map((item) => (
         <li kovo-key={item.id}>
           {escapeText(item.productId)} x {escapeText(item.qty)} - {escapeText(item.total)}
