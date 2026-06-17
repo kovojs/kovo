@@ -201,7 +201,7 @@ export const AddToCartForm = component({
     - Formatting gap: `pnpm exec prettier --check SPEC.md` could not run because
       this workspace does not currently provide a `prettier` command
       (`ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "prettier" not found`).
-- [ ] **2. Compiler graph facts: infer refreshable targets from queries.**
+- [x] **2. Compiler graph facts: infer refreshable targets from queries.**
   - Replace `componentOptionStaticValue(model, 'fragmentTarget') === true` as the
     sole source of `FragmentTargetFact` with an inference pass over query-backed
     components.
@@ -211,8 +211,19 @@ export const AddToCartForm = component({
     missing single root, unserializable props/children, ambiguous repeated target,
     or unsupported client-owned state.
   - Evidence:
-    - Pending.
-- [ ] **3. Compiler lowering: always emit resolvable live target hooks.**
+    - Integrated commit `b43620d9` (`compiler: infer fragment targets from
+      queries`) from `agent/inferred-targets`.
+    - `packages/compiler/src/scan/parse.ts` derives fragment targets from
+      query-backed components and honors `disableServerRefresh: true`.
+    - `packages/compiler/src/graph.ts` generates `FragmentTargets` facts from the
+      inferred target set.
+    - `packages/compiler/src/validate/component-contracts.ts` reports removed
+      `fragmentTarget` usage and reconstructability/coverage diagnostics against
+      inferred targets.
+    - Verified with `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `git diff --check` on 2026-06-17.
+- [x] **3. Compiler lowering: always emit resolvable live target hooks.**
   - For inferred refresh targets, emit `kovo-fragment-target="<derived-target>"`
     on the component root whenever `kovo-c` will be omitted or insufficient.
   - Preserve the current `kovo-c` rule from `SPEC.md` §4.2 for component identity;
@@ -220,8 +231,16 @@ export const AddToCartForm = component({
   - Add fixpoint validation so emitted IR may carry the stamp while app source is
     linted if it hand-authors the same derivable stamp.
   - Evidence:
-    - Pending.
-- [ ] **4. Update coverage: classify inferred fragment coverage.**
+    - `packages/compiler/src/emit/server.ts` emits derived
+      `kovo-fragment-target` hooks for inferred targets while preserving existing
+      `kovo-c` emission behavior.
+    - `packages/compiler/src/validate/component-contracts.ts` lints
+      app-authored derivable `kovo-fragment-target` while allowing emitted IR to
+      carry the runtime stamp for fixpoint validation.
+    - Covered by `packages/compiler/src/fragment-targets.test.ts`,
+      `packages/compiler/src/stamps.test.ts`, and full compiler test command
+      listed under item 2.
+- [x] **4. Update coverage: classify inferred fragment coverage.**
   - Change query coverage so `fragment` status comes from the inferred
     server-refreshable target set, not only the explicit option.
   - Prefer `plan` for path/derive/stamp positions and use `fragment` only for
@@ -229,7 +248,14 @@ export const AddToCartForm = component({
   - Update KV311 help text to recommend query-derived refresh targets and the
     `disableServerRefresh: true` force-off escape hatch.
   - Evidence:
-    - Pending.
+    - `packages/compiler/src/analyze/query-updates.ts` and
+      `packages/compiler/src/validate/component-contracts.ts` classify inferred
+      query-backed server-refresh targets as `fragment` coverage, with `plan` and
+      `isomorphic` taking priority.
+    - `packages/compiler/src/query-coverage.test.ts` covers inferred fragment
+      coverage, force-off behavior, and KV311 help mentioning
+      `disableServerRefresh: true`.
+    - Covered by full compiler test command listed under item 2.
 - [x] **5. Runtime/server response selection: invalidation intersects live targets.**
   - Ensure `Kovo-Targets` continues to read `kovo-deps` from the live DOM and uses
     derived target names.
@@ -276,7 +302,7 @@ export const AddToCartForm = component({
     - Remaining gap: compiler lowering for `<form enhance mutation={...}
       key={...}>`, typed render-context failure state, and inline-loader
       `Kovo-Form-Target` emission are not complete.
-- [ ] **7. Type registry and breaking migration.**
+- [x] **7. Type registry and breaking migration.**
   - Generate `FragmentTargets` facts for inferred targets so existing typed APIs
     keep working.
   - Remove `fragmentTarget` from the component definition type.
@@ -285,7 +311,7 @@ export const AddToCartForm = component({
     `disableServerRefresh: true`, and keyed form/component identity where
     applicable.
   - Evidence:
-    - Partial core API evidence: `packages/core/src/index.ts` removes
+    - `packages/core/src/index.ts` removes
       `fragmentTarget?: boolean` from component definitions by making the removed
       option `never`, adds typed `disableServerRefresh?: boolean`, and updates
       component docs to describe inferred live targets.
@@ -294,11 +320,16 @@ export const AddToCartForm = component({
       `fragmentTarget: true`.
     - `packages/core/src/diagnostics.ts` updates KV238 help to point to stable
       keyed identity and `disableServerRefresh: true`, not the removed option.
+    - `packages/compiler/src/graph.ts` generates `FragmentTargets` facts for
+      inferred targets.
+    - `packages/compiler/src/validate/component-contracts.ts` reports removed
+      `fragmentTarget` usage and hand-authored derivable `kovo-fragment-target`
+      with help pointing to query inference, keyed identity, and
+      `disableServerRefresh: true`.
     - Verified with `pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts`,
+      `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
       `git diff --check` on 2026-06-17.
-    - Remaining gap: compiler diagnostics for removed `fragmentTarget` usage and
-      hand-authored derivable `kovo-fragment-target` are still open.
 - [ ] **8. Commerce reference cleanup.**
   - Remove `fragmentTarget: true` and `kovo-fragment-target="cart-badge"` from
     `examples/commerce/src/components/cart-badge.tsx` once inference covers it.
@@ -375,7 +406,10 @@ export const AddToCartForm = component({
       `rg -n 'fragmentTarget: true|failureTarget|force-on|fragmentTarget,' SPEC.md`,
       `rg -n 'disableServerRefresh|inferred server-refreshable|Kovo-Targets|mutation=\\{addToCart\\}|forms\\.<mutation>\\.failure|KV303|KV311' SPEC.md`,
       and `git diff --check` passed on 2026-06-17.
-- [ ] Compiler graph/lowering/query-coverage tests green: command pending.
+- [x] Compiler graph/lowering/query-coverage tests green:
+      `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `git diff --check` passed on 2026-06-17.
 - [ ] Enhanced form target inference and typed failure rerender tests green:
       command pending.
 - [x] Runtime/server mutation response tests green:
