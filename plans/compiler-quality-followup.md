@@ -62,13 +62,22 @@ compiler-quality gaps found during the 2026-06-16 audit.
 
 ## Structural IR
 
-- [ ] Define the structural IR ownership boundary.
-  - [ ] Document which transformations must be represented in the JSX IR because they rewrite
+- [x] Define the structural IR ownership boundary.
+  - [x] Document which transformations must be represented in the JSX IR because they rewrite
         element/tag/attribute/child structure.
-  - [ ] Document which transformations may remain terminal `SourceReplacement` patches because they
+  - [x] Document which transformations may remain terminal `SourceReplacement` patches because they
         do not overlap authored structural rewrites.
-  - [ ] Add a source-level guard or test that fails when a new lowerer under `packages/compiler/src/lower`
+  - [x] Add a source-level guard or test that fails when a new lowerer under `packages/compiler/src/lower`
         returns structural `SourceReplacement`s without being registered in the boundary document.
+  - Evidence (2026-06-16): `packages/compiler/src/lower/structural-boundary.md` defines the
+        SPEC §5.2 ownership rule for JSX IR structural rewrites versus terminal
+        `SourceReplacement` patches, and registers current source-patch lowerers as `jsx-ir-owner`,
+        `structural-debt`, or `legacy-structural-entrypoint`.
+  - Evidence (2026-06-16): `packages/compiler/src/structural-boundary.test.ts` scans
+        `packages/compiler/src/lower/*.ts` and fails when an exported lowerer that imports
+        `SourceReplacement` is absent from the boundary document or lacks an ownership class;
+        `pnpm --filter @kovojs/compiler exec vitest --run src/structural-boundary.test.ts
+        src/structural-jsx-ir.test.ts` passes.
 
 - [ ] Move remaining overlapping structural rewrites into the JSX IR.
   - [ ] Migrate platform behavior substitution attributes into the JSX IR or prove they are terminal
