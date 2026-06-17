@@ -335,6 +335,120 @@ describe('server createApp request shell', () => {
     await expect(response.text()).resolves.toContain('admin:u1');
   });
 
+  it('provisions db and session through createApp for routes, queries, and enhanced refresh', async () => {
+    interface AppDb {
+      count: number;
+      reads: string[];
+      writes: string[];
+    }
+
+    type AppRequest = Request & {
+      db: AppDb;
+      session: { user: { id: string } } | null;
+    };
+
+    const db: AppDb = { count: 1, reads: [], writes: [] };
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load(_input, context?: { request: AppRequest }) {
+        context?.request.db.reads.push(context.request.session?.user.id ?? 'anonymous');
+        return { count: context?.request.db.count ?? 0 };
+      },
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ quantity: s.number().int().min(1).default(1) }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input, request: AppRequest) {
+        request.db.count += input.quantity;
+        request.db.writes.push(request.session?.user.id ?? 'anonymous');
+        return { count: request.db.count };
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        db: () => db,
+        endpoints: [
+          endpoint('/webhook', {
+            csrf: false,
+            csrfJustification: 'signed provider test endpoint',
+            handler(request) {
+              const endpointRequest = request as Request & { db: AppDb; session?: never };
+              expect('session' in endpointRequest).toBe(false);
+              endpointRequest.db.writes.push('endpoint');
+              return new Response(`endpoint:${endpointRequest.db.count}`);
+            },
+            method: 'POST',
+          }),
+        ],
+        liveTargetRenderers: [
+          {
+            component: 'components/cart/badge',
+            queries: ['cart'],
+            render({ request }: { request: AppRequest }) {
+              return `<cart-badge>${request.db.count}:${request.session?.user.id}</cart-badge>`;
+            },
+          },
+        ],
+        mutations: [addToCart],
+        queries: [cartQuery],
+        routes: [
+          route('/cart', {
+            page(_context, request: AppRequest) {
+              return `<main>${request.db.count}:${request.session?.user.id}</main>`;
+            },
+          }),
+        ],
+        sessionProvider: () => ({ user: { id: 'u1' } }),
+      }),
+    );
+
+    const routeResponse = await handler(new Request('https://example.test/cart'));
+    expect(routeResponse.status).toBe(200);
+    await expect(routeResponse.text()).resolves.toContain('<main>1:u1</main>');
+
+    const queryResponse = await handler(new Request('https://example.test/_q/cart'));
+    expect(queryResponse.status).toBe(200);
+    await expect(queryResponse.text()).resolves.toContain(
+      '<kovo-query name="cart">{"count":1}</kovo-query>',
+    );
+
+    const form = new FormData();
+    form.set('quantity', '2');
+    const mutationResponse = await handler(
+      new Request('https://example.test/_m/cart/add', {
+        body: form,
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': 'cart#components/cart/badge:{}',
+          'Kovo-Targets': 'cart=cart',
+        },
+        method: 'POST',
+      }),
+    );
+
+    expect(mutationResponse.status).toBe(200);
+    await expect(mutationResponse.text()).resolves.toBe(
+      [
+        '<kovo-query name="cart">{"count":3}</kovo-query>',
+        '<kovo-fragment target="cart"><cart-badge>3:u1</cart-badge></kovo-fragment>',
+      ].join('\n'),
+    );
+    expect(db.reads).toEqual(['u1', 'u1']);
+    expect(db.writes).toEqual(['u1']);
+
+    const endpointResponse = await handler(
+      new Request('https://example.test/webhook', { method: 'POST' }),
+    );
+    expect(endpointResponse.status).toBe(200);
+    await expect(endpointResponse.text()).resolves.toBe('endpoint:3');
+    expect(db.writes).toEqual(['u1', 'endpoint']);
+  });
+
   it('dispatches stored query and client-module registries through web Responses', async () => {
     const registry = createMemoryVersionedClientModuleRegistry();
     const href = registry.put({

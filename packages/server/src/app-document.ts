@@ -41,6 +41,7 @@ export async function renderAppRouteDocumentResponse({
         : renderDefaultRouteValue(value),
     {
       currentUrl: appRequestUrl(url),
+      ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       renderForbidden: async () =>
         appErrorDocumentResponseBody(await renderAppErrorDocumentResponse(app, request, 403)),

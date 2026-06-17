@@ -16,6 +16,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isVersionedClientModuleRegistry(value.clientModules) &&
     isMutationResponses(value.mutationResponses) &&
     isOptionalMutationReplayStore(value.mutationReplayStore) &&
+    isOptionalFunction(value.db) &&
     isOptionalFunction(value.onError) &&
     isOptionalFunction(value.renderRoute) &&
     isOptionalFunction(value.sessionProvider) &&

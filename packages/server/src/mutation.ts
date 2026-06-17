@@ -190,7 +190,8 @@ export interface MutationFormAttributes<Key extends string = string> {
 export interface RunMutationOptions<
   Request,
   SessionValue = unknown,
-> extends RequestLifecycleOptions<Request, SessionValue> {
+  DbValue = unknown,
+> extends RequestLifecycleOptions<Request, SessionValue, DbValue> {
   csrf?: CsrfValidationOptions<Request>;
 }
 
@@ -690,6 +691,7 @@ export async function renderMutationEndpointResponse<
       ? {}
       : { renderFailurePage: endpointRequest.renderFailurePage }),
     request: endpointRequest.request,
+    ...(endpointRequest.db === undefined ? {} : { db: endpointRequest.db }),
     ...(endpointRequest.onError === undefined ? {} : { onError: endpointRequest.onError }),
     ...(endpointRequest.sessionProvider === undefined
       ? {}
@@ -834,6 +836,7 @@ function runMutationOptions<Request>(
 ): RunMutationOptions<Request> {
   return {
     ...(csrf === undefined ? {} : { csrf }),
+    ...(lifecycle?.db === undefined ? {} : { db: lifecycle.db }),
     ...(lifecycle?.onError === undefined ? {} : { onError: lifecycle.onError }),
     ...(lifecycle?.sessionProvider === undefined
       ? {}

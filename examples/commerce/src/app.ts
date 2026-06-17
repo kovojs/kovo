@@ -146,7 +146,7 @@ export const commerceAuthCsrf = {
   field: 'csrf',
   secret: EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
   sessionId(request: CommerceAuthRequest) {
-    return request.session?.id ?? request.authCsrfId ?? undefined;
+    return request.session?.id ?? request.authCsrfId ?? 'commerce-shell-login';
   },
 };
 

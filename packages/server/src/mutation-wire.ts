@@ -254,6 +254,7 @@ export function mutationWireRequestFromHeaders<Request>(
     rawInput: options.rawInput,
     request: options.request,
     ...(options.buildToken === undefined ? {} : { buildToken: options.buildToken }),
+    ...(options.db === undefined ? {} : { db: options.db }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
     ...(options.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),

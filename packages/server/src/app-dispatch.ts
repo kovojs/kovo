@@ -14,6 +14,7 @@ import {
   renderAppRouteDocumentResponse,
 } from './app-document.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
+import { resolveLifecycleRequest } from './guards.js';
 
 export interface MatchedAppDispatchOptions {
   app: KovoApp;
@@ -44,6 +45,7 @@ export async function dispatchMatchedAppRequest({
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       request,
       search: url.searchParams,
+      ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
     };
 
@@ -62,7 +64,9 @@ export async function dispatchMatchedAppRequest({
   }
 
   if (match.kind === 'endpoint') {
-    return runEndpoint(match.endpoint, request);
+    const endpointRequest =
+      app.db === undefined ? request : await resolveLifecycleRequest(request, { db: app.db });
+    return runEndpoint(match.endpoint, endpointRequest);
   }
 
   if (match.kind === 'route') {

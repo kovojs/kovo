@@ -9,16 +9,41 @@ import type { CsrfValidationOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import type { DocumentTemplate } from './document-core.js';
 import type { EndpointDeclaration } from './endpoint.js';
-import type { SessionProvider } from './guards.js';
+import type { DbProvider, LifecycleRequest, SessionProvider } from './guards.js';
+import type { Guard } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
-import type { MutationFail, MutationSuccess } from './mutation.js';
+import type { MutationContext, MutationFail, MutationSuccess } from './mutation.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
-import type { RegisteredQueryDefinition } from './query.js';
+import type { QueryLoadContext, RegisteredQueryDefinition } from './query.js';
 import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
 import type { RouteDeclaration } from './route.js';
+import type { Schema } from './schema.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
+
+export type AppLifecycleRequest<
+  RawRequest extends globalThis.Request = globalThis.Request,
+  SessionValue = never,
+  DbValue = never,
+> = LifecycleRequest<RawRequest, SessionValue, DbValue>;
+
+export type AppQueryDeclaration<AppRequest = unknown> = Omit<
+  RegisteredQueryDefinition,
+  'guard' | 'load'
+> & {
+  guard?: Guard<AppRequest>;
+  load?: (input: any, context?: QueryLoadContext<AppRequest>) => unknown;
+};
+
+export type AppRouteDeclaration<AppRequest = unknown> = RouteDeclaration<
+  any,
+  any,
+  any,
+  AppRequest,
+  any,
+  any
+>;
 
 export interface AppErrorShellOptions {
   forbidden?: ErrorShellRenderer;
@@ -43,22 +68,28 @@ export interface AppRouteRenderContext<Route extends AnyRouteDeclaration = AnyRo
   search: Record<string, string | string[]>;
 }
 
-/** Options for `createApp`: the routes, queries, mutations, endpoints, document, CSRF, and session config. */
-export interface CreateAppOptions<SessionValue = unknown> {
+/** Options for `createApp`: the routes, queries, mutations, endpoints, document, CSRF, and request providers. */
+export interface CreateAppOptions<
+  SessionValue = never,
+  DbValue = never,
+  RawRequest extends globalThis.Request = globalThis.Request,
+  AppRequest = AppLifecycleRequest<RawRequest, SessionValue, DbValue>,
+> {
   clientModules?: VersionedClientModuleRegistry;
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfValidationOptions<AppRequest>;
+  db?: DbProvider<RawRequest, DbValue, SessionValue>;
   document?: AppDocumentOptions;
   endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells?: AppErrorShellOptions;
-  liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
+  liveTargetRenderers?: readonly LiveTargetRenderer<AppRequest>[];
   mutationResponses?: AppMutationResponses;
-  mutations?: readonly AppMutationDeclaration[];
+  mutations?: readonly AppMutationDeclaration<AppRequest>[];
   mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
-  queries?: readonly RegisteredQueryDefinition[];
+  queries?: readonly AppQueryDeclaration<AppRequest>[];
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
-  routes?: readonly AnyRouteDeclaration[];
-  sessionProvider?: SessionProvider<Request, SessionValue>;
+  routes?: readonly AppRouteDeclaration<AppRequest>[];
+  sessionProvider?: SessionProvider<RawRequest, SessionValue>;
 }
 
 /**
@@ -77,28 +108,44 @@ export interface AppDiagnostic {
 }
 
 /** The assembled app aggregate returned by `createApp`; request dispatch starts here. */
-export interface KovoApp<SessionValue = unknown> {
+export interface KovoApp<
+  SessionValue = unknown,
+  DbValue = unknown,
+  RawRequest extends globalThis.Request = globalThis.Request,
+  AppRequest = any,
+> {
   clientModules: VersionedClientModuleRegistry;
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfValidationOptions<any>;
+  db?: DbProvider<any, any, any>;
   diagnostics: readonly AppDiagnostic[];
   document: AppDocumentOptions;
   endpoints: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells: AppErrorShellOptions;
-  liveTargetRenderers: readonly LiveTargetRenderer<Request>[];
+  liveTargetRenderers: readonly LiveTargetRenderer<any>[];
   mutationResponses: AppMutationResponses;
-  mutations: readonly AppMutationDeclaration[];
+  mutations: readonly AppMutationDeclaration<any>[];
   mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
-  queries: readonly RegisteredQueryDefinition[];
+  queries: readonly AppQueryDeclaration<any>[];
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
-  routes: readonly AnyRouteDeclaration[];
-  sessionProvider?: SessionProvider<Request, SessionValue>;
+  routes: readonly AppRouteDeclaration<any>[];
+  sessionProvider?: SessionProvider<any, any>;
 }
 
 export type RequestHandler = (request: Request) => Promise<Response>;
 
-export interface AppMutationDeclaration {
+export interface AppMutationDeclaration<AppRequest = unknown> {
+  csrf?: CsrfValidationOptions<any> | false;
+  guard?: Guard<any, any>;
+  handler?: (
+    input: any,
+    request: AppRequest,
+    context: MutationContext<Record<string, Schema<unknown>>>,
+  ) => unknown;
+  input?: Schema<unknown>;
   key: string;
+  registry?: unknown;
+  transaction?: <Result>(request: any, run: (transactionRequest: any) => Promise<Result>) => Promise<Result>;
 }
 
 export interface AppMutationResponseContext {

@@ -76,6 +76,7 @@ export async function buildSoInteractiveApp(
 
   const app = createApp({
     clientModules: createMemoryVersionedClientModuleRegistry(),
+    db: () => database,
     document: { lang: 'en-US' },
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
     mutationResponses: {
@@ -114,17 +115,10 @@ export async function buildSoInteractiveApp(
       }),
       questionDetailRoute,
     ],
+    sessionProvider: () => demoSession,
   });
 
-  const baseHandler = createRequestHandler(app);
-  const handler: RequestHandler = (request) => {
-    // SPEC.md §11.5: the mutation/query handlers read the Drizzle db off the
-    // request. The demo session gives browser forms a CSRF synchronizer token.
-    // Attach both before dispatch (mirrors the commerce shell).
-    Object.defineProperty(request, 'db', { configurable: true, value: database });
-    Object.defineProperty(request, 'session', { configurable: true, value: demoSession });
-    return baseHandler(request);
-  };
+  const handler: RequestHandler = createRequestHandler(app);
 
   return { app, db: database, handler };
 }

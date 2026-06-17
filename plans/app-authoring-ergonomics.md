@@ -142,6 +142,19 @@ item inherits from rather than re-deciding it:
       rename propagates red to consumers.
     - A live-target refresh test proves the generated fragment re-render receives
       the same `db`/session as the originating request.
+  - Current evidence:
+    - `createApp({ db })` is implemented in the app shell lifecycle and dispatches
+      through route pages, query endpoints, mutation handlers/live-target refresh,
+      and session-free endpoints; `pnpm exec vitest --run packages/server/src/app.test.ts`
+      covers these paths.
+    - `rg -n "Object\.defineProperty\(request, '(db|session)'|attachCommerceRequestContext|withCommerceRequestContext" examples/stackoverflow/src examples/crm/src examples/commerce/src` exits 1 with no hits after regenerating example route artifacts.
+    - Example checks pass: `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`; `pnpm --filter @kovojs/example-crm run emit-components -- --check`; `pnpm --filter @kovojs/example-commerce run emit-components -- --check`; `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.rendering.test.ts`.
+    - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
+  - Remaining gap:
+    - The current `query()`/`mutation()`/`route()` APIs type their callbacks before
+      they reach `createApp()`, so provider-driven **zero-annotation** inference
+      inside those callbacks still needs a larger app-scoped builder or equivalent
+      API design before this item can be checked off.
 
 - [ ] **3. First-class nested layouts (supersedes the old "no layouts yet" item).**
   - Decision 2026-06-17: ship nested layouts for authoring parity with peer

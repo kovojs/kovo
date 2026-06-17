@@ -35,7 +35,10 @@ export async function handleAppMutationRequest(
 
   const mutationRequest = await resolveLifecycleRequest(
     request,
-    app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider },
+    {
+      ...(app.db === undefined ? {} : { db: app.db }),
+      ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
+    },
   );
   const rawInput = await readMutationRequestBody(mutationRequest);
   const currentUrl = appRequestUrl(url);

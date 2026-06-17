@@ -151,6 +151,7 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
   const db = options.db ?? createCommerceDb();
   const app = createApp({
     clientModules,
+    db: () => db,
     document: { lang: 'en-US' },
     routes: [
       route('/', {
@@ -160,8 +161,7 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           title: 'Kovo Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
-        page(_context, request: Request) {
-          attachCommerceRequestContext(request, db);
+        page() {
           return renderCommerceCartShell(
             <>
               <CartBadge />
@@ -179,8 +179,7 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           title: 'Kovo Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
-        page(_context, request: Request) {
-          attachCommerceRequestContext(request, db);
+        page() {
           return renderCommerceCartShell(
             <>
               <CartBadge />
@@ -209,8 +208,9 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
 
 export function createCommerceAppShell(options: CommerceAppShellOptions = {}): CommerceAppShell {
   const db = options.db ?? createCommerceDb();
-  const app: KovoApp<CommerceSession> = createApp<CommerceSession>({
+  const app: KovoApp<CommerceSession> = createApp<CommerceSession, CommerceDb>({
     clientModules,
+    db: () => db,
     document: { lang: 'en-US' },
     endpoints: [paymentWebhook],
     mutationResponses: {
@@ -271,7 +271,7 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
     ],
     sessionProvider: (request) => commerceSessionProvider(request as CommerceShellRequest),
   });
-  const requestHandler = withCommerceRequestContext(createRequestHandler(app), db);
+  const requestHandler = createRequestHandler(app);
 
   return {
     app,
@@ -285,25 +285,6 @@ function routeValueToHtml(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === undefined || value === null) return '';
   return JSON.stringify(value);
-}
-
-function withCommerceRequestContext(handler: RequestHandler, db: CommerceDb): RequestHandler {
-  return (request) => handler(attachCommerceRequestContext(request, db));
-}
-
-function attachCommerceRequestContext(request: Request, db: CommerceDb): CommerceShellRequest {
-  Object.defineProperties(request, {
-    authCsrfId: {
-      configurable: true,
-      value: 'commerce-shell-login',
-    },
-    db: {
-      configurable: true,
-      value: db,
-    },
-  });
-
-  return request as CommerceShellRequest;
 }
 
 async function renderAddToCartFailureFragment(

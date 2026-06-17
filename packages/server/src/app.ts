@@ -7,19 +7,22 @@ export type {
   AppDocumentOptions,
   AppErrorShellOptions,
   AppDiagnostic,
+  AppLifecycleRequest,
   AppMutationDeclaration,
   AppMutationResponseContext,
   AppMutationResponseOptions,
   AppMutationResponsePolicy,
   AppMutationResponseResolver,
   AppMutationResponses,
+  AppQueryDeclaration,
+  AppRouteDeclaration,
   AppRouteRenderContext,
   CreateAppOptions,
   ErrorShellRenderer,
   KovoApp,
   RequestHandler,
 } from './app-types.js';
-import type { CreateAppOptions, KovoApp, RequestHandler } from './app-types.js';
+import type { AppLifecycleRequest, CreateAppOptions, KovoApp, RequestHandler } from './app-types.js';
 
 /**
  * Assemble the app aggregate: the routes, queries, mutations, endpoints,
@@ -39,9 +42,17 @@ import type { CreateAppOptions, KovoApp, RequestHandler } from './app-types.js';
  *
  * export const handler = createRequestHandler(app);
  */
-export function createApp<SessionValue = unknown>(
-  options: CreateAppOptions<SessionValue> = {},
-): KovoApp<SessionValue> {
+export function createApp<
+  SessionValue = never,
+  DbValue = never,
+  RawRequest extends globalThis.Request = globalThis.Request,
+  AppRequest = AppLifecycleRequest<RawRequest, SessionValue, DbValue>,
+>(options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest> = {}): KovoApp<
+  SessionValue,
+  DbValue,
+  RawRequest,
+  AppRequest
+> {
   return {
     clientModules: options.clientModules ?? createMemoryVersionedClientModuleRegistry(),
     diagnostics: routeTableDiagnostics(options.routes ?? []),
@@ -53,6 +64,7 @@ export function createApp<SessionValue = unknown>(
     queries: options.queries ?? [],
     routes: options.routes ?? [],
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
+    ...(options.db === undefined ? {} : { db: options.db }),
     ...(options.mutationReplayStore === undefined
       ? {}
       : { mutationReplayStore: options.mutationReplayStore }),

@@ -115,8 +115,23 @@ export type SessionProvider<RawRequest, SessionValue> = (
   request: RawRequest,
 ) => Promise<SessionValue | null | undefined> | SessionValue | null | undefined;
 
-/** Per-request options shared across the lifecycle: error hook and session provider. */
-export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown> {
+/** A function that resolves the app database/transaction handle for a request. */
+export type DbProvider<RawRequest, DbValue, SessionValue = unknown> = (
+  request: LifecycleRequest<RawRequest, SessionValue, never>,
+) => Promise<DbValue> | DbValue;
+
+/** Request shape after the framework has installed configured lifecycle channels. */
+export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> = RawRequest &
+  ([SessionValue] extends [never] ? {} : { session: SessionValue | null }) &
+  ([DbValue] extends [never] ? {} : { db: DbValue });
+
+/** Per-request options shared across the lifecycle: error hook plus session/db providers. */
+export interface RequestLifecycleOptions<
+  RawRequest,
+  SessionValue = unknown,
+  DbValue = unknown,
+> {
+  db?: DbProvider<RawRequest, DbValue, SessionValue>;
   onError?: ServerErrorHandler;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
 }
@@ -141,7 +156,8 @@ export type ForbiddenRenderer<Request> = (
 export interface GuardFailureResponseOptions<
   Request,
   SessionValue = unknown,
-> extends RequestLifecycleOptions<Request, SessionValue> {
+  DbValue = unknown,
+> extends RequestLifecycleOptions<Request, SessionValue, DbValue> {
   currentUrl?: string;
   loginPath?: string;
   onUnauthenticated?: UnauthenticatedHandler<Request>;
@@ -281,14 +297,23 @@ export async function runGuard<Request>(
   return result === true ? null : resolveGuardResult(result);
 }
 
-export async function resolveLifecycleRequest<Request, SessionValue>(
+export async function resolveLifecycleRequest<Request, SessionValue = unknown, DbValue = unknown>(
   request: Request,
-  options: RequestLifecycleOptions<Request, SessionValue> = {},
-): Promise<Request> {
-  if (!options.sessionProvider) return request;
+  options: RequestLifecycleOptions<Request, SessionValue, DbValue> = {},
+): Promise<LifecycleRequest<Request, SessionValue, DbValue>> {
+  let lifecycleRequest: unknown = request;
 
-  const sessionValue = (await options.sessionProvider(request)) ?? null;
-  return requestWithSession(request, sessionValue);
+  if (options.sessionProvider) {
+    const sessionValue = (await options.sessionProvider(request)) ?? null;
+    lifecycleRequest = requestWithProperty(lifecycleRequest, 'session', sessionValue);
+  }
+
+  if (options.db) {
+    const dbValue = await options.db(lifecycleRequest as LifecycleRequest<Request, SessionValue>);
+    lifecycleRequest = requestWithProperty(lifecycleRequest, 'db', dbValue);
+  }
+
+  return lifecycleRequest as LifecycleRequest<Request, SessionValue, DbValue>;
 }
 
 export async function renderHttpGuardFailureResponse<Request>(
@@ -386,27 +411,28 @@ function evictExpiredRateLimits(
   }
 }
 
-function requestWithSession<Request, SessionValue>(
+function requestWithProperty<Request, Key extends string, Value>(
   request: Request,
-  sessionValue: SessionValue | null,
-): Request {
+  key: Key,
+  value: Value,
+): Request & Record<Key, Value> {
   if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
-    return { session: sessionValue } as Request;
+    return { [key]: value } as Request & Record<Key, Value>;
   }
 
   return new Proxy(request as object, {
     get(target, property) {
-      if (property === 'session') return sessionValue;
+      if (property === key) return value;
 
-      const value = Reflect.get(target, property, target) as unknown;
-      return typeof value === 'function' ? value.bind(target) : value;
+      const targetValue = Reflect.get(target, property, target) as unknown;
+      return typeof targetValue === 'function' ? targetValue.bind(target) : targetValue;
     },
     getOwnPropertyDescriptor(target, property) {
-      if (property === 'session') {
+      if (property === key) {
         return {
           configurable: true,
           enumerable: true,
-          value: sessionValue,
+          value,
           writable: false,
         };
       }
@@ -414,13 +440,13 @@ function requestWithSession<Request, SessionValue>(
       return Reflect.getOwnPropertyDescriptor(target, property);
     },
     has(target, property) {
-      return property === 'session' || property in target;
+      return property === key || property in target;
     },
     ownKeys(target) {
       const keys = Reflect.ownKeys(target);
-      return keys.includes('session') ? keys : [...keys, 'session'];
+      return keys.includes(key) ? keys : [...keys, key];
     },
-  }) as Request;
+  }) as Request & Record<Key, Value>;
 }
 
 function defaultOnUnauthenticated<Request>(
