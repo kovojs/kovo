@@ -290,7 +290,16 @@ export const AddToCartForm = component({
   - Update docs/tutorials so authors learn "declare queries; Kovo derives live
     targets" before learning escape hatches.
   - Evidence:
-    - Pending.
+    - Partial docs/prose migration completed in `site/content/guides/mutations.md`,
+      `site/content/tutorial/03-queries.md`, `site/content/tutorial/04-mutations.md`,
+      and `docs/integration-testing.md`: author-facing prose now distinguishes
+      TSX `key`/`mutation={...}` from emitted `kovo-key`/action/fragment target
+      wire hooks.
+    - Verified with `pnpm --filter @kovojs/site run content` and
+      `pnpm --filter @kovojs/site test -- --runInBand` on 2026-06-17.
+    - Remaining gap: example component source, tutorial step source/generated
+      artifacts, StackOverflow, CRM, and commerce still need migration after
+      compiler/runtime support lands.
 - [ ] **10. Final gates.**
   - Run focused compiler/runtime/server/example tests for inferred targets,
     form-target inference, mutation responses, query coverage, and commerce.

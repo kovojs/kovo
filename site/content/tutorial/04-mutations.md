@@ -50,9 +50,9 @@ fallback bolted on afterward:
 {{snippet:04-mutations/src/components/product-list.tsx#add-to-cart-form}}
 
 `enhance` is the entire opt-in: with JavaScript, the loader intercepts the submit and speaks the
-fragment wire; without it, the browser posts natively. `kovo-fragment-target` names this form as a
-patchable region so failures can re-render just it. Either way the wire stays legible — a named
-POST to `/_m/cart/add` with schema-shaped fields.
+fragment wire; without it, the browser posts natively. Repeated forms use ordinary keyed identity,
+and the compiler derives the submitted-form target so failures can re-render just that instance.
+Either way the wire stays legible — a named POST to `/_m/cart/add` with schema-shaped fields.
 
 {{snippet:04-mutations/src/app.test.ts#form-markup-test}}
 
@@ -71,8 +71,8 @@ aspirational.
 ## Mode two: the fragment wire
 
 With JavaScript, the same endpoint sees an `Kovo-Fragment` header and answers with readable chunks:
-re-rendered fragments for the targets the live DOM declared via its `kovo-deps` stamps. The server
-holds no record of what's on screen — it answers a stateless question:
+query values or fragments for the live targets declared by `kovo-deps` stamps. The server holds no
+record of what's on screen — it answers a stateless question:
 
 {{snippet:04-mutations/src/app.test.ts#enhanced-test}}
 
@@ -96,5 +96,6 @@ That's the next chapter.
 typed discriminated union: SPEC §9.2. Transaction lifecycle and rollback: SPEC §10.3. CSRF
 default-on, fail-closed: SPEC §6.6. No-JS degradation as a structural contract: SPEC §8. Legible
 named POST: Constitution #4. Stateless fragment responses keyed off live `kovo-deps`: SPEC §9.1.
+Submitted-form target inference and typed failure state: SPEC §6.3, §9.2.
 
 </details>
