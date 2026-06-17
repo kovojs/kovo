@@ -22,10 +22,10 @@ const loader = () => import('@acme/lazy/panel');
 `;
 
     expect(parseComponentModule('imports.tsx', source).moduleSpecifiers).toEqual([
-      { specifier: '@kovojs/core' },
-      { specifier: '@acme/primitives/dialog' },
-      { specifier: '@acme/theme' },
-      { specifier: '@acme/lazy/panel' },
+      { end: 41, specifier: '@kovojs/core', start: 27 },
+      { end: 91, specifier: '@acme/primitives/dialog', start: 66 },
+      { end: 128, specifier: '@acme/theme', start: 115 },
+      { end: 176, specifier: '@acme/lazy/panel', start: 158 },
     ]);
     expect(parseComponentModule('imports.tsx', source).namedImports).toEqual([
       { importedName: 'component', localName: 'component', moduleSpecifier: '@kovojs/core' },

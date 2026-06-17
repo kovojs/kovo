@@ -19,24 +19,80 @@ export function validateAuthoringSurface(
   if ((options.sourceProvenance ?? 'app') !== 'app') return [];
 
   if (isCompilerIrArtifact(options.source)) {
-    return [
-      kv235Diagnostic({
-        fileName: options.fileName,
-        source: options.source,
-        start: 0,
-        length: options.source.startsWith(compilerIrHeader)
-          ? compilerIrHeader.length
-          : cssIrHeader.length,
-      }),
-    ];
+    return [compilerIrDiagnostic(options)];
   }
 
   const renders = model ? stringRendersFromModel(model) : [];
 
+  return [
+    ...(model?.moduleSpecifiers ?? [])
+      .filter((specifier) => isNonPublicKovoSpecifier(specifier.specifier))
+      .map((specifier) =>
+        nonPublicKovoImportDiagnostic({
+          fileName: options.fileName,
+          length: specifier.end - specifier.start,
+          source: options.source,
+          specifier: specifier.specifier,
+          start: specifier.start,
+        }),
+      ),
+    ...renderDiagnostics(options.fileName, options.source, renders),
+  ];
+}
+
+export function isNonPublicKovoSpecifier(specifier: string): boolean {
+  return (
+    /^@kovojs\/[^/]+\/(?:internal|generated)(?:\/|$)/.test(specifier) ||
+    specifier === 'kovo/internal' ||
+    specifier.startsWith('kovo/internal/')
+  );
+}
+
+function nonPublicKovoImportDiagnostic({
+  fileName,
+  length,
+  source,
+  specifier,
+  start,
+}: {
+  fileName: string;
+  length: number;
+  source: string;
+  specifier: string;
+  start: number;
+}): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'KV235', source, start, length),
+    help: [
+      `Blocked reason: app source imports non-public Kovo subpath \`${specifier}\`.`,
+      'Fixes: import Kovo packages through documented public entrypoints; generated ABI subpaths are reserved for compiler-emitted modules.',
+      'SPEC.md §5.2: app-authored source may import Kovo packages only through documented public entrypoints.',
+    ].join('\n'),
+    message:
+      'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+  };
+}
+
+function compilerIrDiagnostic(options: CompileComponentOptions): CompilerDiagnostic {
+  return kv235Diagnostic({
+    fileName: options.fileName,
+    source: options.source,
+    start: 0,
+    length: options.source.startsWith(compilerIrHeader)
+      ? compilerIrHeader.length
+      : cssIrHeader.length,
+  });
+}
+
+function renderDiagnostics(
+  fileName: string,
+  source: string,
+  renders: readonly StringRender[],
+): CompilerDiagnostic[] {
   return renders.map((render) =>
     kv235Diagnostic({
-      fileName: options.fileName,
-      source: options.source,
+      fileName,
+      source,
       start: render.start,
       length: render.length,
       ...optionalTagName(render.firstHtmlTagName ?? null),

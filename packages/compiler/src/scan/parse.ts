@@ -214,7 +214,9 @@ export interface StringRenderModel {
 }
 
 export interface ModuleSpecifierModel {
+  end: number;
   specifier: string;
+  start: number;
 }
 
 export interface NamedImportModel {
@@ -323,12 +325,22 @@ function moduleSpecifierModel(node: ts.Node): ModuleSpecifierModel | null {
     node.moduleSpecifier &&
     ts.isStringLiteralLike(node.moduleSpecifier)
   ) {
-    return { specifier: node.moduleSpecifier.text };
+    return {
+      end: node.moduleSpecifier.getEnd(),
+      specifier: node.moduleSpecifier.text,
+      start: node.moduleSpecifier.getStart(),
+    };
   }
 
   if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
     const [argument] = node.arguments;
-    if (argument && ts.isStringLiteralLike(argument)) return { specifier: argument.text };
+    if (argument && ts.isStringLiteralLike(argument)) {
+      return {
+        end: argument.getEnd(),
+        specifier: argument.text,
+        start: argument.getStart(),
+      };
+    }
   }
 
   return null;

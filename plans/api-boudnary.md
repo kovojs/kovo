@@ -234,7 +234,7 @@ already excludes `@internal`, but the root barrels can still export those names.
 
 ## Phase 4 — Import Hygiene
 
-- [ ] **Add a compiler diagnostic for app-authored imports from non-public Kovo subpaths.**
+- [x] **Add a compiler diagnostic for app-authored imports from non-public Kovo subpaths.**
   - Done = Kovo app compilation fails when app-authored source imports
     `@kovojs/*/internal`, `@kovojs/*/generated`, or `kovo/internal`; the diagnostic
     cites `SPEC.md` §5.2 because generated/lowered artifacts are compiler-owned and
@@ -248,12 +248,32 @@ already excludes `@internal`, but the root barrels can still export those names.
     `@kovojs/runtime/generated`, and `kovo/internal`; positive fixture for
     compiler-emitted `@kovojs/runtime/generated`; plus
     `pnpm --filter @kovojs/compiler exec vitest run`.
+  - Evidence 2026-06-17 (`agent/api-boundary-import-hygiene`): compiler parser
+    module-specifier facts now carry source spans for static imports, re-exports,
+    and string-literal dynamic `import()`. `validateAuthoringSurface` emits an
+    error diagnostic that cites `SPEC.md §5.2` for app-authored imports from
+    `@kovojs/*/internal`, `@kovojs/*/generated`, and `kovo/internal`, while
+    preserving the `sourceProvenance: 'compiler-emitted'` exemption. Verified by
+    `pnpm --filter @kovojs/compiler exec vitest run` (42 files / 359 tests),
+    including negative fixtures for `@kovojs/core/internal/graph`,
+    `@kovojs/server/internal/html`, `@kovojs/runtime/generated`, `kovo/internal`,
+    and dynamic `import('@kovojs/runtime/generated')`, plus the generated-output
+    contract test for `@kovojs/runtime/generated`.
 - [ ] **Add or extend a repo import-boundary check.**
   - Done = app-facing examples/site/tutorial code cannot import `*/internal` or
     `*/generated`; only packages, tests, generated artifacts, or explicitly-listed
     tool scripts may import internal subpaths, and only generated artifacts plus
     their contract tests may import generated subpaths.
   - Prove: focused import-boundary test plus `pnpm run check`.
+  - Evidence 2026-06-17 (`agent/api-boundary-import-hygiene`):
+    `scripts/import-boundary.mjs` scans app-facing examples, create-kovo
+    templates, site content/src, and tutorial code for static imports,
+    re-exports, and string-literal dynamic imports from non-public Kovo subpaths;
+    it skips generated artifacts and tests and records explicit current internal
+    tool/app exceptions in one allowlist. Verified by
+    `pnpm exec vitest --run scripts/import-boundary.test.mjs` (3 tests) and
+    `node scripts/import-boundary.mjs`. Gap: `pnpm run check` was not run in this
+    slice, so the checklist item remains open pending the broad proof.
 - [ ] **Update generated-artifact tests to pin internal import paths.**
   - Done = compiler/server/runtime generated modules are tested against the real
     package exports they import, so moving a generated ABI symbol requires

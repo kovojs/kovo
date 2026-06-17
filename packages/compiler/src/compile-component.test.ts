@@ -774,6 +774,119 @@ export function renderSource() {
     ]);
   });
 
+  it('reports KV235 for app-authored imports from non-public Kovo subpaths', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import type { KovoExplainInput } from '@kovojs/core/internal/graph';
+import { derive } from '@kovojs/runtime/generated';
+import { main } from 'kovo/internal';
+
+export { escapeHtml } from '@kovojs/server/internal/html';
+
+export const CartBadge = component({
+  render: () => <cart-badge>{derive(() => '2')}</cart-badge>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV235',
+        fileName: 'cart-badge.tsx',
+        help: expect.stringContaining(
+          'SPEC.md §5.2: app-authored source may import Kovo packages only through documented public entrypoints.',
+        ),
+        length: 29,
+        message:
+          'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+        severity: 'error',
+        start: { column: 39, line: 3 },
+      },
+      {
+        code: 'KV235',
+        fileName: 'cart-badge.tsx',
+        help: expect.stringContaining(
+          'Blocked reason: app source imports non-public Kovo subpath `@kovojs/runtime/generated`.',
+        ),
+        length: 27,
+        message:
+          'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+        severity: 'error',
+        start: { column: 24, line: 4 },
+      },
+      {
+        code: 'KV235',
+        fileName: 'cart-badge.tsx',
+        help: expect.stringContaining(
+          'Blocked reason: app source imports non-public Kovo subpath `kovo/internal`.',
+        ),
+        length: 15,
+        message:
+          'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+        severity: 'error',
+        start: { column: 22, line: 5 },
+      },
+      {
+        code: 'KV235',
+        fileName: 'cart-badge.tsx',
+        help: expect.stringContaining(
+          'Blocked reason: app source imports non-public Kovo subpath `@kovojs/server/internal/html`.',
+        ),
+        length: 30,
+        message:
+          'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+        severity: 'error',
+        start: { column: 28, line: 7 },
+      },
+    ]);
+  });
+
+  it('reports KV235 for string-literal dynamic imports from non-public Kovo subpaths', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+const runtime = () => import('@kovojs/runtime/generated');
+
+export const CartBadge = component({
+  render: () => <cart-badge>{runtime.name}</cart-badge>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV235',
+        fileName: 'cart-badge.tsx',
+        help: expect.stringContaining(
+          'Blocked reason: app source imports non-public Kovo subpath `@kovojs/runtime/generated`.',
+        ),
+        length: 27,
+        message:
+          'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+        severity: 'error',
+        start: { column: 30, line: 4 },
+      },
+    ]);
+  });
+
+  it('exempts compiler-emitted modules from non-public generated ABI import diagnostics', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.client.js',
+      source: [
+        "import { handler } from '@kovojs/runtime/generated';",
+        'export const CartBadge$button_click = handler(() => null);',
+        '',
+      ].join('\n'),
+      sourceProvenance: 'compiler-emitted',
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('keeps compiler-emitted IR accepted through explicit fixpoint provenance', () => {
     const emitted = compileComponentModule({
       fileName: 'cart-badge.tsx',
