@@ -1,16 +1,24 @@
 import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { QUESTION_DETAIL_TARGET } from './generated/question-detail.js';
-import { QUESTION_LIST_TARGET } from './generated/question-list.js';
 import { buildSoInteractiveApp } from './interactive-app.js';
 import { answers, questions } from './schema.js';
+
+const questionListTarget = 'question-list-region';
+const questionListComponent = 'components/question-list/question-list-region';
+const questionDetailTarget = 'question-detail-region';
+const questionDetailComponent = 'components/question-detail/question-detail-region';
+
+function liveHeader(target: string, component: string, props: Record<string, unknown> = {}): string {
+  return `${target}#${component}:${JSON.stringify(props)}`;
+}
 
 async function postForm(
   handler: (request: Request) => Promise<Response>,
   key: string,
   fields: Record<string, string>,
   targets: string,
+  liveTargets: string,
 ): Promise<{ status: number; html: string }> {
   const response = await handler(
     new Request(`http://example.test/_m/${key}`, {
@@ -19,6 +27,7 @@ async function postForm(
         'content-type': 'application/x-www-form-urlencoded',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': `${key}-${Object.values(fields).join('-')}`,
+        'Kovo-Live-Targets': liveTargets,
         'Kovo-Targets': targets,
       },
       body: new URLSearchParams(fields),
@@ -48,7 +57,8 @@ describe('stackoverflow interactive app', () => {
           'content-type': 'application/x-www-form-urlencoded',
           'Kovo-Fragment': 'true',
           'Kovo-Idem': 'test-vote-1',
-          'Kovo-Targets': QUESTION_LIST_TARGET,
+          'Kovo-Live-Targets': liveHeader(questionListTarget, questionListComponent),
+          'Kovo-Targets': `${questionListTarget}=questionList questionScore`,
         },
         body: new URLSearchParams({ id: 'v-test', targetId: first.id, userId: 'demo-viewer' }),
       }),
@@ -57,7 +67,7 @@ describe('stackoverflow interactive app', () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     // It is a fragment-wire response targeting the question region.
-    expect(html).toContain(`target="${QUESTION_LIST_TARGET}"`);
+    expect(html).toContain(`target="${questionListTarget}"`);
 
     // The real row was updated.
     const [after] = await db.select().from(questions).where(eq(questions.id, first.id)).limit(1);
@@ -82,11 +92,12 @@ describe('stackoverflow interactive app', () => {
         body: 'A fresh demo answer.',
         authorId: 'demo-viewer',
       },
-      QUESTION_DETAIL_TARGET,
+      `${questionDetailTarget}=answers question`,
+      liveHeader(questionDetailTarget, questionDetailComponent, { questionId: question.id }),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${QUESTION_DETAIL_TARGET}"`);
+    expect(html).toContain(`target="${questionDetailTarget}"`);
     expect(html).toContain('A fresh demo answer.');
 
     const inserted = await db.select().from(answers).where(eq(answers.id, 'a-test-1'));
@@ -108,11 +119,12 @@ describe('stackoverflow interactive app', () => {
         body: 'Asking for a friend.',
         authorId: 'demo-viewer',
       },
-      QUESTION_LIST_TARGET,
+      `${questionListTarget}=questionList questionScore`,
+      liveHeader(questionListTarget, questionListComponent),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${QUESTION_LIST_TARGET}"`);
+    expect(html).toContain(`target="${questionListTarget}"`);
     expect(html).toContain('How do I demo Kovo?');
 
     const rows = await db.select().from(questions);

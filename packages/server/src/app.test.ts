@@ -426,7 +426,6 @@ describe('server createApp request shell', () => {
       csrf: false,
       input: s.object({ productId: s.string() }),
       registry: {
-        queries: [cartQuery],
         touches: [cart],
       },
       handler(input) {
@@ -445,6 +444,7 @@ describe('server createApp request shell', () => {
           },
         ],
         mutations: [addToCart],
+        queries: [cartQuery],
       }),
     );
     const form = new FormData();

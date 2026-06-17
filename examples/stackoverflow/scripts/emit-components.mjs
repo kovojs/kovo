@@ -64,3 +64,26 @@ for (const name of componentNames) {
     writeFileSync(generatedPath, generated);
   }
 }
+
+const liveTargetsPath = resolve(soRoot, 'src/generated/live-targets.ts');
+const liveTargetsSource = `// @kovojs-ir — generated live-target registry for StackOverflow components (SPEC.md section 9.1). Do not edit; regenerate with \`pnpm run emit-components\`.
+import { collectGeneratedLiveTargetRenderers } from '@kovojs/server/internal/wire';
+
+import * as questionDetailModule from './question-detail.js';
+import * as questionListModule from './question-list.js';
+
+export const liveTargetRenderers = collectGeneratedLiveTargetRenderers([
+  questionDetailModule,
+  questionListModule,
+]);
+`;
+
+if (process.argv.includes('--check')) {
+  assert.equal(
+    readFileSync(liveTargetsPath, 'utf8'),
+    liveTargetsSource,
+    'generated live-targets.ts is stale; run `pnpm --filter @kovojs/example-stackoverflow run emit-components`',
+  );
+} else {
+  writeFileSync(liveTargetsPath, liveTargetsSource);
+}

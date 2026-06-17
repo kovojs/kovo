@@ -1,5 +1,10 @@
 import { resolveLifecycleRequest } from './guards.js';
-import { renderMutationEndpointResponse, type MutationDefinition } from './mutation.js';
+import {
+  renderMutationEndpointResponse,
+  type MutationDefinition,
+  type MutationRegistry,
+} from './mutation.js';
+import type { RegisteredQueryDefinition } from './query.js';
 import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
 import type { KovoApp } from './app-types.js';
@@ -37,12 +42,15 @@ export async function handleAppMutationRequest(
     request: mutationRequest,
     url: new URL(url),
   });
-  const requestMutation = mutation as unknown as MutationDefinition<
-    string,
-    Schema<unknown>,
-    Record<string, Schema<unknown>>,
-    Request
-  >;
+  const requestMutation = mutationWithAppQueries(
+    mutation as unknown as MutationDefinition<
+      string,
+      Schema<unknown>,
+      Record<string, Schema<unknown>>,
+      Request
+    >,
+    app.queries,
+  );
   // Derive the build token from the app's client-module registry so it is
   // identical for the page render and this mutation response (SPEC §5.1, §9.1.1).
   const buildToken = app.clientModules.buildToken();
@@ -77,6 +85,37 @@ export async function handleAppMutationRequest(
   });
 
   return serverResponseToWebResponse(mutationResponse, mutationRequest);
+}
+
+function mutationWithAppQueries<Request>(
+  mutation: MutationDefinition<string, Schema<unknown>, Record<string, Schema<unknown>>, Request>,
+  queries: readonly RegisteredQueryDefinition[],
+): MutationDefinition<string, Schema<unknown>, Record<string, Schema<unknown>>, Request> {
+  if (queries.length === 0) return mutation;
+
+  return {
+    ...mutation,
+    registry: mergeMutationRegistryQueries(mutation.registry, queries),
+  };
+}
+
+function mergeMutationRegistryQueries(
+  registry: MutationRegistry | undefined,
+  appQueries: readonly RegisteredQueryDefinition[],
+): MutationRegistry {
+  const queriesByKey = new Map<string, RegisteredQueryDefinition>();
+
+  for (const query of registry?.queries ?? []) {
+    queriesByKey.set(query.key, query);
+  }
+  for (const query of appQueries) {
+    if (!queriesByKey.has(query.key)) queriesByKey.set(query.key, query);
+  }
+
+  return {
+    ...(registry ?? {}),
+    queries: [...queriesByKey.values()],
+  };
 }
 
 async function readMutationRequestBody(request: Request): Promise<unknown> {

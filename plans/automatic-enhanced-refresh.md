@@ -442,6 +442,15 @@ removes app-authored bookkeeping from the enhanced path.
     - Verified with
       `pnpm exec vitest --run packages/server/src/live-target-registry.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts`
       and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
+    - Additional progress 2026-06-17:
+      `packages/server/src/app-mutation-request.ts` now merges app-level
+      `createApp({ queries })` registrations into the mutation registry used for
+      enhanced mutation rerun selection. Mutations no longer have to duplicate
+      the app query list in each `registry.queries` block for generated live
+      targets to refresh.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts packages/server/src/live-target-registry.test.ts`
+      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
     - Remaining gaps: build/app-shell integration still needs to collect the
       generated renderer exports without app-authored `createApp()` wiring; the
       broad app-authored `mutationResponse` success-routing escape hatch is
@@ -475,9 +484,24 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-stackoverflow test`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Additional progress 2026-06-17:
+      `examples/stackoverflow/src/interactive-app.ts` no longer defines an
+      ordinary `mutationResponse` switch, `fragmentRenderers`, generated target
+      constant imports, `renderQuestionListRegionFromDb`, or
+      `renderQuestionDetailRegionFromDb`. It uses generated live-target
+      renderers for ordinary enhanced mutation success; tests now post
+      `Kovo-Live-Targets` descriptors and prove the real PGlite mutation response
+      renders affected list/detail fragments from generated server truth.
+    - `examples/stackoverflow/scripts/emit-components.mjs` now emits
+      `src/generated/live-targets.ts`, which collects the generated
+      `*$liveTargetRenderer` exports with the framework-owned collector.
+    - Verified with
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`
+      and
+      `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`.
     - Remaining gaps: list-region presentational enrichment is still outside the
-      declared query model; generated target imports, `mutationResponse`
-      fragment routing, and route-page wrapper helpers are still present.
+      declared query model; route-page wrapper helpers and a transitional
+      generated live-target registry import are still present.
 - [ ] **8. Migrate CRM.**
   - Move contact/deal/detail presentation data into declared queries or explicit
     component query args.
