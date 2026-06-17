@@ -7,6 +7,7 @@ import {
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
+  type SourceSpan,
 } from '../scan/parse.js';
 import type { CompileComponentOptions } from '../types.js';
 export type { OutputContext } from '../output-context-facts.js';
@@ -28,11 +29,14 @@ export function validateOutputContexts(
   source: string,
   model: ComponentModuleModel,
   options: CompileComponentOptions,
+  compilerOwnedStyleSpans: readonly SourceSpan[] = [],
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
 
   for (const element of jsxElements(model)) {
-    diagnostics.push(...validateElementAttributes(source, element, options.fileName));
+    diagnostics.push(
+      ...validateElementAttributes(source, element, options.fileName, compilerOwnedStyleSpans),
+    );
   }
 
   diagnostics.push(...validateComponentCssText(source, model, options.fileName));
@@ -68,6 +72,7 @@ function validateElementAttributes(
   source: string,
   element: JsxElementModel,
   fileName: string,
+  compilerOwnedStyleSpans: readonly SourceSpan[],
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
   const hasExternalEscape = element.attributes.some((attribute) => attribute.name === 'external');
@@ -79,6 +84,7 @@ function validateElementAttributes(
     }
 
     if (attribute.name === 'style') {
+      if (spanContainsAttribute(compilerOwnedStyleSpans, attribute)) continue;
       diagnostics.push(...validateStyleAttribute(source, attribute, fileName));
       continue;
     }
@@ -115,6 +121,15 @@ function validateElementAttributes(
   }
 
   return diagnostics;
+}
+
+function spanContainsAttribute(
+  spans: readonly SourceSpan[],
+  attribute: JsxAttributeModel,
+): boolean {
+  return spans.some(
+    (span) => attribute.start >= span.start && attribute.end <= span.end,
+  );
 }
 
 function validateUrlAttribute(

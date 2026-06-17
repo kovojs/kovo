@@ -1,5 +1,5 @@
 import type { CompilerDiagnostic } from '../diagnostics.js';
-import type { ComponentModuleModel } from '../scan/parse.js';
+import type { ComponentModuleModel, SourceSpan } from '../scan/parse.js';
 import type { SourceOffsetMap } from '../shared.js';
 import type { CompileComponentOptions, QueryUpdateCoverageFact } from '../types.js';
 import { validateDataBindings, validateStampExpressionDrift } from './bindings.js';
@@ -35,6 +35,7 @@ interface ValidatorContext {
   model: ComponentModuleModel;
   options: CompileComponentOptions;
   originalModel: ComponentModuleModel;
+  styleOwnedSpans: readonly SourceSpan[];
   source: string;
   sourceOffsetMap: SourceOffsetMap;
   updateCoverage: readonly QueryUpdateCoverageFact[];
@@ -67,7 +68,8 @@ const compilerValidators: readonly CompilerValidator[] = [
     ),
   ({ model, options, source }) => validateStaticIds(source, model, options.fileName),
   ({ model, options, source }) => validateLiteralHrefs(source, model, options),
-  ({ options, originalModel }) => validateOutputContexts(options.source, originalModel, options),
+  ({ options, originalModel, styleOwnedSpans }) =>
+    validateOutputContexts(options.source, originalModel, options, styleOwnedSpans),
   ({ model, options, source }) => validateHtmlContentModel(source, model, options.fileName),
   ({ model, options, source }) => validateEventTriggerNames(source, model, options.fileName),
   ({ model, options, source }) => validateResidualStamps(source, model, options),

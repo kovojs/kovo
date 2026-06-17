@@ -110,28 +110,43 @@ compiler-quality gaps found during the 2026-06-16 audit.
         a typed terminal stamp phase with conflict detection.
   - [ ] Migrate state derive URL versioning from attribute string patches to typed derive/reference
         facts.
-  - [ ] Migrate static StyleX/style extraction attribute rewrites into the JSX IR or prove the style
+  - [x] Migrate static StyleX/style extraction attribute rewrites into the JSX IR or prove the style
         phase is terminal and conflict-checked.
   - [ ] Add writer/provenance diagnostics for conflicts between author, primitive, structural
         lowerer, style lowerer, server stamp, and handler stamp writers.
+  - Evidence (2026-06-17): `packages/compiler/src/style.ts` now records StyleX-owned static and
+        dynamic style attribute spans; `packages/compiler/src/compile.ts` threads those spans into
+        `collectCompilerDiagnostics`, and `packages/compiler/src/security/output-context.ts` uses
+        them to keep arbitrary dynamic `style={...}` red while accepting compiler-owned StyleX
+        replacements as already-lowered class/CSS output.
+  - Evidence (2026-06-17): `packages/compiler/src/structural-jsx-ir.test.ts` composes static
+        StyleX extraction with the structural JSX fixture, including extracted atomic CSS,
+        `data-style-src`, style rule attribution, and no KV236 diagnostic.
+  - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest --run
+        src/structural-jsx-ir.test.ts src/style.test.ts src/output-context-security.test.ts`
+        passed.
 
-- [ ] Prove structural rewrite composition with one end-to-end fixture.
+- [x] Prove structural rewrite composition with one end-to-end fixture.
   - [x] Include primitive attrs/asChild in the fixture.
   - [x] Include `Link` lowering in the fixture.
-  - [ ] Include dynamic `viewTransitionName` lowering in the fixture.
-  - [ ] Include StyleX/static style extraction in the fixture.
+  - [x] Include dynamic `viewTransitionName` lowering in the fixture.
+  - [x] Include StyleX/static style extraction in the fixture.
   - [x] Include state and query attribute derives in the fixture.
   - [x] Include mixed text binding insertion in the fixture.
   - [x] Include nested children and fragment-target/slot-like child shape.
   - [x] Include platform substitution in the fixture.
   - [x] Include handler stamping and chained primitive handler refs in the fixture.
-  - [ ] Assert the output is stable independent of transform registration order, either by a
+  - [x] Assert the output is stable independent of transform registration order, either by a
         deliberate order-shuffle test or by a typed IR phase-order invariant.
   - Evidence (2026-06-17): `packages/compiler/src/structural-jsx-ir.test.ts` fixture
         `composes overlap-prone JSX rewrites through one canonical tree` now combines primitive
-        `attrs`/`asChild`, `Link` lowering, query `title` derive, state `hidden` derive, mixed text
-        binding insertion, nested child shape, fragment target facts, platform dialog substitution,
-        and author+primitive handler chaining.
+        `attrs`/`asChild`, `Link` lowering, dynamic `viewTransitionName` style derive, static
+        StyleX extraction, query `title` derive, state `hidden` derive, mixed text binding
+        insertion, nested child shape, fragment target facts, platform dialog substitution, and
+        author+primitive handler chaining.
+  - Evidence (2026-06-17): `packages/compiler/src/lower/structural-jsx.ts` exports
+        `structuralJsxPhaseOrder`, and `packages/compiler/src/structural-jsx-ir.test.ts` snapshots
+        the typed phase-order invariant used to keep JSX IR structural rewrites deterministic.
   - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest run
         src/structural-jsx-ir.test.ts` passes.
 

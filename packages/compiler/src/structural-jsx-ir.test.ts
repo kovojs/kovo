@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
+import { structuralJsxPhaseOrder } from './lower/structural-jsx.js';
 
 describe('structural JSX IR lowering', () => {
   it('composes overlap-prone JSX rewrites through one canonical tree', () => {
@@ -8,7 +9,15 @@ describe('structural JSX IR lowering', () => {
       fileName: 'product-page.tsx',
       registryFacts: { queries: { product: 'ProductQuery' }, routes: ['/products/:id'] },
       source: `
+import * as style from '@kovojs/style';
 import { selectProduct } from './handlers';
+
+const styles = style.create({
+  badge: {
+    backgroundColor: 'black',
+    color: 'white',
+  },
+}, { namespace: 'productBadge', source: 'product-page.tsx' });
 
 export const ProductPage = component({
   fragmentTarget: true,
@@ -36,6 +45,8 @@ export const ProductPage = component({
           <span>{state.open ? 'open' : 'closed'}</span>
         </Link>
       </Tooltip.Trigger>
+      <img viewTransitionName={product.slug} src="/hero.png" />
+      <span style={styles.badge}>Styled</span>
       <button onClick={() => document.getElementById('details')!.showModal()}>Details</button>
       <dialog id="details">Details</dialog>
     </product-page>
@@ -45,6 +56,7 @@ export const ProductPage = component({
     });
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
+    const cssSource = result.files.find((file) => file.kind === 'css')?.source ?? '';
 
     expect(result.diagnostics).toEqual([]);
     expect(serverSource).not.toContain('Tooltip.Trigger');
@@ -63,11 +75,19 @@ export const ProductPage = component({
     expect(serverSource).toContain('data-bind:hidden="/c/product-page.client.js?v=');
     expect(serverSource).toContain('Product <span data-bind="product.name">{product.name}</span>');
     expect(serverSource).toContain('#ProductPage$span_text_derive');
+    expect(serverSource).toContain(
+      '<img data-derive="product.ProductPage$img_style_derive" data-derive-attr="style" src="/hero.png"',
+    );
+    expect(serverSource).toContain('data-style-src="product-page.tsx#badge"');
+    expect(serverSource).toMatch(/class="kv-product-badge-bg-[^"]+ kv-product-badge-fg-[^"]+"/);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, derive, handler } from '@kovojs/runtime';",
+      "import { applyCompiledQueryUpdatePlan, derive, handler, kovoStyleProperty } from '@kovojs/runtime';",
     );
     expect(clientSource).toContain(
       'export const ProductPage$a_title_derive = derive(["product"], (product) => product.name.toUpperCase());',
+    );
+    expect(clientSource).toContain(
+      'export const ProductPage$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));',
     );
     expect(clientSource).toContain('export const ProductPage$selectProduct');
     expect(clientSource).toContain('selectProduct(event, ctx)');
@@ -81,10 +101,22 @@ export const ProductPage = component({
       expect.objectContaining({
         query: 'product',
         stamps: expect.arrayContaining([
+          expect.objectContaining({ attr: 'style' }),
           expect.objectContaining({ attr: 'title' }),
         ]),
       }),
     ]);
+    expect(cssSource).toContain('@layer kovo-style.3000');
+    expect(cssSource).toContain('.kv-product-badge-bg-');
+    expect(result.cssAssets[0]?.styleRuleUsages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          moduleFileName: 'product-page.tsx',
+          source: 'product-page.tsx#badge',
+          styleRef: 'styles.badge',
+        }),
+      ]),
+    );
     expect(result.componentGraphFacts[0]).toMatchObject({
       fragments: ['product-page/product-page'],
     });
@@ -98,6 +130,21 @@ export const ProductPage = component({
       },
     ]);
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('keeps the JSX IR structural phase order explicit', () => {
+    expect(structuralJsxPhaseOrder).toMatchInlineSnapshot(`
+      [
+        "primitive-spreads",
+        "primitive-composition",
+        "link-navigation",
+        "view-transition-name",
+        "inline-attribute-derives",
+        "inline-text-bindings",
+        "static-text-escaping",
+        "helper-import-insertion",
+      ]
+    `);
   });
 
   it('inserts generated imports deterministically for mixed structural helpers', () => {

@@ -29,6 +29,7 @@ import type {
   JsxAttributeModel,
   JsxExpressionModel,
   ObjectLiteralEntry,
+  SourceSpan,
 } from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
 import { literalStringValue } from '../scan/object.js';
@@ -49,7 +50,7 @@ type StructuralJsxLoweringOptions = Pick<
   CompileComponentOptions,
   'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts' | 'source'
 > & {
-  skipInlineAttributeDeriveSpans?: readonly { length: number; start: number }[];
+  skipInlineAttributeDeriveSpans?: readonly SourceSpan[];
 };
 
 interface InlineAttributeDerive {
@@ -76,6 +77,17 @@ export interface StructuralJsxLowering {
   stateDerives: readonly StateDeriveFact[];
   viewTransitionStamps: readonly ViewTransitionStamp[];
 }
+
+export const structuralJsxPhaseOrder = [
+  'primitive-spreads',
+  'primitive-composition',
+  'link-navigation',
+  'view-transition-name',
+  'inline-attribute-derives',
+  'inline-text-bindings',
+  'static-text-escaping',
+  'helper-import-insertion',
+] as const;
 
 export function lowerStructuralJsx(
   model: ComponentModuleModel,
@@ -1036,7 +1048,7 @@ function inlineAttributeDeriveSkippedBySpan(
       attribute.expressionStart !== undefined &&
       attribute.expressionEnd !== undefined &&
       attribute.expressionStart >= span.start &&
-      attribute.expressionEnd <= span.start + span.length,
+      attribute.expressionEnd <= span.end,
   );
 }
 

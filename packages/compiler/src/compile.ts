@@ -25,6 +25,7 @@ import {
   parseComponentModule as parseComponentModuleModel,
   firstComponentModel,
   type ComponentModuleModel,
+  type SourceSpan,
 } from './scan/parse.js';
 import {
   applyModelPatchPass,
@@ -136,6 +137,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     diagnosticSource,
     source,
     sourceOffsetMap: validationOffsetMap,
+    styleOwnedSpans: styleExtraction.handledSpans,
     updateCoverage,
   });
   const fileNames = compileArtifactFileNames(options.fileName);
@@ -354,7 +356,7 @@ function dedupeOutputContextFacts(
 function mergeStyleUpdateCoverage(
   coverage: readonly QueryUpdateCoverageFact[],
   styleCoverage: readonly QueryUpdateCoverageFact[],
-  handledSpans: readonly { length: number; start: number }[],
+  handledSpans: readonly SourceSpan[],
 ): QueryUpdateCoverageFact[] {
   if (styleCoverage.length === 0) return [...coverage];
 
@@ -372,10 +374,10 @@ function mergeStyleUpdateCoverage(
 }
 
 function containsSourceSpan(
-  outer: { length: number; start: number },
+  outer: SourceSpan,
   inner: { length: number; start: number },
 ): boolean {
-  return inner.start >= outer.start && inner.start + inner.length <= outer.start + outer.length;
+  return inner.start >= outer.start && inner.start + inner.length <= outer.end;
 }
 
 function dedupeByKey<Value>(values: readonly Value[], keyFor: (value: Value) => string): Value[] {

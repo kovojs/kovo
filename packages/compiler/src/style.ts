@@ -12,7 +12,7 @@ import ts from 'typescript';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import type { StyleRuleUsage } from './css.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
-import type { ComponentModuleModel, JsxAttributeModel } from './scan/parse.js';
+import type { ComponentModuleModel, JsxAttributeModel, SourceSpan } from './scan/parse.js';
 import { knownQueryNames, queryNameFromPath } from './analyze/query-shapes.js';
 import type {
   CompileComponentOptions,
@@ -51,11 +51,6 @@ interface StyleEnvironment {
 interface ParsedExpression {
   readonly expression: ts.Expression;
   readonly sourceFile: ts.SourceFile;
-}
-
-interface SourceSpan {
-  readonly length: number;
-  readonly start: number;
 }
 
 interface DynamicStyleLowering {
@@ -98,7 +93,7 @@ export function extractKovoStyles(
 
   return {
     css,
-    handledSpans: lowered.dynamic.map((entry) => entry.handledSpan),
+    handledSpans: lowered.handledSpans,
     outputContexts: css
       ? [
           outputWriteFact({
@@ -267,7 +262,12 @@ function styleAttributeReplacements(
   bindings: ReadonlyMap<string, StyleBinding>,
   componentName: string,
   options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'>,
-): { readonly dynamic: readonly DynamicStyleLowering[]; readonly replacements: readonly SourceReplacement[] } {
+): {
+  readonly dynamic: readonly DynamicStyleLowering[];
+  readonly handledSpans: readonly SourceSpan[];
+  readonly replacements: readonly SourceReplacement[];
+} {
+  const handledSpans: SourceSpan[] = [];
   const replacements: SourceReplacement[] = [];
   const dynamic: DynamicStyleLowering[] = [];
   const knownQueries = knownQueryNames(model, options);
@@ -290,12 +290,14 @@ function styleAttributeReplacements(
         );
         if (!lowered) continue;
         dynamic.push(lowered);
+        handledSpans.push(lowered.handledSpan);
         replacements.push(lowered.replacement);
         continue;
       }
       const merged = attrs(resolved.map((binding) => binding.style));
       const replacement = styleAttributeReplacement(merged);
       if (!replacement) continue;
+      handledSpans.push({ end: attribute.end, start: attribute.start });
       replacements.push({
         end: attribute.end,
         replacement,
@@ -304,7 +306,7 @@ function styleAttributeReplacements(
     }
   }
 
-  return { dynamic, replacements };
+  return { dynamic, handledSpans, replacements };
 }
 
 function styleAttributeReplacement(attributes: ReturnType<typeof attrs>): string | null {
@@ -382,7 +384,7 @@ function dynamicStyleAttributeLowering(
 
   return {
     coverage,
-    handledSpan: { length: attribute.expression.length, start: attribute.expressionStart ?? attribute.start },
+    handledSpan: { end: attribute.end, start: attribute.start },
     ...(stateOnly
       ? {
           stateDerive: {
