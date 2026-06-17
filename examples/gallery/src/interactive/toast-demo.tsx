@@ -15,10 +15,10 @@ import {
   toastViewportKeyDown as _toastViewportKeyDown,
 } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/toast.tsx)
+// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/toast.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so the classes are
-// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+// directly is KV234 (component package without a prefix), so matching class
+// strings stay in this TSX-authored gallery fixture.
 const VIEWPORT_CLASS =
   'fixed z-50 grid w-full max-w-sm gap-2 p-4 outline-none data-[placement=top-start]:left-0 data-[placement=top-start]:top-0 data-[placement=top-end]:right-0 data-[placement=top-end]:top-0 data-[placement=bottom-start]:bottom-0 data-[placement=bottom-start]:left-0 data-[placement=bottom-end]:bottom-0 data-[placement=bottom-end]:right-0 data-[placement=top-center]:left-1/2 data-[placement=top-center]:top-0 data-[placement=bottom-center]:bottom-0 data-[placement=bottom-center]:left-1/2 data-[disabled]:opacity-50';
 const TOAST_CLASS =

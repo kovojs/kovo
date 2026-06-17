@@ -102,10 +102,10 @@ import {
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
 } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/scroll-area.tsx)
+// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/scroll-area.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so the classes are
-// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+// directly is KV234 (component package without a prefix), so matching class
+// strings stay in this TSX-authored gallery fixture.
 // The viewport keeps its inline max-height/overflow style so the demo stays short
 // enough to scroll; that inline style wins over the @kovojs/ui max-h-56 utility.
 // TOGGLE_CLASS uses the @kovojs/ui button base (packages/ui/src/button.tsx) since the

@@ -67,8 +67,8 @@ export const galleryInteractiveRoute = route('/gallery/interactive', {
   },
   // SPEC §13.1: the document head delivers the stylesheet. The gallery is
   // exported into the docs dist alongside exportSiteStaticApp, which copies the
-  // Tailwind build to /assets/site.css (it @sources examples/gallery/src), so
-  // without this hint the demos render unstyled. Matches the docs pages' link.
+  // built docs stylesheet to /assets/site.css, so without this hint the demos
+  // render unstyled. Matches the docs pages' link.
   stylesheets: ['/assets/site.css'],
 });
 

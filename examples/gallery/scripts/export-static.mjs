@@ -8,8 +8,8 @@ const galleryRoot = fileURLToPath(new URL('../', import.meta.url));
 const repoRoot = path.resolve(galleryRoot, '../..');
 const defaultDistDir = path.join(galleryRoot, 'dist');
 // SPEC §13.1: the document head links /assets/site.css. The standalone export ships it as a static
-// asset (the Tailwind build `@source`s examples/gallery/src) so the demos render styled instead of
-// 404-ing the stylesheet. Built by the docs `vite build` into site/dist-css/assets/site.css.
+// asset so the demos render styled instead of 404-ing the stylesheet. Built by the docs
+// `vite build` into site/dist-css/assets/site.css.
 const galleryStylesheetSource = path.join(repoRoot, 'site/dist-css/assets/site.css');
 
 export async function exportGalleryInteractiveStatic({

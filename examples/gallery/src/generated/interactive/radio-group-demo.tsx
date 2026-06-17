@@ -64,10 +64,10 @@ import {
   radioGroupRootAttributes,
 } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/radio-group.tsx)
+// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/radio-group.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so the classes are
-// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+// directly is KV234 (component package without a prefix), so matching class
+// strings stay in this TSX-authored gallery fixture.
 const ROOT_CLASS =
   'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[orientation=horizontal]:flex data-[orientation=horizontal]:flex-wrap data-[orientation=horizontal]:items-center data-[invalid]:text-red-950';
 const ITEM_CLASS =

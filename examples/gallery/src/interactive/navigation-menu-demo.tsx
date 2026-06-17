@@ -19,10 +19,10 @@ import {
   type NavigationMenuItem,
 } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/navigation-menu.tsx)
+// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/navigation-menu.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so the classes are
-// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+// directly is KV234 (component package without a prefix), so matching class
+// strings stay in this TSX-authored gallery fixture.
 const LIST_CLASS =
   'flex list-none items-center gap-1 rounded-md border border-neutral-200 bg-white p-1 shadow-sm data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch';
 const ITEM_CLASS = 'relative data-[disabled]:opacity-50';

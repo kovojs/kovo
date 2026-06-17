@@ -10,10 +10,10 @@ import {
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/drawer.tsx)
+// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/drawer.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so the classes are
-// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+// directly is KV234 (component package without a prefix), so matching class
+// strings stay in this TSX-authored gallery fixture.
 // CONTENT_CLASS is drawerContentClassNames base + the `bottom` side variant.
 const TRIGGER_CLASS =
   'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50';
