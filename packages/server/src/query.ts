@@ -183,7 +183,10 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   const value = definition.load
     ? await definition.load(input, { request: lifecycleRequest })
     : (null as Value);
-  return { input, ok: true, value };
+  const outputResult = parseQueryOutput(definition, value);
+  if (!outputResult.ok) return outputResult.failure;
+
+  return { input, ok: true, value: outputResult.value };
 }
 
 export type QueryEndpointResult<Value, Input = unknown> =
@@ -199,12 +202,12 @@ export interface QueryEndpointSuccess<Value, Input = unknown> {
 export interface QueryEndpointFailure {
   auth?: ResolvedGuardFailure['auth'];
   error: {
-    code: 'RATE_LIMITED' | 'UNAUTHORIZED' | 'VALIDATION';
+    code: 'KV410' | 'RATE_LIMITED' | 'UNAUTHORIZED' | 'VALIDATION';
     payload: Record<string, unknown> | ValidationFailurePayload;
   };
   ok: false;
   retryAfter?: number;
-  status: 422 | 429;
+  status: 422 | 429 | 500;
 }
 
 /**
@@ -320,6 +323,33 @@ function parseQueryInput<const Key extends string, Value, Input, Request>(
         },
         ok: false,
         status: 422,
+      },
+      ok: false,
+    };
+  }
+}
+
+function parseQueryOutput<const Key extends string, Value, Input, Request>(
+  definition: QueryDefinition<Key, Value, Input, Request>,
+  value: Value,
+): { ok: true; value: Value } | { failure: QueryEndpointFailure; ok: false } {
+  if (!definition.output) return { ok: true, value };
+
+  try {
+    // SPEC.md §10.2 KV410 + §11.2: opaque query projections with declared
+    // output schemas are verified against the observed runtime result.
+    return { ok: true, value: definition.output.parse(value) };
+  } catch (error) {
+    if (!isSchemaValidationError(error)) throw error;
+
+    return {
+      failure: {
+        error: {
+          code: 'KV410',
+          payload: {},
+        },
+        ok: false,
+        status: 500,
       },
       ok: false,
     };

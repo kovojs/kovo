@@ -763,15 +763,23 @@ integration harness uniquely proves.
     served KV407 diagnostic for an undeclared `audit_log` read. Proving commands: same Playwright,
     verifier vitest, and path-scoped `vp check` commands recorded under
     `touch-graph-runtime-crosscheck`.
-- [ ] `opaque-projection-schema` / `opaque-projection-schema.spec.ts`: raw/`sql<T>` projections with a
+- [x] `opaque-projection-schema` / `opaque-projection-schema.spec.ts`: raw/`sql<T>` projections with a
       declared output schema render when observed rows match and fail when runtime shape drifts.
   - SPEC refs: §10.2 KV410, §11.2 runtime shape verification.
   - Assertions: matching projection binds in UI; drift fixture reports KV410 without leaking internals.
-  - Gap: the public harness path validates query `output` schemas in
-    `packages/test/src/harness-operations.ts`, but the live server query path in
-    `packages/server/src/query.ts` renders `runQuery(...)` results without any `output` parse step,
-    so a browser-served `/_q/...` or mutation-rerun fixture cannot currently surface a real KV410
-    runtime-shape failure for opaque projections.
+  - Evidence: `packages/server/src/query.ts` now parses `query.output` inside `runQuery(...)` before
+    rendering typed-read wire chunks, returning safe `{"code":"KV410","payload":{}}` JSON for
+    schema drift without exposing row internals. `tests/integration/fixtures/opaque-projection-schema`
+    defines matching and drifted opaque projections; `tests/integration/specs/opaque-projection-schema.spec.ts`
+    verifies the matching projection binds in the UI and `/_q/projection-drift` returns KV410.
+    Proving commands: `pnpm exec vitest run packages/server/src/query-endpoint.test.ts`;
+    `pnpm exec vitest run packages/test/src/query-verifier.test.ts
+    packages/test/src/harness-operations.test.ts`; `pnpm exec playwright test
+    tests/integration/specs/opaque-projection-schema.spec.ts --config
+    tests/integration/playwright.config.ts --workers=1`; `pnpm exec vp check
+    packages/server/src/query.ts packages/server/src/query-endpoint.test.ts
+    tests/integration/fixtures/opaque-projection-schema/app.tsx
+    tests/integration/specs/opaque-projection-schema.spec.ts`.
 - [x] `exempt-table-read-fails` / `exempt-table-read-fails.spec.ts`: a query reading an exempt table is
       rejected because exemptions are write-side only.
   - SPEC refs: §10.1 KV411, §11.2 runtime verification.
