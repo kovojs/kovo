@@ -7,9 +7,15 @@ import {
 
 import { LateCard } from './late-card';
 
-const lateCardTarget =
-  kovoFixtureStylesheetManifest().find((asset) => asset.componentName === 'late-card')
-    ?.fragmentTargets[0] ?? 'late-card/late-card';
+const lateCardAsset = kovoFixtureStylesheetManifest().find(
+  (asset) => asset.componentName === 'late-card',
+);
+const lateCardStylesheets =
+  lateCardAsset && lateCardAsset.fragmentTargets.length > 0
+    ? kovoFixtureStylesheetsForTargets(lateCardAsset.fragmentTargets)
+    : lateCardAsset
+      ? [lateCardAsset]
+      : [];
 
 export const revealLateCard = mutation('fragment-style-metadata/reveal', {
   csrf: false,
@@ -38,7 +44,7 @@ export default defineFixture({
           {
             mode: 'append',
             render: () => LateCard.definition.render() as string,
-            stylesheets: kovoFixtureStylesheetsForTargets([lateCardTarget]),
+            stylesheets: lateCardStylesheets,
             target: 'late-card',
           },
         ],

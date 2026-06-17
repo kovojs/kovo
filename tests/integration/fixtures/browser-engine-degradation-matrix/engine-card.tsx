@@ -4,6 +4,7 @@ import { component } from '@kovojs/core';
 import { engineQuery, type EngineResult } from './shared';
 
 export const EngineMatrixCard = component({
+  disableServerRefresh: true,
   queries: { engine: engineQuery },
   render: ({ engine }: { engine: EngineResult }) => (
     <engine-matrix-card kovo-fragment-target="engine-card">

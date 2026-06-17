@@ -40,7 +40,7 @@ const homeRoute = route('/', {
     return `${renderQueryScript({ name: 'inventory', value: inventory })}
     <script type="module" src="/client.ts"></script>
     <main>
-      <inventory-panel kovo-deps="inventory">
+      <inventory-panel id="inventory-panel" kovo-deps="inventory">
         <p><span data-bind="inventory.label">${inventory.label}</span>: <span data-bind="inventory.count">${inventory.count}</span></p>
         <button type="button" data-bind:disabled="/derive.ts#Inventory$disableWhenUnavailable">Ship order</button>
       </inventory-panel>
@@ -55,8 +55,6 @@ const app = createApp({
   mutations: [sellOutInventory],
   queries: [inventoryQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key }) =>
-    key === sellOutInventory.key ? { fragmentRenderers: [], redirectTo: '/' } : undefined,
 });
 
 export default defineFixture({

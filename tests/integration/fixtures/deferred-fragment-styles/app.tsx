@@ -7,10 +7,15 @@ import {
 
 import { DeferredReview } from './deferred-review';
 
-const reviewTarget =
-  kovoFixtureStylesheetManifest().find((asset) => asset.componentName === 'deferred-review')
-    ?.fragmentTargets[0] ?? 'deferred-review/deferred-review';
-const reviewStylesheets = kovoFixtureStylesheetsForTargets([reviewTarget]);
+const reviewAsset = kovoFixtureStylesheetManifest().find(
+  (asset) => asset.componentName === 'deferred-review',
+);
+const reviewStylesheets =
+  reviewAsset && reviewAsset.fragmentTargets.length > 0
+    ? kovoFixtureStylesheetsForTargets(reviewAsset.fragmentTargets)
+    : reviewAsset
+      ? [reviewAsset]
+      : [];
 
 const homeRoute = route('/', {
   page: () => `<main>

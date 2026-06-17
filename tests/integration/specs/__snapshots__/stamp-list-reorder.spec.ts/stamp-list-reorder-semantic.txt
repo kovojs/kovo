@@ -1,4 +1,4 @@
-<board-list kovo-deps="board">
+<board-list kovo-deps="board" kovo-fragment-target="board-list">
   <ol aria-label="Board order" data-bind-list="board.items" kovo-key="id">
     <li data-row="b" kovo-key="b">
       <span data-bind=".rank">

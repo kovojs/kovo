@@ -11,6 +11,7 @@ interface BalanceShellSlots {
 }
 
 export const BalanceShell = component({
+  disableServerRefresh: true,
   queries: { slotBalance: balanceQuery },
   render: (
     { slotBalance }: { slotBalance: BalanceResult },

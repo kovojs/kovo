@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/integration';
 
 test.use({ kovoFixture: 'stamp-list-reorder' });
 
-test('keyed template stamps reorder without replacing existing row identity', async ({
+test('keyed template stamps reorder through fragment patches without replacing row identity', async ({
   page,
   kovoApp,
 }) => {
@@ -25,8 +25,7 @@ test('keyed template stamps reorder without replacing existing row identity', as
     page.getByRole('button', { name: 'Reorder board' }).click(),
   ]);
   const body = await response.text();
-  expect(body).toContain('<kovo-query name="board">');
-  expect(body).not.toContain('<kovo-fragment');
+  expect(body).toContain('<kovo-fragment target="board-list">');
 
   await expect(rows).toHaveText(['1 Beta', '2 Gamma', '3 Alpha moved']);
   await expect(page.locator('[data-bind-list="board.items"] > li').nth(2)).toHaveAttribute(

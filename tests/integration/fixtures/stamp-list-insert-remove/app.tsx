@@ -45,6 +45,11 @@ function renderList(cart: CartResult): string {
   </ul>`;
 }
 
+async function renderCartList(db: KovoFixtureRequest['db']): Promise<string> {
+  const cart = await readCart(db);
+  return `<cart-list kovo-fragment-target="cart-list" kovo-deps="cart">${renderList(cart)}</cart-list>`;
+}
+
 export const cartQuery = query('cart', {
   load: (_input: unknown, context?: { request: KovoFixtureRequest }) =>
     readCart(context?.request.db as KovoFixtureRequest['db']),
@@ -78,7 +83,7 @@ const homeRoute = route('/', {
     return `${renderQueryScript({ name: 'cart', value: cart })}
     <script type="module" src="/client.ts"></script>
     <main>
-      <cart-list kovo-deps="cart">${renderList(cart)}</cart-list>
+      ${await renderCartList(request.db)}
       <form method="post" action="/_m/stamp-list-insert-remove/change" enhance data-mutation="stamp-list-insert-remove/change" kovo-deps="cart">
         <input type="hidden" name="mode" value="insert" />
         <button type="submit">Insert item</button>
@@ -95,8 +100,14 @@ const app = createApp({
   mutations: [changeCart],
   queries: [cartQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key }) =>
-    key === changeCart.key ? { fragmentRenderers: [], redirectTo: '/' } : undefined,
+  mutationResponse: ({ key, request }) => {
+    if (key !== changeCart.key) return undefined;
+    const db = (request as unknown as KovoFixtureRequest).db;
+    return {
+      fragmentRenderers: [{ render: () => renderCartList(db), target: 'cart-list' }],
+      redirectTo: '/',
+    };
+  },
 });
 
 export default defineFixture({

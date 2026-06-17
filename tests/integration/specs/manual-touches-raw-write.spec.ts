@@ -18,7 +18,7 @@ test('runtime-verifies raw writes covered by manual touches and refreshes depend
   ]);
 
   const body = await response.text();
-  expect(body).toContain('<kovo-query name="cart">{"count":1}</kovo-query>');
+  expect(body).toContain('<kovo-fragment target="cart-count">');
   expect(body).toContain('data-testid="cart-count">1</output>');
 
   await expect(page.getByTestId('cart-count')).toHaveText('1');

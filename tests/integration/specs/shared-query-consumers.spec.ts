@@ -23,8 +23,9 @@ test('ships one query value and updates multiple dependent islands together', as
     page.getByRole('button', { name: 'Publish profile' }).click(),
   ]);
   const body = await response.text();
-  expect(body.match(/<kovo-query\b/g)?.length).toBe(1);
-  expect(body).toContain('<kovo-query name="profile">');
+  expect(body.match(/<kovo-fragment\b/g)?.length).toBe(2);
+  expect(body).toContain('<kovo-fragment target="profile-summary">');
+  expect(body).toContain('<kovo-fragment target="profile-status">');
 
   await expect(page.locator('profile-summary [data-bind="profile.name"]')).toHaveText(
     'Grace Hopper',

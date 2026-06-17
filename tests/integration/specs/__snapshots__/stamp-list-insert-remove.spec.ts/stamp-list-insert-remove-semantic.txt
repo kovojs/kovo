@@ -1,4 +1,4 @@
-<cart-list kovo-deps="cart">
+<cart-list kovo-deps="cart" kovo-fragment-target="cart-list">
   <ul aria-label="Cart items" data-bind-list="cart.items" kovo-key="id">
     <li data-row="a" kovo-key="a">
       <span data-bind=".qty">
