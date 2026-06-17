@@ -20,12 +20,14 @@ import { extractKovoStyles } from './style.js';
 // does not lower the package's `<Component>` JSX into prefixed hosts or stamp
 // `kovo-c`/behavior attributes (no package-component host-lowering exists yet).
 
+/** @internal First-party build API (example app `emit-ui-css` scripts). */
 export interface PackageComponentCssDiagnostic {
   /** Package-relative source file whose `style.create(...)` produced no CSS. */
   readonly fileName: string;
   readonly message: string;
 }
 
+/** @internal First-party build API (example app `emit-ui-css` scripts). */
 export interface PackageComponentCssResult {
   /** Deduped CSS across every styled component file in the package. */
   readonly css: string | null;
@@ -48,6 +50,8 @@ interface ResolvedPackage {
  * Extract the StyleX CSS for every styled component file reachable through a
  * package's `exports` map. Returns deduped CSS ready to serve as one stylesheet
  * asset, plus coverage diagnostics for files whose styles could not be lowered.
+ *
+ * @internal First-party build API (example app `emit-ui-css` scripts).
  */
 export function extractPackageComponentCss(
   packageName: string,

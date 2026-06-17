@@ -16,7 +16,7 @@ describe('compatibility path boundaries', () => {
     };
     const publicIndexSource = readFileSync(join(compilerSrcDir, 'index.ts'), 'utf8');
 
-    expect(Object.keys(packageJson.exports).sort()).toEqual(['.', './graph']);
+    expect(Object.keys(packageJson.exports).sort()).toEqual(['.', './graph', './package-styles']);
     expect(publicIndexSource).not.toContain('capturesUnserializableReferences');
     expect(publicIndexSource).not.toMatch(/lower\/handlers/);
   });
