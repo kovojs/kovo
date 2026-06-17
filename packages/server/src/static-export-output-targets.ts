@@ -7,14 +7,26 @@ import {
   type StaticExportClientModuleArtifact,
 } from './static-export-types.js';
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Plan item kind used by
+ * dry-run/write-output tooling, not app authors.
+ */
 export type StaticExportOutputPlanItemKind = 'client-module' | 'route-document' | 'static-asset';
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Public dry-run shape
+ * mirrored by the internal target planner.
+ */
 export interface StaticExportOutputPlanItem {
   kind: StaticExportOutputPlanItemKind;
   path: string;
   targetPath: string;
 }
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Resolved filesystem
+ * target for one artifact, client module, or asset.
+ */
 export interface StaticExportOutputTarget {
   diagnosticPath: string;
   itemIndex: number;
@@ -29,6 +41,10 @@ interface StaticExportOutputTargetArtifacts {
   clientModules: readonly StaticExportClientModuleArtifact[];
 }
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Resolves all target
+ * paths and detects conflicts before a write starts.
+ */
 export function staticExportOutputTargets(
   plan: StaticExportOutputTargetArtifacts,
   root: string,

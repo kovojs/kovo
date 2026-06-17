@@ -1,6 +1,6 @@
 // @kovojs-ir — lowered from examples/stackoverflow/src/components/question-list.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
-import { escapeText } from '@kovojs/server';
+import { escapeText } from '@kovojs/server/internal/html';
 import { component } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';

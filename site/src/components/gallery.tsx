@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { escapeHtml } from '@kovojs/server';
+import { escapeHtml } from '@kovojs/server/internal/html';
 
 // Gallery page chrome (SPEC §4.5): the eyebrow header, the component switcher
 // nav, and the demo body. Composed at render time as TSX; the demo markup

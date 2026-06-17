@@ -17,6 +17,25 @@
       "dir": "server",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          ".",
+          "./app-shell/client-modules",
+          "./app-shell/core",
+          "./app-shell/node",
+          "./app-shell/static-export",
+          "./app-shell/vite",
+          "./jsx-runtime",
+          "./jsx-dev-runtime"
+        ],
+        "internal": [
+          "./internal/app-shell-vite",
+          "./internal/html",
+          "./internal/route",
+          "./internal/static-export",
+          "./internal/wire"
+        ]
+      },
       "apiRef": {
         "order": 2,
         "slug": "server",

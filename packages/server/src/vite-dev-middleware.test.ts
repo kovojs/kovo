@@ -7,9 +7,11 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
-  kovoAppShellViteDevPlugin,
   kovoAppShellVitePlugin,
   type KovoAppShellViteMiddleware,
+} from './internal/app-shell-vite.js';
+import {
+  kovoAppShellViteDevPlugin,
 } from './api/app-shell/vite.js';
 import { nodeFetch } from './vite-test-http.js';
 

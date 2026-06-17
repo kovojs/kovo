@@ -245,7 +245,6 @@ describe('server app-shell public API barrels', () => {
       'staticExportOutputPlan',
     ]);
     expect(moduleValueKeys(packageViteApi)).toEqual([
-      'createKovoAppShellDevDiagnosticLedger',
       'createKovoAppShellViteBuild',
       'createKovoAppShellViteBuildFromBundle',
       'createKovoAppShellViteBuildFromManifestFile',
@@ -256,9 +255,6 @@ describe('server app-shell public API barrels', () => {
       'kovoAppShellViteDevPlugin',
       'kovoAppShellViteManifestFile',
       'kovoAppShellViteManifestStylesheetHrefFromFile',
-      'kovoAppShellVitePlugin',
-      'renderKovoAppShellViteDevDiagnosticResponse',
-      'shouldHandleKovoAppShellViteRequest',
       'staticExportInventoryForKovoAppShellViteBuild',
       'staticExportInventoryForKovoAppShellViteBuildFromManifestFile',
       'staticExportManifestForKovoAppShellViteBuild',
@@ -362,7 +358,10 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestStylesheetHref');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestStylesheetHrefs');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestStylesheetHrefsFromFile');
+    expect(packageViteApi).not.toHaveProperty('kovoAppShellVitePlugin');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteRouteEntries');
+    expect(packageViteApi).not.toHaveProperty('renderKovoAppShellViteDevDiagnosticResponse');
+    expect(packageViteApi).not.toHaveProperty('shouldHandleKovoAppShellViteRequest');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteStaticExportAssets');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteStaticExportAssetsFromManifestFile');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteSsrDevPlugin');

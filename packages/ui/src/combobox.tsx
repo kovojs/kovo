@@ -9,7 +9,7 @@ import {
   comboboxValueText,
   type ComboboxItem as HeadlessComboboxItem,
 } from '@kovojs/headless-ui';
-import { escapeHtml } from '@kovojs/server';
+import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 export interface ComboboxStyleOverrides {

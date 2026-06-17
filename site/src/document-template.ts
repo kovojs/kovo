@@ -1,4 +1,4 @@
-import { escapeAttribute } from '@kovojs/server';
+import { escapeAttribute } from '@kovojs/server/internal/html';
 import type { DocumentTemplate } from '@kovojs/server/app-shell/core';
 
 import { clientHrefs } from './client/modules.js';

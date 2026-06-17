@@ -6,7 +6,7 @@ import {
   createKovoAppShellDevDiagnosticLedger,
   kovoAppShellVitePlugin,
   type KovoAppShellViteMiddleware,
-} from '@kovojs/server/app-shell/vite';
+} from '@kovojs/server/internal/app-shell-vite';
 import { expect, test } from '@kovojs/test/integration';
 
 test.use({ kovoFixture: 'diagnostic-warning-nonblocking' });

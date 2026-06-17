@@ -1,12 +1,11 @@
 import {
   createApp,
-  escapeAttribute,
-  escapeHtml,
   mutation,
   renderQueryScript,
   route,
   s,
 } from '@kovojs/server';
+import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
 
 import { dealDomain, dealQuery, readDeal, type DealResult } from './shared';

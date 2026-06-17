@@ -27,7 +27,9 @@ export const OrderHistory = component({
 
     expect(serverSource).toContain('{escapeText(item.productId)}');
     expect(serverSource).toContain('{escapeText(item.qty)}');
-    expect(serverSource).toContain("import { escapeText } from '@kovojs/server';");
+    expect(serverSource).toContain(
+      "import { escapeText } from '@kovojs/server/internal/html';",
+    );
     // The map callback itself is not a property-access path, so it is never wrapped.
     expect(serverSource).not.toContain('escapeText(orders.map');
     expect(result.diagnostics).toEqual([]);

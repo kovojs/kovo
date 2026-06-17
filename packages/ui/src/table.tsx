@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
-import { escapeAttribute, escapeHtml } from '@kovojs/server';
+import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
 
 export interface TableStyleOverrides {
   body?: style.StyleInput;

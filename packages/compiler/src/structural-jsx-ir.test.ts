@@ -192,7 +192,7 @@ export const ImportOrder = component({
         "diagnostics": [],
         "serverSource": "// @kovojs-ir
       export function renderSource() {
-        return \`import { escapeText } from '@kovojs/server';
+        return \`import { escapeText } from '@kovojs/server/internal/html';
       import { derive, kovoStyleProperty } from '@kovojs/runtime';
 
       export const ImportOrder$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));

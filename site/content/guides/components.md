@@ -43,7 +43,7 @@ A copied component depends only on public, versioned packages:
 - **`@kovojs/style`** — typed StyleX objects, property-level merge, tokens, themes, and readable atomic CSS.
 - **`@kovojs/headless-ui`** — the `*Attributes` builders and headless render-input types.
 - **`@kovojs/core`** — `component()`, the server component constructor.
-- **`@kovojs/server`** — `escapeHtml` / `escapeAttribute`, used by components that interpolate text
+- **`@kovojs/server/internal/html`** — `escapeHtml` / `escapeAttribute`, used by generated or in-repo components that interpolate text
   into markup.
 
 ### The flow
@@ -135,7 +135,7 @@ state machine by hand:
 import { component } from '@kovojs/core';
 import { selectTriggerAttributes } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
-import { escapeHtml } from '@kovojs/server';
+import { escapeHtml } from '@kovojs/server/internal/html';
 ```
 
 Because the behavior lives in `@kovojs/headless-ui`, your copy stays small: it owns markup and

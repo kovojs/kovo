@@ -1,8 +1,5 @@
 export {
-  createKovoAppShellDevDiagnosticLedger,
   kovoAppShellViteDevPlugin,
-  renderKovoAppShellViteDevDiagnosticResponse,
-  shouldHandleKovoAppShellViteRequest,
 } from '../../vite-dev.js';
 export {
   createKovoAppShellViteBuild,
@@ -23,7 +20,6 @@ export {
   staticExportManifestForKovoAppShellViteBuildFromManifestFile,
 } from '../../vite-static-export-manifest-file.js';
 export { kovoAppShellViteManifestStylesheetHrefFromFile } from '../../vite-manifest.js';
-export { kovoAppShellVitePlugin } from '../../vite-plugin.js';
 export type {
   KovoAppShellBuildAsset,
   KovoAppShellRouteEntryMap,
@@ -54,13 +50,6 @@ export type {
 } from '../../vite-static-export-options.js';
 export type { KovoAppShellViteStaticExportWithManifestResult } from '../../vite-static-export-result.js';
 export type {
-  KovoAppShellDevDiagnosticLedger,
-  KovoAppShellDevDiagnosticRecord,
-  KovoAppShellDevModuleDiagnostics,
-  KovoAppShellViteDevServer,
-  KovoAppShellViteDevModuleServer,
   KovoAppShellViteDevPlugin,
   KovoAppShellViteDevPluginOptions,
-  KovoAppShellViteMiddleware,
 } from '../../vite-dev.js';
-export type { KovoAppShellVitePlugin, KovoAppShellVitePluginOptions } from '../../vite-plugin.js';

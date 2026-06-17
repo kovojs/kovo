@@ -10,10 +10,10 @@ import {
   createKovoAppShellViteBuild,
   createKovoAppShellViteBuildFromBundle,
   createKovoAppShellViteBuildFromManifestFile,
-  kovoAppShellVitePlugin,
   type KovoAppShellBuild,
   type KovoAppShellViteBuildOutput,
 } from './api/app-shell/vite.js';
+import { kovoAppShellVitePlugin } from './internal/app-shell-vite.js';
 import { writeKovoAppShellViteBuildOutput } from './vite-build-output.js';
 
 describe('server app shell Vite plugin', () => {

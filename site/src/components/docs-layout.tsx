@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { escapeHtml } from '@kovojs/server';
+import { escapeHtml } from '@kovojs/server/internal/html';
 
 import type { DocSection, Heading, NavGroup, NavLink } from '../content.js';
 import { SECTION_INTROS } from '../content.js';

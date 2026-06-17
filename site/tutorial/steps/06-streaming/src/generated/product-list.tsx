@@ -1,6 +1,6 @@
 // @kovojs-ir — lowered from site/tutorial/steps/06-streaming/src/components/product-list.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `node site/tutorial/run-steps.mjs --write`.
 /** @jsxImportSource @kovojs/server */
-import { escapeText } from '@kovojs/server';
+import { escapeText } from '@kovojs/server/internal/html';
 import { component } from '@kovojs/core';
 import { csrfField } from '@kovojs/server';
 

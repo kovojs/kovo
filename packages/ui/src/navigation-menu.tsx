@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { escapeHtml } from '@kovojs/server';
+import { escapeHtml } from '@kovojs/server/internal/html';
 import {
   navigationMenuContentAttributes,
   navigationMenuIndicatorAttributes,

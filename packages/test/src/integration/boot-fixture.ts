@@ -13,7 +13,7 @@ import { createServer as createHttpServer, type Server } from 'node:http';
 import path from 'node:path';
 
 import { toNodeHandler } from '@kovojs/server/app-shell/node';
-import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/app-shell/vite';
+import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/internal/app-shell-vite';
 import { createServer as createViteServer } from 'vite';
 
 import { isFixtureDescriptor } from './define-fixture.js';
