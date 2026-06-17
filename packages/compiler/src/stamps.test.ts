@@ -166,6 +166,60 @@ export const StampConflict = component({
     `);
   });
 
+  it('lowers typed enhanced mutation forms to submitted target stamps', () => {
+    const result = compileComponentModule({
+      fileName: 'add-to-cart-form.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: (_queries, _state, { productId }) => (
+    <form enhance mutation={addToCart} key={productId} class="add">
+      <input type="hidden" name="productId" value={productId} />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.loweredSource).toContain(
+      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${productId}`} kovo-key={productId} class="add"',
+    );
+    expect(result.loweredSource).not.toContain('mutation={addToCart}');
+    expect(result.loweredSource).not.toMatch(/\skey=\{productId\}/);
+    expect(result.outputContextFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          expression: '/_m/cart/add',
+          sink: 'action',
+          writer: 'typed mutation form lowering',
+        }),
+        expect.objectContaining({
+          expression: 'cart/add',
+          sink: 'data-mutation',
+          writer: 'typed mutation form lowering',
+        }),
+        expect.objectContaining({
+          expression: 'add-to-cart:${productId}',
+          sink: 'kovo-fragment-target',
+          writer: 'typed mutation form lowering',
+        }),
+        expect.objectContaining({
+          expression: 'productId',
+          sink: 'kovo-key',
+          writer: 'typed mutation form lowering',
+        }),
+      ]),
+    );
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('stamps rendered component markup with declared query dependencies', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

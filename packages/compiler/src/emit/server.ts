@@ -27,7 +27,7 @@ import {
   type JsxElementModel,
   type SourceSpan,
 } from '../scan/parse.js';
-import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
+import { escapeAttribute, kebabCase, splitDepValue, type SourceReplacement } from '../shared.js';
 import {
   emitElementParamTypes,
   type HandlerLowering,
@@ -157,21 +157,30 @@ function renderSemanticAttributes(model: ComponentModuleModel, element: JsxEleme
       .join('');
   }
 
+  const formMutation = enhancedMutationFormLowering(model, element);
   const viewTransitionStyle = semanticViewTransitionStyle(element);
-  return element.attributes
-    .filter((attribute) => attribute.name !== 'viewTransitionName')
-    .filter((attribute) => !isQueryExpressionAttribute(model, attribute))
-    .map((attribute) =>
+  const semanticAttributes: string[] = [];
+  for (const attribute of element.attributes) {
+    if (attribute.name === 'viewTransitionName' || isQueryExpressionAttribute(model, attribute)) {
+      continue;
+    }
+    if (formMutation?.generatedAttributeNames.has(attribute.name)) {
+      if (attribute.name === 'mutation') semanticAttributes.push(...formMutation.semanticAttributes);
+      continue;
+    }
+    const rendered =
       attribute.name === 'style' && viewTransitionStyle
         ? renderSemanticStyleAttribute(attribute, viewTransitionStyle)
-        : renderSemanticAttribute(attribute),
-    )
+        : renderSemanticAttribute(attribute);
+    if (rendered) semanticAttributes.push(rendered);
+  }
+
+  return semanticAttributes
     .concat(
       viewTransitionStyle && !element.attributes.some((attribute) => attribute.name === 'style')
         ? [` style="${escapeAttribute(viewTransitionStyle)}"`]
         : [],
     )
-    .filter((attribute): attribute is string => attribute !== null)
     .join('');
 }
 
@@ -368,6 +377,7 @@ function isGeneratedOnlyRenderAttribute(name: string): boolean {
     name === 'kovo-c' ||
     name === 'kovo-deps' ||
     name === 'kovo-fragment-target' ||
+    name === 'kovo-key' ||
     name === 'kovo-state' ||
     name === 'kovo-param-types' ||
     name === 'data-bind' ||
@@ -395,6 +405,10 @@ function serverRenderPatches(
   patches.push(...chained.patches);
   outputContexts.push(...chained.outputContexts);
   if (options) diagnostics.push(...handlerStampConflictDiagnostics(handlers, model, options));
+  const formLowering = enhancedMutationFormRenderLowering(model, options);
+  diagnostics.push(...formLowering.diagnostics);
+  patches.push(...formLowering.replacements);
+  outputContexts.push(...formLowering.outputContexts);
   const hostHandlers = host
     ? handlers.filter(
         (handler) => handler.attributeStart >= host.start && handler.attributeEnd <= host.end,
@@ -434,6 +448,229 @@ function serverRenderPatches(
   }
 
   return { diagnostics, outputContexts, replacements: patches, stampWrites };
+}
+
+function enhancedMutationFormRenderLowering(
+  model: ComponentModuleModel,
+  options?: { fileName: string; source: string },
+): {
+  diagnostics: readonly CompilerDiagnostic[];
+  outputContexts: readonly GeneratedOutputWriteFact[];
+  replacements: readonly SourceReplacement[];
+} {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const replacements: SourceReplacement[] = [];
+  const outputContexts: GeneratedOutputWriteFact[] = [];
+
+  for (const element of model.jsxElements) {
+    const lowering = enhancedMutationFormLowering(model, element);
+    if (!lowering) continue;
+
+    replacements.push(...lowering.replacements);
+    outputContexts.push(...lowering.outputContexts);
+    if (options) {
+      diagnostics.push(
+        ...lowering.conflicts.map((conflict) =>
+          writerConflictDiagnostic(
+            options,
+            conflict.attribute,
+            conflict.attribute.name,
+            'author JSX',
+            'typed mutation form lowering',
+          ),
+        ),
+      );
+    }
+  }
+
+  return { diagnostics, outputContexts, replacements };
+}
+
+interface EnhancedMutationFormConflict {
+  attribute: JsxAttributeModel;
+}
+
+interface EnhancedMutationFormLowering {
+  conflicts: readonly EnhancedMutationFormConflict[];
+  generatedAttributeNames: ReadonlySet<string>;
+  outputContexts: readonly GeneratedOutputWriteFact[];
+  replacements: readonly SourceReplacement[];
+  semanticAttributes: readonly string[];
+}
+
+function enhancedMutationFormLowering(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): EnhancedMutationFormLowering | null {
+  if (element.tag !== 'form') return null;
+
+  const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
+  if (!mutationAttribute?.expressionBareIdentifierName) return null;
+
+  const mutationKey = localMutationKey(model, mutationAttribute.expressionBareIdentifierName);
+  if (!mutationKey) return null;
+
+  const conflicts = enhancedMutationFormConflicts(element);
+  if (conflicts.length > 0) {
+    return {
+      conflicts,
+      generatedAttributeNames: new Set(),
+      outputContexts: [],
+      replacements: [],
+      semanticAttributes: [],
+    };
+  }
+
+  const methodAttribute = element.attributes.find((attribute) => attribute.name === 'method');
+  const keyAttribute = element.attributes.find((attribute) => attribute.name === 'key');
+  const targetBase = kebabCase(mutationAttribute.expressionBareIdentifierName);
+  const generatedInMutationSlot = [
+    ...(methodAttribute ? [] : ['method="post"']),
+    `action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
+    `data-mutation="${escapeAttribute(mutationKey)}"`,
+    submittedFormTargetAttribute(targetBase, keyAttribute),
+  ];
+  const replacements = [
+    {
+      end: mutationAttribute.end,
+      replacement: generatedInMutationSlot.join(' '),
+      start: mutationAttribute.start,
+    },
+    ...(keyAttribute ? [submittedFormKeyReplacement(keyAttribute)] : []),
+  ];
+  const semanticAttributes = [
+    ...(methodAttribute ? [] : [' method="post"']),
+    ` action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
+    ` data-mutation="${escapeAttribute(mutationKey)}"`,
+  ];
+  const generatedAttributeNames = new Set([
+    'action',
+    'data-mutation',
+    'key',
+    'kovo-fragment-target',
+    'kovo-key',
+    'mutation',
+    ...(methodAttribute ? [] : ['method']),
+  ]);
+
+  return {
+    conflicts,
+    generatedAttributeNames,
+    outputContexts: [
+      ...(methodAttribute
+        ? []
+        : [formLoweringOutputContext('method', 'post', 'typed mutation form lowering')]),
+      formLoweringOutputContext('action', `/_m/${mutationKey}`, 'typed mutation form lowering'),
+      formLoweringOutputContext('data-mutation', mutationKey, 'typed mutation form lowering'),
+      formLoweringOutputContext(
+        'kovo-fragment-target',
+        submittedFormTargetExpression(targetBase, keyAttribute),
+        'typed mutation form lowering',
+      ),
+      ...(keyAttribute
+        ? [
+            formLoweringOutputContext(
+              'kovo-key',
+              attributeValueExpression(keyAttribute),
+              'typed mutation form lowering',
+            ),
+          ]
+        : []),
+    ],
+    replacements,
+    semanticAttributes,
+  };
+}
+
+function enhancedMutationFormConflicts(
+  element: JsxElementModel,
+): EnhancedMutationFormConflict[] {
+  return element.attributes
+    .filter((attribute) =>
+      ['action', 'data-mutation', 'kovo-fragment-target', 'kovo-key'].includes(attribute.name),
+    )
+    .map((attribute) => ({ attribute }));
+}
+
+function localMutationKey(model: ComponentModuleModel, localName: string): string | null {
+  const call = model.calls.find(
+    (candidate) =>
+      candidate.name === 'mutation' &&
+      candidate.exportedConstName === localName &&
+      typeof candidate.argumentStaticValues[0] === 'string',
+  );
+  const key = call?.argumentStaticValues[0];
+  return typeof key === 'string' ? key : null;
+}
+
+function submittedFormKeyReplacement(attribute: JsxAttributeModel): SourceReplacement {
+  return {
+    end: attribute.end,
+    replacement: renderAttributeWithName('kovo-key', attribute),
+    start: attribute.start,
+  };
+}
+
+function submittedFormTargetAttribute(base: string, keyAttribute: JsxAttributeModel | undefined): string {
+  const expression = submittedFormTargetExpression(base, keyAttribute);
+  if (!keyAttribute || keyAttribute.expression !== undefined) {
+    return keyAttribute?.expression === undefined
+      ? `kovo-fragment-target="${escapeAttribute(expression)}"`
+      : `kovo-fragment-target={\`${escapeTemplateLiteral(base)}:\${${keyAttribute.expression}}\`}`;
+  }
+
+  return `kovo-fragment-target="${escapeAttribute(expression)}"`;
+}
+
+function submittedFormTargetExpression(base: string, keyAttribute: JsxAttributeModel | undefined): string {
+  if (!keyAttribute) return base;
+  const key = staticAttributeScalar(keyAttribute);
+  return key === null ? `${base}:\${${keyAttribute.expression ?? ''}}` : `${base}:${key}`;
+}
+
+function renderAttributeWithName(name: string, attribute: JsxAttributeModel): string {
+  if (attribute.value !== undefined) {
+    return `${name}="${escapeAttribute(attribute.value)}"`;
+  }
+  if (attribute.expression !== undefined) {
+    return `${name}={${attribute.expression}}`;
+  }
+  const staticValue = attribute.expressionStaticValue;
+  if (staticValue !== undefined && staticValue !== true && staticValue !== false && staticValue !== null) {
+    return `${name}="${escapeAttribute(String(staticValue))}"`;
+  }
+  return name;
+}
+
+function attributeValueExpression(attribute: JsxAttributeModel): string {
+  const staticValue = staticAttributeScalar(attribute);
+  if (staticValue !== null) return staticValue;
+  return attribute.expression ?? '';
+}
+
+function staticAttributeScalar(attribute: JsxAttributeModel): string | null {
+  if (attribute.value !== undefined) return attribute.value;
+  const staticValue = attribute.expressionStaticValue;
+  if (typeof staticValue === 'string' || typeof staticValue === 'number') return String(staticValue);
+  return null;
+}
+
+function escapeTemplateLiteral(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${');
+}
+
+function formLoweringOutputContext(
+  sink: string,
+  expression: string,
+  writer: GeneratedOutputWriteFact['writer'],
+): GeneratedOutputWriteFact {
+  return {
+    context: outputContextForAttribute(sink),
+    expression,
+    sink,
+    source: 'server-render',
+    writer,
+  };
 }
 
 function handlerOutputContexts(

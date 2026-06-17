@@ -309,8 +309,20 @@ export const AddToCartForm = component({
       `pnpm --filter @kovojs/runtime run check:inline-loader`, and
       `pnpm exec vitest --run packages/runtime/src/inline-loader-enhanced-submit.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/mutation-fetch.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts`
       on 2026-06-17.
-    - Remaining gap: compiler lowering for `<form enhance mutation={...}
-      key={...}>` and typed render-context failure state are not complete.
+    - Partial compiler lowering evidence: `packages/compiler/src/emit/server.ts`
+      lowers locally resolvable `<form enhance mutation={addToCart}
+      key={productId}>` to emitted `method`, `action`, `data-mutation`,
+      `kovo-fragment-target`, and `kovo-key` attributes while preserving
+      render-equivalence semantics for generated `kovo-key`.
+    - `packages/compiler/src/stamps.test.ts` covers the typed form lowering,
+      output-context facts, render equivalence, and fixpoint behavior.
+    - Verified with `pnpm exec vitest --run packages/compiler/src/stamps.test.ts`,
+      `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
+      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
+      2026-06-17.
+    - Remaining gap: imported/app-wide mutation value resolution for ordinary
+      component modules, typed render-context failure state, and compiler
+      diagnostics for ambiguous repeated forms are not complete.
 - [x] **7. Type registry and breaking migration.**
   - Generate `FragmentTargets` facts for inferred targets so existing typed APIs
     keep working.

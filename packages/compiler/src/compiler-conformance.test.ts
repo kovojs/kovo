@@ -126,10 +126,7 @@ describe('compiler conformance corpus', () => {
             },
           ],
           "cssAssetCount": 0,
-          "diagnostics": [
-            "KV223",
-            "KV223",
-          ],
+          "diagnostics": [],
           "fileKinds": [
             "server",
             "client",
@@ -173,9 +170,7 @@ describe('compiler conformance corpus', () => {
             },
           ],
           "cssAssetCount": 0,
-          "diagnostics": [
-            "KV223",
-          ],
+          "diagnostics": [],
           "fileKinds": [
             "server",
             "client",
@@ -219,9 +214,7 @@ describe('compiler conformance corpus', () => {
             },
           ],
           "cssAssetCount": 0,
-          "diagnostics": [
-            "KV223",
-          ],
+          "diagnostics": [],
           "fileKinds": [
             "server",
             "client",
