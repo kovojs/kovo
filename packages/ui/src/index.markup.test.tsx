@@ -84,8 +84,6 @@ import {
   alertDialogContentClasses,
   autocompleteClasses,
   autocompleteInputClasses,
-  avatarClasses,
-  avatarFallbackClasses,
   breadcrumbClasses,
   buttonClasses,
   checkboxGroupClasses,
@@ -239,8 +237,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(alertDialogClasses.join(' ')).toContain('contents');
     expect(alertDialogContentClasses.join(' ')).toContain('max-w-md');
     expect(alertDialogActionClasses.join(' ')).toContain('data-[intent=destructive]');
-    expect(avatarClasses.join(' ')).toContain('rounded-full');
-    expect(avatarFallbackClasses.join(' ')).toContain('data-[state=loaded]:hidden');
     expect(checkboxGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
     expect(collapsibleClasses.join(' ')).toContain('border-neutral-200');
     expect(collapsibleTriggerClasses.join(' ')).toContain('cursor-pointer');

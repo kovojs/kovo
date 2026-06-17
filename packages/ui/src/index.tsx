@@ -603,18 +603,17 @@ export {
   Avatar,
   AvatarFallback,
   AvatarImage,
-  avatarClassNames,
   avatarClasses,
-  avatarFallbackClassNames,
   avatarFallbackClasses,
-  avatarImageClassNames,
   avatarImageClasses,
+  avatarStyles,
 } from './avatar.js';
 export type {
   AvatarFallbackProps,
   AvatarImageProps,
   AvatarProps,
   AvatarStateProps,
+  AvatarStyleOverrides,
 } from './avatar.js';
 export {
   Collapsible,

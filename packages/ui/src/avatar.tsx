@@ -4,11 +4,15 @@ import {
   avatarFallbackAttributes,
   avatarImageAttributes,
   avatarRootAttributes,
-  cn,
-  defineVariants,
   type AvatarImageStatus,
-  type ClassValue,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface AvatarStyleOverrides {
+  fallback?: style.StyleInput;
+  image?: style.StyleInput;
+  root?: style.StyleInput;
+}
 
 export interface AvatarStateProps {
   src?: string;
@@ -17,45 +21,70 @@ export interface AvatarStateProps {
 
 export interface AvatarProps extends AvatarStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   label?: string;
+  styles?: AvatarStyleOverrides;
 }
 
 export interface AvatarImageProps extends AvatarStateProps {
   alt: string;
-  class?: ClassValue;
   decoding?: 'async' | 'auto' | 'sync';
   loading?: 'eager' | 'lazy';
   referrerPolicy?: string;
   sizes?: string;
+  styles?: AvatarStyleOverrides;
   srcSet?: string;
 }
 
 export interface AvatarFallbackProps extends AvatarStateProps {
   children?: string;
-  class?: ClassValue;
   delayMs?: number;
+  styles?: AvatarStyleOverrides;
 }
 
-export const avatarClassNames = defineVariants({
-  base: 'relative inline-flex h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-100 text-sm font-medium text-neutral-700',
-  variants: {},
-});
+export const avatarStyles = style.create(
+  {
+    fallback: {
+      alignItems: 'center',
+      backgroundColor: '#f5f5f5',
+      borderRadius: 9999,
+      display: 'flex',
+      height: '100%',
+      justifyContent: 'center',
+      width: '100%',
+      '[data-state=loaded]': {
+        display: 'none',
+      },
+    },
+    image: {
+      aspectRatio: '1 / 1',
+      height: '100%',
+      objectFit: 'cover',
+      width: '100%',
+      '[data-state=error]': {
+        display: 'none',
+      },
+    },
+    root: {
+      backgroundColor: '#f5f5f5',
+      borderRadius: 9999,
+      color: '#404040',
+      display: 'inline-flex',
+      flexShrink: 0,
+      fontSize: 14,
+      fontWeight: 500,
+      height: 40,
+      overflow: 'hidden',
+      position: 'relative',
+      width: 40,
+    },
+  },
+  { namespace: 'avatar', source: 'avatar.tsx' },
+);
 
-export const avatarImageClassNames = defineVariants({
-  base: 'aspect-square h-full w-full object-cover data-[state=error]:hidden',
-  variants: {},
-});
-
-export const avatarFallbackClassNames = defineVariants({
-  base: 'flex h-full w-full items-center justify-center rounded-full bg-neutral-100 data-[state=loaded]:hidden',
-  variants: {},
-});
-
-export const avatarClasses = avatarClassNames.classes;
-export const avatarImageClasses = avatarImageClassNames.classes;
-export const avatarFallbackClasses = avatarFallbackClassNames.classes;
+export const avatarClasses = [style.attrs(avatarStyles.root).class ?? ''] as const;
+export const avatarImageClasses = [style.attrs(avatarStyles.image).class ?? ''] as const;
+export const avatarFallbackClasses = [style.attrs(avatarStyles.fallback).class ?? ''] as const;
 
 export const Avatar = component({
   render(props: AvatarProps) {
@@ -64,11 +93,12 @@ export const Avatar = component({
       ...(props.src === undefined ? {} : { src: props.src }),
       ...(props.status === undefined ? {} : { status: props.status }),
     });
+    const styleAttrs = style.attrs(avatarStyles.root, props.styles?.root);
 
     return (
       <span
+        {...styleAttrs}
         aria-label={attrs['aria-label']}
-        class={cn(avatarClassNames(), props.class)}
         data-state={attrs['data-state']}
         id={props.id}
         role={attrs.role}
@@ -91,11 +121,12 @@ export const AvatarImage = component({
       ...(props.srcSet === undefined ? {} : { srcSet: props.srcSet }),
       ...(props.status === undefined ? {} : { status: props.status }),
     });
+    const styleAttrs = style.attrs(avatarStyles.image, props.styles?.image);
 
     return (
       <img
         alt={attrs.alt}
-        class={cn(avatarImageClassNames(), props.class)}
+        {...styleAttrs}
         data-state={attrs['data-state']}
         decoding={attrs.decoding}
         hidden={attrs.hidden}
@@ -116,10 +147,11 @@ export const AvatarFallback = component({
       ...(props.src === undefined ? {} : { src: props.src }),
       ...(props.status === undefined ? {} : { status: props.status }),
     });
+    const styleAttrs = style.attrs(avatarStyles.fallback, props.styles?.fallback);
 
     return (
       <span
-        class={cn(avatarFallbackClassNames(), props.class)}
+        {...styleAttrs}
         data-delay={attrs['data-delay']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}

@@ -71,6 +71,7 @@ describe('kovo add', () => {
           'add',
           'alert',
           'autocomplete',
+          'avatar',
           'badge',
           'breadcrumb',
           'button',
@@ -112,6 +113,9 @@ describe('kovo add', () => {
       );
       expect(output).toContain(
         `ADD autocomplete path=${JSON.stringify(join(outDir, 'autocomplete.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD avatar path=${JSON.stringify(join(outDir, 'avatar.tsx'))} source=tsx`,
       );
       expect(output).toContain(
         `ADD badge path=${JSON.stringify(join(outDir, 'badge.tsx'))} source=tsx`,
@@ -200,6 +204,7 @@ describe('kovo add', () => {
 
       const alert = readFileSync(join(outDir, 'alert.tsx'), 'utf8');
       const autocomplete = readFileSync(join(outDir, 'autocomplete.tsx'), 'utf8');
+      const avatar = readFileSync(join(outDir, 'avatar.tsx'), 'utf8');
       const badge = readFileSync(join(outDir, 'badge.tsx'), 'utf8');
       const breadcrumb = readFileSync(join(outDir, 'breadcrumb.tsx'), 'utf8');
       const button = readFileSync(join(outDir, 'button.tsx'), 'utf8');
@@ -234,6 +239,10 @@ describe('kovo add', () => {
       expect(alert).toContain('style?: style.StyleInput');
       expect(autocomplete).toContain('export const Autocomplete = component({');
       expect(autocomplete).toContain('export const autocompleteClassNames = defineVariants');
+      expect(avatar).toContain('export const Avatar = component({');
+      expect(avatar).toContain("import * as style from '@kovojs/style';");
+      expect(avatar).toContain('export const avatarStyles = style.create');
+      expect(avatar).toContain('styles?: AvatarStyleOverrides');
       expect(badge).toContain('export const Badge = component({');
       expect(badge).toContain("import * as style from '@kovojs/style';");
       expect(badge).toContain('export const badgeStyles =');
@@ -317,6 +326,7 @@ describe('kovo add', () => {
       const vendoredSource = [
         alert,
         autocomplete,
+        avatar,
         badge,
         breadcrumb,
         button,

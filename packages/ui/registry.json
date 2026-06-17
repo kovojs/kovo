@@ -114,11 +114,9 @@
           "avatarFallbackAttributes",
           "avatarImageAttributes",
           "AvatarImageStatus",
-          "avatarRootAttributes",
-          "ClassValue",
-          "cn",
-          "defineVariants"
+          "avatarRootAttributes"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []
