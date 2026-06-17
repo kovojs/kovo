@@ -1,3 +1,5 @@
+@import './generated/kovo-ui.css';
+
 :root {
   color-scheme: light;
   font-family:
@@ -184,4 +186,214 @@ table {
 
 @media (min-width: 1024px) {
   .lg\:grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+/* ── DevOverflow page chrome ─────────────────────────────────────────────────
+   Document CSS for the app frame (header/nav/container) plus the question/answer
+   layout scaffolding around the @kovojs/ui Cards. A single tasteful brand accent
+   (orange) is exposed as a custom property so the vote control, brand mark, and
+   accepted-answer rail stay in sync. */
+.so-app {
+  --so-accent: #f97316;
+  --so-accent-strong: #ea580c;
+  --so-accent-soft: #fff7ed;
+  --so-border: #e9eef4;
+  min-height: 100vh;
+  background:
+    radial-gradient(120% 60% at 50% -10%, #fff4ec 0%, rgba(255, 244, 236, 0) 60%),
+    #f6f8fb;
+  color: #0f172a;
+}
+
+.so-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--so-border);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: saturate(160%) blur(8px);
+}
+.so-header-inner {
+  margin-inline: auto;
+  display: flex;
+  max-width: 52rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.5rem;
+}
+.so-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.so-brand-mark {
+  display: grid;
+  height: 1.85rem;
+  width: 1.85rem;
+  place-items: center;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, var(--so-accent), var(--so-accent-strong));
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.35);
+}
+.so-brand-name { font-size: 0.98rem; }
+.so-nav { display: flex; align-items: center; gap: 0.25rem; }
+.so-nav-link {
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #64748b;
+  transition: background-color 0.15s, color 0.15s;
+}
+.so-nav-link:hover { background: #eef2f7; color: #0f172a; }
+.so-nav-link--active { color: var(--so-accent-strong); background: var(--so-accent-soft); }
+
+.so-main {
+  margin-inline: auto;
+  max-width: 52rem;
+  padding: 2rem 1.5rem 3.5rem;
+}
+
+.so-stack { display: grid; gap: 1.25rem; }
+
+.so-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.so-page-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.so-page-sub { margin: 0.35rem 0 0; font-size: 0.85rem; color: #64748b; }
+
+/* Question list ------------------------------------------------------------- */
+.so-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.85rem; }
+
+.so-row { display: flex; align-items: flex-start; gap: 1rem; }
+.so-row-stat {
+  display: flex;
+  width: 3.25rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--so-border);
+  padding: 0.4rem 0;
+  color: #475569;
+}
+.so-row-stat-num { font-size: 1.05rem; font-weight: 700; color: #0f172a; }
+.so-row-stat-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; }
+.so-row-main { min-width: 0; flex: 1 1 0%; display: grid; gap: 0.55rem; }
+.so-row-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #1d4ed8;
+  letter-spacing: -0.01em;
+}
+.so-row-title:hover { color: var(--so-accent-strong); text-decoration: underline; text-underline-offset: 2px; }
+.so-row-excerpt {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #64748b;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.so-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+/* Vote control -------------------------------------------------------------- */
+.so-vote { width: 3.25rem; flex-shrink: 0; }
+.so-vote-btn {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  border: 1px solid var(--so-border);
+  border-radius: 0.55rem;
+  padding: 0.45rem 0;
+  background: #fff;
+  color: #64748b;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+.so-vote-btn:hover {
+  background: var(--so-accent-soft);
+  border-color: #fed7aa;
+  color: var(--so-accent-strong);
+}
+.so-vote-caret { font-size: 0.7rem; line-height: 1; }
+.so-vote-score { font-size: 1.05rem; font-weight: 700; color: #0f172a; }
+.so-vote-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.so-answer-vote {
+  display: flex;
+  width: 3.25rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  color: #94a3b8;
+  padding-top: 0.15rem;
+}
+
+/* Composers ----------------------------------------------------------------- */
+.so-composer { display: grid; gap: 0.7rem; }
+.so-composer-title { margin: 0; font-size: 0.95rem; font-weight: 600; color: #0f172a; }
+.so-composer-actions { display: flex; justify-content: flex-end; }
+.so-input {
+  width: 100%;
+  border-radius: 0.6rem;
+  border: 1px solid #d8e0ea;
+  background: #fbfdff;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.875rem;
+  color: #0f172a;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.so-input::placeholder { color: #94a3b8; }
+.so-input:focus {
+  outline: none;
+  border-color: var(--so-accent);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15);
+}
+.so-textarea { resize: vertical; line-height: 1.5; }
+
+/* Question detail ----------------------------------------------------------- */
+.so-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #64748b;
+  width: fit-content;
+}
+.so-back:hover { color: #0f172a; }
+.so-detail-title { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.25; }
+.so-detail-body { margin: 0.25rem 0 0; font-size: 0.95rem; line-height: 1.65; color: #334155; }
+.so-answers-head { margin: 0; font-size: 0.95rem; font-weight: 700; color: #334155; }
+.so-answer-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.85rem; }
+.so-answer { position: relative; }
+.so-answer-body { margin: 0; font-size: 0.95rem; line-height: 1.65; color: #334155; }
+.so-answer--accepted > section {
+  border-color: #a7f3d0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), inset 4px 0 0 #10b981;
+  background: linear-gradient(90deg, #f0fdf9 0%, #fff 18%);
 }
