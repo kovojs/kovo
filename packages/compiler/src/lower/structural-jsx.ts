@@ -65,7 +65,6 @@ interface InlineStateTextDerive {
 
 export interface StructuralJsxLowering {
   diagnostics: readonly CompilerDiagnostic[];
-  prefix: string;
   replacements: readonly SourceReplacement[];
   stateDerives: readonly StateDeriveFact[];
   viewTransitionStamps: readonly ViewTransitionStamp[];
@@ -144,7 +143,7 @@ export function lowerStructuralJsx(
     replacements.push({ end: start, replacement: prefix, start });
   }
 
-  return { diagnostics, prefix: '', replacements, stateDerives, viewTransitionStamps };
+  return { diagnostics, replacements, stateDerives, viewTransitionStamps };
 }
 
 function lowerPrimitiveSpreads(elements: readonly JsxIrElement[]): void {

@@ -162,7 +162,6 @@ export {
   kovoBoundAttributeValue,
   kovoEscapeHtml,
   kovoSafeUrl,
-  kovoStyleProperties,
   kovoStyleProperty,
   trustedHtml,
 } from './security-output.js';

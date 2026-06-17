@@ -1,4 +1,4 @@
-import { kovoStyleProperties } from '@kovojs/runtime';
+import { kovoStyleProperty } from '@kovojs/runtime';
 
 import { escapeAttribute } from './html.js';
 
@@ -77,13 +77,20 @@ function renderJsxAttributes(props: JsxProps): string {
 function attributeText(name: string, value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'bigint') return value.toString();
-  if (name === 'style' && isStyleProperties(value)) return kovoStyleProperties(value);
+  if (name === 'style' && isStyleProperties(value)) return renderStyleProperties(value);
 
   return JSON.stringify(value) ?? '';
 }
 
 function isStyleProperties(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function renderStyleProperties(properties: Record<string, unknown>): string {
+  return Object.entries(properties)
+    .map(([propertyName, propertyValue]) => kovoStyleProperty(propertyName, propertyValue))
+    .filter(Boolean)
+    .join('; ');
 }
 
 function renderJsxChildren(children: JsxNode): string {

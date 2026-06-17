@@ -107,7 +107,6 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...styleExtraction.replacements,
     ],
     parseComponentModuleModel,
-    { prefix: structuralLowering.prefix },
   );
   const source = modelPatch.state.source;
   const diagnosticSource = options.source;

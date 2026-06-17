@@ -79,13 +79,20 @@ compiler-quality gaps found during the 2026-06-16 audit.
   - [ ] Assert the output is stable independent of transform registration order, either by a
         deliberate order-shuffle test or by a typed IR phase-order invariant.
 
-- [ ] Make IR prefix/import insertion deterministic and non-accidental.
-  - [ ] Remove the unused `prefix` result field from `StructuralJsxLowering`, or make the compile
+- [x] Make IR prefix/import insertion deterministic and non-accidental.
+  - [x] Remove the unused `prefix` result field from `StructuralJsxLowering`, or make the compile
         pipeline consume it intentionally.
-  - [ ] Add a fixture with generated `escapeText`, `derive`, and runtime output-context imports in
+  - [x] Add a fixture with generated `escapeText`, `derive`, and runtime output-context imports in
         the same module.
-  - [ ] Assert generated imports are deduped, sorted, and inserted at the intended module location.
-  - [ ] Assert recompiling emitted IR is a byte-stable fixpoint when generated imports are present.
+  - [x] Assert generated imports are deduped, sorted, and inserted at the intended module location.
+  - [x] Assert recompiling emitted IR is a byte-stable fixpoint when generated imports are present.
+  - Evidence (2026-06-16): `packages/compiler/src/lower/structural-jsx.ts` no longer exposes a
+        `prefix` field, and `packages/compiler/src/compile.ts` applies structural import insertion
+        only through source replacements.
+  - Evidence (2026-06-16): `packages/compiler/src/structural-jsx-ir.test.ts` snapshots a single
+        component requiring generated `escapeText`, `derive`, and `kovoStyleProperty` imports and
+        asserts `assertFixpoint(result)`; `pnpm --filter @kovojs/compiler exec vitest --run
+        src/structural-jsx-ir.test.ts` passes.
 
 ## Security Contexts
 
@@ -95,9 +102,10 @@ compiler-quality gaps found during the 2026-06-16 audit.
     `style={{ ... }}` state/query derives to per-property `kovoStyleProperty(...)` calls while
     preserving arbitrary dynamic raw `style={...}` rejection in
     `packages/compiler/src/security/output-context.ts`.
-  - Evidence (2026-06-16): `packages/runtime/src/security-output.ts` adds
-    `kovoStyleProperties(...)` plus allowlisted length/transform property sanitizers, and
-    `packages/server/src/jsx-runtime.ts` uses it for object-valued server-rendered `style` props.
+  - Evidence (2026-06-16): `packages/runtime/src/security-output.ts` adds an internal
+    `kovoStyleProperties(...)` helper plus allowlisted length/transform property sanitizers, and
+    `packages/server/src/jsx-runtime.ts` renders object-valued server `style` props by composing the
+    public `kovoStyleProperty(...)` helper without expanding the runtime barrel API.
   - Evidence (2026-06-16): `packages/compiler/src/output-context-security.test.ts` snapshots
     state style-object lowering; `packages/runtime/src/security-output.test.ts` and
     `packages/server/src/jsx-runtime.test.ts` cover property sanitization/server rendering.

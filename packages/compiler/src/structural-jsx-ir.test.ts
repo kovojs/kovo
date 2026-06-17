@@ -82,6 +82,77 @@ export const ProductPage = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('inserts generated imports deterministically for mixed structural helpers', () => {
+    const result = compileComponentModule({
+      fileName: 'import-order.tsx',
+      source: `
+/** @jsxImportSource @kovojs/server */
+export const ImportOrder = component({
+  queries: { product: productQuery },
+  state: () => ({ value: 50 }),
+  render: ({ product, label }, state) => (
+    <import-order>
+      <img viewTransitionName={product.slug} src="/p1.png" />
+      <span style={{ width: \`\${state.value}%\` }} />
+      <strong>{label.name}</strong>
+    </import-order>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect({
+      clientSource: clientSource.replace(/v=[0-9a-f]{8}/g, 'v=HASH'),
+      diagnostics: result.diagnostics,
+      serverSource: serverSource.replace(/v=[0-9a-f]{8}/g, 'v=HASH'),
+    }).toMatchInlineSnapshot(`
+      {
+        "clientSource": "// @kovojs-ir
+      import { applyCompiledQueryUpdatePlan, derive, kovoStyleProperty } from '@kovojs/runtime';
+
+      export const ImportOrder$span_style_derive = derive(["state"], (state) => [kovoStyleProperty("width", \`\${state.value}%\`)].filter(Boolean).join('; '));
+
+      export const ImportOrder$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));
+
+      export const ImportOrder$queryUpdatePlans = {
+        "product"(root, value) {
+          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "style", selector: "[data-derive=\\"product.ImportOrder$img_style_derive\\"]", select(value) { return ImportOrder$img_style_derive.run(value); } }], templateStamps: [] });
+        },
+      };
+      ",
+        "diagnostics": [],
+        "serverSource": "// @kovojs-ir
+      export function renderSource() {
+        return \`import { escapeText } from '@kovojs/server';
+      import { derive, kovoStyleProperty } from '@kovojs/runtime';
+
+      export const ImportOrder$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));
+      export const ImportOrder$span_style_derive = derive(["state"], (state: any) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
+
+
+      /** @jsxImportSource @kovojs/server */
+      export const ImportOrder = component({
+        queries: { product: productQuery },
+        state: () => ({ value: 50 }),
+        render: ({ product, label }, state) => (
+          <import-order kovo-deps="product" kovo-state="{&quot;value&quot;:50}">
+            <img data-derive="product.ImportOrder$img_style_derive" data-derive-attr="style" src="/p1.png" />
+            <span style={{ width: \\\`\\\${state.value}%\\\` }} data-bind:style="/c/import-order.client.js?v=HASH#ImportOrder$span_style_derive" />
+            <strong>{escapeText(label.name)}</strong>
+          </import-order>
+        ),
+      });
+      ImportOrder.name = "import-order/import-order";
+      \`;
+      }
+      ",
+      }
+    `);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('names both primitive and author writers for overlapping structural conflicts', () => {
     const result = compileComponentModule({
       fileName: 'primitive-conflict.tsx',
