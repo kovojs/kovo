@@ -93,14 +93,49 @@ export const TrustedRawHtml = component({
     });
 
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
     // SPEC §1/§5.2: explicit TrustedHtml values document the unsafe output-context escape hatch.
     expect({
       diagnostics: kv236Diagnostics(result),
+      outputContextFacts: result.outputContextFacts.filter((fact) => fact.context === 'trusted-html'),
       serverSource: normalizeArtifact(serverSource),
     }).toMatchInlineSnapshot(`
       {
         "diagnostics": [],
+        "outputContextFacts": [
+          {
+            "context": "trusted-html",
+            "expression": "trustedHtml("<b>kovo trusted</b>")",
+            "sink": "dangerouslySetInnerHTML",
+            "source": "server-render",
+            "writer": "trusted raw HTML attribute",
+          },
+          {
+            "context": "trusted-html",
+            "expression": "trustedHtml(browserTrustedHtml)",
+            "sink": "innerHTML",
+            "source": "server-render",
+            "writer": "trusted raw HTML attribute",
+          },
+          {
+            "context": "trusted-html",
+            "expression": "trustedHtml("<em>raw helper</em>")",
+            "sink": "rawHtml",
+            "source": "server-render",
+            "writer": "trusted raw HTML attribute",
+          },
+          {
+            "context": "trusted-html",
+            "expression": "trustedHtml({
+              [Symbol.toStringTag]: "TrustedHTML",
+              toString: () => "<strong>compatible</strong>",
+            })",
+            "sink": "html",
+            "source": "server-render",
+            "writer": "trusted raw HTML attribute",
+          },
+        ],
         "serverSource": "// @kovojs-ir
       export function renderSource() {
         return \`
@@ -129,6 +164,9 @@ export const TrustedRawHtml = component({
       }",
       }
     `);
+    expect(clientSource).not.toContain('innerHTML');
+    expect(clientSource).not.toContain('rawHtml');
+    expect(clientSource).not.toContain('dangerouslySetInnerHTML');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 });

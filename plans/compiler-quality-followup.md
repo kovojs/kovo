@@ -360,7 +360,7 @@ compiler-quality gaps found during the 2026-06-16 audit.
       packages/server/src/meta.test.ts packages/server/src/route.test.ts
       packages/server/src/wire-html.test.ts` passes.
 
-- [ ] Tighten Trusted HTML to an actual escape-hatch contract.
+- [x] Tighten Trusted HTML to an actual escape-hatch contract.
   - [x] Define the runtime/browser-compatible TrustedHTML shape Kovo accepts.
     - Evidence (2026-06-16): `packages/runtime/src/security-output.ts` defines
       `BrowserTrustedHTML` as a `Symbol.toStringTag === "TrustedHTML"` object with `toString()`,
@@ -386,7 +386,15 @@ compiler-quality gaps found during the 2026-06-16 audit.
       spellings rendering only trusted raw content.
     - Evidence (2026-06-16): `pnpm exec vitest --run packages/runtime/src/security-output.test.ts
       packages/server/src/jsx-runtime.test.ts` passes.
-  - [ ] Preserve trusted/raw HTML context through generated server and client artifacts.
+  - [x] Preserve trusted/raw HTML context through generated server and client artifacts.
+    - Evidence (2026-06-17): `packages/compiler/src/output-context-raw-html.test.ts`
+      snapshots accepted `trustedHtml(...)` raw HTML sinks for `dangerouslySetInnerHTML`,
+      `innerHTML`, `rawHtml`, and `html`, including `trusted-html` output-context facts for every
+      sink and the emitted server artifact; the same test asserts the generated client artifact does
+      not contain a raw HTML writer.
+    - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest --run
+      src/output-context-raw-html.test.ts src/output-context-facts.test.ts
+      src/output-context-security.test.ts` passed.
 
 ## Conformance Bar
 
