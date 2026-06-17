@@ -131,7 +131,7 @@ function normalizeSemanticTagForComparison(tag: string): string {
 }
 
 function splitSemanticTagAttributes(source: string): string[] {
-  if (source === '') return [];
+  if (source.length === 0) return [];
 
   const attributes: string[] = [];
   let start = 0;

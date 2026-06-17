@@ -601,7 +601,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   assert.deepEqual(fact.handlerExports, ['DocCard$choose']);
   assert.equal(fact.renderEquivalenceAsserted, true);
   assert.equal(fact.cssStylesheet.href, '/_kovo/components/docs/doc-card.css');
-  assert.deepEqual(fact.cssStylesheet.fragmentTargets, ['components/docs/doc-card/doc-card']);
+  assert.deepEqual(fact.cssStylesheet.fragmentTargets, []);
   assert.deepEqual(fact.cssScopeRules, [
     {
       limit: ':scope [kovo-c]',
@@ -770,6 +770,7 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
     body: { kind: 'form-data' },
     headers: {
       Accept: 'text/vnd.kovo.fragment+html',
+      'Kovo-Form-Target': '',
       'Kovo-Fragment': 'true',
       'Kovo-Idem': 'idem-inline',
       'Kovo-Targets': 'cart-badge=cart; inventory=inventory stock',
@@ -847,6 +848,7 @@ void test('P3 server renders initial query scripts for document-load hydration',
     documentQueryScripts: [
       {
         attrs: {
+          'data-kovo-csp-hash': 'sha256-RI5k6RX1M0ro0XMCjumAJoDVyEhUT0DexGgN17O9SSY=',
           'kovo-query': 'cart',
           key: 'cart:c1',
           type: 'application/json',
@@ -857,6 +859,7 @@ void test('P3 server renders initial query scripts for document-load hydration',
     headQueryScripts: [
       {
         attrs: {
+          'data-kovo-csp-hash': 'sha256-RI5k6RX1M0ro0XMCjumAJoDVyEhUT0DexGgN17O9SSY=',
           'kovo-query': 'cart',
           key: 'cart:c1',
           type: 'application/json',
@@ -876,8 +879,9 @@ void test('P2 page hints keep speculation rules opt-in and non-empty', async () 
     },
     emptyOptInHtml: '',
     renderedHtml:
-      '<script type="speculationrules">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
+      '<script type="speculationrules" data-kovo-csp-hash="sha256-VDbRXdVrG1h/HSZeEzeFOKzfY6aegZfd8rNURnGGk4A=">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
     scriptAttrs: {
+      'data-kovo-csp-hash': 'sha256-VDbRXdVrG1h/HSZeEzeFOKzfY6aegZfd8rNURnGGk4A=',
       type: 'speculationrules',
     },
   });
@@ -1070,43 +1074,20 @@ export const CartBadge = component({
     },
     {
       component: 'CartBadge',
-      detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+      detail: 'inferred query-backed server refresh target',
       position: 'expression',
       query: 'cart.discount',
-      status: 'UNHANDLED',
+      status: 'fragment',
     },
     {
       component: 'CartBadge',
-      detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+      detail: 'inferred query-backed server refresh target',
       position: 'expression',
       query: 'product.name',
-      status: 'UNHANDLED',
+      status: 'fragment',
     },
   ]);
-  assert.deepEqual(compilerDiagnosticFacts(result.diagnostics, ['KV311']), [
-    {
-      code: 'KV311',
-      fileName: 'components/cart/cart-badge.tsx',
-      help: [
-        'Coverage classification: CartBadge expression UNHANDLED',
-        'Blocked update: query expression has no data-bind, renderOnce, fragment, or isomorphic status',
-        diagnosticDefinitions.KV311.help,
-      ].join('\n'),
-      message: `${String(diagnosticDefinitions.KV311.message)} CartBadge cart.discount expression`,
-      severity: 'warn',
-    },
-    {
-      code: 'KV311',
-      fileName: 'components/cart/cart-badge.tsx',
-      help: [
-        'Coverage classification: CartBadge expression UNHANDLED',
-        'Blocked update: query expression has no data-bind, renderOnce, fragment, or isomorphic status',
-        diagnosticDefinitions.KV311.help,
-      ].join('\n'),
-      message: `${String(diagnosticDefinitions.KV311.message)} CartBadge product.name expression`,
-      severity: 'warn',
-    },
-  ]);
+  assert.deepEqual(compilerDiagnosticFacts(result.diagnostics, ['KV311']), []);
   assert.deepEqual(
     kovoCheckAssertionFact(
       kovoCheck({
@@ -1325,7 +1306,7 @@ void test('P1 compiler validates fragment-target child hoisting failures', async
 import { component } from '@kovojs/core';
 
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: {} },
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
@@ -1351,7 +1332,7 @@ export const CartTable = component({
 import { component } from '@kovojs/core';
 
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: {} },
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
@@ -1662,7 +1643,7 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
       reorderedKeys: ['p3', 'p1', 'p2'],
     },
     mutationEndpoint: {
-      body: '<kovo-query name="productDetail" key="product:p1">{"id":"p1","stock":0}</kovo-query>',
+      body: '',
       headers: {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[{"domain":"product","keys":["p1"]}]',
@@ -1782,7 +1763,7 @@ void test('D1 commerce enhanced fragments carry stylesheet hints', async () => {
         rel: 'stylesheet',
       },
       sectionAttrs: { class: 'recommendation-panel' },
-      tags: ['main', 'kovo-defer', 'kovo-fragment', 'link', 'section'],
+      tags: ['main', 'kovo-defer', 'kovo-fragment', 'link', 'section', 'script', 'script'],
     },
     failure: {
       body: '<kovo-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/styles.css"><form class="cart-form-panel"><output role="alert">Only 0 left.</output></form></kovo-fragment>',
@@ -1790,10 +1771,14 @@ void test('D1 commerce enhanced fragments carry stylesheet hints', async () => {
       status: 422,
     },
     pageHints: {
+      csp: {
+        scripts: [],
+        styles: ['sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s='],
+      },
       earlyHints: {
         Link: '</assets/styles.css>; rel=preload; as=style',
       },
-      html: '<style data-kovo-critical-href="/assets/styles.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/styles.css"><link rel="stylesheet" href="/assets/recommendations.css">',
+      html: '<style data-kovo-critical-href="/assets/styles.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/styles.css"><link rel="stylesheet" href="/assets/recommendations.css">',
     },
     selectedStylesheets: [
       {
@@ -1839,12 +1824,16 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.deepEqual(fact.pageHints, {
     missingQueryMessage: 'Missing query data for route meta: cart',
     rendered: {
+      csp: {
+        scripts: ['sha256-428PRljyKzl7OW83C4phJF4OKCzGr42vPOLbx/jnYFI='],
+        styles: [],
+      },
       earlyHints: {},
       html: [
         '<title>Kovo Commerce (1)</title>',
         '<meta name="description" content="Browse products and checkout with 1 verifiable cart item.">',
         '<meta property="og:description" content="Browse products and checkout with 1 verifiable cart item.">',
-        '<script type="application/json" kovo-i18n locale="en-US">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
+        '<script type="application/json" kovo-i18n locale="en-US" data-kovo-csp-hash="sha256-428PRljyKzl7OW83C4phJF4OKCzGr42vPOLbx/jnYFI=">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
       ].join(''),
     },
     translation: 'Cart (1)',
@@ -2054,6 +2043,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.deepEqual(fact.componentGraphFacts, [
     {
       domName: 'cart-badge',
+      fragments: ['cart-badge/cart-badge'],
       name: 'cart-badge/cart-badge',
       queries: ['cart'],
     },
@@ -2061,6 +2051,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.deepEqual(fact.registryFacts, {
     components: ['cart-badge/cart-badge'],
     domainKeys: ['cart'],
+    fragmentTargets: ['cart-badge/cart-badge'],
     invalidations: {},
     routes: [],
   });
@@ -2908,7 +2899,15 @@ export const DiagnosticCard = component({
     });
     assert.deepEqual(
       diagnosticFact.help.map(({ label }) => label),
-      ['Would lower to', 'Blocked expression', 'Element params', 'Fixes', 'help', 'help'],
+      [
+        'Would lower to',
+        'Blocked expression',
+        'Element params',
+        'Fixes',
+        'help',
+        'Blocked reason',
+        'help',
+      ],
     );
     assert.equal(diagnosticFact.sourceExpression, "() => window.alert('x')");
     assert.equal(diagnosticFact.elementParams, '-');
@@ -2916,6 +2915,9 @@ export const DiagnosticCard = component({
       diagnosticFact.help.slice(3),
       diagnosticDefinitions.KV201.help.split('\n').map((line, index) => {
         if (index === 0) return { label: 'Fixes', text: line.replace(/^Fixes:\s+/, '') };
+        if (line.startsWith('Blocked reason:')) {
+          return { label: 'Blocked reason', text: line.replace(/^Blocked reason:\s+/, '') };
+        }
         return { label: 'help', text: line };
       }),
     );
@@ -3336,7 +3338,7 @@ void test('P1 fragment targets emit typed registry facts', async () => {
     fileName: 'cart-row.tsx',
     source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: {} },
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
@@ -3347,6 +3349,7 @@ export const CartRow = component({
       domName: 'cart-row',
       fragments: ['cart-row/cart-row'],
       name: 'cart-row/cart-row',
+      queries: ['cart'],
     },
   ]);
   await assertGeneratedRegistryConsumerTypes(

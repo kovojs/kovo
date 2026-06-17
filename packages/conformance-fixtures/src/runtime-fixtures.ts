@@ -894,6 +894,7 @@ export async function enhancedMutationBehaviorFact(
 
 function assertRefetchOptions(options: unknown): void {
   const expected = {
+    cache: 'no-store',
     headers: {
       Accept: 'text/html',
       'Kovo-Fragment': 'true',
