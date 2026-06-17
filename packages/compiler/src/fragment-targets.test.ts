@@ -7,18 +7,41 @@ const kv230 = diagnosticDefinitions.KV230;
 const kv303 = diagnosticDefinitions.KV303;
 
 describe('fragment target validation', () => {
+  it('reports removed fragmentTarget usage and points to query inference', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component({
+  fragmentTarget: true,
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <cart-badge>{cart.count}</cart-badge>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV223',
+        help: expect.stringContaining('disableServerRefresh: true'),
+        message:
+          'Redundant removed component option; query-backed components infer server refresh targets. fragmentTarget',
+        severity: 'lint',
+      }),
+    );
+  });
+
   it('reports KV238 for duplicate derived fragment-target registry names', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr data-row={rowId}></tr>,
 });
 
 export const Cart_Row = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr data-row={rowId}></tr>,
 });
@@ -58,13 +81,13 @@ export const Cart_Row = component({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr data-row={rowId}></tr>,
 });
 
 export const OrderRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr data-row={rowId}></tr>,
 });
@@ -80,7 +103,7 @@ export const OrderRow = component({
       registryFacts: { fragmentTargets: ['cart-row/cart-row'] },
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr data-row={rowId}></tr>,
 });
@@ -120,9 +143,8 @@ export const CartRow = component({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
-  props: { rowId: String, quantity: Number, selected: Boolean },
   queries: { cart: cartQuery },
+  props: { rowId: String, quantity: Number, selected: Boolean },
   render: ({ cart, rowId }) => <tr kovo-c="cart-row" data-row={rowId}>{renderOnce(cart.count)}</tr>,
 });
 `,
@@ -144,7 +166,7 @@ export const CartRow = component({
 const jsonProp = createJsonProp();
 
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String, payload: jsonProp },
   render: ({ rowId, payload }) => <tr kovo-c="cart-row" data-row={rowId}>{renderOnce(payload.label)}</tr>,
 });
@@ -163,7 +185,6 @@ export const CartRow = component({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart, priceList }) => <tr kovo-c="cart-row">{renderOnce(cart.count)}{priceList.version}</tr>,
 });
@@ -178,7 +199,7 @@ export const CartRow = component({
         severity: kv303.severity,
         // SECURITY_FINDINGS.md C1: the escapeText import prepended for the escaped static text
         // child (`priceList.version`) shifts the lowered-artifact diagnostic down one line.
-        start: { column: 20, line: 6 },
+        start: { column: 20, line: 5 },
         length: 9,
       },
     ]);
@@ -189,7 +210,7 @@ export const CartRow = component({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
@@ -214,7 +235,7 @@ export const CartTable = component({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
@@ -245,7 +266,7 @@ export const CartTable = component({
         // SECURITY_FINDINGS.md C1: the static text child is wrapped in escapeText(...) during
         // lowering (and the escapeText import prepended), so the blocked-children snippet shows the
         // escaped form and the diagnostic shifts down one line.
-        start: { column: 9, line: 13 },
+        start: { column: 9, line: 17 },
         length: 47,
       },
     ]);
@@ -256,7 +277,7 @@ export const CartTable = component({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
@@ -308,7 +329,7 @@ import { formatMoney } from './money';
 const CURRENCY = 'USD';
 
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
@@ -333,7 +354,7 @@ export const CartTable = component({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
@@ -360,7 +381,7 @@ export const CartTable = component({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
@@ -427,6 +448,7 @@ export const CartTable = component({
     expect(result.componentGraphFacts).toEqual([
       {
         domName: 'cart-table',
+        fragments: ['cart-row/cart-table'],
         name: 'cart-row/cart-table',
         queries: ['cart'],
       },

@@ -9,6 +9,8 @@ import {
   validateEventPayloads,
   validateFragmentTargetChildren,
   validateFragmentTargetInputs,
+  validateHandAuthoredFragmentTargetStamp,
+  validateRemovedFragmentTargetOption,
   validateReservedQueryNames,
   validateServerFactsInLocalState,
 } from './component-contracts.js';
@@ -47,6 +49,10 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ diagnosticSource, model, options, sourceOffsetMap }) =>
     validateServerFactsInLocalState(diagnosticSource, model, options.fileName, sourceOffsetMap),
   ({ model, options, source }) => validateReservedQueryNames(source, model, options.fileName),
+  ({ model, options, source }) =>
+    validateRemovedFragmentTargetOption(source, model, options.fileName),
+  ({ model, options, source }) =>
+    validateHandAuthoredFragmentTargetStamp(source, model, options.fileName),
   ({ model, options, source }) => validateComponentNameUniqueness(source, model, options),
   ({ model, options, source }) => validateFragmentTargetNameUniqueness(source, model, options),
   ({ options, originalModel }) =>

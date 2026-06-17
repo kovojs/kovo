@@ -9,7 +9,6 @@ const cartBadgeSource = `
 import { component } from '@kovojs/core';
 
 export const CartBadge = component({
-  fragmentTarget: true,
   queries: { cart: {} },
   render: () => (
     <button onClick={() => removeItem(state, item.id)}>
@@ -74,7 +73,7 @@ describe('compileComponentModule', () => {
 import { component } from '@kovojs/core';
 
 export const CartBadge = component({
-  fragmentTarget: true,
+  queries: { cart: {} },
   css: \`
     button { color: teal; }
     .count { font-weight: 700; }

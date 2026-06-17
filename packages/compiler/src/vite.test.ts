@@ -13,7 +13,6 @@ import { component } from '@kovojs/core';
 import { removeItem } from './cart-actions';
 
 export const CartBadge = component({
-  fragmentTarget: true,
   queries: { cart: {} },
   render: () => (
     <button onClick={() => removeItem(state, item.id)}>

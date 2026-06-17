@@ -168,9 +168,12 @@ function fragmentTargetRegistrations(
   fileName: string,
 ): FragmentTargetRegistration[] {
   return model.components.flatMap((component) => {
-    if (component.options.find((option) => option.key === 'fragmentTarget')?.staticValue !== true) {
+    if (component.options.find((option) => option.key === 'disableServerRefresh')?.staticValue === true) {
       return [];
     }
+
+    const queries = component.options.find((option) => option.key === 'queries')?.objectEntries ?? [];
+    if (queries.length === 0) return [];
 
     return [
       {

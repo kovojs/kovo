@@ -3,8 +3,10 @@ import ts from 'typescript';
 import type { StaticLiteralValue } from './object.js';
 
 export interface ComponentOptionEntry {
+  end: number;
   key: string;
   objectEntries?: readonly ObjectLiteralEntry[];
+  start: number;
   staticValue?: StaticLiteralValue;
   staticTemplateValue?: string;
 }
@@ -482,12 +484,17 @@ export function componentStateReturnObjectKeys(model: ComponentModuleModel): str
 
 export function componentFragmentTargetNames(model: ComponentModuleModel): string[] {
   return model.components.flatMap((component) => {
-    if (component.options.find((option) => option.key === 'fragmentTarget')?.staticValue !== true) {
+    if (!componentHasInferredFragmentTarget(component)) {
       return [];
     }
 
     return component.localName === undefined ? [] : [component.localName];
   });
+}
+
+export function componentHasInferredServerRefreshTarget(model: ComponentModuleModel): boolean {
+  const component = firstComponentModel(model);
+  return component ? componentHasInferredFragmentTarget(component) : false;
 }
 
 export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {
@@ -780,15 +787,26 @@ function componentOptions(
 
     return [
       {
+        end: property.name.getEnd(),
         key,
         ...(ts.isObjectLiteralExpression(property.initializer)
           ? { objectEntries: objectLiteralEntries(sourceFile, source, property.initializer) }
           : {}),
+        start: property.name.getStart(sourceFile),
         ...componentOptionStaticValueEntry(property.initializer),
         ...componentOptionStaticTemplateValueEntry(sourceFile, source, property.initializer),
       },
     ];
   });
+}
+
+function componentHasInferredFragmentTarget(component: ComponentModel): boolean {
+  if (component.options.find((option) => option.key === 'disableServerRefresh')?.staticValue === true) {
+    return false;
+  }
+
+  const queries = component.options.find((option) => option.key === 'queries')?.objectEntries ?? [];
+  return queries.length > 0;
 }
 
 function componentOptionStaticValueEntry(

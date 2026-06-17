@@ -4,7 +4,7 @@ import type { CompilerDiagnostic } from './diagnostics.js';
 import {
   componentOptionObjectEntries,
   componentOptionObjectKeys,
-  componentOptionStaticValue,
+  componentHasInferredServerRefreshTarget,
   type ComponentModuleModel,
 } from './scan/parse.js';
 import type {
@@ -52,15 +52,15 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
 }
 
 /**
- * @internal Extract the fragment-target facts a component declares via its
- * `fragmentTarget` option, used internally by {@link compileComponentModule} when building
- * component graph facts. Exported for in-repo callers only (SPEC.md §5.2).
+ * @internal Extract the inferred fragment-target facts for a query-backed component,
+ * used internally by {@link compileComponentModule} when building component graph facts.
+ * Exported for in-repo callers only (SPEC.md §5.2).
  */
 export function findFragmentTargetFacts(
   registryComponentName: string,
   model: ComponentModuleModel,
 ): FragmentTargetFact[] {
-  if (componentOptionStaticValue(model, 'fragmentTarget') !== true) return [];
+  if (!componentHasInferredServerRefreshTarget(model)) return [];
 
   return [
     {

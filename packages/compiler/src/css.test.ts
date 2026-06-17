@@ -201,7 +201,7 @@ export const CartDrawer = component({
 import { component } from '@kovojs/core';
 
 export const CartBadge = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   styles: \`
     .count { color: teal; }
   \`,
@@ -243,6 +243,7 @@ const styles = style.create({
 }, { namespace: 'cart', source: 'cart-badge.tsx' });
 
 export const CartBadge = component({
+  queries: { cart: cartQuery },
   render: () => <cart-badge style={styles.root}>1</cart-badge>,
 });
 `,
@@ -252,7 +253,9 @@ export const CartBadge = component({
       [
         {
           "componentName": "cart-badge",
-          "fragmentTargets": [],
+          "fragmentTargets": [
+            "components/cart/cart-badge/cart-badge",
+          ],
           "href": "/assets/components/cart/cart-badge.css",
           "sourceFileName": "components/cart/cart-badge.css",
           "styleRules": [
@@ -302,7 +305,6 @@ const styles = style.create({
 }, { namespace: 'cart', source: 'cart-badge.tsx' });
 
 export const CartBadge = component({
-  fragmentTarget: true,
   render: () => <cart-badge style={styles.root}>1</cart-badge>,
 });
 `,
@@ -320,7 +322,7 @@ const styles = style.create({
 }, { namespace: 'recommendations', source: 'recommendations.tsx' });
 
 export const Recommendations = component({
-  fragmentTarget: true,
+  queries: { recommendations: recommendationsQuery },
   render: () => <aside style={styles.root}>More like this</aside>,
 });
 `,
@@ -350,9 +352,7 @@ export const Recommendations = component({
       [
         {
           "componentName": "css-base",
-          "fragmentTargets": [
-            "components/cart/cart-badge/cart-badge",
-          ],
+          "fragmentTargets": [],
           "href": "/_kovo/base.css",
           "sourceFileName": "base.css",
           "styleRules": [
@@ -379,9 +379,7 @@ export const Recommendations = component({
       [
         {
           "componentName": "css-base",
-          "fragmentTargets": [
-            "components/cart/cart-badge/cart-badge",
-          ],
+          "fragmentTargets": [],
           "href": "/_kovo/base.css",
           "sourceFileName": "base.css",
           "styleRules": [
@@ -408,9 +406,7 @@ export const Recommendations = component({
       [
         {
           "componentName": "css-base",
-          "fragmentTargets": [
-            "components/cart/cart-badge/cart-badge",
-          ],
+          "fragmentTargets": [],
           "href": "/_kovo/base.css",
           "sourceFileName": "base.css",
           "styleRules": [
@@ -461,9 +457,7 @@ export const Recommendations = component({
       [
         {
           "componentName": "css-base",
-          "fragmentTargets": [
-            "components/cart/cart-badge/cart-badge",
-          ],
+          "fragmentTargets": [],
           "href": "/_kovo/base.css",
           "sourceFileName": "base.css",
           "styleRules": [

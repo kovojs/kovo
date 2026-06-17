@@ -9,6 +9,7 @@ import {
 } from './query-shapes.js';
 import {
   callExpressions,
+  componentHasInferredServerRefreshTarget,
   componentOptionStaticValue,
   jsxElementChildBody,
   jsxElements,
@@ -197,22 +198,6 @@ export function collectQueryUpdateCoverage(
     coveredPaths.add(coveragePathKey('state', path));
   }
 
-  if (componentOptionStaticValue(model, 'fragmentTarget') === true) {
-    for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
-      const path = expression.path;
-      if (coveredPaths.has(coveragePathKey('query', path))) continue;
-
-      facts.push({
-        componentName,
-        detail: 'declared fragment target',
-        position: 'expression',
-        query: path,
-        status: 'fragment',
-      });
-      coveredPaths.add(coveragePathKey('query', path));
-    }
-  }
-
   if (componentOptionStaticValue(model, 'isomorphic') === true) {
     for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
       const path = expression.path;
@@ -241,6 +226,22 @@ export function collectQueryUpdateCoverage(
         status: 'isomorphic',
       });
       coveredPaths.add(coveragePathKey('state', path));
+    }
+  }
+
+  if (componentHasInferredServerRefreshTarget(model)) {
+    for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
+      const path = expression.path;
+      if (coveredPaths.has(coveragePathKey('query', path))) continue;
+
+      facts.push({
+        componentName,
+        detail: 'inferred query-backed server refresh target',
+        position: 'expression',
+        query: path,
+        status: 'fragment',
+      });
+      coveredPaths.add(coveragePathKey('query', path));
     }
   }
 

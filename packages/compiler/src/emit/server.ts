@@ -17,6 +17,7 @@ import {
 } from '../output-context-facts.js';
 import {
   componentOptionObjectKeys,
+  componentHasInferredServerRefreshTarget,
   componentRenderHost,
   componentRenderHostElement,
   componentStateReturnObjectModel,
@@ -46,10 +47,14 @@ export interface ServerRenderLowering {
 }
 
 export interface ServerRenderStampWriteFact {
-  attr: 'kovo-c' | 'kovo-deps' | 'kovo-state';
+  attr: 'kovo-c' | 'kovo-deps' | 'kovo-fragment-target' | 'kovo-state';
   mode: 'insert' | 'preserve' | 'replace';
   value: string;
-  writer: 'host dependency stamp' | 'host identity stamp' | 'host state stamp';
+  writer:
+    | 'host dependency stamp'
+    | 'host fragment target stamp'
+    | 'host identity stamp'
+    | 'host state stamp';
 }
 
 export function emitServerModule(renderedSource: string): EmittedServerModule {
@@ -362,6 +367,7 @@ function isGeneratedOnlyRenderAttribute(name: string): boolean {
   return (
     name === 'kovo-c' ||
     name === 'kovo-deps' ||
+    name === 'kovo-fragment-target' ||
     name === 'kovo-state' ||
     name === 'kovo-param-types' ||
     name === 'data-bind' ||
@@ -607,6 +613,7 @@ function renderHostStampWrites(
   const writes: ServerRenderStampWriteFact[] = [];
   const componentIdentity = componentIdentityStamp(hostElement, domComponentName);
   const declaredQueryDeps = declaredQueryDepsStamp(model, hostElement);
+  const fragmentTarget = inferredFragmentTargetStamp(model, hostElement, domComponentName);
   const stateJson = staticStateJson(model);
 
   if (componentIdentity) {
@@ -620,6 +627,21 @@ function renderHostStampWrites(
   }
   if (declaredQueryDeps) {
     writes.push(declaredQueryDeps);
+  }
+  if (fragmentTarget) {
+    if (fragmentTarget.mode === 'replace') {
+      const existing = hostElement.attributes.find(
+        (attribute) => attribute.name === 'kovo-fragment-target',
+      );
+      if (existing) {
+        conflicts.push({
+          attribute: existing,
+          attr: 'kovo-fragment-target',
+          writer: 'host fragment target stamp',
+        });
+      }
+    }
+    writes.push(fragmentTarget);
   }
   if (stateJson) {
     const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-state');
@@ -644,6 +666,33 @@ function renderHostStampWrites(
   }
 
   return { conflicts, writes };
+}
+
+function inferredFragmentTargetStamp(
+  model: ComponentModuleModel,
+  hostElement: JsxElementModel,
+  domComponentName: string,
+): ServerRenderStampWriteFact | null {
+  if (!componentHasInferredServerRefreshTarget(model)) return null;
+
+  const existing = hostElement.attributes.find(
+    (attribute) => attribute.name === 'kovo-fragment-target',
+  );
+  if (existing) {
+    return {
+      attr: 'kovo-fragment-target',
+      mode: existing.value === domComponentName ? 'preserve' : 'replace',
+      value: domComponentName,
+      writer: 'host fragment target stamp',
+    };
+  }
+
+  return {
+    attr: 'kovo-fragment-target',
+    mode: 'insert',
+    value: domComponentName,
+    writer: 'host fragment target stamp',
+  };
 }
 
 function componentIdentityStamp(
@@ -699,9 +748,9 @@ function staticStateJson(model: ComponentModuleModel): string | null {
 }
 
 interface HostStampConflict {
-  attr: 'kovo-c' | 'kovo-state';
+  attr: 'kovo-c' | 'kovo-fragment-target' | 'kovo-state';
   attribute: JsxAttributeModel;
-  writer: 'host identity stamp' | 'host state stamp';
+  writer: 'host fragment target stamp' | 'host identity stamp' | 'host state stamp';
 }
 
 function renderHostStampAttribute(write: ServerRenderStampWriteFact): string {

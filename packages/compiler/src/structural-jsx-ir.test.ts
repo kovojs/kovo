@@ -20,7 +20,6 @@ const styles = style.create({
 }, { namespace: 'productBadge', source: 'product-page.tsx' });
 
 export const ProductPage = component({
-  fragmentTarget: true,
   queries: { product: productQuery },
   state: () => ({ open: false }),
   render: (_queries, state) => (
@@ -156,6 +155,7 @@ export const ProductPage = component({
 /** @jsxImportSource @kovojs/server */
 export const ImportOrder = component({
   queries: { product: productQuery },
+  disableServerRefresh: true,
   state: () => ({ value: 50 }),
   render: ({ product, label }, state) => (
     <import-order>
@@ -202,6 +202,7 @@ export const ImportOrder = component({
       /** @jsxImportSource @kovojs/server */
       export const ImportOrder = component({
         queries: { product: productQuery },
+        disableServerRefresh: true,
         state: () => ({ value: 50 }),
         render: ({ product, label }, state) => (
           <import-order kovo-deps="product" kovo-state="{&quot;value&quot;:50}">

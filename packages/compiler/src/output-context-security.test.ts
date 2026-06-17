@@ -203,7 +203,6 @@ export const CartList = component({
       fileName: 'promo.tsx',
       source: `
 export const Promo = component({
-  fragmentTarget: true,
   render: ({ promo }) => (
     <section>
       <h2>{promo.title}</h2>

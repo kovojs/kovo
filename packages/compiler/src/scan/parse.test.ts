@@ -55,7 +55,6 @@ import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/pr
   it('records trimmed JSX child bodies with original source offsets', () => {
     const source = `
 export const ChildSlot = component({
-  fragmentTarget: true,
   render: () => (
     <ChildSlot>
       <span>{cart.count}</span>

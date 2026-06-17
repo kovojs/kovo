@@ -72,6 +72,9 @@ describe('compiler conformance corpus', () => {
           "componentGraphFacts": [
             {
               "domName": "reference-shell",
+              "fragments": [
+                "components/reference-shell/reference-shell",
+              ],
               "name": "components/reference-shell/reference-shell",
               "queries": [
                 "account",
@@ -123,7 +126,10 @@ describe('compiler conformance corpus', () => {
             },
           ],
           "cssAssetCount": 0,
-          "diagnostics": [],
+          "diagnostics": [
+            "KV223",
+            "KV223",
+          ],
           "fileKinds": [
             "server",
             "client",
@@ -167,7 +173,9 @@ describe('compiler conformance corpus', () => {
             },
           ],
           "cssAssetCount": 0,
-          "diagnostics": [],
+          "diagnostics": [
+            "KV223",
+          ],
           "fileKinds": [
             "server",
             "client",
@@ -211,7 +219,9 @@ describe('compiler conformance corpus', () => {
             },
           ],
           "cssAssetCount": 0,
-          "diagnostics": [],
+          "diagnostics": [
+            "KV223",
+          ],
           "fileKinds": [
             "server",
             "client",
@@ -613,7 +623,6 @@ function focusedGeneratedFixture(): CompileResult {
 import { component } from '@kovojs/core';
 
 export const CartBadge = component({
-  fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart }) => (
     <cart-badge>
@@ -879,7 +888,6 @@ export const Bindings = component({
         fileName: 'fragment.tsx',
         source: `
 export const Fragment = component({
-  fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart, priceList }) => <section>{renderOnce(cart.count)}{priceList.version}</section>,
 });
