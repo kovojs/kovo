@@ -767,6 +767,13 @@ borrowing its concrete API/spike detail.
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L
       lands; rewrite `site/content/guides/styling.md` + `components.md`; reconcile `plans/api-cleanup.md`
       STABILITY for any new public surface.
+  - Evidence (partial, 2026-06-16): `SPEC.md` §13.1 now makes `@kovojs/style` the StyleX-first
+    v1 authoring model, preserves the stylesheet hint/fragment metadata contract, and keeps `@scope`
+    as the raw co-located CSS escape hatch; §4.2 references StyleX atomic stylesheet assets for the
+    light-DOM styling contract, and §6.1.1 names `@kovojs/ui` as the first-party `kovo-ui-` package
+    prefix.
+  - Evidence (partial, 2026-06-16): `rg -n "Tailwind|tailwind|headless-ui|StyleX|@kovojs/style|kovo-ui-"
+    SPEC.md` returns only the new StyleX / `@kovojs/style` / `kovo-ui-` references.
 - [ ] **Deferred — CSS splitting (opt-in, gated on measurement).** Compute base/route/fragment chunks
       from the attribution map (Phase 2 invariant (a)), keyed off the route registry (§6.4); the manifest
       (invariant (c)) returns per-render asset sets; fragment/defer responses declare their required
