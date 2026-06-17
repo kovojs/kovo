@@ -125,14 +125,14 @@ describe('inline loader enhanced submit source', () => {
           target: {
             closest(selector: string) {
               return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
-                ? {
+                ? null
+                : {
                     action: '/plain',
                     getAttribute() {
                       return null;
                     },
                     method: 'post',
-                  }
-                : null;
+                  };
             },
           },
           type: 'submit',
@@ -164,6 +164,7 @@ describe('inline loader enhanced submit source', () => {
       const form = {
         action: '/_m/cart/add',
         getAttribute(name: string) {
+          if (name === 'kovo-fragment-target') return 'product-form:p1';
           return name === 'enhance' ? '' : null;
         },
         method: 'post',
@@ -279,6 +280,7 @@ describe('inline loader enhanced submit source', () => {
         expect(inlineRequest?.[1].headers['Kovo-Targets']).toBe(
           'cart-badge=cart; inventory=inventory stock; standalone-target; cart-summary=cart summary',
         );
+        expect(inlineRequest?.[1].headers['Kovo-Form-Target']).toBe('product-form:p1');
       } finally {
         Object.assign(globalRecord, {
           DOMParser: originals.DOMParser,

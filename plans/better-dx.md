@@ -299,9 +299,18 @@ export const AddToCartForm = component({
     - Partial runtime/server evidence: integrated commit `7a72498a` adds
       `submittedFormTarget` parsing and failure fallback order
       `failureTarget ?? submittedFormTarget ?? first target ?? error`.
+    - `packages/runtime/src/inline-loader-build.ts` and regenerated
+      `inline-loader.ts` now send `Kovo-Form-Target` from the submitted enhanced
+      form's derived target identity while preserving structured `Kovo-Targets`
+      collection from live query targets.
+    - `packages/runtime/src/inline-loader-enhanced-submit.test.ts` covers parity
+      with modular enhanced submit headers, including the submitted form target.
+    - Verified with `pnpm --filter @kovojs/runtime run build:inline-loader`,
+      `pnpm --filter @kovojs/runtime run check:inline-loader`, and
+      `pnpm exec vitest --run packages/runtime/src/inline-loader-enhanced-submit.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/mutation-fetch.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts`
+      on 2026-06-17.
     - Remaining gap: compiler lowering for `<form enhance mutation={...}
-      key={...}>`, typed render-context failure state, and inline-loader
-      `Kovo-Form-Target` emission are not complete.
+      key={...}>` and typed render-context failure state are not complete.
 - [x] **7. Type registry and breaking migration.**
   - Generate `FragmentTargets` facts for inferred targets so existing typed APIs
     keep working.
@@ -355,7 +364,7 @@ export const AddToCartForm = component({
     - Remaining gap: the add-to-cart form still hand-authors
       `kovo-fragment-target`, still posts through string `action="/_m/cart/add"`,
       and app mutation response wiring still passes `failureTarget`; migrate this
-      after typed form lowering / inline-loader `Kovo-Form-Target` support lands.
+      after typed form lowering lands.
 - [ ] **9. Broader example/docs migration.**
   - Audit StackOverflow and CRM components that currently hand-author
     `kovo-fragment-target` and remove attributes where inference covers them.
