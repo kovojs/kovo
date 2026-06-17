@@ -8,6 +8,25 @@ import {
   scopeComponentCss,
   selectCssAssets,
 } from './index.js';
+import type { ComponentCssAsset } from './index.js';
+
+function cssAssetSnapshot(assets: readonly ComponentCssAsset[]) {
+  return assets.map((asset) => ({
+    componentName: asset.componentName,
+    fragmentTargets: asset.fragmentTargets,
+    href: asset.href,
+    sourceFileName: asset.sourceFileName,
+    styles: {
+      cart: asset.criticalCss?.includes('kv-cart') ?? false,
+      recommendations: asset.criticalCss?.includes('kv-recommendations') ?? false,
+      shell: asset.criticalCss?.includes('kv-shell') ?? false,
+    },
+    styleRules: asset.styleRuleUsages?.map((usage) => ({
+      source: usage.source,
+      styleRef: usage.styleRef,
+    })),
+  }));
+}
 
 describe('component CSS helpers', () => {
   it('wraps component CSS in @scope and emits a prefixed fallback', () => {
@@ -208,6 +227,282 @@ export const CartBadge = component({
         kind: 'fragment',
       }),
     ).toEqual(manifest.stylesheets);
+  });
+
+  it('preserves StyleX rule attribution in collected CSS manifests', () => {
+    const cartBadge = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const styles = style.create({
+  root: {
+    color: 'teal',
+  },
+}, { namespace: 'cart', source: 'cart-badge.tsx' });
+
+export const CartBadge = component({
+  render: () => <cart-badge style={styles.root}>1</cart-badge>,
+});
+`,
+    });
+
+    expect(cssAssetSnapshot(collectCssAssetManifest(cartBadge).stylesheets)).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "cart-badge",
+          "fragmentTargets": [],
+          "href": "/assets/components/cart/cart-badge.css",
+          "sourceFileName": "components/cart/cart-badge.css",
+          "styleRules": [
+            {
+              "source": "cart-badge.tsx#root",
+              "styleRef": "styles.root",
+            },
+          ],
+          "styles": {
+            "cart": true,
+            "recommendations": false,
+            "shell": false,
+          },
+        },
+      ]
+    `);
+  });
+
+  it('computes opt-in base route and fragment CSS chunks from route attribution', () => {
+    const shell = compileComponentModule({
+      fileName: 'components/app/shell.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const styles = style.create({
+  root: {
+    display: 'grid',
+  },
+}, { namespace: 'shell', source: 'shell.tsx' });
+
+export const AppShell = component({
+  render: () => <main style={styles.root}>Shell</main>,
+});
+`,
+    });
+    const cartBadge = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const styles = style.create({
+  root: {
+    color: 'teal',
+  },
+}, { namespace: 'cart', source: 'cart-badge.tsx' });
+
+export const CartBadge = component({
+  fragmentTarget: true,
+  render: () => <cart-badge style={styles.root}>1</cart-badge>,
+});
+`,
+    });
+    const recommendations = compileComponentModule({
+      fileName: 'components/product/recommendations.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const styles = style.create({
+  root: {
+    gap: '1rem',
+  },
+}, { namespace: 'recommendations', source: 'recommendations.tsx' });
+
+export const Recommendations = component({
+  fragmentTarget: true,
+  render: () => <aside style={styles.root}>More like this</aside>,
+});
+`,
+    });
+    const manifest = collectCssAssetManifest([shell, cartBadge, recommendations], {
+      baseHref: '/_kovo/',
+      split: {
+        routes: [
+          {
+            route: '/cart',
+            sourceFileNames: ['components/app/shell.css', 'components/cart/cart-badge.css'],
+          },
+          {
+            route: '/products/:id',
+            sourceFileNames: [
+              'components/app/shell.css',
+              'components/cart/cart-badge.css',
+              'components/product/recommendations.css',
+            ],
+          },
+        ],
+      },
+    });
+    const resolveCssAssets = createCssAssetResolver(manifest);
+
+    expect(cssAssetSnapshot(manifest.chunks?.base ?? [])).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "css-base",
+          "fragmentTargets": [
+            "components/cart/cart-badge/cart-badge",
+          ],
+          "href": "/_kovo/base.css",
+          "sourceFileName": "base.css",
+          "styleRules": [
+            {
+              "source": "shell.tsx#root",
+              "styleRef": "styles.root",
+            },
+            {
+              "source": "cart-badge.tsx#root",
+              "styleRef": "styles.root",
+            },
+          ],
+          "styles": {
+            "cart": true,
+            "recommendations": false,
+            "shell": true,
+          },
+        },
+      ]
+    `);
+    expect(
+      cssAssetSnapshot(resolveCssAssets({ kind: 'page', route: '/cart' })),
+    ).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "css-base",
+          "fragmentTargets": [
+            "components/cart/cart-badge/cart-badge",
+          ],
+          "href": "/_kovo/base.css",
+          "sourceFileName": "base.css",
+          "styleRules": [
+            {
+              "source": "shell.tsx#root",
+              "styleRef": "styles.root",
+            },
+            {
+              "source": "cart-badge.tsx#root",
+              "styleRef": "styles.root",
+            },
+          ],
+          "styles": {
+            "cart": true,
+            "recommendations": false,
+            "shell": true,
+          },
+        },
+      ]
+    `);
+    expect(
+      cssAssetSnapshot(resolveCssAssets({ kind: 'page', route: '/products/:id' })),
+    ).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "css-base",
+          "fragmentTargets": [
+            "components/cart/cart-badge/cart-badge",
+          ],
+          "href": "/_kovo/base.css",
+          "sourceFileName": "base.css",
+          "styleRules": [
+            {
+              "source": "shell.tsx#root",
+              "styleRef": "styles.root",
+            },
+            {
+              "source": "cart-badge.tsx#root",
+              "styleRef": "styles.root",
+            },
+          ],
+          "styles": {
+            "cart": true,
+            "recommendations": false,
+            "shell": true,
+          },
+        },
+        {
+          "componentName": "route:/products/:id",
+          "fragmentTargets": [
+            "components/product/recommendations/recommendations",
+          ],
+          "href": "/_kovo/routes/products-id.css",
+          "sourceFileName": "routes/products-id.css",
+          "styleRules": [
+            {
+              "source": "recommendations.tsx#root",
+              "styleRef": "styles.root",
+            },
+          ],
+          "styles": {
+            "cart": false,
+            "recommendations": true,
+            "shell": false,
+          },
+        },
+      ]
+    `);
+    expect(
+      cssAssetSnapshot(
+        resolveCssAssets({
+          fragmentTargets: ['components/product/recommendations/recommendations'],
+          kind: 'defer',
+        }),
+      ),
+    ).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "css-base",
+          "fragmentTargets": [
+            "components/cart/cart-badge/cart-badge",
+          ],
+          "href": "/_kovo/base.css",
+          "sourceFileName": "base.css",
+          "styleRules": [
+            {
+              "source": "shell.tsx#root",
+              "styleRef": "styles.root",
+            },
+            {
+              "source": "cart-badge.tsx#root",
+              "styleRef": "styles.root",
+            },
+          ],
+          "styles": {
+            "cart": true,
+            "recommendations": false,
+            "shell": true,
+          },
+        },
+        {
+          "componentName": "fragment:components/product/recommendations/recommendations",
+          "fragmentTargets": [
+            "components/product/recommendations/recommendations",
+          ],
+          "href": "/_kovo/fragments/components-product-recommendations-recommendations.css",
+          "sourceFileName": "fragments/components-product-recommendations-recommendations.css",
+          "styleRules": [
+            {
+              "source": "recommendations.tsx#root",
+              "styleRef": "styles.root",
+            },
+          ],
+          "styles": {
+            "cart": false,
+            "recommendations": true,
+            "shell": false,
+          },
+        },
+      ]
+    `);
   });
 
   it('carries preload policy for late fragment stylesheet delivery', () => {

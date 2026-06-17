@@ -959,12 +959,22 @@ borrowing its concrete API/spike detail.
     `pnpm --filter @kovojs/site run check:links` passes (`pages=93`, `internal=13492`,
     `external=190`), `pnpm --filter @kovojs/site test` passes (9 files, 44 tests), and
     `pnpm --filter @kovojs/site exec tsc --noEmit --pretty false` passes.
-- [ ] **Deferred — CSS splitting (opt-in, gated on measurement).** Compute base/route/fragment chunks
+- [x] **Deferred — CSS splitting (opt-in, gated on measurement).** Compute base/route/fragment chunks
       from the attribution map (Phase 2 invariant (a)), keyed off the route registry (§6.4); the manifest
       (invariant (c)) returns per-render asset sets; fragment/defer responses declare their required
       assets. **No architecture change required** — only chunk computation + manifest population — _because_
       invariants (a)/(b)/(c) were preserved from v1. Trigger: a measured page/route where the single asset
       ships meaningfully more CSS than the route needs.
+  - Evidence (2026-06-17): `packages/compiler/src/css.ts` preserves StyleX `styleRuleUsages`, computes
+    opt-in `CssSplitChunks` base/route/fragment assets from route source-file/href/fragment-target
+    attribution, and `createCssAssetResolver()` returns route-keyed page assets plus fragment/defer asset
+    sets.
+  - Evidence (2026-06-17): `packages/compiler/src/css.test.ts` covers attribution preservation and split
+    base/route/defer resolver output with Vitest inline snapshots.
+  - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest --run src/css.test.ts
+    src/style.test.ts`, `pnpm --filter @kovojs/compiler exec vitest --run`, `pnpm --filter @kovojs/compiler
+    exec tsc --noEmit --pretty false`, `pnpm --filter @kovojs/server exec vitest --run src/hints.test.ts
+    src/deferred-stream.test.ts src/mutation-response.test.ts`, and `git diff --check` pass.
 
 ## Resolved Decisions — Phase 0 (2026-06-16)
 

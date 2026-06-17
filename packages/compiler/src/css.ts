@@ -50,6 +50,7 @@ export interface StyleRuleUsage {
  */
 export interface CssAssetManifest {
   byFileName: Readonly<Record<string, ComponentCssAsset>>;
+  chunks?: CssSplitChunks;
   stylesheets: readonly ComponentCssAsset[];
 }
 
@@ -57,6 +58,32 @@ export interface CssAssetManifest {
 export interface CssAssetManifestOptions {
   baseHref?: string;
   preload?: boolean;
+  split?: CssSplitOptions;
+}
+
+/**
+ * @internal Opt-in StyleX/component CSS split configuration. Routes are keyed by the route registry
+ * and may identify their CSS by source file, href, or fragment target facts.
+ */
+export interface CssSplitOptions {
+  baseSourceFileNames?: readonly string[];
+  routes?: readonly CssRouteSplitTarget[];
+}
+
+/** @internal Route-level CSS ownership fact for split manifest computation. */
+export interface CssRouteSplitTarget {
+  fragmentTargets?: readonly string[];
+  hrefs?: readonly string[];
+  route: string;
+  sourceFileNames?: readonly string[];
+  stylesheets?: readonly string[];
+}
+
+/** @internal Computed base/route/fragment chunk assets. */
+export interface CssSplitChunks {
+  base: readonly ComponentCssAsset[];
+  fragments: Readonly<Record<string, readonly ComponentCssAsset[]>>;
+  routes: Readonly<Record<string, readonly ComponentCssAsset[]>>;
 }
 
 /**
@@ -67,6 +94,7 @@ export interface CssAssetManifestOptions {
 export interface CssRenderTarget {
   fragmentTargets?: readonly string[];
   kind: 'defer' | 'fragment' | 'page';
+  route?: string;
   sourceFileNames?: readonly string[];
 }
 
@@ -138,12 +166,18 @@ export function collectCssAssetManifest(
         options,
         cssAsset.criticalCss,
       );
+      if (cssAsset.styleRuleUsages && cssAsset.styleRuleUsages.length > 0) {
+        asset.styleRuleUsages = cssAsset.styleRuleUsages;
+      }
       byFileName[cssAsset.sourceFileName] = asset;
       stylesheets.push(asset);
     }
   }
 
-  return { byFileName, stylesheets };
+  const manifest = { byFileName, stylesheets };
+  return options.split
+    ? { ...manifest, chunks: computeCssSplitChunks(manifest, options) }
+    : manifest;
 }
 
 /**
@@ -167,8 +201,23 @@ export function selectCssAssets(
  */
 export function createCssAssetResolver(manifest: CssAssetManifest): CssAssetResolver {
   return (renderTarget) => {
-    if (!renderTarget) return [...manifest.stylesheets];
+    if (!renderTarget) return allManifestAssets(manifest);
     if (renderTarget.sourceFileNames) return selectCssAssets(manifest, renderTarget.sourceFileNames);
+    if (manifest.chunks) {
+      if (renderTarget.kind === 'page') {
+        return renderTarget.route
+          ? [...manifest.chunks.base, ...(manifest.chunks.routes[renderTarget.route] ?? [])]
+          : allManifestAssets(manifest);
+      }
+      if (renderTarget.fragmentTargets) {
+        return dedupeComponentCssAssets([
+          ...manifest.chunks.base,
+          ...renderTarget.fragmentTargets.flatMap(
+            (target) => manifest.chunks?.fragments[target] ?? [],
+          ),
+        ]);
+      }
+    }
     if (renderTarget.fragmentTargets) {
       const wanted = new Set(renderTarget.fragmentTargets);
       return manifest.stylesheets.filter((asset) =>
@@ -177,6 +226,184 @@ export function createCssAssetResolver(manifest: CssAssetManifest): CssAssetReso
     }
     return [...manifest.stylesheets];
   };
+}
+
+function computeCssSplitChunks(
+  manifest: Pick<CssAssetManifest, 'byFileName' | 'stylesheets'>,
+  options: CssAssetManifestOptions,
+): CssSplitChunks {
+  const split = options.split ?? {};
+  const routeSelections = new Map<string, ComponentCssAsset[]>();
+
+  for (const route of split.routes ?? []) {
+    routeSelections.set(route.route, selectRouteCssAssets(manifest, route));
+  }
+
+  const baseAssets = split.baseSourceFileNames
+    ? selectCssAssets(manifest, split.baseSourceFileNames)
+    : sharedRouteCssAssets(routeSelections);
+  const baseNames = new Set(baseAssets.map((asset) => asset.sourceFileName));
+  const base =
+    baseAssets.length > 0
+      ? [chunkAsset('base.css', 'css-base', fragmentTargetsForAssets(baseAssets), baseAssets, options)]
+      : [];
+  const routes: Record<string, ComponentCssAsset[]> = {};
+
+  for (const [route, assets] of routeSelections) {
+    const routeAssets = assets.filter((asset) => !baseNames.has(asset.sourceFileName));
+    routes[route] =
+      routeAssets.length > 0
+        ? [
+            chunkAsset(
+              `routes/${routeChunkName(route)}.css`,
+              `route:${route}`,
+              fragmentTargetsForAssets(routeAssets),
+              routeAssets,
+              options,
+            ),
+          ]
+        : [];
+  }
+
+  const fragments: Record<string, ComponentCssAsset[]> = {};
+  for (const target of fragmentTargetsForAssets(manifest.stylesheets)) {
+    const fragmentAssets = manifest.stylesheets.filter(
+      (asset) =>
+        !baseNames.has(asset.sourceFileName) && asset.fragmentTargets.some((item) => item === target),
+    );
+    fragments[target] =
+      fragmentAssets.length > 0
+        ? [
+            chunkAsset(
+              `fragments/${routeChunkName(target)}.css`,
+              `fragment:${target}`,
+              [target],
+              fragmentAssets,
+              options,
+            ),
+          ]
+        : [];
+  }
+
+  return { base, fragments, routes };
+}
+
+function selectRouteCssAssets(
+  manifest: Pick<CssAssetManifest, 'byFileName' | 'stylesheets'>,
+  route: CssRouteSplitTarget,
+): ComponentCssAsset[] {
+  return dedupeComponentCssAssets([
+    ...selectCssAssets(
+      { byFileName: manifest.byFileName, stylesheets: manifest.stylesheets },
+      route.sourceFileNames ?? [],
+    ),
+    ...selectCssAssetsByHref(manifest.stylesheets, [
+      ...(route.hrefs ?? []),
+      ...(route.stylesheets ?? []),
+    ]),
+    ...selectCssAssetsByFragmentTarget(manifest.stylesheets, route.fragmentTargets ?? []),
+  ]);
+}
+
+function selectCssAssetsByHref(
+  assets: readonly ComponentCssAsset[],
+  hrefs: readonly string[],
+): ComponentCssAsset[] {
+  if (hrefs.length === 0) return [];
+  const wanted = new Set(hrefs);
+  return assets.filter((asset) => wanted.has(asset.href));
+}
+
+function selectCssAssetsByFragmentTarget(
+  assets: readonly ComponentCssAsset[],
+  fragmentTargets: readonly string[],
+): ComponentCssAsset[] {
+  if (fragmentTargets.length === 0) return [];
+  const wanted = new Set(fragmentTargets);
+  return assets.filter((asset) => asset.fragmentTargets.some((target) => wanted.has(target)));
+}
+
+function sharedRouteCssAssets(
+  routeSelections: ReadonlyMap<string, readonly ComponentCssAsset[]>,
+): ComponentCssAsset[] {
+  const counts = new Map<string, { asset: ComponentCssAsset; count: number }>();
+  for (const assets of routeSelections.values()) {
+    for (const asset of new Map(assets.map((item) => [item.sourceFileName, item])).values()) {
+      const existing = counts.get(asset.sourceFileName);
+      counts.set(asset.sourceFileName, {
+        asset,
+        count: (existing?.count ?? 0) + 1,
+      });
+    }
+  }
+
+  return [...counts.values()]
+    .filter((entry) => entry.count > 1)
+    .map((entry) => entry.asset);
+}
+
+function fragmentTargetsForAssets(assets: readonly ComponentCssAsset[]): string[] {
+  return [...new Set(assets.flatMap((asset) => asset.fragmentTargets))].sort();
+}
+
+function chunkAsset(
+  fileName: string,
+  componentName: string,
+  fragmentTargets: readonly string[],
+  assets: readonly ComponentCssAsset[],
+  options: CssAssetManifestOptions,
+): ComponentCssAsset {
+  const criticalCss = dedupeCss(assets.flatMap((asset) => asset.criticalCss ?? []));
+  const styleRuleUsages = dedupeStyleRuleUsages(
+    assets.flatMap((asset) => [...(asset.styleRuleUsages ?? [])]),
+  );
+  const chunk = componentCssAssetForFile(
+    fileName,
+    componentName,
+    fragmentTargets,
+    options,
+    criticalCss,
+  );
+  if (styleRuleUsages.length > 0) chunk.styleRuleUsages = styleRuleUsages;
+  return chunk;
+}
+
+function allManifestAssets(manifest: CssAssetManifest): ComponentCssAsset[] {
+  if (!manifest.chunks) return [...manifest.stylesheets];
+  return dedupeComponentCssAssets([
+    ...manifest.chunks.base,
+    ...Object.values(manifest.chunks.routes).flat(),
+    ...Object.values(manifest.chunks.fragments).flat(),
+  ]);
+}
+
+function dedupeComponentCssAssets(assets: readonly ComponentCssAsset[]): ComponentCssAsset[] {
+  const seen = new Set<string>();
+  return assets.filter((asset) => {
+    if (seen.has(asset.sourceFileName)) return false;
+    seen.add(asset.sourceFileName);
+    return true;
+  });
+}
+
+function dedupeStyleRuleUsages(usages: readonly StyleRuleUsage[]): StyleRuleUsage[] {
+  const seen = new Set<string>();
+  return usages.filter((usage) => {
+    const key = `${usage.className}\0${usage.moduleFileName}\0${usage.source}\0${usage.styleRef}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function routeChunkName(value: string): string {
+  return (
+    value
+      .replace(/^\//, '')
+      .replace(/[:*]+/g, '')
+      .replace(/[^A-Za-z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'index'
+  );
 }
 
 export function componentCssAssetForFile(
