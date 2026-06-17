@@ -13,7 +13,7 @@ import { runContentPipeline } from './content-pipeline.mjs';
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 
 export async function createSiteServeServer({
-  host = '127.0.0.1',
+  host = process.env.HOST ?? '127.0.0.1',
   port = Number(process.env.PORT ?? 4173),
   strictPort = false,
 } = {}) {

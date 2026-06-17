@@ -12,6 +12,7 @@
     "check:links": "node scripts/check-links.mjs",
     "content": "node scripts/content-pipeline.mjs",
     "serve": "node scripts/serve.mjs",
+    "serve:static": "node scripts/serve-static.mjs",
     "test": "vitest --run"
   },
   "dependencies": {
