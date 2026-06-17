@@ -4,6 +4,8 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { documentedApiEntries } from './api-ref.mjs';
+
 /**
  * `@example` typecheck gate (plan Goal 2): every `@example` block in the
  * generated API reference must compile against the real workspace `@kovojs/*`
@@ -50,10 +52,12 @@ export function extractExampleBlocks(markdown) {
 }
 
 /** Map of `<page>:<heading>#<n>` → example source over every generated page. */
-export function collectApiExamples(dir = apiDir) {
+export function collectApiExamples(dir = apiDir, publicPages = publicApiPageFiles()) {
+  const allowedPages = new Set(publicPages);
   const examples = [];
   for (const file of readdirSync(dir).sort()) {
     if (!file.endsWith('.md')) continue;
+    if (!allowedPages.has(file)) continue;
     const markdown = readFileSync(path.join(dir, file), 'utf8');
     const lines = markdown.split('\n');
     const slug = file.replace(/\.md$/, '');
@@ -93,6 +97,10 @@ export function collectApiExamples(dir = apiDir) {
 
 function sanitize(name) {
   return name.replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '') || 'export';
+}
+
+function publicApiPageFiles() {
+  return documentedApiEntries().map((entry) => `${entry.slug}.md`);
 }
 
 async function main() {
