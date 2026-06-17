@@ -35,6 +35,8 @@ import {
   mutationWireRequestFromHeaders,
   type ErrorBoundaryRenderer,
   type FragmentRenderer,
+  type LiveTargetRenderer,
+  type MutationLiveTargetDescriptor,
   type MutationLiveTarget,
   type MutationEndpointRequest,
   type MutationEndpointResponse,
@@ -541,6 +543,8 @@ export async function renderMutationResponse<
     try {
       const selection = selectMutationResponseTargets({
         fragmentRenderers: wireRequest.fragmentRenderers ?? [],
+        liveTargetDescriptors: wireRequest.liveTargetDescriptors ?? [],
+        liveTargetRenderers: wireRequest.liveTargetRenderers ?? [],
         liveTargets: wireRequest.liveTargets,
         rerunQueries: result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
         targets: wireRequest.targets ?? [],
@@ -557,6 +561,15 @@ export async function renderMutationResponse<
         selection.fragmentTargets,
         renderInput,
       );
+      fragmentChunks = [
+        ...(await renderLiveTargetChunks(
+          wireRequest.liveTargetRenderers ?? [],
+          selection.liveTargetDescriptors,
+          renderInput,
+          wireRequest.request,
+        )),
+        ...fragmentChunks,
+      ];
     } catch (error) {
       reportServerError(wireRequest.onError, error, {
         mutationKey: definition.key,
@@ -1008,8 +1021,50 @@ async function renderFragmentChunks(
   return chunks;
 }
 
+async function renderLiveTargetChunks<Request>(
+  renderers: readonly LiveTargetRenderer<Request>[],
+  targets: readonly MutationLiveTargetDescriptor[],
+  input: unknown,
+  request: Request,
+): Promise<string[]> {
+  const renderersByComponent = liveTargetRenderersByComponent(renderers);
+  const chunks: string[] = [];
+
+  for (const target of targets) {
+    const renderer = renderersByComponent.get(target.component);
+    if (!renderer) continue;
+
+    chunks.push(
+      renderFragmentWireHtml({
+        html: await renderer.render({
+          input,
+          props: target.props,
+          request,
+          target: target.target,
+        }),
+        stylesheets: renderer.stylesheets,
+        target: target.target,
+      }),
+    );
+  }
+
+  return chunks;
+}
+
+function liveTargetRenderersByComponent<Request>(
+  renderers: readonly LiveTargetRenderer<Request>[],
+): ReadonlyMap<string, LiveTargetRenderer<Request>> {
+  const byComponent = new Map<string, LiveTargetRenderer<Request>>();
+  for (const renderer of renderers) {
+    if (!byComponent.has(renderer.component)) byComponent.set(renderer.component, renderer);
+  }
+  return byComponent;
+}
+
 interface MutationResponseSelectionInput {
   fragmentRenderers: readonly FragmentRenderer[];
+  liveTargetDescriptors: readonly MutationLiveTargetDescriptor[];
+  liveTargetRenderers: readonly LiveTargetRenderer[];
   liveTargets?: readonly MutationLiveTarget[] | undefined;
   rerunQueries: readonly QueryRerun[];
   targets: readonly string[];
@@ -1017,6 +1072,7 @@ interface MutationResponseSelectionInput {
 
 interface MutationResponseSelection {
   fragmentTargets: readonly string[];
+  liveTargetDescriptors: readonly MutationLiveTargetDescriptor[];
   rerunQueries: readonly QueryRerun[];
 }
 
@@ -1026,20 +1082,25 @@ function selectMutationResponseTargets(
   if (input.liveTargets === undefined) {
     return {
       fragmentTargets: input.targets,
+      liveTargetDescriptors: [],
       rerunQueries: input.rerunQueries,
     };
   }
 
-  if (input.liveTargets.length === 0) return { fragmentTargets: [], rerunQueries: [] };
+  if (input.liveTargets.length === 0) {
+    return { fragmentTargets: [], liveTargetDescriptors: [], rerunQueries: [] };
+  }
 
   if (!input.liveTargets.some((target) => target.deps.length > 0)) {
     return {
       fragmentTargets: input.targets,
+      liveTargetDescriptors: [],
       rerunQueries: input.rerunQueries,
     };
   }
 
   const renderersByTarget = fragmentRenderersByTarget(input.fragmentRenderers);
+  const liveRenderersByComponent = liveTargetRenderersByComponent(input.liveTargetRenderers);
   const affectedQueryTokens = new Set<string>();
   for (const query of input.rerunQueries) {
     const tokens = queryRerunTokens(query);
@@ -1070,7 +1131,14 @@ function selectMutationResponseTargets(
     })
     .map((renderer) => renderer.target);
 
-  return { fragmentTargets, rerunQueries };
+  const liveTargetDescriptors = input.liveTargetDescriptors.filter((descriptor) => {
+    if (renderersByTarget.has(descriptor.target)) return false;
+    if (!liveRenderersByComponent.has(descriptor.component)) return false;
+    const liveTarget = input.liveTargets?.find((target) => target.target === descriptor.target);
+    return liveTarget !== undefined && depsMatch(liveTarget, affectedQueryTokens);
+  });
+
+  return { fragmentTargets, liveTargetDescriptors, rerunQueries };
 }
 
 function fragmentRenderersByTarget(

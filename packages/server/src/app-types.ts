@@ -12,7 +12,7 @@ import type { EndpointDeclaration } from './endpoint.js';
 import type { SessionProvider } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
-import type { FragmentRenderer } from './mutation-wire.js';
+import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
@@ -50,6 +50,7 @@ export interface CreateAppOptions<SessionValue = unknown> {
   document?: AppDocumentOptions;
   endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells?: AppErrorShellOptions;
+  liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
   mutationResponse?: AppMutationResponseResolver;
   mutations?: readonly AppMutationDeclaration[];
   mutationReplayStore?: MutationReplayStore;
@@ -83,6 +84,7 @@ export interface KovoApp<SessionValue = unknown> {
   document: AppDocumentOptions;
   endpoints: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells: AppErrorShellOptions;
+  liveTargetRenderers: readonly LiveTargetRenderer<Request>[];
   mutationResponse?: AppMutationResponseResolver;
   mutations: readonly AppMutationDeclaration[];
   mutationReplayStore?: MutationReplayStore;

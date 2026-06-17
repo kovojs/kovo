@@ -415,4 +415,60 @@ describe('server createApp request shell', () => {
     expect(noJs.headers.get('location')).toBe('/cart');
     await expect(noJs.text()).resolves.toBe('');
   });
+
+  it('dispatches enhanced mutation fragments through app live target renderers', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: () => ({ count: 1 }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+    const renderCartPanel = vi.fn(({ props }: { props: Record<string, unknown> }) => {
+      return `<cart-panel>${props.cartId}</cart-panel>`;
+    });
+    const handler = createRequestHandler(
+      createApp({
+        liveTargetRenderers: [
+          {
+            component: 'components/cart/panel',
+            render: renderCartPanel,
+          },
+        ],
+        mutations: [addToCart],
+      }),
+    );
+    const form = new FormData();
+    form.set('productId', 'p1');
+
+    const response = await handler(
+      new Request('https://example.test/_m/cart/add', {
+        body: form,
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{"cartId":"c1"}',
+          'Kovo-Targets': 'cart-panel=cart',
+        },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe(
+      [
+        '<kovo-query name="cart">{"count":1}</kovo-query>',
+        '<kovo-fragment target="cart-panel"><cart-panel>c1</cart-panel></kovo-fragment>',
+      ].join('\n'),
+    );
+    expect(renderCartPanel).toHaveBeenCalledOnce();
+  });
 });

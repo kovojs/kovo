@@ -12,6 +12,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isRouteDeclarations(value.routes) &&
     isAppDocumentOptions(value.document) &&
     isAppErrorShellOptions(value.errorShells) &&
+    isLiveTargetRenderers(value.liveTargetRenderers) &&
     isVersionedClientModuleRegistry(value.clientModules) &&
     isOptionalFunction(value.mutationResponse) &&
     isOptionalMutationReplayStore(value.mutationReplayStore) &&
@@ -60,6 +61,18 @@ function isAppErrorShellOptions(value: unknown): value is KovoApp['errorShells']
     isOptionalFunction(value.forbidden) &&
     isOptionalFunction(value.notFound) &&
     isOptionalFunction(value.serverError)
+  );
+}
+
+function isLiveTargetRenderers(value: unknown): value is KovoApp['liveTargetRenderers'] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (renderer) =>
+        isRecord(renderer) &&
+        typeof renderer.component === 'string' &&
+        typeof renderer.render === 'function',
+    )
   );
 }
 
@@ -161,7 +174,10 @@ function isDomainLike(value: unknown): boolean {
 }
 
 function isSchemaLike(value: unknown): boolean {
-  return isRecord(value) && typeof value.parse === 'function';
+  return (
+    (isRecord(value) || typeof value === 'function') &&
+    typeof (value as { parse?: unknown }).parse === 'function'
+  );
 }
 
 function isOptionalFunction(value: unknown): boolean {

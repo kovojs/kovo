@@ -57,6 +57,7 @@ export interface MutationWireRequest<
   fragmentRenderers?: readonly FragmentRenderer[];
   idem?: string;
   liveTargetDescriptors?: readonly MutationLiveTargetDescriptor[];
+  liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
   liveTargets?: readonly MutationLiveTarget[];
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   replayStore?: MutationReplayStore<MutationWireResponse>;
@@ -83,6 +84,25 @@ export interface MutationLiveTarget {
 export interface MutationLiveTargetDescriptor {
   component: string;
   props: Record<string, unknown>;
+  target: string;
+}
+
+/**
+ * @internal Generated live-target renderer keyed by component registry name. App authors do not
+ * hand-write this; compiler-emitted registries provide it for automatic enhanced mutation
+ * fragments (SPEC §9.1).
+ */
+export interface LiveTargetRenderer<Request = unknown> {
+  component: string;
+  render(context: LiveTargetRenderContext<Request>): string | Promise<string>;
+  stylesheets?: readonly (string | StylesheetAsset)[];
+}
+
+/** @internal Context passed to a generated live-target renderer (SPEC §9.1). */
+export interface LiveTargetRenderContext<Request = unknown> {
+  input: unknown;
+  props: Record<string, unknown>;
+  request: Request;
   target: string;
 }
 
@@ -123,6 +143,7 @@ export interface MutationWireRequestOptions<
   failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragmentRenderers?: readonly FragmentRenderer[];
   headers: MutationWireHeaderSource;
+  liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
   rawInput: unknown;
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   replayStore?: MutationReplayStore<MutationWireResponse>;
@@ -240,6 +261,9 @@ export function mutationWireRequestFromHeaders<Request>(
     ...(options.fragmentRenderers === undefined
       ? {}
       : { fragmentRenderers: options.fragmentRenderers }),
+    ...(options.liveTargetRenderers === undefined
+      ? {}
+      : { liveTargetRenderers: options.liveTargetRenderers }),
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(headers.idem === undefined ? {} : { idem: headers.idem }),
     liveTargetDescriptors: headers.liveTargetDescriptors,

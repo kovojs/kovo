@@ -312,7 +312,28 @@ removes app-authored bookkeeping from the enhanced path.
   - Delete the general explicit `mutationResponse` success-routing API once the
     generated path is in place; model auth redirects, raw endpoints, webhooks, and
     non-component responses through narrower declared surfaces.
-  - Evidence: pending.
+  - Progress 2026-06-17:
+    - `packages/server/src/mutation-wire.ts` defines generated
+      `LiveTargetRenderer` entries keyed by component registry name.
+    - `packages/server/src/app-types.ts`, `app.ts`, and
+      `app-mutation-request.ts` let `createApp({ liveTargetRenderers })` pass
+      generated renderer registries into enhanced mutation responses.
+    - `packages/server/src/mutation.ts` selects affected
+      `Kovo-Live-Targets` descriptors by intersecting committed rerun queries
+      with live `Kovo-Targets`, then renders matching generated live-target
+      fragments without app-authored `fragmentRenderers`.
+    - `packages/server/src/mutation-response.test.ts` proves direct mutation
+      responses render affected live-target descriptors from generated renderers;
+      `packages/server/src/app.test.ts` proves the same path through
+      `createApp()` / `createRequestHandler()`.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/mutation-wire.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gaps: compiler-emitted generated renderer registries still need
+      to load declared query args from descriptors and render the real component
+      instances; the broad app-authored `mutationResponse` success-routing escape
+      hatch is still present until examples migrate.
 - [ ] **7. Migrate StackOverflow.**
   - Move presentational enrichment and detail filtering into declared queries or
     query arg bindings.

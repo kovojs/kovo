@@ -83,6 +83,65 @@ describe('server mutation primitives', () => {
     expect(accountLoad).not.toHaveBeenCalled();
   });
 
+  it('auto-renders affected live target descriptors from generated renderers', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: () => ({ count: 2 }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+    const renderCartPanel = vi.fn(
+      ({
+        props,
+        request,
+        target,
+      }: {
+        props: Record<string, unknown>;
+        request: unknown;
+        target: string;
+      }) =>
+        `<cart-panel data-target="${target}">${(request as { tenant: string }).tenant}:${props.cartId}</cart-panel>`,
+    );
+
+    await expect(
+      renderMutationEndpointResponse(addToCart, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{"cartId":"c1"}',
+          'Kovo-Targets': 'cart-panel=cart',
+        },
+        liveTargetRenderers: [
+          {
+            component: 'components/cart/panel',
+            render: renderCartPanel,
+          },
+        ],
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request: { tenant: 'shop' },
+      }),
+    ).resolves.toMatchObject({
+      body: [
+        '<kovo-query name="cart">{"count":2}</kovo-query>',
+        '<kovo-fragment target="cart-panel"><cart-panel data-target="cart-panel">shop:c1</cart-panel></kovo-fragment>',
+      ].join('\n'),
+      headers: {
+        'Kovo-Changes': '[{"domain":"cart"}]',
+      },
+      status: 200,
+    });
+    expect(renderCartPanel).toHaveBeenCalledOnce();
+  });
+
   it('bypasses success selection on failures and rerenders the submitted form target', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {

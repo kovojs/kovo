@@ -63,6 +63,7 @@ export async function handleAppMutationRequest(
       ? {}
       : { fragmentRenderers: mutationResponseOptions.fragmentRenderers }),
     headers: request.headers,
+    liveTargetRenderers: app.liveTargetRenderers,
     rawInput,
     redirectTo:
       mutationResponseOptions?.redirectTo ?? defaultMutationRedirectTo(mutationRequest, currentUrl),

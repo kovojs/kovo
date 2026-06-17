@@ -45,6 +45,7 @@ export function createApp<SessionValue = unknown>(
     document: options.document ?? {},
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},
+    liveTargetRenderers: options.liveTargetRenderers ?? [],
     mutations: options.mutations ?? [],
     queries: options.queries ?? [],
     routes: options.routes ?? [],
