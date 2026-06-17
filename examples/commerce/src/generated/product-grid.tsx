@@ -7,7 +7,7 @@ import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
-import { addToCart, commerceCsrf, type CommerceRequest, type ProductGridResult } from '../app.js';
+import { commerceCsrf, type CommerceRequest, type ProductGridResult } from '../app.js';
 import { productGridQuery } from '../queries.js';
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native

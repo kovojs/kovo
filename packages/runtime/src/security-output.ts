@@ -72,7 +72,7 @@ export function kovoTrustedHtmlContent(value: unknown): string {
  * Escapes text for generated HTML-fragment interpolation.
  */
 export function kovoEscapeHtml(value: unknown): string {
-  return String(value ?? '')
+  return formatOutputValue(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -83,7 +83,7 @@ export function kovoEscapeHtml(value: unknown): string {
  * Neutralizes unsafe URL schemes for generated URL-bearing attributes.
  */
 export function kovoSafeUrl(value: unknown): string {
-  const rendered = String(value ?? '');
+  const rendered = formatOutputValue(value);
   return hasUnsafeUrlScheme(rendered) ? '#' : rendered;
 }
 
@@ -103,7 +103,7 @@ export function kovoStyleProperty(name: string, value: unknown): string {
 
   const propertyName = normalizeCssPropertyName(name);
   if (propertyName === 'view-transition-name') {
-    return `view-transition-name: ${sanitizeCssIdentifier(String(value))}`;
+    return `view-transition-name: ${sanitizeCssIdentifier(formatOutputValue(value))}`;
   }
 
   if (SAFE_LENGTH_PROPERTIES.has(propertyName)) {
@@ -160,7 +160,13 @@ function isUrlAttributeName(name: string): boolean {
 }
 
 function hasUnsafeUrlScheme(value: string): boolean {
-  const normalized = value.replace(/[\u0000-\u0020]+/g, '').toLowerCase();
+  const normalized = Array.from(value)
+    .filter((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint > 0x20;
+    })
+    .join('')
+    .toLowerCase();
   const match = /^([a-z][a-z0-9+.-]*):/.exec(normalized);
   if (!match) return false;
 

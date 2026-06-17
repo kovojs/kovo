@@ -791,7 +791,7 @@ function renderAttributeWithName(name: string, attribute: JsxAttributeModel): st
     staticValue !== false &&
     staticValue !== null
   ) {
-    return `${name}="${escapeAttribute(String(staticValue))}"`;
+    return `${name}="${escapeAttribute(staticAttributeScalar(attribute) ?? '')}"`;
   }
   return name;
 }

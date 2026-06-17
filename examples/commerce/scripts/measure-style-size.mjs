@@ -108,7 +108,7 @@ function listFiles(root) {
     if (stats.isDirectory()) entries.push(...listFiles(file));
     else if (stats.isFile()) entries.push(file);
   }
-  return entries.sort();
+  return entries.sort((left, right) => left.localeCompare(right));
 }
 
 function relativeFile(file, from) {

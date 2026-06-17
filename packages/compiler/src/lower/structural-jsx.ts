@@ -15,7 +15,6 @@ import {
   generatedJsxIrAttribute,
   jsxIrAttributeValue,
   jsxIrReplacements,
-  jsxIrText,
   markJsxIrChanged,
   primitiveJsxIrAttribute,
   removeJsxIrAttribute,
@@ -200,7 +199,7 @@ export function lowerStructuralJsx(
 
 function lowerPrimitiveSpreads(elements: readonly JsxIrElement[]): void {
   for (const element of elements) {
-    for (const spread of [...element.attributes]) {
+    for (const spread of element.attributes) {
       const source = spread.source;
       if (!source || !('objectEntries' in source) || !source.objectEntries) continue;
       const attrs = spreadObjectAttributes(source.objectEntries);

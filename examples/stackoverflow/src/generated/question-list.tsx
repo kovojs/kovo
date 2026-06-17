@@ -6,7 +6,6 @@ import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
-import { postQuestionMutation } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
 import type { QuestionListItem } from '../types.js';
 import {
@@ -67,7 +66,9 @@ function renderQuestionRow(question: QuestionRow): string {
         {question.excerpt ? <p class="so-row-excerpt">{escapeText(question.excerpt)}</p> : ''}
         <div class="so-row-meta">
           {renderTags(tags)}
-          {question.authorName ? renderAuthor(question.authorName, question.createdAt, 'asked') : ''}
+          {question.authorName
+            ? renderAuthor(question.authorName, question.createdAt, 'asked')
+            : ''}
         </div>
       </div>
     </div>
