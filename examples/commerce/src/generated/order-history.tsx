@@ -7,6 +7,8 @@ import { Badge } from '@kovojs/ui/badge';
 import type { OrderHistoryResult } from '../app.js';
 import { orderHistoryQuery } from '../queries.js';
 import { priceLabel } from './product-grid.js';
+import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native <ol>
 // host keeps the HTML content model valid for its <li> children (KV225), so
@@ -19,7 +21,7 @@ import { priceLabel } from './product-grid.js';
 export const OrderHistory = component({
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
-    <ol class="grid gap-2" kovo-c="order-history" kovo-deps="orderHistory" kovo-fragment-target="order-history">{renderOrderHistoryItems(orderHistory)}</ol>
+    <ol class="grid gap-2" kovo-c="order-history" kovo-deps="orderHistory" kovo-fragment-target="order-history" kovo-live-component="components/order-history/order-history">{renderOrderHistoryItems(orderHistory)}</ol>
   ),
 });
 OrderHistory.name = "components/order-history/order-history";
@@ -52,3 +54,14 @@ export function renderOrderHistoryItems(result: OrderHistoryResult): string {
     </>
   );
 }
+
+export const OrderHistory$liveTargetRenderer = componentLiveTargetRenderer({
+  component: OrderHistory,
+  componentId: "components/order-history/order-history",
+  queries: [
+    {
+      name: "orderHistory",
+      query: orderHistoryQuery,
+    },
+  ],
+});

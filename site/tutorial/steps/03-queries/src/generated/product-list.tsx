@@ -5,6 +5,8 @@ import { component } from '@kovojs/core';
 
 import { formatPrice } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
+import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
 // Tutorial step 03 (chapter 3): a keyed list over query data. The native <ul>
 // host keeps the HTML content model valid for its <li> children (KV225), so
@@ -16,7 +18,7 @@ import { productsQuery, type ProductsResult } from '../queries.js';
 export const ProductList = component({
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }) => (
-    <ul class="products" kovo-c="product-list" kovo-deps="products" kovo-fragment-target="product-list">
+    <ul class="products" kovo-c="product-list" kovo-deps="products" kovo-fragment-target="product-list" kovo-live-component="components/product-list/product-list">
       {products.items.map((item) => (
         <li kovo-key={item.id}>
           {escapeText(item.name)} — {formatPrice(item.unitPrice)} ({escapeText(item.stock)} in stock)
@@ -27,3 +29,14 @@ export const ProductList = component({
 });
 ProductList.name = "components/product-list/product-list";
 // /snippet
+
+export const ProductList$liveTargetRenderer = componentLiveTargetRenderer({
+  component: ProductList,
+  componentId: "components/product-list/product-list",
+  queries: [
+    {
+      name: "products",
+      query: productsQuery,
+    },
+  ],
+});

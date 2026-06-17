@@ -9,6 +9,8 @@ import { Card } from '@kovojs/ui/card';
 
 import { commerceCsrf, type CommerceRequest, type ProductGridResult } from '../app.js';
 import { productGridQuery } from '../queries.js';
+import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native
 // <section> host gets its product-grid kovo-c identity stamp and the
@@ -51,7 +53,7 @@ export const ProductGrid = component({
   ) => {
     const { nextCursor } = productGrid;
     return (
-      <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid" kovo-fragment-target="product-grid">
+      <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid" kovo-fragment-target="product-grid" kovo-live-component="components/product-grid/product-grid">
         {renderProductGridItems(
           productGrid,
           slots.productId,
@@ -226,3 +228,14 @@ function addToCartFailureFromMutation(failure: MutationFail): AddToCartFailure {
 
   return formFailure;
 }
+
+export const ProductGrid$liveTargetRenderer = componentLiveTargetRenderer({
+  component: ProductGrid,
+  componentId: "components/product-grid/product-grid",
+  queries: [
+    {
+      name: "productGrid",
+      query: productGridQuery,
+    },
+  ],
+});

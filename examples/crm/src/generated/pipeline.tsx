@@ -27,6 +27,8 @@ import {
   type PipelineStageBucket,
 } from '../queries.js';
 import { freshId, money, renderCrmShell, stageBadge } from '../components/chrome.js';
+import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
 // Pipeline dashboard (route `/`). Reads the `pipelineByStage` aggregate (SUM by
 // stage — the out-of-grammar GROUP BY query whose optimism is hand-written in
@@ -87,7 +89,7 @@ function renderOpenDealsTable(openDeals: DealRow[], contactsById: Map<string, Co
             children: contactsById.get(deal.contactId)?.name ?? deal.contactId,
           }) +
           TableCell.definition.render({
-            children: (<span class="tabular-nums">{money(deal.amount)}</span>),
+            children: <span class="tabular-nums">{money(deal.amount)}</span>,
           }),
       }),
     )
@@ -122,7 +124,7 @@ export const PipelineRegion = component({
     const total = buckets.reduce((sum, bucket) => sum + bucket.total, 0);
 
     return (
-      <div class="space-y-8" kovo-c="pipeline-region" kovo-deps="contactList openDeals pipelineByStage" kovo-fragment-target="pipeline-region">
+      <div class="space-y-8" kovo-c="pipeline-region" kovo-deps="contactList openDeals pipelineByStage" kovo-fragment-target="pipeline-region" kovo-live-component="components/pipeline/pipeline-region">
         <div>
           <h1 class="text-2xl font-bold tracking-tight">Sales pipeline</h1>
           <p class="mt-1 text-sm text-slate-600">
@@ -213,3 +215,22 @@ export function renderPipelineRegion({ buckets, openDeals, contacts }: PipelineP
 export function renderPipelinePage(data: PipelinePageData): string {
   return renderCrmShell('pipeline', renderPipelineRegion(data));
 }
+
+export const PipelineRegion$liveTargetRenderer = componentLiveTargetRenderer({
+  component: PipelineRegion,
+  componentId: "components/pipeline/pipeline-region",
+  queries: [
+    {
+      name: "contactList",
+      query: contactListQuery,
+    },
+    {
+      name: "openDeals",
+      query: openDealsQuery,
+    },
+    {
+      name: "pipelineByStage",
+      query: pipelineByStageQuery,
+    },
+  ],
+});

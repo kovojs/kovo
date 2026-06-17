@@ -3,6 +3,7 @@ import ts from 'typescript';
 import { componentCssAssetForFile, dedupeCss, emitCssModule } from './css.js';
 import { deriveComponentNames } from './component-names.js';
 import { emitClientModule } from './emit/client.js';
+import { appendLiveTargetRendererExports } from './emit/live-target-renderers.js';
 import { emitRegistryModule } from './emit/registry.js';
 import {
   emitServerModule,
@@ -190,7 +191,11 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ...versionStateDeriveReferences(stateDeriveReferences),
   ];
   const serverRenderedSource = removeUnreferencedNamedImports(
-    applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements),
+    appendLiveTargetRendererExports({
+      componentExpression: componentName,
+      liveTargetFacts,
+      source: applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements),
+    }),
   );
   const serverModule = emitServerModule(serverRenderedSource);
   const registrySource = emitRegistryModule({

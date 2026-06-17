@@ -11,6 +11,8 @@ import { Card } from '@kovojs/ui/card';
 import { addContact } from '../mutations.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
 import { freshId, renderCrmShell } from '../components/chrome.js';
+import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
 // Contact book (route `/contacts`). Reads the `contactList` rowset and shows
 // each contact with their owner and rolling deal count (the `contacts.dealCount`
@@ -67,7 +69,7 @@ export const ContactsRegion = component({
     const contacts = contactList.items;
 
     return (
-      <div class="space-y-6" kovo-c="contacts-region" kovo-deps="contactList" kovo-fragment-target="contacts-region">
+      <div class="space-y-6" kovo-c="contacts-region" kovo-deps="contactList" kovo-fragment-target="contacts-region" kovo-live-component="components/contacts/contacts-region">
         <div>
           <h1 class="text-2xl font-bold tracking-tight">Contacts</h1>
           <p class="mt-1 text-sm text-slate-600">{escapeText(contacts.length)} people in the book.</p>
@@ -98,7 +100,11 @@ export const ContactsRegion = component({
               placeholder="name@example.com"
               class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
-            {Button.definition.render({ children: 'Add contact', type: 'submit', variant: 'primary' })}
+            {Button.definition.render({
+              children: 'Add contact',
+              type: 'submit',
+              variant: 'primary',
+            })}
           </div>
         </form>
 
@@ -120,3 +126,14 @@ export function renderContactsRegion({ contacts }: ContactsPageData): string {
 export function renderContactsPage(data: ContactsPageData): string {
   return renderCrmShell('contacts', renderContactsRegion(data));
 }
+
+export const ContactsRegion$liveTargetRenderer = componentLiveTargetRenderer({
+  component: ContactsRegion,
+  componentId: "components/contacts/contacts-region",
+  queries: [
+    {
+      name: "contactList",
+      query: contactListQuery,
+    },
+  ],
+});

@@ -20,6 +20,8 @@ import {
   renderTags,
   voteButton,
 } from '../components/chrome.js';
+import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
 // Question detail (route `/questions/:id`). Shows the question and its answers
 // (filtered from `answerList` by questionId), with the accepted answer flagged.
@@ -125,7 +127,7 @@ export const QuestionDetailRegion = component({
       variant: 'primary',
     });
     return (
-      <div class="so-stack" kovo-c="question-detail-region" kovo-deps="answers question" kovo-fragment-target="question-detail-region">
+      <div class="so-stack" kovo-c="question-detail-region" kovo-deps="answers question" kovo-fragment-target="question-detail-region" kovo-live-component="components/question-detail/question-detail-region">
         <a class="so-back" href="/">
           &larr; All questions
         </a>
@@ -175,3 +177,18 @@ export function renderQuestionDetailRegion(data: QuestionDetailPageData): string
 export function renderQuestionDetailPage(data: QuestionDetailPageData): string {
   return renderSoShell(renderQuestionDetailRegion(data));
 }
+
+export const QuestionDetailRegion$liveTargetRenderer = componentLiveTargetRenderer({
+  component: QuestionDetailRegion,
+  componentId: "components/question-detail/question-detail-region",
+  queries: [
+    {
+      name: "answers",
+      query: answerList,
+    },
+    {
+      name: "question",
+      query: questionList,
+    },
+  ],
+});

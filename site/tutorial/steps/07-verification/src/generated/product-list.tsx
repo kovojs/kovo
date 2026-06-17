@@ -6,7 +6,9 @@ import { csrfField } from '@kovojs/server';
 
 import { formatPrice, type ShopProduct, type ShopRequest } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
-import { addToCart, shopCsrf, type AddToCartFailure, type AddToCartFailureState } from '../app.js';
+import { shopCsrf, type AddToCartFailure, type AddToCartFailureState } from '../app.js';
+import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
 // Tutorial step 07 (chapter 7), unchanged from step 06: every product card carries a real form
 // posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS
@@ -23,7 +25,7 @@ export interface ProductListRenderContext {
 export const ProductList = component({
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
-    <ul class="products" kovo-c="product-list" kovo-deps="products" kovo-fragment-target="product-list">
+    <ul class="products" kovo-c="product-list" kovo-deps="products" kovo-fragment-target="product-list" kovo-live-component="components/product-list/product-list">
       {products.items.map((item) => (
         <li kovo-key={item.id}>
           {escapeText(item.name)} — {formatPrice(item.unitPrice)} ({escapeText(item.stock)} in stock)
@@ -51,11 +53,7 @@ export function renderAddToCartForm(
   request?: ShopRequest,
 ): string {
   return (
-    <form
-      enhance
-      method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${item.id}`}
-      kovo-key={item.id}
-    >
+    <form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${item.id}`} kovo-key={item.id}>
       {request?.session?.id ? csrfField(request, shopCsrf) : ''}
       <input type="hidden" name="productId" value={item.id} />
       <label>
@@ -87,3 +85,14 @@ export function renderAddToCartError(failure: AddToCartFailure): string {
   );
 }
 // /snippet
+
+export const ProductList$liveTargetRenderer = componentLiveTargetRenderer({
+  component: ProductList,
+  componentId: "components/product-list/product-list",
+  queries: [
+    {
+      name: "products",
+      query: productsQuery,
+    },
+  ],
+});

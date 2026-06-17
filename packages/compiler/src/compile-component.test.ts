@@ -55,6 +55,19 @@ describe('compileComponentModule', () => {
     expect(result.loweredSource).toContain(
       'CartBadge.name = "components/cart/cart-badge/cart-badge";',
     );
+    expect(result.loweredSource).toContain(
+      "import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';",
+    );
+    expect(result.loweredSource).toContain(`export const CartBadge$liveTargetRenderer = componentLiveTargetRenderer({
+  component: CartBadge,
+  componentId: "components/cart/cart-badge/cart-badge",
+  queries: [
+    {
+      name: "cart",
+      query: {},
+    },
+  ],
+});`);
     expect(registry?.source).toContain(
       "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",
     );

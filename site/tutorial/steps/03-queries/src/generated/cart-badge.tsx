@@ -3,6 +3,8 @@
 import { component } from '@kovojs/core';
 
 import { cartQuery, type CartResult } from '../queries.js';
+import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
 // Tutorial step 03 (chapter 3): authored sugar carries no stamps (SPEC.md
 // section 4.1). The compiler derives kovo-deps from the queries declaration and
@@ -13,10 +15,21 @@ import { cartQuery, type CartResult } from '../queries.js';
 export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }: { cart: CartResult }) => (
-    <cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge">
+    <cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge" kovo-live-component="components/cart-badge/cart-badge">
       Cart: <span data-bind="cart.count">{cart.count}</span>
     </cart-badge>
   ),
 });
 CartBadge.name = "components/cart-badge/cart-badge";
 // /snippet
+
+export const CartBadge$liveTargetRenderer = componentLiveTargetRenderer({
+  component: CartBadge,
+  componentId: "components/cart-badge/cart-badge",
+  queries: [
+    {
+      name: "cart",
+      query: cartQuery,
+    },
+  ],
+});

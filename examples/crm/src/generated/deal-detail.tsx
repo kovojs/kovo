@@ -15,6 +15,8 @@ import {
   type DealListResult,
 } from '../queries.js';
 import { money, renderCrmShell, stageBadge } from '../components/chrome.js';
+import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
 // Deal detail (route `/deals/:id`). Joins a single deal to its contact and the
 // activity timeline. This is the page the pipeline's open-deal rows link into.
@@ -92,7 +94,7 @@ export const DealDetailRegion = component({
     if (!deal) return <div class="space-y-6"></div>;
 
     return (
-      <div class="space-y-6" kovo-c="deal-detail-region" kovo-deps="activityList contactList dealList" kovo-fragment-target="deal-detail-region">
+      <div class="space-y-6" kovo-c="deal-detail-region" kovo-deps="activityList contactList dealList" kovo-fragment-target="deal-detail-region" kovo-live-component="components/deal-detail/deal-detail-region">
         <a
           class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
           href="/"
@@ -209,3 +211,22 @@ export function renderDealDetailRegion({ deal, contact, activities }: DealDetail
 export function renderDealDetailPage(data: DealDetailPageData): string {
   return renderCrmShell('pipeline', renderDealDetailRegion(data));
 }
+
+export const DealDetailRegion$liveTargetRenderer = componentLiveTargetRenderer({
+  component: DealDetailRegion,
+  componentId: "components/deal-detail/deal-detail-region",
+  queries: [
+    {
+      name: "activityList",
+      query: activityListQuery,
+    },
+    {
+      name: "contactList",
+      query: contactListQuery,
+    },
+    {
+      name: "dealList",
+      query: dealListQuery,
+    },
+  ],
+});

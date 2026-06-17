@@ -16,6 +16,8 @@ import {
   renderTags,
   voteButton,
 } from '../components/chrome.js';
+import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
 // Question list (route `/`). Reads the `questionList` rowset (id/title/score/
 // answerCount — each a column the postQuestion / postAnswer / voteUp derived
@@ -99,7 +101,7 @@ export const QuestionListRegion = component({
     });
 
     return (
-      <div class="so-stack" kovo-c="question-list-region" kovo-deps="questionList questionScore" kovo-fragment-target="question-list-region">
+      <div class="so-stack" kovo-c="question-list-region" kovo-deps="questionList questionScore" kovo-fragment-target="question-list-region" kovo-live-component="components/question-list/question-list-region">
         <div class="so-page-head">
           <div>
             <h1 class="so-page-title">Top questions</h1>
@@ -154,3 +156,18 @@ export function renderQuestionListRegion({ questions, totalVotes }: QuestionList
 export function renderQuestionListPage(data: QuestionListPageData): string {
   return renderSoShell(renderQuestionListRegion(data));
 }
+
+export const QuestionListRegion$liveTargetRenderer = componentLiveTargetRenderer({
+  component: QuestionListRegion,
+  componentId: "components/question-list/question-list-region",
+  queries: [
+    {
+      name: "questionList",
+      query: questionList,
+    },
+    {
+      name: "questionScore",
+      query: questionScore,
+    },
+  ],
+});

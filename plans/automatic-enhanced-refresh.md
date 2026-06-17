@@ -215,8 +215,25 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and the focused `git diff --check`.
-    - Remaining gaps: render exports, target identity expressions for
-      keyed/parameterized instances, and coverage facts are not emitted yet.
+    - Additional progress 2026-06-17:
+      `packages/compiler/src/emit/live-target-renderers.ts` appends
+      compiler-generated `*$liveTargetRenderer` exports to lowered TSX modules
+      for inferred live targets. These exports call the internal
+      `componentLiveTargetRenderer()` helper with the component binding,
+      component registry id, declared query expressions, and prop-derived query
+      args.
+    - `packages/compiler/src/compile-component.test.ts` proves singleton
+      live-target renderer export emission; `packages/compiler/src/registry.test.ts`
+      proves `productQuery.args((props) => ({ id: props.productId }))` is emitted
+      as the generated renderer `args` callback.
+    - Regenerated lowered artifacts in `examples/commerce/src/generated`,
+      `examples/crm/src/generated`, `examples/stackoverflow/src/generated`, and
+      `site/tutorial/steps/*/src/generated` now expose generated
+      `*$liveTargetRenderer` exports.
+    - Remaining gaps: target identity expressions for keyed/parameterized
+      instances and coverage facts are not emitted yet; build/app-shell
+      integration still needs to collect generated renderer exports
+      automatically.
 - [ ] **3. Compiler/core: make query args from props/routes usable.**
   - Ensure `query.args((props) => ...)` style authoring is typed, scanned, emitted,
     and available to generated server renderers.
@@ -241,8 +258,13 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/core/src/index.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gap: generated server renderers do not yet consume the emitted
-      query binding facts to reload and render component instances.
+    - Additional progress 2026-06-17:
+      generated lowered TSX renderer exports now consume emitted query binding
+      facts, including `.args((props) => ...)`, and pass them to the server
+      helper that reloads declared queries from serialized props.
+    - Remaining gap: route-generated initial render still needs to pass route
+      params/search as serialized component props, and build/app-shell wiring
+      still needs to collect the generated renderer exports automatically.
 - [ ] **4. Server/compiler: lower route JSX pages.**
   - Support route pages that return TSX component invocations, for example
     `page: () => <QuestionListRegion />` and
@@ -341,10 +363,26 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts packages/server/src/mutation-wire.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gaps: compiler-emitted generated renderer registries still need
-      to call the helper for real component modules; the broad app-authored
-      `mutationResponse` success-routing escape hatch is still present until
-      examples migrate.
+    - Additional progress 2026-06-17:
+      `packages/compiler/src/compile.ts` now threads inferred live target facts
+      into compiler-generated lowered TSX exports that call
+      `componentLiveTargetRenderer()` for real component modules; example and
+      tutorial generated artifacts were refreshed with those exports.
+    - Verified with
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts packages/server/src/mutation-wire.test.ts`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `node site/tutorial/run-steps.mjs`,
+      `pnpm --filter @kovojs/example-commerce test`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gaps: build/app-shell integration still needs to collect the
+      generated renderer exports without app-authored `createApp()` wiring; the
+      broad app-authored `mutationResponse` success-routing escape hatch is
+      still present until examples migrate.
 - [ ] **7. Migrate StackOverflow.**
   - Move presentational enrichment and detail filtering into declared queries or
     query arg bindings.
@@ -388,6 +426,10 @@ removes app-authored bookkeeping from the enhanced path.
   - Progress 2026-06-17:
     - `packages/compiler/src/registry.test.ts` covers a singleton cart live target
       and a prop-backed query args binding fixture.
+    - `packages/compiler/src/compile-component.test.ts` covers emitted
+      `CartBadge$liveTargetRenderer`; `packages/compiler/src/registry.test.ts`
+      covers emitted prop-backed `ProductDetail$liveTargetRenderer` with a
+      generated `args: (props) => ({ id: props.productId })` callback.
     - Remaining gap: keyed repeated and route-param-backed generated-renderer
       fixtures are still pending.
 - [ ] **Runtime/server tests prove no app-authored fragment renderers are needed.**

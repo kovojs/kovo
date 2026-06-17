@@ -14,8 +14,10 @@ describe('tutorial step 03 — queries & data binding', () => {
   it('serves compiler-derived dependency and binding stamps', () => {
     const html = renderShopPage();
 
-    // The queries declaration became kovo-deps plus an inferred refresh target.
-    expect(html).toContain('<cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge">');
+    // The queries declaration became kovo-deps plus inferred refresh target metadata.
+    expect(html).toContain(
+      '<cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge" kovo-live-component="components/cart-badge/cart-badge">',
+    );
     expect(html).toContain('kovo-c="product-list"');
     expect(html).toContain('kovo-deps="products"');
 
