@@ -52,10 +52,12 @@ describe('query refetch', () => {
     ]);
 
     expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(fetch).toHaveBeenNthCalledWith(2, '/_q/reviews', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
@@ -124,6 +126,7 @@ describe('query refetch', () => {
     // SPEC.md §9.4/§10.2: typed-read responses carry the canonical query
     // instance key directly in the kovo-query name and still hit the keyed store.
     expect(fetch).toHaveBeenCalledWith('/_q/product%3Ap1', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });

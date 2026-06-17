@@ -22,6 +22,41 @@ describe('optimistic query apply', () => {
     expect(discardPendingOptimism).toHaveBeenCalledTimes(1);
   });
 
+  it('also listens on the browser lifecycle target when the loader root is document-like', () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originalAddEventListener = globalRecord.addEventListener;
+    const originalRemoveEventListener = globalRecord.removeEventListener;
+    const root = new FakeRoot();
+    const discardPendingOptimism = vi.fn();
+    const globalListeners = new Map<string, () => void>();
+
+    try {
+      globalRecord.addEventListener = (type: string, listener: () => void) => {
+        globalListeners.set(type, listener);
+      };
+      globalRecord.removeEventListener = (type: string, listener: () => void) => {
+        if (globalListeners.get(type) === listener) globalListeners.delete(type);
+      };
+
+      const dispose = installPagehideOptimismCleanup({ discardPendingOptimism, root });
+
+      expect(root.listeners.has('pagehide')).toBe(true);
+      expect(globalListeners.has('pagehide')).toBe(true);
+
+      globalListeners.get('pagehide')?.();
+      expect(discardPendingOptimism).toHaveBeenCalledTimes(1);
+
+      dispose();
+      expect(root.listeners.has('pagehide')).toBe(false);
+      expect(globalListeners.has('pagehide')).toBe(false);
+    } finally {
+      if (originalAddEventListener === undefined) delete globalRecord.addEventListener;
+      else globalRecord.addEventListener = originalAddEventListener;
+      if (originalRemoveEventListener === undefined) delete globalRecord.removeEventListener;
+      else globalRecord.removeEventListener = originalRemoveEventListener;
+    }
+  });
+
   it('applies hand-written optimistic transforms through query update plans', () => {
     const store = createQueryStore();
     const plan = vi.fn();

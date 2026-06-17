@@ -696,20 +696,30 @@ tests/integration/specs/forbidden-route.spec.ts --config tests/integration/playw
     the public fixture compiler/render path, and the browser navigation preserves those emitted
     names on both sides of the document load. Proving command: same Playwright command recorded
     under `speculation-rules-opt-in`.
-- [ ] `bfcache-hygiene` / `bfcache-hygiene.spec.ts`: navigating away/back does not rely on unload and
+- [x] `bfcache-hygiene` / `bfcache-hygiene.spec.ts`: navigating away/back does not rely on unload and
       refetch/optimistic state resumes from server truth.
   - SPEC refs: §8 bfcache hygiene, §9.3 refetch.
   - Assertions: `pageshow.persisted` when supported; no stale pending optimism after back.
-  - Partial evidence: added `tests/integration/fixtures/bfcache-hygiene/app.tsx` and
-    `tests/integration/specs/bfcache-hygiene.spec.ts`; the public inline-loader route path
-    registers no `unload`/`beforeunload` listeners during page boot and enhanced mutation fetches
-    carry `keepalive: true`, both verified in-browser via init-script instrumentation. Proving
-    command: same Playwright command recorded under `speculation-rules-opt-in`.
-  - Gap: left unchecked because the public app/render path still ships the minified inline loader
-    from `packages/runtime/src/inline-loader.ts`, which does not currently emit the runtime
-    package's `pagehide` optimism cleanup or focus/visibility typed-read refetch lifecycle hooks;
-    without those browser-path hooks there is no honest integration proof yet for
-    `pageshow.persisted` recovery or stale-optimism discard after Back/Forward navigation.
+  - Evidence: `packages/runtime/src/query-visible-return.ts` listens for `pageshow` on the browser
+    lifecycle target when the loader root is `document`, and `packages/runtime/src/optimism.ts`
+    does the same for `pagehide` optimism cleanup; `packages/runtime/src/query-refetch.ts` sends
+    visible-return typed reads with `cache: 'no-store'` so Back/Forward recovery reads server truth
+    instead of a cached `/_q` response. `tests/integration/fixtures/bfcache-hygiene` now ships a
+    public runtime client with `OptimisticRebaser`, `installKovoLoader({ discardPendingOptimism,
+queryRefetch })`, typed `navCounter` query hydration, and a delayed keepalive mutation.
+    `tests/integration/specs/bfcache-hygiene.spec.ts` verifies a real Back return fires a
+    `pageshow` path and refetches changed server truth through `/_q/navCounter`, then verifies a
+    pending optimistic mutation is discarded on navigation, the keepalive write commits in the DB,
+    Back recovery refetches `{"value":8}`, the DOM shows server truth, and pending stamps/count are
+    gone. Chromium under the Playwright/Vite fixture reported `pageshow.persisted=false`, so the
+    spec records the pageshow recovery without faking persisted bfcache support. Proving commands:
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/bfcache-hygiene.spec.ts
+--config playwright.config.ts --workers=1`; `pnpm exec vitest run
+packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-visible-return-refetch.test.ts
+packages/runtime/src/loader-visible-return-refetch.test.ts packages/runtime/src/loader-disposal.test.ts
+packages/runtime/src/optimism-apply.test.ts packages/runtime/src/mutation-optimistic-pagehide.test.ts
+packages/runtime/src/mutation-optimistic.test.ts packages/runtime/src/optimism-rebase.test.ts`;
+    `pnpm --filter @kovojs/runtime run check:inline-loader`.
 
 ## Auth, guards, sessions, and authorization audits
 
