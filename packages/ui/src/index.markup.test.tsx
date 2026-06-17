@@ -107,7 +107,6 @@ import {
   selectTriggerClasses,
   tooltipClasses,
   tooltipContentClasses,
-  tableClasses,
   sliderClasses,
   sliderInputClasses,
   toggleGroupClasses,
@@ -403,15 +402,14 @@ describe('@kovojs/ui styled package foundation', () => {
 
   it('exports table primitives as styled semantic markup', () => {
     expect(Table.definition.render({ caption: 'Invoices', children: '<tbody></tbody>' })).toContain(
-      '<caption class="mt-3 text-sm text-neutral-500">Invoices</caption><tbody></tbody>',
+      'Invoices</caption><tbody></tbody>',
     );
     expect(TableHeaderCell.definition.render({ children: 'Status', scope: 'row' })).toContain(
-      '<th class="h-10 px-3 text-left align-middle font-medium text-neutral-700" scope="row">',
+      'scope="row">Status</th>',
     );
     expect(TableCell.definition.render({ children: '$250.00', colSpan: 2 })).toContain(
       'colspan="2"',
     );
-    expect(tableClasses).toContain('w-full overflow-x-auto');
   });
 
   it('exports breadcrumb primitives with headless separator attributes', () => {

@@ -432,17 +432,23 @@ export {
   TableHead,
   TableHeaderCell,
   TableRow,
-  tableBodyClassNames,
-  tableCaptionClassNames,
-  tableCellClassNames,
-  tableClassNames,
+  tableBodyClasses,
+  tableCaptionClasses,
+  tableCellClasses,
   tableClasses,
-  tableHeadClassNames,
-  tableHeaderCellClassNames,
-  tableRowClassNames,
-  tableWrapperClassNames,
+  tableHeadClasses,
+  tableHeaderCellClasses,
+  tableRootClasses,
+  tableRowClasses,
+  tableStyles,
+  tableWrapperClasses,
 } from './table.js';
-export type { TableCellProps, TableProps, TableSectionProps } from './table.js';
+export type {
+  TableCellProps,
+  TableProps,
+  TableSectionProps,
+  TableStyleOverrides,
+} from './table.js';
 export {
   Slider,
   SliderInput,

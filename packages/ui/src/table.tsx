@@ -1,57 +1,124 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, type ClassValue } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
 import { escapeAttribute, escapeHtml } from '@kovojs/server';
+
+export interface TableStyleOverrides {
+  body?: style.StyleInput;
+  caption?: style.StyleInput;
+  cell?: style.StyleInput;
+  head?: style.StyleInput;
+  headerCell?: style.StyleInput;
+  row?: style.StyleInput;
+  table?: style.StyleInput;
+  wrapper?: style.StyleInput;
+}
 
 export interface TableProps {
   caption?: string;
   children?: string;
-  class?: ClassValue;
-  wrapperClass?: ClassValue;
+  styles?: TableStyleOverrides;
 }
 
 export interface TableSectionProps {
   children?: string;
-  class?: ClassValue;
+  styles?: TableStyleOverrides;
 }
 
 export interface TableCellProps {
   children?: string;
-  class?: ClassValue;
   colSpan?: number;
   scope?: 'col' | 'row';
+  styles?: TableStyleOverrides;
 }
 
-export const tableWrapperClassNames = 'w-full overflow-x-auto';
-export const tableClassNames = 'w-full caption-bottom border-collapse text-sm';
-export const tableHeadClassNames = 'border-b border-neutral-200 bg-neutral-50';
-export const tableBodyClassNames = '[&_tr:last-child]:border-0';
-export const tableRowClassNames =
-  'border-b border-neutral-200 transition-colors hover:bg-neutral-50';
-export const tableHeaderCellClassNames =
-  'h-10 px-3 text-left align-middle font-medium text-neutral-700';
-export const tableCellClassNames = 'p-3 align-middle text-neutral-950';
-export const tableCaptionClassNames = 'mt-3 text-sm text-neutral-500';
+export const tableStyles = style.create(
+  {
+    body: {
+      '[&_tr:last-child]': {
+        borderBottomWidth: 0,
+      },
+    },
+    caption: {
+      color: '#737373',
+      fontSize: 14,
+      marginTop: 12,
+    },
+    cell: {
+      color: '#0a0a0a',
+      padding: 12,
+      verticalAlign: 'middle',
+    },
+    head: {
+      backgroundColor: '#fafafa',
+      borderBottomColor: '#e5e5e5',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+    },
+    headerCell: {
+      color: '#404040',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 40,
+      paddingInline: 12,
+      textAlign: 'left',
+      verticalAlign: 'middle',
+    },
+    row: {
+      borderBottomColor: '#e5e5e5',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      transitionProperty: 'background-color',
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
+    },
+    table: {
+      borderCollapse: 'collapse',
+      captionSide: 'bottom',
+      fontSize: 14,
+      width: '100%',
+    },
+    wrapper: {
+      overflowX: 'auto',
+      width: '100%',
+    },
+  },
+  { namespace: 'table', source: 'table.tsx' },
+);
+
+export const tableWrapperClasses = [style.attrs(tableStyles.wrapper).class ?? ''] as const;
+export const tableRootClasses = [style.attrs(tableStyles.table).class ?? ''] as const;
+export const tableHeadClasses = [style.attrs(tableStyles.head).class ?? ''] as const;
+export const tableBodyClasses = [style.attrs(tableStyles.body).class ?? ''] as const;
+export const tableRowClasses = [style.attrs(tableStyles.row).class ?? ''] as const;
+export const tableHeaderCellClasses = [style.attrs(tableStyles.headerCell).class ?? ''] as const;
+export const tableCellClasses = [style.attrs(tableStyles.cell).class ?? ''] as const;
+export const tableCaptionClasses = [style.attrs(tableStyles.caption).class ?? ''] as const;
 export const tableClasses = [
-  tableWrapperClassNames,
-  tableClassNames,
-  tableHeadClassNames,
-  tableBodyClassNames,
-  tableRowClassNames,
-  tableHeaderCellClassNames,
-  tableCellClassNames,
-  tableCaptionClassNames,
+  ...tableWrapperClasses,
+  ...tableRootClasses,
+  ...tableHeadClasses,
+  ...tableBodyClasses,
+  ...tableRowClasses,
+  ...tableHeaderCellClasses,
+  ...tableCellClasses,
+  ...tableCaptionClasses,
 ] as const;
 
 export const Table = component({
   render(props: TableProps) {
+    const wrapperAttrs = style.attrs(tableStyles.wrapper, props.styles?.wrapper);
+    const tableAttrs = style.attrs(tableStyles.table, props.styles?.table);
+    const captionAttrs = style.attrs(tableStyles.caption, props.styles?.caption);
+
     return (
-      <div class={cn(tableWrapperClassNames, props.wrapperClass)}>
-        <table class={cn(tableClassNames, props.class)}>
+      <div {...wrapperAttrs}>
+        <table {...tableAttrs}>
           {props.caption === undefined ? (
             ''
           ) : (
-            <caption class={tableCaptionClassNames}>{escapeHtml(props.caption)}</caption>
+            <caption {...captionAttrs}>{escapeHtml(props.caption)}</caption>
           )}
           {props.children}
         </table>
@@ -62,19 +129,19 @@ export const Table = component({
 
 export const TableHead = component({
   render(props: TableSectionProps) {
-    return tablePart('thead', { class: cn(tableHeadClassNames, props.class) }, props.children);
+    return tablePart('thead', style.attrs(tableStyles.head, props.styles?.head), props.children);
   },
 });
 
 export const TableBody = component({
   render(props: TableSectionProps) {
-    return tablePart('tbody', { class: cn(tableBodyClassNames, props.class) }, props.children);
+    return tablePart('tbody', style.attrs(tableStyles.body, props.styles?.body), props.children);
   },
 });
 
 export const TableRow = component({
   render(props: TableSectionProps) {
-    return tablePart('tr', { class: cn(tableRowClassNames, props.class) }, props.children);
+    return tablePart('tr', style.attrs(tableStyles.row, props.styles?.row), props.children);
   },
 });
 
@@ -83,7 +150,7 @@ export const TableHeaderCell = component({
     return tablePart(
       'th',
       {
-        class: cn(tableHeaderCellClassNames, props.class),
+        ...style.attrs(tableStyles.headerCell, props.styles?.headerCell),
         colspan: props.colSpan,
         scope: props.scope ?? 'col',
       },
@@ -96,7 +163,7 @@ export const TableCell = component({
   render(props: TableCellProps) {
     return tablePart(
       'td',
-      { class: cn(tableCellClassNames, props.class), colspan: props.colSpan },
+      { ...style.attrs(tableStyles.cell, props.styles?.cell), colspan: props.colSpan },
       props.children,
     );
   },
@@ -104,7 +171,7 @@ export const TableCell = component({
 
 function tablePart(
   tag: 'tbody' | 'td' | 'th' | 'thead' | 'tr',
-  attributes: Readonly<Record<string, number | string | undefined>>,
+  attributes: TablePartAttributes,
   children: string | undefined,
 ): string {
   // SPEC.md §5.2 keeps vendored styled components as app-authored TSX source. These table
@@ -114,7 +181,7 @@ function tablePart(
 }
 
 function tableAttributes(
-  attributes: Readonly<Record<string, number | string | undefined>>,
+  attributes: TablePartAttributes,
 ): string {
   let rendered = '';
 
@@ -125,3 +192,11 @@ function tableAttributes(
 
   return rendered;
 }
+
+type TablePartAttributes = Readonly<{
+  'data-style-src'?: string | undefined;
+  class?: string | undefined;
+  colspan?: number | undefined;
+  scope?: 'col' | 'row' | undefined;
+  style?: string | undefined;
+}>;

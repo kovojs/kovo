@@ -49,6 +49,7 @@ const COMPONENTS = [
   { file: 'button.tsx', label: 'static (no headless behavior)' },
   { file: 'radio-group.tsx', label: 'headless behavior + StyleX slot overrides' },
   { file: 'select.tsx', label: 'headless behavior (attributes + escapeHtml)' },
+  { file: 'table.tsx', label: 'semantic table parts with typed StyleX slot overrides' },
   { file: 'tabs.tsx', label: 'multi-slot StyleX overrides' },
 ];
 

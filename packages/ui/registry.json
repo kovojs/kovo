@@ -778,7 +778,8 @@
       "files": ["src/table.tsx"],
       "exports": ["Table", "TableHead", "TableBody", "TableRow", "TableHeaderCell", "TableCell"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn"],
+        "@kovojs/headless-ui": [],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"],
         "@kovojs/server": ["escapeAttribute", "escapeHtml"]
       },

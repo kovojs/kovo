@@ -528,9 +528,9 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   ],
   '/components/switch': ['role="switch"', 'type="checkbox"', 'aria-checked="true"', 'disabled'],
   '/components/table': [
-    '<table class="w-full caption-bottom border-collapse text-sm">',
-    '<caption class="mt-3 text-sm text-neutral-500">',
-    '<thead class="border-b border-neutral-200 bg-neutral-50">',
+    '<table class="kv-table-',
+    '<caption class="kv-table-',
+    '<thead class="kv-table-',
     'scope="row">INV-0042</th>',
     'colspan="3"',
   ],

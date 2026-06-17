@@ -1007,9 +1007,10 @@ describe('gallery demo fixtures', () => {
     expect(slider.html).toContain('type="range"');
 
     expect(table.html).toContain('data-ui-demo="table"');
-    expect(table.html).toContain('<caption class="mt-3 text-sm text-neutral-500">');
-    expect(table.html).toContain('<thead class="border-b border-neutral-200 bg-neutral-50">');
-    expect(table.html).toContain('<th class="h-10 px-3 text-left align-middle');
+    expect(table.html).toContain('<caption class="kv-table-');
+    expect(table.html).toContain('data-style-src="table.tsx#caption"');
+    expect(table.html).toContain('<thead class="kv-table-');
+    expect(table.html).toContain('<th class="kv-table-');
     expect(table.html).toContain('scope="row">INV-0042</th>');
     expect(table.html).toContain('colspan="3"');
 

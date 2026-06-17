@@ -332,6 +332,9 @@ describe('kovo add', () => {
       expect(switchSource).toContain('styles?: SwitchStyleOverrides');
       expect(table).toContain('export const Table = component({');
       expect(table).toContain('export const TableHead = component({');
+      expect(table).toContain("import * as style from '@kovojs/style';");
+      expect(table).toContain('export const tableStyles = style.create');
+      expect(table).toContain('styles?: TableStyleOverrides');
       expect(tabs).toContain("import * as style from '@kovojs/style';");
       expect(tabs).toContain('export const tabsStyles = style.create');
       expect(tabs).toContain('styles?: TabsStyleOverrides');

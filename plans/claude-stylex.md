@@ -632,6 +632,28 @@ borrowing its concrete API/spike detail.
     `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.visual.browser.test.ts`, `pnpm exec tsc --noEmit`, and `git diff --check`
     pass.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/table.tsx` now uses `@kovojs/style`,
+    exports `tableStyles`, accepts `styles?: TableStyleOverrides` for `wrapper`/`table`/`caption`/
+    `head`/`body`/`row`/`headerCell`/`cell` overrides, and drops `cn` plus the `class`/`wrapperClass`
+    escape hatches while preserving the SPEC.md §5.2 raw table-part emission path for isolated
+    `thead`/`tbody`/`tr`/`th`/`td` output. `packages/ui/src/table.stylex.test.tsx` snapshots semantic
+    table markup, exported StyleX slot groups, and author-last slot override output.
+  - Evidence (partial, 2026-06-16): `packages/ui/registry.json` records Table's copied-source
+    dependency on `@kovojs/style`; `packages/ui/src/copy-in.test.ts` covers `table.tsx`;
+    `packages/cli/src/index.kovo-add.test.ts` asserts copied `table.tsx` contains StyleX imports,
+    `tableStyles`, and typed `styles` overrides. The gallery Table visual fixture is refreshed in
+    `examples/gallery/src/visual-fixtures/table.html.txt`, and shared Table assertions in
+    `packages/ui/src/index.markup.test.tsx`, `examples/gallery/src/demo-fixtures.test.ts`, and
+    `examples/gallery/src/behavior-contracts.test.ts` keep semantic checks while moving generated class
+    coverage to the Vitest snapshot.
+  - Evidence (partial, 2026-06-16): `./node_modules/.bin/vitest run packages/cli/src/index.kovo-add.test.ts`,
+    `../../node_modules/.bin/vitest run src/index.markup.test.tsx -t "exports table primitives as styled semantic markup"`,
+    `../../node_modules/.bin/vitest run src/xss-escaping.test.tsx`,
+    `../../node_modules/.bin/vitest run src/copy-in.test.ts`,
+    `../../node_modules/.bin/vitest run -u -t "@kovojs/ui Table StyleX slots"`,
+    `../../node_modules/.bin/vitest run -u src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+    `node packages/ui/scripts/build-registry.mjs --write`, `pnpm exec tsc --noEmit`, and
+    `git diff --check` pass.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L
