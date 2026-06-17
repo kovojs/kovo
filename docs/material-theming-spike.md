@@ -168,7 +168,8 @@ the engine internals stay private.
    exposing (`rules/accessibility-conformance.md`); default variant `tonal-spot`.
 5. **Image-seed support: in scope but lowest priority** (quantizer+score), behind the build-time API.
 
-Tracked rollout: **`plans/material-theming.md`**.
+Tracked rollout: **`plans/theming-codex.md`**; the earlier `plans/material-theming.md` proposal was
+retired into `plans/archive.md`.
 
 ## 9. Sketch of the proving path (once decisions land)
 

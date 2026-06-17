@@ -3,7 +3,7 @@
 Created 2026-06-17. Behavioral source of truth is `SPEC.md`; this follow-up
 tracks framework work that improves the app-authoring model exposed by the
 examples but is not the core automatic enhanced refresh implementation in
-`plans/automatic-enhanced-refresh.md`.
+the archived Automatic Enhanced Mutation Refresh ledger.
 
 ## Goal
 
@@ -50,7 +50,7 @@ already specifies it** (see item 2).
 This plan owns only the residue after these land; cite the exact checkbox each
 item inherits from rather than re-deciding it:
 
-- `plans/automatic-enhanced-refresh.md` — owns generated live-target rendering,
+- Archived Automatic Enhanced Mutation Refresh ledger — owns generated live-target rendering,
   removal of app-authored success-fragment routing, route JSX composition (#4,
   #7–9), and key-scoped `createApp({ mutationResponses })` policies (#9). Items 1,
   6, and the redirect half of the old failure switch are AER residue.
@@ -58,7 +58,7 @@ item inherits from rather than re-deciding it:
   derived `kovo-fragment-target`/`kovo-key`, typed `mutation={…}` binding, and
   typed `forms.<m>.failure` (all `[x]`). Item 5 builds *on top of* this, not
   beside it.
-- `plans/better-forms.md` — KV242 (`name` ∈ schema), `MutationRegistry` inference,
+- Archived Better forms ledger — KV242 (`name` ∈ schema), `MutationRegistry` inference,
   the single failure shape `{ code; payload; fieldErrors? }`, CSRF-on. Item 5
   consumes these decisions verbatim; do not re-open the failure shape.
 
@@ -68,8 +68,8 @@ item inherits from rather than re-deciding it:
   - StackOverflow, CRM, and Commerce are interactive; retire their example
     static-export paths (item 8). Static export remains a framework capability,
     but must keep a dedicated non-example fixture so it does not bitrot.
-- [ ] **Do not block `plans/automatic-enhanced-refresh.md`.** Start after or
-  alongside AER when a slice is clearly independent.
+- [ ] **Do not regress archived automatic enhanced refresh behavior.** This
+  follow-up starts after AER and must preserve its generated live-target path.
 - [ ] **Nested layouts target authoring parity, not runtime persistence (v1).**
   - Decision 2026-06-17: each navigation still renders a full server document;
     `SPEC.md` §13.4 (no persistent cross-navigation elements) stays intact. The
@@ -283,14 +283,14 @@ item inherits from rather than re-deciding it:
 
 - [ ] **5. Field-bound mutation failure UI (replaces the broad failure switch).**
   - Decision 2026-06-17 (resolves the original `formFailure`/`<Failure>` proposal,
-    which conflicted with §9.2 and `better-forms.md`):
+    which conflicted with §9.2 and the archived Better forms ledger):
     - **Adopt the single failure shape `{ code; payload; fieldErrors? }`** from
-      `better-forms.md`; **drop `formFailure({ message })`** (free-text, uncoded
+      the archived Better forms ledger; **drop `formFailure({ message })`** (free-text, uncoded
       failures contradict §9.2's exhaustive coded union).
     - **Primary surface: field-bound components** `<FieldError name="…" />` and
       `<FormError />`, compiler-bound to the enclosing `<form mutation={m}>`:
       - `name` is checked ∈ the mutation input schema (this *is* KV242 from
-        `better-forms.md` — do not invent a second check).
+        the archived Better forms ledger — do not invent a second check).
       - a11y auto-wired: `role="alert"` + `aria-describedby` from the input to its
         `<FieldError>`.
       - Validation failures map to the matching `<FieldError>` (`fieldErrors[name]`);
@@ -322,7 +322,7 @@ item inherits from rather than re-deciding it:
       add-to-cart **failure display** (redirect policy moves to `mutationResponses`).
     - Sign-in and add-to-cart render failures through `<FieldError>/<FormError>`;
       a CRM or SO form gains a declared `errors:` schema and renders it (proving the
-      §9.2 typed path beyond commerce — closes the `better-forms.md` C4 gap).
+      §9.2 typed path beyond commerce — closes the archived Better forms C4 gap).
     - Existing auth redirect, CSRF, no-JS, and enhanced failure tests still pass.
 
 - [ ] **6. Derive the app query registry from routes/components/layouts.**
