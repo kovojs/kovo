@@ -75,9 +75,9 @@ browser. Next: the page's first interactivity — without shipping a framework t
 <details>
 <summary>Spec & diagnostics</summary>
 
-Tutorial goal and shape: SPEC §16, §1.1. Strict-TypeScript requirement: SPEC §6.6. MPA model
+Tutorial goal and shape: `rules/v1-acceptance.md` and SPEC §1.1. Strict-TypeScript requirement: SPEC §6.6. MPA model
 and real navigation: SPEC §8. Typed route paths checked at every consumer: SPEC §6.4. Params
 schema with coercion: SPEC §6.3. Self-describing HTML proven from strings: SPEC §11.4. No
-browser in the tutorial: SPEC §16.3.
+browser in the tutorial: `rules/v1-acceptance.md`.
 
 </details>

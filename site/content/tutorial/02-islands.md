@@ -83,7 +83,7 @@ Interaction ladder and lowest-layer rule: SPEC §7. Compiler-derived stamps: SPE
 hand-written stamp is **KV223**, a stamp that disagrees with its typed expression is **KV222**.
 Serializable island state: SPEC §4.1. Popover lowering and naming nudge: SPEC §5.2 rule 4,
 **KV210**. Committed lowered IR under `src/generated/`: Constitution #3. Legible served HTML and
-load-bearing names: SPEC §4.2, §16.2, Constitution #1. Handler signature and lazy load: SPEC
+load-bearing names: SPEC §4.2, `rules/v1-acceptance.md`, Constitution #1. Handler signature and lazy load: SPEC
 §4.3, §4.4.
 
 </details>

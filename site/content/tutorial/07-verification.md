@@ -94,8 +94,8 @@ Guarded, session-typed, and provable without a browser. One short chapter remain
 Behavior surface proven without a browser: SPEC §11.4. Typed session schema: SPEC §6.5. Optimism
 and invalidation keyed to queries, not call sites: SPEC §10.4. App graph as one composed value:
 SPEC §11.4. `kovo check` exhaustiveness and consistency gate: SPEC §10.6. `kovo explain` stable text
-for humans and agents: SPEC §5.3. Acceptance intent question: SPEC §16.3. Unguarded audit and
+for humans and agents: SPEC §5.3. Acceptance intent question: `rules/v1-acceptance.md`. Unguarded audit and
 zero unauthed reach: SPEC §10.3. `observed ⊆ static` write-verification invariant: SPEC §11.2.
-Reference-app parity: SPEC §16.
+Reference-app parity: `rules/v1-acceptance.md`.
 
 </details>

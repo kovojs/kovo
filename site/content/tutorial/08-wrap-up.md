@@ -59,7 +59,7 @@ Typed route paths and real navigation: SPEC §6.4, §8. Declared interactivity a
 SPEC §4.3, §7. Declare-once data and derived stamps: SPEC §4.8, §10.2. Schema-validated
 transactional CSRF POSTs and readable wire: SPEC §6.3, §9.1. Derived invalidation, optimistic
 exhaustiveness, property-tested predictions: SPEC §10.3–10.6. Machine-checkable behavior surface
-and reference-app pinning: SPEC §11.2, §11.4, §16. No browser test in the tutorial: SPEC §16.3.
+and reference-app pinning: SPEC §11.2, SPEC §11.4, and `rules/v1-acceptance.md`. No browser test in the tutorial: `rules/v1-acceptance.md`.
 `run-steps.mjs` gating and compile-output no-op: SPEC §5.2 rule 3. Artifact-is-the-documentation:
 Constitution #4. Stateless v1 server and immutable versioned client modules: SPEC §9.3, §6.6.
 

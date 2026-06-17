@@ -217,7 +217,7 @@ framework internals.
 
 The `kovo explain` / `kovo check` artifact formats: SPEC §5.3, §11.4. The committed graph and its diffs:
 SPEC §11.1. Optimistic exhaustiveness is **KV310** (SPEC §10.6); update coverage is **KV311**
-(SPEC §4.9). The "agent answers from `kovo explain` alone" acceptance criterion: SPEC §16. The audits
+(SPEC §4.9). The "agent answers from `kovo explain` alone" acceptance criterion: `rules/v1-acceptance.md`. The audits
 and guard reachability: SPEC §10.3, §11.4; `owner:` annotations behind `--unscoped`: SPEC §10.1. The
 wire vocabulary behind Network-panel debugging: SPEC §9.1. Debugging downward into plainer artifacts:
 SPEC §1.

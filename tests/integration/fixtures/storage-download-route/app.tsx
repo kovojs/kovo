@@ -1,4 +1,4 @@
-// SPEC.md §13.5: a storage-backed download route authorizes by app data first,
+// plans/open-design-areas.md storage capability floor: a storage-backed download route authorizes by app data first,
 // then serves bytes through the swappable StorageCapability.
 import { createMemoryStorage } from '@kovojs/core';
 import { createApp, guards, notFound, respond, route, s } from '@kovojs/server';

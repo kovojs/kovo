@@ -41,8 +41,9 @@ keeping dev fully legible.
       responses; minify footnote restated (names verbatim in prod). Evidence: `SPEC.md` §5.1.
 - [x] **§15** — new risk row: prod delta against stale base → version token fails loud. Evidence:
       `SPEC.md` §15.
-- [x] **§16.2** — legibility criterion scoped: holds on dev frames directly; prod frames are deltas
-      with verbatim names and `kovo explain` reconstruction. Evidence: `SPEC.md` §16.
+- [x] **v1 acceptance legibility gate** — legibility criterion scoped: holds on dev frames directly;
+      prod frames are deltas with verbatim names and `kovo explain` reconstruction. Evidence:
+      `rules/v1-acceptance.md`.
 
 ## Hazards (each has a SPEC answer; implementation must honor it)
 

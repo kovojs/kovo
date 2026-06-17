@@ -198,7 +198,7 @@ A practical app suite is therefore:
 <details>
 <summary>Spec & diagnostics</summary>
 
-The browser-free verification posture: SPEC §11.4, §16. The test harness and unit/property testing:
+The browser-free verification posture: SPEC §11.4 and `rules/v1-acceptance.md`. The test harness and unit/property testing:
 SPEC §12. The unified change record (`{domain, keys, input}`): SPEC §14. Typed error schemas:
 SPEC §6.3. The `observed ⊆ static ∪ declared` invariant and read-side shape verification: SPEC §11.2.
 The KV402–KV410 verification family: SPEC §11.3; manual touches at an opaque write are **KV406**; a

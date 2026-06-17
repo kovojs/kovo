@@ -452,7 +452,7 @@ export async function serverCommerceTransactionBehaviorFact(
 export async function serverCommerceStylesheetBehaviorFact(
   runtime: ServerCommerceStylesheetRuntime,
 ): Promise<ServerCommerceStylesheetBehaviorFact> {
-  // SPEC.md §13.5/§16.5: commerce fragments prove platform stylesheet hints, not app-local wiring.
+  // plans/open-design-areas.md / rules/v1-acceptance.md: commerce fragments prove platform stylesheet hints, not app-local wiring.
   const stylesheetManifest = [
     {
       criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
@@ -529,7 +529,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
     pages: Array<Record<string, unknown>>;
   },
 ): Promise<ServerCommerceAdoptDontInventBehaviorFact> {
-  // SPEC.md §13.5 and §16.5: commerce covers platform features without custom client/state seams.
+  // plans/open-design-areas.md and rules/v1-acceptance.md: commerce covers platform features without custom client/state seams.
   const cartPage = graph.pages.find((page) => page.route === '/cart');
   const receiptMutation = graph.mutations.find((item) => item.key === 'order/receipt');
 

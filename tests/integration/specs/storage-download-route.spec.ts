@@ -1,4 +1,4 @@
-// SPEC.md §13.5: guarded download routes authorize app-owned rows while storage
+// plans/open-design-areas.md storage capability floor: guarded download routes authorize app-owned rows while storage
 // capabilities reject keys that would escape their configured namespace.
 import { expect, test } from '@kovojs/test/integration';
 

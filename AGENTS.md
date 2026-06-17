@@ -2,16 +2,24 @@
 
 ## Framework Source of Truth
 
-- Treat `SPEC.md` as the normative source of truth for how the Kovo framework should behave.
+- Treat `SPEC.md` as the normative source of truth for framework behavior.
+- Treat `rules/` as standing agent, release, and conformance rules.
 - Use active files under `plans/` as the implementation roadmap and sequencing plan. Completed or
   retired ledgers are listed in `plans/archive.md`; if a plan conflicts with `SPEC.md`, follow
   `SPEC.md` for behavior and update the plan or ask before coding through the conflict.
+- Treat `docs/` as explanatory reference material, studies, evidence, and examples unless a rule or
+  `SPEC.md` explicitly delegates authority to a docs file.
 - When implementing or reviewing framework behavior, cite the relevant `SPEC.md` section in comments, tests, diagnostics, or handoff notes where that context would prevent ambiguity.
 - Emit app components as TSX/JSX source. Treat lowered IR, generated stamps, and emitted server/client modules as artifacts to inspect for verification, not as app-authored code to write by hand; `SPEC.md` §5.2 makes hand-authored lowered IR KV235.
 
 ## Progress Discipline
 
 - For GitHub Actions workflow edits, follow `rules/github-workflows.md`.
+- For compiler behavior edits, follow `rules/compiler-hard-rules.md`.
+- For public API surface edits, follow `rules/api-surface.md`.
+- For accessibility conformance claims, follow `rules/accessibility-conformance.md`.
+- For v1 acceptance or launch-readiness claims, follow `rules/v1-acceptance.md` and
+  `rules/prelaunch-checklist.md`.
 - Make commits at meaningful checkpoints instead of accumulating a large uncommitted diff.
 - Default to a parallel fan-out when the open plans expose multiple independent, non-overlapping implementation, audit, or verification slices that can move the active plan ledger forward concurrently. Keep one immediate critical-path task in the main worktree, and delegate bounded sidecar slices to up to five sub-agents at a time unless the work is tightly coupled.
 - Prefer large, closure-oriented sub-agent slices that push an open plan item materially toward completion over tiny incremental edits. A delegated slice should usually own a coherent module, primitive family, runtime path, conformance gap, or plan phase and should include the production changes, tests, and evidence needed to integrate that slice.

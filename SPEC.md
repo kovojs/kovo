@@ -382,7 +382,8 @@ cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart
 5. **Teaching errors.** Every diagnostic shows the lowering: what would have been generated, why it can't be, and the fix menu.
 6. **Registry atomicity.** Registry `.d.ts` emission is part of every compile; `vp dev` and `vp check` regenerate registries before type-checking runs. A stale registry is unrepresentable, not just unlikely — the typegen failure modes (fresh clone red until first generation, watch-mode races) are designed out.
 7. **TSX-only authoring.** TSX is the sole app-authoring surface. The lowered IR is an output format: valid Kovo source for fixpoint/render-equivalence gates and readable artifacts, but not something app code hand-authors or vendors. Hand-authored lowered IR in app source is **KV235** with a teaching message that shows the TSX equivalent. There is no suppression pragma or ejection workflow in v1; a front-end gap is fixed in the compiler or recorded as a SPEC conflict.
-8. **Post-parse decisions use typed facts, not source strings.** After parsing, the compiler's post-parse phases (`lower/**`, `validate/**`, `analyze/**`, `emit/**`, and `graph.ts`) MUST decide from typed model facts and spans, never from raw source snippets, regexes, `getText()`/`getFullText()`, or ad hoc string slicing; the scanner/parser is the sole boundary that reads source text into typed facts. Permitted source-text uses elsewhere are narrow: diagnostic source-frame rendering, span-based source-patch application by known offsets, generated-artifact body carry and `renderSource()` emission, generated-artifact verification, IR-header provenance checks (`source.startsWith(compilerIrHeader)`), binding-path grammar parsing on typed `.path` fields, URL/route parsing of an extracted literal `attribute.value`, and name-formatting of model-derived identifiers. A mechanical kovo-check guard enforces this.
+8. **Public imports in app source.** App-authored source may import Kovo packages only through documented public entrypoints. Imports from framework-maintenance subpaths (`@kovojs/*/internal`, `kovo/internal`) and compiler-emitted ABI subpaths (`@kovojs/*/generated`) are invalid in app source and must produce a teaching diagnostic. Compiler-emitted modules may import generated ABI subpaths such as `@kovojs/runtime/generated`; those imports are compiler-owned artifacts, not app-authored API.
+9. **Post-parse decisions use typed facts, not source strings.** After parsing, the compiler's post-parse phases (`lower/**`, `validate/**`, `analyze/**`, `emit/**`, and `graph.ts`) MUST decide from typed model facts and spans, never from raw source snippets, regexes, `getText()`/`getFullText()`, or ad hoc string slicing; the scanner/parser is the sole boundary that reads source text into typed facts. Permitted source-text uses elsewhere are narrow: diagnostic source-frame rendering, span-based source-patch application by known offsets, generated-artifact body carry and `renderSource()` emission, generated-artifact verification, IR-header provenance checks (`source.startsWith(compilerIrHeader)`), binding-path grammar parsing on typed `.path` fields, URL/route parsing of an extracted literal `attribute.value`, import-specifier boundary validation for the public/generated/internal Kovo subpath rule above, and name-formatting of model-derived identifiers. A mechanical kovo-check guard enforces this.
 
 ### 5.3 `kovo explain`
 
@@ -648,7 +649,7 @@ Route and query guard failures have fixed outcomes so auth remains part of the t
 
 ### 6.6 Soundness boundary (normative)
 
-The §1.1 proof claims are claims about TypeScript programs that stay inside the sound subset. The starter therefore ships — and the docs state as a precondition — `strict` everything plus lint bans on `any`, non-null assertions, and `as` casts in app code. Three boundaries are runtime-validated regardless, by design: the **wire** (every mutation input passes its `s.*` schema — types-without-validators, raw-tRPC style, was rejected); **deploy skew** (a long-lived document POSTing yesterday's form shape is answered by schema validation and the 422 path, §9.2 — never undefined behavior); and **CSRF** — `kovo-csrf` (§9.1) is a session-bound synchronizer token stamped into every emitted form and verified before schema parsing, replay lookup, and the guard chain on every mutation POST. CSRF is default-on for server-rendered mutation endpoints; an explicit `csrf: false` is the only per-mutation opt-out and is reserved for non-browser or externally authenticated endpoints. Deploy skew also covers handler modules, normatively: emitted module URLs are immutable and versioned, and the serving layer retains prior versions — an old document's `on:*` refs keep resolving after a deploy; first interaction on a still-open tab never 404s.
+The §1.1 proof claims are claims about TypeScript programs that stay inside the sound subset. The starter therefore ships — and the docs state as a precondition — `strict` everything plus lint bans on `any`, non-null assertions, and `as` casts in app code. Three boundaries are runtime-validated regardless, by design: the **wire** (every mutation input passes its `s.*` schema — types-without-validators, raw-tRPC style, was rejected); **deploy skew** (a long-lived document POSTing yesterday's form shape is answered by schema validation and the 422 path, §9.2 — never undefined behavior); and **CSRF** — `kovo-csrf` (§9.1) is a session-bound synchronizer token stamped into every emitted form and verified before schema parsing, replay lookup, and the guard chain on every mutation POST. CSRF is default-on for server-rendered mutation endpoints; an explicit `csrf: false` is the only per-mutation opt-out and is reserved for non-browser or externally authenticated endpoints. Deploy skew also covers handler modules, normatively: emitted module URLs are immutable and versioned, and the serving layer retains prior versions — an old document's `on:*` refs keep resolving after a deploy; first interaction on a still-open tab never 404s. Generated ABI subpaths (for example `@kovojs/runtime/generated`) may change when the compiler and runtime ship together because app source regenerates those imports, but already-emitted immutable modules remain governed by the same versioned-module retention rule: old generated modules must keep resolving to the runtime symbols they were emitted against for the supported deploy-skew window.
 
 ---
 
@@ -1141,109 +1142,18 @@ propertyTest(addToCart, cartQuery); // patch∘shape ≡ shape∘apply over gene
 
 Handlers unit-test as `(event, ctx)` functions; transforms as pure `(data, input)`; the wire as HTTP.
 
-### 12.1 Accessibility conformance (axe-clean states)
-
-Every claimed primitive family MUST be free of axe-core violations not only at initial render but in the terminal awaited state of each interaction tier it supports: open/expanded (accordion, disclosure, collapsible, dialog, alert-dialog, sheet, drawer, popover, tooltip, hover-card, command, and all menu surfaces), checked/pressed/selected (checkbox including `aria-checked="mixed"`, switch, toggle, radio-group, checkbox-group, toggle-group, toolbar, tabs), value end-states (slider, number-field, OTP filled/complete, progress complete and indeterminate, meter optimum band), and validation/error states (field/fieldset). Static styled families (alert, avatar, badge, breadcrumb, button, card, kbd, separator, skeleton, table) MUST be axe-clean as rendered. Native top-layer content (promoted `<dialog>`, `popover` content) MUST be evaluated as visible, active DOM, not as a hidden subtree.
-
-A state MAY be excluded from this requirement only where it cannot be represented as an axe-stable DOM — transient transition/closing frames, time-based auto-dismiss countdowns, and hover-only visual states with no ARIA/DOM delta — and each exclusion MUST be justified in the proving suite. Conformance is proven by the gallery browser axe suite (`examples/gallery/src/interactive-gallery.browser.test.ts`), run under Chromium.
-
 ---
 
-## 13. Open Design Areas
+## 13. Related Rules and Roadmaps
 
-These ship with v1 only if resolved; otherwise they are explicitly punted with documented workarounds.
+`SPEC.md` is the normative source of framework behavior. The following files
+carry standing conformance rules, release gates, implementation roadmaps, and
+explanatory examples:
 
-**13.1 CSS.** Kovo v1 is StyleX-first for app-authored styling through `@kovojs/style`. Starters, examples, docs, and official UI primitives author typed style objects with `style.create(...)`, compose them with the JSX `style` prop (or the `style.attrs()` lowering target), and reserve `style.raw(...)` for the rare dynamic inline custom-property escape hatch. The compiler extracts StyleX atoms into readable provenance-prefixed classes (`kv-...`), records `data-style-src` in development output, emits CSS in cascade-priority `@layer` buckets rather than relying on source-file order, and keeps rule-to-component/route/fragment attribution so a single v1 stylesheet can later split without changing render callers. Kovo still owns the framework CSS contract: emitted pages list required stylesheet assets once, preload first-party app styles when useful, and use the same stylesheet hints for full-page renders, mutation fragments, and deferred fragments; fragments and `<kovo-defer>` responses retain metadata for any stylesheet assets they require. Raw co-located component CSS is an escape hatch for selectors or third-party theming StyleX cannot express well: the compiler extracts those rules, wraps them in `@scope` keyed to the derived DOM host leaf (dashed tag or `[kovo-c=…]` stamp), donut-scopes nested islands out, emits a tag-prefixed fallback for older engines, and dedupes assets in page order. Design tokens are ordinary CSS custom properties returned by `defineVars`/`createTheme`; theming CSS remains document CSS because there is no shadow boundary.
-
-**13.2 Lists at scale.** Template stamps and the shared `kovo-key` identity contract are now normative (§4.8); remaining design: cursor pagination flowing through URL params, infinite scroll as fragment appends, and keyed reordering under simultaneous optimistic updates + morphing — exercised in the commerce grid.
-
-**13.3 Streaming details.** `<kovo-defer>` exists (§8); remaining: priority hints between deferred fragments, query-JSON placement guarantees under HTTP/1.1 fallbacks.
-
-**13.4 Persistent cross-navigation elements.** Position: **Kovo does not support media/state surviving real navigations in v1.** Documented escape hatches (SharedWorker for sockets, popout windows for players) rather than a half-iframe architecture. Revisit if the platform ships pagewide persistent elements.
-
-**13.5 Adopt-don't-invent list:** head/meta (typed per-route `meta()` riding the `route()` declaration, §6.4), file uploads (`s.file()` + multipart + pending-mechanism progress), per-island error boundaries, i18n (server-rendered message catalogs — easier than SPA i18n), rate limiting as guard middleware. Typed sessions graduated to core (§6.5).
-
-File upload/download storage is a capability floor, not framework-owned object storage. The core `StorageCapability` interface is `put(key, body, { contentType?, etag?, metadata? })`, `get(key)`, `stat(key)`, and `stream(key)`, with results carrying `key`, `size`, `contentType`, `etag`, `lastModified`, and string metadata. Keys are relative storage keys and adapters must reject paths that escape their configured root/prefix. Blessed adapters are in-memory test storage, filesystem storage rooted under a guarded directory, and an injected S3-compatible client; all share one conformance suite and preserve caller/provider ETags. `s.file()` uploads and guarded download routes should meet at this seam so app code can authorize by rows/owners while body storage stays swappable.
-
----
-
-## 14. Data-Layer Strategy & Roadmap
-
-Kovo-core defines a **capability interface** — `(writes → touch sets, queries → read sets + result types + instance keys)` — not a portability promise. Adapters implement what they can; the floor is universal.
-
-| Stage            | Ships                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Mechanism                                                                          |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **v1**           | Core model: domain layer with declared `touches` (#3) + flat tags as low-ceremony on-ramp (#2) + `invalidate()` escape hatch (#1, linted)                                                                                                                                                                                                                                                                                                                                                                      | Works with ANY data access                                                         |
-| **v1 (blessed)** | `@kovojs/drizzle`: touches **inferred** from ASTs, schema-as-registry, query shapes/keys derived; optimism hand-written against the transform IR (§10.4)                                                                                                                                                                                                                                                                                                                                                       | Postgres-first via Drizzle; MySQL/SQLite conformance deferred to late hardening    |
-| **v1.5**         | Verification layer: runtime instrumentation as CI cross-check (KV402–409); unified typed change record `{domain, keys, input}` feeding optimism now and the v2 live bus later                                                                                                                                                                                                                                                                                                                                  | pglite harness                                                                     |
-| **v2**           | **Derived optimism**: compiler-generated transforms via the §10.5 algebra, property-tested soundness, named punts; supersedes hand-written transforms pair by pair. **Live queries (L4)**: `<kovo-live>` over SSE, guard-recheck-per-push, in-process/Redis bus — the design's first stateful infrastructure, deferred until something needs it. CDC adapter (Postgres logical replication / Supabase Realtime) as live-query transport + the answer to out-of-band writes (cron, admin tools, other services) | Derivation over the pinned Drizzle subset; live/CDC opt-in, per `live: true` query |
-| **v3**           | Full runtime read/write tracking (Convex-style precision) **only if** a managed data product exists; never the default — it trades static printability away                                                                                                                                                                                                                                                                                                                                                    | Conditional                                                                        |
-
-**Drizzle coupling, managed:** the extraction pass targets a pinned, conformance-tested subset of Drizzle's surface (tables as first-argument identifiers); the suite fails loudly on API drift. Raw SQL is a marked second-class citizen (KV406 annotation + runtime verification, excluded from derived optimism) — acceptable if the seam is visible, and it is.
-
----
-
-## 15. Risks & Costs
-
-| Risk                                                               | Mitigation / Position                                                                                                                                                                                                                 |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Chromium-led enhancements (speculation rules, invokers)            | Graceful degradation is structural; baseline is a working website                                                                                                                                                                     |
-| Cold-cache first-interaction latency                               | `modulepreload` from rendered attributes, 103 Early Hints, HTTP/3; measure, don't hide                                                                                                                                                |
-| Drizzle API drift breaks inference                                 | Pinned conformance suite; declared-`touches` floor always works                                                                                                                                                                       |
-| Over-invalidation storms (coarse domains)                          | Row-level keys via schema annotations; KV403 surfaces excess                                                                                                                                                                          |
-| `derive`/shared-client-state creep toward SPA heap                 | Lints with required justifications; isomorphic opt-in (`isomorphic: true`, §4.8, KV302) as the sanctioned escape                                                                                                                      |
-| Derived-optimism wrong predictions (v2)                            | All-or-nothing derivation; property-tested soundness; punts are loud; deferred to v2 so v1 ships the proven hand-written path first                                                                                                   |
-| Two-file IR + explicit data channels feel austere vs. React        | Single-file sugar + editor tooling (cheap because everything is static); day-100 > day-1                                                                                                                                              |
-| Query-binding layer moves some rendering clientward                | Bounded: paths/stamps/named derives only (§4.8) — no runtime signal graph; complex rendering flips to fragments or isomorphic islands (§4.8)                                                                                          |
-| Live bus introduces stateful infra                                 | Deferred to v2 wholesale — the v1 server is stateless; BroadcastChannel + refetch-on-focus cover the interim (§9.3)                                                                                                                   |
-| Prerender discards cost server renders                             | Off by default; per-route opt-in where renders are idempotent, plus response caching                                                                                                                                                  |
-| TypeScript unsoundness (`any`, casts) hollowing proof claims       | Starter ships strict config + lint bans in app code (§6.6); wire and deploy-skew boundaries are runtime-validated regardless                                                                                                          |
-| Deep template-literal types (params, `data-bind`) slow `tsc`       | Paths are shallow by construction (flat query shapes); TypeScript Go toolchain; registry types stay trivial lookups, not recursive solves                                                                                             |
-| Projected children all ship in initial HTML (no client lazy mount) | Stated posture (§4.5); `<kovo-defer>` is the escape hatch for expensive subtrees; payload measured under §16.1                                                                                                                        |
-| `on:*` chaining + trigger observers grow the loader                | Gated by the S2 4KB budget before the composition API freezes; the budget leaves room for clear control flow over compiler-synthesized shortcuts                                                                                      |
-| Prod delta/patch applied against a stale base (deploy skew)        | Every delta carries the render-plan version token (§5.1, §9.1.1); base mismatch fails loud and refetches full — never silently patches wrong state. Dev ships full self-describing payloads, so the failure mode does not exist there |
-
----
-
-## 16. Success Criteria (v1)
-
-1. **Perf:** TTI ≡ FCP on first load (no hydration gap); prerendered navigations render in <50ms perceived on routes that opt in; zero session-length memory growth across 100 navigations.
-2. **Legibility:** a developer who has never seen the codebase can identify what any button does, what data any island holds, and what any mutation changed — from devtools alone — in under a minute. (Run this as an actual usability study.) Holds against a dev frame directly; against a prod frame, names are still verbatim and payloads still named/schema-shaped, with the full fragment/query reconstructable via `kovo explain` (§9.1.1) — prod frames are deltas, not complete documents.
-3. **Verifiability:** the demo app's full behavior surface passes TypeScript static checking + `kovo check` + graph assertions with **no app-level browser tests** — browser testing lives in the framework-owned L0 and morph-survival suites; an agent given only `kovo explain` output answers "what updates when X is clicked" with 100% accuracy.
-4. **Constitution holds:** fixpoint CI green; no feature shipped without an authorable lowering; `grep -r "invalidate(" app/` returns only documented escape-hatch sites.
-5. **Coverage:** every (mutation × query) pair in the reference commerce app has an explicit optimistic status — hand-written transform or declared `'await-fragment'` — with zero unhandled KV310s. (The v2 target: derivation handles ≥70% of pairs, every punt naming its reason.)
-6. **Navigation typed:** every literal href/redirect in the commerce app resolves against the route registry (zero KV220/KV221); renaming a route path turns every consumer red under `vp check` — the navigation mirror of the column-rename proof (§6.2).
-7. **Declared execution only:** `grep -r "on:load" app/` returns only KV211-justified sites and isomorphic islands only KV302-justified ones — the eager-JS mirror of the `invalidate()` criterion (#4).
-8. **Update coverage:** every query/state-dependent DOM position in the commerce app has an explicit status (`plan` / `isomorphic` / `fragment` / `renderOnce`) with zero unhandled KV311s — the client-side mirror of criterion 5.
-
----
-
-## Appendix A: Worked Example — End-to-End "Add to Cart"
-
-One feature traversing every layer:
-
-```
-schema.ts          products(domain:'product', key:id), cart_items(domain:'cart')
-cart.domain.ts     cart.addItem — upsert cart_items + decrement products.stock
-                   ⇒ touch-graph: {cart, product:productId}            [STATIC, §11.1]
-cart.queries.ts    cartQuery (count, jsonAgg) reads {cart, product}    [JOIN = declaration]
-cart.mutations.ts  addToCart: guard authed, schema input, OUT_OF_STOCK error
-                   ⇒ invalidates {cart, product:productId}             [DERIVED]
-                   ⇒ optimistic: 2 transforms                          [HAND-WRITTEN, §10.4;
-                                                                        derived in v2, §10.5]
-products.routes.ts route('/products/:id') — params/search schemas; <Link>s and
-                   redirect() targets type-checked vs RouteRegistry            [§6.4]
-product.tsx        <f.Form> — fields type-checked & completeness-checked vs schema
-cart-badge.tsx     {cart.count} ⇒ data-bind="cart.count" stamp         [DERIVED, §4.8;
-                   kovo-deps="cart"; coverage: plan ✓                     KV311 §4.9 — no code]
-
-USER CLICKS (JS loaded):  snapshot → badge ticks instantly (kovo-pending) →
-  POST /_m/cart/add (Kovo-Targets from live DOM) → tx commits →
-  <kovo-query name="cart"> + <kovo-fragment target="recommendations"> →
-  morph reconciles (no-op if prediction was right)
-
-USER CLICKS (no JS):      form POSTs → redirect → fresh page. Same handler.
-
-TEAMMATE, NEXT MONTH:     ships <mini-cart> with queries:{cart} —
-  it is optimistically updated by every cart mutation ever written. Nothing to remember.
-```
+- Accessibility conformance: `rules/accessibility-conformance.md`
+- Data-layer policy: `rules/data-layer-policy.md`
+- v1 acceptance gates: `rules/v1-acceptance.md`
+- Open design areas: `plans/open-design-areas.md`
+- Data-layer roadmap: `plans/data-layer-roadmap.md`
+- Risk register: `docs/risk-register.md`
+- Worked add-to-cart example: `docs/worked-example-add-to-cart.md`

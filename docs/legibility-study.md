@@ -1,6 +1,6 @@
 # Devtools Legibility Study
 
-`SPEC.md` section 16.2 requires an actual usability study before v1 freeze. This
+`rules/v1-acceptance.md` requires an actual usability study before v1 freeze. This
 document is the executable study packet and results ledger; it does not claim the
 study has been completed.
 
@@ -13,7 +13,7 @@ artifacts alone in under 60 seconds
 ## Fixture Setup
 
 Use the commerce reference app from the exact commit recorded in
-`docs/v1-acceptance.md` after a clean acceptance run:
+`docs/v1-acceptance-ledger.md` after a clean acceptance run:
 
 ```sh
 pnpm run acceptance
@@ -89,7 +89,7 @@ participant IDs and outcome summaries belong in this file.
 
 ## Dated Study Readiness Ledger
 
-This ledger tracks whether SPEC §16.2 has runnable local materials and whether
+This ledger tracks whether the v1 legibility gate has runnable local materials and whether
 the required outside evidence exists. It is not a substitute for the five
 outside-developer result rows above.
 
@@ -123,7 +123,7 @@ until the confusing artifact is fixed or the task wording is corrected and rerun
 
 ## Completion Rule
 
-Do not mark SPEC §16.2 or P10 legibility complete until this ledger contains five
+Do not mark the v1 legibility gate or P10 legibility complete until this ledger contains five
 dated outside-developer result rows, every timed task is under 60 seconds for
 each participant, every issue row is resolved or explicitly accepted, and
-`docs/v1-acceptance.md` links the passing study evidence.
+`docs/v1-acceptance-ledger.md` links the passing study evidence.

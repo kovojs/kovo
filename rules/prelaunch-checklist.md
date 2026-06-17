@@ -25,7 +25,7 @@ external evidence as completion.
 | Date       | Reviewer | Scope checked                                                                                  | Result                                                                                                | Status                                  |
 | ---------- | -------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | 2026-06-12 | TBD      | Required P10 checks: trademark screen, `kovo.sh`, `@kovojs` npm scope, and linguistic screen.  | All four required evidence ledgers exist; none contains completion evidence.                          | pending                                 |
-| 2026-06-12 | TBD      | Local runnable references in `docs/v1-acceptance.md` and the repository `pnpm run acceptance`. | Local acceptance command is documented separately; it cannot replace external launch-readiness proof. | pending                                 |
+| 2026-06-12 | TBD      | Local runnable references in `rules/v1-acceptance.md` and the repository `pnpm run acceptance`. | Local acceptance command is documented separately; it cannot replace external launch-readiness proof. | pending                                 |
 | 2026-06-12 | Codex    | Ledger honesty audit of every required pre-launch evidence section.                            | Required sections are present and each section keeps the absence of external evidence explicit.       | packet ready; external evidence pending |
 
 ## Runnable Local Checklist
@@ -36,10 +36,10 @@ domain, npm-scope, or linguistic requirements.
 
 | Step | Command or action                                                                 | Evidence to record                                  | Status  |
 | ---- | --------------------------------------------------------------------------------- | --------------------------------------------------- | ------- |
-| 1    | `pnpm exec vp check docs/prelaunch-checklist.md docs/v1-acceptance.md`            | Passing command log and commit SHA.                 | pending |
+| 1    | `pnpm exec vp check rules/prelaunch-checklist.md rules/v1-acceptance.md docs/v1-acceptance-ledger.md` | Passing command log and commit SHA.                 | pending |
 | 2    | Confirm every required check has a ledger section below.                          | Reviewer initials and date in Dated Audit Ledger.   | pending |
 | 3    | Attach external search/control/review evidence to the relevant ledger row.        | Source, reviewer, date, findings, and disposition.  | pending |
-| 4    | Link completed pre-launch evidence from `docs/v1-acceptance.md` before v1 freeze. | Updated acceptance ledger row and clean diff check. | pending |
+| 4    | Link completed pre-launch evidence from `docs/v1-acceptance-ledger.md` before v1 freeze. | Updated acceptance ledger row and clean diff check. | pending |
 
 ## Trademark Evidence Ledger
 
@@ -69,4 +69,4 @@ domain, npm-scope, or linguistic requirements.
 
 Do not mark v1 pre-launch complete until every required check has dated evidence,
 no ledger row remains `pending`, conflicts are resolved or explicitly accepted,
-and `docs/v1-acceptance.md` links the completed checklist.
+and `docs/v1-acceptance-ledger.md` links the completed checklist.

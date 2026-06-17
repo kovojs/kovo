@@ -171,7 +171,7 @@ describe('tutorial step 07 — testing & verification', () => {
 
   // snippet:parity-test
   it('matches the reference commerce app: wire vocabulary and optimistic statuses', async () => {
-    // The committed graph artifact of examples/commerce — the SPEC.md §16
+    // The committed graph artifact of examples/commerce — the rules/v1-acceptance.md
     // acceptance target this tutorial has been building toward.
     const commerceGraph = JSON.parse(
       readFileSync(

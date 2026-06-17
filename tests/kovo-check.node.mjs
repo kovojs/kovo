@@ -549,8 +549,9 @@ void test('P10 commerce invalidation is expressed through graph facts', async ()
 });
 
 void test('P10 normative docs cover the constitution and compiler hard rules', async () => {
-  const constitution = await readProjectFile('docs/constitution.md');
-  const compilerRules = await readProjectFile('docs/compiler-hard-rules.md');
+  const constitution = await readProjectFile('rules/constitution.md');
+  const compilerRules = await readProjectFile('rules/compiler-hard-rules.md');
+  const openDesignAreas = await readProjectFile('plans/open-design-areas.md');
   const spec = await readProjectFile('SPEC.md');
   const fact = normativeDocsGateFact({
     assertRenderEquivalence,
@@ -558,6 +559,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
     compileComponentModule,
     compilerRules,
     constitution,
+    openDesignAreas,
     spec,
   });
 
@@ -582,7 +584,9 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
     'Fixpoint invariant',
     'Platform-behavior emission',
     'Teaching errors',
+    'Registry atomicity',
     'TSX-only authoring',
+    'Public imports in app source',
     'Post-parse decisions use typed facts, not source strings',
   ]);
   assert.deepEqual(fact.compilerRuleTitles, fact.hardRuleTitlesCovered);
@@ -644,12 +648,12 @@ void test('P10 legibility study packet is ready but not claimed complete', async
 });
 
 void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => {
-  const ledger = await readProjectFile('docs/v1-acceptance.md');
-  const spec = await readProjectFile('SPEC.md');
-  const fact = v1AcceptanceLedgerGateFact({ ledger, spec });
+  const ledger = await readProjectFile('docs/v1-acceptance-ledger.md');
+  const rule = await readProjectFile('rules/v1-acceptance.md');
+  const fact = v1AcceptanceLedgerGateFact({ ledger, rule });
 
-  assert.deepEqual(fact.gateCriteria, fact.specGateCriteria);
-  assert.equal(fact.gateCriteriaMatchSpec, true);
+  assert.deepEqual(fact.gateCriteria, fact.ruleGateCriteria);
+  assert.equal(fact.gateCriteriaMatchRule, true);
   assert.equal(
     fact.gateEvidenceArtifacts['16.5 Coverage'],
     'Commerce matrix assertions in examples/commerce/src/app.test.ts and kovo check optimistic output.',
@@ -711,7 +715,7 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
 });
 
 void test('pre-launch checklist is tracked explicitly', async () => {
-  const checklist = await readProjectFile('docs/prelaunch-checklist.md');
+  const checklist = await readProjectFile('rules/prelaunch-checklist.md');
   const fact = prelaunchChecklistGateFact(checklist);
 
   assert.deepEqual(fact.requiredChecks, [

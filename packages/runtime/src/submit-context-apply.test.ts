@@ -143,19 +143,19 @@ describe('submit context apply', () => {
       });
     };
     const assertLegacyHrefRejected = () => {
-      // @ts-expect-error SPEC.md §6.4/§16.6: route path renames make old href consumers red.
+      // @ts-expect-error SPEC.md §6.4 and rules/v1-acceptance.md: route path renames make old href consumers red.
       href('/legacy-catalog/:id', { params: { id: 'p1' } });
     };
     const assertLegacyLinkRejected = () => {
-      // @ts-expect-error SPEC.md §6.4/§16.6: route path renames make old Link consumers red.
+      // @ts-expect-error SPEC.md §6.4 and rules/v1-acceptance.md: route path renames make old Link consumers red.
       Link('/legacy-catalog/:id', { params: { id: 'p1' } });
     };
     const assertLegacyRedirectRejected = () => {
-      // @ts-expect-error SPEC.md §6.4/§16.6: route path renames make old redirect consumers red.
+      // @ts-expect-error SPEC.md §6.4 and rules/v1-acceptance.md: route path renames make old redirect consumers red.
       redirect('/legacy-catalog/:id', { params: { id: 'p1' } });
     };
     const assertLegacyGetFormRejected = () => {
-      // @ts-expect-error SPEC.md §6.4/§16.6: route path renames make old GET forms red.
+      // @ts-expect-error SPEC.md §6.4 and rules/v1-acceptance.md: route path renames make old GET forms red.
       form.get('/legacy-catalog');
     };
     const assertLegacySearchFieldRejected = () => {

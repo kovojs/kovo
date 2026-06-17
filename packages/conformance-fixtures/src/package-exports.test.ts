@@ -785,7 +785,7 @@ describe('@kovojs/test package subpath exports', () => {
     }>();
     expectTypeOf<V1AcceptanceLedgerGateFact>().toMatchTypeOf<{
       gateCriteria: string[];
-      gateCriteriaMatchSpec: boolean;
+      gateCriteriaMatchRule: boolean;
       runFacts: Array<{ command: string; commit: string; result: string }>;
     }>();
     expectTypeOf<LegibilityStudyGateFact>().toMatchTypeOf<{

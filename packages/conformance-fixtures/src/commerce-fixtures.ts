@@ -166,7 +166,7 @@ export function commerceFixtureFile(name: string, type: string, size: number): C
 export function commerceUpdateIntentFact<Graph>(
   options: CommerceUpdateIntentOptions<Graph>,
 ): CommerceUpdateIntentFact {
-  // SPEC.md §10.4/§16.5: mutation update intent must mechanically cover every
+  // SPEC.md §10.4 and rules/v1-acceptance.md: mutation update intent must mechanically cover every
   // query consumer affected on the page instead of relying on duplicated test logic.
   const mutation = options.kovoExplain(options.graph, {
     kind: 'mutation',
@@ -240,7 +240,7 @@ export async function commerceHarnessQueryFact<Db>(
 export async function commerceMutationQueryAcceptanceFact<Db, Graph extends KovoGraphFixture>(
   options: CommerceMutationQueryAcceptanceOptions<Db, Graph>,
 ): Promise<CommerceMutationQueryAcceptanceFact> {
-  // SPEC.md §10.4/§11.2/§16.5: commerce mutation/query acceptance is proven
+  // SPEC.md §10.4/§11.2 and rules/v1-acceptance.md: commerce mutation/query acceptance is proven
   // through public graph explanations, harness verification, and fragment wire facts.
   const addToCartExplanation = options.kovoExplain(options.graph, {
     kind: 'mutation',

@@ -168,6 +168,10 @@ describe('@kovojs/test markdown fixture seam', () => {
           '1. **Legibility is load-bearing.**',
           '2. **Local code must not require global knowledge.**',
         ].join('\n'),
+        openDesignAreas: [
+          '# Open Design Areas',
+          '- [ ] **13.1 CSS.** details',
+        ].join('\n'),
         spec: [
           '## 2. The Constitution (Design Tests)',
           '| # | Test |',
@@ -178,8 +182,7 @@ describe('@kovojs/test markdown fixture seam', () => {
           '1. **Source-derived names.** Names remain derived.',
           '2. **One-to-one file mapping.** Files remain mapped.',
           '3. **Registry atomicity.** Pending.',
-          '## 13. Open Design Areas',
-          '**13.1 CSS:** details',
+          '4. **TSX-only authoring.** Source only.',
         ].join('\n'),
       }),
     ).toEqual({
@@ -207,7 +210,12 @@ describe('@kovojs/test markdown fixture seam', () => {
         href: '/_kovo/components/docs/doc-card.css',
       },
       handlerExports: ['DocCard$choose'],
-      hardRuleTitlesCovered: ['Source-derived names', '1:1 file mapping'],
+      hardRuleTitlesCovered: [
+        'Source-derived names',
+        '1:1 file mapping',
+        'Registry atomicity',
+        'TSX-only authoring',
+      ],
       renderEquivalenceAsserted: true,
     });
     expect(calls).toEqual(['compile:components/docs/doc-card.tsx:true', 'render:DocCard$choose']);
@@ -219,7 +227,7 @@ describe('@kovojs/test markdown fixture seam', () => {
         ledger: [
           '# v1 Acceptance',
           '## Required Gates',
-          '| SPEC §16 criterion | Status | Current evidence artifact |',
+          '| v1 acceptance criterion | Status | Current evidence artifact |',
           '| --- | --- | --- |',
           '| 16.1 Framework | passed | build output |',
           '| 16.2 Legibility | pending external study | study ledger |',
@@ -241,11 +249,14 @@ describe('@kovojs/test markdown fixture seam', () => {
           '| build | pending |',
           '| kovo-check | pending |',
         ].join('\n'),
-        spec: [
-          '# SPEC',
-          '## 16. Success Criteria (v1)',
-          '1. Framework holds: built.',
-          '2. Legibility holds: studied.',
+        rule: [
+          '# v1 Acceptance Rule',
+          '## Required Gates',
+          '| Criterion | Required evidence | Current evidence artifact |',
+          '| --- | --- | --- |',
+          '| 16.1 Framework | built | output |',
+          '| 16.2 Legibility | studied | ledger |',
+          '| Pre-launch | checked | checklist |',
         ].join('\n'),
       }),
     ).toMatchObject({
@@ -257,7 +268,7 @@ describe('@kovojs/test markdown fixture seam', () => {
       cleanCheckoutStatuses: ['pending', 'pending'],
       externalAuditPendingCount: 2,
       gateCriteria: ['16.1 Framework', '16.2 Legibility', 'Pre-launch'],
-      gateCriteriaMatchSpec: true,
+      gateCriteriaMatchRule: true,
       gateEvidenceArtifacts: {
         '16.1 Framework': 'build output',
         '16.2 Legibility': 'study ledger',
@@ -276,7 +287,7 @@ describe('@kovojs/test markdown fixture seam', () => {
         { command: 'pnpm run acceptance', commit: 'abc1234', result: 'passed' },
         { command: 'pnpm run acceptance', commit: 'TBD at freeze run', result: 'pending' },
       ],
-      specGateCriteria: ['16.1 Framework', '16.2 Legibility', 'Pre-launch'],
+      ruleGateCriteria: ['16.1 Framework', '16.2 Legibility', 'Pre-launch'],
     });
   });
 

@@ -53,15 +53,15 @@ export interface V1AcceptanceLedgerGateFact {
   cleanCheckoutStatuses: string[];
   externalAuditPendingCount: number;
   gateCriteria: string[];
-  gateCriteriaMatchSpec: boolean;
+  gateCriteriaMatchRule: boolean;
   gateEvidenceArtifacts: Record<string, string | undefined>;
   gateStatuses: Record<string, string | undefined>;
   localAcceptanceAuditPending: boolean;
   localAcceptanceAuditRunCount: number;
   passedAcceptanceRunCount: number;
   pendingFreezeRunCount: number;
+  ruleGateCriteria: string[];
   runFacts: AcceptanceLedgerRunFact[];
-  specGateCriteria: string[];
 }
 
 export interface LegibilityStudyGateFact {
@@ -165,7 +165,11 @@ export function markdownCanonicalSpecRuleTitles(titles: readonly string[]): stri
 export function markdownBoldSectionHeadings(source: string): MarkdownBoldSectionHeading[] {
   return source
     .split('\n')
-    .map((line) => /^\s*\*\*(\d+(?:\.\d+)*)\s+(.+?)[.:]\*\*(?:\s+.*)?$/.exec(line))
+    .map((line) =>
+      /^\s*(?:-\s+\[[ x]\]\s+)?\*\*(\d+(?:\.\d+)*)\s+(.+?)[.:]\*\*(?:\s+.*)?$/.exec(
+        line,
+      ),
+    )
     .filter((match): match is RegExpExecArray => match !== null)
     .map((match) => ({
       number: match[1] ?? '',
@@ -257,6 +261,7 @@ export function normativeDocsGateFact<T extends NormativeDocsCompileResult>(opti
   compileComponentModule: (input: { fileName: string; source: string }) => T;
   compilerRules: string;
   constitution: string;
+  openDesignAreas: string;
   spec: string;
 }): NormativeDocsGateFact {
   const constitutionRows = markdownTableRows(
@@ -270,7 +275,7 @@ export function normativeDocsGateFact<T extends NormativeDocsCompileResult>(opti
   );
   const compilerRuleItems = markdownNumberedListItems(options.compilerRules);
   const cssContractHeadings = markdownBoldSectionHeadings(
-    markdownSection(options.spec, '13. Open Design Areas'),
+    markdownSection(options.openDesignAreas, 'Open Design Areas'),
   );
   const behaviorFixture = options.compileComponentModule({
     fileName: 'components/docs/doc-card.tsx',
@@ -305,9 +310,7 @@ export const DocCard = component({
       href: cssManifest.stylesheets[0]?.href,
     },
     handlerExports: behaviorFixture.handlerExports,
-    hardRuleTitlesCovered: markdownCanonicalSpecRuleTitles(specHardRuleTitles).filter(
-      (title) => title !== 'Registry atomicity',
-    ),
+    hardRuleTitlesCovered: markdownCanonicalSpecRuleTitles(specHardRuleTitles),
     constitutionTableNumbers: constitutionRows.map((row) => row['#'] ?? ''),
     renderEquivalenceAsserted: true,
   };
@@ -315,14 +318,12 @@ export const DocCard = component({
 
 export function v1AcceptanceLedgerGateFact(options: {
   ledger: string;
-  spec: string;
+  rule: string;
 }): V1AcceptanceLedgerGateFact {
-  const specCriteria = markdownNumberedListItems(
-    markdownSection(options.spec, '16. Success Criteria (v1)'),
-  ).map((item) => item.split(':')[0] ?? '');
+  const ruleRows = markdownTableRows(markdownSection(options.rule, 'Required Gates'));
   const gateRows = markdownTableRows(markdownSection(options.ledger, 'Required Gates'));
   const gatesByCriterion = new Map(
-    gateRows.map((row) => [markdownRequiredTableCell(row, 'SPEC §16 criterion'), row]),
+    gateRows.map((row) => [markdownRequiredTableCell(row, 'v1 acceptance criterion'), row]),
   );
   const auditRows = markdownTableRows(markdownSection(options.ledger, 'Dated Ledger Audit'));
   const acceptanceRunRows = markdownTableRows(
@@ -337,9 +338,7 @@ export function v1AcceptanceLedgerGateFact(options: {
       markdownRequiredTableCell(row, 'Status'),
     ]),
   );
-  const specGateCriteria = specCriteria
-    .map((criterion, index) => `16.${index + 1} ${criterion.replace(/ holds$/, '')}`)
-    .concat('Pre-launch');
+  const ruleGateCriteria = ruleRows.map((row) => markdownRequiredTableCell(row, 'Criterion'));
   const gateCriteria = [...gatesByCriterion.keys()];
 
   return {
@@ -350,9 +349,9 @@ export function v1AcceptanceLedgerGateFact(options: {
       markdownRequiredTableCell(row, 'Status').startsWith('pending'),
     ).length,
     gateCriteria,
-    gateCriteriaMatchSpec:
-      gateCriteria.length === specGateCriteria.length &&
-      gateCriteria.every((criterion, index) => criterion === specGateCriteria[index]),
+    gateCriteriaMatchRule:
+      gateCriteria.length === ruleGateCriteria.length &&
+      gateCriteria.every((criterion, index) => criterion === ruleGateCriteria[index]),
     gateEvidenceArtifacts: Object.fromEntries(
       [...gatesByCriterion].map(([criterion, row]) => [
         criterion,
@@ -378,12 +377,12 @@ export function v1AcceptanceLedgerGateFact(options: {
         markdownRequiredTableCell(row, 'Result') === 'pending' &&
         markdownRequiredTableCell(row, 'Commit') === 'TBD at freeze run',
     ).length,
+    ruleGateCriteria,
     runFacts: acceptanceRunRows.map((row) => ({
       command: markdownRequiredTableCell(row, 'Command'),
       commit: markdownRequiredTableCell(row, 'Commit'),
       result: markdownRequiredTableCell(row, 'Result'),
     })),
-    specGateCriteria,
   };
 }
 

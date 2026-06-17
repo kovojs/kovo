@@ -13,9 +13,10 @@ One organizing constraint governs everything: every artifact the system produces
 | Document                                                     | Role                                                               |
 | ------------------------------------------------------------ | ------------------------------------------------------------------ |
 | [`SPEC.md`](SPEC.md)                                         | The normative source of truth for framework behavior               |
+| [`rules/`](rules)                                            | Standing agent, release, and conformance rules                     |
 | [`plans/archive.md`](plans/archive.md)                       | Completed and retired implementation plan registry                 |
-| [`docs/constitution.md`](docs/constitution.md)               | The five design tests every feature must pass (summary of SPEC §2) |
-| [`docs/compiler-hard-rules.md`](docs/compiler-hard-rules.md) | Compiler release gates (summary of SPEC §5.2)                      |
+| [`rules/constitution.md`](rules/constitution.md)             | The five design tests every feature must pass (summary of SPEC §2) |
+| [`rules/compiler-hard-rules.md`](rules/compiler-hard-rules.md) | Compiler release gates (summary of SPEC §5.2)                      |
 | [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md)          | Instructions for coding agents working in this repo                |
 
 ## Prior art
@@ -45,9 +46,10 @@ What it deliberately rejects (client routers, hydration, shadow DOM, custom elem
 | `packages/cli`         | The `kovo` command-line surface                         |
 | `packages/test`        | `kovoTest` harness                                      |
 | `packages/create-kovo` | Starter-template scaffolder                             |
-| `examples/commerce`    | The reference commerce app (SPEC §16 acceptance target) |
+| `examples/commerce`    | The reference commerce app (`rules/v1-acceptance.md` target) |
 | `conformance/`         | Pinned Drizzle-surface conformance suite                |
-| `docs/`                | Repo-facing summaries, studies, and checklists          |
+| `docs/`                | Explanation, studies, evidence, and examples            |
+| `rules/`               | Standing agent, release, and conformance rules          |
 
 ## Development
 
@@ -79,4 +81,4 @@ The repo has five test mechanisms:
 
 ## Name
 
-"Kovo" — short, pronounceable, no known collisions in the framework space. Launch-readiness checks (trademark, domain, npm scope) are tracked in [`docs/prelaunch-checklist.md`](docs/prelaunch-checklist.md).
+"Kovo" — short, pronounceable, no known collisions in the framework space. Launch-readiness checks (trademark, domain, npm scope) are tracked in [`rules/prelaunch-checklist.md`](rules/prelaunch-checklist.md).

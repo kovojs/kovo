@@ -12,7 +12,7 @@ import {
 import { kovoCheck, kovoExplain } from 'kovo';
 import { describe, expect, it } from 'vitest';
 
-// SPEC.md §10.4/§10.5/§10.6/§16.5: the CRM graph is the mechanical proof of the
+// SPEC.md §10.4/§10.5/§10.6 and rules/v1-acceptance.md: the CRM graph is the mechanical proof of the
 // optimism MIX. `kovo check` must be OK (zero unhandled KV310 — every invalidated
 // pair carries an explicit status). `kovo explain --optimistic` must show, per
 // mutation, the partition of `derived` / `hand-written` / `await-fragment` pairs

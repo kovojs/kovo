@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { soGraph } from './app.js';
 
-// SPEC.md §10.4/§10.5/§16.5: the static graph proves every (mutation × invalidated
+// SPEC.md §10.4/§10.5 and rules/v1-acceptance.md: the static graph proves every (mutation × invalidated
 // query) pair is compiler-DERIVED. `kovo check` is OK (zero KV310 — no invalidated
 // query lacks an optimistic transform), and `kovo explain` reports `derived`
 // statuses with zero PUNTED / zero UNHANDLED for each mutation.

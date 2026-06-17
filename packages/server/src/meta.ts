@@ -66,7 +66,7 @@ export function metaFromQuery<
 /**
  * Declare a typed message catalog for one locale. Look messages up with `t`,
  * which type-checks keys against this catalog. i18n stays server-rendered
- * (SPEC §13.5).
+ * (plans/open-design-areas.md).
  *
  * @param locale - The catalog's locale tag (e.g. `'en'`).
  * @param messages - A map of message keys to template strings (`{name}` placeholders).
@@ -86,7 +86,7 @@ export function i18n<const Messages extends Record<string, string>>(
 
 /**
  * Resolve a message from an i18n catalog, substituting `{name}` placeholders.
- * The `key` is type-checked against the catalog's messages (SPEC §13.5).
+ * The `key` is type-checked against the catalog's messages (plans/open-design-areas.md).
  *
  * @param catalog - The catalog to read from.
  * @param key - A message key present in the catalog.
@@ -100,7 +100,7 @@ export function t<
   const message = catalog.messages[key];
   if (message === undefined) throw new Error(`Missing i18n message: ${key}`);
 
-  // SPEC.md §13.5 keeps i18n server-rendered and legible; substitutions stay string-only here.
+  // plans/open-design-areas.md keeps i18n server-rendered and legible; substitutions stay string-only here.
   return message.replace(/\{(?<name>[A-Za-z0-9_]+)\}/g, (match, name: string) =>
     Object.hasOwn(values, name) ? String(values[name]) : match,
   );

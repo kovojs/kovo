@@ -1,6 +1,6 @@
 # Kovo Constitution
 
-`SPEC.md` is the source of truth for framework behavior. This page is the repo-facing normative summary of SPEC section 2.
+`SPEC.md` is the source of truth for framework behavior. This page is the standing rule summary of SPEC section 2.
 
 Every shipped feature must satisfy these design tests:
 

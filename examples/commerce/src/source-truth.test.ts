@@ -387,7 +387,7 @@ describe('commerce source-truth graph acceptance', () => {
       graph: commerceGraph,
     });
 
-    // SPEC.md §10.4/§16.5: every mutation/query cell either has an explicit
+    // SPEC.md §10.4 and rules/v1-acceptance.md: every mutation/query cell either has an explicit
     // optimistic status or is proven not to be invalidated by that mutation.
     expect(fact.matrix.staticInvalidationMismatches).toEqual([]);
     expect(fact.matrix.unhandledMutations).toEqual([]);
