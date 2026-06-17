@@ -183,6 +183,7 @@ function isRouteDeclarations(value: unknown): value is KovoApp['routes'] {
       (route) =>
         isRecord(route) &&
         typeof route.path === 'string' &&
+        (route.boundaries === undefined || isRouteBoundaries(route.boundaries)) &&
         isOptionalFunction(route.guard) &&
         isOptionalFunction(route.onUnauthenticated) &&
         isOptionalFunction(route.page) &&
@@ -192,6 +193,15 @@ function isRouteDeclarations(value: unknown): value is KovoApp['routes'] {
           (Array.isArray(route.staticPaths) &&
             route.staticPaths.every((path) => typeof path === 'string'))),
     )
+  );
+}
+
+function isRouteBoundaries(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isOptionalFunction(value.error) &&
+    isOptionalFunction(value.notFound) &&
+    isOptionalFunction(value.unauthorized)
   );
 }
 

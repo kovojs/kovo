@@ -1,7 +1,12 @@
 import { reportServerError } from './diagnostics.js';
 import { renderErrorDocument, renderRouteDocumentResponse } from './document-core.js';
 import { routeResponseToDocumentResponse, type RoutePageResponse } from './response.js';
-import { renderRoutePageResponse, type RouteDeclaration, type RouteRequestInput } from './route.js';
+import {
+  renderRoutePageResponse,
+  routeHasBoundary,
+  type RouteDeclaration,
+  type RouteRequestInput,
+} from './route.js';
 import type { KovoApp } from './app-types.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
@@ -49,11 +54,11 @@ export async function renderAppRouteDocumentResponse({
     },
   );
 
-  if (routeResponse.status === 404) {
+  if (routeResponse.status === 404 && !routeHasBoundary(route, 'notFound')) {
     return renderAppErrorDocumentResponse(app, request, 404);
   }
 
-  if (routeResponse.status === 500) {
+  if (routeResponse.status === 500 && !routeHasBoundary(route, 'error')) {
     return renderAppErrorDocumentResponse(app, request, 500);
   }
 

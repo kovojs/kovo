@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.js';
 import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from './app-document.js';
 import { guards } from './guards.js';
-import { notFound, route } from './route.js';
+import { layout, notFound, route } from './route.js';
 
 describe('server app document boundary', () => {
   it('assembles matched route documents through app render options', async () => {
@@ -170,5 +170,69 @@ describe('server app document boundary', () => {
     expect(response.status).toBe(403);
     expect(response.body).toContain('configured:403');
     expect(response.body).not.toContain('data-secret');
+  });
+
+  it('lets layout boundaries override configured 404 and 403 app shells', async () => {
+    const NotFoundLayout = layout({
+      boundaries: {
+        notFound: ({ status }) => `<main data-layout-boundary="404">layout:${status}</main>`,
+      },
+      render: (_queries, _state, { children }) => `<section>${children}</section>`,
+    });
+    const AdminLayout = layout<Request & { session?: { user?: { roles?: readonly string[] } } }>({
+      boundaries: {
+        unauthorized: ({ status }) => `<main data-layout-boundary="403">layout:${status}</main>`,
+      },
+      guard: guards.role<Request & { session?: { user?: { roles?: readonly string[] } } }>(
+        'admin',
+      ),
+      render: (_queries, _state, { children }) => `<section>${children}</section>`,
+    });
+    const missingRoute = route('/admin/missing', {
+      layout: NotFoundLayout,
+      page: () => notFound(),
+    });
+    const forbiddenRoute = route('/admin', {
+      layout: AdminLayout,
+      page: () => '<main data-secret>Admin</main>',
+    });
+    const app = createApp({
+      errorShells: {
+        forbidden: ({ status }) => ({
+          body: `<main data-app-shell="403">app:${status}</main>`,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          status,
+        }),
+        notFound: ({ status }) => ({
+          body: `<main data-app-shell="404">app:${status}</main>`,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          status,
+        }),
+      },
+      routes: [missingRoute, forbiddenRoute],
+      sessionProvider: () => ({ user: { roles: ['staff'] } }),
+    });
+
+    const missingResponse = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://shop.example.test/admin/missing'),
+      route: missingRoute,
+      url: new URL('https://shop.example.test/admin/missing'),
+    });
+    const forbiddenResponse = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://shop.example.test/admin'),
+      route: forbiddenRoute,
+      url: new URL('https://shop.example.test/admin'),
+    });
+
+    expect(missingResponse.status).toBe(404);
+    expect(missingResponse.body).toContain('data-layout-boundary="404"');
+    expect(missingResponse.body).not.toContain('data-app-shell');
+    expect(forbiddenResponse.status).toBe(403);
+    expect(forbiddenResponse.body).toContain('data-layout-boundary="403"');
+    expect(forbiddenResponse.body).not.toContain('data-app-shell');
   });
 });

@@ -23,6 +23,9 @@ export type {
   LayoutFactory,
   LayoutQueryResults,
   LayoutRenderSlots,
+  RouteBoundaries,
+  RouteBoundaryContext,
+  RouteBoundaryRenderer,
   RouteDeclaration,
   RouteDefinition,
 } from '../../route.js';

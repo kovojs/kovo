@@ -233,12 +233,17 @@ item inherits from rather than re-deciding it:
       packages/compiler/src/registry.test.ts packages/core/src/graph.test.ts`
       passes with fixtures for graph-threaded layout facts, in-process page
       explain output, and CLI `page --layouts` parsing.
+    - Layout/route segment boundaries now support `boundaries.notFound`,
+      `boundaries.unauthorized`, and `boundaries.error`; `pnpm exec vitest
+      --run packages/server/src/route-jsx.test.tsx packages/server/src/app-document.test.ts
+      packages/server/src/route.test.ts packages/server/src/route-query-guards.test.ts
+      packages/server/src/app.test.ts` passes with fixtures proving nearest
+      segment boundary selection and override of app-level 404/403 shells.
     - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
   - Remaining gaps:
     - Compiler route lowering does not yet derive navigation segment metadata.
-    - Layout query live-target refresh and per-segment boundaries are not
-      implemented yet.
+    - Layout query live-target refresh is not implemented yet.
 
 - [ ] **4. Replace string shell helpers with layouts + `documentTemplate`.**
   - Framework direction: convert document-level shells to

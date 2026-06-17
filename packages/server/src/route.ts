@@ -60,12 +60,32 @@ export interface LayoutRenderSlots<Request> {
   request: Request;
 }
 
+/** Context passed to route/layout segment boundary renderers. */
+export interface RouteBoundaryContext<Request> {
+  error?: unknown;
+  request: Request;
+  status: 403 | 404 | 500;
+}
+
+/** Render a route/layout segment boundary for expected route failures or errors. */
+export type RouteBoundaryRenderer<Request, Page = unknown> = (
+  context: RouteBoundaryContext<Request>,
+) => Page | Promise<Page>;
+
+/** Per-segment boundaries that override app-level error shells for matching route failures. */
+export interface RouteBoundaries<Request = unknown, Page = unknown> {
+  error?: RouteBoundaryRenderer<Request, Page>;
+  notFound?: RouteBoundaryRenderer<Request, Page>;
+  unauthorized?: RouteBoundaryRenderer<Request, Page>;
+}
+
 /** The body passed to `layout()`: optional parent, guard, queries, and chrome render function. */
 export interface LayoutDefinition<
   Request = unknown,
   Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
   Page = unknown,
 > extends PageHintOptions {
+  boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request>;
   parent?: LayoutDeclaration<Request, LayoutQueryMap<Request>, unknown>;
   queries?: Queries;
@@ -113,6 +133,7 @@ export interface RouteDefinition<
   Page = unknown,
   GuardedRequest extends Request = Request,
 > extends PageHintOptions {
+  boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request, GuardedRequest>;
   layout?: LayoutDeclaration<any, LayoutQueryMap<any>, unknown>;
   onUnauthenticated?: UnauthenticatedHandler<Request>;
@@ -261,25 +282,80 @@ export async function runRoutePage<
   request: Request,
   options: RequestLifecycleOptions<Request> = {},
 ): Promise<RoutePageResult<Page>> {
+  const result = await runRoutePageInternal(definition, input, request, options);
+  if (result.ok) return result;
+  return stripRouteBoundaryFailure(result);
+}
+
+async function runRoutePageInternal<
+  const Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>>,
+  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  Request,
+  Page,
+  GuardedRequest extends Request = Request,
+>(
+  definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
+  input: RouteRequestInput,
+  request: Request,
+  options: RequestLifecycleOptions<Request> = {},
+): Promise<RoutePageInternalResult<Page>> {
   const routeRequest = parseRouteRequest(definition, input);
 
   const lifecycleRequest = await resolveLifecycleRequest(request, options);
   const layouts = routeLayoutChain(definition.layout);
 
-  for (const layoutDeclaration of layouts) {
+  for (let index = 0; index < layouts.length; index += 1) {
+    const layoutDeclaration = layouts[index];
+    if (!layoutDeclaration) continue;
     const guardFailure = await runGuard(layoutDeclaration.guard, lifecycleRequest);
-    if (guardFailure) return routeGuardFailure(guardFailure);
+    if (guardFailure) {
+      return withRouteBoundaryFailure(
+        routeGuardFailure(guardFailure),
+        routeBoundaryFor('unauthorized', undefined, layouts.slice(0, index + 1)),
+      );
+    }
   }
 
   const guardFailure = await runGuard(definition.guard, lifecycleRequest);
-  if (guardFailure) return routeGuardFailure(guardFailure);
+  if (guardFailure) {
+    return withRouteBoundaryFailure(
+      routeGuardFailure(guardFailure),
+      routeBoundaryFor('unauthorized', definition, layouts),
+    );
+  }
 
-  const value = await runWithJsxRequestContext(lifecycleRequest, async () => {
-    const pageValue = await definition.page?.(routeRequest, lifecycleRequest as GuardedRequest);
-    if (isNotFound(pageValue) || isRouteResponseOutcome(pageValue)) return pageValue;
-    return renderLayoutChain(layouts, pageValue, lifecycleRequest);
-  });
-  if (isNotFound(value)) return { ok: false, status: 404 };
+  let value: unknown;
+  try {
+    value = await runWithJsxRequestContext(lifecycleRequest, async () => {
+      let pageValue: unknown;
+      try {
+        pageValue = await definition.page?.(routeRequest, lifecycleRequest as GuardedRequest);
+      } catch (error) {
+        throw new RouteBoundaryRenderError(error, routeBoundaryFor('error', definition, layouts));
+      }
+      if (isNotFound(pageValue) || isRouteResponseOutcome(pageValue)) return pageValue;
+      return renderLayoutChain(layouts, pageValue, lifecycleRequest);
+    });
+  } catch (error) {
+    if (error instanceof RouteBoundaryRenderError && error.boundary) {
+      return {
+        boundary: error.boundary,
+        error: { code: 'RENDER_ERROR', payload: {} },
+        ok: false,
+        status: 500,
+        thrown: error.thrown,
+      };
+    }
+    throw error instanceof RouteBoundaryRenderError ? error.thrown : error;
+  }
+
+  if (isNotFound(value)) {
+    return withRouteBoundaryFailure(
+      { ok: false, status: 404 },
+      routeBoundaryFor('notFound', definition, layouts),
+    );
+  }
   if (isRouteResponseOutcome(value)) return { ok: true, outcome: value };
   return { ok: true, value: value as Page };
 }
@@ -319,13 +395,22 @@ async function renderLayoutChain<Request>(
   request: Request,
 ): Promise<unknown> {
   let value = pageValue;
-  for (const layoutDeclaration of [...layouts].reverse()) {
+  for (let index = layouts.length - 1; index >= 0; index -= 1) {
+    const layoutDeclaration = layouts[index];
+    if (!layoutDeclaration) continue;
     if (!layoutDeclaration.render) continue;
-    const queries = await loadLayoutQueries(layoutDeclaration, request);
-    value = await layoutDeclaration.render(queries, undefined, {
-      children: value,
-      request,
-    });
+    try {
+      const queries = await loadLayoutQueries(layoutDeclaration, request);
+      value = await layoutDeclaration.render(queries, undefined, {
+        children: value,
+        request,
+      });
+    } catch (error) {
+      throw new RouteBoundaryRenderError(
+        error,
+        routeBoundaryFor('error', undefined, layouts.slice(0, index + 1)),
+      );
+    }
   }
   return value;
 }
@@ -364,12 +449,75 @@ export interface RoutePageOutcomeSuccess {
 export interface RoutePageFailure {
   auth?: ResolvedGuardFailure['auth'];
   error?: {
-    code: 'RATE_LIMITED' | 'UNAUTHORIZED';
+    code: 'RATE_LIMITED' | 'RENDER_ERROR' | 'UNAUTHORIZED';
     payload: Record<string, unknown>;
   };
   ok: false;
   retryAfter?: number;
-  status: 404 | 422 | 429;
+  status: 404 | 422 | 429 | 500;
+}
+
+type RouteBoundaryKind = keyof RouteBoundaries<any, any>;
+
+interface ResolvedRouteBoundary {
+  kind: RouteBoundaryKind;
+  render: RouteBoundaryRenderer<any, any>;
+}
+
+type RoutePageInternalResult<Page> = RoutePageSuccess<Page> | RoutePageInternalFailure;
+
+interface RoutePageInternalFailure extends RoutePageFailure {
+  boundary?: ResolvedRouteBoundary;
+  thrown?: unknown;
+}
+
+class RouteBoundaryRenderError extends Error {
+  constructor(
+    readonly thrown: unknown,
+    readonly boundary: ResolvedRouteBoundary | undefined,
+  ) {
+    super('Route boundary render error');
+  }
+}
+
+function stripRouteBoundaryFailure(failure: RoutePageInternalFailure): RoutePageFailure {
+  const { boundary: _boundary, thrown: _thrown, ...publicFailure } = failure;
+  return publicFailure;
+}
+
+function withRouteBoundaryFailure(
+  failure: RoutePageFailure,
+  boundary: ResolvedRouteBoundary | undefined,
+): RoutePageInternalFailure {
+  return {
+    ...failure,
+    ...(boundary === undefined ? {} : { boundary }),
+  };
+}
+
+function routeBoundaryFor<Request, Page>(
+  kind: RouteBoundaryKind,
+  routeDefinition:
+    | RouteDeclaration<any, any, any, Request, Page, any>
+    | undefined,
+  layouts: readonly LayoutDeclaration<any, LayoutQueryMap<any>, unknown>[],
+): ResolvedRouteBoundary | undefined {
+  const routeBoundary = routeDefinition?.boundaries?.[kind];
+  if (routeBoundary) return { kind, render: routeBoundary };
+
+  for (let index = layouts.length - 1; index >= 0; index -= 1) {
+    const layoutBoundary = layouts[index]?.boundaries?.[kind];
+    if (layoutBoundary) return { kind, render: layoutBoundary };
+  }
+
+  return undefined;
+}
+
+export function routeHasBoundary(
+  definition: RouteDeclaration<any, any, any, any, any, any>,
+  kind: RouteBoundaryKind,
+): boolean {
+  return routeBoundaryFor(kind, definition, routeLayoutChain(definition.layout)) !== undefined;
 }
 
 /**
@@ -407,11 +555,11 @@ export async function renderRoutePageResponse<
   render: (value: Page) => string | Promise<string> = (value) => String(value ?? ''),
   options: GuardFailureResponseOptions<Request> = {},
 ): Promise<RoutePageResponse> {
-  let result: RoutePageResult<Page>;
+  let result: RoutePageInternalResult<Page>;
   let lifecycleRequest: Request = request;
   try {
     lifecycleRequest = await resolveLifecycleRequest(request, options);
-    result = await runRoutePage(definition, input, lifecycleRequest);
+    result = await runRoutePageInternal(definition, input, lifecycleRequest);
   } catch (error) {
     reportServerError(options.onError, error, {
       operation: 'route-page',
@@ -422,11 +570,29 @@ export async function renderRoutePageResponse<
   }
 
   if (!result.ok) {
+    if (result.boundary && (result.status === 404 || result.status === 500)) {
+      if (result.status === 500) {
+        reportServerError(options.onError, result.thrown, {
+          operation: 'route-page',
+          request: lifecycleRequest,
+          routePath: definition.path,
+        });
+      }
+      return renderRouteBoundaryResponse(result.boundary, result.status, lifecycleRequest, render, {
+        ...(result.thrown === undefined ? {} : { error: result.thrown }),
+      });
+    }
+
     const onUnauthenticated = definition.onUnauthenticated ?? options.onUnauthenticated;
+    const unauthorizedBoundary = result.boundary;
+    const renderForbidden = unauthorizedBoundary
+      ? async () => renderRouteBoundaryBody(unauthorizedBoundary, 403, lifecycleRequest, render, {})
+      : options.renderForbidden;
     const authResponse = await renderHttpGuardFailureResponse(result, lifecycleRequest, {
       ...options,
       currentUrl: options.currentUrl ?? routeCurrentUrl(definition, input),
       ...(onUnauthenticated === undefined ? {} : { onUnauthenticated }),
+      ...(renderForbidden === undefined ? {} : { renderForbidden }),
     });
     if (authResponse) return authResponse;
 
@@ -461,6 +627,35 @@ export async function renderRoutePageResponse<
     });
     return htmlServerErrorResponse();
   }
+}
+
+async function renderRouteBoundaryResponse<Page, Request>(
+  boundary: ResolvedRouteBoundary,
+  status: 403 | 404 | 500,
+  request: Request,
+  render: (value: Page) => string | Promise<string>,
+  options: { error?: unknown },
+): Promise<RoutePageResponse> {
+  return {
+    body: await renderRouteBoundaryBody(boundary, status, request, render, options),
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    status,
+  };
+}
+
+async function renderRouteBoundaryBody<Page, Request>(
+  boundary: ResolvedRouteBoundary,
+  status: 403 | 404 | 500,
+  request: Request,
+  render: (value: Page) => string | Promise<string>,
+  options: { error?: unknown },
+): Promise<string> {
+  const value = await boundary.render({
+    ...(options.error === undefined ? {} : { error: options.error }),
+    request,
+    status,
+  });
+  return render(value as Page);
 }
 
 function routeCurrentUrl<
