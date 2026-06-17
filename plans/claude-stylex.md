@@ -791,6 +791,14 @@ borrowing its concrete API/spike detail.
     @kovojs/site run build` reaches Vite CSS output (`dist-css/assets/site.css`) but stops on the
     existing static-export diagnostic `KV229 route=/deals/:id`; `pnpm --filter @kovojs/site test`
     stops in the existing API-ref expectation drift for the newly public `style.md` page.
+  - Evidence (partial, 2026-06-17): integration late-fragment CSS coverage no longer depends on
+    Tailwind: `tests/integration/fixtures/late-fragment-static-css` uses a checked-in static
+    `/assets/fragment.css`, `tests/integration/package.json` and `pnpm-lock.yaml` drop
+    `@tailwindcss/node`/`tailwindcss` from the integration importer, and `rg -n -i
+    "tailwind|@tailwind|@source|tailwindcss|@tailwindcss" tests/integration` returns no matches.
+    `pnpm --filter @kovojs/integration-tests exec playwright test`, `pnpm --filter
+    @kovojs/integration-tests exec playwright test --list`, `pnpm exec tsc --noEmit --pretty false`,
+    and `git diff --check` pass.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L
