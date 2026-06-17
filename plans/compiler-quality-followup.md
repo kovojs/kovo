@@ -135,7 +135,20 @@ compiler-quality gaps found during the 2026-06-16 audit.
 - [ ] Complete the security payload matrix.
   - [ ] Add server-render and client-update agreement tests for text payloads containing `<`, `>`,
         `&`, and quotes.
-  - [ ] Add title and ARIA attribute payload tests.
+    - Evidence (partial, 2026-06-16): `packages/compiler/src/output-context-payloads.test.ts`
+      snapshots initial server text escaping through `escapeText(...)` and client query text
+      updates through `textContent` for payloads containing `<`, `>`, `&`, double quotes, and
+      single quotes; keep this row open until one fixture proves the browser-observed
+      server-rendered text and the client-updated text agree for the same payload.
+    - Evidence (2026-06-16): `pnpm exec vitest --run
+      packages/compiler/src/output-context-payloads.test.ts` passes.
+  - [x] Add title and ARIA attribute payload tests.
+    - Evidence (2026-06-16): `packages/compiler/src/output-context-payloads.test.ts`
+      snapshots compiler-generated `title`, `aria-label`, and `aria-description` derive stamps,
+      emitted client update plans, and runtime `setAttribute` results for payloads containing
+      `<`, `>`, `&`, double quotes, and single quotes.
+    - Evidence (2026-06-16): `pnpm exec vitest --run
+      packages/compiler/src/output-context-payloads.test.ts` passes.
   - [ ] Add literal `href` tests for internal routes, explicit external URLs, and unsafe schemes.
   - [ ] Add dynamic URL update tests for safe routes and unsafe schemes.
   - [ ] Add style-property tests for allowed generated properties and rejected arbitrary dynamic CSS.
