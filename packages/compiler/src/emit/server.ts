@@ -84,14 +84,17 @@ export function semanticRenderEquivalenceCheck(
   const actualSource = emittedServerRenderSource(executableSource);
   const actualModel = parseComponentModule(artifact, actualSource);
   const actual = semanticRenderModel(actualModel);
+  const normalizedExpected = normalizeSemanticHtmlForComparison(expected);
+  const normalizedActual = normalizeSemanticHtmlForComparison(actual);
+  const ok = normalizedActual === normalizedExpected;
 
   return {
-    actual,
+    actual: ok ? normalizedActual : actual,
     artifact,
     detail:
       'SPEC §5.2 semantic render differential: render(src) differed from render(compile(src)).',
-    expected,
-    ok: actual === expected,
+    expected: ok ? normalizedExpected : expected,
+    ok,
   };
 }
 
@@ -102,6 +105,64 @@ function emittedServerRenderSource(serverSource: string): string {
   } catch {
     return '';
   }
+}
+
+function normalizeSemanticHtmlForComparison(html: string): string {
+  return html.replace(/<[^>]*>/g, (tag) => normalizeSemanticTagForComparison(tag));
+}
+
+function normalizeSemanticTagForComparison(tag: string): string {
+  if (!tag.startsWith('<') || !tag.endsWith('>')) return tag;
+  const body = tag.slice(1, -1);
+  if (body.startsWith('/') || body.startsWith('!') || body.trim() === '') return tag;
+
+  const match = /^([^\s/>]+)([\s\S]*)$/.exec(body);
+  if (!match) return tag;
+
+  const [, name, rest = ''] = match;
+  const attributes = splitSemanticTagAttributes(rest.trim());
+  if (attributes.length <= 1) return tag;
+
+  const sorted = [...attributes].sort((left, right) => {
+    const nameOrder = semanticAttributeName(left).localeCompare(semanticAttributeName(right));
+    return nameOrder === 0 ? left.localeCompare(right) : nameOrder;
+  });
+  return `<${name} ${sorted.join(' ')}>`;
+}
+
+function splitSemanticTagAttributes(source: string): string[] {
+  if (source === '') return [];
+
+  const attributes: string[] = [];
+  let start = 0;
+  let quote: '"' | "'" | null = null;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === undefined) continue;
+    if (quote) {
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      const attribute = source.slice(start, index).trim();
+      if (attribute) attributes.push(attribute);
+      start = index + 1;
+    }
+  }
+
+  const tail = source.slice(start).trim();
+  if (tail) attributes.push(tail);
+  return attributes;
+}
+
+function semanticAttributeName(attribute: string): string {
+  const equalsIndex = attribute.indexOf('=');
+  return equalsIndex === -1 ? attribute : attribute.slice(0, equalsIndex);
 }
 
 const voidElements = new Set([
@@ -184,7 +245,8 @@ function renderSemanticAttributes(
       continue;
     }
     if (formMutation?.generatedAttributeNames.has(attribute.name)) {
-      if (attribute.name === 'mutation') semanticAttributes.push(...formMutation.semanticAttributes);
+      if (attribute.name === 'mutation')
+        semanticAttributes.push(...formMutation.semanticAttributes);
       continue;
     }
     const rendered =
@@ -220,17 +282,22 @@ function semanticPrimitiveChild(
   element: JsxElementModel,
 ): { child: JsxElementModel; forcedAttributes: string } | null {
   if (!element.attributes.some((attribute) => attribute.name === 'asChild')) return null;
-  const attrs = element.attributes.find((attribute) => attribute.name === 'attrs')
-    ?.expressionObjectEntries;
+  const attrs = element.attributes.find(
+    (attribute) => attribute.name === 'attrs',
+  )?.expressionObjectEntries;
   if (!attrs) return null;
   const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
   if (!primitiveAttributes) return null;
   const [child] = directChildElements(model, element);
   if (!child) return null;
-  const merge = mergePrimitiveAndAuthorAttributes(primitiveAttributes, authorJsxAttributes(child.attributes), {
-    fileName: 'semantic-render',
-    source: '',
-  });
+  const merge = mergePrimitiveAndAuthorAttributes(
+    primitiveAttributes,
+    authorJsxAttributes(child.attributes),
+    {
+      fileName: 'semantic-render',
+      source: '',
+    },
+  );
   const forcedAttributes = renderMergedAttributes(merge.attributes);
   return { child, forcedAttributes: forcedAttributes ? ` ${forcedAttributes}` : '' };
 }
@@ -254,8 +321,9 @@ function semanticStaticObjectAttribute(
   element: JsxElementModel,
   name: string,
 ): Record<string, string | number | boolean | null> | null {
-  const value = element.attributes.find((attribute) => attribute.name === name)
-    ?.expressionStaticValue;
+  const value = element.attributes.find(
+    (attribute) => attribute.name === name,
+  )?.expressionStaticValue;
   if (!value || typeof value !== 'object') return null;
   return Object.fromEntries(
     Object.entries(value).filter((entry): entry is [string, string | number | boolean | null] => {
@@ -471,7 +539,8 @@ function serverRenderPatches(
     stampWrites.push(...hostStamps.writes);
     patches.push(...renderHostStampPatches(hostElement, hostStamps.writes));
     outputContexts.push(...renderHostStampOutputContexts(hostStamps.writes));
-    if (options) diagnostics.push(...renderHostStampConflictDiagnostics(hostStamps.conflicts, options));
+    if (options)
+      diagnostics.push(...renderHostStampConflictDiagnostics(hostStamps.conflicts, options));
   }
 
   return { diagnostics, outputContexts, replacements: patches, stampWrites };
@@ -631,7 +700,9 @@ function repeatableMutationFormDiagnostic(
 
   const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
   if (!mutationAttribute?.expressionBareIdentifierName) return null;
-  if (!localMutationKey(model, mutationAttribute.expressionBareIdentifierName, options.registryFacts)) {
+  if (
+    !localMutationKey(model, mutationAttribute.expressionBareIdentifierName, options.registryFacts)
+  ) {
     return null;
   }
 
@@ -647,9 +718,7 @@ function repeatableMutationFormDiagnostic(
   };
 }
 
-function enhancedMutationFormConflicts(
-  element: JsxElementModel,
-): EnhancedMutationFormConflict[] {
+function enhancedMutationFormConflicts(element: JsxElementModel): EnhancedMutationFormConflict[] {
   return element.attributes
     .filter((attribute) =>
       ['action', 'data-mutation', 'kovo-fragment-target', 'kovo-key'].includes(attribute.name),
@@ -685,7 +754,10 @@ function submittedFormKeyReplacement(attribute: JsxAttributeModel): SourceReplac
   };
 }
 
-function submittedFormTargetAttribute(base: string, keyAttribute: JsxAttributeModel | undefined): string {
+function submittedFormTargetAttribute(
+  base: string,
+  keyAttribute: JsxAttributeModel | undefined,
+): string {
   const expression = submittedFormTargetExpression(base, keyAttribute);
   if (!keyAttribute || keyAttribute.expression !== undefined) {
     return keyAttribute?.expression === undefined
@@ -696,7 +768,10 @@ function submittedFormTargetAttribute(base: string, keyAttribute: JsxAttributeMo
   return `kovo-fragment-target="${escapeAttribute(expression)}"`;
 }
 
-function submittedFormTargetExpression(base: string, keyAttribute: JsxAttributeModel | undefined): string {
+function submittedFormTargetExpression(
+  base: string,
+  keyAttribute: JsxAttributeModel | undefined,
+): string {
   if (!keyAttribute) return base;
   const key = staticAttributeScalar(keyAttribute);
   return key === null ? `${base}:\${${keyAttribute.expression ?? ''}}` : `${base}:${key}`;
@@ -710,7 +785,12 @@ function renderAttributeWithName(name: string, attribute: JsxAttributeModel): st
     return `${name}={${attribute.expression}}`;
   }
   const staticValue = attribute.expressionStaticValue;
-  if (staticValue !== undefined && staticValue !== true && staticValue !== false && staticValue !== null) {
+  if (
+    staticValue !== undefined &&
+    staticValue !== true &&
+    staticValue !== false &&
+    staticValue !== null
+  ) {
     return `${name}="${escapeAttribute(String(staticValue))}"`;
   }
   return name;
@@ -725,7 +805,8 @@ function attributeValueExpression(attribute: JsxAttributeModel): string {
 function staticAttributeScalar(attribute: JsxAttributeModel): string | null {
   if (attribute.value !== undefined) return attribute.value;
   const staticValue = attribute.expressionStaticValue;
-  if (typeof staticValue === 'string' || typeof staticValue === 'number') return String(staticValue);
+  if (typeof staticValue === 'string' || typeof staticValue === 'number')
+    return String(staticValue);
   return null;
 }
 
@@ -747,9 +828,7 @@ function formLoweringOutputContext(
   };
 }
 
-function handlerOutputContexts(
-  handler: HandlerLowering,
-): GeneratedOutputWriteFact[] {
+function handlerOutputContexts(handler: HandlerLowering): GeneratedOutputWriteFact[] {
   return [
     {
       context: outputContextForAttribute(handler.attributeName),
@@ -1068,10 +1147,7 @@ function renderHostStampAttribute(write: ServerRenderStampWriteFact): string {
   return `${write.attr}="${escapeAttribute(write.value)}"`;
 }
 
-function sameEscapedOrRawAttributeValue(
-  actual: string | undefined,
-  expectedRaw: string,
-): boolean {
+function sameEscapedOrRawAttributeValue(actual: string | undefined, expectedRaw: string): boolean {
   return actual === expectedRaw || actual === escapeAttribute(expectedRaw);
 }
 
@@ -1080,7 +1156,13 @@ function renderHostStampConflictDiagnostics(
   options: { fileName: string; source: string },
 ): CompilerDiagnostic[] {
   return conflicts.map((conflict) =>
-    writerConflictDiagnostic(options, conflict.attribute, conflict.attr, 'author JSX', conflict.writer),
+    writerConflictDiagnostic(
+      options,
+      conflict.attribute,
+      conflict.attr,
+      'author JSX',
+      conflict.writer,
+    ),
   );
 }
 
@@ -1106,7 +1188,13 @@ function handlerStampConflictDiagnostics(
       const existing = element.attributes.find((attribute) => attribute.name === name);
       if (!existing) continue;
       diagnostics.push(
-        writerConflictDiagnostic(options, existing, name, 'author JSX', 'event handler param lowering'),
+        writerConflictDiagnostic(
+          options,
+          existing,
+          name,
+          'author JSX',
+          'event handler param lowering',
+        ),
       );
     }
   }

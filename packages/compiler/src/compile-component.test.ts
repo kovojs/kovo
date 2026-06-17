@@ -423,6 +423,45 @@ export const SaveButton = component({
     });
   });
 
+  it('allows semantically equivalent attributes with different source order', () => {
+    const expectedSource = `
+import { component } from '@kovojs/core';
+
+export const AccordionButton = component({
+  render: () => (
+    <button aria-expanded="{String(open)}" class="trigger" data-state="{open ? 'open' : 'closed'}" tabIndex="{open ? 0 : -1}" value="shipping">
+      Shipping
+    </button>
+  ),
+});
+`;
+    const actualSource = `
+import { component } from '@kovojs/core';
+
+export const AccordionButton = component({
+  render: () => (
+    <button class="trigger" value="shipping" aria-expanded="{String(open)}" data-state="{open ? 'open' : 'closed'}" tabIndex="{open ? 0 : -1}">
+      Shipping
+    </button>
+  ),
+});
+`;
+
+    const check = semanticRenderEquivalenceCheck(
+      'components/accordion-button.server.js',
+      parseComponentModule('components/accordion-button.tsx', expectedSource),
+      emitServerModule(actualSource).executableSource,
+    );
+
+    expect(check).toMatchObject({
+      actual:
+        '<button aria-expanded="{String(open)}" class="trigger" data-state="{open ? \'open\' : \'closed\'}" tabIndex="{open ? 0 : -1}" value="shipping">Shipping</button>',
+      expected:
+        '<button aria-expanded="{String(open)}" class="trigger" data-state="{open ? \'open\' : \'closed\'}" tabIndex="{open ? 0 : -1}" value="shipping">Shipping</button>',
+      ok: true,
+    });
+  });
+
   it('compares primitive asChild authored semantics against the merged child element', () => {
     const expectedSource = `
 import { component } from '@kovojs/core';
