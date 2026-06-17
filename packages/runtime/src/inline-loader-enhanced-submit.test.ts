@@ -181,7 +181,7 @@ describe('inline loader enhanced submit source', () => {
         },
         { deps: 'debug', id: 'empty-fragment-target-fallback', target: '' },
         { deps: '', id: 'standalone-target' },
-        { component: 'cart-summary', deps: 'cart summary' },
+        { component: 'cart-summary', deps: 'cart summary', id: 'cart-summary' },
       ];
       const modularRoot = new InlineParityRoot();
       const modularFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
@@ -254,7 +254,7 @@ describe('inline loader enhanced submit source', () => {
                 if (name === 'kovo-fragment-target') return dep.target ?? null;
                 if (name === 'kovo-live-component') return dep.component ?? null;
                 if (name === 'kovo-props') return dep.props ?? null;
-                if (name === 'kovo-c') return dep.component ?? null;
+                if (name === 'kovo-c') return null;
                 return null;
               },
               id: dep.id,

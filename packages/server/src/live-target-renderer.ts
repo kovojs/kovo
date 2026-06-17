@@ -53,7 +53,7 @@ export function componentLiveTargetRenderer<
     async render(context) {
       const queries = await loadLiveTargetQueries(options.queries, context);
       const renderOptions = await componentLiveTargetRenderOptions(options, context);
-      return renderComponent(options.component, queries, renderOptions);
+      return renderComponent(options.component, { ...context.props, ...queries }, renderOptions);
     },
   };
 }

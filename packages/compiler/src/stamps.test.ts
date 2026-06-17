@@ -383,6 +383,32 @@ export const OrderHistory = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('stamps serializable props on inferred live target roots', () => {
+    const result = compileComponentModule({
+      fileName: 'product-detail.tsx',
+      source: `
+export const ProductDetail = component({
+  props: { productId: String },
+  queries: {
+    product: productQuery.args((props) => ({ id: props.productId })),
+  },
+  render: ({ productId, product }) => (
+    <section>
+      <span>{productId}</span>
+      <span>{product.name}</span>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.files[0]?.source).toContain(
+      '<section kovo-c="product-detail" kovo-deps="product" kovo-fragment-target="product-detail" kovo-live-component="product-detail/product-detail" kovo-props={JSON.stringify({ productId })}>',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+  });
+
   it('keeps hand-written kovo-c stamps on native hosts unchanged in ejected IR', () => {
     const result = compileComponentModule({
       fileName: 'order-history.tsx',

@@ -340,8 +340,20 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `pnpm --filter @kovojs/runtime run check:inline-loader`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gap: generated route/render lowering does not yet stamp actual
-      serializable component props or consume descriptors to render fragments.
+    - Additional progress 2026-06-17:
+      `packages/compiler/src/emit/server.ts` now stamps inferred live-target
+      hosts with generated `kovo-props={JSON.stringify({ ... })}` for declared
+      component props, and keeps `kovo-props` generated-only for semantic render
+      equivalence. `packages/runtime/src/inline-loader-build.ts` now compacts
+      local identifiers without rewriting string protocol names, so the shipped
+      inline loader reads `kovo-live-component` instead of a shortened attribute.
+    - Verified with
+      `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-enhanced-submit.test.ts packages/runtime/src/mutation-targets.test.ts packages/runtime/src/mutation-fetch.test.ts`,
+      `pnpm --filter @kovojs/runtime run check:inline-loader`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gap: legacy target-only compatibility remains until examples and
+      app-shell integration finish migrating to generated live-target registries.
 - [ ] **6. Server: auto-render affected targets.**
   - Add a generated-registry-aware response selector to `createApp()` /
     mutation response handling.
@@ -403,6 +415,20 @@ removes app-authored bookkeeping from the enhanced path.
       dependency stamps use component-local query aliases.
     - Verified with
       `pnpm exec vitest --run packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts packages/server/src/mutation-wire.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Additional progress 2026-06-17:
+      `componentLiveTargetRenderer()` now renders components with
+      `{ ...context.props, ...queries }`, so serialized props are available to
+      component render functions as well as query arg callbacks. This lets
+      compiler-generated re-rendered fragments restamp their own `kovo-props`
+      channel.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts packages/server/src/mutation-wire.test.ts`,
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
     - Remaining gaps: build/app-shell integration still needs to collect the

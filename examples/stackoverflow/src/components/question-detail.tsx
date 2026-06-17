@@ -98,7 +98,15 @@ export const QuestionDetailRegion = component({
     answers: questionAnswers.args((props) => ({ questionId: props.questionId })),
     question: questionDetail.args((props) => ({ id: props.questionId })),
   },
-  render: ({ question, answers }: { question: QuestionDetailResult | null; answers: QuestionAnswersResult }) => {
+  render: ({
+    answers,
+    question,
+    questionId,
+  }: {
+    answers: QuestionAnswersResult;
+    question: QuestionDetailResult | null;
+    questionId: string;
+  }) => {
     if (!question) {
       return (
         <div class="so-stack">

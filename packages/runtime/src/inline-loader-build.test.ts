@@ -39,6 +39,8 @@ describe('inline loader build source', () => {
     expect(inlineKovoLoaderInstallerReadableSource).toContain('\nfunction installInlineKovoLoader');
     expect(inlineKovoLoaderInstallerReadableSource).toContain("join('; ')");
     expect(buildInlineKovoLoaderInstallerSource()).toBe(inlineKovoLoaderInstallerSource);
+    expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-live-component')");
+    expect(inlineKovoLoaderInstallerSource).not.toContain('kovo-live-cp');
   });
 
   it('emits the checked-in runtime module from the readable inline loader source', () => {

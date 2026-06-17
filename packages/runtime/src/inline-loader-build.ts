@@ -690,13 +690,36 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['controller', 'ac'],
     ['nextHtml', 'nh'],
   ]);
-  let compacted = source;
+  return replaceInlineLoaderIdentifierTokens(source, replacements);
+}
 
-  for (const [from, to] of replacements) {
-    compacted = compacted.replaceAll(new RegExp(`\\b${from}\\b`, 'g'), to);
+function replaceInlineLoaderIdentifierTokens(
+  source: string,
+  replacements: ReadonlyMap<string, string>,
+): string {
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    true,
+    ts.LanguageVariant.Standard,
+    source,
+  );
+  let output = '';
+  let cursor = 0;
+
+  for (let kind = scanner.scan(); kind !== ts.SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
+    if (kind !== ts.SyntaxKind.Identifier) continue;
+
+    const tokenStart = scanner.getTokenPos();
+    const tokenEnd = scanner.getTextPos();
+    const replacement = replacements.get(source.slice(tokenStart, tokenEnd));
+    if (replacement === undefined) continue;
+
+    output += source.slice(cursor, tokenStart);
+    output += replacement;
+    cursor = tokenEnd;
   }
 
-  return compacted;
+  return `${output}${source.slice(cursor)}`;
 }
 
 function assertInlineKovoLoaderInstallerHelperContains(

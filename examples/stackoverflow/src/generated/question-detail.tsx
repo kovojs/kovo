@@ -105,7 +105,15 @@ export const QuestionDetailRegion = component({
     answers: questionAnswers.args((props) => ({ questionId: props.questionId })),
     question: questionDetail.args((props) => ({ id: props.questionId })),
   },
-  render: ({ question, answers }: { question: QuestionDetailResult | null; answers: QuestionAnswersResult }) => {
+  render: ({
+    answers,
+    question,
+    questionId,
+  }: {
+    answers: QuestionAnswersResult;
+    question: QuestionDetailResult | null;
+    questionId: string;
+  }) => {
     if (!question) {
       return (
         <div class="so-stack">
@@ -126,7 +134,7 @@ export const QuestionDetailRegion = component({
       variant: 'primary',
     });
     return (
-      <div class="so-stack" kovo-c="question-detail-region" kovo-deps="answers question" kovo-fragment-target="question-detail-region" kovo-live-component="components/question-detail/question-detail-region">
+      <div class="so-stack" kovo-c="question-detail-region" kovo-deps="answers question" kovo-fragment-target="question-detail-region" kovo-live-component="components/question-detail/question-detail-region" kovo-props={JSON.stringify({ questionId })}>
         <a class="so-back" href="/">
           &larr; All questions
         </a>

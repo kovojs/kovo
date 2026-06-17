@@ -21,8 +21,16 @@ describe('generated component live target renderers', () => {
       queries: {
         product: productQuery.args((props: { productId: string }) => ({ id: props.productId })),
       },
-      render: ({ product }: { product: { id: string; label: string } }) => (
-        <section data-product={product.id}>{product.label}</section>
+      render: ({
+        product,
+        productId,
+      }: {
+        product: { id: string; label: string };
+        productId: string;
+      }) => (
+        <section data-product={product.id} data-prop={productId}>
+          {product.label}
+        </section>
       ),
     });
 
@@ -46,7 +54,7 @@ describe('generated component live target renderers', () => {
         request: { locale: 'en-US' },
         target: 'product-detail:p1',
       }),
-    ).resolves.toBe('<section data-product="p1">en-US:p1</section>');
+    ).resolves.toBe('<section data-product="p1" data-prop="p1">en-US:p1</section>');
   });
 
   it('throws when a generated query reload fails', async () => {

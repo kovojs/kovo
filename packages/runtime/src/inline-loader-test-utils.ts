@@ -106,7 +106,14 @@ export class InlineTriggerElement {
 }
 
 export class InlineParityRoot {
-  deps: { component?: string; deps?: string; id?: string; props?: string; target?: string }[] = [];
+  deps: {
+    component?: string;
+    deps?: string;
+    id?: string;
+    kovoC?: string;
+    props?: string;
+    target?: string;
+  }[] = [];
 
   findFragmentTarget(): null {
     return null;
@@ -123,7 +130,7 @@ export class InlineParityRoot {
         if (name === 'kovo-live-component') return dep.component ?? null;
         if (name === 'kovo-props') return dep.props ?? null;
         if (name === 'kovo-deps') return dep.deps ?? null;
-        if (name === 'kovo-c') return dep.component ?? null;
+        if (name === 'kovo-c') return dep.kovoC ?? null;
         return null;
       },
       ...(dep.id ? { id: dep.id } : {}),
