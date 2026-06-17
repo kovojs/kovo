@@ -1,5 +1,32 @@
 # Better forms — close the form-field type-safety gap end to end
 
+## Sequencing
+
+This plan is a **prerequisite for `plans/app-authoring-ergonomics.md` item 5**
+(field-bound mutation failure UI). That plan's `<FieldError name="…" />` /
+`<FormError />` surface is a thin authoring layer over what this plan establishes;
+it must not re-open or fork these decisions:
+
+- **KV242 — `name` ∈ mutation input schema** (Part A) is the same check that backs
+  `<FieldError name>` binding downstream. Do not invent a second field-name check
+  in the ergonomics plan.
+- **`MutationRegistry` inference** (Part B) is what lets `<FieldError>/<FormError>`
+  resolve a form's failure union without hand-written type args.
+- **The single failure shape `{ code; payload; fieldErrors? }`** (Decisions + Part D)
+  is the shape `<FieldError>` (reads `fieldErrors[name]`) and `<FormError>` (reads
+  coded `payload`) render. The ergonomics plan explicitly drops `formFailure({ message })`
+  in favor of this shape — so it must be locked here first.
+- **CSRF-on for browser forms** (Decision + Part C3) is assumed by the ergonomics
+  examples.
+
+Ordering: land **Part A (KV242), Part B (registry inference), and Part D (failure
+shape)** here before starting `app-authoring-ergonomics.md` item 5. Part C
+(example fixes) can overlap with that item's example migration. Forward-compat
+requirement: shape the A1/A3 field-fact surface so it can also back per-field
+`<FieldError name>` resolution (field name → required/optional/error slot), not
+only the form-level completeness check — the ergonomics layer should consume these
+facts, not re-derive them.
+
 ## Context
 
 The forms API reads cleanly (`<form enhance mutation={addToCart}>`) and the **mutation side** is well
@@ -59,8 +86,8 @@ path in more than one app — without changing the clean authoring spelling.
 
 - **The check is a compiler diagnostic, not just a TS type.** The HTML `name=` strings live in JSX
   the permissive `IntrinsicElements` index signature cannot constrain, so the binding-style check
-  (KV227) is the model: run it in compiler lowering (editor-visible) **and** in `kovo check`. A new
-  KV code, **proposed KV242** (next free after KV241), covers names-∈-schema + completeness +
+  (KV227) is the model: run it in compiler lowering (editor-visible) **and** in `kovo check`. The
+  KV242 diagnostic covers names-∈-schema + completeness +
   declared-coercion. `formFields()` stays as the importable-value escape for sites that build forms
   outside JSX, but is no longer the only enforcement.
 - **`mutation={value}` stays the canonical spelling** (SPEC §6.3 line 580). The string-keyed
@@ -77,8 +104,8 @@ path in more than one app — without changing the clean authoring spelling.
 
 ## Established facts (verified this session)
 
-- Implemented KV codes (compiler src, non-test): `KV201, 210-241, 301-304, 310-311, 320, 330,
-402-409`. **No form-field code exists**; KV242+ are free.
+- Implemented KV codes (compiler src, non-test): `KV201, 210-242, 301-304, 310-311, 320, 330,
+402-409`. KV242 now anchors the form-field diagnostic; KV243+ remain free.
 - `core/src/index.ts:541-619` defines `FormFieldName`/`CompleteFormFields`/`formFields` — a working
   compile-time completeness type, but opt-in and unused by every example.
 - `core/src/index.ts:89-97` (`ComponentMutationForms`) types `forms.<m>.failure` correctly **when**
@@ -98,17 +125,37 @@ path in more than one app — without changing the clean authoring spelling.
 
 ## Part A — Framework: the form-field diagnostic (critical path; do first)
 
-- [ ] **A0. Anchor the validation altitude.** Extend the existing compiler path that already sees
+- [x] **A0. Anchor the validation altitude.** Extend the existing compiler path that already sees
       typed mutation forms (`packages/compiler/src/emit/server.ts` or a nearby validation pass after
       JSX parsing) so KV242 uses parsed JSX/model facts. Evidence: name the traversal entry point and
       the tests proving it sees local and imported `mutation={...}` forms.
+      - Evidence 2026-06-17: KV242 now runs inside
+        `enhancedMutationFormRenderLowering()` in
+        `packages/compiler/src/emit/server.ts`, the same traversal that lowers
+        typed enhanced mutation forms and emits KV238. `packages/compiler/src/stamps.test.ts`
+        proves the pass sees local `mutation={addToCart}` forms; the existing
+        imported-form lowering fixture remains green and Part B owns
+        registry-backed field facts.
+      - Verified with
+        `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/core/src/diagnostics.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/spec-coverage-map.test.ts`,
+        `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+        `node scripts/api-surface-gate.mjs`, and focused `git diff --check`.
 - [ ] **A1. Emit/collect mutation input field facts.** Add a typed fact surface for mutation input
       fields: name, required/optional/defaulted, declared coercion kind, and source span/provenance.
       Populate it from `mutation()` definitions and generated registry facts, not source strings.
+      - Progress 2026-06-17: local `mutation()` definitions now produce
+        compiler-owned field facts from the TypeScript AST for `input:
+        s.object({ ... })`, including field name and defaulted-vs-required
+        status. Cross-module/generated registry field facts, coercion kind, and
+        source-span/provenance remain open.
 - [ ] **A2. Resolve the bound mutation's input schema at a `<form>`.** From `mutation={value}`
       (importable) resolve the `s.object` field set + required/optional + declared coercions; from the
       string-keyed `form('key')`/`mutationFormAttributes` path resolve via the registry (Part B).
       Decide from typed model facts, not source strings (SPEC §5 line 386).
+      - Progress 2026-06-17: local `mutation={value}` forms resolve to local
+        `s.object` field facts. Imported mutation values still lower for action
+        stamps through existing registry facts, but field validation waits for
+        Part B's generated `MutationRegistry`/field facts.
 - [ ] **A3. Emit KV242.** For each enhanced `<form>` in v1 scope, collect literal descendant
       successful controls (`input`, `select`, `textarea`, including `type="hidden"` and submitter
       controls with `name`). Error on name ∉ schema, missing required field (completeness), and
@@ -117,14 +164,36 @@ path in more than one app — without changing the clean authoring spelling.
       checkbox/radio/multiple-select, and dotted/bracket paths either need a deliberate v1 rule,
       diagnostic, or documented escape. Teaching message shows the schema field set and the
       offending/missing name — mirror KV227's fix-menu tone.
+      - Progress 2026-06-17: KV242 emits for literal descendant
+        `input`/`select`/`textarea`/`button` controls with static `name` values,
+        including hidden inputs and submitter-capable controls, and skips
+        disabled controls. It reports name-not-in-schema and missing required
+        local mutation fields with the expected field set in the message.
+        Dynamic/external/repeated/file/dotted/bracket/coercion-specific cases
+        remain open.
 - [ ] **A4. Tests (red→green).** Compiler unit fixtures: wrong name, missing required field, extra
       field, hidden-field name match, coercion-declared-once, disabled/control-scope behavior, dynamic
       name escape/diagnostic, submitter `name`, and a green fixture for the corrected commerce form.
       Evidence: new `*.test.ts` in the compiler suite.
-- [ ] **A5. SPEC + diagnostics catalog.** Add KV242 to SPEC §6.2/§6.3 (assign the code the prose
+      - Progress 2026-06-17: `packages/compiler/src/stamps.test.ts` covers
+        wrong names, missing required fields, hidden-field matching, and a green
+        defaulted-field case for local mutation forms. The broader A4 fixture
+        matrix remains open.
+- [x] **A5. SPEC + diagnostics catalog.** Add KV242 to SPEC §6.2/§6.3 (assign the code the prose
       already promises) and to every diagnostic surface: `DiagnosticCode`, `diagnosticDefinitions`,
       `compilerDiagnosticTeachingSchemas`, diagnostic coverage matrix, SPEC diagnostic table,
       `spec-coverage-map` where applicable, and the docs/catalog surface used by `kovo explain`.
+      - Evidence 2026-06-17: `SPEC.md` §6.2 and the diagnostic table now name
+        KV242; `packages/core/src/diagnostics.ts` registers the code,
+        definition, and teaching schema; `packages/core/src/diagnostics.test.ts`
+        snapshots the registry; and
+        `packages/compiler/src/diagnostic-coverage-matrix.test.ts` includes a
+        positive/negative KV242 row. `spec-coverage-map` remains green without a
+        dedicated mapping change.
+      - Verified with
+        `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/core/src/diagnostics.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/spec-coverage-map.test.ts`,
+        `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+        `node scripts/api-surface-gate.mjs`.
 
 ## Part B — Framework: wire `MutationRegistry` so inference works
 
@@ -165,7 +234,12 @@ path in more than one app — without changing the clean authoring spelling.
 - [ ] **D2. Fix the failure-shape contradiction.** Update SPEC §6.3 lines 572-574 so the
       programmatic `ctx.submit` onError union uses `payload` / `fieldErrors` (matching lines 587/559
       and the migrated impl), not `data` / `fields`.
-- [ ] **D3. Cite KV242** wherever §6.2/§6.3 currently promise the form-field check in prose.
+- [x] **D3. Cite KV242** wherever §6.2/§6.3 currently promise the form-field check in prose.
+  - Evidence 2026-06-17: `SPEC.md` §6.2's typed-surface form-field row now
+    cites KV242, and the SPEC diagnostic table includes KV242 for enhanced
+    mutation form control/schema mismatches.
+  - Verified with
+    `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/core/src/diagnostics.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/spec-coverage-map.test.ts`.
 
 ---
 

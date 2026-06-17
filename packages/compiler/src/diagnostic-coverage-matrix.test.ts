@@ -601,6 +601,53 @@ export const Product_Grid = component({
       }).diagnostics,
   },
   {
+    code: 'KV242',
+    spec: 'SPEC.md §6.2/§6.3',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'form-fields-ok.tsx',
+        source: `
+export const addToCart = mutation('cart/add', {
+  input: s.object({
+    productId: s.string(),
+    quantity: s.number().int().min(1).default(1),
+  }),
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: () => (
+    <form enhance mutation={addToCart}>
+      <input type="hidden" name="productId" value="p1" />
+    </form>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'form-fields-bad.tsx',
+        source: `
+export const addToCart = mutation('cart/add', {
+  input: s.object({ productId: s.string() }),
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: () => (
+    <form enhance mutation={addToCart}>
+      <input name="product" value="p1" />
+    </form>
+  ),
+});
+`,
+      }).diagnostics,
+  },
+  {
     code: 'KV239',
     spec: 'SPEC.md §8',
     positive: () =>
@@ -1048,6 +1095,12 @@ describe('compiler diagnostic coverage matrix', () => {
           "spec": "SPEC.md §4.5/§6.2",
         },
         {
+          "code": "KV242",
+          "negativeCount": 2,
+          "positiveCount": 0,
+          "spec": "SPEC.md §6.2/§6.3",
+        },
+        {
           "code": "KV239",
           "negativeCount": 1,
           "positiveCount": 0,
@@ -1458,6 +1511,21 @@ describe('compiler diagnostic coverage matrix', () => {
           "start": {
             "column": 14,
             "line": 7,
+          },
+        },
+        {
+          "code": "KV242",
+          "fileName": "form-fields-bad.tsx",
+          "help": "Would lower to: an enhanced mutation form whose successful control names exactly match the bound mutation input schema.
+      Blocked reason: form field names are part of the mutation input contract; unknown or missing names would only fail after submit.
+      Fixes: rename the control, add the missing required control, or change the mutation input schema so the field set matches the form.
+      SPEC §6.2 and §6.3 require form control names to be statically checked against the bound mutation input schema.",
+          "length": 14,
+          "message": "Enhanced mutation form fields do not match mutation input schema. unknown field "product" for mutation "cart/add". Expected fields: productId",
+          "severity": "error",
+          "start": {
+            "column": 14,
+            "line": 12,
           },
         },
         {

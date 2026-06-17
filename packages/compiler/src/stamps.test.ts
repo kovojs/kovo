@@ -293,6 +293,102 @@ export const ProductList = component({
     expect(result.loweredSource).not.toContain('action="/_m/cart/add"');
   });
 
+  it('reports KV242 for enhanced mutation form names outside the local input schema', () => {
+    const result = compileComponentModule({
+      fileName: 'add-to-cart-form.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: s.object({
+    productId: s.string(),
+    quantity: s.number().int().min(1).default(1),
+  }),
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: () => (
+    <form enhance mutation={addToCart}>
+      <input type="hidden" name="product" value="p1" />
+      <input name="quantity" value="1" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
+      expect.objectContaining({
+        message:
+          'Enhanced mutation form fields do not match mutation input schema. unknown field "product" for mutation "cart/add". Expected fields: productId, quantity',
+      }),
+      expect.objectContaining({
+        message:
+          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "cart/add". Expected fields: productId, quantity',
+      }),
+    ]);
+  });
+
+  it('reports KV242 for missing required local mutation input fields', () => {
+    const result = compileComponentModule({
+      fileName: 'add-to-cart-form.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: s.object({
+    productId: s.string(),
+    quantity: s.number().int().min(1).default(1),
+  }),
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: () => (
+    <form enhance mutation={addToCart}>
+      <input name="quantity" value="1" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
+      expect.objectContaining({
+        message:
+          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "cart/add". Expected fields: productId, quantity',
+      }),
+    ]);
+  });
+
+  it('accepts complete local enhanced mutation fields and defaulted missing fields', () => {
+    const result = compileComponentModule({
+      fileName: 'add-to-cart-form.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: s.object({
+    productId: s.string(),
+    quantity: s.number().int().min(1).default(1),
+  }),
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: () => (
+    <form enhance mutation={addToCart}>
+      <input type="hidden" name="productId" value="p1" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([]);
+  });
+
   it('stamps rendered component markup with declared query dependencies', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

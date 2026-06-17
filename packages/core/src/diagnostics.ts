@@ -28,6 +28,7 @@ export type DiagnosticCode =
   | 'KV239'
   | 'KV240'
   | 'KV241'
+  | 'KV242'
   | 'KV301'
   | 'KV302'
   | 'KV303'
@@ -141,6 +142,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV239: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV240: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV241: { blockedReason: true, escapePosture: 'documented', loweredForm: 'not-applicable' },
+  KV242: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV301: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV302: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV303: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
@@ -434,6 +436,17 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'warn',
     message: 'Derived component registry key changed since the previous emitted graph.',
+  },
+  KV242: {
+    code: 'KV242',
+    help: [
+      'Would lower to: an enhanced mutation form whose successful control names exactly match the bound mutation input schema.',
+      'Blocked reason: form field names are part of the mutation input contract; unknown or missing names would only fail after submit.',
+      'Fixes: rename the control, add the missing required control, or change the mutation input schema so the field set matches the form.',
+      'SPEC §6.2 and §6.3 require form control names to be statically checked against the bound mutation input schema.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Enhanced mutation form fields do not match mutation input schema.',
   },
   KV301: {
     code: 'KV301',

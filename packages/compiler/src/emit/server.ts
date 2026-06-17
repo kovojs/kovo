@@ -1,6 +1,7 @@
 import { runInNewContext } from 'node:vm';
 
 import { diagnosticDefinitions } from '@kovojs/core';
+import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { compilerIrHeader } from '../ir.js';
@@ -598,6 +599,7 @@ function enhancedMutationFormRenderLowering(
     outputContexts.push(...lowering.outputContexts);
     if (options) {
       diagnostics.push(
+        ...mutationFormFieldDiagnostics(model, element, options),
         ...lowering.conflicts.map((conflict) =>
           writerConflictDiagnostic(
             options,
@@ -624,6 +626,17 @@ interface EnhancedMutationFormLowering {
   outputContexts: readonly GeneratedOutputWriteFact[];
   replacements: readonly SourceReplacement[];
   semanticAttributes: readonly string[];
+}
+
+interface MutationInputFieldFact {
+  name: string;
+  required: boolean;
+}
+
+interface MutationInputFact {
+  fields: readonly MutationInputFieldFact[];
+  key: string;
+  localName: string;
 }
 
 function enhancedMutationFormLowering(
@@ -770,6 +783,211 @@ function localMutationKey(
     ([, typeSource]) => typeSource.trim() === `typeof ${localName}`,
   );
   return registryEntry?.[0] ?? null;
+}
+
+function mutationFormFieldDiagnostics(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  options: { fileName: string; registryFacts?: RegistryFacts; source: string },
+): CompilerDiagnostic[] {
+  if (element.tag !== 'form') return [];
+
+  const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
+  const localName = mutationAttribute?.expressionBareIdentifierName;
+  if (!localName) return [];
+
+  const mutation = localMutationInputFacts(options.fileName, options.source).get(localName);
+  if (!mutation) return [];
+
+  const controls = successfulFormControls(model, element);
+  const fieldNames = new Set(mutation.fields.map((field) => field.name));
+  const controlNames = new Set(controls.map((control) => control.name));
+  const diagnostics: CompilerDiagnostic[] = [];
+
+  for (const control of controls) {
+    if (fieldNames.has(control.name)) continue;
+    diagnostics.push(
+      formFieldDiagnostic(
+        options,
+        control.start,
+        control.length,
+        `unknown field "${control.name}" for mutation "${mutation.key}". Expected fields: ${[
+          ...fieldNames,
+        ].join(', ')}`,
+      ),
+    );
+  }
+
+  for (const field of mutation.fields) {
+    if (!field.required || controlNames.has(field.name)) continue;
+    diagnostics.push(
+      formFieldDiagnostic(
+        options,
+        mutationAttribute.start,
+        mutationAttribute.end - mutationAttribute.start,
+        `missing required field "${field.name}" for mutation "${mutation.key}". Expected fields: ${[
+          ...fieldNames,
+        ].join(', ')}`,
+      ),
+    );
+  }
+
+  return diagnostics;
+}
+
+function formFieldDiagnostic(
+  options: { fileName: string; source: string },
+  start: number,
+  length: number,
+  detail: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(options.fileName, 'KV242', options.source, start, length),
+    message: `${diagnosticDefinitions.KV242.message} ${detail}`,
+  };
+}
+
+function successfulFormControls(
+  model: ComponentModuleModel,
+  form: JsxElementModel,
+): { length: number; name: string; start: number }[] {
+  const formEnd = form.selfClosing ? form.end : form.closingStart;
+
+  return model.jsxElements.flatMap((element) => {
+    if (element === form) return [];
+    if (element.start < form.openingEnd || element.end > formEnd) return [];
+    if (!['button', 'input', 'select', 'textarea'].includes(element.tag)) return [];
+    if (element.attributes.some((attribute) => attribute.name === 'disabled')) return [];
+
+    const nameAttribute = element.attributes.find((attribute) => attribute.name === 'name');
+    const name = staticStringAttributeValue(nameAttribute);
+    if (!name) return [];
+
+    return [
+      {
+        length: nameAttribute?.end ? nameAttribute.end - nameAttribute.start : element.end - element.start,
+        name,
+        start: nameAttribute?.start ?? element.start,
+      },
+    ];
+  });
+}
+
+function staticStringAttributeValue(attribute: JsxAttributeModel | undefined): string | null {
+  if (!attribute) return null;
+  if (attribute.value !== undefined) return attribute.value;
+  if (typeof attribute.expressionStaticValue === 'string') return attribute.expressionStaticValue;
+  return null;
+}
+
+function localMutationInputFacts(fileName: string, source: string): ReadonlyMap<string, MutationInputFact> {
+  const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const facts = new Map<string, MutationInputFact>();
+
+  const visit = (node: ts.Node): void => {
+    const fact = mutationInputFactFromVariable(sourceFile, node);
+    if (fact) facts.set(fact.localName, fact);
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return facts;
+}
+
+function mutationInputFactFromVariable(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+): MutationInputFact | null {
+  if (!ts.isVariableDeclaration(node)) return null;
+  if (!ts.isIdentifier(node.name)) return null;
+  const initializer = unwrapTsExpression(node.initializer);
+  if (!initializer || !ts.isCallExpression(initializer)) return null;
+  if (!ts.isIdentifier(initializer.expression) || initializer.expression.text !== 'mutation') {
+    return null;
+  }
+
+  const [keyArg, optionsArg] = initializer.arguments;
+  if (!keyArg || !ts.isStringLiteralLike(keyArg)) return null;
+  if (!optionsArg || !ts.isObjectLiteralExpression(optionsArg)) return null;
+
+  const input = objectPropertyExpression(optionsArg, 'input');
+  const fields = input ? mutationInputFields(input) : [];
+  if (fields.length === 0) return null;
+
+  return {
+    fields,
+    key: keyArg.text,
+    localName: node.name.text,
+  };
+}
+
+function mutationInputFields(expression: ts.Expression): MutationInputFieldFact[] {
+  const input = unwrapTsExpression(expression);
+  if (!input || !ts.isCallExpression(input)) return [];
+  if (!isPropertyCall(input.expression, 'object')) return [];
+
+  const [shapeArg] = input.arguments;
+  if (!shapeArg || !ts.isObjectLiteralExpression(shapeArg)) return [];
+
+  return shapeArg.properties.flatMap((property) => {
+    if (!ts.isPropertyAssignment(property)) return [];
+    const name = propertyNameText(property.name);
+    if (!name) return [];
+    return [{ name, required: !schemaExpressionHasCall(property.initializer, 'default') }];
+  });
+}
+
+function objectPropertyExpression(
+  object: ts.ObjectLiteralExpression,
+  propertyName: string,
+): ts.Expression | null {
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.name) === propertyName) return property.initializer;
+  }
+  return null;
+}
+
+function propertyNameText(name: ts.PropertyName): string | null {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return null;
+}
+
+function schemaExpressionHasCall(expression: ts.Expression, methodName: string): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === methodName
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
+}
+
+function isPropertyCall(expression: ts.Expression, propertyName: string): boolean {
+  return ts.isPropertyAccessExpression(expression) && expression.name.text === propertyName;
+}
+
+function unwrapTsExpression(expression: ts.Expression | undefined): ts.Expression | null {
+  let current = expression;
+  while (
+    current &&
+    (ts.isParenthesizedExpression(current) ||
+      ts.isAsExpression(current) ||
+      ts.isSatisfiesExpression(current) ||
+      ts.isNonNullExpression(current))
+  ) {
+    current = current.expression;
+  }
+  return current ?? null;
 }
 
 function submittedFormKeyReplacement(attribute: JsxAttributeModel): SourceReplacement {

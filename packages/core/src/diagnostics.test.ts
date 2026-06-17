@@ -34,6 +34,7 @@ describe('diagnostic registry', () => {
       'KV239',
       'KV240',
       'KV241',
+      'KV242',
       'KV301',
       'KV302',
       'KV303',
@@ -287,6 +288,15 @@ describe('diagnostic registry', () => {
       SPEC §4.2 and §4.8 make derived component names load-bearing for kovo-c identity, scoped CSS, fragments, and graph facts.",
           "message": "Derived component registry key changed since the previous emitted graph.",
           "severity": "warn",
+        },
+        "KV242": {
+          "code": "KV242",
+          "help": "Would lower to: an enhanced mutation form whose successful control names exactly match the bound mutation input schema.
+      Blocked reason: form field names are part of the mutation input contract; unknown or missing names would only fail after submit.
+      Fixes: rename the control, add the missing required control, or change the mutation input schema so the field set matches the form.
+      SPEC §6.2 and §6.3 require form control names to be statically checked against the bound mutation input schema.",
+          "message": "Enhanced mutation form fields do not match mutation input schema.",
+          "severity": "error",
         },
         "KV301": {
           "code": "KV301",

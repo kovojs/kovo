@@ -525,7 +525,7 @@ ERROR KV234 package component prefix conflict.
 | Surface               | Source of truth                     | What TypeScript proves                                                                                                               |
 | --------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Handler refs          | client module exports               | `cart.remove` exists; params required & typed; typo = error                                                                          |
-| Form fields           | mutation input schema               | names ∈ schema; types match; **completeness** (missing required field = error); coercion declared once                               |
+| Form fields           | mutation input schema               | names ∈ schema; types match; **completeness** (missing required field = error); coercion declared once (KV242)                       |
 | Fragment targets      | component registry                  | target exists; patched with the right component's props                                                                              |
 | Query data / bindings | Drizzle select shape (`$infer`)     | `data-bind` paths exist; column rename propagates to every template; nullable traversal requires `?.` or a derive (KV227, §4.8)      |
 | Invalidations         | domain layer / touch graph          | invalidated keys exist; optimistic exhaustiveness in `tsc` via emitted invalidation sets (§10.6)                                     |
@@ -1102,6 +1102,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV239 | error      | Duplicate static view-transition name (§8)                                                                                                                                     |
 | KV240 | error      | Duplicate query-shape fact for one query name (§4.8)                                                                                                                           |
 | KV241 | warn       | Derived component registry key changed since the previous emitted graph (§4.2, §4.8)                                                                                           |
+| KV242 | error      | Enhanced mutation form control names do not match the bound mutation input schema (§6.2, §6.3)                                                                                 |
 | KV301 | lint       | Server fact in island-local state                                                                                                                                              |
 | KV302 | error      | `data-bind` path is not present in the declared query shape (§4.8)                                                                                                             |
 | KV303 | error      | Inferred refresh-target render input is not declared as query data or serializable stamped props (§4.5)                                                                        |
