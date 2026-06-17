@@ -7,7 +7,7 @@ import {
   createBetterAuthDbVerificationConfig,
   generateBetterAuthSchemaSource,
   validateBetterAuthSchemaBridge,
-} from '../../../packages/better-auth/src/index.js';
+} from '@kovojs/better-auth/internal';
 
 import {
   betterAuthSchemaSourceFixture,

@@ -3,13 +3,15 @@ import { admin, organization } from 'better-auth/plugins';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
-  betterAuthSchemaBridge,
-  validateBetterAuthSchemaBridge,
   type BetterAuthLike,
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
   type BetterAuthSignUpEmailLike,
-} from '../../../packages/better-auth/src/index.js';
+} from '@kovojs/better-auth';
+import {
+  betterAuthSchemaBridge,
+  validateBetterAuthSchemaBridge,
+} from '@kovojs/better-auth/internal';
 
 import { createRealAuth, requireAuthTable } from './real-auth-fixtures.js';
 

@@ -1,4 +1,5 @@
 import { endpointMatches, runEndpoint } from '@kovojs/server';
+import { mount } from '@kovojs/better-auth';
 import { getAuthTables } from 'better-auth';
 import { deviceAuthorization, oidcProvider, twoFactor } from 'better-auth/plugins';
 import { describe, expect, it } from 'vitest';
@@ -7,9 +8,8 @@ import {
   annotateBetterAuthSchemaSource,
   createBetterAuthDbVerificationConfig,
   generateBetterAuthSchemaSource,
-  mount,
   validateBetterAuthSchemaBridge,
-} from '../../../packages/better-auth/src/index.js';
+} from '@kovojs/better-auth/internal';
 
 import {
   betterAuthSchemaSourceFixture,

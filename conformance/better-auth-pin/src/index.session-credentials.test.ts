@@ -4,16 +4,18 @@ import { describe, expect, it } from 'vitest';
 
 import {
   authed,
-  betterAuthCredentialMutationTouchGraph,
-  betterAuthDbVerificationConfig,
   betterAuthSession,
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
+  role,
+} from '@kovojs/better-auth';
+import {
+  betterAuthCredentialMutationTouchGraph,
+  betterAuthDbVerificationConfig,
   createBetterAuthCredentialMutationTouchGraph,
   createBetterAuthDbVerificationConfig,
-  role,
-} from '../../../packages/better-auth/src/index.js';
+} from '@kovojs/better-auth/internal';
 
 import {
   authTable,

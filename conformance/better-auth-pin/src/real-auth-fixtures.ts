@@ -3,15 +3,17 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import { expect } from 'vitest';
 
 import {
-  betterAuthCredentialMutationDeclaredTableTouches,
-  betterAuthCredentialMutationTouches,
-  type BetterAuthCoreTable,
   type BetterAuthResponseLike,
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
   type BetterAuthSignUpEmailLike,
+} from '@kovojs/better-auth';
+import {
+  betterAuthCredentialMutationDeclaredTableTouches,
+  betterAuthCredentialMutationTouches,
+  type BetterAuthCoreTable,
   type BetterAuthTable,
-} from '../../../packages/better-auth/src/index.js';
+} from '@kovojs/better-auth/internal';
 
 export type AuthDatabase = Record<BetterAuthCoreTable, Record<string, unknown>[]>;
 
@@ -235,16 +237,20 @@ export async function expectObservedTables(
       ...new Set(
         betterAuthCredentialMutationDeclaredTableTouches[api].map((touch) => touch.domain),
       ),
-    ].sort(),
-  ).toEqual(betterAuthCredentialMutationTouches[api].map((domain) => domain.key).sort());
+    ].sort((left, right) => left.localeCompare(right)),
+  ).toEqual(
+    betterAuthCredentialMutationTouches[api]
+      .map((domain) => domain.key)
+      .sort((left, right) => left.localeCompare(right)),
+  );
 }
 
 export function snapshotTables(db: AuthDatabase): Record<BetterAuthCoreTable, string> {
   return {
-    account: stableRows(db.account),
-    session: stableRows(db.session),
-    user: stableRows(db.user),
-    verification: stableRows(db.verification),
+    account: stableRows(db.account ?? []),
+    session: stableRows(db.session ?? []),
+    user: stableRows(db.user ?? []),
+    verification: stableRows(db.verification ?? []),
   };
 }
 
