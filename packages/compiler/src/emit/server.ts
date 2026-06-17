@@ -486,6 +486,12 @@ function enhancedMutationFormRenderLowering(
   const outputContexts: GeneratedOutputWriteFact[] = [];
 
   for (const element of model.jsxElements) {
+    const repeatableDiagnostic = repeatableMutationFormDiagnostic(model, element, options);
+    if (repeatableDiagnostic) {
+      diagnostics.push(repeatableDiagnostic);
+      continue;
+    }
+
     const lowering = enhancedMutationFormLowering(model, element, options?.registryFacts);
     if (!lowering) continue;
 
@@ -551,6 +557,7 @@ function enhancedMutationFormLowering(
 
   const methodAttribute = element.attributes.find((attribute) => attribute.name === 'method');
   const keyAttribute = element.attributes.find((attribute) => attribute.name === 'key');
+  if (!keyAttribute && element.repeatable) return null;
   const targetBase = kebabCase(mutationAttribute.expressionBareIdentifierName);
   const generatedInMutationSlot = [
     ...(methodAttribute ? [] : ['method="post"']),
@@ -607,6 +614,32 @@ function enhancedMutationFormLowering(
     ],
     replacements,
     semanticAttributes,
+  };
+}
+
+function repeatableMutationFormDiagnostic(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  options: { fileName: string; registryFacts?: RegistryFacts; source: string } | undefined,
+): CompilerDiagnostic | null {
+  if (!options || element.tag !== 'form' || !element.repeatable) return null;
+  if (element.attributes.some((attribute) => attribute.name === 'key')) return null;
+
+  const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
+  if (!mutationAttribute?.expressionBareIdentifierName) return null;
+  if (!localMutationKey(model, mutationAttribute.expressionBareIdentifierName, options.registryFacts)) {
+    return null;
+  }
+
+  return {
+    ...diagnosticFor(
+      options.fileName,
+      'KV238',
+      options.source,
+      mutationAttribute.start,
+      mutationAttribute.end - mutationAttribute.start,
+    ),
+    message: `${diagnosticDefinitions.KV238.message} repeatable enhanced mutation form needs authored key identity`,
   };
 }
 

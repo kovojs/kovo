@@ -329,8 +329,18 @@ export const AddToCartForm = component({
     - Verified imported mutation lowering with
       `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`
       on 2026-06-17.
-    - Remaining gap: typed render-context failure state and compiler diagnostics
-      for ambiguous repeated forms are not complete.
+    - `packages/compiler/src/scan/parse.ts` marks JSX elements inside `.map(...)`
+      callbacks as repeatable, and `packages/compiler/src/emit/server.ts`
+      rejects repeatable typed enhanced mutation forms without authored `key`
+      identity instead of guessing a submitted form target.
+    - `packages/compiler/src/scan/parse.test.ts` and `stamps.test.ts` cover the
+      repeatable-form parser fact and `KV238` diagnostic for unkeyed repeatable
+      typed mutation forms.
+    - Verified with
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/stamps.test.ts`
+      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
+      2026-06-17.
+    - Remaining gap: typed render-context failure state is not complete.
 - [x] **7. Type registry and breaking migration.**
   - Generate `FragmentTargets` facts for inferred targets so existing typed APIs
     keep working.

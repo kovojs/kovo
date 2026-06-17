@@ -245,6 +245,40 @@ export const ProductGrid = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('rejects repeatable typed enhanced mutation forms without authored key identity', () => {
+    const result = compileComponentModule({
+      fileName: 'product-list.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  handler() {
+    return null;
+  },
+});
+
+export const ProductList = component({
+  render: ({ products }) => (
+    <section>
+      {products.items.map((item) => (
+        <form enhance mutation={addToCart}>
+          <input type="hidden" name="productId" value={item.id} />
+        </form>
+      ))}
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238')).toEqual([
+      expect.objectContaining({
+        message:
+          'Duplicate fragment-target wire name. repeatable enhanced mutation form needs authored key identity',
+      }),
+    ]);
+    expect(result.loweredSource).toContain('mutation={addToCart}');
+    expect(result.loweredSource).not.toContain('action="/_m/cart/add"');
+  });
+
   it('stamps rendered component markup with declared query dependencies', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

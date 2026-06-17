@@ -136,6 +136,7 @@ export interface JsxElementModel {
   openingEnd: number;
   openingTagNameEnd: number;
   openingTagNameStart: number;
+  repeatable: boolean;
   selfClosing: boolean;
   selfClosingSlashHasLeadingWhitespace: boolean;
   spreadAttributes: readonly JsxSpreadAttributeModel[];
@@ -1228,6 +1229,7 @@ function jsxElementModel(
     openingEnd: openingElement.getEnd(),
     openingTagNameEnd: openingElement.tagName.getEnd(),
     openingTagNameStart: openingElement.tagName.getStart(sourceFile),
+    repeatable: isInsideArrayMapCallback(node),
     selfClosing,
     selfClosingSlashHasLeadingWhitespace: selfClosingSlashHasLeadingWhitespace(
       source,
@@ -1390,6 +1392,25 @@ function jsxAncestorTags(sourceFile: ts.SourceFile, node: ts.Node): string[] {
   }
 
   return tags;
+}
+
+function isInsideArrayMapCallback(node: ts.Node): boolean {
+  let current = node.parent;
+
+  while (current) {
+    if (
+      (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
+      ts.isCallExpression(current.parent) &&
+      current.parent.arguments[0] === current &&
+      ts.isPropertyAccessExpression(current.parent.expression) &&
+      current.parent.expression.name.text === 'map'
+    ) {
+      return true;
+    }
+    current = current.parent;
+  }
+
+  return false;
 }
 
 function staticJsxAttributeValue(attribute: ts.JsxAttribute): string | undefined {
