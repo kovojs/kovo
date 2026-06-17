@@ -325,6 +325,11 @@ removes app-authored bookkeeping from the enhanced path.
     - `packages/server/src/mutation-wire.ts` parses `Kovo-Live-Targets` into
       structured `{ target, component, props }` descriptors while preserving
       legacy `Kovo-Targets` parsing for current selection behavior.
+    - Additional progress 2026-06-17:
+      generated `LiveTargetRenderer` entries now carry their declared query keys,
+      and mutation selection can choose `Kovo-Live-Targets` descriptors from
+      renderer metadata even when DOM `kovo-deps` contains component-local query
+      aliases.
     - `packages/runtime/src/mutation-targets.test.ts`,
       `packages/runtime/src/inline-loader-enhanced-submit.test.ts`,
       `packages/server/src/mutation-wire.test.ts`, and
@@ -389,7 +394,16 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-commerce test`,
       `pnpm --filter @kovojs/example-crm test`,
       `pnpm --filter @kovojs/example-stackoverflow test`,
-      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Additional progress 2026-06-17:
+      `packages/server/src/live-target-renderer.ts` exposes declared query keys
+      on generated renderers, and `packages/server/src/mutation.ts` uses those
+      keys to select generated live descriptors and query JSON even when DOM
+      dependency stamps use component-local query aliases.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts packages/server/src/mutation-wire.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
     - Remaining gaps: build/app-shell integration still needs to collect the
       generated renderer exports without app-authored `createApp()` wiring; the
@@ -404,7 +418,29 @@ removes app-authored bookkeeping from the enhanced path.
     `<QuestionDetail questionId={params.id} />` directly rather than calling
     `renderQuestionListPage`, `renderQuestionListRegion`, or
     `renderQuestionListRegionFromDb`.
-  - Evidence: pending.
+  - Progress 2026-06-17:
+    - `examples/stackoverflow/src/queries.ts` now declares prop-backed
+      `questionDetail` and `questionAnswers` queries; `QuestionDetailRegion`
+      declares `props: { questionId: String }` and binds both queries with
+      `.args((props) => ...)`.
+    - `examples/stackoverflow/src/interactive-app.ts` no longer has a manual
+      `loadAnswersForQuestion()` helper and uses the declared detail queries for
+      both full detail pages and the current transitional detail fragment
+      renderer.
+    - `examples/stackoverflow/src/graph.ts` marks prop-backed detail query edges
+      as `await-fragment`, so kovo-check coverage stays explicit while the full
+      fragment server-truth path matures.
+    - Regenerated `examples/stackoverflow/src/generated/question-detail.tsx`,
+      `generated/touch-graph.ts`, and `generated/graph.json`.
+    - Verified with
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gaps: list-region presentational enrichment is still outside the
+      declared query model; generated target imports, `mutationResponse`
+      fragment routing, and route-page wrapper helpers are still present.
 - [ ] **8. Migrate CRM.**
   - Move contact/deal/detail presentation data into declared queries or explicit
     component query args.
@@ -450,7 +486,13 @@ removes app-authored bookkeeping from the enhanced path.
 - [ ] **Runtime/server tests prove no app-authored fragment renderers are needed.**
   - Enhanced mutation success should update visible query-backed targets using the
     generated registry.
-  - Evidence: pending.
+  - Progress 2026-06-17:
+    - `packages/server/src/mutation-response.test.ts` proves generated live
+      descriptors render from `liveTargetRenderers` and are selected from
+      renderer-declared query keys even when DOM deps are component-local aliases.
+    - Remaining gap: build/app-shell wiring still needs to collect generated
+      renderer exports automatically, and example success paths still use
+      transitional app-authored `mutationResponse` fragment routing.
 - [ ] **Example no-match checks prove the DX outcome.**
   - `rg -n 'fragmentRenderers|mutationResponse\\(|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb' examples/stackoverflow/src examples/crm/src examples/commerce/src`
     should have no ordinary app-authored success-routing hits after migration

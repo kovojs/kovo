@@ -10,8 +10,8 @@ import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
-import { answerList, questionList } from '../queries.js';
-import type { AnswerListItem } from '../types.js';
+import { questionAnswers, questionDetail } from '../queries.js';
+import type { QuestionAnswersResult, QuestionDetailResult } from '../types.js';
 import {
   freshId,
   parseTags,
@@ -35,31 +35,12 @@ import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 export const QUESTION_DETAIL_TARGET = 'question-detail-region';
 
-export interface QuestionDetail {
-  id: string;
-  title: string;
-  body: string;
-  authorId: string;
-  score: number;
-  answerCount: number;
-  authorName?: string;
-  tags?: string;
-  createdAt?: string;
-}
-
-export interface AnswerDetail extends AnswerListItem {
-  accepted: boolean;
-  authorId: string;
-  authorName?: string;
-  createdAt?: string;
-}
-
 export interface QuestionDetailPageData {
-  question: QuestionDetail;
-  answers: AnswerDetail[];
+  question: QuestionDetailResult;
+  answers: QuestionAnswersResult;
 }
 
-function renderQuestionCard(question: QuestionDetail): string {
+function renderQuestionCard(question: QuestionDetailResult): string {
   const tags = parseTags(question.tags);
   const body = (
     <div class="so-row">
@@ -79,7 +60,7 @@ function renderQuestionCard(question: QuestionDetail): string {
   return Card.definition.render({ children: body });
 }
 
-function renderAnswerCard(answer: AnswerDetail): string {
+function renderAnswerCard(answer: QuestionAnswersResult[number]): string {
   const acceptedBadge = answer.accepted
     ? Badge.definition.render({ children: '✓ Accepted answer', variant: 'success' })
     : '';
@@ -119,8 +100,26 @@ function renderAnswerCard(answer: AnswerDetail): string {
 // fragment payload. SPEC.md §4.8: the query-backed component root derives its
 // `kovo-fragment-target` in the generated module.
 export const QuestionDetailRegion = component({
-  queries: { answers: answerList, question: questionList },
-  render: ({ question, answers }: QuestionDetailPageData) => {
+  props: { questionId: String },
+  queries: {
+    answers: questionAnswers.args((props) => ({ questionId: props.questionId })),
+    question: questionDetail.args((props) => ({ id: props.questionId })),
+  },
+  render: ({ question, answers }: { question: QuestionDetailResult | null; answers: QuestionAnswersResult }) => {
+    if (!question) {
+      return (
+        <div class="so-stack">
+          <a class="so-back" href="/">
+            &larr; All questions
+          </a>
+          {Card.definition.render({
+            children:
+              '<h1 class="so-detail-title">Question not found</h1><p class="so-detail-body">This question does not exist (it may have been a demo that reset).</p>',
+          })}
+        </div>
+      );
+    }
+
     const postButton = Button.definition.render({
       children: 'Post your answer',
       type: 'submit',
@@ -184,11 +183,13 @@ export const QuestionDetailRegion$liveTargetRenderer = componentLiveTargetRender
   queries: [
     {
       name: "answers",
-      query: answerList,
+      query: questionAnswers,
+      args: (props) => ({ questionId: props.questionId }),
     },
     {
       name: "question",
-      query: questionList,
+      query: questionDetail,
+      args: (props) => ({ id: props.questionId }),
     },
   ],
 });

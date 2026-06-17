@@ -5,7 +5,6 @@ import {
   type RequestHandler,
 } from '@kovojs/server/app-shell/core';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
-import { asc, eq } from 'drizzle-orm';
 
 import {
   QUESTION_LIST_TARGET,
@@ -17,13 +16,12 @@ import {
   QUESTION_DETAIL_TARGET,
   renderQuestionDetailPage,
   renderQuestionDetailRegion,
-  type AnswerDetail,
 } from './generated/question-detail.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';
-import { questionList, questionScore } from './queries.js';
-import { answers, questions } from './schema.js';
+import { questionAnswers, questionDetail, questionList, questionScore } from './queries.js';
+import { questions } from './schema.js';
 
 // SPEC.md §9.1: the Stack Overflow example as a FULLY INTERACTIVE Kovo app. It
 // registers the postQuestion / postAnswer / voteUp mutations and a
@@ -43,24 +41,6 @@ const soStaticQuestionPaths = [
   '/questions/q6',
   '/questions/q7',
 ] as const;
-
-async function loadAnswersForQuestion(db: SoDb, questionId: string): Promise<AnswerDetail[]> {
-  const rows = await db
-    .select()
-    .from(answers)
-    .where(eq(answers.questionId, questionId))
-    .orderBy(asc(answers.id));
-  return rows.map((row) => ({
-    id: row.id,
-    questionId: row.questionId,
-    body: row.body,
-    score: row.score,
-    accepted: row.accepted,
-    authorId: row.authorId,
-    authorName: row.authorName,
-    createdAt: row.createdAt,
-  }));
-}
 
 // Presentational enrichment for question rows. The proven `questionList` query
 // (queries.ts) selects only the §10.5 columns; here we join the cosmetic
@@ -118,22 +98,15 @@ async function renderQuestionListRegionFromDb(db: SoDb): Promise<string> {
 // The voteUp (on a detail page) / postAnswer fragment payload: the question detail
 // region re-rendered from server truth (question card + answers + bumped count).
 async function renderQuestionDetailRegionFromDb(db: SoDb, questionId: string): Promise<string> {
-  const [row] = await db.select().from(questions).where(eq(questions.id, questionId)).limit(1);
-  if (!row) return '';
-  const detailAnswers = await loadAnswersForQuestion(db, questionId);
+  const context = { db, request: { db } };
+  const [question, detailAnswers] = await Promise.all([
+    questionDetail.load({ id: questionId }, context),
+    questionAnswers.load({ questionId }, context),
+  ]);
+  if (!question) return '';
   return renderQuestionDetailRegion({
     answers: detailAnswers,
-    question: {
-      id: row.id,
-      title: row.title,
-      body: row.body,
-      authorId: row.authorId,
-      score: row.score,
-      answerCount: row.answerCount,
-      authorName: row.authorName,
-      tags: row.tags,
-      createdAt: row.createdAt,
-    },
+    question,
   });
 }
 
@@ -185,12 +158,12 @@ export async function buildSoInteractiveApp(
     params: s.object({ id: s.string() }),
     staticPaths: soStaticQuestionPaths,
     async page({ params }: { params: { id: string } }) {
-      const [row] = await database
-        .select()
-        .from(questions)
-        .where(eq(questions.id, params.id))
-        .limit(1);
-      if (!row) {
+      const context = { db: database, request: { db: database } };
+      const [question, detailAnswers] = await Promise.all([
+        questionDetail.load({ id: params.id }, context),
+        questionAnswers.load({ questionId: params.id }, context),
+      ]);
+      if (!question) {
         return renderQuestionDetailPage({
           answers: [],
           question: {
@@ -203,20 +176,9 @@ export async function buildSoInteractiveApp(
           },
         });
       }
-      const detailAnswers = await loadAnswersForQuestion(database, row.id);
       return renderQuestionDetailPage({
         answers: detailAnswers,
-        question: {
-          id: row.id,
-          title: row.title,
-          body: row.body,
-          authorId: row.authorId,
-          score: row.score,
-          answerCount: row.answerCount,
-          authorName: row.authorName,
-          tags: row.tags,
-          createdAt: row.createdAt,
-        },
+        question,
       });
     },
     stylesheets: soStylesheets,
@@ -226,7 +188,7 @@ export async function buildSoInteractiveApp(
     clientModules: createMemoryVersionedClientModuleRegistry(),
     document: { lang: 'en-US' },
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
-    queries: [questionList, questionScore],
+    queries: [questionList, questionScore, questionDetail, questionAnswers],
     mutationResponse({ key, rawInput }) {
       // CSRF is disabled on the mutation definitions themselves (csrf: false in
       // mutations.ts — a no-auth demo). Here we only pick which fragment regions

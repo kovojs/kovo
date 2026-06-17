@@ -65,6 +65,26 @@
       "mutation": "voteUp",
       "query": "questionScore",
       "status": "derived"
+    },
+    {
+      "mutation": "postQuestion",
+      "query": "questionDetail",
+      "status": "await-fragment"
+    },
+    {
+      "mutation": "postAnswer",
+      "query": "questionAnswers",
+      "status": "await-fragment"
+    },
+    {
+      "mutation": "postAnswer",
+      "query": "questionDetail",
+      "status": "await-fragment"
+    },
+    {
+      "mutation": "voteUp",
+      "query": "questionDetail",
+      "status": "await-fragment"
     }
   ],
   "queries": [
@@ -75,6 +95,14 @@
     {
       "domains": ["answer"],
       "query": "answerList"
+    },
+    {
+      "domains": ["question"],
+      "query": "questionDetail"
+    },
+    {
+      "domains": ["answer"],
+      "query": "questionAnswers"
     },
     {
       "domains": ["vote"],

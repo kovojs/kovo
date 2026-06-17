@@ -1,9 +1,10 @@
-import { query, type QueryLoadContext } from '@kovojs/server';
-import { sum } from 'drizzle-orm';
+import { query, s, type QueryLoadContext } from '@kovojs/server';
+import { asc, eq, sum } from 'drizzle-orm';
 
 import { answer, question, vote } from './domains.js';
 import type { SoDb, SoRequest } from './runtime.js';
 import { answers, questions, votes } from './schema.js';
+import type { QuestionAnswersResult, QuestionDetailResult } from './types.js';
 
 // SPEC.md §10.2 / §10.5 Stage 2: typed reads declared once. Each loader INLINES
 // its Drizzle select directly in the `query('key', { load })` body so the static
@@ -52,6 +53,55 @@ export const answerList = query('answerList', {
       .from(answers)
       .orderBy(answers.id);
     return { items: items };
+  },
+  reads: [answer],
+});
+
+export const questionDetail = query('questionDetail', {
+  args: s.object({ id: s.string() }),
+  load: async (input: { id: string }, context?: SoQueryLoadContext): Promise<QuestionDetailResult | null> => {
+    const db = requireSoQueryDb(context);
+    const [row] = await db
+      .select({
+        id: questions.id,
+        title: questions.title,
+        body: questions.body,
+        authorId: questions.authorId,
+        score: questions.score,
+        answerCount: questions.answerCount,
+        authorName: questions.authorName,
+        tags: questions.tags,
+        createdAt: questions.createdAt,
+      })
+      .from(questions)
+      .where(eq(questions.id, input.id))
+      .limit(1);
+    return row ?? null;
+  },
+  reads: [question],
+});
+
+export const questionAnswers = query('questionAnswers', {
+  args: s.object({ questionId: s.string() }),
+  load: async (
+    input: { questionId: string },
+    context?: SoQueryLoadContext,
+  ): Promise<QuestionAnswersResult> => {
+    const db = requireSoQueryDb(context);
+    return db
+      .select({
+        id: answers.id,
+        questionId: answers.questionId,
+        body: answers.body,
+        score: answers.score,
+        accepted: answers.accepted,
+        authorId: answers.authorId,
+        authorName: answers.authorName,
+        createdAt: answers.createdAt,
+      })
+      .from(answers)
+      .where(eq(answers.questionId, input.questionId))
+      .orderBy(asc(answers.id));
   },
   reads: [answer],
 });

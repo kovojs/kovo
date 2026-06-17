@@ -1104,7 +1104,13 @@ function selectMutationResponseTargets(
   const affectedQueryTokens = new Set<string>();
   for (const query of input.rerunQueries) {
     const tokens = queryRerunTokens(query);
-    if (input.liveTargets.some((target) => depsMatch(target, tokens))) {
+    if (
+      input.liveTargets.some((target) => depsMatch(target, tokens)) ||
+      input.liveTargetDescriptors.some((descriptor) => {
+        const renderer = liveRenderersByComponent.get(descriptor.component);
+        return renderer?.queries?.some((rendererQuery) => tokens.includes(rendererQuery)) ?? false;
+      })
+    ) {
       for (const token of tokens) affectedQueryTokens.add(token);
     }
   }
@@ -1115,7 +1121,11 @@ function selectMutationResponseTargets(
       !input.liveTargets?.some(
         (target) =>
           targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
-      )
+      ) &&
+      !input.liveTargetDescriptors.some((descriptor) => {
+        const renderer = liveRenderersByComponent.get(descriptor.component);
+        return renderer?.queries?.some((rendererQuery) => tokens.includes(rendererQuery)) ?? false;
+      })
     ) {
       return false;
     }
@@ -1133,8 +1143,11 @@ function selectMutationResponseTargets(
 
   const liveTargetDescriptors = input.liveTargetDescriptors.filter((descriptor) => {
     if (renderersByTarget.has(descriptor.target)) return false;
-    if (!liveRenderersByComponent.has(descriptor.component)) return false;
+    const renderer = liveRenderersByComponent.get(descriptor.component);
+    if (!renderer) return false;
     const liveTarget = input.liveTargets?.find((target) => target.target === descriptor.target);
+    const rendererQueries = renderer.queries ?? [];
+    if (rendererQueries.some((query) => affectedQueryTokens.has(query))) return true;
     return liveTarget !== undefined && depsMatch(liveTarget, affectedQueryTokens);
   });
 

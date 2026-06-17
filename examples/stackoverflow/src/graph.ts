@@ -18,6 +18,13 @@ const DERIVED_OPTIMISTIC = [
   { mutation: 'voteUp', query: 'questionScore' },
 ] as const;
 
+const AWAIT_FRAGMENT_OPTIMISTIC = [
+  { mutation: 'postQuestion', query: 'questionDetail' },
+  { mutation: 'postAnswer', query: 'questionAnswers' },
+  { mutation: 'postAnswer', query: 'questionDetail' },
+  { mutation: 'voteUp', query: 'questionDetail' },
+] as const;
+
 export function soGraphDeclarations() {
   return {
     mutations: [
@@ -51,10 +58,18 @@ export function soGraphDeclarations() {
       mutation: pair.mutation,
       query: pair.query,
       status: 'derived' as const,
-    })),
+    })).concat(
+      AWAIT_FRAGMENT_OPTIMISTIC.map((pair) => ({
+        mutation: pair.mutation,
+        query: pair.query,
+        status: 'await-fragment' as const,
+      })),
+    ),
     queries: [
       { domains: ['question'], query: 'questionList' },
       { domains: ['answer'], query: 'answerList' },
+      { domains: ['question'], query: 'questionDetail' },
+      { domains: ['answer'], query: 'questionAnswers' },
       { domains: ['vote'], query: 'questionScore' },
     ],
   } satisfies Omit<KovoExplainInput, 'touchGraph'>;

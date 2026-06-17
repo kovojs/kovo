@@ -117,11 +117,12 @@ describe('server mutation primitives', () => {
         headers: {
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{"cartId":"c1"}',
-          'Kovo-Targets': 'cart-panel=cart',
+          'Kovo-Targets': 'cart-panel=panelCart',
         },
         liveTargetRenderers: [
           {
             component: 'components/cart/panel',
+            queries: ['cart'],
             render: renderCartPanel,
           },
         ],

@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest';
 
 import { soGraph } from './app.js';
 
-// SPEC.md §10.4/§10.5 and rules/v1-acceptance.md: the static graph proves every (mutation × invalidated
-// query) pair is compiler-DERIVED. `kovo check` is OK (zero KV310 — no invalidated
-// query lacks an optimistic transform), and `kovo explain` reports `derived`
-// statuses with zero PUNTED / zero UNHANDLED for each mutation.
+// SPEC.md §10.4/§10.5 and rules/v1-acceptance.md: the static graph proves every
+// mutation × invalidated query pair is covered. Algebraic collection queries are
+// compiler-derived; prop-backed detail queries intentionally await the server
+// fragment. `kovo check` remains OK: zero KV310, zero PUNTED, zero UNHANDLED.
 
 describe('stackoverflow kovo graph acceptance', () => {
   it('kovo check is OK with zero optimistic-coverage gaps (no KV310)', () => {
@@ -22,52 +22,61 @@ describe('stackoverflow kovo graph acceptance', () => {
     expect(result.output).not.toContain('KV310');
   });
 
-  it('kovo explain reports fully-derived optimism for postQuestion', () => {
+  it('kovo explain reports covered optimism for postQuestion', () => {
     const fact = kovoExplainMutationAssertionFact(
       kovoExplain(soGraph, { kind: 'mutation', optimistic: true, target: 'postQuestion' }),
     );
     expect(fact.exitCode).toBe(0);
-    expect(fact.optimisticStatuses).toEqual({ questionList: 'derived' });
+    expect(fact.optimisticStatuses).toEqual({
+      questionDetail: 'await-fragment',
+      questionList: 'derived',
+    });
     expect(fact.optimisticSummary).toMatchObject({
+      'await-fragment': '1',
       PUNTED: '0',
       UNHANDLED: '0',
       derived: '1',
       'hand-written': '0',
-      total: '1',
+      total: '2',
     });
   });
 
-  it('kovo explain reports fully-derived optimism for postAnswer', () => {
+  it('kovo explain reports covered optimism for postAnswer', () => {
     const fact = kovoExplainMutationAssertionFact(
       kovoExplain(soGraph, { kind: 'mutation', optimistic: true, target: 'postAnswer' }),
     );
     expect(fact.exitCode).toBe(0);
     expect(fact.optimisticStatuses).toEqual({
       answerList: 'derived',
+      questionAnswers: 'await-fragment',
+      questionDetail: 'await-fragment',
       questionList: 'derived',
     });
     expect(fact.optimisticSummary).toMatchObject({
+      'await-fragment': '2',
       PUNTED: '0',
       UNHANDLED: '0',
       derived: '2',
-      total: '2',
+      total: '4',
     });
   });
 
-  it('kovo explain reports fully-derived optimism for voteUp', () => {
+  it('kovo explain reports covered optimism for voteUp', () => {
     const fact = kovoExplainMutationAssertionFact(
       kovoExplain(soGraph, { kind: 'mutation', optimistic: true, target: 'voteUp' }),
     );
     expect(fact.exitCode).toBe(0);
     expect(fact.optimisticStatuses).toEqual({
+      questionDetail: 'await-fragment',
       questionList: 'derived',
       questionScore: 'derived',
     });
     expect(fact.optimisticSummary).toMatchObject({
+      'await-fragment': '1',
       PUNTED: '0',
       UNHANDLED: '0',
       derived: '2',
-      total: '2',
+      total: '3',
     });
   });
 });

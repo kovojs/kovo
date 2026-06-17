@@ -38,6 +38,7 @@ describe('generated component live target renderers', () => {
       ],
     });
 
+    expect(renderer.queries).toEqual(['product']);
     await expect(
       renderer.render({
         input: {},

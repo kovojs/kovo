@@ -42,6 +42,18 @@ export interface QuestionListResult {
   items: QuestionListItem[];
 }
 
+export interface QuestionDetailResult {
+  id: string;
+  title: string;
+  body: string;
+  authorId: string;
+  score: number;
+  answerCount: number;
+  authorName?: string;
+  tags?: string;
+  createdAt?: string;
+}
+
 export interface AnswerListItem {
   id: string;
   questionId: string;
@@ -51,6 +63,14 @@ export interface AnswerListItem {
 export interface AnswerListResult {
   items: AnswerListItem[];
 }
+
+export interface QuestionAnswerDetail extends AnswerListItem {
+  accepted: boolean;
+  authorId: string;
+  authorName?: string;
+  createdAt?: string;
+}
+export type QuestionAnswersResult = QuestionAnswerDetail[];
 
 export interface QuestionScoreResult {
   score: number;

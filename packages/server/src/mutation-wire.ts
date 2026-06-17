@@ -94,6 +94,7 @@ export interface MutationLiveTargetDescriptor {
  */
 export interface LiveTargetRenderer<Request = unknown> {
   component: string;
+  queries?: readonly string[];
   render(context: LiveTargetRenderContext<Request>): string | Promise<string>;
   stylesheets?: readonly (string | StylesheetAsset)[];
 }
