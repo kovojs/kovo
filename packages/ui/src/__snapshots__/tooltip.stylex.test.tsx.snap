@@ -1,0 +1,32 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Tooltip StyleX slots > exports StyleX style groups 1`] = `
+{
+  "contentMarker": true,
+  "keys": [
+    "content",
+    "root",
+    "trigger",
+  ],
+  "rootMarker": true,
+  "triggerMarker": true,
+}
+`;
+
+exports[`@kovojs/ui Tooltip StyleX slots > matches author-last slot override output 1`] = `"<div class="kv-tooltip-d-14glvo kv-tooltip-font-ms8kpd kv-tooltip-position-ojetho kv-tooltip-opacity-1wmp2v kv-app-tooltip-fg-vo7ghd" data-style-src="tooltip.tsx#root; app-tooltip.tsx#root" data-state="open"><button class="kv-tooltip-align-1asrww kv-tooltip-bg-18mblj kv-tooltip-bd-rie3sg kv-tooltip-bd-1957bb kv-tooltip-bd-1vad9u kv-tooltip-bd-115o9z kv-tooltip-box-kdtwje kv-tooltip-d-1fob82 kv-tooltip-font-ms8kpd kv-tooltip-font-pbx8x4 kv-tooltip-h-557h6j kv-tooltip-justify-edikmg kv-tooltip-pad-viev00 kv-tooltip-transition-hk52ie kv-tooltip-bg-1rtfai kv-tooltip-outline-1yt6dx kv-tooltip-outline-1iz9f5 kv-tooltip-outline-iee2jp kv-tooltip-outline-1bfidg kv-tooltip-bg-d6c1of kv-app-tooltip-fg-vo7ghd kv-app-tooltip-fg-76imh" data-style-src="tooltip.tsx#trigger; app-tooltip.tsx#trigger" aria-describedby="tooltip-help" data-state="open" kovo-tooltip="tooltip-help" type="button">Help</button><div class="kv-tooltip-bg-1alc0m kv-tooltip-bd-1957bb kv-tooltip-fg-iaalic kv-tooltip-font-q0hy3m kv-tooltip-m-146lrb kv-tooltip-pad-13f0fs kv-tooltip-pad-viev00 kv-tooltip-w-1iqvxf kv-tooltip-d-1que9w kv-tooltip-box-13xkzi kv-app-tooltip-max-1it16c" data-style-src="tooltip.tsx#content; app-tooltip.tsx#content" data-state="open" id="tooltip-help" role="tooltip">Info</div></div>"`;
+
+exports[`@kovojs/ui Tooltip StyleX slots > matches tooltip markup with StyleX slot output 1`] = `
+{
+  "classes": [
+    "kv-tooltip-fg-1vjxc5 kv-tooltip-d-14glvo kv-tooltip-font-ms8kpd kv-tooltip-position-ojetho kv-tooltip-opacity-1wmp2v",
+  ],
+  "contentClasses": [
+    "kv-tooltip-bg-1alc0m kv-tooltip-bd-1957bb kv-tooltip-fg-iaalic kv-tooltip-font-q0hy3m kv-tooltip-m-146lrb kv-tooltip-max-1odqu3 kv-tooltip-pad-13f0fs kv-tooltip-pad-viev00 kv-tooltip-w-1iqvxf kv-tooltip-d-1que9w kv-tooltip-box-13xkzi",
+  ],
+  "disabled": "<div class="kv-tooltip-fg-1vjxc5 kv-tooltip-d-14glvo kv-tooltip-font-ms8kpd kv-tooltip-position-ojetho kv-tooltip-opacity-1wmp2v" data-style-src="tooltip.tsx#root" data-disabled="" data-state="closed"><button class="kv-tooltip-align-1asrww kv-tooltip-bg-18mblj kv-tooltip-bd-rie3sg kv-tooltip-bd-1957bb kv-tooltip-bd-1vad9u kv-tooltip-bd-115o9z kv-tooltip-box-kdtwje kv-tooltip-fg-1vjxc5 kv-tooltip-d-1fob82 kv-tooltip-font-ms8kpd kv-tooltip-font-pbx8x4 kv-tooltip-h-557h6j kv-tooltip-justify-edikmg kv-tooltip-pad-viev00 kv-tooltip-transition-hk52ie kv-tooltip-bg-1rtfai kv-tooltip-outline-1yt6dx kv-tooltip-outline-1iz9f5 kv-tooltip-outline-iee2jp kv-tooltip-outline-1bfidg kv-tooltip-bg-d6c1of" data-style-src="tooltip.tsx#trigger" data-disabled="" data-state="closed" disabled type="button">Help</button><div class="kv-tooltip-bg-1alc0m kv-tooltip-bd-1957bb kv-tooltip-fg-iaalic kv-tooltip-font-q0hy3m kv-tooltip-m-146lrb kv-tooltip-max-1odqu3 kv-tooltip-pad-13f0fs kv-tooltip-pad-viev00 kv-tooltip-w-1iqvxf kv-tooltip-d-1que9w kv-tooltip-box-13xkzi" data-style-src="tooltip.tsx#content" data-state="closed" hidden id="tooltip-help" role="tooltip">Info</div></div>",
+  "open": "<div class="kv-tooltip-fg-1vjxc5 kv-tooltip-d-14glvo kv-tooltip-font-ms8kpd kv-tooltip-position-ojetho kv-tooltip-opacity-1wmp2v" data-style-src="tooltip.tsx#root" data-state="open"><button class="kv-tooltip-align-1asrww kv-tooltip-bg-18mblj kv-tooltip-bd-rie3sg kv-tooltip-bd-1957bb kv-tooltip-bd-1vad9u kv-tooltip-bd-115o9z kv-tooltip-box-kdtwje kv-tooltip-fg-1vjxc5 kv-tooltip-d-1fob82 kv-tooltip-font-ms8kpd kv-tooltip-font-pbx8x4 kv-tooltip-h-557h6j kv-tooltip-justify-edikmg kv-tooltip-pad-viev00 kv-tooltip-transition-hk52ie kv-tooltip-bg-1rtfai kv-tooltip-outline-1yt6dx kv-tooltip-outline-1iz9f5 kv-tooltip-outline-iee2jp kv-tooltip-outline-1bfidg kv-tooltip-bg-d6c1of" data-style-src="tooltip.tsx#trigger" aria-describedby="tooltip-help" data-state="open" kovo-tooltip="tooltip-help" type="button">Help</button><div class="kv-tooltip-bg-1alc0m kv-tooltip-bd-1957bb kv-tooltip-fg-iaalic kv-tooltip-font-q0hy3m kv-tooltip-m-146lrb kv-tooltip-max-1odqu3 kv-tooltip-pad-13f0fs kv-tooltip-pad-viev00 kv-tooltip-w-1iqvxf kv-tooltip-d-1que9w kv-tooltip-box-13xkzi" data-style-src="tooltip.tsx#content" data-state="open" id="tooltip-help" role="tooltip">Info</div></div>",
+  "triggerClasses": [
+    "kv-tooltip-align-1asrww kv-tooltip-bg-18mblj kv-tooltip-bd-rie3sg kv-tooltip-bd-1957bb kv-tooltip-bd-1vad9u kv-tooltip-bd-115o9z kv-tooltip-box-kdtwje kv-tooltip-fg-1vjxc5 kv-tooltip-d-1fob82 kv-tooltip-font-ms8kpd kv-tooltip-font-pbx8x4 kv-tooltip-h-557h6j kv-tooltip-justify-edikmg kv-tooltip-pad-viev00 kv-tooltip-transition-hk52ie kv-tooltip-bg-1rtfai kv-tooltip-outline-1yt6dx kv-tooltip-outline-1iz9f5 kv-tooltip-outline-iee2jp kv-tooltip-outline-1bfidg kv-tooltip-bg-d6c1of",
+  ],
+}
+`;

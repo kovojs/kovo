@@ -441,14 +441,12 @@
       "exports": ["HoverCard", "HoverCardTrigger", "HoverCardContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
-          "defineVariants",
           "hoverCardContentAttributes",
           "hoverCardRootAttributes",
           "hoverCardTriggerAttributes",
           "safeUrl"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []
@@ -589,13 +587,11 @@
       "exports": ["Popover", "PopoverTrigger", "PopoverContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
-          "defineVariants",
           "popoverContentAttributes",
           "popoverRootAttributes",
           "popoverTriggerAttributes"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []
@@ -896,13 +892,11 @@
       "exports": ["Tooltip", "TooltipTrigger", "TooltipContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
-          "defineVariants",
           "tooltipContentAttributes",
           "tooltipRootAttributes",
           "tooltipTriggerAttributes"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

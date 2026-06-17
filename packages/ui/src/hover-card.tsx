@@ -1,14 +1,18 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   hoverCardContentAttributes,
   hoverCardRootAttributes,
   hoverCardTriggerAttributes,
   safeUrl,
-  type ClassValue,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface HoverCardStyleOverrides {
+  content?: style.StyleInput;
+  root?: style.StyleInput;
+  trigger?: style.StyleInput;
+}
 
 export interface HoverCardStateProps {
   disabled?: boolean;
@@ -17,42 +21,80 @@ export interface HoverCardStateProps {
 
 export interface HoverCardProps extends HoverCardStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: HoverCardStyleOverrides;
 }
 
 export interface HoverCardTriggerProps extends HoverCardStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   href?: string;
   id?: string;
+  styles?: HoverCardStyleOverrides;
 }
 
 export interface HoverCardContentProps extends HoverCardStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
+  styles?: HoverCardStyleOverrides;
 }
 
-export const hoverCardClassNames = defineVariants({
-  base: 'relative inline-block text-sm text-neutral-950 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const hoverCardStyles = style.create(
+  {
+    content: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#404040',
+      fontSize: 14,
+      marginTop: 8,
+      padding: 16,
+      width: 288,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'inline-block',
+      fontSize: 14,
+      position: 'relative',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    trigger: {
+      alignItems: 'center',
+      borderRadius: 6,
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      textDecorationLine: 'none',
+      textUnderlineOffset: 4,
+      '[data-state=open]': {
+        textDecorationLine: 'underline',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        textDecorationLine: 'underline',
+      },
+    },
+  },
+  { namespace: 'hoverCard', source: 'hover-card.tsx' },
+);
 
-export const hoverCardTriggerClassNames = defineVariants({
-  base: 'inline-flex items-center rounded-md text-sm font-medium text-neutral-950 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 data-[state=open]:underline',
-  variants: {},
-});
-
-export const hoverCardContentClassNames = defineVariants({
-  base: 'mt-2 w-72 rounded-md border border-neutral-200 bg-white p-4 text-sm text-neutral-700 shadow-md data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const hoverCardClasses = hoverCardClassNames.classes;
-export const hoverCardTriggerClasses = hoverCardTriggerClassNames.classes;
-export const hoverCardContentClasses = hoverCardContentClassNames.classes;
+export const hoverCardClasses = [style.attrs(hoverCardStyles.root).class ?? ''] as const;
+export const hoverCardTriggerClasses = [style.attrs(hoverCardStyles.trigger).class ?? ''] as const;
+export const hoverCardContentClasses = [style.attrs(hoverCardStyles.content).class ?? ''] as const;
 
 function hoverCardState(props: HoverCardStateProps) {
   return {
@@ -64,10 +106,11 @@ function hoverCardState(props: HoverCardStateProps) {
 export const HoverCard = component({
   render(props: HoverCardProps) {
     const attrs = hoverCardRootAttributes(hoverCardState(props));
+    const styleAttrs = style.attrs(hoverCardStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(hoverCardClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -84,13 +127,14 @@ export const HoverCardTrigger = component({
       ...hoverCardState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(hoverCardStyles.trigger, props.styles?.trigger);
 
     return (
       <a
+        {...styleAttrs}
         aria-controls={attrs['aria-controls']}
         aria-disabled={props.disabled === true ? 'true' : undefined}
         aria-expanded={attrs['aria-expanded']}
-        class={cn(hoverCardTriggerClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         // SECURITY_FINDINGS.md H3: sanitize the caller href so a dangerous
@@ -112,10 +156,11 @@ export const HoverCardContent = component({
       ...hoverCardState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(hoverCardStyles.content, props.styles?.content);
 
     return (
       <div
-        class={cn(hoverCardContentClassNames(), props.class)}
+        {...styleAttrs}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
         id={attrs.id}

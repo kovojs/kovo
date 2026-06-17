@@ -1,13 +1,17 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   popoverContentAttributes,
   popoverRootAttributes,
   popoverTriggerAttributes,
-  type ClassValue,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface PopoverStyleOverrides {
+  content?: style.StyleInput;
+  root?: style.StyleInput;
+  trigger?: style.StyleInput;
+}
 
 export interface PopoverStateProps {
   disabled?: boolean;
@@ -16,41 +20,90 @@ export interface PopoverStateProps {
 
 export interface PopoverProps extends PopoverStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: PopoverStyleOverrides;
 }
 
 export interface PopoverTriggerProps extends PopoverStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   id?: string;
+  styles?: PopoverStyleOverrides;
 }
 
 export interface PopoverContentProps extends PopoverStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
+  styles?: PopoverStyleOverrides;
 }
 
-export const popoverClassNames = defineVariants({
-  base: 'relative inline-block text-sm text-neutral-950 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const popoverStyles = style.create(
+  {
+    content: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#404040',
+      fontSize: 14,
+      marginTop: 8,
+      padding: 12,
+      width: 256,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'inline-block',
+      fontSize: 14,
+      position: 'relative',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    trigger: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 36,
+      justifyContent: 'center',
+      paddingInline: 12,
+      transitionProperty: 'background-color',
+      '[data-state=open]': {
+        backgroundColor: '#f5f5f5',
+      },
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
+    },
+  },
+  { namespace: 'popover', source: 'popover.tsx' },
+);
 
-export const popoverTriggerClassNames = defineVariants({
-  base: 'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50 data-[state=open]:bg-neutral-100',
-  variants: {},
-});
-
-export const popoverContentClassNames = defineVariants({
-  base: 'mt-2 w-64 rounded-md border border-neutral-200 bg-white p-3 text-sm text-neutral-700 shadow-md data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const popoverClasses = popoverClassNames.classes;
-export const popoverTriggerClasses = popoverTriggerClassNames.classes;
-export const popoverContentClasses = popoverContentClassNames.classes;
+export const popoverClasses = [style.attrs(popoverStyles.root).class ?? ''] as const;
+export const popoverTriggerClasses = [style.attrs(popoverStyles.trigger).class ?? ''] as const;
+export const popoverContentClasses = [style.attrs(popoverStyles.content).class ?? ''] as const;
 
 function popoverState(props: PopoverStateProps) {
   return {
@@ -62,10 +115,11 @@ function popoverState(props: PopoverStateProps) {
 export const Popover = component({
   render(props: PopoverProps) {
     const attrs = popoverRootAttributes(popoverState(props));
+    const styleAttrs = style.attrs(popoverStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(popoverClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -82,12 +136,13 @@ export const PopoverTrigger = component({
       ...popoverState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(popoverStyles.trigger, props.styles?.trigger);
 
     return (
       <button
+        {...styleAttrs}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
-        class={cn(popoverTriggerClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
@@ -108,10 +163,11 @@ export const PopoverContent = component({
       ...popoverState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(popoverStyles.content, props.styles?.content);
 
     return (
       <div
-        class={cn(popoverContentClassNames(), props.class)}
+        {...styleAttrs}
         data-state={attrs['data-state']}
         id={attrs.id}
         popover={attrs.popover}

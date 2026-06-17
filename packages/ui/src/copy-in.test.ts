@@ -47,10 +47,13 @@ function linkKovoDep(nodeModules: string, pkg: string): void {
 
 const COMPONENTS = [
   { file: 'button.tsx', label: 'static (no headless behavior)' },
+  { file: 'hover-card.tsx', label: 'overlay slot overrides + href sanitization' },
+  { file: 'popover.tsx', label: 'overlay slot overrides + native popover wiring' },
   { file: 'radio-group.tsx', label: 'headless behavior + StyleX slot overrides' },
   { file: 'select.tsx', label: 'headless behavior (attributes + escapeHtml)' },
   { file: 'table.tsx', label: 'semantic table parts with typed StyleX slot overrides' },
   { file: 'tabs.tsx', label: 'multi-slot StyleX overrides' },
+  { file: 'tooltip.tsx', label: 'overlay slot overrides + tooltip semantics' },
 ];
 
 describe('@kovojs/ui copy-in model', () => {

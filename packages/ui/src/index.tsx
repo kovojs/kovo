@@ -670,17 +670,16 @@ export {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
-  hoverCardClassNames,
   hoverCardClasses,
-  hoverCardContentClassNames,
   hoverCardContentClasses,
-  hoverCardTriggerClassNames,
   hoverCardTriggerClasses,
+  hoverCardStyles,
 } from './hover-card.js';
 export type {
   HoverCardContentProps,
   HoverCardProps,
   HoverCardStateProps,
+  HoverCardStyleOverrides,
   HoverCardTriggerProps,
 } from './hover-card.js';
 export { Meter, meterClasses, meterStyles } from './meter.js';
@@ -689,17 +688,16 @@ export {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  popoverClassNames,
   popoverClasses,
-  popoverContentClassNames,
   popoverContentClasses,
-  popoverTriggerClassNames,
   popoverTriggerClasses,
+  popoverStyles,
 } from './popover.js';
 export type {
   PopoverContentProps,
   PopoverProps,
   PopoverStateProps,
+  PopoverStyleOverrides,
   PopoverTriggerProps,
 } from './popover.js';
 export { Progress, progressClasses, progressStyles } from './progress.js';
@@ -710,16 +708,15 @@ export {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  tooltipClassNames,
   tooltipClasses,
-  tooltipContentClassNames,
   tooltipContentClasses,
-  tooltipTriggerClassNames,
   tooltipTriggerClasses,
+  tooltipStyles,
 } from './tooltip.js';
 export type {
   TooltipContentProps,
   TooltipProps,
   TooltipStateProps,
+  TooltipStyleOverrides,
   TooltipTriggerProps,
 } from './tooltip.js';

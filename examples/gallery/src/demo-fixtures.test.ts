@@ -972,7 +972,8 @@ describe('gallery demo fixtures', () => {
 
     expect(hoverCard.html).toContain('data-ui-demo="hover-card"');
     expect(hoverCard.html).toContain('kovo-hover-card="gallery-hover-card-content"');
-    expect(hoverCard.html).toContain('rounded-md border border-neutral-200 bg-white p-4');
+    expect(hoverCard.html).toContain('data-style-src="hover-card.tsx#content"');
+    expect(hoverCard.html).toContain('class="kv-hover-card-');
 
     expect(kbd.html).toMatchSnapshot('kbd demo html');
 
@@ -986,7 +987,8 @@ describe('gallery demo fixtures', () => {
 
     expect(popover.html).toContain('data-ui-demo="popover"');
     expect(popover.html).toContain('popovertarget="gallery-popover-content"');
-    expect(popover.html).toContain('rounded-md border border-neutral-200 bg-white p-3');
+    expect(popover.html).toContain('data-style-src="popover.tsx#content"');
+    expect(popover.html).toContain('class="kv-popover-');
 
     expect(select.html).toContain('data-ui-demo="select"');
     expect(select.html).toContain('rounded-md border border-neutral-300');
@@ -1027,7 +1029,8 @@ describe('gallery demo fixtures', () => {
 
     expect(tooltip.html).toContain('data-ui-demo="tooltip"');
     expect(tooltip.html).toContain('kovo-tooltip="gallery-tooltip-content"');
-    expect(tooltip.html).toContain('rounded-md bg-neutral-950 px-2.5 py-1.5');
+    expect(tooltip.html).toContain('data-style-src="tooltip.tsx#content"');
+    expect(tooltip.html).toContain('class="kv-tooltip-');
 
     expect(toast.html).toContain('data-ui-demo="toast"');
     expect(toast.html).toContain('data-[variant=success]:bg-emerald-50');

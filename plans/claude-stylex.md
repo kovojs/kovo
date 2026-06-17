@@ -675,6 +675,25 @@ borrowing its concrete API/spike detail.
     `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.visual.browser.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
     `pnpm exec tsc --noEmit`, and `git diff --check` pass.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/popover.tsx`, `packages/ui/src/tooltip.tsx`,
+    and `packages/ui/src/hover-card.tsx` now import `@kovojs/style`, replace `defineVariants`/`cn`
+    with `style.create(...)` + `style.attrs(...)`, and expose typed `styles?: ...StyleOverrides`
+    slot overrides for `root`/`trigger`/`content` while preserving the headless
+    `popover*Attributes(...)`, `tooltip*Attributes(...)`, and `hoverCard*Attributes(...)` semantics
+    required by `SPEC.md` §4.6.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/popover.stylex.test.tsx`,
+    `packages/ui/src/tooltip.stylex.test.tsx`, and `packages/ui/src/hover-card.stylex.test.tsx`
+    snapshot generated `kv-*` classes, exported StyleX slot groups, and author-last slot override
+    output; `packages/ui/src/index.markup.test.tsx` keeps the semantic overlay assertions and
+    removes brittle Tailwind-fragment coverage; `packages/ui/src/copy-in.test.ts` now typechecks the
+    vendored `hover-card.tsx`, `popover.tsx`, and `tooltip.tsx` sources against the public
+    `@kovojs/*` packages alone.
+  - Evidence (partial, 2026-06-16): `packages/ui/registry.json` is regenerated for the overlay
+    imports, `examples/gallery/src/visual-fixtures/hover-card.html.txt`,
+    `examples/gallery/src/visual-fixtures/popover.html.txt`, and
+    `examples/gallery/src/visual-fixtures/tooltip.html.txt` are refreshed with `kv-*` classes plus
+    `data-style-src`, and `examples/gallery/src/demo-fixtures.test.ts` moves overlay fixture checks
+    to those StyleX markers instead of Tailwind class fragments.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L
