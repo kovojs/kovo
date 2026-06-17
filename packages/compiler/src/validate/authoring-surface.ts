@@ -68,8 +68,7 @@ function nonPublicKovoImportDiagnostic({
       'Fixes: import Kovo packages through documented public entrypoints; generated ABI subpaths are reserved for compiler-emitted modules.',
       'SPEC.md §5.2: app-authored source may import Kovo packages only through documented public entrypoints.',
     ].join('\n'),
-    message:
-      'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+    message: 'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
   };
 }
 

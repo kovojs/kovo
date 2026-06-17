@@ -18,8 +18,15 @@
     "prepack": "pnpm run build:dist"
   },
   "devDependencies": {
+    "@kovojs/better-auth": "workspace:*",
     "@kovojs/compiler": "workspace:*",
     "@kovojs/core": "workspace:*",
+    "@kovojs/runtime": "workspace:*",
+    "@kovojs/server": "workspace:*",
+    "@kovojs/style": "workspace:*",
+    "kovo": "workspace:*",
+    "vite": "8.0.16",
+    "vite-plus": "0.1.24",
     "vitest": "4.1.8"
   }
 }

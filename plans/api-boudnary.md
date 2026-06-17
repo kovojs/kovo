@@ -86,13 +86,18 @@ already excludes `@internal`, but the root barrels can still export those names.
     and baseline ratcheting: `pnpm exec vitest --run scripts/api-surface-gate.test.mjs`.
   - Evidence: `pnpm exec vitest --run scripts/public-packages.test.mjs scripts/api-surface-gate.test.mjs`
     passed on 2026-06-17 with 13 tests. `node scripts/api-surface-gate.mjs`
-    now fails on existing package migration debt, reporting 343 boundary
-    violations after the compiler slice, which proves hard enforcement is active.
-- [ ] **Keep publish generation aware of generated/internal subpaths.**
+    passed after the runtime and CLI boundary cleanup with
+    `public-exports-needing-attention=2904`, `baseline=2904`, and no hard
+    boundary violations.
+- [x] **Keep publish generation aware of generated/internal subpaths.**
   - Done = `scripts/build-publish.mjs` includes generated/internal subpaths in
     `publishConfig` when they are in top-level `exports`, and verifies their dist
     outputs without treating them as public API docs.
   - Prove: `pnpm run check:publish`.
+  - Evidence: `pnpm run check:publish` passed on 2026-06-17 after the generated
+    and internal subpath migrations; it built every public package and verified
+    every `publishConfig` target file exists, including generated/internal
+    subpath outputs.
 
 ## Phase 2 — Docs Enforcement
 
@@ -190,10 +195,9 @@ already excludes `@internal`, but the root barrels can still export those names.
     `pnpm run check:inline-loader`,
     `pnpm --filter @kovojs/example-gallery exec vitest run src/interactive-gallery.static-export.test.ts src/interactive-gallery.artifacts.test.ts`
     (2 files, 5 tests), and
-    `node scripts/api-surface-gate.mjs 2>&1 | rg '@kovojs/runtime|api-surface:'`,
-    which reported only `api-surface: 2 boundary violation(s):` with no
-    `@kovojs/runtime` entries; the remaining full-gate failures are unrelated
-    `kovo` CLI root internals.
+    `node scripts/api-surface-gate.mjs`, which passed after integration with
+    `public-exports-needing-attention=2904`, `baseline=2904`, and no hard
+    runtime, generated, or CLI boundary violations.
   - Prove: `pnpm --filter @kovojs/runtime exec vitest run`,
     `pnpm --filter @kovojs/compiler exec vitest run`, generated fixture tests,
     and `pnpm run check:inline-loader`.
@@ -206,10 +210,17 @@ already excludes `@internal`, but the root barrels can still export those names.
     and the API surface gate.
   - Evidence: local compiler split introduced `@kovojs/compiler/internal` and
     `@kovojs/compiler/internal/graph`; `pnpm --filter @kovojs/compiler exec vitest run`
-    passed on 2026-06-17 with 42 files / 356 tests. `node scripts/api-surface-gate.mjs | rg '@kovojs/compiler|api-surface:'`
-    reported 343 non-compiler boundary violations and no compiler-specific
-    violations. Remaining proof gaps: create-kovo vitest and example graph-emission
-    checks have not run in this session.
+    passed on 2026-06-17 with 42 files / 359 tests after import-hygiene tests
+    landed. `node scripts/api-surface-gate.mjs` passed with no hard compiler
+    boundary violations. Example graph checks passed for CRM
+    (`pnpm --filter @kovojs/example-crm exec vitest run src/graph.test.ts`),
+    Stack Overflow
+    (`pnpm --filter @kovojs/example-stackoverflow exec vitest run src/kovo-graph.test.ts`),
+    and Reference
+    (`pnpm --filter @kovojs/example-reference exec vitest run src/app.test.ts`).
+    Remaining proof gap: `pnpm --filter create-kovo exec vitest run` still fails
+    on starter-template environment assumptions (`node_modules/.pnpm` absent in
+    the package workspace) and one Vite cwd resolution case for `/src/app-shell.ts`.
 - [ ] **Audit `@kovojs/drizzle`, `@kovojs/better-auth`, `@kovojs/test`, `@kovojs/headless-ui`, `@kovojs/style`, and CLI packages.**
   - For each package, root exports must be documented public API; `@internal`
     declarations move behind internal subpaths or become package-private.
@@ -272,8 +283,10 @@ already excludes `@internal`, but the root barrels can still export those names.
     it skips generated artifacts and tests and records explicit current internal
     tool/app exceptions in one allowlist. Verified by
     `pnpm exec vitest --run scripts/import-boundary.test.mjs` (3 tests) and
-    `node scripts/import-boundary.mjs`. Gap: `pnpm run check` was not run in this
-    slice, so the checklist item remains open pending the broad proof.
+    `node scripts/import-boundary.mjs`; the root `check` script now runs this
+    scanner through `pnpm run check:imports`. Gap: `pnpm run check` remains
+    blocked by repo-wide formatting drift outside this slice, so the checklist
+    item remains open pending the broad proof.
 - [ ] **Update generated-artifact tests to pin internal import paths.**
   - Done = compiler/server/runtime generated modules are tested against the real
     package exports they import, so moving a generated ABI symbol requires
@@ -288,17 +301,26 @@ already excludes `@internal`, but the root barrels can still export those names.
 
 ## Phase 5 — Final Gates and Baseline
 
-- [ ] **Regenerate the API surface baseline only after enforcing the new split.**
+- [x] **Regenerate the API surface baseline only after enforcing the new split.**
   - Done = the baseline represents only remaining undocumented public exports,
     not `@internal` or `@generated` symbols leaked through roots.
   - Prove: `node scripts/api-surface-gate.mjs --write` followed by
     `node scripts/api-surface-gate.mjs`.
+  - Evidence: `node scripts/api-surface-gate.mjs --write` wrote a baseline with
+    2904 known undocumented public exports, then `node scripts/api-surface-gate.mjs`
+    passed with `public-exports-needing-attention=2904`, `baseline=2904`, and no
+    hard boundary violations.
 - [ ] **Run broad verification before closing the plan.**
   - Done = package tests, docs generation, publish checks, and acceptance gates
     pass with the new boundary.
   - Prove: `pnpm run check`, `pnpm run check:api-surface`,
     `pnpm --filter @kovojs/site run api:check`, `pnpm run check:publish`, and
     the narrow package suites named in Phase 3.
+  - Evidence: `pnpm run check:api-surface`, `pnpm --filter @kovojs/site run api:check`,
+    and `pnpm run check:publish` passed on 2026-06-17. `pnpm run check` is still
+    blocked by repo-wide formatting issues across unrelated tracked and untracked
+    files; touched files pass
+    `pnpm exec vp check package.json packages/create-kovo/package.json packages/compiler/src/validate/authoring-surface.ts scripts/import-boundary.mjs scripts/import-boundary.test.mjs packages/compiler/src/compile-component.test.ts packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts`.
 - [ ] **Archive or merge this ledger once all packages comply.**
   - Done = `plans/archive.md` records the completed boundary work and any
     remaining policy exceptions with evidence.

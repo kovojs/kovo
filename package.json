@@ -12,9 +12,10 @@
   "type": "module",
   "scripts": {
     "acceptance": "pnpm run check && pnpm run check:api-surface && pnpm run test && pnpm run test:browser && pnpm run test:integration && pnpm run check:build && pnpm run check:publish && pnpm run test:p10-perf && pnpm run test:compiler-perf && pnpm run test:conformance && pnpm run check:kovo",
-    "check": "pnpm run check:inline-loader && vp check && vp run typecheck-examples",
+    "check": "pnpm run check:inline-loader && pnpm run check:imports && vp check && vp run typecheck-examples",
     "check:api-surface": "node scripts/api-surface-gate.mjs",
     "check:build": "pnpm run check:inline-loader && vp run build",
+    "check:imports": "node scripts/import-boundary.mjs",
     "check:publish": "node scripts/build-publish.mjs",
     "check:kovo": "vp run kovo-check",
     "check:inline-loader": "pnpm --filter @kovojs/runtime run check:inline-loader",
