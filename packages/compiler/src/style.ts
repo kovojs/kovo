@@ -158,10 +158,13 @@ function collectStyleEnvironment(
   const bindings = new Map<string, StyleBinding>();
   const rules: AtomicRule[] = [];
   const usages: StyleRuleUsage[] = [];
+  // Module-local `const x = { ... }` objects, so static `{ ...x }` spreads inside
+  // a style object resolve (e.g. @kovojs/ui field.tsx shares `nativeControlStyle`).
+  const localObjects = collectLocalObjectLiterals(sourceFile);
 
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const created = styleCreateCall(sourceFile, node.initializer, styleNamespaces);
+      const created = styleCreateCall(sourceFile, node.initializer, styleNamespaces, localObjects);
       if (created) {
         const result = createAtomicStyles(created.styles, {
           namespace: created.options.namespace ?? node.name.text,
@@ -195,6 +198,7 @@ function styleCreateCall(
   sourceFile: ts.SourceFile,
   initializer: ts.Expression | undefined,
   styleNamespaces: ReadonlySet<string>,
+  localObjects: LocalObjectLiterals,
 ): { readonly options: CreateOptions; readonly styles: Record<string, StyleObject> } | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
   if (!ts.isPropertyAccessExpression(initializer.expression)) return null;
@@ -205,7 +209,7 @@ function styleCreateCall(
   const [stylesArgument, optionsArgument] = initializer.arguments;
   if (!stylesArgument || !ts.isObjectLiteralExpression(stylesArgument)) return null;
 
-  const styles = styleNamespacesFromObject(stylesArgument);
+  const styles = styleNamespacesFromObject(stylesArgument, localObjects);
   if (!styles) return null;
 
   return {
@@ -214,14 +218,17 @@ function styleCreateCall(
   };
 }
 
-function styleNamespacesFromObject(node: ts.ObjectLiteralExpression): Record<string, StyleObject> | null {
+function styleNamespacesFromObject(
+  node: ts.ObjectLiteralExpression,
+  localObjects: LocalObjectLiterals,
+): Record<string, StyleObject> | null {
   const styles: Record<string, StyleObject> = {};
 
   for (const property of node.properties) {
     if (!ts.isPropertyAssignment(property)) return null;
     const key = propertyNameText(property.name);
     if (!key || !ts.isObjectLiteralExpression(property.initializer)) return null;
-    const value = styleObjectFromObject(property.initializer);
+    const value = styleObjectFromObject(property.initializer, localObjects);
     if (!value) return null;
     styles[key] = value;
   }
@@ -229,16 +236,30 @@ function styleNamespacesFromObject(node: ts.ObjectLiteralExpression): Record<str
   return styles;
 }
 
-function styleObjectFromObject(node: ts.ObjectLiteralExpression): StyleObject | null {
+function styleObjectFromObject(
+  node: ts.ObjectLiteralExpression,
+  localObjects: LocalObjectLiterals,
+): StyleObject | null {
   const style: Record<string, string | number | StyleObject> = {};
 
   for (const property of node.properties) {
+    // `{ ...sharedStyle, ... }`: inline a module-local const object literal so a
+    // styled component that composes shared fragments still extracts statically.
+    if (ts.isSpreadAssignment(property)) {
+      if (!ts.isIdentifier(property.expression)) return null;
+      const target = localObjects.get(property.expression.text);
+      if (!target) return null;
+      const spread = styleObjectFromObject(target, localObjects);
+      if (!spread) return null;
+      Object.assign(style, spread);
+      continue;
+    }
     if (!ts.isPropertyAssignment(property)) return null;
     const key = propertyNameText(property.name);
     if (!key) return null;
     const value = property.initializer;
     if (ts.isObjectLiteralExpression(value)) {
-      const nested = styleObjectFromObject(value);
+      const nested = styleObjectFromObject(value, localObjects);
       if (!nested) return null;
       style[key] = nested;
       continue;
@@ -249,6 +270,34 @@ function styleObjectFromObject(node: ts.ObjectLiteralExpression): StyleObject | 
   }
 
   return style;
+}
+
+type LocalObjectLiterals = ReadonlyMap<string, ts.ObjectLiteralExpression>;
+
+/**
+ * Index module-scope `const name = { ... }` object literals (unwrapping a
+ * trailing `as const` / parentheses) so static `{ ...name }` spreads inside a
+ * `style.create(...)` argument can be resolved and inlined.
+ */
+function collectLocalObjectLiterals(sourceFile: ts.SourceFile): LocalObjectLiterals {
+  const objects = new Map<string, ts.ObjectLiteralExpression>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+      const literal = unwrapObjectLiteral(declaration.initializer);
+      if (literal) objects.set(declaration.name.text, literal);
+    }
+  }
+  return objects;
+}
+
+function unwrapObjectLiteral(node: ts.Expression): ts.ObjectLiteralExpression | null {
+  let current: ts.Expression = node;
+  while (ts.isAsExpression(current) || ts.isParenthesizedExpression(current)) {
+    current = current.expression;
+  }
+  return ts.isObjectLiteralExpression(current) ? current : null;
 }
 
 function createOptionsFromObject(node: ts.Expression | undefined): CreateOptions {

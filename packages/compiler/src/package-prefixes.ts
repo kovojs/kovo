@@ -41,6 +41,19 @@ export function mergePackageComponentPrefixFacts(
   );
 }
 
+/**
+ * Resolve an installed package's `package.json` path from the importing module,
+ * walking up `node_modules` like {@link packageComponentPrefixesForModule} does.
+ * Exported so the package-style extraction pass (`package-styles.ts`) can locate
+ * a `kovo.prefix` component package's source `.tsx` files (SPEC §6.1.1, §13.1).
+ */
+export function resolvePackageManifestPath(
+  packageName: string,
+  options: PackageComponentPrefixDiscoveryOptions,
+): string | null {
+  return findPackageManifestPath(packageName, options);
+}
+
 function readPackageManifest(
   packageName: string,
   options: PackageComponentPrefixDiscoveryOptions,

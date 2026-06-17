@@ -20,7 +20,9 @@
     "@kovojs/drizzle": "workspace:*",
     "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
+    "@kovojs/style": "workspace:*",
     "@kovojs/test": "workspace:*",
+    "@kovojs/ui": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {

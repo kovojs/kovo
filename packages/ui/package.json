@@ -60,6 +60,7 @@
     "vitest": "4.1.8"
   },
   "kovo": {
-    "vendoredSource": true
+    "vendoredSource": true,
+    "prefix": "kovo-ui-"
   }
 }
