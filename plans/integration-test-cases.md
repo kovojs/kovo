@@ -38,20 +38,27 @@ integration harness uniquely proves.
 
 ## First-wave gaps from the suite plan
 
-- [ ] `query-refetch` / `query-refetch.spec.ts`: mutate server state outside the page, trigger the
+- [x] `query-refetch` / `query-refetch.spec.ts`: mutate server state outside the page, trigger the
       loader's focus/visibility refetch, and assert the typed read endpoint updates all
       `[kovo-deps]` consumers from `<kovo-query>` server truth.
   - SPEC refs: §4.4 loader, §9.3 liveness, §9.4 typed reads.
   - Assertions: wait for `/_q/<query>`; `[data-bind]` text updates; semantic snapshot keeps
     `kovo-query`, `kovo-deps`, and binding attrs; no full navigation.
-  - Partial evidence: `tests/integration/fixtures/query-refetch` and
-    `tests/integration/specs/query-refetch.spec.ts` verify `/_q/refetch` returns latest server
-    truth and snapshots the stale page. Proving command:
-    `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts specs/binding-text-attr.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts`.
-  - Gap: default inline loader still does not install focus/visibility typed-read refetch. Query-only
-    chunks now update live `data-bind` / `data-bind:<attr>` text/attrs in `[kovo-deps]`
-    consumers, but typed-read lifecycle wiring exceeded the SPEC §4.4 4KB gzip budget during this
-    slice (prototype generated inline loader was 4619 bytes gzip > 4096).
+  - Evidence: `tests/integration/fixtures/query-refetch` installs the public modular loader with
+    `queryRefetch`; `tests/integration/specs/query-refetch.spec.ts` mutates server truth outside the
+    page, dispatches a visible-return `visibilitychange`, waits for `/_q/refetch`, verifies the
+    bound `[data-bind="refetch.message"]` consumer updates without navigation, confirms the typed
+    read endpoint serves the new `<kovo-query>` body, and snapshots the updated semantic fragment.
+    Runtime unit coverage continues to pin the shared visible-return refetch ledger and typed-read
+    apply path. Proving commands:
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts
+    specs/binding-text-attr.spec.ts specs/shared-query-consumers.spec.ts --config
+    playwright.config.ts --workers=1`; `pnpm exec vitest run
+    packages/runtime/src/query-visible-return-refetch.test.ts
+    packages/runtime/src/loader-visible-return-refetch.test.ts
+    packages/runtime/src/loader-query-hydration.test.ts
+    packages/runtime/src/query-visible-return.browser.test.ts`; `pnpm --filter @kovojs/runtime run
+    check:inline-loader`.
 - [ ] `optimistic-success` / `optimistic-success.spec.ts`: a hand-written optimistic transform
       updates every consumer of the invalidated query immediately, marks affected islands pending,
       and reconciles cleanly when the server response arrives.

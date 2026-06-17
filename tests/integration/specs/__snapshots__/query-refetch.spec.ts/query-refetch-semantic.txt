@@ -2,4 +2,4 @@
   <kovo-fragment>
     <refetch-card kovo-deps="refetch" kovo-fragment-target="refetch-card">
       <output data-bind="refetch.message">
-        "Initial message"
+        "Externally changed"

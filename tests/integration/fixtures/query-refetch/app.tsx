@@ -14,6 +14,7 @@ const homeRoute = route('/', {
     const refetch = await readRefetch(request.db);
     const card = await renderCard(request.db);
     return `${renderQueryScript({ name: 'refetch', value: refetch })}
+    <script type="module" src="/client.ts"></script>
     <main>
       <kovo-fragment target="refetch-card">${card}</kovo-fragment>
     </main>`;
