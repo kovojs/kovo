@@ -8,4 +8,8 @@ export type { SoDb } from './db.js';
 
 export interface SoRequest {
   db: SoDb;
+  session?: {
+    id?: string;
+    user?: { id?: string; roles?: readonly string[] } | null;
+  } | null;
 }

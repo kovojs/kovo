@@ -1,4 +1,4 @@
-import { guards, mutation, s } from '@kovojs/server';
+import { guards, mutation, s, type MutationContext } from '@kovojs/server';
 import { eq, sql } from 'drizzle-orm';
 import type { OptimisticFor } from '@kovojs/runtime';
 
@@ -45,8 +45,24 @@ export interface CrmRequest {
   } | null;
 }
 
+export interface CrmCsrfRequest {
+  session?: { id?: string } | null;
+}
+
+export const EXAMPLE_ONLY_CRM_CSRF_SECRET = 'crm-reference-demo-csrf-secret';
+
+export const crmCsrf = {
+  field: 'csrf',
+  secret: EXAMPLE_ONLY_CRM_CSRF_SECRET,
+  sessionId(request: CrmCsrfRequest) {
+    return request.session?.id;
+  },
+};
+
 /** The shared `authed` guard for every CRM mutation. */
 const authed = guards.authed<CrmRequest>();
+
+const duplicateEmailError = s.object({ email: s.string() });
 
 // ── addContact ───────────────────────────────────────────────────────────────
 // INSERT contact ⇒ contactList push is fully compiler-derived (no overrides).
@@ -54,14 +70,23 @@ const authed = guards.authed<CrmRequest>();
 export async function addContactHandler(
   { id, name, email, ownerId }: AddContactInput,
   request: CrmRequest,
+  context: MutationContext<{ DUPLICATE_EMAIL: typeof duplicateEmailError }>,
 ) {
   const db = request.db;
+  const [existing] = await db.select().from(contacts).where(eq(contacts.email, email)).limit(1);
+  if (existing) {
+    return context.fail('DUPLICATE_EMAIL', { email });
+  }
+
   await db.insert(contacts).values({ id, name, email, ownerId, dealCount: 0 });
   return { id };
 }
 
 export const addContact = mutation('addContact', {
-  csrf: false,
+  csrf: crmCsrf,
+  errors: {
+    DUPLICATE_EMAIL: duplicateEmailError,
+  },
   guard: authed,
   input: s.object({
     id: s.string(),
@@ -96,7 +121,7 @@ export async function createDealHandler(
 }
 
 export const createDeal = mutation('createDeal', {
-  csrf: false,
+  csrf: crmCsrf,
   guard: authed,
   input: s.object({
     id: s.string(),
@@ -152,7 +177,7 @@ export async function moveDealHandler({ dealId, stage }: MoveDealInput, request:
 }
 
 export const moveDeal = mutation('moveDeal', {
-  csrf: false,
+  csrf: crmCsrf,
   guard: authed,
   input: s.object({
     dealId: s.string(),
@@ -222,7 +247,7 @@ export async function closeDealHandler({ dealId }: CloseDealInput, request: CrmR
 }
 
 export const closeDeal = mutation('closeDeal', {
-  csrf: false,
+  csrf: crmCsrf,
   guard: authed,
   input: s.object({
     dealId: s.string(),

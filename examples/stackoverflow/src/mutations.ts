@@ -1,4 +1,4 @@
-import { mutation, s } from '@kovojs/server';
+import { mutation, s, type MutationContext } from '@kovojs/server';
 import { eq, sql } from 'drizzle-orm';
 
 import { answer, question, vote } from './domains.js';
@@ -19,8 +19,14 @@ import { answers, questions, votes } from './schema.js';
 export async function postQuestion(
   { id, title, body, authorId }: { id: string; title: string; body: string; authorId: string },
   request: SoRequest,
+  context: MutationContext<{ DUPLICATE_TITLE: typeof duplicateTitleError }>,
 ): Promise<{ id: string }> {
   const db = request.db;
+  const [existing] = await db.select().from(questions).where(eq(questions.title, title)).limit(1);
+  if (existing) {
+    return context.fail('DUPLICATE_TITLE', { title });
+  }
+
   await db.insert(questions).values({
     answerCount: 0,
     authorId,
@@ -73,9 +79,22 @@ export async function voteUp(
 // invalidated queries (by key) and the inferred touches come from the extracted
 // touch graph (wired in app.ts).
 
-// SPEC.md §6.4: this is a no-auth public demo with no server session to protect,
-// so the mutations opt out of CSRF (`csrf: false`) — the enhance forms can POST
-// without a token. A real app would keep CSRF on and render `csrfField`.
+export interface SoCsrfRequest {
+  session?: { id?: string } | null;
+}
+
+export const EXAMPLE_ONLY_SO_CSRF_SECRET = 'stackoverflow-reference-demo-csrf-secret';
+
+export const soCsrf = {
+  field: 'csrf',
+  secret: EXAMPLE_ONLY_SO_CSRF_SECRET,
+  sessionId(request: SoCsrfRequest) {
+    return request.session?.id;
+  },
+};
+
+const duplicateTitleError = s.object({ title: s.string() });
+
 export const postQuestionMutation = mutation('postQuestion', {
   input: s.object({
     id: s.string(),
@@ -83,7 +102,10 @@ export const postQuestionMutation = mutation('postQuestion', {
     body: s.string(),
     authorId: s.string(),
   }),
-  csrf: false,
+  csrf: soCsrf,
+  errors: {
+    DUPLICATE_TITLE: duplicateTitleError,
+  },
   registry: { touches: [question] },
   handler: postQuestion,
 });
@@ -95,7 +117,7 @@ export const postAnswerMutation = mutation('postAnswer', {
     body: s.string(),
     authorId: s.string(),
   }),
-  csrf: false,
+  csrf: soCsrf,
   registry: { touches: [answer, question] },
   handler: postAnswer,
 });
@@ -106,7 +128,7 @@ export const voteUpMutation = mutation('voteUp', {
     targetId: s.string(),
     userId: s.string(),
   }),
-  csrf: false,
+  csrf: soCsrf,
   registry: { touches: [vote, question] },
   handler: voteUp,
 });

@@ -231,12 +231,36 @@ path in more than one app — without changing the clean authoring spelling.
       - Evidence 2026-06-17: tutorial steps 05, 06, and 07 use bare `form('cart/add')` and derive
         `AddToCartInput` from `FormInput<typeof addToCartForm>`.
       - Verified with `node site/tutorial/run-steps.mjs` and the same `rg -n "form<" ...` search.
-- [ ] **C3. CSRF on.** Remove `csrf: false` from crm + stackoverflow browser mutations; adopt the
+- [x] **C3. CSRF on.** Remove `csrf: false` from crm + stackoverflow browser mutations; adopt the
       commerce `csrf:` + `csrfField(...)` pattern at each render site, and update comments,
       interactive apps, and fixtures/tests that posted without the token.
-- [ ] **C4. Typed failure rendering in crm + SO.** Add at least one `errors:` schema (e.g. a
+      - Evidence 2026-06-17: CRM and StackOverflow browser mutations use `crmCsrf` /
+        `soCsrf`, their component render sites emit `csrfField(...)`, and their
+        interactive tests post synchronizer tokens through `csrfToken(...)`.
+      - Verified with
+        `rg -n "csrf: false" examples/crm/src examples/stackoverflow/src --glob '!**/generated/**'`
+        (no matches),
+        `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+        `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+        `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+        `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`,
+        `pnpm --filter @kovojs/example-crm test`, and
+        `pnpm --filter @kovojs/example-stackoverflow test`.
+- [x] **C4. Typed failure rendering in crm + SO.** Add at least one `errors:` schema (e.g. a
       validation/conflict code) and render `forms.<mutation>.failure` in those components, proving the
       §9.2 path beyond commerce.
+      - Evidence 2026-06-17: CRM `addContact` declares `DUPLICATE_EMAIL` and
+        `ContactsRegion` renders `slots.forms.addContact.failure`; StackOverflow
+        `postQuestion` declares `DUPLICATE_TITLE` and `QuestionListRegion`
+        renders `slots.forms.postQuestion.failure`. Both apps use keyed
+        `mutationResponses` failure policies to rerender the submitted component
+        with `renderComponentMutationFailure(...)`.
+      - Verified with
+        `rg -n "DUPLICATE_EMAIL|DUPLICATE_TITLE|forms\\.(addContact|postQuestion)\\.failure|data-error-code" examples/crm/src examples/stackoverflow/src --glob '!**/generated/**'`,
+        `pnpm --filter @kovojs/example-crm test`,
+        `pnpm --filter @kovojs/example-stackoverflow test`,
+        `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+        `node scripts/api-surface-gate.mjs`, and `git diff --check`.
 - [x] **C5. Keyed repeated forms.** Add `key=` to the crm move/close loops and the SO per-row
       `voteButton()`; verify the existing KV238 repeated-form check accepts the corrected examples.
       - Evidence 2026-06-17: CRM `DealDetailRegion` move forms are keyed by

@@ -2,9 +2,9 @@
 /** @jsxImportSource @kovojs/server */
 import { escapeText } from '@kovojs/server/internal/html';
 import { component } from '@kovojs/core';
-import { mutationFormAttributes } from '@kovojs/server';
+import { csrfField, mutationFormAttributes } from '@kovojs/server';
 
-import { closeDeal, moveDeal } from '../mutations.js';
+import { closeDeal, crmCsrf, moveDeal, type CrmRequest } from '../mutations.js';
 import {
   activityListQuery,
   contactListQuery,
@@ -35,6 +35,10 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 // also applies the server commission), so it is not a plain move target.
 const MOVE_STAGES = ['lead', 'qualified', 'open', 'proposal', 'lost'] as const;
 
+interface DealDetailRenderSlots {
+  request?: CrmRequest | undefined;
+}
+
 // The interactive region, rendered inside the page and as the moveDeal /
 // closeDeal fragment payload. SPEC.md §4.8: the query-backed component root
 // derives its fragment target in the generated module.
@@ -55,7 +59,7 @@ export const DealDetailRegion = component({
     contactList: ContactListResult;
     dealId: string;
     dealList: DealListResult;
-  }) => {
+  }, _state, slots: DealDetailRenderSlots = {}) => {
     const deal = dealList.items.find((item) => item.id === dealId);
     const contact = contactList.items.find((item) => item.id === deal?.contactId);
     const activities = activityList.items.filter((item) => item.dealId === dealId);
@@ -124,6 +128,7 @@ export const DealDetailRegion = component({
           <div class="flex flex-wrap gap-2">
             {MOVE_STAGES.map((stage) => (
               <form key={`${deal.id}:${stage}`} {...mutationFormAttributes(moveDeal)}>
+                {slots.request ? csrfField(slots.request, crmCsrf) : ''}
                 <input type="hidden" name="dealId" value={deal.id} />
                 <input type="hidden" name="stage" value={stage} />
                 <button
@@ -147,6 +152,7 @@ export const DealDetailRegion = component({
               </p>
             ) : (
               <form key={`${deal.id}:close`} {...mutationFormAttributes(closeDeal)}>
+                {slots.request ? csrfField(slots.request, crmCsrf) : ''}
                 <input type="hidden" name="dealId" value={deal.id} />
                 <button
                   type="submit"

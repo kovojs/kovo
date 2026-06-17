@@ -1,7 +1,10 @@
 import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
+import { csrfToken } from '@kovojs/server';
+
 import { buildCrmInteractiveApp } from './interactive-app.js';
+import { crmCsrf } from './mutations.js';
 import { contacts, deals } from './schema.js';
 
 // SPEC.md §9.1: the interactive CRM app's mutation endpoints run the REAL Drizzle
@@ -17,6 +20,14 @@ const pipelineTarget = 'pipeline-region';
 const pipelineComponent = 'components/pipeline/pipeline-region';
 const dealDetailTarget = 'deal-detail-region';
 const dealDetailComponent = 'components/deal-detail/deal-detail-region';
+const demoCsrfRequest = { session: { id: 'demo-session' } };
+
+function withCsrf(fields: Record<string, string>): Record<string, string> {
+  return {
+    csrf: csrfToken(demoCsrfRequest, crmCsrf),
+    ...fields,
+  };
+}
 
 function liveHeader(target: string, component: string, props: Record<string, unknown> = {}): string {
   return `${target}#${component}:${JSON.stringify(props)}`;
@@ -53,7 +64,12 @@ describe('crm interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'addContact',
-      { id: 'c-test-1', name: 'Edsger Dijkstra', email: 'edsger@demo.example.com', ownerId: 'u1' },
+      withCsrf({
+        id: 'c-test-1',
+        name: 'Edsger Dijkstra',
+        email: 'edsger@demo.example.com',
+        ownerId: 'u1',
+      }),
       `${contactsTarget}=contactList`,
       liveHeader(contactsTarget, contactsComponent),
     );
@@ -67,6 +83,30 @@ describe('crm interactive app', () => {
     expect(rows.some((row) => row.id === 'c-test-1')).toBe(true);
   });
 
+  it('addContact typed failure re-renders the contact form with duplicate-email state', async () => {
+    const { db, handler } = await buildCrmInteractiveApp();
+    const [contact] = await db.select().from(contacts).orderBy(asc(contacts.id)).limit(1);
+    if (!contact) throw new Error('seed produced no contacts');
+
+    const { status, html } = await postForm(
+      handler,
+      'addContact',
+      withCsrf({
+        id: 'c-duplicate-email',
+        name: 'Duplicate Contact',
+        email: contact.email,
+        ownerId: 'u1',
+      }),
+      `${contactsTarget}=contactList`,
+      liveHeader(contactsTarget, contactsComponent),
+    );
+
+    expect(status).toBe(422);
+    expect(html).toContain(`target="${contactsTarget}"`);
+    expect(html).toContain('data-error-code="DUPLICATE_EMAIL"');
+    expect(html).toContain(`${contact.email} is already in the contact book.`);
+  });
+
   it('createDeal inserts the deal, bumps the contact dealCount, and re-renders the pipeline', async () => {
     const { db, handler } = await buildCrmInteractiveApp();
     const [contact] = await db.select().from(contacts).orderBy(asc(contacts.id)).limit(1);
@@ -77,7 +117,13 @@ describe('crm interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'createDeal',
-      { id: 'd-test-1', contactId: contact.id, stage: 'open', amount: '7500', ownerId: 'u1' },
+      withCsrf({
+        id: 'd-test-1',
+        contactId: contact.id,
+        stage: 'open',
+        amount: '7500',
+        ownerId: 'u1',
+      }),
       `${pipelineTarget}=contactList openDeals pipelineByStage`,
       liveHeader(pipelineTarget, pipelineComponent),
     );
@@ -100,7 +146,7 @@ describe('crm interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'moveDeal',
-      { dealId: 'd1', stage: 'proposal' },
+      withCsrf({ dealId: 'd1', stage: 'proposal' }),
       `${dealDetailTarget}=activityList contactList dealList`,
       liveHeader(dealDetailTarget, dealDetailComponent, { dealId: 'd1' }),
     );
@@ -121,7 +167,7 @@ describe('crm interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'closeDeal',
-      { dealId: 'd1' },
+      withCsrf({ dealId: 'd1' }),
       `${dealDetailTarget}=activityList contactList dealList`,
       liveHeader(dealDetailTarget, dealDetailComponent, { dealId: 'd1' }),
     );

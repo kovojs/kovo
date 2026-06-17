@@ -111,12 +111,20 @@
   ],
   "touchGraph": {
     "postQuestion": {
-      "reads": [],
+      "reads": [
+        {
+          "domain": "question",
+          "keys": null,
+          "site": "examples/stackoverflow/.emit-0/src/mutations.ts:25",
+          "source": "select",
+          "via": "questions"
+        }
+      ],
       "touches": [
         {
           "domain": "question",
           "keys": null,
-          "site": "examples/stackoverflow/src/mutations.ts:24",
+          "site": "examples/stackoverflow/src/mutations.ts:30",
           "via": "questions"
         }
       ],
@@ -128,13 +136,13 @@
         {
           "domain": "answer",
           "keys": null,
-          "site": "examples/stackoverflow/src/mutations.ts:49",
+          "site": "examples/stackoverflow/src/mutations.ts:55",
           "via": "answers"
         },
         {
           "domain": "question",
           "keys": "arg:questionId",
-          "site": "examples/stackoverflow/src/mutations.ts:50",
+          "site": "examples/stackoverflow/src/mutations.ts:56",
           "via": "questions"
         }
       ],
@@ -146,13 +154,13 @@
         {
           "domain": "question",
           "keys": "arg:targetId",
-          "site": "examples/stackoverflow/src/mutations.ts:64",
+          "site": "examples/stackoverflow/src/mutations.ts:70",
           "via": "questions"
         },
         {
           "domain": "vote",
           "keys": null,
-          "site": "examples/stackoverflow/src/mutations.ts:63",
+          "site": "examples/stackoverflow/src/mutations.ts:69",
           "via": "votes"
         }
       ],

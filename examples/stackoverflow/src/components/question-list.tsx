@@ -1,12 +1,14 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentRenderSlots } from '@kovojs/core';
+import { csrfField } from '@kovojs/server';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
-import { postQuestionMutation } from '../mutations.js';
+import { postQuestionMutation, soCsrf } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
-import type { QuestionListItem } from '../types.js';
+import type { SoRequest } from '../runtime.js';
+import { postQuestionForm, type QuestionListItem } from '../types.js';
 import {
   freshId,
   parseTags,
@@ -29,12 +31,19 @@ import {
 
 type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
 type QuestionScoreQueryResult = Awaited<ReturnType<typeof questionScore.load>>;
+type QuestionListRenderSlots = ComponentRenderSlots<{ postQuestion: typeof postQuestionForm }> & {
+  request?: SoRequest | undefined;
+};
 
-function renderQuestionRow(question: QuestionListItem): string {
+const defaultQuestionListRenderSlots: QuestionListRenderSlots = {
+  forms: { postQuestion: { failure: null } },
+};
+
+function renderQuestionRow(question: QuestionListItem, request?: SoRequest): string {
   const tags = parseTags(question.tags);
   const body = (
     <div class="so-row">
-      {voteButton(question.id, question.score)}
+      {voteButton(question.id, question.score, request)}
       <div class="so-row-stat">
         <span class="so-row-stat-num tabular-nums">{question.answerCount}</span>
         <span class="so-row-stat-label">answers</span>
@@ -60,6 +69,7 @@ function renderQuestionRow(question: QuestionListItem): string {
 // postQuestion fragment payload. SPEC.md §4.8: the query-backed component root
 // derives its `kovo-fragment-target` in the generated module.
 export const QuestionListRegion = component({
+  mutations: { postQuestion: postQuestionForm },
   queries: { questionList, questionScore },
   render: ({
     questionList,
@@ -67,9 +77,10 @@ export const QuestionListRegion = component({
   }: {
     questionList: QuestionListQueryResult;
     questionScore: QuestionScoreQueryResult;
-  }) => {
+  }, _state, slots: QuestionListRenderSlots = defaultQuestionListRenderSlots) => {
     const questions = questionList.items;
     const totalVotes = questionScore.score;
+    const failure = slots.forms.postQuestion.failure;
     const askButton = Button.definition.render({
       children: 'Ask question',
       type: 'submit',
@@ -96,6 +107,7 @@ export const QuestionListRegion = component({
           compiler lowers `mutation={...}` consistently; `so-composer` gives the
           card surface. */}
         <form enhance mutation={postQuestionMutation} class="so-composer">
+          {slots.request ? csrfField(slots.request, soCsrf) : ''}
           <input type="hidden" name="id" value={freshId('q')} />
           <input type="hidden" name="authorId" value="demo-viewer" />
           <p class="so-composer-title">Ask the community</p>
@@ -113,9 +125,18 @@ export const QuestionListRegion = component({
             class="so-input so-textarea"
           />
           <div class="so-composer-actions">{askButton}</div>
+          {failure?.code === 'DUPLICATE_TITLE' ? (
+            <output role="alert" data-error-code="DUPLICATE_TITLE" class="so-form-error">
+              A question titled "{failure.payload.title}" already exists.
+            </output>
+          ) : (
+            ''
+          )}
         </form>
 
-        <ul class="so-list">{questions.map(renderQuestionRow)}</ul>
+        <ul class="so-list">
+          {questions.map((question) => renderQuestionRow(question, slots.request))}
+        </ul>
       </div>
     );
   },

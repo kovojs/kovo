@@ -1,9 +1,11 @@
 /** @jsxImportSource @kovojs/server */
+import { csrfField } from '@kovojs/server';
 import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
 import * as style from '@kovojs/style';
 
-import { voteUpMutation } from '../mutations.js';
+import { soCsrf, voteUpMutation } from '../mutations.js';
+import type { SoRequest } from '../runtime.js';
 
 // Shared page chrome for the Stack Overflow example UI, restyled with @kovojs/ui
 // (SPEC.md §6.1.1). The app-shell wraps each page() return in the document
@@ -103,9 +105,10 @@ export function renderAuthor(name: string, iso: string | undefined, verb: string
 // IMPORTANT (SPEC.md §9.1): the `{value}` here is the data-bound vote score the
 // compiler stamps; it must stay a JSX sole-text-child, so it is authored inline
 // and never passed through a `.definition.render({ children })` call.
-export function voteButton(questionId: string, value: number): string {
+export function voteButton(questionId: string, value: number, request?: SoRequest): string {
   return (
     <form enhance mutation={voteUpMutation} key={questionId} class="so-vote">
+      {request ? csrfField(request, soCsrf) : ''}
       <input type="hidden" name="id" value={`vote-${questionId}`} />
       <input type="hidden" name="targetId" value={questionId} />
       <input type="hidden" name="userId" value="demo-viewer" />

@@ -1,11 +1,13 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { csrfField } from '@kovojs/server';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
-import { postAnswerMutation } from '../mutations.js';
+import { postAnswerMutation, soCsrf } from '../mutations.js';
 import { questionAnswers, questionDetail } from '../queries.js';
+import type { SoRequest } from '../runtime.js';
 import type { QuestionAnswersResult, QuestionDetailResult } from '../types.js';
 import {
   freshId,
@@ -25,11 +27,11 @@ import {
 // Cards, tags + the accepted state are Badges, and the composer uses a Button.
 // The accepted answer gets an accent left border via a token-driven class.
 
-function renderQuestionCard(question: QuestionDetailResult): string {
+function renderQuestionCard(question: QuestionDetailResult, request?: SoRequest): string {
   const tags = parseTags(question.tags);
   const body = (
     <div class="so-row">
-      {voteButton(question.id, question.score)}
+      {voteButton(question.id, question.score, request)}
       <div class="so-row-main">
         <h1 class="so-detail-title">{question.title}</h1>
         <p class="so-detail-body">{question.body}</p>
@@ -98,7 +100,7 @@ export const QuestionDetailRegion = component({
     answers: QuestionAnswersResult;
     question: QuestionDetailResult | null;
     questionId: string;
-  }) => {
+  }, _state, slots: { request?: SoRequest | undefined } = {}) => {
     if (!question) {
       return (
         <div class="so-stack">
@@ -124,7 +126,7 @@ export const QuestionDetailRegion = component({
           &larr; All questions
         </a>
 
-        {renderQuestionCard(question)}
+          {renderQuestionCard(question, slots.request)}
 
         <section class="so-stack">
           <h2 class="so-answers-head">
@@ -139,6 +141,7 @@ export const QuestionDetailRegion = component({
               so the compiler lowers `mutation={...}` consistently; `so-composer`
               gives the card surface. */}
           <form enhance mutation={postAnswerMutation} class="so-composer">
+            {slots.request ? csrfField(slots.request, soCsrf) : ''}
             <input type="hidden" name="id" value={freshId('a')} />
             <input type="hidden" name="questionId" value={question.id} />
             <input type="hidden" name="authorId" value="demo-viewer" />

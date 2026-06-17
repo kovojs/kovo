@@ -1,13 +1,24 @@
 import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
+import { csrfToken } from '@kovojs/server';
+
 import { buildSoInteractiveApp } from './interactive-app.js';
+import { soCsrf } from './mutations.js';
 import { answers, questions } from './schema.js';
 
 const questionListTarget = 'question-list-region';
 const questionListComponent = 'components/question-list/question-list-region';
 const questionDetailTarget = 'question-detail-region';
 const questionDetailComponent = 'components/question-detail/question-detail-region';
+const demoCsrfRequest = { session: { id: 'demo-session' } };
+
+function withCsrf(fields: Record<string, string>): Record<string, string> {
+  return {
+    csrf: csrfToken(demoCsrfRequest, soCsrf),
+    ...fields,
+  };
+}
 
 function liveHeader(target: string, component: string, props: Record<string, unknown> = {}): string {
   return `${target}#${component}:${JSON.stringify(props)}`;
@@ -60,7 +71,9 @@ describe('stackoverflow interactive app', () => {
           'Kovo-Live-Targets': liveHeader(questionListTarget, questionListComponent),
           'Kovo-Targets': `${questionListTarget}=questionList questionScore`,
         },
-        body: new URLSearchParams({ id: 'v-test', targetId: first.id, userId: 'demo-viewer' }),
+        body: new URLSearchParams(
+          withCsrf({ id: 'v-test', targetId: first.id, userId: 'demo-viewer' }),
+        ),
       }),
     );
 
@@ -86,12 +99,12 @@ describe('stackoverflow interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'postAnswer',
-      {
+      withCsrf({
         id: 'a-test-1',
         questionId: question.id,
         body: 'A fresh demo answer.',
         authorId: 'demo-viewer',
-      },
+      }),
       `${questionDetailTarget}=answers question`,
       liveHeader(questionDetailTarget, questionDetailComponent, { questionId: question.id }),
     );
@@ -113,12 +126,12 @@ describe('stackoverflow interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'postQuestion',
-      {
+      withCsrf({
         id: 'q-test-1',
         title: 'How do I demo Kovo?',
         body: 'Asking for a friend.',
         authorId: 'demo-viewer',
-      },
+      }),
       `${questionListTarget}=questionList questionScore`,
       liveHeader(questionListTarget, questionListComponent),
     );
@@ -130,5 +143,29 @@ describe('stackoverflow interactive app', () => {
     const rows = await db.select().from(questions);
     expect(rows).toHaveLength(before + 1);
     expect(rows.some((row) => row.id === 'q-test-1')).toBe(true);
+  });
+
+  it('postQuestion typed failure re-renders the list form with duplicate-title state', async () => {
+    const { db, handler } = await buildSoInteractiveApp();
+    const [question] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
+    if (!question) throw new Error('seed produced no questions');
+
+    const { status, html } = await postForm(
+      handler,
+      'postQuestion',
+      withCsrf({
+        id: 'q-duplicate-title',
+        title: question.title,
+        body: 'Asking again should surface a typed form failure.',
+        authorId: 'demo-viewer',
+      }),
+      `${questionListTarget}=questionList questionScore`,
+      liveHeader(questionListTarget, questionListComponent),
+    );
+
+    expect(status).toBe(422);
+    expect(html).toContain(`target="${questionListTarget}"`);
+    expect(html).toContain('data-error-code="DUPLICATE_TITLE"');
+    expect(html).toContain(`A question titled "${question.title}" already exists.`);
   });
 });

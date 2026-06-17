@@ -2,7 +2,7 @@
 /** @jsxImportSource @kovojs/server */
 import { escapeText } from '@kovojs/server/internal/html';
 import { component } from '@kovojs/core';
-import { mutationFormAttributes } from '@kovojs/server';
+import { csrfField, mutationFormAttributes } from '@kovojs/server';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 import {
@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@kovojs/ui/table';
 
-import { createDeal } from '../mutations.js';
+import { createDeal, crmCsrf, type CrmRequest } from '../mutations.js';
 import {
   contactListQuery,
   openDealsQuery,
@@ -41,6 +41,10 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 // The stages a new deal can start in (mirrors the demo data / pipelineByStage
 // buckets). A new deal opens in one of these; 'won' is reached via closeDeal.
 const NEW_DEAL_STAGES = ['lead', 'qualified', 'open', 'proposal'] as const;
+
+interface PipelineRenderSlots {
+  request?: CrmRequest | undefined;
+}
 
 function renderStageCard(bucket: PipelineStageBucket): string {
   return Card.definition.render({
@@ -109,7 +113,7 @@ export const PipelineRegion = component({
     contactList: ContactListResult;
     openDeals: OpenDealsResult;
     pipelineByStage: PipelineByStageResult;
-  }) => {
+  }, _state, slots: PipelineRenderSlots = {}) => {
     const contacts = contactList.items;
     const buckets = pipelineByStage.buckets;
     const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));
@@ -147,6 +151,7 @@ export const PipelineRegion = component({
             {...mutationFormAttributes(createDeal)}
             class="rounded-lg border border-slate-200 bg-white p-4"
           >
+            {slots.request ? csrfField(slots.request, crmCsrf) : ''}
             <input type="hidden" name="id" value={freshId('d')} />
             <input type="hidden" name="ownerId" value="u1" />
             <div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-start">

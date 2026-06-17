@@ -1,14 +1,15 @@
 // @kovojs-ir — lowered from examples/crm/src/components/contacts.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
 import { escapeText } from '@kovojs/server/internal/html';
-import { component } from '@kovojs/core';
-import { mutationFormAttributes } from '@kovojs/server';
+import { component, type ComponentRenderSlots } from '@kovojs/core';
+import { csrfField, mutationFormAttributes } from '@kovojs/server';
 import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
-import { addContact } from '../mutations.js';
+import { addContact, crmCsrf, type CrmRequest } from '../mutations.js';
+import { addContactForm } from '../forms.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
 import { freshId } from '../components/chrome.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
@@ -54,13 +55,27 @@ function renderContactCard(contact: ContactRow): string {
   });
 }
 
+type ContactsRenderSlots = ComponentRenderSlots<{ addContact: typeof addContactForm }> & {
+  request?: CrmRequest | undefined;
+};
+
+const defaultContactsRenderSlots: ContactsRenderSlots = {
+  forms: { addContact: { failure: null } },
+};
+
 // The interactive region, rendered both inside the full page and as the
 // addContact / createDeal fragment payload. SPEC.md §4.8: the query-backed
 // component root derives its fragment target in the generated module.
 export const ContactsRegion = component({
+  mutations: { addContact: addContactForm },
   queries: { contactList: contactListQuery },
-  render: ({ contactList }: { contactList: ContactListResult }) => {
+  render: (
+    { contactList }: { contactList: ContactListResult },
+    _state,
+    slots: ContactsRenderSlots = defaultContactsRenderSlots,
+  ) => {
     const contacts = contactList.items;
+    const failure = slots.forms.addContact.failure;
 
     return (
       <div class="space-y-6" kovo-c="contacts-region" kovo-deps="contactList" kovo-fragment-target="contacts-region" kovo-live-component="components/contacts/contacts-region">
@@ -78,6 +93,7 @@ export const ContactsRegion = component({
           {...mutationFormAttributes(addContact)}
           class="rounded-lg border border-slate-200 bg-white p-4"
         >
+          {slots.request ? csrfField(slots.request, crmCsrf) : ''}
           <input type="hidden" name="id" value={freshId('c')} />
           <input type="hidden" name="ownerId" value="u1" />
           <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
@@ -100,6 +116,17 @@ export const ContactsRegion = component({
               variant: 'primary',
             })}
           </div>
+          {failure?.code === 'DUPLICATE_EMAIL' ? (
+            <output
+              role="alert"
+              data-error-code="DUPLICATE_EMAIL"
+              class="mt-2 block text-sm text-red-700"
+            >
+              {escapeText(failure.payload.email)} is already in the contact book.
+            </output>
+          ) : (
+            ''
+          )}
         </form>
 
         <ul class="grid gap-3 sm:grid-cols-2">

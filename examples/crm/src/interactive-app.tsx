@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { route, s } from '@kovojs/server';
+import { renderComponentMutationFailure, route, s } from '@kovojs/server';
 import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
 import type { RequestHandler } from '@kovojs/server/app-shell/core';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
@@ -10,8 +10,8 @@ import { PipelineRegion } from './generated/pipeline.js';
 import { renderCrmShell } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
-import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';
-import { crmQueries } from './queries.js';
+import { addContact, closeDeal, createDeal, moveDeal, type CrmRequest } from './mutations.js';
+import { contactListQuery, crmQueries } from './queries.js';
 
 // SPEC.md §9.1/§9.5: the CRM example as a FULLY INTERACTIVE Kovo app. It
 // registers the addContact / createDeal / moveDeal / closeDeal mutations and
@@ -84,6 +84,25 @@ export async function buildCrmInteractiveApp(
     clientModules: createMemoryVersionedClientModuleRegistry(),
     document: { lang: 'en-US' },
     mutations: [addContact, createDeal, moveDeal, closeDeal],
+    mutationResponses: {
+      [addContact.key]: ({ request }) => ({
+        failureTarget: 'contacts-region',
+        renderFailureFragment: async (failure) =>
+          renderComponentMutationFailure(
+            ContactsRegion,
+            {
+              contactList: await contactListQuery.load(undefined, {
+                request: request as CrmRequest,
+              }),
+            },
+            failure,
+            {
+              formName: 'addContact',
+              slots: { request: request as CrmRequest },
+            },
+          ),
+      }),
+    },
     queries: crmQueries,
     routes: [
       route('/', {

@@ -4,8 +4,8 @@ import type { AnswerListResult, QuestionAnswersResult, QuestionDetailResult, Que
 export const soTouchGraph = {
   "postAnswer": {
     touches: [
-      { domain: "answer", via: "answers", site: "examples/stackoverflow/src/mutations.ts:49", keys: null },
-      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:50", keys: "arg:questionId" },
+      { domain: "answer", via: "answers", site: "examples/stackoverflow/src/mutations.ts:55", keys: null },
+      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:56", keys: "arg:questionId" },
     ],
     reads: [
     ],
@@ -14,17 +14,18 @@ export const soTouchGraph = {
   },
   "postQuestion": {
     touches: [
-      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:24", keys: null },
+      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:30", keys: null },
     ],
     reads: [
+      { domain: "question", via: "questions", site: "examples/stackoverflow/.emit-0/src/mutations.ts:25", keys: null, source: "select" },
     ],
     unresolved: [
     ],
   },
   "voteUp": {
     touches: [
-      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:64", keys: "arg:targetId" },
-      { domain: "vote", via: "votes", site: "examples/stackoverflow/src/mutations.ts:63", keys: null },
+      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:70", keys: "arg:targetId" },
+      { domain: "vote", via: "votes", site: "examples/stackoverflow/src/mutations.ts:69", keys: null },
     ],
     reads: [
     ],
