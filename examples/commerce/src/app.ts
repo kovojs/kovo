@@ -925,7 +925,6 @@ export function submitAddToCart(
   const submittedInput = appendCommerceCsrf(rawInput, request);
   return renderMutationEndpointResponse(addToCart, {
     csrf: commerceCsrf,
-    failureTarget: productId ? productFormTarget(productId) : 'product-form',
     failureStylesheets: commerceStylesheets,
     fragmentRenderers: [
       {

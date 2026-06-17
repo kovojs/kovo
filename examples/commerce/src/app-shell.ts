@@ -30,7 +30,6 @@ import {
   orderCsvRoute,
   orderHistoryQuery,
   paymentWebhook,
-  productFormTarget,
   productGridQuery,
   renderAddToCartError,
   renderAddToCartForm,
@@ -210,9 +209,7 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
       if (key !== addToCart.key) return undefined;
 
       const commerceRequest = request as CommerceShellRequest;
-      const productId = productIdFromRawInput(rawInput);
       return {
-        failureTarget: productId ? productFormTarget(productId) : 'product-form',
         // No per-fragment `stylesheets` (Phase R1 learning): the inline loader's
         // morph takes the fragment's first child as the new region root, and a
         // leading `<link rel=stylesheet>` would REPLACE the region with a bare

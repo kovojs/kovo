@@ -320,6 +320,9 @@ export const AddToCartForm = component({
       `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
       and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
       2026-06-17.
+    - Commerce response wiring now relies on request-derived submitted form
+      targets instead of manual `failureTarget` for add-to-cart handlers in
+      `examples/commerce/src/app.ts` and `app-shell.ts`.
     - Remaining gap: imported/app-wide mutation value resolution for ordinary
       component modules, typed render-context failure state, and compiler
       diagnostics for ambiguous repeated forms are not complete.
@@ -373,10 +376,14 @@ export const AddToCartForm = component({
     - Verified with `pnpm --filter @kovojs/example-commerce run emit-components`,
       `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
       and `pnpm --filter @kovojs/example-commerce test` on 2026-06-17.
+    - Add-to-cart response wiring no longer passes manual `failureTarget` in
+      `examples/commerce/src/app.ts` or `app-shell.ts`; verified with
+      `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app-shell.test.ts`
+      on 2026-06-17.
     - Remaining gap: the add-to-cart form still hand-authors
-      `kovo-fragment-target`, still posts through string `action="/_m/cart/add"`,
-      and app mutation response wiring still passes `failureTarget`; migrate this
-      after typed form lowering lands.
+      `kovo-fragment-target` and still posts through string
+      `action="/_m/cart/add"`; migrate this after imported/app-wide typed form
+      lowering and typed failure state land.
 - [ ] **9. Broader example/docs migration.**
   - Audit StackOverflow and CRM components that currently hand-author
     `kovo-fragment-target` and remove attributes where inference covers them.
