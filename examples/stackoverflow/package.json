@@ -18,10 +18,14 @@
     "@kovojs/drizzle": "workspace:*",
     "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
+    "@kovojs/style": "workspace:*",
+    "@kovojs/ui": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
+    "@kovojs/compiler": "workspace:*",
     "@kovojs/conformance-fixtures": "workspace:*",
+    "@kovojs/headless-ui": "workspace:*",
     "@kovojs/test": "workspace:*",
     "kovo": "workspace:*",
     "vite": "8.0.16",

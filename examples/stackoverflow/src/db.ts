@@ -11,9 +11,13 @@ import * as schema from './schema.js';
 /** The Stack Overflow runtime database: Drizzle over PGlite, typed by the schema. */
 export type SoDb = PgliteDatabase<typeof schema>;
 
+// The presentational columns carry SQL DEFAULTs (mirroring the Drizzle
+// `.default(...)` in schema.ts) so inserts that omit them — the base seed below,
+// the demo seed, and the postQuestion / postAnswer mutation handlers — stay
+// valid. No query selects these columns, so derived optimism is unaffected.
 export const SCHEMA_DDL = [
-  'CREATE TABLE questions (id text PRIMARY KEY, title text NOT NULL, body text NOT NULL, author_id text NOT NULL, score integer NOT NULL, answer_count integer NOT NULL);',
-  'CREATE TABLE answers (id text PRIMARY KEY, question_id text NOT NULL, author_id text NOT NULL, body text NOT NULL, score integer NOT NULL, accepted boolean NOT NULL);',
+  "CREATE TABLE questions (id text PRIMARY KEY, title text NOT NULL, body text NOT NULL, author_id text NOT NULL, score integer NOT NULL, answer_count integer NOT NULL, author_name text NOT NULL DEFAULT 'Anonymous', tags text NOT NULL DEFAULT '', created_at text NOT NULL DEFAULT '');",
+  "CREATE TABLE answers (id text PRIMARY KEY, question_id text NOT NULL, author_id text NOT NULL, body text NOT NULL, score integer NOT NULL, accepted boolean NOT NULL, author_name text NOT NULL DEFAULT 'Anonymous', created_at text NOT NULL DEFAULT '');",
   'CREATE TABLE votes (id serial PRIMARY KEY, target_type text NOT NULL, target_id text NOT NULL, user_id text NOT NULL, value integer NOT NULL);',
 ].join('\n');
 

@@ -8,6 +8,11 @@ import { boolean, integer, pgTable, serial, text } from 'drizzle-orm/pg-core';
 // derived-optimism transforms in generated/optimistic/ are produced from these
 // tables + the query loaders + the mutation handlers, never hand-authored.
 
+// Presentational columns (authorName / tags / createdAt) carry `.default(...)`
+// so the existing fixture inserts and the postQuestion / postAnswer handlers —
+// which OMIT these columns — stay valid. They are deliberately NOT selected by
+// any query loader in queries.ts, so the §10.5 algebraic shapes (and therefore
+// the commuting-diagram proofs) are unaffected; they only enrich the rendered UI.
 export const questions = pgTable(
   'questions',
   {
@@ -17,6 +22,9 @@ export const questions = pgTable(
     authorId: text('author_id').notNull(),
     score: integer('score').notNull(),
     answerCount: integer('answer_count').notNull(),
+    authorName: text('author_name').notNull().default('Anonymous'),
+    tags: text('tags').notNull().default(''),
+    createdAt: text('created_at').notNull().default(''),
   },
   kovo({ domain: 'question', key: 'id' }),
 );
@@ -30,6 +38,8 @@ export const answers = pgTable(
     body: text('body').notNull(),
     score: integer('score').notNull(),
     accepted: boolean('accepted').notNull(),
+    authorName: text('author_name').notNull().default('Anonymous'),
+    createdAt: text('created_at').notNull().default(''),
   },
   kovo({ domain: 'answer', key: 'id' }),
 );
