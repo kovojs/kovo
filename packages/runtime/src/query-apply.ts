@@ -1,5 +1,5 @@
 import { applyQueryDelta, QueryDeltaApplyError } from '@kovojs/core';
-import type { QueryDelta } from '@kovojs/core';
+import type { JsonValue, QueryDelta } from '@kovojs/core';
 import { definedProps } from './defined-props.js';
 import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
@@ -50,7 +50,7 @@ function applyQueryChunk(
   if (query.delta) {
     const base = store.get(query.name, query.key);
     try {
-      const merged = applyQueryDelta(base, query.value as QueryDelta);
+      const merged = applyQueryDelta(base as JsonValue | undefined, query.value as QueryDelta);
       store.set(query.name, merged, query.key);
       return merged;
     } catch (error) {

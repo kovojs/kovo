@@ -55,7 +55,7 @@ export interface FetchEnhancedMutationOptions {
 export interface FetchedEnhancedMutation {
   body: string;
   /** The `Kovo-Build` response header value, if present (SPEC §9.1.1). */
-  buildToken: string | undefined;
+  buildToken?: string | undefined;
   changes: MutationChangeRecord[];
   idem: string;
   response: EnhancedMutationResponseLike;
