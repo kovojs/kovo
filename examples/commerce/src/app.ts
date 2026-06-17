@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createMemoryStorage, form, stripeSignature } from '@kovojs/core';
 import {
   createMemoryMutationReplayStore,
+  componentMutationFailureSlots,
   csrfField,
   csrfToken,
   guards,
@@ -27,6 +28,7 @@ import {
   type MutationFail,
   type StoredFileUpload,
 } from '@kovojs/server';
+import { Fragment, jsx, jsxs } from '@kovojs/server/jsx-runtime';
 import { escapeAttribute } from '@kovojs/server/internal/html';
 import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 import {
@@ -916,26 +918,54 @@ export async function renderCartPage(
   request?: CommerceRequest,
 ): Promise<string> {
   const pageHints = renderCommercePageHints(await loadCartQuery(db));
-  return `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6">${await renderCartPageBody(db, addToCartFailure, request)}</body></html>`;
+  const pageRequest = commerceCartPageRequest(db, request);
+  const pageRoute = route('/cart', {
+    page(_context, routeRequest: CommerceRequest) {
+      return commerceCartMain(
+        jsxs(Fragment, {
+          children: [
+            jsx(CartBadge, {}),
+            jsx(ProductGrid, productGridCartPageSlots(addToCartFailure)),
+            routeRequest.session?.user?.id
+              ? jsx(OrderHistory, {})
+              : OrderHistory.definition.render({ orderHistory: { items: [] } }),
+            renderReceiptUploadForm(),
+          ],
+        }),
+      );
+    },
+  });
+  const response = await renderRoutePageResponse(
+    pageRoute,
+    {},
+    pageRequest,
+    async (body) =>
+      `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6">${await body}</body></html>`,
+  );
+  return response.body;
 }
 
-export async function renderCartPageBody(
-  db = createCommerceDb(),
-  addToCartFailure?: AddToCartFailureState,
-  request?: CommerceRequest,
-  options: { readOnly?: boolean | undefined } = {},
-): Promise<string> {
-  const cartBadge = CartBadge.definition.render({ cart: await loadCartQuery(db) });
-  const productGrid = renderProductGrid(
-    await loadProductGridForRequest(db, undefined, request),
-    request,
-    addToCartFailure,
-    { readOnly: options.readOnly },
-  );
-  const receiptForm = options.readOnly ? '' : renderReceiptUploadForm();
-  // SECURITY (SECURITY_FINDINGS.md M9): scope order history to the session user.
-  const orderHistory = await renderOrderHistory(db, request?.session?.user?.id);
-  return `<main class="mx-auto max-w-4xl"><kovo-fragment target="cart-badge">${cartBadge}</kovo-fragment><kovo-fragment target="product-grid">${productGrid}</kovo-fragment><kovo-fragment target="order-history">${orderHistory}${receiptForm}</kovo-fragment></main>`;
+function commerceCartMain(children: unknown): Promise<string> | string {
+  return children instanceof Promise
+    ? children.then((html) => `<main class="mx-auto max-w-4xl">${html}</main>`)
+    : `<main class="mx-auto max-w-4xl">${children}</main>`;
+}
+
+function productGridCartPageSlots(
+  addToCartFailure: AddToCartFailureState | undefined,
+): productGridComponent.ProductGridRenderSlots {
+  if (!addToCartFailure) return {};
+  return componentMutationFailureSlots(
+    'addToCart',
+    addToCartFailure.failure,
+    productGridRenderSlots(undefined, {}, addToCartFailure.productId),
+  ) as productGridComponent.ProductGridRenderSlots;
+}
+
+function commerceCartPageRequest(db: CommerceDb, request?: CommerceRequest): CommerceRequest {
+  const pageRequest = request ?? ({ db } as CommerceRequest);
+  Object.defineProperty(pageRequest, 'db', { configurable: true, value: db });
+  return pageRequest;
 }
 
 export function submitAddToCartNoJs(rawInput: unknown, request: CommerceRequest) {

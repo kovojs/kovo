@@ -782,10 +782,25 @@ removes app-authored bookkeeping from the enhanced path.
       `node scripts/api-surface-gate.mjs`,
       `rg -n "renderCartPageBody|render[A-Za-z]+Region|mutationResponse\\(|fragmentRenderers|liveTargetRenderers|generated/live-targets|_TARGET" examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx`,
       and `git diff --check`.
-    - Remaining gap: the legacy `renderCartPage()` failure page path still uses
-      `renderCartPageBody`; the legacy broad
-      `mutationResponse` compatibility API still exists in the framework and
-      tests until follow-up cleanup removes or retires it.
+    - Additional progress 2026-06-17:
+      `examples/commerce/src/app.ts` no longer defines or calls
+      `renderCartPageBody`. The legacy no-JS add-to-cart failure page now
+      renders a synthetic `/cart` route through server JSX: CartBadge,
+      ProductGrid, and OrderHistory load through declared component queries, and
+      ProductGrid receives add-to-cart failure state through component slots.
+    - Verified with
+      `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app.rendering.test.ts app.queries.test.ts`,
+      `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-commerce test`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`,
+      `rg -n "renderCartPageBody|render[A-Za-z]+Region|mutationResponse\\(|fragmentRenderers|liveTargetRenderers|generated/live-targets|_TARGET" examples/commerce/src/app.ts examples/commerce/src/app-shell.tsx examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx`,
+      and `git diff --check`.
+    - Remaining gap: the legacy broad `mutationResponse` compatibility API
+      still exists in the framework and tests until follow-up cleanup removes or
+      retires it.
 - [ ] **10. Docs/tutorial update.**
   - Teach the authoring model as "declare queries and serializable props; Kovo
     updates enhanced mutations from server truth automatically."
