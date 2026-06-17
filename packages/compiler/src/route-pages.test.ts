@@ -44,6 +44,45 @@ export const home = route('/', {
     );
   });
 
+  it('records compiler-derived layout chains for JSX-authored route pages', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { layout, route } from '@kovojs/server';
+import { QuestionListRegion } from './components/question-list.js';
+
+const AppLayout = layout({
+  queries: { viewer: viewerQuery, cart: cartQuery },
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+
+const AdminLayout = layout({
+  parent: AppLayout,
+  queries: { permissions: permissionQuery },
+  render: (_queries, _state, { children }) => <section>{children}</section>,
+});
+
+export const home = route('/', {
+  layout: AdminLayout,
+  page: () => <QuestionListRegion />,
+});
+`,
+    });
+
+    expect(result.routePageFacts).toEqual([
+      expect.objectContaining({
+        layouts: [
+          { localName: 'AppLayout', queries: ['viewer', 'cart'] },
+          { localName: 'AdminLayout', queries: ['permissions'] },
+        ],
+        route: '/',
+      }),
+    ]);
+    expect(result.files[0]?.source).toContain(
+      `"layouts":[{"localName":"AppLayout","queries":["viewer","cart"]},{"localName":"AdminLayout","queries":["permissions"]}]`,
+    );
+  });
+
   it('emits executable route IR after jsx import-source pragmas', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',

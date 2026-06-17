@@ -9,6 +9,7 @@ import type {
   RoutePageComponentFact,
   RoutePageComponentPropFact,
   RoutePageFact,
+  RoutePageLayoutFact,
 } from './types.js';
 import type { StaticLiteralValue } from './scan/object.js';
 import { applySourceReplacements, replaceExtension, type SourceReplacement } from './shared.js';
@@ -26,6 +27,12 @@ interface RoutePageHandler {
   sourceExpression: string;
 }
 
+interface RouteLayoutModel {
+  localName: string;
+  parent?: string;
+  queries: readonly string[];
+}
+
 /** Compile route-page JSX composition facts (SPEC.md §4.5/§9.1). */
 export function compileRouteModule(options: CompileRouteModuleOptions): CompileRouteModuleResult {
   const sourceFile = ts.createSourceFile(
@@ -36,9 +43,10 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
     ts.ScriptKind.TSX,
   );
   const routePages: CompiledRoutePage[] = [];
+  const layouts = routeLayoutModels(sourceFile);
 
   const visit = (node: ts.Node): void => {
-    const routePage = routePageFromCall(options.fileName, sourceFile, node);
+    const routePage = routePageFromCall(options.fileName, sourceFile, node, layouts);
     if (routePage) routePages.push(routePage);
     ts.forEachChild(node, visit);
   };
@@ -75,6 +83,7 @@ function routePageFromCall(
   fileName: string,
   sourceFile: ts.SourceFile,
   node: ts.Node,
+  layouts: ReadonlyMap<string, RouteLayoutModel>,
 ): CompiledRoutePage | null {
   if (!ts.isCallExpression(node)) return null;
   if (!ts.isIdentifier(node.expression) || node.expression.text !== 'route') return null;
@@ -88,9 +97,11 @@ function routePageFromCall(
 
   const components = routePageComponentFacts(sourceFile, pageHandler.node);
   if (components.length === 0) return null;
+  const routeLayouts = routeLayoutFacts(definitionArg, layouts);
   const fact = {
     components,
     fileName,
+    ...(routeLayouts.length > 0 ? { layouts: routeLayouts } : {}),
     route: pathArg.text,
   };
 
@@ -102,6 +113,91 @@ function routePageFromCall(
       start: pageHandler.replacementStart,
     },
   };
+}
+
+function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, RouteLayoutModel> {
+  const layouts = new Map<string, RouteLayoutModel>();
+
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      ts.isCallExpression(node.initializer) &&
+      ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === 'layout'
+    ) {
+      const [definition] = node.initializer.arguments;
+      if (definition && ts.isObjectLiteralExpression(definition)) {
+        const parent = layoutParentName(definition);
+        layouts.set(node.name.text, {
+          localName: node.name.text,
+          ...(parent === undefined ? {} : { parent }),
+          queries: layoutQueryNames(definition),
+        });
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return layouts;
+}
+
+function routeLayoutFacts(
+  routeDefinition: ts.ObjectLiteralExpression,
+  layouts: ReadonlyMap<string, RouteLayoutModel>,
+): RoutePageLayoutFact[] {
+  const layoutName = routeLayoutName(routeDefinition);
+  if (!layoutName) return [];
+
+  const chain: RoutePageLayoutFact[] = [];
+  const seen = new Set<string>();
+  let current: string | undefined = layoutName;
+
+  while (current) {
+    if (seen.has(current)) return [];
+    seen.add(current);
+    const layoutModel = layouts.get(current);
+    if (!layoutModel) return [];
+    chain.unshift({ localName: layoutModel.localName, queries: layoutModel.queries });
+    current = layoutModel.parent;
+  }
+
+  return chain;
+}
+
+function routeLayoutName(routeDefinition: ts.ObjectLiteralExpression): string | null {
+  const value = objectPropertyInitializer(routeDefinition, 'layout');
+  return value && ts.isIdentifier(value) ? value.text : null;
+}
+
+function layoutParentName(layoutDefinition: ts.ObjectLiteralExpression): string | undefined {
+  const value = objectPropertyInitializer(layoutDefinition, 'parent');
+  return value && ts.isIdentifier(value) ? value.text : undefined;
+}
+
+function layoutQueryNames(layoutDefinition: ts.ObjectLiteralExpression): string[] {
+  const value = objectPropertyInitializer(layoutDefinition, 'queries');
+  if (!value || !ts.isObjectLiteralExpression(value)) return [];
+  return value.properties.flatMap((property) => {
+    if (!ts.isPropertyAssignment(property)) return [];
+    const name = propertyNameText(property.name);
+    return name ? [name] : [];
+  });
+}
+
+function objectPropertyInitializer(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): ts.Expression | null {
+  for (const property of object.properties) {
+    if (ts.isPropertyAssignment(property) && propertyNameText(property.name) === name) {
+      return property.initializer;
+    }
+  }
+  return null;
 }
 
 function objectPageHandler(

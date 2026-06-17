@@ -183,7 +183,14 @@ export interface CompileRouteModuleResult {
 export interface RoutePageFact {
   components: readonly RoutePageComponentFact[];
   fileName: string;
+  layouts?: readonly RoutePageLayoutFact[];
   route: string;
+}
+
+/** One layout segment in the compiler-derived route layout chain. */
+export interface RoutePageLayoutFact {
+  localName: string;
+  queries: readonly string[];
 }
 
 /** One component invocation found under a JSX-authored route page. */

@@ -214,11 +214,14 @@ item inherits from rather than re-deciding it:
       and `route(..., { layout })`; `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/route.test.ts packages/server/src/app.test.ts`
       passes with nested parent output, layout query loading from the route
       request, and layout guard composition.
+    - Route compilation derives parent-first layout-chain facts from local
+      `layout({ parent, queries })` declarations; `pnpm exec vitest --run
+      packages/compiler/src/route-pages.test.ts` passes with a fixture asserting
+      layout names and query keys in the emitted route IR fact.
     - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
   - Remaining gaps:
-    - Compiler route lowering does not yet derive layout chain facts or segment
-      metadata.
+    - Compiler route lowering does not yet derive navigation segment metadata.
     - Layout query live-target refresh, per-segment boundaries, diagnostics for
       cyclic/unresolvable layout chains, and `kovo explain page --layouts` are
       not implemented yet.
