@@ -88,7 +88,6 @@ import { component } from '@kovojs/core';
 import { cartQuery } from './cart.queries.js';
 
 export const CartBadge = component({
-  fragmentTarget: true, // registers in FragmentTargets registry
   queries: { cart: cartQuery }, // typed data dependencies
   state: () => ({ bouncing: false }), // LOCAL state: UI-only facts, JsonValue-constrained
 
@@ -110,16 +109,25 @@ registry/type key from the module path plus that leaf (`components/cart-badge/ca
 component-name application of the §4.8 rule that TSX does not require strings the compiler can derive.
 Implementation sequencing for the 2026-06-16 migration is tracked in `plans/name-derivation.md`.
 
+Query-backed components are ordinary live refresh candidates: a component with `queries` gets
+`kovo-deps` and a derived fragment target when the compiler can prove the root is addressable and
+the subtree can be reconstructed from declared query data plus serializable stamped props. App
+authors do not write `fragmentTarget: true` or `kovo-fragment-target="..."`; those are derived IR
+facts. The component-level escape hatch is force-off only: `disableServerRefresh: true` opts a
+query-backed component out of server fragment refresh while preserving query bindings and local
+client updates. There is no force-on mode.
+
 **Rules enforced by the type system:**
 
 - `state` must satisfy `JsonValue` (no `Date`, `Map`, functions, class instances) — serializability is a compile error, not a runtime surprise.
-- A `fragmentTarget: true` component's render inputs must be ⊆ (declared queries ∪ stamped props) — otherwise the server cannot re-render it as a fragment.
+- A query-backed component that is inferred as server-refreshable has render inputs ⊆ (declared queries ∪ stamped props); otherwise the compiler emits a diagnostic explaining why the target cannot be reconstructed, while §4.8 plan-covered positions may still update from query JSON.
+- Repeated or prop-keyed inferred targets need stable instance identity from authored `key` or serializable keyed component props; duplicate or ambiguous target identities are compile errors.
 - Query data is **shared and server-owned**; local state is **private and client-owned**. A lint (`KV301`) rejects server facts in local state.
 
 ### 4.2 Rendered output (the IR's runtime form)
 
 ```html
-<cart-badge kovo-deps="cart">
+<cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge">
   <button commandfor="cart-drawer" command="show-modal">
     🛒 <span data-bind="cart.count">2</span>
   </button>
@@ -131,7 +139,7 @@ Implementation sequencing for the 2026-06-16 migration is tracked in `plans/name
 </script>
 ```
 
-Components render to **light DOM** as plain, never-registered elements — no shadow roots, no `customElements.define`, no upgrade step (rationale in §3.1). The load-bearing DOM identity is the derived `kovo-c` leaf; the compiler omits it when the host tag already spells the derived leaf (`<cart-badge>` — dashed tags are inert sugar) and emits it on native hosts (`<tr kovo-c="cart-row">`, so table content-model nesting works). Registry and type identities are separately namespaced by module path (§6.1), so global uniqueness never lengthens the ordinary DOM leaf. If two distinct registry keys would put the same DOM leaf on one page, the composition pass derives a stable disambiguated `kovo-c` value from the registry key and reports it through component explain output. StyleX-authored component styles compile to globally collision-free atomic classes and dedupe into declared stylesheet assets; raw co-located CSS remains an escape hatch scoped to the derived host leaf (`@scope`, donut-scoped out of nested islands) (§13.1). With no shadow boundary, IDREF wiring (`commandfor`, `for`, `aria-*`), native form participation, and find-in-page work document-wide — the L0 layer and no-JS form fallback depend on it. The compiler validates JSX nesting against the HTML content model (**KV225**): markup the parser would re-parent (`<div>` in `<p>`, `<tr>` outside a table) makes served HTML and parsed DOM disagree, silently breaking morph identity and fragment targets — a compile error, not a runtime surprise.
+Components render to **light DOM** as plain, never-registered elements — no shadow roots, no `customElements.define`, no upgrade step (rationale in §3.1). The load-bearing DOM identity is the derived `kovo-c` leaf; the compiler omits it when the host tag already spells the derived leaf (`<cart-badge>` — dashed tags are inert sugar) and emits it on native hosts (`<tr kovo-c="cart-row">`, so table content-model nesting works). Query-backed server-refreshable roots also carry a derived `kovo-fragment-target`; for singleton components this is the DOM leaf (`cart-badge`), while repeated instances append stable authored identity (`product-form:p2`). Registry and type identities are separately namespaced by module path (§6.1), so global uniqueness never lengthens the ordinary DOM leaf. If two distinct registry keys would put the same DOM leaf on one page, the composition pass derives a stable disambiguated `kovo-c` value from the registry key and reports it through component explain output; fragment target identities use the same disambiguated leaf before any instance suffix. StyleX-authored component styles compile to globally collision-free atomic classes and dedupe into declared stylesheet assets; raw co-located CSS remains an escape hatch scoped to the derived host leaf (`@scope`, donut-scoped out of nested islands) (§13.1). With no shadow boundary, IDREF wiring (`commandfor`, `for`, `aria-*`), native form participation, and find-in-page work document-wide — the L0 layer and no-JS form fallback depend on it. The compiler validates JSX nesting against the HTML content model (**KV225**): markup the parser would re-parent (`<div>` in `<p>`, `<tr>` outside a table) makes served HTML and parsed DOM disagree, silently breaking morph identity and fragment targets — a compile error, not a runtime surprise.
 
 Everything is inspectable in the Elements panel: dependencies (`kovo-deps`), data (the JSON), behavior (`on:*` attributes), pending mutations (`kovo-pending`, §10.3).
 
@@ -198,7 +206,27 @@ export const Card = component({
 
 **2. Compound components coordinate through lexical scope and the DOM — there is no context API.** At render time, sub-parts are functions sharing scope (a `Dialog.Root` generates ids and passes them down as ordinary arguments; KV221 validates the IDREF wiring). Ids are **unique by construction**: generated ids are keyed to the render site, and a static `id` in a component the compiler cannot prove renders at most once per page is **KV224** (derive it from `kovo-key`/props instead) — KV221 proves an id _exists_; KV224 keeps that proof meaningful by forbidding duplicates, including under list stamping and fragment patch-in. At runtime, the tree is the context: a sub-part's handler resolves its island via `closest('[kovo-c]')`, which `ctx` already does. This is sound because **framework code never reparents islands** (normative; dev mode asserts it). Native top-layer promotion (`<dialog>`, popover) does not reparent — exactly why Kovo needs no portal.
 
-**3. Fragment-target children must remain server-renderable.** A `fragmentTarget: true` component's subtree must be reconstructible from (declared queries ∪ stamped props) — and call-site children are part of that subtree. They are therefore **lowered to component references**: the compiler hoists JSX children into a named component (`Parent$slot_children`) when their free variables fit the stamped-prop channels (the same lowering discipline as handlers, §4.3), records the reference + props in the target's stamps, and re-renders the full subtree on fragment patch. Children that cannot be hoisted (unserializable captures) are compile error **KV230**, whose message shows the hoisted component that _would_ have been generated and the fixes. Morph-preserved "slot holes" were considered and **rejected**: a fragment response must fully describe the DOM it produces (Constitution #4, #5) — there is no region the server cannot refresh. This "fully describes" property is literal in dev, where the fragment is complete HTML. In prod the framework may refresh the same region with a **delta** instead — a change-record-scoped query update the client applies through the update plan (§4.8), or keyed-row fragment updates — against a version-validated base (§9.1.1), when that is smaller. The delta is bounded by what the committed write touched, never by diffing against client state the stateless server would have to remember; soundness shifts from self-description to change-record scoping plus base-version validation (a missing or stale base refetches full, §9.1.1). The server's *capability* to refresh any region is unchanged, so the rejection of slot holes stands: a prod delta still accounts for the entire target subtree, just incrementally.
+**3. Refreshable-target children must remain server-renderable.** An inferred server-refreshable
+query component's subtree must be reconstructible from (declared queries ∪ stamped props) — and
+call-site children are part of that subtree. They are therefore **lowered to component references**:
+the compiler hoists JSX children into a named component (`Parent$slot_children`) when their free
+variables fit the stamped-prop channels (the same lowering discipline as handlers, §4.3), records
+the reference + props in the target's stamps, and re-renders the full subtree on fragment patch.
+Children that cannot be hoisted (unserializable captures) are compile error **KV230**, whose message
+shows the hoisted component that _would have_ been generated and the fixes. If the component has
+`disableServerRefresh: true`, the hoist requirement applies only to positions that still need a
+server fragment; ordinary §4.8 query bindings remain valid. Morph-preserved "slot holes" were
+considered and **rejected**: a fragment response must fully describe the DOM it produces
+(Constitution #4, #5) — there is no region the server cannot refresh. This "fully describes"
+property is literal in dev, where the fragment is complete HTML. In prod the framework may refresh
+the same region with a **delta** instead — a change-record-scoped query update the client applies
+through the update plan (§4.8), or keyed-row fragment updates — against a version-validated base
+(§9.1.1), when that is smaller. The delta is bounded by what the committed write touched, never by
+diffing against client state the stateless server would have to remember; soundness shifts from
+self-description to change-record scoping plus base-version validation (a missing or stale base
+refetches full, §9.1.1). The server's *capability* to refresh any region is unchanged, so the
+rejection of slot holes stands: a prod delta still accounts for the entire target subtree, just
+incrementally.
 
 **Layouts are function composition.** v1 has no nested-layout convention. A layout is a component with children, applied in `route().page` (`page: () => Shell({ children: ProductPage(…) })`). Every navigation is a full document, so there is no persistent-layout state to manage; cross-document View Transitions carry the visual continuity. A route-tree convention may arrive later as sugar lowering to exactly these calls (Constitution #3).
 
@@ -295,9 +323,9 @@ Declared inputs tell the loader which query changes re-run it — no dependency 
 </ul>
 ```
 
-On change, the loader keys existing `[kovo-key]` children against the new array: clone the template for inserts, remove exits, reorder by key, then run item-relative bindings (`.qty`, typed against the array element type). **`kovo-key` is the single keyed-identity contract** — written once (spike S3) and shared verbatim by stamps, morph, and optimistic reordering (§13.2).
+On change, the loader keys existing `[kovo-key]` children against the new array: clone the template for inserts, remove exits, reorder by key, then run item-relative bindings (`.qty`, typed against the array element type). **`key={...}` is the authored TSX identity; `kovo-key` is the lowered runtime identity contract** — written once and shared verbatim by stamps, morph, inferred fragment target suffixes, submitted-form identity, and optimistic reordering (§13.2). App source that hand-authors `kovo-key` where it can write `key` instead is hand-authored lowered IR under **KV235**; emitted IR keeps `kovo-key` so fixpoint validation can recompile it.
 
-**Stamps are derived, never required in TSX.** `{cart.count}` and `data-bind="cart.count"` are one fact; the author writes the typed expression, the compiler emits the stamp. Classification: an expression that is an element's sole text child stamps that element; an expression in mixed content gets a synthesized `<span data-bind>` (reported in `kovo explain component` — wrap it yourself if the extra element matters); an expression in attribute position lowers to a named derive (above). Hand-written stamps remain valid compiler input so the fixpoint gate can recompile emitted IR (Constitution #3), but app-authored TSX must not carry derivable stamps: redundant stamps are lint **KV223**, and a stamp that disagrees with the expression it wraps is an error (**KV222**). A component module in app source that hand-authors the lowered string/template IR instead of TSX is **KV235**. The general rule, normative framework-wide: **a residual string may be _validated_ in emitted IR, but TSX never requires a string the compiler can derive from a typed expression.**
+**Stamps are derived, never required in TSX.** `{cart.count}` and `data-bind="cart.count"` are one fact; the author writes the typed expression, the compiler emits the stamp. Classification: an expression that is an element's sole text child stamps that element; an expression in mixed content gets a synthesized `<span data-bind>` (reported in `kovo explain component` — wrap it yourself if the extra element matters); an expression in attribute position lowers to a named derive (above). Hand-written stamps remain valid compiler input so the fixpoint gate can recompile emitted IR (Constitution #3), but app-authored TSX must not carry derivable stamps: redundant stamps are lint **KV223**, and a stamp that disagrees with the expression it wraps is an error (**KV222**). The same rule covers `kovo-fragment-target`, `kovo-deps`, and `kovo-key`: app TSX writes typed queries and `key`; emitted IR carries residual strings and validates them. A component module in app source that hand-authors the lowered string/template IR instead of TSX is **KV235**. The general rule, normative framework-wide: **a residual string may be _validated_ in emitted IR, but TSX never requires a string the compiler can derive from a typed expression.**
 
 **The ceiling is explicit, and the escape hatch is defined.** Anything beyond paths, derives, and keyed lists flips to a server fragment — or to an **isomorphic island**: `isomorphic: true` on a component also emits its render function into the client module; on query/state change the island re-renders itself and self-morphs. It is the _same_ render function the server uses (partials cannot drift), and it is lint-gated (**KV302**: justification comment required) — this is the sanctioned SPA-creep escape named in §15.
 
@@ -311,10 +339,10 @@ During lowering, the compiler classifies every render-output position that reads
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
 | `plan`       | lowered to a binding, derive, or stamp (§4.8)                                                                                                                                                            | instant; participates in optimism |
 | `isomorphic` | island self-renders on change (§4.8, KV302)                                                                                                                                                              | instant; costs the render module  |
-| `fragment`   | inside a `fragmentTarget` — server re-renders query-backed output on mutation responses (§9.1); not a state remedy unless a later SPEC defines how client-private state participates in server fragments | 1 RTT — **no optimistic update**  |
+| `fragment`   | inside an inferred server-refreshable query target — mutation success may re-render it after invalidation ∩ live targets (§9.1); not a state remedy unless a later SPEC defines how client-private state participates in server fragments | 1 RTT — **no optimistic update**  |
 | `renderOnce` | declared immutable for the document's lifetime (suppression recorded in source)                                                                                                                          | never                             |
 
-A position fitting none of these is **KV311**. The teaching error shows the classification, why the position exceeds the plan grammar, and the fix menu — extract a derive, lower to a CSS/attribute toggle, `fragmentTarget: true`, `isomorphic: true`, or declare `renderOnce`:
+A position fitting none of these is **KV311**. The teaching error shows the classification, why the position exceeds the plan grammar, and the fix menu — extract a derive, lower to a CSS/attribute toggle, make the query-backed component reconstructible as an inferred target, remove `disableServerRefresh: true` if it is suppressing a valid target, use `isomorphic: true`, or declare `renderOnce`:
 
 ```
 kovo check coverage
@@ -322,8 +350,8 @@ query cart:
   cart-badge   span text          plan: binding ✓
   cart-badge   button class       plan: derive (CartBadge$button_class) ✓
   cart-badge   conditional <dot>  UNHANDLED ⚠ KV311
-     → derive + [hidden] toggle, fragmentTarget, isomorphic, or renderOnce
-  mini-cart    (subtree)          fragment ✓ — no optimistic update (declared)
+     → derive + [hidden] toggle, inferred fragment target, isomorphic, or renderOnce
+  mini-cart    (subtree)          fragment ✓ — no optimistic update (inferred target)
 ```
 
 Like KV310, the check runs at two altitudes off one derived set: in the compiler during lowering (editor-visible) and as `kovo check coverage` (CI/agents). Together with §10.6 and the touch graph, a mutation's full dataflow is exhaustiveness-checked edge by edge: write → invalidated queries (§11.1) → optimistic prediction (KV310) → every dependent DOM position (KV311) → fragment reconcile (§9.1). No edge may be silently uncovered — Appendix A's "nothing to remember" promise holds _unconditionally_, not just inside the plan grammar.
@@ -372,7 +400,7 @@ kovo explain page /products/:id    # emitted modulepreloads, per-route prefetch 
 
 ## 6. Type System
 
-One pattern, applied everywhere: **declare facts once → derive every surface → validate residual strings against generated registries.** The only codegen is trivial registry `.d.ts` files; all wiring checks are TypeScript static checks over code that runs as written. Residual strings live in emitted IR and are derived from TSX authoring facts (§4.8); every load-bearing attribute the IR carries (`on:*`, `data-bind*`, `kovo-deps`, `kovo-c`, `kovo-key`, `href`, IDREFs) has a named validator in §11.3, so "all residual strings are validated" is a checkable claim, not an aspiration.
+One pattern, applied everywhere: **declare facts once → derive every surface → validate residual strings against generated registries.** The only codegen is trivial registry `.d.ts` files; all wiring checks are TypeScript static checks over code that runs as written. Residual strings live in emitted IR and are derived from TSX authoring facts (§4.8); every load-bearing attribute the IR carries (`on:*`, `data-bind*`, `kovo-deps`, `kovo-c`, `kovo-key`, `kovo-fragment-target`, `href`, IDREFs) has a named validator in §11.3, so "all residual strings are validated" is a checkable claim, not an aspiration.
 
 ### 6.1 The registries (generated)
 
@@ -405,6 +433,13 @@ interface InvalidationSets {
 // also: DomainKey (schema domains), PageIds (per-page element ids, §6.4/KV221),
 // ComponentPackagePrefixes + ComponentPackageRegistry (§6.1.1)
 ```
+
+`FragmentTargets` is generated from inferred server-refreshable query components, not from an
+author-written `fragmentTarget` option. Singleton targets use the component registry key as the type
+identity and the derived DOM leaf as the ordinary wire target; repeated targets add their typed
+instance identity at the wire edge (`cart-row:p1`) while the registry records the serializable prop
+shape required to reconstruct any instance. `disableServerRefresh: true` suppresses target generation
+for that component and appears in explain output.
 
 Component registry keys are derived as `<module path relative to the package src root>/<dom leaf>`, with
 `tests/integration/fixtures/` used as the fixture root in the integration suite. The DOM leaf remains
@@ -510,13 +545,24 @@ export const addToCart = mutation('cart/add', {
 
 ```tsx
 // product.tsx — consuming form; the no-JS fallback IS the output
-const f = form('cart/add'); // key validated vs MutationRegistry; input type inferred
-<f.Form>
-  <f.hidden name="productId" value={props.productId} />
-  <f.input name="quantity" type="number" min={1} />
-  <button>Add to cart</button>
-</f.Form>; // ✗ compile error if a required field is missing
-// Emits: <form method="post" action="/_m/cart/add" enhance> …
+export const AddToCartForm = component({
+  queries: { product: productQuery.args((p) => ({ id: p.productId })) },
+  props: s.object({ productId: s.string() }),
+  mutations: { addToCart },
+  render: ({ product }, _state, { productId, forms }) => (
+    <form enhance mutation={addToCart} key={productId}>
+      <input type="hidden" name="productId" value={productId} />
+      <input name="quantity" type="number" min={1} defaultValue={1} />
+      {forms.addToCart.failure?.code === 'OUT_OF_STOCK' ? (
+        <output role="alert" data-error-code="OUT_OF_STOCK">
+          Only {forms.addToCart.failure.payload.availableQuantity} left.
+        </output>
+      ) : null}
+      <button disabled={product.stock <= 0}>Add to cart</button>
+    </form>
+  ),
+});
+// Emits: <form method="post" action="/_m/cart/add" enhance data-mutation="cart/add" kovo-key="p1"> …
 
 // programmatic, with the exhaustive typed-error union:
 ctx.submit(addToCart, {
@@ -529,7 +575,20 @@ ctx.submit(addToCart, {
 });
 ```
 
-Where the mutation value is importable — server-rendered templates always can — `form(addToCart)` is the preferred spelling: inference straight off the value, no registry hop. The string-keyed form survives for sites that can't import the value.
+Where the mutation value is importable — server-rendered templates always can — `mutation={addToCart}`
+is the preferred form authoring spelling: inference straight off the value, no registry hop. The compiler
+emits the concrete `action="/_m/cart/add"`, mutation key metadata, input coercion metadata, CSRF field,
+and submitted-form target. The string-keyed `form('cart/add')` helper survives for sites that cannot
+import the value, but author TSX should not hard-code mutation URLs.
+
+Enhanced form failures use the same render function as the no-JS full-page path. The third render
+argument carries typed form state, with each bound mutation exposing
+`forms.<mutation>.failure: null | { code; payload; fieldErrors? }`. The failure value is scoped to
+the submitted form instance for that render and is cleared by the next successful render of that
+instance. Repeated forms must provide stable identity through authored `key` or serializable keyed
+component props; the compiler lowers it to `kovo-key` and derives the submitted-form fragment target.
+Hidden inputs are submitted data, not identity. An enhanced form in a repeatable position with no
+stable key is a teaching diagnostic because the server cannot know which live form to re-render.
 
 ### 6.4 Routes & links (typed navigation)
 
@@ -648,11 +707,20 @@ Kovo-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1
 </kovo-fragment>
 ```
 
-- `Kovo-Targets` is read off the live DOM (`kovo-deps` stamps), so islands patched in after page load participate. The server holds **no session of what's on screen** — it answers a stateless question.
+- `Kovo-Targets` is read off the live DOM (`kovo-deps` stamps), so islands patched in after page load participate. The wire format is `target=queryInstance queryInstance`; singleton targets use the derived leaf (`cart-badge=cart`), and repeated targets include their stable keyed suffix (`product-form:p2=product:p2`). The server holds **no session of what's on screen** — it answers a stateless question.
 - `Kovo-Changes` is the sanitized wire summary of committed writes: each entry is `{domain, keys}`. It never includes mutation input, user-provided values, failure reasons, stack traces, or internal diagnostic detail; richer typed change records are internal compiler/runtime artifacts (§14).
 - `<kovo-query>` replaces the client's query value and runs that query's update plan — bindings, named derives, stamps — across every dependent island. No runtime dependency tracking: the plan is the DOM itself (§4.8).
 - `<kovo-fragment>` is **DOM-morphed** by default (idiomorph-class algorithm): focus, scroll, selection, CSS transitions, and nested island state survive. `mode="append"` is the explicit append vocabulary for pagination and streams. Patched-in islands are inert-until-touched like everything else — _a fragment update is a tiny navigation, not a different programming model._
 - **Without JS:** the same endpoint sees no `Kovo-Fragment` header and answers POST-redirect-GET with errors re-rendered into the full page. One handler, two response modes.
+
+Success response selection is deterministic. After commit, the server intersects `Kovo-Changes` with
+the submitted live `Kovo-Targets`. For each affected live target, output positions covered by §4.8
+bindings/derives/stamps are refreshed through `<kovo-query>` values or prod deltas; uncovered
+positions inside a reconstructible inferred target receive a `<kovo-fragment>`. If every affected
+position is plan-covered, no fragment is sent for that target. If a target is not reconstructible and
+not plan-covered, the compiler must have emitted KV311/KV303 before this response path is relied on.
+Mutation failure does not run this selector: it re-renders only the submitted enhanced form target
+with typed failure state (§9.2), while the no-JS path re-renders the full page with the same state.
 
 The round-trip above is the **dev** (and no-JS) form: complete `<kovo-query>` JSON and full self-describing `<kovo-fragment>` HTML. Prod ships the same vocabulary delta-encoded, described next.
 
@@ -678,7 +746,13 @@ The verifier kit is part of the normative surface for `webhook()`: `hmacSignatur
 
 ### 9.2 Errors
 
-Validation failures (schema, with field paths) and declared error codes return a fragment re-rendering the form with messages (default generated from schema paths; overridable per-form), HTTP 422. The enhanced path morphs just the form; the no-JS path re-renders the page. `ctx.submit`'s `onError` receives the typed union.
+Validation failures (schema, with field paths) and declared error codes return HTTP 422. The enhanced
+path infers the submitted form instance from the request's compiler-emitted form target and returns a
+`<kovo-fragment>` for that form only; the no-JS path re-renders the full page. Both paths call the
+same component render function with the same typed failure state in `forms.<mutation>.failure`, so
+error UI is normal TSX rather than a separate failure template. `ctx.submit`'s `onError` receives the
+same typed union. Failure responses never use committed invalidation or `Kovo-Targets` success
+selection.
 
 Unexpected server failures are not part of the typed union and must not leak internals. The typed query endpoint (§9.4) returns HTTP 500 with JSON `{"code":"SERVER_ERROR","payload":{}}`. Full-page route rendering returns HTTP 500 with the app's stable error shell or the fallback body `Internal Server Error`. Enhanced mutation responses that fail while rendering post-commit queries/fragments return a render-error fragment with HTTP 500 and `data-error-code="RENDER_ERROR"`; any `Kovo-Changes` header on that response remains sanitized to `{domain, keys}` for writes that already committed.
 
@@ -984,7 +1058,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV232 | lint       | Author override of a primitive-owned ARIA/state attribute                                                     |
 | KV233 | error      | Two writers for one binding target                                                                            |
 | KV234 | error      | Package component prefix registration conflict or reservation violation (§6.1.1)                              |
-| KV235 | error      | App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR (§5.2)  |
+| KV235 | error      | App source hand-authors lowered IR/string-rendered components or derivable runtime stamps; write TSX (`queries`, `key`, typed expressions) and let the compiler emit IR (§5.2) |
 | KV236 | error      | Unsafe output context requires an explicit trusted Kovo escape hatch (§1, §5.2)                               |
 | KV237 | error      | Duplicate derived component registry key (§4.2, §4.8, §6.1.1)                                                 |
 | KV238 | error      | Duplicate derived fragment-target registry key (§4.5, §6.2, §9.1)                                             |
@@ -993,7 +1067,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV241 | warn       | Derived component registry key changed since the previous emitted graph (§4.2, §4.8)                          |
 | KV301 | lint       | Server fact in island-local state                                                                             |
 | KV302 | error      | `data-bind` path is not present in the declared query shape (§4.8)                                            |
-| KV303 | error      | Fragment-target render input is not declared as query data or stamped props (§4.5)                            |
+| KV303 | error      | Inferred refresh-target render input is not declared as query data or serializable stamped props (§4.5)        |
 | KV304 | error      | Reserved query name such as `state` is not allowed (§4.8 binding roots)                                       |
 | KV310 | warn       | Invalidated query lacks optimistic transform (write/defer; v2 adds derive)                                    |
 | KV311 | warn       | Query/state-dependent DOM position with no update status — plan/isomorphic/fragment/renderOnce (§4.9)         |

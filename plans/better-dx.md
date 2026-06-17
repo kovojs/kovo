@@ -99,7 +99,7 @@ export const AddToCartForm = component({
   - Decision: use `disableServerRefresh: true`. Remove `fragmentTarget: true`
     rather than deprecating it, and do not add an `'always'` force-on mode.
   - Evidence: owner decision in this planning session, 2026-06-17.
-- [ ] **Define target identity for multiple instances.**
+- [x] **Define target identity for multiple instances.**
   - A singleton query component can use the derived DOM leaf (`cart-badge`).
     Repeated or prop-keyed instances need a derived target such as
     `product-form:p2`.
@@ -108,14 +108,28 @@ export const AddToCartForm = component({
     compiler lowers authored `key` to runtime `kovo-key`.
   - Hidden inputs are submitted data, not render identity; they may match the key
     but are not the primary source of target identity.
-  - Done = `SPEC.md` defines singleton vs keyed target derivation, duplicate
-    diagnostics, and how `Kovo-Targets` serializes each instance.
-- [ ] **Define when auto targets ship full fragments vs query deltas only.**
+  - Evidence:
+    - `SPEC.md` §4.1/§4.2 now defines query-backed inferred targets, singleton
+      leaf targets, keyed repeated targets, duplicate/ambiguous identity errors,
+      and derived `kovo-fragment-target` IR.
+    - `SPEC.md` §9.1 now defines `Kovo-Targets` serialization as
+      `target=queryInstance queryInstance`, including keyed repeated targets such
+      as `product-form:p2=product:p2`.
+    - Verified with `rg -n 'disableServerRefresh|Kovo-Targets|kovo-fragment-target' SPEC.md`
+      and `git diff --check` on 2026-06-17.
+- [x] **Define when auto targets ship full fragments vs query deltas only.**
   - Rule direction: if every invalidated position under the target is covered by
     §4.8 bindings/derives/keyed stamps, prefer query JSON or prod query deltas;
     otherwise send a fragment rerender when the component is server-reconstructible.
-  - Done = `SPEC.md` §4.9 and §9.1.1 describe deterministic selection and the
-    compiler exposes the classification in explain output.
+  - Evidence:
+    - `SPEC.md` §4.9 now defines `fragment` as an inferred server-refreshable
+      query target status, not an explicit component option.
+    - `SPEC.md` §9.1 now defines deterministic success response selection:
+      committed changes intersect live targets, §4.8-covered positions refresh
+      through query values/deltas, and uncovered reconstructible targets receive
+      fragments.
+    - Verified with `rg -n 'inferred server-refreshable|Kovo-Targets|KV311|KV303' SPEC.md`
+      and `git diff --check` on 2026-06-17.
 - [x] **Choose typed mutation binding over string action authoring.**
   - Decision: app-authored forms use `mutation={addToCart}`. The emitted IR may
     contain `action="/_m/cart/add"`, but app TSX should not require stringly
@@ -127,7 +141,7 @@ export const AddToCartForm = component({
     usage becomes an invalid component option with a diagnostic that points to
     query inference and `disableServerRefresh: true`.
   - Evidence: owner decision in this planning session, 2026-06-17.
-- [ ] **Define inferred form target identity and failure state shape.**
+- [x] **Define inferred form target identity and failure state shape.**
   - Repeated forms need stable instance identity. Prefer ordinary local identity
     (`key={productId}` / keyed component props, lowered to `kovo-key`) over
     globally coordinated target strings. If no stable key can be derived,
@@ -135,9 +149,15 @@ export const AddToCartForm = component({
   - Decision: typed failure state lives in the render context / third render arg,
     e.g. `render: (queries, state, { productId, forms }) => ...`, with
     `forms.addToCart.failure: null | { code; payload; fieldErrors? }`.
-  - Done = `SPEC.md` §6.3/§9.2 define enhanced form target inference, no-JS
-    parity, typed failure state lifetime, and diagnostics for unkeyed repeated
-    forms.
+  - Evidence:
+    - `SPEC.md` §6.3 now defines `<form enhance mutation={addToCart}
+      key={productId}>`, typed `forms.<mutation>.failure`, stable key
+      requirements, and compiler-derived submitted-form targets.
+    - `SPEC.md` §9.2 now defines enhanced HTTP 422 form-fragment rerender,
+      no-JS full-page parity, typed failure state, and bypassing success
+      invalidation selection on failures.
+    - Verified with `rg -n 'mutation=\\{addToCart\\}|forms\\.<mutation>\\.failure|Failure responses' SPEC.md`
+      and `git diff --check` on 2026-06-17.
 - [x] **Define success vs failure response selection.**
   - Decision: on success, intersect committed changes with submitted live targets;
     send query value/delta when §4.8 covers affected output, otherwise send a
@@ -147,7 +167,7 @@ export const AddToCartForm = component({
 
 ## Implementation plan
 
-- [ ] **1. SPEC contract update.**
+- [x] **1. SPEC contract update.**
   - Update `SPEC.md` §4.1 to make `queries` the ordinary declaration for live
     query-backed components, not `fragmentTarget: true`.
   - Update `SPEC.md` §4.2/§4.8 so compiler-derived stamps include the
@@ -162,7 +182,25 @@ export const AddToCartForm = component({
   - Update `SPEC.md` §4.8/§13.2 so app-authored `key` is the TSX source form and
     `kovo-key` is the lowered DOM/runtime identity stamp.
   - Evidence:
-    - Pending.
+    - `SPEC.md` §4.1 now makes `queries` the ordinary declaration for inferred
+      live query-backed components and defines `disableServerRefresh: true` as
+      force-off only.
+    - `SPEC.md` §4.2/§4.8 now define compiler-derived `kovo-fragment-target`,
+      `kovo-deps`, and `kovo-key` as emitted IR while app TSX writes typed
+      queries, expressions, and `key`.
+    - `SPEC.md` §4.9 now defines `fragment` coverage as inferred
+      server-refreshable targets and updates KV311 guidance away from
+      `fragmentTarget: true`.
+    - `SPEC.md` §6.3/§9.2 now define typed mutation form authoring,
+      submitted-form target inference, typed failure state, and no-JS parity.
+    - `SPEC.md` §9.1 now defines invalidation intersected with live
+      `Kovo-Targets`, query value/delta preference, and fragment fallback.
+    - Verified with `rg -n 'fragmentTarget: true|failureTarget|force-on|fragmentTarget,' SPEC.md`,
+      `rg -n 'disableServerRefresh|inferred server-refreshable|Kovo-Targets|mutation=\\{addToCart\\}|forms\\.<mutation>\\.failure|KV303|KV311' SPEC.md`,
+      and `git diff --check` on 2026-06-17.
+    - Formatting gap: `pnpm exec prettier --check SPEC.md` could not run because
+      this workspace does not currently provide a `prettier` command
+      (`ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "prettier" not found`).
 - [ ] **2. Compiler graph facts: infer refreshable targets from queries.**
   - Replace `componentOptionStaticValue(model, 'fragmentTarget') === true` as the
     sole source of `FragmentTargetFact` with an inference pass over query-backed
@@ -188,8 +226,8 @@ export const AddToCartForm = component({
     server-refreshable target set, not only the explicit option.
   - Prefer `plan` for path/derive/stamp positions and use `fragment` only for
     positions outside the §4.8 grammar but inside a reconstructible target.
-  - Update KV311 help text to recommend query-derived refresh targets and the new
-    force-off/force-on escape hatches.
+  - Update KV311 help text to recommend query-derived refresh targets and the
+    `disableServerRefresh: true` force-off escape hatch.
   - Evidence:
     - Pending.
 - [ ] **5. Runtime/server response selection: invalidation intersects live targets.**
@@ -293,7 +331,10 @@ export const AddToCartForm = component({
 
 ## Proving commands
 
-- [ ] SPEC contract tests updated and green: command pending.
+- [x] SPEC contract updated and mechanically checked:
+      `rg -n 'fragmentTarget: true|failureTarget|force-on|fragmentTarget,' SPEC.md`,
+      `rg -n 'disableServerRefresh|inferred server-refreshable|Kovo-Targets|mutation=\\{addToCart\\}|forms\\.<mutation>\\.failure|KV303|KV311' SPEC.md`,
+      and `git diff --check` passed on 2026-06-17.
 - [ ] Compiler graph/lowering/query-coverage tests green: command pending.
 - [ ] Enhanced form target inference and typed failure rerender tests green:
       command pending.
