@@ -57,7 +57,10 @@ describe('commerce example', () => {
     expect(cartDocument.bodyAttrs.class).toBe('min-h-dvh bg-slate-50 p-6');
     expect(
       htmlElementFacts(cartPage, {
-        attrs: { class: 'rounded bg-teal-600 px-2 py-0.5 text-white' },
+        attrs: {
+          class:
+            'inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1.5 text-xs font-semibold tabular-nums text-white',
+        },
         tag: 'span',
       }),
     ).toHaveLength(1);

@@ -30,7 +30,9 @@ export const CartBadge = component({
       class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm"
     >
       <span>{t(commerceMessages, 'cartLabel')}</span>
-      <span class="rounded bg-teal-600 px-2 py-0.5 text-white">{cart.count}</span>
+      <span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1.5 text-xs font-semibold tabular-nums text-white">
+        {cart.count}
+      </span>
     </cart-badge>
   ),
 });

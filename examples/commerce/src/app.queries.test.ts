@@ -331,7 +331,7 @@ describe('commerce example', () => {
     // SECURITY (SECURITY_FINDINGS.md M9): renderOrderHistory is scoped to the
     // session user, so it must be given the owning user id to surface the order.
     expect(htmlKeyTextMap(await renderOrderHistory(db, 'u-direct'))).toMatchObject({
-      'order-1': 'p1 x 2 - 2998',
+      'order-1': 'p1Order order-1×2$29.98',
     });
   });
 
