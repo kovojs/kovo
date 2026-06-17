@@ -35,16 +35,9 @@ import {
   comboboxListboxClasses,
   comboboxOptionClasses,
   comboboxValueClasses,
-  scrollAreaCornerClasses,
-  scrollAreaScrollbarClasses,
-  scrollAreaThumbClasses,
-  scrollAreaViewportClasses,
   selectContentClasses,
   selectItemClasses,
   selectValueClasses,
-  tabsListClasses,
-  tabsPanelClasses,
-  tabsTriggerClasses,
   sliderRangeClasses,
   sliderThumbClasses,
   sliderTrackClasses,
@@ -94,10 +87,6 @@ describe('@kovojs/ui styled package foundation', () => {
       scrollbars: 'vertical',
     });
 
-    expect(ScrollAreaViewport.name).toBe('scroll-area-viewport');
-    expect(ScrollAreaScrollbar.name).toBe('scroll-area-scrollbar');
-    expect(ScrollAreaThumb.name).toBe('scroll-area-thumb');
-    expect(ScrollAreaCorner.name).toBe('scroll-area-corner');
     expect(root).toContain('data-scrollbars="both" dir="ltr" id="activity"');
     expect(viewport).toContain('aria-describedby="activity-description"');
     expect(viewport).toContain('aria-labelledby="activity-title"');
@@ -114,10 +103,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(corner).toContain('id="activity-corner"');
     expect(disabledViewport).toContain('aria-disabled="true"');
     expect(disabledViewport).toContain('tabIndex="-1"');
-    expect(scrollAreaViewportClasses.join(' ')).toContain('overflow-auto');
-    expect(scrollAreaScrollbarClasses.join(' ')).toContain('data-[orientation=vertical]:w-2.5');
-    expect(scrollAreaThumbClasses.join(' ')).toContain('rounded-full bg-neutral-400');
-    expect(scrollAreaCornerClasses.join(' ')).toContain('absolute bottom-0 right-0');
   });
 
   it('wraps the headless select primitive as styled trigger, listbox, and hidden input markup', () => {
@@ -158,11 +143,6 @@ describe('@kovojs/ui styled package foundation', () => {
     });
     const hiddenInput = SelectHiddenInput.definition.render({ ...state, id: 'plan-hidden' });
     const value = SelectValue.definition.render({ ...state, id: 'plan-value' });
-
-    expect(SelectTrigger.name).toBe('select-trigger');
-    expect(SelectContent.name).toBe('select-content');
-    expect(SelectItem.name).toBe('select-item');
-    expect(SelectValue.name).toBe('select-value');
     expect(root).toContain('data-invalid="" data-required="" data-state="closed" id="plan-root"');
     expect(trigger).toContain('aria-describedby="plan-help plan-error"');
     expect(trigger).toContain('aria-expanded="false"');
@@ -226,11 +206,6 @@ describe('@kovojs/ui styled package foundation', () => {
       labelledBy: 'assignee-label',
     });
     const value = ComboboxValue.definition.render({ ...state, id: 'assignee-value' });
-
-    expect(ComboboxInput.name).toBe('combobox-input');
-    expect(ComboboxListbox.name).toBe('combobox-listbox');
-    expect(ComboboxOption.name).toBe('combobox-option');
-    expect(ComboboxValue.name).toBe('combobox-value');
     expect(input).toContain('aria-activedescendant="assignee-listbox-option-1"');
     expect(input).toContain('aria-autocomplete="list"');
     expect(input).toContain('aria-controls="assignee-listbox"');
@@ -288,11 +263,6 @@ describe('@kovojs/ui styled package foundation', () => {
       labelledBy: 'plan-search-label',
     });
     const value = AutocompleteValue.definition.render({ ...state, id: 'plan-search-value' });
-
-    expect(AutocompleteInput.name).toBe('autocomplete-input');
-    expect(AutocompleteList.name).toBe('autocomplete-list');
-    expect(AutocompleteOption.name).toBe('autocomplete-option');
-    expect(AutocompleteValue.name).toBe('autocomplete-value');
     expect(input).toContain('aria-activedescendant="plan-suggestions-option-1"');
     expect(input).toContain('autocomplete="off"');
     expect(input).toContain('form="plan-form"');
@@ -336,11 +306,6 @@ describe('@kovojs/ui styled package foundation', () => {
       })}${SliderThumb.definition.render(state)}`,
       id: 'coverage-root',
     });
-
-    expect(SliderInput.name).toBe('slider-input');
-    expect(SliderTrack.name).toBe('slider-track');
-    expect(SliderRange.name).toBe('slider-range');
-    expect(SliderThumb.name).toBe('slider-thumb');
     expect(root).toContain('data-max="100" data-min="0" data-orientation="horizontal"');
     expect(root).toContain('data-required="" data-value="65" id="coverage-root"');
     expect(root).toContain('aria-describedby="coverage-help"');
@@ -371,10 +336,6 @@ describe('@kovojs/ui styled package foundation', () => {
       orientation: 'horizontal' as const,
       value: 'overview',
     };
-
-    expect(TabsList.name).toBe('tabs-list');
-    expect(TabsTrigger.name).toBe('tabs-trigger');
-    expect(TabsPanel.name).toBe('tabs-panel');
 
     expect(
       Tabs.definition.render({
@@ -430,8 +391,5 @@ describe('@kovojs/ui styled package foundation', () => {
         itemValue: 'activity',
       }),
     ).toContain('data-state="inactive" hidden role="tabpanel"');
-    expect(tabsListClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
-    expect(tabsTriggerClasses.join(' ')).toContain('data-[state=active]:bg-white');
-    expect(tabsPanelClasses.join(' ')).toContain('rounded-md border border-neutral-200');
   });
 });

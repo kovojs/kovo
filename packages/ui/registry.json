@@ -651,9 +651,6 @@
       ],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
-          "defineVariants",
           "scrollAreaCornerAttributes",
           "ScrollAreaOrientation",
           "scrollAreaRootAttributes",
@@ -664,6 +661,7 @@
           "scrollAreaViewportAttributes",
           "TextDirection"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

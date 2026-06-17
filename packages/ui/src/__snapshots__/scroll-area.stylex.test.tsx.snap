@@ -1,0 +1,45 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui ScrollArea StyleX styles > exports StyleX style groups 1`] = `
+{
+  "cornerMarker": true,
+  "keys": [
+    "corner",
+    "root",
+    "scrollbar",
+    "thumb",
+    "viewport",
+  ],
+  "rootMarker": true,
+  "scrollbarMarker": true,
+  "thumbMarker": true,
+  "viewportMarker": true,
+}
+`;
+
+exports[`@kovojs/ui ScrollArea StyleX styles > matches author-last slot override output 1`] = `"<div class="kv-scroll-area-bg-1e9h7l kv-scroll-area-bd-135gc1 kv-scroll-area-bd-17dppo kv-scroll-area-bd-5grtwb kv-scroll-area-fg-1vjxc5 kv-scroll-area-font-ms8kpd kv-scroll-area-overflow-v522gr kv-scroll-area-position-ojetho kv-scroll-area-opacity-1wmp2v kv-app-scroll-area-bd-110po9" data-style-src="scroll-area.tsx#root; app-scroll-area.tsx#root" data-scrollbars="both"><div class="kv-scroll-area-outline-x8cs7p kv-scroll-area-overflow-sxk0l2 kv-scroll-area-pad-1qk7f1 kv-scroll-area-cursor-1vbzsg kv-scroll-area-box-21qb5r kv-app-scroll-area-max-htlvua" data-style-src="scroll-area.tsx#viewport; app-scroll-area.tsx#viewport" data-scrollbars="both" tabIndex="0">feed</div><div class="kv-scroll-area-d-1sq7s1 kv-scroll-area-pad-1vr9s7 kv-scroll-area-position-1qlvvy kv-scroll-area-touch-v3h6zb kv-scroll-area-transition-1jkhsu kv-scroll-area-user-1xrdaj kv-scroll-area-bottom-1ysypa kv-scroll-area-h-7zyscz kv-scroll-area-left-3cagmy kv-scroll-area-right-1ntxqs kv-scroll-area-bottom-tnstfa kv-scroll-area-right-1rcz69 kv-scroll-area-top-i0wlzw kv-scroll-area-w-axad78 kv-scroll-area-opacity-l4986l kv-app-scroll-area-bg-s4n93u" data-style-src="scroll-area.tsx#scrollbar; app-scroll-area.tsx#scrollbar" aria-hidden="true" data-orientation="vertical" data-scrollbars="both" data-state="visible"><div class="kv-scroll-area-bd-109pdw kv-scroll-area-flex-16nrr9 kv-scroll-area-position-ojetho kv-scroll-area-min-eyjidt kv-scroll-area-min-sczs5k kv-scroll-area-opacity-l4986l kv-app-scroll-area-bg-yhk1ij" data-style-src="scroll-area.tsx#thumb; app-scroll-area.tsx#thumb" aria-hidden="true" data-orientation="vertical" data-scrollbars="both" data-state="visible"></div></div><div class="kv-scroll-area-bottom-1pt27q kv-scroll-area-h-1shnsm kv-scroll-area-position-1qlvvy kv-scroll-area-right-m20y42 kv-scroll-area-w-xwddux kv-scroll-area-d-6v8kr1 kv-app-scroll-area-bg-s4n93u" data-style-src="scroll-area.tsx#corner; app-scroll-area.tsx#corner" aria-hidden="true" data-scrollbars="both" data-state="visible"></div></div>"`;
+
+exports[`@kovojs/ui ScrollArea StyleX styles > matches scroll-area parts with StyleX output 1`] = `
+{
+  "classes": [
+    "kv-scroll-area-bg-1e9h7l kv-scroll-area-bd-1nros8 kv-scroll-area-bd-135gc1 kv-scroll-area-bd-17dppo kv-scroll-area-bd-5grtwb kv-scroll-area-fg-1vjxc5 kv-scroll-area-font-ms8kpd kv-scroll-area-overflow-v522gr kv-scroll-area-position-ojetho kv-scroll-area-opacity-1wmp2v",
+  ],
+  "corner": "<div class="kv-scroll-area-bg-1komfq kv-scroll-area-bottom-1pt27q kv-scroll-area-h-1shnsm kv-scroll-area-position-1qlvvy kv-scroll-area-right-m20y42 kv-scroll-area-w-xwddux kv-scroll-area-d-6v8kr1" data-style-src="scroll-area.tsx#corner" aria-hidden="true" data-scrollbars="both" data-state="visible" id="activity-corner"></div>",
+  "cornerClasses": [
+    "kv-scroll-area-bg-1komfq kv-scroll-area-bottom-1pt27q kv-scroll-area-h-1shnsm kv-scroll-area-position-1qlvvy kv-scroll-area-right-m20y42 kv-scroll-area-w-xwddux kv-scroll-area-d-6v8kr1",
+  ],
+  "hiddenThumb": "<div class="kv-scroll-area-bg-16le2c kv-scroll-area-bd-109pdw kv-scroll-area-flex-16nrr9 kv-scroll-area-position-ojetho kv-scroll-area-min-eyjidt kv-scroll-area-min-sczs5k kv-scroll-area-opacity-l4986l" data-style-src="scroll-area.tsx#thumb" aria-hidden="true" data-orientation="horizontal" data-scroll-position="none" data-scrollbars="both" data-state="hidden" id="activity-thumb-x"></div>",
+  "root": "<div class="kv-scroll-area-bg-1e9h7l kv-scroll-area-bd-1nros8 kv-scroll-area-bd-135gc1 kv-scroll-area-bd-17dppo kv-scroll-area-bd-5grtwb kv-scroll-area-fg-1vjxc5 kv-scroll-area-font-ms8kpd kv-scroll-area-overflow-v522gr kv-scroll-area-position-ojetho kv-scroll-area-opacity-1wmp2v" data-style-src="scroll-area.tsx#root" data-scrollbars="both" dir="ltr" id="activity">viewport and scrollbars</div>",
+  "scrollbarClasses": [
+    "kv-scroll-area-bg-1komfq kv-scroll-area-d-1sq7s1 kv-scroll-area-pad-1vr9s7 kv-scroll-area-position-1qlvvy kv-scroll-area-touch-v3h6zb kv-scroll-area-transition-1jkhsu kv-scroll-area-user-1xrdaj kv-scroll-area-bottom-1ysypa kv-scroll-area-h-7zyscz kv-scroll-area-left-3cagmy kv-scroll-area-right-1ntxqs kv-scroll-area-bottom-tnstfa kv-scroll-area-right-1rcz69 kv-scroll-area-top-i0wlzw kv-scroll-area-w-axad78 kv-scroll-area-opacity-l4986l",
+  ],
+  "thumbClasses": [
+    "kv-scroll-area-bg-16le2c kv-scroll-area-bd-109pdw kv-scroll-area-flex-16nrr9 kv-scroll-area-position-ojetho kv-scroll-area-min-eyjidt kv-scroll-area-min-sczs5k kv-scroll-area-opacity-l4986l",
+  ],
+  "verticalScrollbar": "<div class="kv-scroll-area-bg-1komfq kv-scroll-area-d-1sq7s1 kv-scroll-area-pad-1vr9s7 kv-scroll-area-position-1qlvvy kv-scroll-area-touch-v3h6zb kv-scroll-area-transition-1jkhsu kv-scroll-area-user-1xrdaj kv-scroll-area-bottom-1ysypa kv-scroll-area-h-7zyscz kv-scroll-area-left-3cagmy kv-scroll-area-right-1ntxqs kv-scroll-area-bottom-tnstfa kv-scroll-area-right-1rcz69 kv-scroll-area-top-i0wlzw kv-scroll-area-w-axad78 kv-scroll-area-opacity-l4986l" data-style-src="scroll-area.tsx#scrollbar" aria-hidden="true" data-orientation="vertical" data-scroll-position="middle" data-scrollbars="both" data-state="visible" id="activity-scrollbar-y"><div class="kv-scroll-area-bg-16le2c kv-scroll-area-bd-109pdw kv-scroll-area-flex-16nrr9 kv-scroll-area-position-ojetho kv-scroll-area-min-eyjidt kv-scroll-area-min-sczs5k kv-scroll-area-opacity-l4986l" data-style-src="scroll-area.tsx#thumb" aria-hidden="true" data-orientation="vertical" data-scroll-position="middle" data-scrollbars="both" data-state="visible"></div></div>",
+  "viewport": "<div class="kv-scroll-area-max-6ru0rb kv-scroll-area-outline-x8cs7p kv-scroll-area-overflow-sxk0l2 kv-scroll-area-pad-1qk7f1 kv-scroll-area-cursor-1vbzsg kv-scroll-area-box-21qb5r" data-style-src="scroll-area.tsx#viewport" aria-describedby="activity-description" aria-labelledby="activity-title" data-scroll-x="none" data-scroll-y="middle" data-scrollbars="both" id="activity-viewport" role="region" tabIndex="0">feed</div>",
+  "viewportClasses": [
+    "kv-scroll-area-max-6ru0rb kv-scroll-area-outline-x8cs7p kv-scroll-area-overflow-sxk0l2 kv-scroll-area-pad-1qk7f1 kv-scroll-area-cursor-1vbzsg kv-scroll-area-box-21qb5r",
+  ],
+}
+`;

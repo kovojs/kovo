@@ -104,7 +104,6 @@ import {
   popoverClasses,
   popoverContentClasses,
   radioGroupClasses,
-  scrollAreaClasses,
   selectClasses,
   selectTriggerClasses,
   tooltipClasses,
@@ -200,7 +199,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(toolbarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(numberFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');
     expect(otpFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');
-    expect(scrollAreaClasses.join(' ')).toContain('relative overflow-hidden');
     expect(fieldClasses.join(' ')).toContain('data-[required]');
     expect(selectClasses.join(' ')).toContain('data-[invalid]:text-red-950');
     expect(selectTriggerClasses.join(' ')).toContain('data-[placeholder]:text-neutral-500');

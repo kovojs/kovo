@@ -1,19 +1,25 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   scrollAreaCornerAttributes,
   scrollAreaRootAttributes,
   scrollAreaScrollbarAttributes,
   scrollAreaThumbAttributes,
   scrollAreaViewportAttributes,
-  type ClassValue,
   type ScrollAreaOrientation,
   type ScrollAreaScrollPosition,
   type ScrollAreaScrollbars,
   type TextDirection,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface ScrollAreaStyleOverrides {
+  corner?: style.StyleInput;
+  root?: style.StyleInput;
+  scrollbar?: style.StyleInput;
+  thumb?: style.StyleInput;
+  viewport?: style.StyleInput;
+}
 
 export interface ScrollAreaStateProps {
   disabled?: boolean;
@@ -23,70 +29,129 @@ export interface ScrollAreaStateProps {
 
 export interface ScrollAreaProps extends ScrollAreaStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: ScrollAreaStyleOverrides;
 }
 
 export interface ScrollAreaViewportProps extends ScrollAreaStateProps {
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
   scrollX?: ScrollAreaScrollPosition;
   scrollY?: ScrollAreaScrollPosition;
+  styles?: ScrollAreaStyleOverrides;
 }
 
 export interface ScrollAreaScrollbarProps extends ScrollAreaStateProps {
   children?: string;
-  class?: ClassValue;
   forceMount?: boolean;
   id?: string;
   orientation?: ScrollAreaOrientation;
   scrollPosition?: ScrollAreaScrollPosition;
+  styles?: ScrollAreaStyleOverrides;
   visible?: boolean;
 }
 
 export interface ScrollAreaThumbProps extends ScrollAreaScrollbarProps {}
 
 export interface ScrollAreaCornerProps extends ScrollAreaStateProps {
-  class?: ClassValue;
   forceMount?: boolean;
   id?: string;
+  styles?: ScrollAreaStyleOverrides;
   visible?: boolean;
 }
 
-export const scrollAreaClassNames = defineVariants({
-  base: 'relative overflow-hidden rounded-md border border-neutral-200 bg-white text-sm text-neutral-950 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const scrollAreaStyles = style.create(
+  {
+    corner: {
+      backgroundColor: '#f5f5f5',
+      bottom: 0,
+      height: 10,
+      position: 'absolute',
+      right: 0,
+      width: 10,
+      '[data-state=hidden]': {
+        display: 'none',
+      },
+    },
+    root: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      fontSize: 14,
+      overflow: 'hidden',
+      position: 'relative',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    scrollbar: {
+      backgroundColor: '#f5f5f5',
+      display: 'flex',
+      padding: 2,
+      position: 'absolute',
+      touchAction: 'none',
+      transitionProperty: 'background-color, opacity',
+      userSelect: 'none',
+      '[data-orientation=horizontal]': {
+        bottom: 0,
+        height: 10,
+        left: 0,
+        right: 0,
+      },
+      '[data-orientation=vertical]': {
+        bottom: 0,
+        right: 0,
+        top: 0,
+        width: 10,
+      },
+      '[data-state=hidden]': {
+        opacity: 0,
+      },
+    },
+    thumb: {
+      backgroundColor: '#a3a3a3',
+      borderRadius: 9999,
+      flex: 1,
+      position: 'relative',
+      '[data-orientation=horizontal]': {
+        minWidth: 32,
+      },
+      '[data-orientation=vertical]': {
+        minHeight: 32,
+      },
+      '[data-state=hidden]': {
+        opacity: 0,
+      },
+    },
+    viewport: {
+      maxHeight: 224,
+      outlineStyle: 'none',
+      overflow: 'auto',
+      padding: 16,
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+      },
+      ':focus-visible': {
+        boxShadow: 'inset 0 0 0 2px #0a0a0a',
+      },
+    },
+  },
+  { namespace: 'scrollArea', source: 'scroll-area.tsx' },
+);
 
-export const scrollAreaViewportClassNames = defineVariants({
-  base: 'max-h-56 overflow-auto p-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-950 data-[disabled]:cursor-not-allowed',
-  variants: {},
-});
-
-export const scrollAreaScrollbarClassNames = defineVariants({
-  base: 'absolute flex touch-none select-none bg-neutral-100 p-0.5 transition-colors data-[orientation=vertical]:inset-y-0 data-[orientation=vertical]:right-0 data-[orientation=vertical]:w-2.5 data-[orientation=horizontal]:inset-x-0 data-[orientation=horizontal]:bottom-0 data-[orientation=horizontal]:h-2.5 data-[state=hidden]:opacity-0',
-  variants: {},
-});
-
-export const scrollAreaThumbClassNames = defineVariants({
-  base: 'relative flex-1 rounded-full bg-neutral-400 data-[orientation=vertical]:min-h-8 data-[orientation=horizontal]:min-w-8 data-[state=hidden]:opacity-0',
-  variants: {},
-});
-
-export const scrollAreaCornerClassNames = defineVariants({
-  base: 'absolute bottom-0 right-0 h-2.5 w-2.5 bg-neutral-100 data-[state=hidden]:hidden',
-  variants: {},
-});
-
-export const scrollAreaClasses = scrollAreaClassNames.classes;
-export const scrollAreaViewportClasses = scrollAreaViewportClassNames.classes;
-export const scrollAreaScrollbarClasses = scrollAreaScrollbarClassNames.classes;
-export const scrollAreaThumbClasses = scrollAreaThumbClassNames.classes;
-export const scrollAreaCornerClasses = scrollAreaCornerClassNames.classes;
+export const scrollAreaClasses = [style.attrs(scrollAreaStyles.root).class ?? ''] as const;
+export const scrollAreaViewportClasses = [style.attrs(scrollAreaStyles.viewport).class ?? ''] as const;
+export const scrollAreaScrollbarClasses = [
+  style.attrs(scrollAreaStyles.scrollbar).class ?? '',
+] as const;
+export const scrollAreaThumbClasses = [style.attrs(scrollAreaStyles.thumb).class ?? ''] as const;
+export const scrollAreaCornerClasses = [style.attrs(scrollAreaStyles.corner).class ?? ''] as const;
 
 export const ScrollArea = component({
   render(props: ScrollAreaProps) {
@@ -96,10 +161,11 @@ export const ScrollArea = component({
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.scrollbars === undefined ? {} : { scrollbars: props.scrollbars }),
     });
+    const styleAttrs = style.attrs(scrollAreaStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(scrollAreaClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-scrollbars={attrs['data-scrollbars']}
         dir={attrs.dir}
@@ -124,14 +190,15 @@ export const ScrollAreaViewport = component({
       ...(props.scrollbars === undefined ? {} : { scrollbars: props.scrollbars }),
       ...(props.scrollY === undefined ? {} : { scrollY: props.scrollY }),
     });
+    const styleAttrs = style.attrs(scrollAreaStyles.viewport, props.styles?.viewport);
 
     return (
       <div
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-label={attrs['aria-label']}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(scrollAreaViewportClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-scroll-x={attrs['data-scroll-x']}
         data-scroll-y={attrs['data-scroll-y']}
@@ -158,11 +225,12 @@ export const ScrollAreaScrollbar = component({
       ...(props.scrollbars === undefined ? {} : { scrollbars: props.scrollbars }),
       ...(props.visible === undefined ? {} : { visible: props.visible }),
     });
+    const styleAttrs = style.attrs(scrollAreaStyles.scrollbar, props.styles?.scrollbar);
 
     return (
       <div
+        {...styleAttrs}
         aria-hidden={attrs['aria-hidden']}
-        class={cn(scrollAreaScrollbarClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         data-scroll-position={attrs['data-scroll-position']}
@@ -189,11 +257,12 @@ export const ScrollAreaThumb = component({
       ...(props.scrollbars === undefined ? {} : { scrollbars: props.scrollbars }),
       ...(props.visible === undefined ? {} : { visible: props.visible }),
     });
+    const styleAttrs = style.attrs(scrollAreaStyles.thumb, props.styles?.thumb);
 
     return (
       <div
+        {...styleAttrs}
         aria-hidden={attrs['aria-hidden']}
-        class={cn(scrollAreaThumbClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         data-scroll-position={attrs['data-scroll-position']}
@@ -216,11 +285,12 @@ export const ScrollAreaCorner = component({
       ...(props.scrollbars === undefined ? {} : { scrollbars: props.scrollbars }),
       ...(props.visible === undefined ? {} : { visible: props.visible }),
     });
+    const styleAttrs = style.attrs(scrollAreaStyles.corner, props.styles?.corner);
 
     return (
       <div
+        {...styleAttrs}
         aria-hidden={attrs['aria-hidden']}
-        class={cn(scrollAreaCornerClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-scrollbars={attrs['data-scrollbars']}
         data-state={attrs['data-state']}

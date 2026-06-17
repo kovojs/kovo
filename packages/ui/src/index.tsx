@@ -378,22 +378,19 @@ export {
   ScrollAreaScrollbar,
   ScrollAreaThumb,
   ScrollAreaViewport,
-  scrollAreaClassNames,
   scrollAreaClasses,
-  scrollAreaCornerClassNames,
   scrollAreaCornerClasses,
-  scrollAreaScrollbarClassNames,
   scrollAreaScrollbarClasses,
-  scrollAreaThumbClassNames,
   scrollAreaThumbClasses,
-  scrollAreaViewportClassNames,
   scrollAreaViewportClasses,
+  scrollAreaStyles,
 } from './scroll-area.js';
 export type {
   ScrollAreaCornerProps,
   ScrollAreaProps,
   ScrollAreaScrollbarProps,
   ScrollAreaStateProps,
+  ScrollAreaStyleOverrides,
   ScrollAreaViewportProps,
 } from './scroll-area.js';
 export {

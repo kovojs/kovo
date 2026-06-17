@@ -89,6 +89,7 @@ describe('kovo add', () => {
           'navigation-menu',
           'progress',
           'radio-group',
+          'scroll-area',
           'select',
           'separator',
           'sheet',
@@ -170,6 +171,9 @@ describe('kovo add', () => {
         `ADD radio-group path=${JSON.stringify(join(outDir, 'radio-group.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD scroll-area path=${JSON.stringify(join(outDir, 'scroll-area.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD select path=${JSON.stringify(join(outDir, 'select.tsx'))} source=tsx`,
       );
       expect(output).toContain(
@@ -226,6 +230,7 @@ describe('kovo add', () => {
       const navigationMenu = readFileSync(join(outDir, 'navigation-menu.tsx'), 'utf8');
       const progress = readFileSync(join(outDir, 'progress.tsx'), 'utf8');
       const radioGroup = readFileSync(join(outDir, 'radio-group.tsx'), 'utf8');
+      const scrollArea = readFileSync(join(outDir, 'scroll-area.tsx'), 'utf8');
       const select = readFileSync(join(outDir, 'select.tsx'), 'utf8');
       const separator = readFileSync(join(outDir, 'separator.tsx'), 'utf8');
       const sheet = readFileSync(join(outDir, 'sheet.tsx'), 'utf8');
@@ -303,6 +308,10 @@ describe('kovo add', () => {
       expect(radioGroup).toContain('export const radioGroupClassNames = defineVariants');
       expect(select).toContain('export const Select = component({');
       expect(select).toContain('export const selectClassNames = defineVariants');
+      expect(scrollArea).toContain('export const ScrollArea = component({');
+      expect(scrollArea).toContain("import * as style from '@kovojs/style';");
+      expect(scrollArea).toContain('export const scrollAreaStyles = style.create');
+      expect(scrollArea).toContain('styles?: ScrollAreaStyleOverrides');
       expect(separator).toContain('export const Separator = component({');
       expect(separator).toContain("import * as style from '@kovojs/style';");
       expect(separator).toContain('export const separatorStyles =');
@@ -355,6 +364,7 @@ describe('kovo add', () => {
         navigationMenu,
         progress,
         radioGroup,
+        scrollArea,
         select,
         separator,
         sheet,
