@@ -119,6 +119,7 @@ export function create<const Styles extends Record<string, StyleObject>>(
   styles: Styles,
   options: CreateOptions = {},
 ): StyleNamespaces<Styles> {
+  assertObjectInput(styles, 'style.create', 'styles');
   return createAtomicStyles(styles, options).styles;
 }
 
@@ -131,6 +132,7 @@ export function createAtomicStyles<const Styles extends Record<string, StyleObje
   styles: Styles,
   options: CreateOptions = {},
 ): AtomicCssResult<Styles> {
+  assertObjectInput(styles, 'style.createAtomicStyles', 'styles');
   const namespace = slug(options.namespace ?? options.source ?? 'style');
   const rulesByKey = new Map<string, AtomicRule>();
   const compiled: Record<string, CompiledStyle> = {};
@@ -194,6 +196,7 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
   tokens: Tokens,
   options: CreateOptions = {},
 ): Vars<Tokens> {
+  assertObjectInput(tokens, 'style.defineVars', 'tokens');
   const namespace = slug(options.namespace ?? options.source ?? 'tokens');
   const result: Record<string, string | true | readonly AtomicRule[]> = {
     [CSS_MARKER]: true,
@@ -231,6 +234,7 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
 export function defineConsts<const Constants extends Record<string, StylePrimitive>>(
   constants: Constants,
 ): Consts<Constants> {
+  assertObjectInput(constants, 'style.defineConsts', 'constants');
   return Object.freeze({ ...constants }) as Consts<Constants>;
 }
 
@@ -243,6 +247,8 @@ export function createTheme<Tokens extends Record<string, CssValue>>(
   overrides: Partial<Record<keyof Tokens, CssValue>>,
   options: CreateOptions = {},
 ): Theme {
+  assertObjectInput(baseTokens, 'style.createTheme', 'baseTokens');
+  assertObjectInput(overrides, 'style.createTheme', 'overrides');
   const namespace = slug(options.namespace ?? options.source ?? 'theme');
   const className = `kv-${namespace}-theme-${hash(JSON.stringify(overrides))}`;
   const rules: AtomicRule[] = [];
@@ -287,16 +293,21 @@ export function createTheme<Tokens extends Record<string, CssValue>>(
  * decision in plans/claude-stylex.md and SPEC.md §13.1.
  */
 export function raw(style: InlineStyle): readonly [null, InlineStyle] {
+  assertObjectInput(style, 'style.raw', 'style');
   return [null, style] as const;
 }
 
 /** Returns the first supplied CSS value list; the compiler may lower this further. */
 export function firstThatWorks<T extends StylePrimitive>(...values: readonly T[]): readonly T[] {
+  if (values.length === 0) {
+    throw new TypeError('style.firstThatWorks requires at least one value.');
+  }
   return values;
 }
 
 /** Deterministic keyframes name placeholder for the compiler's later extraction pass. */
 export function keyframes(frames: Keyframes, options: CreateOptions = {}): string {
+  assertObjectInput(frames, 'style.keyframes', 'frames');
   return `kv-${slug(options.namespace ?? options.source ?? 'keyframes')}-${hash(JSON.stringify(frames))}`;
 }
 
@@ -342,6 +353,16 @@ interface MergeState {
   readonly classesByProperty: Map<string, string>;
   readonly inlineStyle: Record<string, StylePrimitive>;
   readonly styleSources: string[];
+}
+
+function assertObjectInput(
+  value: unknown,
+  apiName: string,
+  argumentName: string,
+): asserts value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${apiName} requires ${argumentName} to be an object.`);
+  }
 }
 
 function compileObject(styleObject: StyleObject, context: CompileContext): AtomicRule[] {

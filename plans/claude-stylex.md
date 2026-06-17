@@ -203,6 +203,14 @@ borrowing its concrete API/spike detail.
   - Evidence (partial, 2026-06-16): `pnpm --filter @kovojs/style test`, `pnpm exec tsc --noEmit`,
     and `pnpm --filter @kovojs/style run build:dist` pass for the expanded Phase 1 runtime fork
     coverage.
+  - Evidence (partial, 2026-06-16): `packages/style/src/index.test.ts` snapshots the upstream
+    `stylex-test.js` missing-input error handling for Kovo-supported APIs (`create`, `createTheme`,
+    `defineConsts`, `defineVars`, `firstThatWorks`, `keyframes`) and Kovo-only helper guards
+    (`createAtomicStyles`, `raw`); `packages/style/src/index.ts` now reports explicit `TypeError`
+    messages instead of relying on incidental JS failures.
+  - Evidence (partial, 2026-06-16): `pnpm --filter @kovojs/style test`,
+    `pnpm --filter @kovojs/style run build:dist`, and `pnpm exec tsc --noEmit --pretty false` pass
+    for the missing-input runtime fixture port.
   - [ ] Port the broader upstream StyleX shared/runtime fixture set before checking Phase 1 complete.
   - [x] Replace the current curated priority-property subset with the full forked
     `property-priorities` table before checking Phase 1 complete.

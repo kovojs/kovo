@@ -8,7 +8,9 @@ import {
   createTheme,
   defineVars,
   emitAtomicCss,
+  firstThatWorks,
   getPriority,
+  keyframes,
   props,
   raw,
 } from './index.js';
@@ -164,6 +166,103 @@ describe('@kovojs/style phase 1 runtime fork', () => {
 });
 
 describe('ported upstream StyleX runtime fixtures', () => {
+  it('snapshots supported upstream error handling for missing inputs', () => {
+    // Ported from ../stylex/packages/@stylexjs/stylex/__tests__/stylex-test.js "error handling".
+    type RuntimeApi = (...args: readonly unknown[]) => unknown;
+    const calls = [
+      ['create', create as RuntimeApi],
+      ['createTheme', createTheme as RuntimeApi],
+      ['defineConsts', defineConsts as RuntimeApi],
+      ['defineVars', defineVars as RuntimeApi],
+      ['firstThatWorks', firstThatWorks as RuntimeApi],
+      ['keyframes', keyframes as RuntimeApi],
+    ] as const;
+
+    expect(
+      calls.map(([api, call]) => {
+        try {
+          call();
+          return { api, message: null, name: null };
+        } catch (error) {
+          return {
+            api,
+            message: error instanceof Error ? error.message : String(error),
+            name: error instanceof Error ? error.name : typeof error,
+          };
+        }
+      }),
+    ).toMatchInlineSnapshot(`
+      [
+        {
+          "api": "create",
+          "message": "style.create requires styles to be an object.",
+          "name": "TypeError",
+        },
+        {
+          "api": "createTheme",
+          "message": "style.createTheme requires baseTokens to be an object.",
+          "name": "TypeError",
+        },
+        {
+          "api": "defineConsts",
+          "message": "style.defineConsts requires constants to be an object.",
+          "name": "TypeError",
+        },
+        {
+          "api": "defineVars",
+          "message": "style.defineVars requires tokens to be an object.",
+          "name": "TypeError",
+        },
+        {
+          "api": "firstThatWorks",
+          "message": "style.firstThatWorks requires at least one value.",
+          "name": "TypeError",
+        },
+        {
+          "api": "keyframes",
+          "message": "style.keyframes requires frames to be an object.",
+          "name": "TypeError",
+        },
+      ]
+    `);
+  });
+
+  it('snapshots Kovo-only missing input guards for style helpers', () => {
+    type RuntimeApi = (...args: readonly unknown[]) => unknown;
+    const calls = [
+      ['createAtomicStyles', createAtomicStyles as RuntimeApi],
+      ['raw', raw as RuntimeApi],
+    ] as const;
+
+    expect(
+      calls.map(([api, call]) => {
+        try {
+          call();
+          return { api, message: null, name: null };
+        } catch (error) {
+          return {
+            api,
+            message: error instanceof Error ? error.message : String(error),
+            name: error instanceof Error ? error.name : typeof error,
+          };
+        }
+      }),
+    ).toMatchInlineSnapshot(`
+      [
+        {
+          "api": "createAtomicStyles",
+          "message": "style.createAtomicStyles requires styles to be an object.",
+          "name": "TypeError",
+        },
+        {
+          "api": "raw",
+          "message": "style.raw requires style to be an object.",
+          "name": "TypeError",
+        },
+      ]
+    `);
+  });
+
   it('matches upstream basic props resolution', () => {
     // Ported from ../stylex/packages/@stylexjs/stylex/__tests__/stylex-test.js "basic resolve".
     expect(props({ a: 'aaa', b: 'bbb', $$css: true }).className).toBe('aaa bbb');
