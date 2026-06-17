@@ -161,8 +161,21 @@ compiler-quality gaps found during the 2026-06-16 audit.
       safe `/images/...` URL and neutralizes `javascript:alert(1)` to `#`.
     - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run
       src/output-context-payloads.test.ts` passes.
-  - [ ] Add style-property tests for allowed generated properties and rejected arbitrary dynamic CSS.
-  - [ ] Add component CSS block tests for unsafe `url()` values.
+  - [x] Add style-property tests for allowed generated properties and rejected arbitrary dynamic CSS.
+    - Evidence (2026-06-16): `packages/compiler/src/output-context-security.test.ts`
+      snapshots generated state style-object lowering to `kovoStyleProperty(...)` and rejects
+      arbitrary dynamic raw `style={...}` text; `packages/runtime/src/security-output.test.ts`
+      covers allowed `view-transition-name`, length/transform properties, and rejected unsafe
+      `background-image`.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run
+      src/output-context-security.test.ts` and `pnpm exec vitest --run
+      packages/runtime/src/security-output.test.ts packages/server/src/jsx-runtime.test.ts` pass.
+  - [x] Add component CSS block tests for unsafe `url()` values.
+    - Evidence (2026-06-16): `packages/compiler/src/output-context-security.test.ts` asserts a
+      component `styles` block containing `background-image: url("javascript:...")` emits KV236
+      with `styles contains an unsafe CSS url()`.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run
+      src/output-context-security.test.ts` passes.
   - [ ] Add template stamp tests where list item values attempt HTML injection.
   - [ ] Add fragment-target tests where refreshed fragment values attempt HTML injection.
   - [x] Add raw HTML rejection tests for plain strings at every supported raw HTML sink.
