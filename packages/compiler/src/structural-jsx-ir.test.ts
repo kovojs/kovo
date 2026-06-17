@@ -8,7 +8,10 @@ describe('structural JSX IR lowering', () => {
       fileName: 'product-page.tsx',
       registryFacts: { queries: { product: 'ProductQuery' }, routes: ['/products/:id'] },
       source: `
+import { selectProduct } from './handlers';
+
 export const ProductPage = component({
+  fragmentTarget: true,
   queries: { product: productQuery },
   state: () => ({ open: false }),
   render: (_queries, state) => (
@@ -25,14 +28,16 @@ export const ProductPage = component({
           class="nav-link"
           to="/products/:id"
           params={{ id: 'p1' }}
-          viewTransitionName={product.slug}
           title={product.name.toUpperCase()}
           hidden={!state.open}
+          onClick={selectProduct}
         >
           Product {product.name}
           <span>{state.open ? 'open' : 'closed'}</span>
         </Link>
       </Tooltip.Trigger>
+      <button onClick={() => document.getElementById('details')!.showModal()}>Details</button>
+      <dialog id="details">Details</dialog>
     </product-page>
   ),
 });
@@ -47,23 +52,25 @@ export const ProductPage = component({
     expect(serverSource).not.toContain('viewTransitionName=');
     expect(serverSource).toContain('class="primitive nav-link"');
     expect(serverSource).toContain('href="/products/p1"');
-    expect(serverSource).toContain('on:click="/c/primitive#click"');
+    expect(serverSource).toMatch(
+      /on:click="\/c\/product-page\.client\.js\?v=[0-9a-f]{8}#ProductPage\$selectProduct \/c\/primitive#click"/,
+    );
     expect(serverSource).toContain('data-state="closed"');
-    expect(serverSource).toContain('data-derive="product.ProductPage$a_style_derive"');
-    expect(serverSource).toContain('data-derive-attr="style"');
-    expect(serverSource).toContain('data-bind:title="product.ProductPage$a_title_derive"');
+    expect(serverSource).toContain('commandfor="details" command="show-modal"');
+    expect(serverSource).toContain('<dialog id="details">Details</dialog>');
+    expect(serverSource).toContain('data-derive="product.ProductPage$a_title_derive"');
+    expect(serverSource).toContain('data-derive-attr="title"');
     expect(serverSource).toContain('data-bind:hidden="/c/product-page.client.js?v=');
     expect(serverSource).toContain('Product <span data-bind="product.name">{product.name}</span>');
     expect(serverSource).toContain('#ProductPage$span_text_derive');
     expect(clientSource).toContain(
-      'export const ProductPage$a_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));',
-    );
-    expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, derive, kovoStyleProperty } from '@kovojs/runtime';",
+      "import { applyCompiledQueryUpdatePlan, derive, handler } from '@kovojs/runtime';",
     );
     expect(clientSource).toContain(
       'export const ProductPage$a_title_derive = derive(["product"], (product) => product.name.toUpperCase());',
     );
+    expect(clientSource).toContain('export const ProductPage$selectProduct');
+    expect(clientSource).toContain('selectProduct(event, ctx)');
     expect(clientSource).toContain(
       'export const ProductPage$a_hidden_derive = derive(["state"], (state) => ((!state.open) ? "" : null));',
     );
@@ -74,10 +81,21 @@ export const ProductPage = component({
       expect.objectContaining({
         query: 'product',
         stamps: expect.arrayContaining([
-          expect.objectContaining({ attr: 'style' }),
           expect.objectContaining({ attr: 'title' }),
         ]),
       }),
+    ]);
+    expect(result.componentGraphFacts[0]).toMatchObject({
+      fragments: ['product-page/product-page'],
+    });
+    expect(result.platformSubstitutions).toEqual([
+      {
+        action: 'show-modal',
+        event: 'click',
+        kind: 'dialog',
+        tag: 'button',
+        target: 'details',
+      },
     ]);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
