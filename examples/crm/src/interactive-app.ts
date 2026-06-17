@@ -41,6 +41,18 @@ import { activities, contacts, deals } from './schema.js';
 // a demo session below.
 
 const crmStylesheets = ['/assets/styles.css'] as const;
+const crmStaticDealPaths = [
+  '/deals/d1',
+  '/deals/d2',
+  '/deals/d3',
+  '/deals/d4',
+  '/deals/d5',
+  '/deals/d6',
+  '/deals/d7',
+  '/deals/d8',
+  '/deals/d9',
+  '/deals/d10',
+] as const;
 
 // The demo viewer attached to every request so the mutations' `guards.authed`
 // guard (SPEC.md §6.5) passes. This is a no-auth public demo; the session is a
@@ -150,6 +162,7 @@ export async function buildCrmInteractiveApp(
   const dealDetailRoute = route('/deals/:id', {
     meta: { description: 'CRM deal detail.', title: 'Deal · Atlas CRM' },
     params: s.object({ id: s.string() }),
+    staticPaths: crmStaticDealPaths,
     async page({ params }: { params: { id: string } }) {
       const [row] = await database.select().from(deals).where(eq(deals.id, params.id)).limit(1);
       if (!row) {

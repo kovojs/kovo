@@ -12,7 +12,7 @@ import { docRoute, type AnyRoute } from './route-kit.js';
 import {
   EXAMPLES,
   buildExampleEmbed,
-  exampleAppBase,
+  exampleLiveAppHref,
   examplePagePath,
   loadExampleSources,
 } from '../scripts/examples.mjs';
@@ -22,19 +22,21 @@ import { renderMarkdown } from '../scripts/md.mjs';
 //
 // CONTRACT (owned by this module):
 //  - buildExampleRoutes: the /examples/ index plus one /examples/<name>/ split
-//    page per example (a sandboxed iframe of the app + a CSS-only tabbed source
-//    viewer of the authored TSX). See scripts/examples.mjs (renderExampleSplit,
-//    loadExampleSources, EXAMPLES) and scripts/build.mjs (examples loop) for the
-//    reference logic.
+//    page per example (a sandboxed iframe when the app is static-exportable or a
+//    live service URL is configured + a CSS-only tabbed source viewer of the
+//    authored TSX). See scripts/examples.mjs for the manifest contract.
 //  - exportExampleApps: a build-time hook (called by scripts/export-static.mjs
-//    after the main replay) that statically exports each example app into
-//    <outDir>/examples/<name>/app/ with refs re-rooted, so the iframes resolve
-//    on a static host (SPEC §9.5).
+//    after the main replay) that statically exports only L0/L1-safe examples
+//    into <outDir>/examples/<name>/app/ with refs re-rooted (SPEC §9.5). Dynamic
+//    PGlite mutation demos render iframes only when their service URL env var is
+//    configured for the docs build.
 
 interface ExampleManifest {
   blurb: string;
   dir: string;
+  embed: 'static' | 'service';
   name: string;
+  serviceUrlEnv?: string;
   sources: string[];
   title: string;
 }
@@ -86,9 +88,8 @@ export async function buildExampleRoutes({ groups }: ExampleDeps): Promise<AnyRo
 
   // One split page per example. Source files are highlighted through the shared
   // markdown/Shiki pipeline (matching the previous build), with copy buttons
-  // wired to the versioned code module. The live app's static export is produced
-  // separately by exportExampleApps at export time; here we only point the iframe
-  // at its stable app base.
+  // wired to the versioned code module. Static examples are exported separately
+  // by exportExampleApps; dynamic examples use a service URL only when configured.
   for (const example of examples) {
     const pagePath = examplePagePath(example.name);
     const sources = (await loadExampleSources(example, { repoRootPath })) as ExampleSource[];
@@ -103,7 +104,7 @@ export async function buildExampleRoutes({ groups }: ExampleDeps): Promise<AnyRo
     }
 
     const contentHtml = renderExampleSplit({
-      appBase: exampleAppBase(example.name),
+      appHref: exampleLiveAppHref(example),
       blurb: example.blurb,
       files,
       idBase: `${example.name}-src`,
@@ -130,12 +131,13 @@ export async function buildExampleRoutes({ groups }: ExampleDeps): Promise<AnyRo
   return routes;
 }
 
-/** Build-time hook: statically export each example app under <outDir>/examples/
- * <name>/app/, re-rooting its absolute refs so the iframes resolve from a
- * subdirectory on a static host (SPEC §9.5). All examples run through the one
- * manifest-driven embed helper (commerce/crm/stackoverflow alike). */
+/** Build-time hook: statically export each L0/L1-safe example app under
+ * <outDir>/examples/<name>/app/, re-rooting its absolute refs so the iframes
+ * resolve from a subdirectory on a static host (SPEC §9.5). Dynamic examples
+ * with server mutation forms are served by separately deployed demo services. */
 export async function exportExampleApps(outDir: string): Promise<void> {
   for (const example of examples) {
+    if (example.embed !== 'static') continue;
     await buildExampleEmbed(example, { outDir, repoRootPath });
   }
 }

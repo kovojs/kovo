@@ -18,8 +18,8 @@ export interface ExampleSourceFile {
 }
 
 export interface ExampleSplitInput {
-  /** The docs-host base the example's static export is served from. */
-  appBase: string;
+  /** Static docs-host base or configured dynamic service URL, when available. */
+  appHref?: string | undefined;
   blurb: string;
   files: ExampleSourceFile[];
   /** Unique radio-group/id prefix for this page's tabs. */
@@ -30,7 +30,7 @@ export interface ExampleSplitInput {
 /** Render the example split view as a render-time composition. Returns the page
  * body string consumed by docRoute(..., { prose: false }). */
 export function renderExampleSplit({
-  appBase,
+  appHref,
   blurb,
   files,
   idBase,
@@ -59,17 +59,27 @@ export function renderExampleSplit({
         <section class="example-live" aria-label={`${title} running app`}>
           <div class="example-bar">
             <span class="example-bar-title">Live app</span>
-            <a class="example-open" href={appBase} target="_blank" rel="noopener">
-              Open in new tab &#8599;
-            </a>
+            {appHref ? (
+              <a class="example-open" href={appHref} target="_blank" rel="noopener">
+                Open in new tab &#8599;
+              </a>
+            ) : (
+              ''
+            )}
           </div>
-          <iframe
-            class="example-frame"
-            src={appBase}
-            title={`${title} running app`}
-            loading="lazy"
-            sandbox="allow-scripts allow-same-origin"
-          ></iframe>
+          {appHref ? (
+            <iframe
+              class="example-frame"
+              src={appHref}
+              title={`${title} running app`}
+              loading="lazy"
+              sandbox="allow-scripts allow-same-origin"
+            ></iframe>
+          ) : (
+            <div class="example-frame example-frame-empty">
+              <p>Dynamic demo service not configured for this static build.</p>
+            </div>
+          )}
         </section>
         <section class="example-source" aria-label={`${title} source code`}>
           {files.map((_, index) => (

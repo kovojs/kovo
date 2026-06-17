@@ -33,6 +33,15 @@ import { answers, questions } from './schema.js';
 // detail page); postQuestion re-renders the list; postAnswer the detail region.
 
 const soStylesheets = ['/assets/styles.css'] as const;
+const soStaticQuestionPaths = [
+  '/questions/q1',
+  '/questions/q2',
+  '/questions/q3',
+  '/questions/q4',
+  '/questions/q5',
+  '/questions/q6',
+  '/questions/q7',
+] as const;
 
 async function loadAnswersForQuestion(db: SoDb, questionId: string): Promise<AnswerDetail[]> {
   const rows = await db
@@ -126,6 +135,7 @@ export async function buildSoInteractiveApp(
   const questionDetailRoute = route('/questions/:id', {
     meta: { description: 'Question detail', title: 'Question · DevOverflow' },
     params: s.object({ id: s.string() }),
+    staticPaths: soStaticQuestionPaths,
     async page({ params }: { params: { id: string } }) {
       const [row] = await database
         .select()

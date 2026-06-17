@@ -159,12 +159,11 @@ try {
     'JS: folded toggle gallery page runs the compiled handler',
   );
 
-  // Examples: each app loads as a static export inside the docs page's sandboxed
-  // iframe, and its authored source renders beside it in the tabbed panel.
+  // Examples: static-exportable apps load inside the docs page's sandboxed iframe,
+  // while dynamic server-mutation demos keep their authored source visible until
+  // a live service URL is configured for the docs build (SPEC §9.5).
   const EMBED_CHECKS = [
     { name: 'commerce', marker: '[data-commerce-shell]', text: 'Cart' },
-    { name: 'crm', marker: 'header', text: 'Atlas CRM' },
-    { name: 'stackoverflow', marker: 'header', text: 'DevOverflow' },
   ];
   for (const embed of EMBED_CHECKS) {
     await page.goto(`${origin}/examples/${embed.name}/`, { waitUntil: 'networkidle' });
@@ -181,16 +180,17 @@ try {
     );
   }
 
-  // The multi-page apps navigate inside the iframe (root-relative links re-rooted
-  // under the app base): from the CRM pipeline into a deal detail page.
-  await page.goto(`${origin}/examples/crm/`, { waitUntil: 'networkidle' });
-  const crmFrame = page.frameLocator('iframe.example-frame');
-  await crmFrame.locator('a[href$="/deals/d1"]').first().click();
-  await crmFrame.locator('h1').first().waitFor({ state: 'attached' });
-  check(
-    ((await crmFrame.locator('h1').first().textContent()) ?? '').includes('Deal D1'),
-    'JS: crm example navigates list → deal detail inside the iframe',
-  );
+  for (const name of ['crm', 'stackoverflow']) {
+    await page.goto(`${origin}/examples/${name}/`, { waitUntil: 'networkidle' });
+    check(
+      (await page.locator('.example-source .code-window').count()) >= 2,
+      `JS: ${name} dynamic example keeps authored source windows`,
+    );
+    check(
+      (await page.locator('iframe.example-frame').count()) === 0,
+      `JS: ${name} dynamic example does not emit a broken static iframe`,
+    );
+  }
   await context.close();
 } finally {
   await browser.close();

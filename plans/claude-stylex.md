@@ -897,7 +897,7 @@ borrowing its concrete API/spike detail.
     `node examples/commerce/scripts/measure-style-size.mjs --root
     ../kovo-commerce-tailwind-baseline/examples/commerce` -> `build-ms=333`, `css-bytes=9479`,
     `css-files=dist/assets/tailwind.css`, `js-bytes=0`, `html-bytes=3290`.
-- [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L
+- [x] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L
       lands; rewrite `site/content/guides/styling.md` + `components.md`; reconcile `plans/api-cleanup.md`
       STABILITY for any new public surface.
   - Evidence (partial, 2026-06-16): `SPEC.md` §13.1 now makes `@kovojs/style` the StyleX-first
@@ -915,11 +915,16 @@ borrowing its concrete API/spike detail.
     public package table and keeps `@kovojs/ui` documented as a private copy-in starter; `STABILITY.md`
     and the site page both state the `@internal` boundary is enforced by API docs/gates rather than a
     `.d.ts` stripping promise.
-  - Evidence (partial, 2026-06-17): `pnpm exec vitest --run scripts/public-packages.test.mjs
+  - Evidence (2026-06-17): `pnpm exec vitest --run scripts/public-packages.test.mjs
     site/scripts/api-ref.test.mjs packages/server/src/component-render.test.tsx`,
     `pnpm run check:api-surface`, and `git diff --check` pass for the new public style API docs and
-    server render signature documentation. `pnpm --filter @kovojs/site run check:links` remains
-    blocked on existing `/examples/crm/app/` and `/examples/stackoverflow/app/` generated links.
+    server render signature documentation.
+  - Evidence (2026-06-17): `pnpm --filter @kovojs/site run build` now completes a fresh static export
+    (`site-export/v1`, `html=92`, `diagnostics=0`) after the docs example manifest stopped treating
+    CRM/Stack Overflow server-mutation demos as static embeds unless a live service URL is configured.
+    `pnpm --filter @kovojs/site run check:links` passes (`pages=93`, `internal=13492`,
+    `external=190`), `pnpm --filter @kovojs/site test` passes (9 files, 44 tests), and
+    `pnpm --filter @kovojs/site exec tsc --noEmit --pretty false` passes.
 - [ ] **Deferred — CSS splitting (opt-in, gated on measurement).** Compute base/route/fragment chunks
       from the attribution map (Phase 2 invariant (a)), keyed off the route registry (§6.4); the manifest
       (invariant (c)) returns per-render asset sets; fragment/defer responses declare their required

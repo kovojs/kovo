@@ -748,6 +748,17 @@ canvas {
   width: 100%;
 }
 
+.example-frame-empty {
+  align-items: center;
+  background: var(--panel);
+  color: var(--dim);
+  display: flex;
+  font-size: 0.9rem;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
 /* Zero-JS tabbed source: radio inputs drive `:checked` sibling rules (the
    per-index display/active rules are emitted inline next to the markup so the
    set tracks the file count). */

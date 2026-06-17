@@ -20,6 +20,7 @@ import { pathToFileURL } from 'node:url';
 
 /** @typedef {{ name: string, title: string, blurb: string, dir: string,
  *   exportModule: string, exportFn: string, appExportField: string,
+ *   embed: 'static' | 'service', serviceUrlEnv?: string,
  *   sources: string[] }} ExampleManifest */
 
 /** @type {ExampleManifest[]} */
@@ -33,6 +34,7 @@ export const EXAMPLES = [
     exportModule: 'examples/commerce/scripts/export-static.mjs',
     exportFn: 'exportCommerceStaticApp',
     appExportField: 'commerce.client.js',
+    embed: 'static',
     sources: [
       'src/components/product-grid.tsx',
       'src/components/cart-badge.tsx',
@@ -50,6 +52,8 @@ export const EXAMPLES = [
     exportModule: 'examples/crm/scripts/export-static.mjs',
     exportFn: 'exportCrmStaticApp',
     appExportField: '',
+    embed: 'service',
+    serviceUrlEnv: 'KOVO_EXAMPLE_CRM_URL',
     sources: [
       'src/components/pipeline.tsx',
       'src/components/contacts.tsx',
@@ -68,6 +72,8 @@ export const EXAMPLES = [
     exportModule: 'examples/stackoverflow/scripts/export-static.mjs',
     exportFn: 'exportSoStaticApp',
     appExportField: '',
+    embed: 'service',
+    serviceUrlEnv: 'KOVO_EXAMPLE_STACKOVERFLOW_URL',
     sources: [
       'src/components/question-list.tsx',
       'src/components/question-detail.tsx',
@@ -86,6 +92,12 @@ export function exampleAppBase(name) {
 /** The docs-site page path for an example's two-pane embed. */
 export function examplePagePath(name) {
   return `/examples/${name}/`;
+}
+
+export function exampleLiveAppHref(manifest) {
+  if (manifest.embed === 'static') return exampleAppBase(manifest.name);
+  const href = process.env[manifest.serviceUrlEnv ?? '']?.trim();
+  return href ? href.replace(/\/?$/, '/') : undefined;
 }
 
 function escapeHtml(value) {
@@ -124,6 +136,10 @@ async function htmlFilesUnder(directory) {
  * example's own export bridge (`vp run export`) as the producer.
  */
 export async function buildExampleEmbed(manifest, { outDir, repoRootPath }) {
+  if (manifest.embed !== 'static') {
+    throw new Error(`build: ${manifest.name} is a dynamic service example, not a static embed`);
+  }
+
   const exportStaticPath = path.join(repoRootPath, manifest.exportModule);
   const module = await import(pathToFileURL(exportStaticPath).href);
   const exportFn = module[manifest.exportFn];
@@ -170,7 +186,7 @@ export async function loadExampleSources(manifest, { repoRootPath }) {
  * the docs degradation contract (SPEC §8). `files` carry pre-highlighted code
  * windows (rendered through the shared Shiki pipeline by the caller).
  */
-export function renderExampleSplit({ appBase, blurb, files, idBase, title }) {
+export function renderExampleSplit({ appHref, blurb, files, idBase, title }) {
   const tabRules = files
     .map((_, index) => `#${idBase}-${index}:checked~.example-panels>[data-index="${index}"]`)
     .join(',');
@@ -209,11 +225,19 @@ export function renderExampleSplit({ appBase, blurb, files, idBase, title }) {
       <section class="example-live" aria-label="${escapeHtml(title)} running app">
         <div class="example-bar">
           <span class="example-bar-title">Live app</span>
-          <a class="example-open" href="${appBase}" target="_blank" rel="noopener">Open in new tab &#8599;</a>
+          ${
+            appHref
+              ? `<a class="example-open" href="${escapeHtml(appHref)}" target="_blank" rel="noopener">Open in new tab &#8599;</a>`
+              : ''
+          }
         </div>
-        <iframe class="example-frame" src="${appBase}" title="${escapeHtml(
-          title,
-        )} running app" loading="lazy" sandbox="allow-scripts allow-same-origin"></iframe>
+        ${
+          appHref
+            ? `<iframe class="example-frame" src="${escapeHtml(appHref)}" title="${escapeHtml(
+                title,
+              )} running app" loading="lazy" sandbox="allow-scripts allow-same-origin"></iframe>`
+            : `<div class="example-frame example-frame-empty"><p>Dynamic demo service not configured for this static build.</p></div>`
+        }
       </section>
       <section class="example-source" aria-label="${escapeHtml(title)} source code">
         ${inputs}
