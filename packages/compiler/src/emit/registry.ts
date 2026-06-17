@@ -4,6 +4,7 @@ import type { PlatformSubstitution } from '../lower/platform.js';
 import type {
   FragmentTargetFact,
   HandlerLowering,
+  LiveTargetFact,
   QueryUpdatePlanFact,
   RegistryFacts,
   RegistryTypeFacts,
@@ -17,6 +18,7 @@ export interface EmitRegistryModuleOptions {
   domComponentName: string;
   fragmentTargetFacts: readonly FragmentTargetFact[];
   handlers: readonly Pick<HandlerLowering, 'exportName'>[];
+  liveTargetFacts: readonly LiveTargetFact[];
   platformSubstitutions: readonly PlatformSubstitution[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   registryFacts?: RegistryFacts;
@@ -31,6 +33,10 @@ export function emitRegistryModule(options: EmitRegistryModuleOptions): string {
   const fragmentTargetLines = options.fragmentTargetFacts
     .map((fact) => `  '${fact.target}': ${fact.propsType};`)
     .join('\n');
+  const liveTargetLines = liveTargetFactLines([
+    ...options.liveTargetFacts,
+    ...(options.registryFacts?.liveTargets ?? []),
+  ]);
   const platformSubstitutionLines = options.platformSubstitutions
     .map(
       (substitution) =>
@@ -65,6 +71,10 @@ ${handlerModuleLine}
 
 export interface FragmentTargets {
 ${fragmentTargetLines}
+}
+
+export interface LiveTargetRegistry {
+${liveTargetLines}
 }
 
 export interface PlatformSubstitutions {
@@ -116,6 +126,10 @@ ${componentRegistryLines}
 ${fragmentTargetLines}
   }
 
+  interface LiveTargetRegistry {
+${liveTargetLines}
+  }
+
   interface QueryRegistry {
 ${queryRegistryLines}
   }
@@ -164,6 +178,24 @@ function registryTypeFactLines(facts: RegistryTypeFacts | undefined): string {
   return Object.entries(facts ?? {})
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, typeExpression]) => `  '${key}': ${typeExpression};`)
+    .join('\n');
+}
+
+function liveTargetFactLines(facts: readonly LiveTargetFact[]): string {
+  const byTarget = new Map<string, LiveTargetFact>();
+  for (const fact of facts) {
+    byTarget.set(fact.target, fact);
+  }
+
+  return [...byTarget.values()]
+    .sort((left, right) => left.target.localeCompare(right.target))
+    .map((fact) => {
+      const queries =
+        fact.queries.length === 0
+          ? 'readonly []'
+          : `readonly [${fact.queries.map((query) => `'${query}'`).join(', ')}]`;
+      return `  '${fact.target}': { component: '${fact.component}'; queries: ${queries}; props: ${fact.propsType}; };`;
+    })
     .join('\n');
 }
 

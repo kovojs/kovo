@@ -228,7 +228,26 @@ refetches full, §9.1.1). The server's _capability_ to refresh any region is unc
 rejection of slot holes stands: a prod delta still accounts for the entire target subtree, just
 incrementally.
 
-**Layouts are function composition.** v1 has no nested-layout convention. A layout is a component with children, applied in `route().page` (`page: () => Shell({ children: ProductPage(…) })`). Every navigation is a full document, so there is no persistent-layout state to manage; cross-document View Transitions carry the visual continuity. A route-tree convention may arrive later as sugar lowering to exactly these calls (Constitution #3).
+**Layouts are function composition.** v1 has no nested-layout convention. A layout is a component with children, applied directly in `route().page` as JSX:
+
+```tsx
+route('/', {
+  page: () => (
+    <Shell>
+      <ProductPage />
+    </Shell>
+  ),
+});
+```
+
+Route pages that return JSX are **compiler-processed Kovo source**, not opaque runtime JSX. The
+compiler lowers the route page into authorable server IR, records the component calls and
+serializable props, runs the declared component queries for the initial document, and emits the
+live-target registry used by enhanced mutation responses (§9.1). Dynamic route composition that
+cannot be scanned receives a diagnostic rather than falling back to app-authored fragment routing.
+Every navigation is a full document, so there is no persistent-layout state to manage;
+cross-document View Transitions carry the visual continuity. A route-tree convention may arrive
+later as sugar lowering to exactly these calls (Constitution #3).
 
 **Payload posture:** projected children ship in the initial HTML — all tab panels, dialog bodies, accordion contents. There is no client-side lazy mount; `<kovo-defer>` (§8) is the escape hatch for expensive subtrees. This is the MPA posture by design.
 
@@ -691,6 +710,7 @@ POST /_m/cart/add HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 Kovo-Fragment: true
 Kovo-Targets: cart-badge=cart; cart-drawer=cart; recommendations=product:p1
+Kovo-Live-Targets: cart-badge#cart-badge:{}; recommendations#recommendations:{"productId":"p1"}
 Kovo-Idem: 7f3a-…                          ← stamped hidden field; server replays duplicates
 
 productId=p1&quantity=2&kovo-csrf=…
@@ -709,19 +729,28 @@ Kovo-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1
 ```
 
 - `Kovo-Targets` is read off the live DOM (`kovo-deps` stamps), so islands patched in after page load participate. The wire format is `target=queryInstance queryInstance`; singleton targets use the derived leaf (`cart-badge=cart`), and repeated targets include their stable keyed suffix (`product-form:p2=product:p2`). The server holds **no session of what's on screen** — it answers a stateless question.
+- `Kovo-Live-Targets` is the structured reconstruction companion for server-refreshable component targets. Each entry names the live target, its generated component registry key, and the serialized props/key identity the compiler proved sufficient to reconstruct the component instance. Dev mode keeps this explicit and inspectable; prod may replace the JSON with a build-versioned token only when `kovo explain` can recover the same value. App authors never construct this header, import target constants, or route mutations to fragments by hand.
 - `Kovo-Changes` is the sanitized wire summary of committed writes: each entry is `{domain, keys}`. It never includes mutation input, user-provided values, failure reasons, stack traces, or internal diagnostic detail; richer typed change records are internal compiler/runtime artifacts.
 - `<kovo-query>` replaces the client's query value and runs that query's update plan — bindings, named derives, stamps — across every dependent island. No runtime dependency tracking: the plan is the DOM itself (§4.8).
 - `<kovo-fragment>` is **DOM-morphed** by default (idiomorph-class algorithm): focus, scroll, selection, CSS transitions, and nested island state survive. `mode="append"` is the explicit append vocabulary for pagination and streams. Patched-in islands are inert-until-touched like everything else — _a fragment update is a tiny navigation, not a different programming model._
 - **Without JS:** the same endpoint sees no `Kovo-Fragment` header and answers POST-redirect-GET with errors re-rendered into the full page. One handler, two response modes.
 
-Success response selection is deterministic. After commit, the server intersects `Kovo-Changes` with
-the submitted live `Kovo-Targets`. For each affected live target, output positions covered by §4.8
-bindings/derives/stamps are refreshed through `<kovo-query>` values or prod deltas; uncovered
-positions inside a reconstructible inferred target receive a `<kovo-fragment>`. If every affected
-position is plan-covered, no fragment is sent for that target. If a target is not reconstructible and
-not plan-covered, the compiler must have emitted KV311/KV303 before this response path is relied on.
-Mutation failure does not run this selector: it re-renders only the submitted enhanced form target
-with typed failure state (§9.2), while the no-JS path re-renders the full page with the same state.
+Success response selection is deterministic and generated. After commit, the server intersects
+`Kovo-Changes` with the submitted live `Kovo-Targets`. For each affected server-refreshable target,
+the generated live-target registry supplies the component render function, serializable props,
+declared queries, and query-arg bindings. The first v1 implementation reloads **all declared queries
+for each selected target** in the same request context and returns a complete `<kovo-fragment>` for
+that target. Query JSON and prod deltas are optimizations layered on this registry when §4.8 update
+coverage and change-record scoping prove they are smaller and equivalent; they are not app-authored
+configuration knobs. If a target cannot be reconstructed from declared queries plus serializable
+props, the compiler emits KV311/KV303 before the response path can be relied on.
+
+There is no ordinary app-authored `mutationResponse` switch, `fragmentRenderers` list, generated
+target constant import, or `render*RegionFromDb` hook in the success path. Raw endpoints/webhooks,
+downloads, auth redirects, and other non-component responses use their own declared framework
+surfaces rather than a general mutation-response body override. Mutation failure does not run the
+success selector: it re-renders only the submitted enhanced form target with typed failure state
+(§9.2), while the no-JS path re-renders the full page with the same state.
 
 The round-trip above is the **dev** (and no-JS) form: complete `<kovo-query>` JSON and full self-describing `<kovo-fragment>` HTML. Prod ships the same vocabulary delta-encoded, described next.
 
@@ -787,7 +816,7 @@ Args arrive as search params through the query's `args` schema (§10.2) — the 
 
 ### 9.5 Request shell
 
-The request shell is the server-owned composition point for routing, document assembly, dev serving, and export. Apps declare a closed `createApp()` aggregate: routes, mutations, queries, endpoints, the client-module registry, document options, error shells, CSRF config, and the §6.5 `sessionProvider`. The public handler currency is web-standard `Request -> Response`; adapters such as `node:http` convert at the edge.
+The request shell is the server-owned composition point for routing, document assembly, dev serving, and export. Apps declare a closed `createApp()` aggregate: routes, mutations, queries, endpoints, the client-module registry, document options, error shells, CSRF config, and the §6.5 `sessionProvider`. Generated route IR and live-target registry artifacts are wired by the compiler/build integration, not by app-authored `createApp({ generated, refresh })` options. The public handler currency is web-standard `Request -> Response`; adapters such as `node:http` convert at the edge.
 
 Dispatch order is normative and printable: `/_m/<mutation-key>` mutations, `/_q/<query-key>` typed reads, `/c/<module>?v=` immutable client modules, declared `endpoint()` exact/prefix mounts, route table, then the 404 shell. There is no user middleware chain in v1. Extension points that can affect control flow are declared surfaces — `sessionProvider`, guards, `endpoint()`, `webhook()` — so audits can print them and no request behavior is registered from a distance.
 
@@ -864,6 +893,14 @@ Derived from this one expression, statically:
 - **Instance key** from the WHERE eq-predicates, resolved to `args.*` or `req.session.*` — only args are client-visible. Canonical encoding: `name:keyValue` in declared arg order (`product:p1`). This one string keys the client store (`<script kovo-query="product:p1">`), `kovo-deps` stamps, `Kovo-Targets` (§9.1), optimistic transform keys (§10.4), and live-push routing. Two instances of one query coexist on a page; `data-bind` inside an island resolves against that island's instance.
 
 **Args bind locally (Constitution #2).** A component declares how its args derive from its own props — `queries: { product: productQuery.args((p) => ({ id: p.productId })) }` — so any page rendering the component satisfies the dependency without call-site knowledge. Route params reach queries as ordinary props through `route().page`; no call site enumerates query dependencies.
+
+**Queries are the UI data contract.** A query-backed component's declared queries must contain the
+data needed to render that component. "Skinny" queries maintained only for optimistic derivation
+plus separate page/region loaders for presentation are rejected for ordinary app code: they split the
+server-truth render path from the statically declared dependency graph and force app authors back
+into manual fragment routing. The compiler may derive optimistic transforms, deltas, or §4.8 update
+plans for only the fields and query shapes it can prove; unproved presentation fields still travel
+through the same declared query and refresh via full server fragments.
 
 ### 10.3 Mutations & writes
 

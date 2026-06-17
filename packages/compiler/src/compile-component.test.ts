@@ -591,31 +591,23 @@ export const CartBadge = component({
     expect(registry).toMatch(/export interface MutationRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface RouteRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface InvalidationSets \{\n\n\}/);
-    expect(registry).toContain(`declare module '@kovojs/core' {
-  interface ComponentRegistry {
-  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
-  }
-
-  interface FragmentTargets {
-  'components/cart/cart-badge/cart-badge': {};
-  }
-
-  interface QueryRegistry {
-
-  }
-
-  interface MutationRegistry {
-
-  }
-
-  interface RouteRegistry {
-
-  }
-
-  interface InvalidationSets {
-
-  }
+    expect(registry).toContain(`export interface LiveTargetRegistry {
+  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; queries: readonly ['cart']; props: {}; };
 }`);
+    expect(registry).toContain(`declare module '@kovojs/core' {`);
+    expect(registry).toContain(`  interface ComponentRegistry {
+  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+  }`);
+    expect(registry).toContain(`  interface FragmentTargets {
+  'components/cart/cart-badge/cart-badge': {};
+  }`);
+    expect(registry).toContain(`  interface LiveTargetRegistry {
+  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; queries: readonly ['cart']; props: {}; };
+  }`);
+    expect(registry).toContain(`  interface QueryRegistry {\n\n  }`);
+    expect(registry).toContain(`  interface MutationRegistry {\n\n  }`);
+    expect(registry).toContain(`  interface RouteRegistry {\n\n  }`);
+    expect(registry).toContain(`  interface InvalidationSets {\n\n  }`);
     expect(registry).toContain('export type DomainKey = never;');
   });
 

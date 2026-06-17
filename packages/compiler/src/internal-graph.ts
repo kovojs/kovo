@@ -12,6 +12,7 @@ import type {
   CompileAppGraphResult,
   ComponentGraphFact,
   FragmentTargetFact,
+  LiveTargetFact,
   RegistryFacts,
   RegistryGraphInput,
   RegistryTypeFactOptions,
@@ -36,9 +37,13 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.components ?? []),
     ...(options.components ?? []).flatMap((component) => component.componentGraphFacts),
   ]);
+  const routePages = (options.routePages ?? []).flatMap((routePage) => routePage.routePageFacts);
   const graph: RegistryGraphInput = {
     ...options.graph,
     components,
+    ...(routePages.length > 0
+      ? { pages: [...(options.graph?.pages ?? []), ...routePages.map((page) => ({ route: page.route }))] }
+      : {}),
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
   };
 
@@ -65,6 +70,27 @@ export function findFragmentTargetFacts(
   return [
     {
       propsType: fragmentTargetPropsType(model),
+      target: registryComponentName,
+    },
+  ];
+}
+
+/**
+ * @internal Extract generated reconstruction facts for inferred server-refreshable targets. These
+ * facts join target identity to component, props, and declared queries for §9.1 automatic full
+ * fragment rendering.
+ */
+export function findLiveTargetFacts(
+  registryComponentName: string,
+  model: ComponentModuleModel,
+): LiveTargetFact[] {
+  if (!componentHasInferredServerRefreshTarget(model)) return [];
+
+  return [
+    {
+      component: registryComponentName,
+      propsType: fragmentTargetPropsType(model),
+      queries: componentQueryNames(model),
       target: registryComponentName,
     },
   ];

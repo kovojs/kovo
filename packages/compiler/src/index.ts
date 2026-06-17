@@ -12,7 +12,16 @@ export { mergePrimitiveAndAuthorAttributes } from './lower/attribute-merge.js';
 export type { KovoVitePlugin, KovoVitePluginOptions } from './vite.js';
 export { deriveAppGraph } from './graph.js';
 export { composePageComponentArtifacts } from './page-composition.js';
-export type { CompileComponentOptions, CompileResult } from './types.js';
+export { compileRouteModule } from './route-pages.js';
+export type {
+  CompileComponentOptions,
+  CompileResult,
+  CompileRouteModuleOptions,
+  CompileRouteModuleResult,
+  RoutePageComponentFact,
+  RoutePageComponentPropFact,
+  RoutePageFact,
+} from './types.js';
 export { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './compile.js';
 
 /**

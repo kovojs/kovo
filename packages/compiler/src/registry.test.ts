@@ -1,7 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, compileComponentModule, deriveAppGraph } from './index.js';
+import { assertFixpoint, compileComponentModule, compileRouteModule, deriveAppGraph } from './index.js';
 import { deriveRegistryFactsFromGraph } from './internal-graph.js';
 
 const cartBadgeSource = `
@@ -63,35 +63,35 @@ describe('compiler registry and graph emission', () => {
     expect(registry).toContain(`export interface InvalidationSets {
   'cart/add': 'cart' | 'orderHistory' | 'productGrid';
 }`);
-    expect(registry).toContain(`declare module '@kovojs/core' {
-  interface ComponentRegistry {
+    expect(registry).toContain(`export interface LiveTargetRegistry {
+  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; queries: readonly ['cart']; props: {}; };
+}`);
+    expect(registry).toContain(`declare module '@kovojs/core' {`);
+    expect(registry).toContain(`  interface ComponentRegistry {
   'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
   'components/products/product-grid/product-grid': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
-  }
-
-  interface FragmentTargets {
+  }`);
+    expect(registry).toContain(`  interface FragmentTargets {
   'components/cart/cart-badge/cart-badge': {};
-  }
-
-  interface QueryRegistry {
+  }`);
+    expect(registry).toContain(`  interface LiveTargetRegistry {
+  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; queries: readonly ['cart']; props: {}; };
+  }`);
+    expect(registry).toContain(`  interface QueryRegistry {
   'cart': typeof cartQuery;
   'productGrid': typeof productGridQuery;
-  }
-
-  interface MutationRegistry {
+  }`);
+    expect(registry).toContain(`  interface MutationRegistry {
   'cart/add': typeof addToCart;
   'cart/remove': typeof removeFromCart;
-  }
-
-  interface RouteRegistry {
+  }`);
+    expect(registry).toContain(`  interface RouteRegistry {
   '/cart': import('@kovojs/core').Route<'/cart'>;
   '/products/:id': import('@kovojs/core').Route<'/products/:id'>;
-  }
-
-  interface InvalidationSets {
+  }`);
+    expect(registry).toContain(`  interface InvalidationSets {
   'cart/add': 'cart' | 'orderHistory' | 'productGrid';
-  }
-}`);
+  }`);
     expect(registry).toContain('export type DomainKey = "cart" | "product";');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -167,6 +167,27 @@ describe('compiler registry and graph emission', () => {
 }`);
     expect(registry).toContain('export type DomainKey = "cart" | "order" | "product";');
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('derives route registry facts from compiled route-page JSX facts', () => {
+    const routes = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+
+export const home = route('/', {
+  page: () => <QuestionListRegion />,
+});
+
+export const detail = route('/questions/:id', {
+  page: ({ params }) => <QuestionDetail questionId={params.id} />,
+});
+`,
+    });
+
+    const { registryFacts } = deriveAppGraph({ routePages: [routes] });
+
+    expect(registryFacts.routes).toEqual(['/', '/questions/:id']);
   });
 
   it('derives app graph component facts from compiled component results', () => {

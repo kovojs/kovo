@@ -205,6 +205,9 @@ export interface MutationRegistry {}
 /** Augmentable registry mapping fragment-target names to their props. */
 export interface FragmentTargets {}
 
+/** Augmentable generated registry mapping live targets to component/query reconstruction facts. */
+export interface LiveTargetRegistry {}
+
 /** Augmentable registry mapping derived component registry keys to component descriptors. */
 export interface ComponentRegistry {}
 

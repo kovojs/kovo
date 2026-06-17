@@ -9,7 +9,7 @@ import {
   semanticRenderEquivalenceCheck,
   serverRenderLowering,
 } from './emit/server.js';
-import { componentGraphFact, findFragmentTargetFacts } from './internal-graph.js';
+import { componentGraphFact, findFragmentTargetFacts, findLiveTargetFacts } from './internal-graph.js';
 import { cssIrHeader } from './ir.js';
 import {
   clientModuleUrl,
@@ -151,6 +151,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       : (componentCssSource ?? styleCssSource ?? '');
   const fragmentTargetFacts = findFragmentTargetFacts(componentNames.registryKey, model);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
+  const liveTargetFacts = findLiveTargetFacts(componentNames.registryKey, model);
   const componentGraphFacts = [
     componentGraphFact(
       componentNames.registryKey,
@@ -199,6 +200,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     registryComponentName: componentNames.registryKey,
     fragmentTargetFacts,
     handlers: versionedHandlers,
+    liveTargetFacts,
     platformSubstitutions: structuralLowering.platformSubstitutions,
     queryUpdatePlans,
     ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),

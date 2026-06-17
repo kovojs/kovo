@@ -43,6 +43,17 @@ export interface FragmentTargetFact {
 }
 
 /**
+ * @internal Generated reconstruction metadata for one server-refreshable live target. The server
+ * uses these facts to reload declared queries and render full fragments after enhanced mutations.
+ */
+export interface LiveTargetFact {
+  component: string;
+  propsType: string;
+  queries: readonly string[];
+  target: string;
+}
+
+/**
  * @internal Derived registry facts for an app graph (components, domain keys, invalidations,
  * mutation/query type maps, routes). Produced by {@link deriveAppGraph}; lowered-IR shape,
  * in-repo use only (SPEC.md §5.2).
@@ -53,6 +64,7 @@ export interface RegistryFacts {
   domainKeys?: readonly string[];
   fragmentTargets?: readonly string[];
   invalidations?: Readonly<Record<string, readonly string[]>>;
+  liveTargets?: readonly LiveTargetFact[];
   mutations?: RegistryTypeFacts;
   queries?: RegistryTypeFacts;
   routes?: readonly string[];
@@ -82,12 +94,53 @@ export interface CompileAppGraphOptions {
   graph?: RegistryGraphInput;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   registryTypes?: RegistryTypeFactOptions;
+  routePages?: readonly { routePageFacts: readonly RoutePageFact[] }[];
 }
 
 export interface CompileAppGraphResult {
   diagnostics: readonly CompilerDiagnostic[];
   graph: RegistryGraphInput;
   registryFacts: RegistryFacts;
+}
+
+/**
+ * Input to {@link compileRouteModule}: a route module's authored source. Route pages that return
+ * JSX are compiler-processed Kovo source; this entrypoint extracts the route-to-component facts the
+ * generated live-target registry will consume (SPEC.md §4.5/§9.1).
+ */
+export interface CompileRouteModuleOptions {
+  fileName: string;
+  source: string;
+}
+
+/**
+ * Result of {@link compileRouteModule}. The first implementation is fact-only: it proves the
+ * compiler can see route JSX composition before later slices emit executable route IR.
+ */
+export interface CompileRouteModuleResult {
+  diagnostics: readonly CompilerDiagnostic[];
+  routePageFacts: readonly RoutePageFact[];
+}
+
+/** Compiler-derived facts for one JSX-authored `route().page`. */
+export interface RoutePageFact {
+  components: readonly RoutePageComponentFact[];
+  fileName: string;
+  route: string;
+}
+
+/** One component invocation found under a JSX-authored route page. */
+export interface RoutePageComponentFact {
+  localName: string;
+  props: readonly RoutePageComponentPropFact[];
+}
+
+/** A serializable prop/key expression passed from a route page into a component. */
+export interface RoutePageComponentPropFact {
+  expression: string;
+  name: string;
+  propertyAccesses?: readonly string[];
+  staticValue?: import('./scan/object.js').StaticLiteralValue;
 }
 
 /**
