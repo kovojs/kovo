@@ -204,14 +204,11 @@ export {
   RadioGroupItem,
   RadioGroupLabel,
   RadioGroupRadio,
-  radioGroupClassNames,
   radioGroupClasses,
-  radioGroupItemClassNames,
   radioGroupItemClasses,
-  radioGroupLabelClassNames,
   radioGroupLabelClasses,
-  radioGroupRadioClassNames,
   radioGroupRadioClasses,
+  radioGroupStyles,
 } from './radio-group.js';
 export type {
   RadioGroupItemProps,
@@ -219,6 +216,7 @@ export type {
   RadioGroupProps,
   RadioGroupRadioProps,
   RadioGroupStateProps,
+  RadioGroupStyleOverrides,
 } from './radio-group.js';
 export { Drawer, drawerContentClassNames, drawerContentClasses } from './drawer.js';
 export type { DrawerProps, DrawerSide } from './drawer.js';

@@ -1,17 +1,22 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   radioGroupItemAttributes,
   radioGroupLabelAttributes,
   radioGroupRadioAttributes,
   radioGroupRootAttributes,
-  type ClassValue,
   type CollectionOrientation,
   type RadioGroupItem as HeadlessRadioGroupItem,
   type TextDirection,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface RadioGroupStyleOverrides {
+  item?: style.StyleInput;
+  label?: style.StyleInput;
+  radio?: style.StyleInput;
+  root?: style.StyleInput;
+}
 
 export interface RadioGroupStateProps {
   descriptionId?: string;
@@ -30,59 +35,97 @@ export interface RadioGroupStateProps {
 
 export interface RadioGroupProps extends RadioGroupStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   labelledBy?: string;
+  styles?: RadioGroupStyleOverrides;
 }
 
 export interface RadioGroupItemProps extends RadioGroupStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: RadioGroupStyleOverrides;
 }
 
 export interface RadioGroupRadioProps extends RadioGroupStateProps {
-  class?: ClassValue;
   controlId?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: RadioGroupStyleOverrides;
 }
 
 export interface RadioGroupLabelProps extends RadioGroupStateProps {
   children?: string;
-  class?: ClassValue;
   controlId?: string;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: RadioGroupStyleOverrides;
 }
 
-export const radioGroupClassNames = defineVariants({
-  base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[orientation=horizontal]:flex data-[orientation=horizontal]:flex-wrap data-[orientation=horizontal]:items-center data-[invalid]:text-red-950',
-  variants: {},
-});
+export const radioGroupStyles = style.create(
+  {
+    item: {
+      alignItems: 'center',
+      columnGap: 8,
+      display: 'inline-flex',
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+    },
+    label: {
+      lineHeight: 1,
+      userSelect: 'none',
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+      },
+    },
+    radio: {
+      accentColor: '#0a0a0a',
+      borderColor: '#d4d4d4',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      height: 16,
+      width: 16,
+      ':disabled': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-invalid]': {
+        color: '#450a0a',
+      },
+      '[data-orientation=horizontal]': {
+        alignItems: 'center',
+        display: 'flex',
+        flexWrap: 'wrap',
+      },
+    },
+  },
+  { namespace: 'radioGroup', source: 'radio-group.tsx' },
+);
 
-export const radioGroupItemClassNames = defineVariants({
-  base: 'inline-flex items-center gap-2 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const radioGroupRadioClassNames = defineVariants({
-  base: 'h-4 w-4 border border-neutral-300 text-neutral-950 accent-neutral-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50',
-  variants: {},
-});
-
-export const radioGroupLabelClassNames = defineVariants({
-  base: 'select-none leading-none data-[disabled]:cursor-not-allowed',
-  variants: {},
-});
-
-export const radioGroupClasses = radioGroupClassNames.classes;
-export const radioGroupItemClasses = radioGroupItemClassNames.classes;
-export const radioGroupRadioClasses = radioGroupRadioClassNames.classes;
-export const radioGroupLabelClasses = radioGroupLabelClassNames.classes;
+export const radioGroupClasses = [style.attrs(radioGroupStyles.root).class ?? ''] as const;
+export const radioGroupItemClasses = [style.attrs(radioGroupStyles.item).class ?? ''] as const;
+export const radioGroupRadioClasses = [style.attrs(radioGroupStyles.radio).class ?? ''] as const;
+export const radioGroupLabelClasses = [style.attrs(radioGroupStyles.label).class ?? ''] as const;
 
 export const RadioGroup = component({
   render(props: RadioGroupProps) {
@@ -102,15 +145,16 @@ export const RadioGroup = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(radioGroupStyles.root, props.styles?.root);
 
     return (
       <div
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-invalid={attrs['aria-invalid']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-required={attrs['aria-required']}
-        class={cn(radioGroupClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-orientation={attrs['data-orientation']}
@@ -141,10 +185,11 @@ export const RadioGroupItem = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(radioGroupStyles.item, props.styles?.item);
 
     return (
       <div
-        class={cn(radioGroupItemClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -172,12 +217,13 @@ export const RadioGroupRadio = component({
       ...(props.value === undefined ? {} : { value: props.value }),
       ...(props.controlId === undefined ? {} : { controlId: props.controlId }),
     });
+    const styleAttrs = style.attrs(radioGroupStyles.radio, props.styles?.radio);
 
     return (
       <input
+        {...styleAttrs}
         aria-checked={attrs['aria-checked']}
         checked={attrs.checked}
-        class={cn(radioGroupRadioClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
@@ -211,10 +257,11 @@ export const RadioGroupLabel = component({
       ...(props.value === undefined ? {} : { value: props.value }),
       ...(props.controlId === undefined ? {} : { controlId: props.controlId }),
     });
+    const styleAttrs = style.attrs(radioGroupStyles.label, props.styles?.label);
 
     return (
       <label
-        class={cn(radioGroupLabelClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         for={attrs.for}

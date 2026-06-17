@@ -103,7 +103,6 @@ import {
   otpFieldClasses,
   popoverClasses,
   popoverContentClasses,
-  radioGroupClasses,
   selectClasses,
   selectTriggerClasses,
   tooltipClasses,
@@ -194,7 +193,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(disclosureTriggerClasses.join(' ')).toContain('data-[state=open]');
     expect(hoverCardClasses.join(' ')).toContain('relative inline-block');
     expect(hoverCardContentClasses.join(' ')).toContain('w-72');
-    expect(radioGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
     expect(toggleGroupClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(toolbarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(numberFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');

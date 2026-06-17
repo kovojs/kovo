@@ -519,6 +519,30 @@ borrowing its concrete API/spike detail.
     `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.visual.browser.test.ts`, `pnpm exec tsc --noEmit`, and `git diff --check`
     pass.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/radio-group.tsx` now uses `@kovojs/style`,
+    exports `radioGroupStyles`, accepts `styles?: RadioGroupStyleOverrides` for `root`/`item`/`radio`/
+    `label` slot overrides, and drops `defineVariants`/`cn` plus the `class` escape hatches while
+    preserving `radioGroup*Attributes(...)` radiogroup, native radio, roving `tabIndex`, and label `for`
+    output. `packages/ui/src/radio-group.stylex.test.tsx` snapshots the generated StyleX output,
+    exported style groups, and author-last slot override output.
+  - Evidence (partial, 2026-06-16): `packages/ui/registry.json` records Radio Group's copied-source
+    dependency on `@kovojs/style`; `packages/ui/src/copy-in.test.ts` typechecks copied `radio-group.tsx`
+    against only the public `@kovojs/*` packages, and `packages/cli/src/index.kovo-add.test.ts` asserts
+    copied `radio-group.tsx` contains StyleX imports, `radioGroupStyles`, and typed `styles` overrides.
+    The gallery Radio Group visual fixture and demo snapshot are refreshed with `kv-radio-group-*`
+    classes and `data-style-src`; shared tests keep semantic form-control assertions and move generated
+    class coverage to the focused Vitest snapshot.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/ui/src/radio-group.stylex.test.tsx
+    packages/ui/src/index.form-controls.test.tsx packages/ui/src/copy-in.test.ts
+    packages/cli/src/index.kovo-add.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --run src/demo-fixtures.test.ts
+    src/behavior-contracts.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest --config
+    vitest.browser.config.ts --run src/interactive-gallery.native.browser.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.axe.browser.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.visual.browser.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
+    `pnpm exec tsc --noEmit`, and `git diff --check` pass.
   - Evidence (partial, 2026-06-16): `packages/ui/src/avatar.tsx` now uses `@kovojs/style`, exports
     `avatarStyles`, accepts `styles?: AvatarStyleOverrides` for `root`/`image`/`fallback` slot
     overrides, and drops `defineVariants`/`cn` plus the `class` escape hatches while preserving

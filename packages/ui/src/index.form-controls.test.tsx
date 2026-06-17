@@ -55,9 +55,6 @@ import {
   otpFieldGroupClasses,
   otpFieldHiddenInputClasses,
   otpFieldInputClasses,
-  radioGroupItemClasses,
-  radioGroupLabelClasses,
-  radioGroupRadioClasses,
   toggleGroupButtonClasses,
   toggleGroupItemClasses,
   toolbarButtonClasses,
@@ -185,9 +182,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(disabledRadio).toContain('disabled form="checkout-form" id="shipping-freight"');
     expect(disabledRadio).toContain('tabIndex="-1" type="radio" value="freight"');
     expect(label).toContain('for="shipping-express"');
-    expect(radioGroupItemClasses.join(' ')).toContain('data-[disabled]:opacity-50');
-    expect(radioGroupRadioClasses.join(' ')).toContain('accent-neutral-950');
-    expect(radioGroupLabelClasses.join(' ')).toContain('select-none');
   });
 
   it('wraps headless form-control primitives as styled native controls', () => {

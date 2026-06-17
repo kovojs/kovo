@@ -623,10 +623,7 @@
       "exports": ["RadioGroup", "RadioGroupItem", "RadioGroupRadio", "RadioGroupLabel"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
           "CollectionOrientation",
-          "defineVariants",
           "RadioGroupItem",
           "radioGroupItemAttributes",
           "radioGroupLabelAttributes",
@@ -634,6 +631,7 @@
           "radioGroupRootAttributes",
           "TextDirection"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

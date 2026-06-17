@@ -305,7 +305,9 @@ describe('kovo add', () => {
       expect(progress).toContain('export const progressStyles = style.create');
       expect(progress).toContain('style?: style.StyleInput');
       expect(radioGroup).toContain('export const RadioGroup = component({');
-      expect(radioGroup).toContain('export const radioGroupClassNames = defineVariants');
+      expect(radioGroup).toContain("import * as style from '@kovojs/style';");
+      expect(radioGroup).toContain('export const radioGroupStyles = style.create');
+      expect(radioGroup).toContain('styles?: RadioGroupStyleOverrides');
       expect(select).toContain('export const Select = component({');
       expect(select).toContain('export const selectClassNames = defineVariants');
       expect(scrollArea).toContain('export const ScrollArea = component({');
