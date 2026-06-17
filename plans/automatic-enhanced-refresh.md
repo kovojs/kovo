@@ -215,15 +215,34 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and the focused `git diff --check`.
-    - Remaining gaps: query arg bindings, render exports, target identity
-      expressions for keyed/parameterized instances, and coverage facts are not
-      emitted yet.
+    - Remaining gaps: render exports, target identity expressions for
+      keyed/parameterized instances, and coverage facts are not emitted yet.
 - [ ] **3. Compiler/core: make query args from props/routes usable.**
   - Ensure `query.args((props) => ...)` style authoring is typed, scanned, emitted,
     and available to generated server renderers.
   - Route params/search values should reach components as ordinary serializable
     props, so detail-page regions do not need ad-hoc loaders.
-  - Evidence: pending.
+  - Progress 2026-06-17:
+    - `packages/core/src/index.ts` adds typed `query(...).args((props) => args)`
+      component-query bindings for serializable props.
+    - `packages/server/src/query.ts` wraps parameterized query schemas with a
+      callable args binder while preserving normal schema parsing for query
+      endpoints and mutation reruns.
+    - `packages/compiler/src/internal-graph.ts` extracts component query binding
+      facts, including `.args((props) => ...)` source, props parameter name, and
+      accessed prop paths; `packages/compiler/src/emit/registry.ts` emits those
+      facts in `LiveTargetRegistry`.
+    - `packages/core/src/index.test.ts`,
+      `packages/server/src/query-endpoint.test.ts`, and
+      `packages/compiler/src/registry.test.ts` cover typed query args binding,
+      schema parsing, and registry emission for
+      `productQuery.args((props) => ({ id: props.productId }))`.
+    - Verified with
+      `pnpm exec vitest --run packages/core/src/index.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gap: generated server renderers do not yet consume the emitted
+      query binding facts to reload and render component instances.
 - [ ] **4. Server/compiler: lower route JSX pages.**
   - Support route pages that return TSX component invocations, for example
     `page: () => <QuestionListRegion />` and
@@ -312,7 +331,11 @@ removes app-authored bookkeeping from the enhanced path.
 - [ ] **Compiler tests prove generated registry facts.**
   - Add fixtures for singleton, keyed repeated, and route-param-backed query
     components.
-  - Evidence: pending.
+  - Progress 2026-06-17:
+    - `packages/compiler/src/registry.test.ts` covers a singleton cart live target
+      and a prop-backed query args binding fixture.
+    - Remaining gap: keyed repeated and route-param-backed generated-renderer
+      fixtures are still pending.
 - [ ] **Runtime/server tests prove no app-authored fragment renderers are needed.**
   - Enhanced mutation success should update visible query-backed targets using the
     generated registry.

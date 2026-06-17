@@ -73,6 +73,19 @@ export interface QueryDefinition<
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }
 
+/** A query input schema that also binds component props to query args in app-authored TSX. */
+export type QueryArgsSchema<Input> = Schema<Input> & {
+  <Props extends Record<string, unknown>>(mapper: (props: Props) => Input): QueryArgsBinding<
+    Input,
+    Props
+  >;
+};
+
+export interface QueryArgsBinding<Input, Props extends Record<string, unknown>> {
+  args: (props: Props) => Input;
+  schema: Schema<Input>;
+}
+
 type BivariantGuard<Request> = {
   call(request: Request): GuardResult | Promise<GuardResult>;
 }['call'];
@@ -88,6 +101,10 @@ interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Reque
   reads: readonly Domain[];
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }
+
+type QueryWithArgsBinding<Definition, Input> = Omit<Definition, 'args'> & {
+  args: QueryArgsSchema<Input>;
+};
 
 type BivariantQueryGuard = {
   call(request: unknown): GuardResult | Promise<GuardResult>;
@@ -143,16 +160,25 @@ export function query<
   Request,
   Value,
   const Definition extends Omit<QueryArgsDeclarationDefinition<Key, Value, Input, Request>, 'key'>,
->(key: Key, definition: Definition): Definition & { key: Key };
+>(key: Key, definition: Definition): QueryWithArgsBinding<Definition, Input> & { key: Key };
 export function query<
   const Key extends string,
   const Definition extends Omit<RegisteredQueryDefinition, 'key'>,
->(key: Key, definition: Definition): Definition & { key: Key };
+>(
+  key: Key,
+  definition: Definition,
+): Definition extends { args: Schema<infer Input> }
+  ? QueryWithArgsBinding<Definition, Input> & { key: Key }
+  : Definition & { key: Key };
 export function query<const Key extends string>(
   key: Key,
   definition: Omit<RegisteredQueryDefinition, 'key'>,
-): Omit<RegisteredQueryDefinition, 'key'> & { key: Key } {
-  return { ...definition, key };
+): unknown {
+  return {
+    ...definition,
+    ...(definition.args ? { args: queryArgsSchema(definition.args) } : {}),
+    key,
+  };
 }
 
 /** Extract the resolved value type a query's `load` produces. */
@@ -341,6 +367,34 @@ function parseQueryInput<const Key extends string, Value, Input, Request>(
       ok: false,
     };
   }
+}
+
+function queryArgsSchema<Input>(schema: Schema<Input>): QueryArgsSchema<Input> {
+  const bind = (<Props extends Record<string, unknown>>(
+    mapper: (props: Props) => Input,
+  ): QueryArgsBinding<Input, Props> => ({
+    args: mapper,
+    schema,
+  })) as QueryArgsSchema<Input>;
+
+  Object.defineProperty(bind, 'parse', {
+    configurable: true,
+    enumerable: true,
+    value: (input: unknown) => schema.parse(input),
+  });
+
+  const asyncSchema = schema as Schema<Input> & {
+    parseAsync?: (input: unknown) => Promise<Input>;
+  };
+  if (typeof asyncSchema.parseAsync === 'function') {
+    Object.defineProperty(bind, 'parseAsync', {
+      configurable: true,
+      enumerable: true,
+      value: (input: unknown) => asyncSchema.parseAsync?.(input),
+    });
+  }
+
+  return bind;
 }
 
 function parseQueryOutput<const Key extends string, Value, Input, Request>(

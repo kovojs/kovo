@@ -64,7 +64,7 @@ describe('compiler registry and graph emission', () => {
   'cart/add': 'cart' | 'orderHistory' | 'productGrid';
 }`);
     expect(registry).toContain(`export interface LiveTargetRegistry {
-  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; queries: readonly ['cart']; props: {}; };
+  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; queries: readonly ['cart']; queryBindings: readonly [{ name: 'cart'; queryExpression: "{}" }]; props: {}; };
 }`);
     expect(registry).toContain(`declare module '@kovojs/core' {`);
     expect(registry).toContain(`  interface ComponentRegistry {
@@ -75,7 +75,7 @@ describe('compiler registry and graph emission', () => {
   'components/cart/cart-badge/cart-badge': {};
   }`);
     expect(registry).toContain(`  interface LiveTargetRegistry {
-  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; queries: readonly ['cart']; props: {}; };
+  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; queries: readonly ['cart']; queryBindings: readonly [{ name: 'cart'; queryExpression: "{}" }]; props: {}; };
   }`);
     expect(registry).toContain(`  interface QueryRegistry {
   'cart': typeof cartQuery;
@@ -93,6 +93,31 @@ describe('compiler registry and graph emission', () => {
   'cart/add': 'cart' | 'orderHistory' | 'productGrid';
   }`);
     expect(registry).toContain('export type DomainKey = "cart" | "product";');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('emits component query arg binding facts from props', () => {
+    const result = compileComponentModule({
+      fileName: 'components/products/product-detail.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { productQuery } from '../queries.js';
+
+export const ProductDetail = component({
+  props: { productId: String },
+  queries: {
+    product: productQuery.args((props) => ({ id: props.productId })),
+  },
+  render: ({ product }) => <section>{product.name}</section>,
+});
+`,
+    });
+
+    const registry = result.files[2]?.source ?? '';
+
+    expect(registry).toContain(`export interface LiveTargetRegistry {
+  'components/products/product-detail/product-detail': { component: 'components/products/product-detail/product-detail'; queries: readonly ['product']; queryBindings: readonly [{ name: 'product'; queryExpression: "productQuery"; argsExpression: "({ id: props.productId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId'] }]; props: { productId: string }; };
+}`);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 

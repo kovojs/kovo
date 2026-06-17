@@ -149,7 +149,14 @@ describe('core authoring APIs', () => {
   });
 
   it('preserves query and form keys as typed authoring facts', () => {
-    expect(query('cart').key).toBe('cart');
+    const cart = query<'cart', { count: number }>('cart');
+    const cartForProduct = cart.args((props: { productId: string }) => ({
+      id: props.productId,
+    }));
+
+    expect(cart.key).toBe('cart');
+    expect(cartForProduct.key).toBe('cart');
+    expect(cartForProduct.args({ productId: 'p1' })).toEqual({ id: 'p1' });
     expect(form('cart/add').key).toBe('cart/add');
 
     const assertUnknownQuery = () => {

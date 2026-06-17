@@ -194,9 +194,25 @@ function liveTargetFactLines(facts: readonly LiveTargetFact[]): string {
         fact.queries.length === 0
           ? 'readonly []'
           : `readonly [${fact.queries.map((query) => `'${query}'`).join(', ')}]`;
-      return `  '${fact.target}': { component: '${fact.component}'; queries: ${queries}; props: ${fact.propsType}; };`;
+      const queryBindings =
+        fact.queryBindings.length === 0
+          ? 'readonly []'
+          : `readonly [${fact.queryBindings.map(liveTargetQueryBindingFact).join(', ')}]`;
+      return `  '${fact.target}': { component: '${fact.component}'; queries: ${queries}; queryBindings: ${queryBindings}; props: ${fact.propsType}; };`;
     })
     .join('\n');
+}
+
+function liveTargetQueryBindingFact(fact: LiveTargetFact['queryBindings'][number]): string {
+  return `{ name: '${fact.name}'; queryExpression: ${JSON.stringify(fact.queryExpression)}${
+    fact.argsExpression === undefined ? '' : `; argsExpression: ${JSON.stringify(fact.argsExpression)}`
+  }${fact.argsParam === undefined ? '' : `; argsParam: '${fact.argsParam}'`}${
+    fact.argsPropertyAccesses === undefined
+      ? ''
+      : `; argsPropertyAccesses: readonly [${fact.argsPropertyAccesses
+          .map((path) => `'${path}'`)
+          .join(', ')}]`
+  } }`;
 }
 
 function componentRegistryFactLines(componentNames: readonly string[]): string {

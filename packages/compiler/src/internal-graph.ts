@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core';
+import ts from 'typescript';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
@@ -13,6 +14,7 @@ import type {
   ComponentGraphFact,
   FragmentTargetFact,
   LiveTargetFact,
+  LiveTargetQueryBindingFact,
   RegistryFacts,
   RegistryGraphInput,
   RegistryTypeFactOptions,
@@ -90,6 +92,7 @@ export function findLiveTargetFacts(
     {
       component: registryComponentName,
       propsType: fragmentTargetPropsType(model),
+      queryBindings: componentQueryBindingFacts(model),
       queries: componentQueryNames(model),
       target: registryComponentName,
     },
@@ -235,6 +238,96 @@ function deriveViewTransitionsFromGraph(graph: RegistryGraphInput): string[] {
 
 function componentQueryNames(model: ComponentModuleModel): string[] {
   return componentOptionObjectKeys(model, 'queries');
+}
+
+function componentQueryBindingFacts(model: ComponentModuleModel): LiveTargetQueryBindingFact[] {
+  return componentOptionObjectEntries(model, 'queries').map((entry) => {
+    const parsed = entry.value ? queryBindingFromExpression(entry.value) : null;
+    return {
+      name: entry.key,
+      ...(parsed ?? { queryExpression: entry.value ?? entry.key }),
+    };
+  });
+}
+
+function queryBindingFromExpression(
+  expressionSource: string,
+): Omit<LiveTargetQueryBindingFact, 'name'> | null {
+  const sourceFile = ts.createSourceFile(
+    'query-binding.tsx',
+    `const __binding = ${expressionSource};`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const statement = sourceFile.statements[0];
+  if (!statement || !ts.isVariableStatement(statement)) return null;
+  const expression = statement.declarationList.declarations[0]?.initializer;
+  if (!expression) return null;
+
+  if (
+    ts.isCallExpression(expression) &&
+    ts.isPropertyAccessExpression(expression.expression) &&
+    expression.expression.name.text === 'args'
+  ) {
+    const [mapper] = expression.arguments;
+    const arrow = mapper && ts.isArrowFunction(mapper) ? mapper : null;
+    return {
+      ...(arrow ? queryArgsArrowFacts(sourceFile, arrow) : {}),
+      queryExpression: expression.expression.expression.getText(sourceFile),
+    };
+  }
+
+  return {
+    queryExpression: expression.getText(sourceFile),
+  };
+}
+
+function queryArgsArrowFacts(
+  sourceFile: ts.SourceFile,
+  arrow: ts.ArrowFunction,
+): Pick<
+  LiveTargetQueryBindingFact,
+  'argsExpression' | 'argsParam' | 'argsPropertyAccesses'
+> {
+  const param = arrow.parameters[0];
+  const argsParam = param && ts.isIdentifier(param.name) ? param.name.text : undefined;
+  const body = arrow.body;
+  const argsExpression = body.getText(sourceFile);
+  const propertyAccesses = propertyAccessPaths(body);
+
+  return {
+    argsExpression,
+    ...(argsParam === undefined ? {} : { argsParam }),
+    ...(propertyAccesses.length === 0 ? {} : { argsPropertyAccesses: propertyAccesses }),
+  };
+}
+
+function propertyAccessPaths(node: ts.Node): string[] {
+  const paths: string[] = [];
+  const visit = (current: ts.Node): void => {
+    if (ts.isPropertyAccessExpression(current)) {
+      const path = propertyAccessPath(current);
+      if (path) paths.push(path);
+    }
+    ts.forEachChild(current, visit);
+  };
+
+  visit(node);
+  return [...new Set(paths)];
+}
+
+function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
+  const receiver = propertyAccessReceiverSegments(expression.expression);
+  if (!receiver) return null;
+  return [...receiver, expression.name.text].join('.');
+}
+
+function propertyAccessReceiverSegments(expression: ts.Expression): string[] | null {
+  if (ts.isIdentifier(expression)) return [expression.text];
+  if (!ts.isPropertyAccessExpression(expression)) return null;
+  const path = propertyAccessPath(expression);
+  return path ? path.split('.') : null;
 }
 
 function fragmentTargetPropsType(model: ComponentModuleModel): string {

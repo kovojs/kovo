@@ -49,8 +49,18 @@ export interface FragmentTargetFact {
 export interface LiveTargetFact {
   component: string;
   propsType: string;
+  queryBindings: readonly LiveTargetQueryBindingFact[];
   queries: readonly string[];
   target: string;
+}
+
+/** @internal One declared component query binding, including optional prop-derived args. */
+export interface LiveTargetQueryBindingFact {
+  argsExpression?: string;
+  argsParam?: string;
+  argsPropertyAccesses?: readonly string[];
+  name: string;
+  queryExpression: string;
 }
 
 /**

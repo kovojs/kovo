@@ -190,8 +190,18 @@ export function component<const Definition extends ComponentDefinitionShape>(
   return { definition };
 }
 
+/** A typed component query binding with args derived from serializable component props. */
+export interface QueryArgsBinding<Key extends string, Result, Props, Args> {
+  args: (props: Props) => Args;
+  key: Key;
+  result?: Result;
+}
+
 /** A typed query handle: a key and the result type it resolves to. */
 export interface Query<Key extends string, Result> {
+  args<Props extends Record<string, JsonValue>, Args extends Record<string, JsonValue>>(
+    mapper: (props: Props) => Args,
+  ): QueryArgsBinding<Key, Result, Props, Args>;
   key: Key;
   result?: Result;
 }
@@ -450,7 +460,12 @@ export function query<
   const Key extends RegistryKey<QueryRegistry>,
   Result = Key extends keyof QueryRegistry ? QueryRegistry[Key] : unknown,
 >(key: Key): Query<Key, Result> {
-  return { key };
+  return {
+    args(mapper) {
+      return { args: mapper, key };
+    },
+    key,
+  };
 }
 
 /** A typed mutation form handle: its key, input shape, and failure type. */

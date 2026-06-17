@@ -61,6 +61,24 @@ describe('query endpoints', () => {
     });
   });
 
+  it('keeps parameterized query args parseable while supporting component prop bindings', () => {
+    const productQuery = query('product', {
+      args: s.object({ id: s.string() }),
+      load(input: { id: string }) {
+        return { id: input.id };
+      },
+      reads: [domain('product')],
+    });
+
+    const bound = productQuery.args((props: { productId: string }) => ({
+      id: props.productId,
+    }));
+
+    expect(productQuery.args.parse({ id: 'p1' })).toEqual({ id: 'p1' });
+    expect(bound.args({ productId: 'p2' })).toEqual({ id: 'p2' });
+    expect(bound.schema.parse({ id: 'p3' })).toEqual({ id: 'p3' });
+  });
+
   it('renders query endpoint loader exceptions as stable 500 JSON', async () => {
     const thrown = new Error('database password leaked in stack');
     const onError = vi.fn();
