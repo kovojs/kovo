@@ -166,17 +166,6 @@ export function submitAddToCart(
 ) {
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
-    fragmentRenderers: [
-      {
-        render: () => CartBadge.definition.render({ cart: loadCart(request.db) }),
-        target: 'cart-badge',
-      },
-      {
-        render: () =>
-          ProductList.definition.render({ products: loadProducts(request.db) }, { request }),
-        target: 'product-list',
-      },
-    ],
     headers,
     rawInput,
     redirectTo: '/',
@@ -190,7 +179,7 @@ function renderAddToCartFailureFragment(
   request: ShopRequest,
   rawInput: unknown,
   failure: AddToCartFailure,
-): string {
+) {
   const productId = productIdFromRawInput(rawInput);
   const product = productId ? request.db.products.get(productId) : undefined;
 

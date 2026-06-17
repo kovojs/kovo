@@ -824,12 +824,32 @@ removes app-authored bookkeeping from the enhanced path.
     - Remaining gap: the legacy broad `mutationResponse` compatibility API
       still exists in the framework and tests until follow-up cleanup removes or
       retires it.
-- [ ] **10. Docs/tutorial update.**
+- [x] **10. Docs/tutorial update.**
   - Teach the authoring model as "declare queries and serializable props; Kovo
     updates enhanced mutations from server truth automatically."
   - Move target constants, live target registry, and fragment envelopes into
     verification/debugging docs rather than app-author tutorials.
-  - Evidence: pending.
+  - Evidence 2026-06-17:
+    - `site/content/guides/mutations.md`,
+      `site/content/guides/styling.md`, and `docs/integration-testing.md` now
+      describe ordinary enhanced success refresh as generated live-target
+      registry behavior from query-backed components, with `Kovo-Targets` /
+      `Kovo-Live-Targets` framed as wire/debugging details rather than
+      app-authored routing.
+    - `site/tutorial/steps/04-mutations/src/app.ts`,
+      `site/tutorial/steps/05-optimistic/src/app.ts`,
+      `site/tutorial/steps/06-streaming/src/app.ts`, and
+      `site/tutorial/steps/07-verification/src/app.ts` no longer pass
+      `fragmentRenderers` to `renderMutationEndpointResponse()`. Step 04 now
+      declares mutation query/touch facts and request-context query loaders so
+      generated post-commit refresh renders server truth.
+    - Tutorial generated component IR was refreshed so checked-in
+      `site/tutorial/steps/*/src/generated/*.tsx` live-target renderers
+      self-register with the generated registry.
+    - Verified with `node site/tutorial/run-steps.mjs --write`,
+      `node site/tutorial/run-steps.mjs`, and
+      `rg -n "fragmentRenderers|mutationResponse\\(|liveTargetRenderers|generated/live-targets" docs site/content site/tutorial/steps --glob '!**/generated/**'`
+      showing no stale author-facing fragment-routing references.
 
 ## Verification Targets
 

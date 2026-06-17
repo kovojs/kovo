@@ -229,7 +229,12 @@ describe('tutorial step 07 — testing & verification', () => {
     const success = await submitAddToCart(
       formInput(request, { productId: 'p1', quantity: '2' }),
       request,
-      { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'cart-badge,product-list,order-history' },
+      {
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets':
+          'cart-badge#components/cart-badge/cart-badge:{}; product-list#components/product-list/product-list:{}; order-history#components/order-history/order-history:{}',
+        'Kovo-Targets': 'cart-badge=cart; product-list=products; order-history=orderHistory',
+      },
     );
     expect(success.headers['Content-Type']).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
     expect(success.body).toContain('<kovo-query name="cart">{"count":2}</kovo-query>');

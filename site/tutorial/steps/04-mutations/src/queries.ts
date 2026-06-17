@@ -1,9 +1,11 @@
-import { query } from '@kovojs/server';
+import { query, type QueryLoadContext } from '@kovojs/server';
 
-import { createShopDb, type ShopDb, type ShopProduct } from './db.js';
+import { createShopDb, type ShopDb, type ShopProduct, type ShopRequest } from './db.js';
 import { cart, product } from './domains.js';
 
-// Typed reads declared once (SPEC.md section 10.2); unchanged from step 03.
+// Typed reads declared once (SPEC.md section 10.2). Loaders read the per-request
+// database through query context so generated post-commit refresh renders the
+// same state the mutation just wrote (SPEC.md sections 9.1 and 10.3).
 
 export interface CartResult {
   count: number;
@@ -23,12 +25,16 @@ export function loadProducts(db: ShopDb): ProductsResult {
   };
 }
 
+function dbFrom(context?: QueryLoadContext<ShopRequest>): ShopDb {
+  return context?.request?.db ?? createShopDb();
+}
+
 export const cartQuery = query('cart', {
-  load: (_input: unknown) => loadCart(createShopDb()),
+  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadCart(dbFrom(context)),
   reads: [cart],
 });
 
 export const productsQuery = query('products', {
-  load: (_input: unknown) => loadProducts(createShopDb()),
+  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadProducts(dbFrom(context)),
   reads: [product],
 });

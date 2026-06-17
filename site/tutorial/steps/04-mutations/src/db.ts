@@ -24,6 +24,11 @@ export interface ShopDb {
 }
 // /snippet
 
+export interface ShopRequest {
+  db: ShopDb;
+  session?: { id?: string } | null;
+}
+
 export function createShopDb(): ShopDb {
   const db: ShopDb = {
     cartItems: [],

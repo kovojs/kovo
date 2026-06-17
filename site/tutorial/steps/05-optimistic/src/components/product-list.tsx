@@ -46,7 +46,7 @@ export function renderAddToCartForm(
   item: Pick<ShopProduct, 'id' | 'stock'>,
   failure?: AddToCartFailure,
   request?: ShopRequest,
-): string {
+) {
   return (
     <form enhance mutation={addToCart} key={item.id}>
       {request?.session?.id ? csrfField(request, shopCsrf) : ''}
@@ -63,7 +63,7 @@ export function renderAddToCartForm(
 // /snippet
 
 // snippet:add-to-cart-error
-export function renderAddToCartError(failure: AddToCartFailure): string {
+export function renderAddToCartError(failure: AddToCartFailure) {
   if (failure.error.code === 'OUT_OF_STOCK') {
     const payload = failure.error.payload as { availableQuantity?: number };
     return (

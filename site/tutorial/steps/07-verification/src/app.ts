@@ -246,7 +246,7 @@ export function renderShopPageDeferredStream(db: ShopDb = createShopDb(), reques
       {
         fragments: [
           {
-            html: ProductList.definition.render({ products }, { request }),
+            html: expectSyncHtml(ProductList.definition.render({ products }, { request })),
             target: 'product-list',
           },
         ],
@@ -269,22 +269,6 @@ export function submitAddToCart(
 ) {
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
-    fragmentRenderers: [
-      {
-        render: () => CartBadge.definition.render({ cart: loadCart(request.db) }),
-        target: 'cart-badge',
-      },
-      {
-        render: () =>
-          ProductList.definition.render({ products: loadProducts(request.db) }, { request }),
-        target: 'product-list',
-      },
-      {
-        render: () =>
-          OrderHistory.definition.render({ orderHistory: loadOrderHistory(request.db) }),
-        target: 'order-history',
-      },
-    ],
     headers,
     rawInput,
     redirectTo: '/',
@@ -298,7 +282,7 @@ function renderAddToCartFailureFragment(
   request: ShopRequest,
   rawInput: unknown,
   failure: AddToCartFailure,
-): string {
+) {
   const productId = productIdFromRawInput(rawInput);
   const product = productId ? request.db.products.get(productId) : undefined;
 
@@ -313,4 +297,11 @@ function productIdFromRawInput(rawInput: unknown): string | undefined {
   }
   const productId = rawInput.productId;
   return typeof productId === 'string' ? productId : undefined;
+}
+
+function expectSyncHtml(html: string | Promise<string>): string {
+  if (typeof html !== 'string') {
+    throw new Error('Tutorial deferred stream fixture expected synchronous component HTML');
+  }
+  return html;
 }

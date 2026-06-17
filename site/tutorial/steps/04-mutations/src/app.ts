@@ -9,10 +9,11 @@ import {
 } from '@kovojs/server';
 import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 
-import { createShopDb, type ShopDb } from './db.js';
+import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
+import { cart, product } from './domains.js';
 import { CartBadge } from './generated/cart-badge.js';
 import * as productListComponent from './generated/product-list.js';
-import { loadCart, loadProducts } from './queries.js';
+import { cartQuery, loadCart, loadProducts, productsQuery } from './queries.js';
 
 // Tutorial step 04 (chapter 4): a typed write over a real form. One mutation
 // endpoint answers both response modes — POST-redirect-GET without
@@ -20,10 +21,7 @@ import { loadCart, loadProducts } from './queries.js';
 // 9.1, 10.3). CSRF is default-on (section 6.6): a mutation with no token
 // source fails closed, so the request shell declares one up front.
 
-export interface ShopRequest {
-  db: ShopDb;
-  session?: { id?: string } | null;
-}
+export type { ShopRequest } from './db.js';
 
 // snippet:csrf
 // SPEC.md section 6.6: kovo-csrf is a session-bound synchronizer token stamped
@@ -54,6 +52,10 @@ export const addToCart = mutation('cart/add', {
   }),
   errors: {
     OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+  },
+  registry: {
+    queries: [cartQuery, productsQuery],
+    touches: [cart, product],
   },
   transaction(request: ShopRequest, run) {
     return request.db.transaction((db) => run({ ...request, db }));
@@ -118,17 +120,6 @@ export function submitAddToCart(
 ) {
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
-    fragmentRenderers: [
-      {
-        render: () => CartBadge.definition.render({ cart: loadCart(request.db) }),
-        target: 'cart-badge',
-      },
-      {
-        render: () =>
-          ProductList.definition.render({ products: loadProducts(request.db) }, { request }),
-        target: 'product-list',
-      },
-    ],
     headers,
     rawInput,
     redirectTo: '/',
@@ -143,7 +134,7 @@ function renderAddToCartFailureFragment(
   request: ShopRequest,
   rawInput: unknown,
   failure: AddToCartFailure,
-): string {
+) {
   const productId = productIdFromRawInput(rawInput);
   const product = productId ? request.db.products.get(productId) : undefined;
 

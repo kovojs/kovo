@@ -139,6 +139,7 @@ POST /_m/cart/add HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 Kovo-Fragment: true
 Kovo-Targets: cart-badge=cart; product-grid=product; order-history=order
+Kovo-Live-Targets: cart-badge#components/cart-badge/cart-badge:{}; …
 Kovo-Idem: 7f3a-…
 
 productId=p1&quantity=2&kovo-csrf=…
@@ -157,10 +158,12 @@ Kovo-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1
 
 What each piece does:
 
-- **`Kovo-Targets`** is read off the live DOM's `kovo-deps` stamps at submit time. The server keeps no
-  session of what's on screen; it answers a self-contained question. Singleton targets look like
-  `cart-badge=cart`; repeated targets include their keyed suffix, such as
-  `product-form:p2=product:p2`. This matters for [deployment](/guides/deployment/).
+- **`Kovo-Targets`** and **`Kovo-Live-Targets`** are read off compiler-emitted DOM stamps at submit
+  time. The server keeps no session of what's on screen; it answers a self-contained question.
+  Singleton targets look like `cart-badge=cart`; repeated targets include their keyed suffix, such
+  as `product-form:p2=product:p2`. `Kovo-Live-Targets` adds the generated component id and
+  serializable props needed to reconstruct the visible component instance. This matters for
+  [deployment](/guides/deployment/).
 - **`<kovo-query>`** chunks replace the client's query values and run each query's update plan across
   every dependent island. When §4.8 bindings cover the affected output, query JSON or prod deltas
   are preferred over a full fragment.
@@ -170,31 +173,28 @@ What each piece does:
 - **`Kovo-Changes`** is the sanitized summary of committed writes — `{domain, keys}` only, never
   mutation input or failure detail.
 
-Fragments are rendered by the same functions as full pages, so a partial can't drift from the page
-it patches.
+Fragments are rendered by compiler-generated live-target renderers for the same query-backed
+components your route pages compose, so a partial can't drift from the page it patches. App code
+does not route ordinary success fragments by mutation key.
 
 ## The no-JS path: POST-redirect-GET
 
 When the same endpoint sees no `Kovo-Fragment` header, it answers with PRG. In the commerce app's
 tests, a successful no-JS `cart/add` returns `303` with `Location: /cart` and
 `Cache-Control: no-store`, and the next GET renders the updated page. Errors re-render the full page
-with messages in place. You don't write this path twice — one server helper renders both modes from
-the same declaration:
+with messages in place. You don't write success fragment routing: query-backed components declare the
+data they need, and Kovo reruns those queries after the mutation commits.
 
 ```ts
 import { renderMutationEndpointResponse } from '@kovojs/server';
 
 return renderMutationEndpointResponse(addToCart, {
   csrf: commerceCsrf,
-  fragmentRenderers: [
-    { target: 'cart-badge', render: () => CartBadge.definition.render() },
-    { target: 'order-history', render: () => renderOrderHistory(request.db) },
-  ],
   rawInput,
   redirectTo: '/cart', // the PRG destination for the no-JS mode
   renderFailureFragment: (failure) => renderAddToCartForm(item, failure, request),
   renderFailurePage: (failure) => renderCartPage(request.db, { failure }, request),
-  headers, // Kovo-Fragment / Kovo-Targets, when present
+  headers, // Kovo-Fragment / target descriptors, when present
   request,
 });
 ```

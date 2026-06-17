@@ -7,7 +7,7 @@ import { csrfField } from '@kovojs/server';
 import { formatPrice, type ShopProduct, type ShopRequest } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
 import { shopCsrf, type AddToCartFailure, type AddToCartFailureState } from '../app.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // Tutorial step 06 (chapter 6), unchanged from step 05: every product card carries a real form
@@ -51,7 +51,7 @@ export function renderAddToCartForm(
   item: Pick<ShopProduct, 'id' | 'stock'>,
   failure?: AddToCartFailure,
   request?: ShopRequest,
-): string {
+) {
   return (
     <form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${item.id}`} kovo-key={item.id}>
       {request?.session?.id ? csrfField(request, shopCsrf) : ''}
@@ -68,7 +68,7 @@ export function renderAddToCartForm(
 // /snippet
 
 // snippet:add-to-cart-error
-export function renderAddToCartError(failure: AddToCartFailure): string {
+export function renderAddToCartError(failure: AddToCartFailure) {
   if (failure.error.code === 'OUT_OF_STOCK') {
     const payload = failure.error.payload as { availableQuantity?: number };
     return (
@@ -86,7 +86,7 @@ export function renderAddToCartError(failure: AddToCartFailure): string {
 }
 // /snippet
 
-export const ProductList$liveTargetRenderer = componentLiveTargetRenderer({
+export const ProductList$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductList,
   componentId: "components/product-list/product-list",
   queries: [
@@ -95,4 +95,4 @@ export const ProductList$liveTargetRenderer = componentLiveTargetRenderer({
       query: productsQuery,
     },
   ],
-});
+}));

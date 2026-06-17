@@ -75,12 +75,12 @@ fragment). Two rules:
 2. **The compiler matches the component-call token as source text** — keep that token
    out of comments/strings in non-component modules, or the plugin will claim them.
 
-The page renders a component root with `kovo-deps`; the compiler/runtime derive any
-refresh target hooks needed by the fragment wire. An enhanced form posts the compiled
+The page renders a component root with `kovo-deps`; the compiler/runtime derive the
+live-target descriptors needed by the fragment wire. An enhanced form posts the compiled
 mutation action (`<form method="post" action="/_m/<key>" data-mutation="<key>">` in
 emitted HTML). The always-present inline-loader runtime applies returned query chunks
-or morphs named fragments in place — no navigation. The app's `mutationResponse`
-re-renders selected fragment(s) from server truth.
+or morphs named fragments in place — no navigation. Ordinary success fragments are
+selected from the generated live-target registry and re-rendered from server truth.
 
 ### Loader coverage split
 

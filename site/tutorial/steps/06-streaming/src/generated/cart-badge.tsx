@@ -3,7 +3,7 @@
 import { component } from '@kovojs/core';
 
 import { cartQuery, type CartResult } from '../queries.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // Tutorial step 06 (chapter 6), unchanged from step 05: declared queries make
@@ -22,7 +22,7 @@ export const CartBadge = component({
 CartBadge.name = "components/cart-badge/cart-badge";
 // /snippet
 
-export const CartBadge$liveTargetRenderer = componentLiveTargetRenderer({
+export const CartBadge$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: CartBadge,
   componentId: "components/cart-badge/cart-badge",
   queries: [
@@ -31,4 +31,4 @@ export const CartBadge$liveTargetRenderer = componentLiveTargetRenderer({
       query: cartQuery,
     },
   ],
-});
+}));

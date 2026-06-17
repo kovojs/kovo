@@ -4,7 +4,7 @@ import { escapeText } from '@kovojs/server/internal/html';
 import { component } from '@kovojs/core';
 
 import { orderHistoryQuery, type OrderHistoryResult } from '../queries.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // Tutorial step 07 (chapter 7): the third commerce island. The native <ol>
@@ -29,7 +29,7 @@ export const OrderHistory = component({
 OrderHistory.name = "components/order-history/order-history";
 // /snippet
 
-export const OrderHistory$liveTargetRenderer = componentLiveTargetRenderer({
+export const OrderHistory$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: OrderHistory,
   componentId: "components/order-history/order-history",
   queries: [
@@ -38,4 +38,4 @@ export const OrderHistory$liveTargetRenderer = componentLiveTargetRenderer({
       query: orderHistoryQuery,
     },
   ],
-});
+}));

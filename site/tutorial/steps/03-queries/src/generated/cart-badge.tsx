@@ -3,7 +3,7 @@
 import { component } from '@kovojs/core';
 
 import { cartQuery, type CartResult } from '../queries.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // Tutorial step 03 (chapter 3): authored sugar carries no stamps (SPEC.md
@@ -23,7 +23,7 @@ export const CartBadge = component({
 CartBadge.name = "components/cart-badge/cart-badge";
 // /snippet
 
-export const CartBadge$liveTargetRenderer = componentLiveTargetRenderer({
+export const CartBadge$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: CartBadge,
   componentId: "components/cart-badge/cart-badge",
   queries: [
@@ -32,4 +32,4 @@ export const CartBadge$liveTargetRenderer = componentLiveTargetRenderer({
       query: cartQuery,
     },
   ],
-});
+}));

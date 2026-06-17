@@ -60,7 +60,12 @@ describe('tutorial step 06 — streaming & defer', () => {
     const response = await submitAddToCart(
       formInput(request, { productId: 'p1', quantity: '1' }),
       request,
-      { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'cart-badge,product-list' },
+      {
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets':
+          'cart-badge#components/cart-badge/cart-badge:{}; product-list#components/product-list/product-list:{}',
+        'Kovo-Targets': 'cart-badge=cart; product-list=products',
+      },
     );
 
     expect(response.status).toBe(200);

@@ -86,7 +86,9 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
       request,
       {
         'Kovo-Fragment': 'true',
-        'Kovo-Targets': 'cart-badge,product-list',
+        'Kovo-Live-Targets':
+          'cart-badge#components/cart-badge/cart-badge:{}; product-list#components/product-list/product-list:{}',
+        'Kovo-Targets': 'cart-badge=cart; product-list=products',
       },
     );
 

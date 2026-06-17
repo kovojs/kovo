@@ -5,7 +5,7 @@ import { component } from '@kovojs/core';
 
 import { formatPrice } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // Tutorial step 03 (chapter 3): a keyed list over query data. The native <ul>
@@ -30,7 +30,7 @@ export const ProductList = component({
 ProductList.name = "components/product-list/product-list";
 // /snippet
 
-export const ProductList$liveTargetRenderer = componentLiveTargetRenderer({
+export const ProductList$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductList,
   componentId: "components/product-list/product-list",
   queries: [
@@ -39,4 +39,4 @@ export const ProductList$liveTargetRenderer = componentLiveTargetRenderer({
       query: productsQuery,
     },
   ],
-});
+}));

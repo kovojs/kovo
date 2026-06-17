@@ -104,19 +104,19 @@ page order.
 ## Declare stylesheets for fragments and streams
 
 A mutation fragment can patch into a long-lived document that predates the fragment's styles or, with
-split CSS, into a page that never loaded them. Fragment renderers declare their stylesheets, and the
-response carries the links with the fragment:
+split CSS, into a page that never loaded them. Declare stylesheets on the route/component metadata
+that owns the generated live target; ordinary enhanced success fragments carry those assets from the
+generated renderer. Failure-only policies can provide `failureStylesheets` for submitted-form
+rerenders:
 
 ```ts
 return renderMutationEndpointResponse(addToCart, {
-  fragmentRenderers: [
-    {
-      target: 'cart-badge',
-      render: () => CartBadge.definition.render(),
-      stylesheets: siteStylesheets,
-    },
-  ],
-  // ...
+  failureStylesheets: siteStylesheets,
+  headers,
+  rawInput,
+  redirectTo: '/cart',
+  renderFailureFragment: (failure) => renderAddToCartForm(item, failure),
+  request,
 });
 ```
 

@@ -2,15 +2,9 @@
 import { component } from '@kovojs/core';
 import { csrfField } from '@kovojs/server';
 
-import { formatPrice, type ShopProduct } from '../db.js';
+import { formatPrice, type ShopProduct, type ShopRequest } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
-import {
-  addToCart,
-  shopCsrf,
-  type AddToCartFailure,
-  type AddToCartFailureState,
-  type ShopRequest,
-} from '../app.js';
+import { addToCart, shopCsrf, type AddToCartFailure, type AddToCartFailureState } from '../app.js';
 
 // Tutorial step 04 (chapter 4): every product card carries a real form
 // posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS
@@ -51,7 +45,7 @@ export function renderAddToCartForm(
   item: Pick<ShopProduct, 'id' | 'stock'>,
   failure?: AddToCartFailure,
   request?: ShopRequest,
-): string {
+) {
   return (
     <form enhance mutation={addToCart} key={item.id}>
       {request?.session?.id ? csrfField(request, shopCsrf) : ''}
@@ -68,7 +62,7 @@ export function renderAddToCartForm(
 // /snippet
 
 // snippet:add-to-cart-error
-export function renderAddToCartError(failure: AddToCartFailure): string {
+export function renderAddToCartError(failure: AddToCartFailure) {
   if (failure.error.code === 'OUT_OF_STOCK') {
     const payload = failure.error.payload as { availableQuantity?: number };
     return (
