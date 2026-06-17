@@ -1,6 +1,6 @@
 # Kovo
 
-A web-platform-native framework for building multi-page applications that are **interactive at first paint, legible at every layer, and statically verifiable end-to-end.**
+A web framework for building multi-page applications that are **interactive at first paint, legible at every layer, and statically verifiable end-to-end.**
 
 > An application's complete behavior — every handler wiring, navigation target, form field, mutation contract, data dependency, and optimistic prediction — should be provable by TypeScript static checking plus static graph queries, and auditable by reading the page source and the Network panel.
 
