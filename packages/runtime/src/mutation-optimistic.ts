@@ -20,7 +20,7 @@ import { stampPendingQueries } from './pending.js';
 import { queryStoreKey } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface OptimisticEnhancedMutationSubmitOptions<
   Input,
 > extends EnhancedMutationSubmitOptions {
@@ -31,7 +31,7 @@ export interface OptimisticEnhancedMutationSubmitOptions<
   rebaser: OptimisticRebaser;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export async function submitOptimisticEnhancedMutation<Input>(
   options: OptimisticEnhancedMutationSubmitOptions<Input>,
 ): Promise<

@@ -5,7 +5,7 @@ import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { MutationChangeRecord } from './optimism.js';
 import { definedProps } from './defined-props.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedFormLike {
   action: string;
   getAttribute?(name: string): string | null;
@@ -13,7 +13,7 @@ export interface EnhancedFormLike {
   method?: string | undefined;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedMutationFetchOptions {
   body: unknown;
   headers: Record<string, string>;
@@ -22,13 +22,13 @@ export interface EnhancedMutationFetchOptions {
   onUploadProgress?: (progress: UploadProgress) => void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface UploadProgress {
   loaded: number;
   total?: number;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedMutationResponseLike {
   headers?: {
     get(name: string): string | null;
@@ -38,7 +38,7 @@ export interface EnhancedMutationResponseLike {
   text(): Promise<string>;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type EnhancedMutationFetch = (
   url: string,
   options: EnhancedMutationFetchOptions,

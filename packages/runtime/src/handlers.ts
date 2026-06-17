@@ -9,14 +9,13 @@ import {
 } from './handler-context.js';
 import { applyStateBindings, supportsQueryBindings } from './query-bindings.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
 
 export type { ElementParamValue, HandlerContext, IslandSignalScope } from './handler-context.js';
 
 /**
  * A client event handler: receives the DOM `event` and a typed island `HandlerContext`.
- * @internal
  */
 export type ClientHandler<State = unknown, Params = Record<string, ElementParamValue>> = (
   event: Event,
@@ -48,7 +47,7 @@ export function handler<State = unknown, Params = Record<string, ElementParamVal
 
 const delegatedStateQueues = new WeakMap<EventElementLike, Promise<void>>();
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export async function dispatchDelegatedEvent(
   event: DelegatedEvent,
   importModule: ImportHandlerModule,

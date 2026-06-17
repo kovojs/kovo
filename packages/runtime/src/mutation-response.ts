@@ -4,14 +4,14 @@ import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import type { MutationChangeRecord } from './optimism.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface MutationResponseHeaderLike {
   headers?: {
     get(name: string): string | null;
   };
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function readMutationChangeHeader(
   response: MutationResponseHeaderLike,
   onError?: RuntimeErrorReporter,
@@ -32,7 +32,7 @@ export function readMutationChangeHeader(
   });
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function isMutationBroadcastMessage(value: unknown): value is {
   body: string;
   changes: MutationChangeRecord[];
@@ -55,7 +55,7 @@ function isMutationChangeRecord(value: unknown): value is MutationChangeRecord {
   return sanitizeMutationChangeRecord(value) !== null;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function sanitizeMutationChangeRecord(value: unknown): MutationChangeRecord | null {
   if (typeof value !== 'object' || value === null) return null;
   if (!('domain' in value) || typeof value.domain !== 'string') return null;
@@ -75,7 +75,7 @@ export function sanitizeMutationChangeRecord(value: unknown): MutationChangeReco
 
 let generatedMutationIdemCounter = 0;
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function createMutationIdem(): string {
   // SPEC.md §9.1: enhanced mutation requests carry stable Kovo-Idem metadata.
   // Browser crypto is preferred; this fallback only needs per-tab uniqueness.

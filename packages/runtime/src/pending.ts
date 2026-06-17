@@ -1,12 +1,12 @@
 import type { AttributeMutatorLike, QuerySelectorAllRootLike } from './dom-like.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface PendingElementLike extends AttributeMutatorLike {}
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface PendingRoot extends QuerySelectorAllRootLike<PendingElementLike> {}
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function stampPendingQueries(
   root: PendingRoot,
   queryNames: readonly string[],
@@ -34,7 +34,7 @@ export function stampPendingQueries(
   return stamped;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function readDeps(value: string | null): string[] {
   return (value ?? '')
     .split(/[\s,]+/)

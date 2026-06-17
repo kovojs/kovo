@@ -11,7 +11,7 @@ import { queryWireKey } from './query-store.js';
 import { readQueryChunks } from './wire-parser.js';
 import type { QueryChunk } from './wire-parser.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryRefetchOptions {
   fetch: QueryRefetchFetch;
   /**
@@ -23,7 +23,7 @@ export interface QueryRefetchOptions {
   urlForQuery?: (query: string) => string | undefined;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryRefetchFetch {
   (
     url: string,
@@ -35,14 +35,14 @@ export interface QueryRefetchFetch {
   ): Promise<QueryRefetchResponse> | QueryRefetchResponse;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryRefetchResponse {
   ok?: boolean;
   status?: number;
   text(): Promise<string> | string;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface RefetchQueriesOptions extends QueryRefetchOptions {
   applyQuery?: QueryApplyInterposition;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -51,7 +51,7 @@ export interface RefetchQueriesOptions extends QueryRefetchOptions {
   root?: unknown;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface RefetchedQueryResponse {
   fragments: [];
   queries: readonly string[];
@@ -73,7 +73,6 @@ interface AppliedRefetchedQueryBody extends RefetchedQueryResponse {
  *
  * @param options - The `queries` to refetch, the `queryStore`, a `fetch`, and apply/plan hooks.
  * @returns The applied query responses.
- * @internal
  */
 export async function refetchQueries(
   options: RefetchQueriesOptions,
@@ -135,7 +134,7 @@ export async function refetchQueries(
     .map(({ decodedQueryCount: _decodedQueryCount, ...body }) => body);
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface CreateDeltaMissRefetcherOptions extends QueryRefetchOptions {
   applyQuery?: QueryApplyInterposition;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -149,7 +148,6 @@ export interface CreateDeltaMissRefetcherOptions extends QueryRefetchOptions {
  * path). The returned callback is fire-and-forget (async); errors are routed to
  * `options.onError`. Injectable via `options.fetch` for tests.
  *
- * @internal
  */
 export function createDeltaMissRefetcher(options: CreateDeltaMissRefetcherOptions): OnDeltaMiss {
   // SPEC §9.1.1: on a delta miss, refetch the full value over /_q/<wireKey>.

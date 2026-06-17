@@ -20,34 +20,34 @@ import {
 } from './mutation-submit.js';
 import type { QueryScriptLike } from './query-script-hydration.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface LoaderLifecycleTarget extends ListenerTargetLike<DelegatedEvent> {}
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface LoaderRoot
   extends
     LoaderLifecycleTarget,
     OptionalQuerySelectorAllRootLike<EventElementLike | QueryScriptLike>,
     VisibilityStateLike {}
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface VisibleObserver {
   observe(element: EventElementLike): void;
   unobserve(element: EventElementLike): void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type VisibleObserverFactory = (
   callback: (entries: readonly VisibleObserverEntry[]) => void,
 ) => VisibleObserver;
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface VisibleObserverEntry {
   isIntersecting: boolean;
   target: EventElementLike;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface ExecutionTriggerOptions {
   importModule: ImportHandlerModule;
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
@@ -56,7 +56,7 @@ export interface ExecutionTriggerOptions {
   visibleObserver?: VisibleObserverFactory;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface DelegatedEventLifecycleOptions {
   enhancedMutations?: EnhancedMutationLoaderOptions;
   events: readonly string[];
@@ -67,7 +67,7 @@ export interface DelegatedEventLifecycleOptions {
   root: LoaderRoot;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function addLoaderListener(
   target: LoaderLifecycleTarget,
   type: string,
@@ -81,7 +81,7 @@ export function addLoaderListener(
   });
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function installDelegatedEventLifecycle(
   options: DelegatedEventLifecycleOptions,
 ): () => void {
@@ -160,7 +160,7 @@ interface PointerCrossingNode extends EventTargetLike {
   contains?: (node: PointerCrossingNode | null) => boolean;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function installExecutionTriggers(
   options: ExecutionTriggerOptions,
   islandSignalScope: IslandSignalScope,

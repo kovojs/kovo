@@ -1,23 +1,23 @@
 import { readDeps } from './pending.js';
 import type { QuerySelectorAllRootLike, TargetElementLike } from './dom-like.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface TargetCollectorRoot extends QuerySelectorAllRootLike<TargetElementLike> {}
 
 const liveTargetHeaderSeparator = '; ';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface LiveTargetSnapshot {
   header: string;
   targets: string[];
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function readLiveTargets(root: TargetCollectorRoot): string[] {
   return collectLiveTargets(root);
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function readLiveTargetSnapshot(root: TargetCollectorRoot): LiveTargetSnapshot {
   const targets = collectLiveTargets(root);
   return {

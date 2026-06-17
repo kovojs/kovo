@@ -1,7 +1,7 @@
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type MutationTask<Value> = () => Promise<Value> | Value;
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export class MutationQueue {
   #tails = new Map<string, Promise<unknown>>();
 

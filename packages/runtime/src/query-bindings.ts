@@ -7,7 +7,7 @@ import type {
 import { morphDomElement } from './morph.js';
 import { kovoBoundAttributeValue } from './security-output.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryBindingElement
   extends AttributeElementLike, ClosestElementLike<QueryBindingElement> {
   checked?: boolean;
@@ -19,10 +19,10 @@ export interface QueryBindingElement
   value?: string;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryBindingRoot extends QuerySelectorAllRootLike<QueryBindingElement> {}
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface TemplateStampItem {
   html: string;
   index: number;
@@ -30,26 +30,26 @@ export interface TemplateStampItem {
   value: unknown;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface TemplateStampHost extends QueryBindingElement {
   reconcileTemplateStamp(items: readonly TemplateStampItem[]): void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface CompiledQueryDerive {
   name: string;
   select(value: unknown, root: QueryBindingRoot): unknown;
   selector?: string;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface CompiledQueryStamp {
   attr: string;
   select(value: unknown, root: QueryBindingRoot): unknown;
   selector: string;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface CompiledQueryTemplateStamp {
   key: string | ((item: unknown, index: number) => string | number);
   list: string;
@@ -57,7 +57,7 @@ export interface CompiledQueryTemplateStamp {
   selector: string;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface CompiledQueryUpdatePlan {
   bindings?: boolean;
   derives?: readonly CompiledQueryDerive[];
@@ -65,7 +65,7 @@ export interface CompiledQueryUpdatePlan {
   templateStamps?: readonly CompiledQueryTemplateStamp[];
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface AppliedCompiledQueryUpdatePlan {
   bindings: string[];
   derives: string[];
@@ -73,38 +73,38 @@ export interface AppliedCompiledQueryUpdatePlan {
   templateStamps: string[];
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type CompiledQueryUpdatePlans = Readonly<
   Record<string, CompiledQueryUpdatePlan | undefined>
 >;
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryBindingIndex {
   attributeBindingElements: readonly QueryBindingElement[];
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface ApplyQueryBindingsOptions {
   bindingIndex?: QueryBindingIndex;
   queryKey?: string;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface ApplyStateBindingsOptions extends ApplyQueryBindingsOptions {
   importModule?: (url: string) => Promise<Record<string, unknown>>;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface ApplyCompiledQueryUpdatePlanOptions extends ApplyQueryBindingsOptions {}
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function createQueryBindingIndex(root: QueryBindingRoot): QueryBindingIndex {
   return {
     attributeBindingElements: queryAttributeBindingElements(root),
   };
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function applyQueryBindings(
   root: QueryBindingRoot,
   queryName: string,
@@ -114,7 +114,7 @@ export function applyQueryBindings(
   return applyRootBindings(root, queryName, value, options);
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function applyStateBindings(
   root: QueryBindingRoot,
   state: unknown,
@@ -175,7 +175,7 @@ function applyRootBindings(
   return applied;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function applyCompiledQueryUpdatePlan(
   root: QueryBindingRoot,
   queryName: string,
@@ -238,7 +238,7 @@ export function applyCompiledQueryUpdatePlan(
   return applied;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function supportsQueryBindings(root: unknown): root is QueryBindingRoot {
   return typeof (root as Partial<QueryBindingRoot>).querySelectorAll === 'function';
 }

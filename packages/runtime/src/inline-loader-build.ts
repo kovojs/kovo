@@ -385,7 +385,7 @@ export function buildInlineKovoLoaderModuleSource(
     '',
     '// SPEC.md §4.4 keeps the always-loaded loader under a 4KB gzip budget; this',
     '// literal is the pre-minified bootstrap shipped in document shells.',
-    '/** @internal */',
+    '/** Runtime API used by Kovo applications and generated runtime integration. */',
     `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
       installerSource,
     )};`,
@@ -397,12 +397,12 @@ export function buildInlineKovoLoaderModuleSource(
     '    importModule: ImportHandlerModule,',
     '  ) => void;',
     '',
-    '/** @internal */',
+    '/** Runtime API used by Kovo applications and generated runtime integration. */',
     'export function installInlineKovoLoader(importModule: ImportHandlerModule): void {',
     '  inlineKovoLoaderInstaller(importModule);',
     '}',
     '',
-    '/** @internal */',
+    '/** Runtime API used by Kovo applications and generated runtime integration. */',
     'export function createInlineKovoLoaderSource(',
     "  importModuleExpression = '(url)=>import(url)',",
     '): string {',
@@ -414,7 +414,7 @@ export function buildInlineKovoLoaderModuleSource(
     '  return `(${inlineKovoLoaderInstallerSource})(${expression});`;',
     '}',
     '',
-    '/** @internal */',
+    '/** Runtime API used by Kovo applications and generated runtime integration. */',
     'export const kovoLoaderSource = createInlineKovoLoaderSource();',
   ].join('\n')}\n`;
   assertInlineKovoLoaderModuleArtifactParity(moduleSource, 'Generated inline Kovo loader module');

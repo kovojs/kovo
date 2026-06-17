@@ -8,20 +8,20 @@ import type { QueryStore } from './query-store.js';
 import { readQueryElementChunk } from './wire-parser.js';
 import type { QueryChunk, QueryElementChunkLike } from './wire-parser.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface InlineQueryEventDetail {
   queries: QueryElementChunkLike[];
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface InlineQueryEvent {
   detail?: InlineQueryEventDetail;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryEventHydrationTarget extends ListenerTargetLike<InlineQueryEvent> {}
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface ApplyInlineQueryEventOptions {
   applyQuery?: QueryApplyInterposition;
   onError?: RuntimeErrorReporter;
@@ -30,13 +30,13 @@ export interface ApplyInlineQueryEventOptions {
   store: QueryStore;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface InstallInlineQueryEventHydrationOptions extends ApplyInlineQueryEventOptions {
   onAppliedQueries?: (queries: readonly string[]) => void;
   target: QueryEventHydrationTarget;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function applyInlineQueryEventToRuntime(
   event: InlineQueryEvent,
   options: ApplyInlineQueryEventOptions,
@@ -56,7 +56,7 @@ export function applyInlineQueryEventToRuntime(
   });
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function installInlineQueryEventHydration(
   options: InstallInlineQueryEventHydrationOptions,
 ): () => void {

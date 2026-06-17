@@ -39,7 +39,7 @@ export type {
 } from './mutation-fetch.js';
 export type { EnhancedFormElementLike } from './mutation-form.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedMutationLoaderOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -66,7 +66,7 @@ interface EnhancedFormSubmitHooks {
   onAppliedQueries?: (queries: readonly string[]) => void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export async function dispatchEnhancedFormSubmit(
   event: DelegatedEvent,
   options: EnhancedMutationLoaderOptions | undefined,
@@ -118,7 +118,7 @@ export async function dispatchEnhancedFormSubmit(
   return true;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function isEnhancedSubmitEvent(
   event: DelegatedEvent,
   options: EnhancedMutationLoaderOptions | undefined,
@@ -139,7 +139,7 @@ function formDataForSubmit(form: EnhancedFormElementLike, event: DelegatedEvent)
   return new FormData(form as HTMLFormElement);
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedMutationSubmitOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -174,7 +174,7 @@ export interface EnhancedMutationSubmitOptions {
   store: QueryStore;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export async function submitEnhancedMutation(
   options: EnhancedMutationSubmitOptions,
 ): Promise<EnhancedMutationAppliedResult> {

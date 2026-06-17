@@ -22,7 +22,6 @@ import type { QueryStore } from './query-store.js';
 
 /**
  * Options for `installKovoLoader`: the root, module importer, query store/plans, and lifecycle hooks.
- * @internal
  */
 export interface KovoLoaderOptions {
   discardPendingOptimism?: () => readonly string[] | void;
@@ -45,7 +44,6 @@ export interface KovoLoaderOptions {
 
 /**
  * A running loader instance: the delegated `events` it listens for and a `dispose` to tear it down.
- * @internal
  */
 export interface KovoLoader {
   dispose(): void;
@@ -84,7 +82,6 @@ const defaultDelegatedEvents = [
  *
  * @param options - The `root`, an `importModule` to load handler bundles, and optional query/lifecycle hooks.
  * @returns A `KovoLoader` handle.
- * @internal
  */
 export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
   const events = options.events ?? defaultDelegatedEvents;

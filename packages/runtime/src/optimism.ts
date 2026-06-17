@@ -107,13 +107,13 @@ interface PagehideRoot {
   removeEventListener?: (type: 'pagehide', listener: () => void) => void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface PagehideOptimismCleanupOptions {
   discardPendingOptimism: () => readonly string[] | void;
   root: PagehideRoot;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export class OptimisticRebaser {
   #pendingByQuery = new Map<string, PendingTransform[]>();
   #serverTruthByQuery = new Map<string, unknown>();
@@ -224,7 +224,7 @@ export class OptimisticRebaser {
   }
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function installPagehideOptimismCleanup(
   options: PagehideOptimismCleanupOptions,
 ): () => void {
@@ -248,7 +248,7 @@ function globalPagehideTarget(root: PagehideRoot): PagehideRoot | undefined {
   return target !== root && typeof target.addEventListener === 'function' ? target : undefined;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function applyOptimisticTransforms<Input>(
   store: QueryStore,
   input: Input,
@@ -304,7 +304,6 @@ export function tempId(): string {
 
 /**
  * Client clock for `now()` placeholders in derived optimistic transforms (SPEC.md §10.5).
- * @internal
  */
 export function now(): number {
   return Date.now();

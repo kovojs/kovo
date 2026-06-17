@@ -2,7 +2,6 @@
  * Read the render-plan version token from the page's `<meta name="kovo-build">`.
  * Returns undefined in non-DOM environments (tests, SSR) or when the tag is absent
  * (SPEC §9.1.1).
- * @internal
  */
 export function readPageBuildToken(): string | undefined {
   if (typeof document === 'undefined') return undefined;

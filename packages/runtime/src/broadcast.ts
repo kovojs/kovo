@@ -8,20 +8,20 @@ import type { QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { MutationChangeRecord } from './optimism.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface BroadcastLike {
   close?: () => void;
   onmessage: ((event: { data: unknown }) => void) | null;
   postMessage(message: unknown): void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface MutationBroadcast {
   close(): void;
   publish(body: string, changes?: readonly MutationChangeRecord[]): void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface InstallMutationBroadcastOptions {
   applyQuery?: QueryApplyInterposition;
   channel: BroadcastLike;
@@ -34,7 +34,7 @@ export interface InstallMutationBroadcastOptions {
   store: QueryStore;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface DefaultMutationBroadcastOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -46,7 +46,7 @@ export interface DefaultMutationBroadcastOptions {
   store: QueryStore;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function withDefaultMutationBroadcast<Options extends DefaultMutationBroadcastOptions>(
   options: Options,
 ): {
@@ -83,7 +83,7 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
   }
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function installMutationBroadcast(
   options: InstallMutationBroadcastOptions,
 ): MutationBroadcast {

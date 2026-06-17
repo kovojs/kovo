@@ -8,12 +8,12 @@ import {
   type ApplyMutationResponseChunksToRuntimeOptions,
 } from './apply-mutation-response.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type AppliedDeferredStreamResponseWithRoot = AppliedMutationResponseWithRoot & {
   chunks: AppliedMutationResponseWithRoot[];
 };
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type AppliedDeferredStreamResponseToRuntime =
   | (AppliedMutationResponse & { chunks: AppliedMutationResponse[] })
   | AppliedDeferredStreamResponseWithRoot;
@@ -26,13 +26,13 @@ interface ApplyDeferredStreamResponseToRuntimeBaseOptions extends Omit<
   boundary?: string;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type ApplyDeferredStreamResponseToRuntimeOptions =
   ApplyDeferredStreamResponseToRuntimeBaseOptions & {
     root?: MorphRoot | undefined;
   };
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function applyDeferredStreamResponseToRuntime(
   options: ApplyDeferredStreamResponseToRuntimeOptions & { root: MorphRoot },
 ): AppliedDeferredStreamResponseWithRoot;

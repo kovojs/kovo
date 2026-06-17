@@ -8,7 +8,7 @@ import type {
 } from './dom-like.js';
 import { reportRuntimeContextError } from './error-policy.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface DelegatedEvent {
   preventDefault?: () => void;
   submitter?: unknown;
@@ -16,22 +16,22 @@ export interface DelegatedEvent {
   target: EventTargetLike | null;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EventTargetLike extends ClosestElementLike<EventElementLike> {}
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EventElementLike
   extends
     AttributeElementLike,
     ClosestElementLike<EventElementLike>,
     OptionalQuerySelectorAllRootLike<UploadProgressElementLike> {}
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface UploadProgressElementLike extends AttributeWriterLike {
   setAttribute(name: string, value: string): void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type EventPayloadMap<Definitions extends readonly EventDefinition<string, JsonValue>[]> = {
   [Definition in Definitions[number] as Definition['name']]: Definition extends EventDefinition<
     string,
@@ -41,21 +41,21 @@ export type EventPayloadMap<Definitions extends readonly EventDefinition<string,
     : never;
 };
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface TypedEvent<Name extends string = string, Payload = unknown> {
   name: Name;
   payload: Payload;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type EventListener<Payload> = (event: TypedEvent<string, Payload>) => void | Promise<void>;
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EventSubscription {
   off(): void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface TypedEventBus<EventMap extends Record<string, unknown>> {
   emit<Name extends Extract<keyof EventMap, string>>(name: Name, payload: EventMap[Name]): void;
   events: readonly Extract<keyof EventMap, string>[];
@@ -65,13 +65,13 @@ export interface TypedEventBus<EventMap extends Record<string, unknown>> {
   ): EventSubscription;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EventBusOptions {
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
   queryDataKeys?: readonly string[];
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface RuntimeErrorContext {
   event?: DelegatedEvent | TypedEvent<string, unknown>;
   phase:
@@ -83,7 +83,7 @@ export interface RuntimeErrorContext {
     | 'query-hydration';
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function createEventBus<
   const Definitions extends readonly EventDefinition<string, JsonValue>[],
 >(

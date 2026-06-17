@@ -4,22 +4,22 @@ import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-t
 import { applyResponseFragments } from './response-fragment-apply.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface MorphTarget {
   appendHtml?(html: string): void;
   readHtml?(): string;
   replaceWithHtml(html: string): void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface MorphRoot {
   findFragmentTarget(target: string): MorphTarget | null;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type MorphFragment = (target: MorphTarget, html: string) => void;
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export class DomMorphTarget implements MorphTarget {
   constructor(public element: Element) {}
 
@@ -51,7 +51,7 @@ export class DomMorphTarget implements MorphTarget {
   }
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export class DomMorphRoot implements MorphRoot {
   constructor(private readonly root: FragmentTargetRoot) {}
 
@@ -62,15 +62,15 @@ export class DomMorphRoot implements MorphRoot {
   }
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export const keyedDomMorph: MorphFragment = (target, html) => {
   target.replaceWithHtml(html);
 };
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type StructuralMorphKey = string | number;
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface StructuralMorphBrowserState {
   focused?: boolean;
   islandState?: unknown;
@@ -93,7 +93,7 @@ export interface StructuralMorphNode {
   type: string;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function applyFragments(
   root: MorphRoot,
   fragments: readonly FragmentChunk[],
@@ -115,7 +115,6 @@ export function applyFragments(
  * the current tree is rewritten to the next tree shape while matching
  * sibling keys keep their object identity and browser-owned state across
  * insertion and reorder.
- * @internal
  */
 export function morphStructuralTree(
   current: StructuralMorphNode,
@@ -133,7 +132,7 @@ export function morphStructuralTree(
   return current;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function morphDomElement(current: Element, next: Element): Element {
   if (!canReuseDomElement(current, next)) {
     current.replaceWith(next);

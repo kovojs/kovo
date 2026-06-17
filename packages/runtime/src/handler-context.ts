@@ -3,17 +3,17 @@ import { domAttributes } from './dom-like.js';
 import type { EventElementLike } from './events.js';
 import { readAttribute, tagClose } from './wire-html.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type ElementParamValue = string | number | boolean;
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface HandlerContext<State = unknown, Params = Record<string, ElementParamValue>> {
   params: Params;
   signal: AbortSignal;
   state: State;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type IslandSignalScope = object;
 
 export const defaultIslandSignalScope: IslandSignalScope = {};
@@ -59,7 +59,7 @@ export function createDelegatedHandlerContext(
   };
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function readElementParams(element: EventElementLike): Record<string, ElementParamValue> {
   const paramTypes = readElementParamTypes(element.getAttribute?.('kovo-param-types'));
   const params: Record<string, ElementParamValue> = {};
@@ -92,7 +92,7 @@ function coerceElementParam(value: string, type: string | undefined): ElementPar
   return value;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function readElementState(element: EventElementLike): JsonValue {
   const stateHost = readElementStateHost(element);
   const state = stateHost?.getAttribute('kovo-state');
@@ -105,7 +105,7 @@ export function readElementState(element: EventElementLike): JsonValue {
   }
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function writeElementState(element: EventElementLike, state: JsonValue): void {
   element.setAttribute?.('kovo-state', JSON.stringify(state));
 }
@@ -139,7 +139,7 @@ function islandSignalKey(element: EventElementLike): string | null {
   );
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function abortRemovedIslandSignals(
   currentHtml: string,
   nextHtml: string,

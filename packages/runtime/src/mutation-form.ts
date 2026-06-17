@@ -3,7 +3,7 @@ import type { UploadProgress } from './mutation-fetch.js';
 
 export const enhancedMutationFormSelector = 'form[enhance],form[data-enhance],form[data-mutation]';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedFormElementLike extends EventElementLike {
   action: string;
   id?: string | undefined;

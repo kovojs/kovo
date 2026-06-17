@@ -161,7 +161,7 @@ already excludes `@internal`, but the root barrels can still export those names.
     `pnpm --filter @kovojs/server exec vitest run` (62 files, 404 tests) and
     `node scripts/api-surface-gate.mjs`
     (`public-exports-needing-attention=2904`, `baseline=2907`).
-- [ ] **Migrate `@kovojs/runtime` emit-target surface to `@kovojs/runtime/generated`.**
+- [x] **Migrate `@kovojs/runtime` emit-target surface to `@kovojs/runtime/generated`.**
   - Emitted modules import from `@kovojs/runtime/generated` rather than the public
     root or an internal path; update compiler emitters, gallery replacements, and
     runtime export tests in the same slice.
@@ -180,6 +180,20 @@ already excludes `@internal`, but the root barrels can still export those names.
     refreshed with `pnpm --filter @kovojs/example-gallery run emit:interactive-gallery`
     and checked with
     `pnpm --filter @kovojs/example-gallery exec vitest run src/interactive-gallery.static-export.test.ts src/interactive-gallery.artifacts.test.ts`.
+  - Evidence 2026-06-17 (`agent/api-boundary-runtime-root`): runtime declarations
+    reachable from the public root and generated ABI are now documented as public
+    runtime APIs instead of tagged `@internal`, so `@kovojs/runtime/generated`
+    re-exports documented public declarations for compiler-emitted code while
+    the root remains app-facing. Verified with
+    `pnpm --filter @kovojs/runtime exec vitest run` (75 files, 374 tests),
+    `pnpm --filter @kovojs/compiler exec vitest run` (42 files, 356 tests),
+    `pnpm run check:inline-loader`,
+    `pnpm --filter @kovojs/example-gallery exec vitest run src/interactive-gallery.static-export.test.ts src/interactive-gallery.artifacts.test.ts`
+    (2 files, 5 tests), and
+    `node scripts/api-surface-gate.mjs 2>&1 | rg '@kovojs/runtime|api-surface:'`,
+    which reported only `api-surface: 2 boundary violation(s):` with no
+    `@kovojs/runtime` entries; the remaining full-gate failures are unrelated
+    `kovo` CLI root internals.
   - Prove: `pnpm --filter @kovojs/runtime exec vitest run`,
     `pnpm --filter @kovojs/compiler exec vitest run`, generated fixture tests,
     and `pnpm run check:inline-loader`.

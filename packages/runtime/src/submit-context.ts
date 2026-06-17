@@ -15,10 +15,10 @@ import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type SubmitFormDefinition = Form<string, Record<string, JsonValue>, JsonValue>;
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure> {
   action?: string;
   idem?: string;
@@ -28,7 +28,7 @@ export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure>
   parseError?: (body: string) => Failure;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface SubmitContextOptions {
   actionFor?: (form: SubmitFormDefinition) => string;
   broadcast?: MutationBroadcast;
@@ -40,7 +40,7 @@ export interface SubmitContextOptions {
   store: QueryStore;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface SubmitContext {
   submit<Definition extends SubmitFormDefinition>(
     form: Definition,
@@ -52,7 +52,7 @@ export interface SubmitContext {
 
 // SPEC.md §9.1/§9.2: typed ctx.submit uses the same enhanced mutation request,
 // fragment/query apply, and validation-failure parsing path as enhanced forms.
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function createSubmitContext(options: SubmitContextOptions): SubmitContext {
   return {
     async submit(form, submitOptions) {

@@ -13,7 +13,7 @@ import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedMutationRuntimeApplyOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -29,7 +29,7 @@ export interface EnhancedMutationRuntimeApplyOptions {
   store: QueryStore;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export type EnhancedMutationAppliedResult = AppliedMutationResponse & {
   appliedFragments: string[];
   changes: MutationChangeRecord[];
@@ -37,13 +37,13 @@ export type EnhancedMutationAppliedResult = AppliedMutationResponse & {
   targets: string[];
 };
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export interface MutationRuntimeApplyHooks {
   applyQuery?: QueryApplyInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
 }
 
-/** @internal */
+/** Runtime API used by Kovo applications and generated runtime integration. */
 export function applyFetchedEnhancedMutationResponseToRuntime(
   options: EnhancedMutationRuntimeApplyOptions,
   fetched: FetchedEnhancedMutation,
