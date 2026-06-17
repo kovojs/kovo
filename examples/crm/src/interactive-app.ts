@@ -13,6 +13,8 @@ import {
   DEAL_DETAIL_TARGET,
   renderDealDetailPage,
   renderDealDetailRegion,
+  type DetailContact,
+  type DetailDeal,
 } from './components/deal-detail.js';
 import {
   PIPELINE_TARGET,
@@ -22,12 +24,7 @@ import {
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
 import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';
-import {
-  contactListQuery,
-  openDealsQuery,
-  pipelineByStageQuery,
-  type ContactRow,
-} from './queries.js';
+import { contactListQuery, openDealsQuery, pipelineByStageQuery } from './queries.js';
 import { activities, contacts, deals } from './schema.js';
 
 // SPEC.md §9.1/§9.5: the CRM example as a FULLY INTERACTIVE Kovo app. It
@@ -59,7 +56,7 @@ const crmStaticDealPaths = [
 // fixed stand-in for a logged-in sales rep (owner `u1`, the demo seed owner).
 const demoSession = { id: 'demo-session', user: { id: 'u1', roles: ['sales'] as const } };
 
-async function loadContact(db: CrmDb, id: string): Promise<ContactRow | undefined> {
+async function loadContact(db: CrmDb, id: string): Promise<DetailContact | undefined> {
   const rows = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
   const row = rows[0];
   return row
@@ -69,6 +66,8 @@ async function loadContact(db: CrmDb, id: string): Promise<ContactRow | undefine
         email: row.email,
         ownerId: row.ownerId,
         dealCount: row.dealCount,
+        company: row.company,
+        title: row.title,
       }
     : undefined;
 }
@@ -112,6 +111,7 @@ async function renderDealDetailRegionFromDb(db: CrmDb, dealId: string): Promise<
       stage: row.stage,
       amount: row.amount,
       ownerId: row.ownerId,
+      title: row.title,
     },
   });
 }
@@ -175,6 +175,7 @@ export async function buildCrmInteractiveApp(
             stage: 'lost',
             amount: 0,
             ownerId: 'system',
+            title: 'Unknown deal',
           },
         });
       }
@@ -193,6 +194,7 @@ export async function buildCrmInteractiveApp(
           stage: row.stage,
           amount: row.amount,
           ownerId: row.ownerId,
+          title: row.title,
         },
       });
     },

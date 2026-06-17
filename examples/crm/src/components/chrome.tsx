@@ -1,8 +1,11 @@
 /** @jsxImportSource @kovojs/server */
+import { Badge, type BadgeVariant } from '@kovojs/ui/badge';
 
 // Shared page chrome for the CRM example UI. The app-shell wraps each page()
 // return in the document <html>/<head> (with the stylesheet), so these helpers
 // render the <body> contents: a top bar with section nav plus a main column.
+// Page chrome (header/nav/container) stays document CSS; content surfaces use the
+// @kovojs/ui styled components (Card / Table / Badge / Button).
 
 export type CrmSection = 'pipeline' | 'contacts';
 
@@ -24,34 +27,39 @@ export function money(amount: number): string {
   return `$${amount.toLocaleString('en-US')}`;
 }
 
-const STAGE_TONE: Record<string, string> = {
-  lead: 'bg-slate-100 text-slate-700',
-  qualified: 'bg-sky-100 text-sky-700',
-  open: 'bg-amber-100 text-amber-800',
-  proposal: 'bg-violet-100 text-violet-700',
-  won: 'bg-emerald-100 text-emerald-700',
-  lost: 'bg-rose-100 text-rose-700',
+// Map each pipeline stage onto one of the @kovojs/ui Badge variants
+// (neutral / success / warning). Won is a success; lost a warning; everything
+// in-flight is neutral.
+const STAGE_VARIANT: Record<string, BadgeVariant> = {
+  lead: 'neutral',
+  qualified: 'neutral',
+  open: 'neutral',
+  proposal: 'neutral',
+  won: 'success',
+  lost: 'warning',
 };
 
+export function stageBadgeVariant(stage: string): BadgeVariant {
+  return STAGE_VARIANT[stage] ?? 'neutral';
+}
+
+/** A capitalized stage chip rendered with the @kojvojs/ui Badge. */
 export function stageBadge(stage: string): string {
-  const tone = STAGE_TONE[stage] ?? 'bg-slate-100 text-slate-700';
   return (
-    <span
-      class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${tone}`}
-    >
-      {stage}
+    <span class="capitalize">
+      {Badge.definition.render({ variant: stageBadgeVariant(stage), children: stage })}
     </span>
   );
 }
 
 export function renderCrmShell(active: CrmSection, body: string): string {
   return (
-    <div class="min-h-screen bg-slate-50 text-slate-900">
+    <div class="crm-app min-h-screen bg-slate-50 text-slate-900">
       <header class="border-b border-slate-200 bg-white">
         <div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <a href="/" class="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <span class="grid h-7 w-7 place-items-center rounded-md bg-slate-900 text-xs font-bold text-white">
-              CR
+              A
             </span>
             Atlas CRM
           </a>

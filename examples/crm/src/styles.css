@@ -44,7 +44,9 @@ table {
 .mb-1 { margin-bottom: 0.25rem; }
 .mb-2 { margin-bottom: 0.5rem; }
 .mb-3 { margin-bottom: 0.75rem; }
+.mt-0\.5 { margin-top: 0.125rem; }
 .mt-1 { margin-top: 0.25rem; }
+.mt-1\.5 { margin-top: 0.375rem; }
 .mt-2 { margin-top: 0.5rem; }
 .mt-3 { margin-top: 0.75rem; }
 .mt-4 { margin-top: 1rem; }
@@ -77,10 +79,12 @@ table {
 .items-center { align-items: center; }
 .items-end { align-items: flex-end; }
 .justify-between { justify-content: space-between; }
+.justify-end { justify-content: flex-end; }
 .gap-1 { gap: 0.25rem; }
 .gap-2 { gap: 0.5rem; }
 .gap-3 { gap: 0.75rem; }
 .gap-4 { gap: 1rem; }
+.gap-5 { gap: 1.25rem; }
 .space-y-2 > * + * { margin-top: 0.5rem; }
 .space-y-3 > * + * { margin-top: 0.75rem; }
 .space-y-5 > * + * { margin-top: 1.25rem; }
@@ -96,6 +100,7 @@ table {
 .border { border: 1px solid #e2e8f0; }
 .border-b { border-bottom: 1px solid #e2e8f0; }
 .border-t { border-top: 1px solid #e2e8f0; }
+.border-l-2 { border-left: 2px solid #e2e8f0; }
 .border-dashed { border-style: dashed; }
 .border-emerald-300 { border-color: #6ee7b7; }
 .border-slate-100 { border-color: #f1f5f9; }
@@ -120,6 +125,7 @@ table {
 .px-3 { padding-inline: 0.75rem; }
 .px-4 { padding-inline: 1rem; }
 .px-6 { padding-inline: 1.5rem; }
+.pl-4 { padding-left: 1rem; }
 .py-0\.5 { padding-block: 0.125rem; }
 .py-1 { padding-block: 0.25rem; }
 .py-1\.5 { padding-block: 0.375rem; }
@@ -162,6 +168,26 @@ table {
 .ring-1 { box-shadow: 0 0 0 1px var(--ring-color, rgb(0 0 0 / 0.05)); }
 .ring-emerald-100 { --ring-color: #d1fae5; }
 .place-items-center { place-items: center; }
+.shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+
+/* Styled form controls for the CRM composers (matches the @kovojs/ui field/input
+   look: soft border, subtle shadow, brand focus ring). */
+.crm-input {
+  background: #fff;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  color: #0f172a;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.crm-input::placeholder {
+  color: #94a3b8;
+}
+
+.crm-input:focus-visible {
+  border-color: #0f172a;
+  box-shadow: 0 0 0 3px rgb(15 23 42 / 0.12);
+}
 
 .hover\:bg-emerald-700:hover { background: #047857; }
 .hover\:bg-orange-50:hover { background: #fff7ed; }
