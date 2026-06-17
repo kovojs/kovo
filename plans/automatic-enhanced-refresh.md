@@ -326,14 +326,25 @@ removes app-authored bookkeeping from the enhanced path.
       responses render affected live-target descriptors from generated renderers;
       `packages/server/src/app.test.ts` proves the same path through
       `createApp()` / `createRequestHandler()`.
+    - `packages/server/src/live-target-renderer.ts` adds the generated-code
+      helper that reloads declared component queries from serialized props and
+      calls `renderComponent()`; it is exported only from the internal wire
+      subpath for compiler-emitted modules.
+    - `packages/server/src/live-target-renderer.test.tsx` proves prop-derived
+      query args are loaded from descriptors and render through the component's
+      normal render function.
     - Verified with
       `pnpm exec vitest --run packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/mutation-wire.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Additional verification 2026-06-17:
+      `pnpm exec vitest --run packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts packages/server/src/mutation-wire.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
     - Remaining gaps: compiler-emitted generated renderer registries still need
-      to load declared query args from descriptors and render the real component
-      instances; the broad app-authored `mutationResponse` success-routing escape
-      hatch is still present until examples migrate.
+      to call the helper for real component modules; the broad app-authored
+      `mutationResponse` success-routing escape hatch is still present until
+      examples migrate.
 - [ ] **7. Migrate StackOverflow.**
   - Move presentational enrichment and detail filtering into declared queries or
     query arg bindings.
