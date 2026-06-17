@@ -394,7 +394,7 @@ export const AddToCartForm = component({
       `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
       `git diff --check` on 2026-06-17.
-- [ ] **8. Commerce reference cleanup.**
+- [x] **8. Commerce reference cleanup.**
   - Remove `fragmentTarget: true` and `kovo-fragment-target="cart-badge"` from
     `examples/commerce/src/components/cart-badge.tsx` once inference covers it.
   - Replace the add-to-cart form's manual `kovo-fragment-target` /
@@ -433,8 +433,27 @@ export const AddToCartForm = component({
       `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app-shell.test.ts source-truth.test.ts`,
       `pnpm --filter @kovojs/example-commerce test`, and
       `pnpm exec vitest --run packages/compiler/src/stamps.test.ts` on 2026-06-17.
-    - Remaining gap: commerce still passes no-JS/enhanced failure state through
-      explicit render context instead of typed `forms.addToCart.failure`.
+    - `examples/commerce/src/components/product-grid.tsx` now declares
+      `mutations: { addToCart }`, reads typed
+      `slots.forms.addToCart.failure`, and renders the add-to-cart form from the
+      typed form failure shape instead of server `MutationFail`.
+    - `examples/commerce/src/app.ts` renders full product-grid failures through
+      `renderComponentMutationFailure()` with submitted `productId` only as
+      repeated-form identity; `app.ts` and `app-shell.ts` render submitted-form
+      fragments through `renderAddToCartMutationFailureForm()`.
+    - Regenerated `examples/commerce/src/generated/product-grid.tsx` carries the
+      typed failure-slot render path while preserving compiler-emitted form
+      targets.
+    - Verified with
+      `pnpm exec vitest --run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app.rendering.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/app-shell.test.ts`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      no-match checks
+      `rg -n 'ProductGridRenderContext|renderAddToCartForm\\(product, failure|failure\\?: AddToCartFailureState' examples/commerce/src`,
+      `rg -n 'failure\\.error\\.code' examples/commerce/src/components/product-grid.tsx examples/commerce/src/generated/product-grid.tsx`,
+      and
+      `rg -n 'failureTarget|kovo-fragment-target="cart-badge"|fragmentTarget: true|action="/_m/cart/add"|data-mutation="cart/add"' examples/commerce/src/components examples/commerce/src/app.ts examples/commerce/src/app-shell.ts`
+      on 2026-06-17.
 - [ ] **9. Broader example/docs migration.**
   - Audit StackOverflow and CRM components that currently hand-author
     `kovo-fragment-target` and remove attributes where inference covers them.

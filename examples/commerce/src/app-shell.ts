@@ -31,8 +31,8 @@ import {
   orderHistoryQuery,
   paymentWebhook,
   productGridQuery,
-  renderAddToCartError,
-  renderAddToCartForm,
+  renderAddToCartMutationFailureError,
+  renderAddToCartMutationFailureForm,
   renderCartPage,
   renderCartPageBody,
   renderCommerceLoginForm,
@@ -316,8 +316,8 @@ async function renderAddToCartFailureFragment(
     ? (await db.select().from(products).where(eq(products.id, productId)).limit(1))[0]
     : undefined;
 
-  if (!product) return renderAddToCartError(failure);
-  return renderAddToCartForm(product, failure, request);
+  if (!product) return renderAddToCartMutationFailureError(failure);
+  return renderAddToCartMutationFailureForm(product, failure, request);
 }
 
 function productIdFromRawInput(rawInput: unknown): string | undefined {

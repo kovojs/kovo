@@ -13,6 +13,8 @@ import {
   metaFromQuery,
   mutation,
   notFound,
+  renderComponent,
+  renderComponentMutationFailure,
   renderDeferredStream,
   renderMutationEndpointResponse,
   renderPageHints,
@@ -422,9 +424,8 @@ export function resolveCommercePaymentWebhookSecret(
 export const commercePaymentWebhookSecret = resolveCommercePaymentWebhookSecret();
 export const commercePaymentReplayStore = createMemoryMutationReplayStore();
 
-export type AddToCartFailure = MutationFail<string, unknown>;
 export interface AddToCartFailureState {
-  failure: AddToCartFailure;
+  failure: MutationFail<string, unknown>;
   productId?: string;
 }
 
@@ -740,8 +741,11 @@ export const {
   ProductGrid,
   renderAddToCartError,
   renderAddToCartForm,
+  renderAddToCartMutationFailureError,
+  renderAddToCartMutationFailureForm,
   renderProductGridItems,
 } = productGridComponent;
+export type AddToCartFailure = productGridComponent.AddToCartFailure;
 
 export function renderProductGrid(
   result: ProductGridResult,
@@ -750,19 +754,43 @@ export function renderProductGrid(
   options: { readOnly?: boolean | undefined } = {},
 ): string {
   // SPEC.md section 4.2: the markup comes from the compiled TSX component;
-  // kovo-c and kovo-deps are compiler-derived (section 4.8). SPEC.md section
-  // 10.2 keeps query data separate from request-only form failure context.
-  return ProductGrid.definition.render(
-    { productGrid: result },
-    { failure: addToCartFailure, readOnly: options.readOnly, request },
-  );
+  // kovo-c and kovo-deps are compiler-derived (section 4.8). SPEC.md §6.3/§9.2
+  // keeps mutation failures in forms.addToCart.failure, separate from query data.
+  const slots = productGridRenderSlots(request, options, addToCartFailure?.productId);
+
+  if (addToCartFailure) {
+    return renderComponentMutationFailure(
+      ProductGrid,
+      { productGrid: result },
+      addToCartFailure.failure,
+      {
+        formName: 'addToCart',
+        slots,
+      },
+    );
+  }
+
+  return renderComponent(ProductGrid, { productGrid: result }, { slots });
+}
+
+function productGridRenderSlots(
+  request?: CommerceRequest,
+  options: { readOnly?: boolean | undefined } = {},
+  productId?: string,
+): productGridComponent.ProductGridRenderSlots {
+  return {
+    forms: { addToCart: { failure: null } },
+    ...(productId === undefined ? {} : { productId }),
+    ...(options.readOnly === undefined ? {} : { readOnly: options.readOnly }),
+    ...(request === undefined ? {} : { request }),
+  };
 }
 
 export function renderProductGridAppend(
   result: ProductGridResult,
   request?: CommerceRequest,
 ): string {
-  return renderProductGridItems(result, undefined, request);
+  return renderProductGridItems(result, undefined, null, request);
 }
 
 export async function renderProductGridPageFragment(
@@ -1078,9 +1106,9 @@ async function renderAddToCartFailureFragment(
   const productId = productIdFromRawInput(rawInput);
   const product = productId ? await loadProductForFailure(db, productId) : undefined;
 
-  if (!product) return renderAddToCartError(failure);
+  if (!product) return renderAddToCartMutationFailureError(failure);
 
-  return renderAddToCartForm(product, failure, request);
+  return renderAddToCartMutationFailureForm(product, failure, request);
 }
 
 function productIdFromRawInput(rawInput: unknown): string | undefined {
