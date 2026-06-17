@@ -1,3 +1,4 @@
+/** @jsxImportSource @kovojs/server */
 import {
   route,
   type CsrfValidationOptions,
@@ -34,12 +35,16 @@ import {
   renderCartPage,
   renderCartPageBody,
   renderCommerceLoginForm,
+  renderReceiptUploadForm,
   type CommerceAuthRequest,
   type CommerceDb,
   type CommerceRequest,
   type CommerceSession,
 } from './app.js';
+import { CartBadge } from './generated/cart-badge.js';
 import { liveTargetRenderers } from './generated/live-targets.js';
+import { OrderHistory } from './generated/order-history.js';
+import { ProductGrid } from './generated/product-grid.js';
 import { products } from './schema.js';
 
 export type CommerceShellRequest = Request & CommerceAuthRequest;
@@ -88,8 +93,15 @@ export const commerceHomeRoute = route('/', {
     description: 'Browse products and checkout with verifiable cart state.',
     title: 'Kovo Commerce',
   },
-  async page(_context, request: CommerceShellRequest) {
-    return `<div data-commerce-shell="cart">${await renderCartPageBody(request.db, undefined, request)}</div>`;
+  page(_context, request: CommerceShellRequest) {
+    return renderCommerceCartShell(
+      <>
+        <CartBadge />
+        <ProductGrid />
+        {renderCommerceOrderHistoryRegion(request)}
+        {renderReceiptUploadForm()}
+      </>,
+    );
   },
   stylesheets: commerceStylesheets,
 });
@@ -100,11 +112,27 @@ export const commerceCartRoute = route('/cart', {
     description: 'Browse products and checkout with verifiable cart state.',
     title: 'Kovo Commerce',
   },
-  async page(_context, request: CommerceShellRequest) {
-    return `<div data-commerce-shell="cart">${await renderCartPageBody(request.db, undefined, request)}</div>`;
+  page(_context, request: CommerceShellRequest) {
+    return renderCommerceCartShell(
+      <>
+        <CartBadge />
+        <ProductGrid />
+        {renderCommerceOrderHistoryRegion(request)}
+        {renderReceiptUploadForm()}
+      </>,
+    );
   },
   stylesheets: commerceStylesheets,
 });
+
+async function renderCommerceCartShell(children: unknown): Promise<string> {
+  return `<div data-commerce-shell="cart"><main class="mx-auto max-w-4xl">${await children}</main></div>`;
+}
+
+function renderCommerceOrderHistoryRegion(request: CommerceShellRequest): unknown {
+  if (request.session?.user?.id) return <OrderHistory />;
+  return OrderHistory.definition.render({ orderHistory: { items: [] } });
+}
 
 export const commerceLoginRoute = route('/login', {
   meta: {

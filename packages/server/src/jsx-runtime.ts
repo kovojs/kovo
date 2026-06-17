@@ -242,8 +242,13 @@ function componentRenderSlots(
   return {
     ...(props.children === undefined ? {} : { children: props.children }),
     ...(forms === undefined ? {} : { forms }),
+    ...jsxPropsToSlots(props),
     ...(request === undefined ? {} : { request }),
   };
+}
+
+function jsxPropsToSlots(props: JsxProps): ComponentRenderSlots {
+  return Object.fromEntries(Object.entries(props).filter(([name]) => name !== 'children'));
 }
 
 function isKovoComponent(value: unknown): value is KovoJsxComponent {

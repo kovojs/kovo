@@ -70,4 +70,28 @@ describe('route JSX pages', () => {
       status: 200,
     });
   });
+
+  it('forwards JSX component props into render slots', async () => {
+    const products = domain('product');
+    const productsQuery = query('products', {
+      load: () => ({ items: ['p1'] }),
+      reads: [products],
+    });
+    const ProductGrid = component({
+      queries: { products: productsQuery },
+      render: ({ products }: { products: { items: string[] } }, _state, slots) => (
+        <section data-read-only={slots.readOnly ? 'true' : 'false'}>
+          {products.items.join(',')}
+        </section>
+      ),
+    });
+    const productRoute = route('/products', {
+      page: () => <ProductGrid readOnly />,
+    });
+
+    await expect(renderRoutePageResponse(productRoute, {}, {})).resolves.toMatchObject({
+      body: '<section data-read-only="true">p1</section>',
+      status: 200,
+    });
+  });
 });

@@ -653,6 +653,34 @@ removes app-authored bookkeeping from the enhanced path.
     - Remaining gaps: route-page wrapper helpers and the transitional generated
       live-target registry import are still present; the app-shell still uses
       `mutationResponse` for auth redirects and add-to-cart failure rendering.
+    - Additional progress 2026-06-17:
+      `examples/commerce/src/app-shell.tsx` is now a TSX-authored route module
+      whose dynamic `/` and `/cart` pages compose `<CartBadge />`,
+      `<ProductGrid />`, and authenticated `<OrderHistory />` directly through
+      server JSX instead of loading cart/product/history data in the route page.
+      Anonymous public cart pages render the generated empty order-history host
+      without running the guarded `orderHistory` query, preserving the
+      `SECURITY_FINDINGS.md` M9 scoped-history guard for query and enhanced
+      mutation paths.
+    - `packages/server/src/jsx-runtime.ts` now forwards JSX component props into
+      render slots, so route JSX can pass component options such as
+      `<ProductGrid readOnly />` without app-authored helper plumbing.
+      `examples/commerce/tsconfig.json`, `examples/commerce/vite.config.ts`,
+      `examples/commerce/scripts/{demo-serve,export-static}.mjs`, and
+      `examples/commerce/src/app-shell.test.ts` now load the Commerce app shell
+      as `/src/app-shell.tsx`.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/component-render.test.tsx`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.rendering.test.ts app.add-to-cart.test.ts app.queries.test.ts`,
+      `pnpm --filter @kovojs/example-commerce test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gaps: static export and the legacy `renderCartPage()` failure
+      page path still use `renderCartPageBody`; the transitional generated
+      live-target registry import is still present; the app-shell still uses
+      `mutationResponse` for auth redirects and add-to-cart failure rendering.
 - [ ] **10. Docs/tutorial update.**
   - Teach the authoring model as "declare queries and serializable props; Kovo
     updates enhanced mutations from server truth automatically."

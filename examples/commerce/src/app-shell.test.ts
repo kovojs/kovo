@@ -109,7 +109,7 @@ describe('commerce app shell HTTP entry', () => {
     expect(exportScriptSource).not.toContain('commerceStaticExportShell?.app');
     expect(exportScriptSource).not.toContain("ssrLoadModule('@kovojs/server')");
 
-    const appShellSource = await readFile(path.join(commerceRoot, 'src/app-shell.ts'), 'utf8');
+    const appShellSource = await readFile(path.join(commerceRoot, 'src/app-shell.tsx'), 'utf8');
     expect(appShellSource).toContain("from '@kovojs/server/app-shell/client-modules'");
     expect(appShellSource).toContain("from '@kovojs/server/app-shell/core'");
     expect(appShellSource).toContain("from '@kovojs/server/app-shell/node'");
@@ -153,6 +153,7 @@ describe('commerce app shell HTTP entry', () => {
     expect(plugin.name).toBe('kovo-commerce-app-shell-dev-loader');
     expect(delegatedOptions).toEqual([
       {
+        moduleId: '/src/app-shell.tsx',
         name: 'kovo-commerce-app-shell-dev',
         nodeHandlerExportName: 'commerceNodeHandler',
         order: 'post',
@@ -190,7 +191,7 @@ describe('commerce app shell HTTP entry', () => {
     server = createServer(vite.middlewares);
 
     try {
-      const viteShell = (await vite.ssrLoadModule('/src/app-shell.ts')) as {
+      const viteShell = (await vite.ssrLoadModule('/src/app-shell.tsx')) as {
         commerceAppShell: ReturnType<typeof createCommerceAppShell>;
       };
       await listen(server);
@@ -381,7 +382,7 @@ describe('commerce app shell HTTP entry', () => {
     expect(document.headers.get('link')).toContain('</assets/styles.css>; rel=preload; as=style');
     expect(html).toContain('<!doctype html>');
     expectCommerceShellDocument(html);
-    expect(kovoFragmentFacts(html, 'cart-badge')).toHaveLength(1);
+    expect(htmlElementCount(html, { attrs: { 'kovo-fragment-target': 'cart-badge' } })).toBe(1);
 
     const query = await fetch(`${origin}/_q/cart`);
     expect(query.status).toBe(200);
