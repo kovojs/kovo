@@ -50,15 +50,38 @@ compiler-quality gaps found during the 2026-06-16 audit.
         packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/handler-lowering.test.ts`
         passed; `pnpm exec tsc --noEmit --pretty false` passed.
 
-- [ ] Retire or clearly quarantine the old source-normalization render-equivalence path.
-  - [ ] Audit every import and call site of `renderEquivalenceCheck`,
+- [x] Retire or clearly quarantine the old source-normalization render-equivalence path.
+  - [x] Audit every import and call site of `renderEquivalenceCheck`,
         `semanticRenderEquivalenceCheck`, and `renderEquivalenceSourceCheck`.
-  - [ ] Remove `renderEquivalenceSourceCheck()` from production exports or move it behind a clearly
+  - [x] Remove `renderEquivalenceSourceCheck()` from production exports or move it behind a clearly
         named test-support boundary.
-  - [ ] Add a static/kovo-check guard proving production compile/check code cannot use
+  - [x] Add a static/kovo-check guard proving production compile/check code cannot use
         source-normalization as semantic evidence.
-  - [ ] Keep any remaining regex normalization tests explicitly labeled as legacy/test-only.
-  - [ ] Record verification commands and grep evidence under this item.
+  - [x] Keep any remaining regex normalization tests explicitly labeled as legacy/test-only.
+  - [x] Record verification commands and grep evidence under this item.
+  - Evidence (2026-06-17): `packages/compiler/src/emit/server.ts` exports
+        `semanticRenderEquivalenceCheck` only; the previous `renderEquivalenceCheck`,
+        `renderEquivalenceSourceCheck`, `RenderEquivalenceIgnoredSpan`,
+        `removeIgnoredSpans`, and `normalizeRenderEquivalenceSource` production path was removed.
+  - Evidence (2026-06-17): `packages/compiler/src/compile-component.test.ts` now exercises
+        generated `renderSource()` execution through `semanticRenderEquivalenceCheck`, not the
+        removed source comparator.
+  - Evidence (2026-06-17): `packages/compiler/src/render-equivalence-boundary.test.ts` scans
+        non-test TypeScript files under `packages/compiler/src` and `packages/cli/src` and fails on
+        `renderEquivalenceSourceCheck`, `renderEquivalenceCheck(`,
+        `normalizeRenderEquivalenceSource`, `expectedIgnoredSpans`, or `removeIgnoredSpans`; it also
+        asserts `compile.ts` calls
+        `semanticRenderEquivalenceCheck(fileNames.server, originalModel, serverModule.executableSource)`.
+  - Evidence (2026-06-17): `rg -n
+        "renderEquivalenceCheck|renderEquivalenceSourceCheck|normalizeRenderEquivalenceSource|expectedIgnoredSpans|removeIgnoredSpans|semanticRenderEquivalenceCheck"
+        packages/compiler/src packages/cli/src` found no source-normalization helper references
+        outside the new test's forbidden-pattern list; remaining production hits are
+        `semanticRenderEquivalenceCheck`, `renderEquivalenceChecks` result plumbing, and
+        `RenderEquivalenceCheck` types.
+  - Evidence (2026-06-17): `pnpm exec vitest --run
+        packages/compiler/src/compile-component.test.ts
+        packages/compiler/src/render-equivalence-boundary.test.ts` passed, and
+        `pnpm exec tsc --noEmit --pretty false` passed.
 
 ## Structural IR
 

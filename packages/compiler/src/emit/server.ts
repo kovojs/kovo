@@ -55,21 +55,6 @@ export function serverRenderLowering(
   return serverRenderPatches(handlers, model, domComponentName);
 }
 
-export function renderEquivalenceCheck(
-  artifact: string,
-  expected: string,
-  executableSource: string,
-): RenderEquivalenceCheck {
-  const actual = emittedServerRenderSource(executableSource);
-
-  return {
-    actual,
-    artifact,
-    expected,
-    ok: actual === expected,
-  };
-}
-
 export function semanticRenderEquivalenceCheck(
   artifact: string,
   expectedModel: ComponentModuleModel,
@@ -88,52 +73,6 @@ export function semanticRenderEquivalenceCheck(
     expected,
     ok: actual === expected,
   };
-}
-
-export function renderEquivalenceSourceCheck(
-  artifact: string,
-  expectedSource: string,
-  actualSource: string,
-  options: { expectedIgnoredSpans?: readonly RenderEquivalenceIgnoredSpan[] } = {},
-): RenderEquivalenceCheck {
-  const expected = normalizeRenderEquivalenceSource(
-    removeIgnoredSpans(expectedSource, options.expectedIgnoredSpans ?? []),
-  );
-  const actual = normalizeRenderEquivalenceSource(actualSource);
-
-  return {
-    actual,
-    artifact,
-    expected,
-    ok: actual === expected,
-  };
-}
-
-export interface RenderEquivalenceIgnoredSpan {
-  end: number;
-  start: number;
-}
-
-function removeIgnoredSpans(
-  source: string,
-  spans: readonly RenderEquivalenceIgnoredSpan[],
-): string {
-  return [...spans]
-    .toSorted((left, right) => right.start - left.start)
-    .reduce((next, span) => `${next.slice(0, span.start)}${next.slice(span.end)}`, source);
-}
-
-function normalizeRenderEquivalenceSource(source: string): string {
-  return source
-    .replace(
-      /\s+(?:kovo-c|kovo-deps|kovo-state|kovo-param-types|data-p-[\w-]+|on:[\w-]+)=(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+)/g,
-      '',
-    )
-    .replace(/\s+(data-bind(?::[\w-]+)?)(?:=(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+))?/g, ' $1')
-    .replace(/\s+on[A-Z][\w-]*=(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+)/g, '')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([>/])/g, '$1')
-    .trim();
 }
 
 function emittedServerRenderSource(serverSource: string): string {

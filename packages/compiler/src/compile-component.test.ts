@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
-import {
-  emitServerModule,
-  renderEquivalenceCheck,
-  semanticRenderEquivalenceCheck,
-} from './emit/server.js';
+import { emitServerModule, semanticRenderEquivalenceCheck } from './emit/server.js';
 import { parseComponentModule } from './scan/parse.js';
 import { compileFixture } from './test-support.js';
 
@@ -170,26 +166,38 @@ export const CartBadge = component({
     );
   });
 
-  it('executes generated renderSource for render-equivalence checks', () => {
-    const expected = '<cart-badge>u0032</cart-badge>';
+  it('executes generated renderSource for semantic render-equivalence checks', () => {
+    const expectedSource = `
+import { component } from '@kovojs/core';
+
+export const CartBadge = component({
+  render: () => <cart-badge>u0032</cart-badge>,
+});
+`;
     const executableSource = [
       '// @kovojs-ir',
       'function renderSource() {',
-      '  return `<cart-badge>\\u0032</cart-badge>`;',
+      '  return `',
+      "import { component } from '@kovojs/core';",
+      '',
+      'export const CartBadge = component({',
+      '  render: () => <cart-badge>\\u0032</cart-badge>,',
+      '});',
+      '`;',
       '}',
       '',
     ].join('\n');
 
-    const check = renderEquivalenceCheck(
+    const check = semanticRenderEquivalenceCheck(
       'components/cart/cart-badge.server.js',
-      expected,
+      parseComponentModule('components/cart/cart-badge.tsx', expectedSource),
       executableSource,
     );
 
-    expect(check).toEqual({
+    expect(check).toMatchObject({
       actual: '<cart-badge>2</cart-badge>',
       artifact: 'components/cart/cart-badge.server.js',
-      expected,
+      expected: '<cart-badge>u0032</cart-badge>',
       ok: false,
     });
   });
