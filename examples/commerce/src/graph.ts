@@ -1,4 +1,4 @@
-import type { KovoExplainInput, TouchGraph } from '@kovojs/core';
+import type { KovoExplainInput, TouchGraph } from '@kovojs/core/internal/graph';
 
 import { commerceCartPageMeta } from './page-meta.js';
 

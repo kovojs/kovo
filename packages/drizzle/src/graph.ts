@@ -1,12 +1,5 @@
-import {
-  diagnosticDefinitions,
-  type DiagnosticCode,
-  type DiagnosticSeverity,
-  type ReadSite,
-  type TouchGraph,
-  type TouchGraphEntry,
-  type TouchSite,
-} from '@kovojs/core';
+import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
+import type { ReadSite, TouchGraph, TouchGraphEntry, TouchSite } from '@kovojs/core/internal/graph';
 
 interface GraphDomainTableAnnotation {
   domain: string;

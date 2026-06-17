@@ -1,4 +1,4 @@
-import type { AlgebraicQueryShape, SymbolicEffect } from '@kovojs/core';
+import type { AlgebraicQueryShape, SymbolicEffect } from '@kovojs/core/internal/derivation';
 import { describe, expect, it } from 'vitest';
 
 import { deriveOptimistic } from './derive.js';

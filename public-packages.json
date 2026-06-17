@@ -11,7 +11,11 @@
           "."
         ],
         "generated": [],
-        "internal": []
+        "internal": [
+          "./internal/derivation",
+          "./internal/graph",
+          "./internal/package-prefix"
+        ]
       },
       "apiRef": {
         "order": 1,

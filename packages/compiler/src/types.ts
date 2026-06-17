@@ -1,5 +1,5 @@
-import type { ComponentExplain, KovoExplainInput } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core';
+import type { ComponentExplain, KovoExplainInput } from '@kovojs/core/internal/graph';
 
 import type { ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';

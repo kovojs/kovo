@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import type { KovoExplainInput } from '@kovojs/core';
+import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 
 import { kovoCheck, kovoExplain } from '../../../packages/cli/src/index.js';
 import { createKovoProject, main, writeKovoProject } from './index.js';

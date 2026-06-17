@@ -1,11 +1,11 @@
+export type { DiagnosticCode } from '@kovojs/core';
 export type {
-  DiagnosticCode,
   ReadSite,
   TouchGraph,
   TouchGraphEntry,
   TouchSite,
   UnresolvedWriteSite,
-} from '@kovojs/core';
+} from '@kovojs/core/internal/graph';
 
 export type {
   KovoDomainTableAnnotation,

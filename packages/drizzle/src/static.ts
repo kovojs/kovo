@@ -2,40 +2,39 @@ export type {
   AlgebraicField,
   AlgebraicQueryShape,
   DerivationResult,
-  DiagnosticCode,
   OrderByColumn,
   PuntReason,
-  ReadSite,
   Rowset,
   RowsetFilter,
   RowWitness,
   SymbolicEffect,
   SymbolicMatch,
   SymbolicValue,
+} from '@kovojs/core/internal/derivation';
+export type { DiagnosticCode } from '@kovojs/core';
+export type {
+  ReadSite,
   TouchGraph,
   TouchGraphEntry,
   TouchSite,
   UnresolvedWriteSite,
-} from '@kovojs/core';
+} from '@kovojs/core/internal/graph';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  diagnosticDefinitionText,
-  diagnosticDefinitions,
-  type AlgebraicField,
-  type AlgebraicQueryShape,
-  type ArithOp,
-  type JsonValue,
-  type OrderByColumn,
-  type Rowset,
-  type RowsetFilter,
-  type RowWitness,
-  type SymbolicEffect,
-  type SymbolicMatch,
-  type SymbolicValue,
-  type TouchGraph,
-  type TouchGraphEntry,
-} from '@kovojs/core';
+import { diagnosticDefinitionText, diagnosticDefinitions, type JsonValue } from '@kovojs/core';
+import type {
+  AlgebraicField,
+  AlgebraicQueryShape,
+  ArithOp,
+  OrderByColumn,
+  Rowset,
+  RowsetFilter,
+  RowWitness,
+  SymbolicEffect,
+  SymbolicMatch,
+  SymbolicValue,
+} from '@kovojs/core/internal/derivation';
+import type { TouchGraph, TouchGraphEntry } from '@kovojs/core/internal/graph';
 import {
   Node,
   Project,

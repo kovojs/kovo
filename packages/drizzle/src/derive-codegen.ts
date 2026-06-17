@@ -1,4 +1,4 @@
-import type { PatchOp, PatchProgram, SymbolicValue } from '@kovojs/core';
+import type { PatchOp, PatchProgram, SymbolicValue } from '@kovojs/core/internal/derivation';
 
 // SPEC.md §10.4/§10.5 Phase 3 — lower a Stage-3 PatchProgram into a committed,
 // reviewable, overridable transform module (`generated/optimistic/*.ts`). This is

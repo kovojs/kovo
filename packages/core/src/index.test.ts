@@ -20,6 +20,7 @@ import {
   type FormInput,
   type JsonValue,
 } from './index.js';
+import * as coreRoot from './index.js';
 
 interface TestSchema<Value> {
   parse(input: unknown): Value;
@@ -77,6 +78,13 @@ declare module './index.js' {
 }
 
 describe('core authoring APIs', () => {
+  it('keeps internal graph and derivation helpers off the root surface', () => {
+    expect('applyPatchProgram' in coreRoot).toBe(false);
+    expect('derived' in coreRoot).toBe(false);
+    expect('packageComponentPrefixFactFromPackageManifest' in coreRoot).toBe(false);
+    expect('validateKovoExplainInput' in coreRoot).toBe(false);
+  });
+
   it('preserves component definitions for compiler analysis', () => {
     const cart = query<'cart', { count: number }>('cart');
     const CartBadge = component({

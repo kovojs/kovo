@@ -1,0 +1,23 @@
+export type {
+  AlgebraicField,
+  AlgebraicQueryShape,
+  ApplyPatchOptions,
+  ArithOp,
+  DerivationResult,
+  DerivationStatus,
+  OrderByColumn,
+  PatchOp,
+  PatchProgram,
+  PlaceholderKind,
+  PuntReason,
+  PushPosition,
+  RowMatch,
+  Rowset,
+  RowsetFilter,
+  RowWitness,
+  SymbolicEffect,
+  SymbolicKeyEq,
+  SymbolicMatch,
+  SymbolicValue,
+} from '../derivation.js';
+export { applyPatchProgram, derived, punt, puntReasonLabel } from '../derivation.js';

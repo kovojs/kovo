@@ -1,10 +1,5 @@
-import {
-  diagnosticDefinitions,
-  type DiagnosticCode,
-  type DiagnosticSeverity,
-  type TouchGraph,
-  type TouchSite,
-} from '@kovojs/core';
+import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
+import type { TouchGraph, TouchSite } from '@kovojs/core/internal/graph';
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 
 export type { DiagnosticCode } from '@kovojs/core';

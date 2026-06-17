@@ -9,65 +9,6 @@ export {
   diagnosticDefinitionText,
   isDiagnosticCode,
 } from './diagnostics.js';
-export type {
-  AlgebraicField,
-  AlgebraicQueryShape,
-  ApplyPatchOptions,
-  ArithOp,
-  DerivationResult,
-  DerivationStatus,
-  OrderByColumn,
-  PatchOp,
-  PatchProgram,
-  PlaceholderKind,
-  PuntReason,
-  PushPosition,
-  RowMatch,
-  Rowset,
-  RowsetFilter,
-  RowWitness,
-  SymbolicEffect,
-  SymbolicKeyEq,
-  SymbolicMatch,
-  SymbolicValue,
-} from './derivation.js';
-export { applyPatchProgram, derived, punt, puntReasonLabel } from './derivation.js';
-export type {
-  AttributeMergeExplain,
-  CaptureChannel,
-  ComponentExplain,
-  DeriveExplain,
-  EndpointExplain,
-  EventPayloadFact,
-  FixpointCheck,
-  KovoCheckInput,
-  KovoExplainInput,
-  GraphInputValidationError,
-  HandlerExplain,
-  MutationExplain,
-  OptimisticCoverage,
-  PackageComponentPrefixExplain,
-  OwnerDomainFact,
-  PageExplain,
-  PageMetaExplain,
-  PlatformSubstitutionExplain,
-  QueryDataFact,
-  QueryReadSet,
-  ReadSite,
-  RenderEquivalenceCheck,
-  ScopeAuditFact,
-  SemanticLint,
-  SourcePosition,
-  StaticDiagnosticFact,
-  TouchGraph,
-  TouchGraphEntry,
-  TouchSite,
-  TriggerExplain,
-  UnresolvedWriteSite,
-  UpdateCoverageFact,
-  VerificationDiagnosticFact,
-} from './graph.js';
-export { validateKovoExplainInput } from './graph.js';
 export type { QueryDelta, QueryDeltaListMeta, QueryListDelta } from './query-delta.js';
 export {
   applyQueryDelta,
@@ -75,8 +16,6 @@ export {
   QueryDeltaApplyError,
   queryDeltaIsSmaller,
 } from './query-delta.js';
-export type { PackageComponentPrefixManifestOptions } from './package-prefix.js';
-export { packageComponentPrefixFactFromPackageManifest } from './package-prefix.js';
 export type {
   FileSystemStorageOptions,
   MemoryStorageOptions,

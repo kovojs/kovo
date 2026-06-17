@@ -6,18 +6,33 @@
   ],
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./internal/derivation": "./src/internal/derivation.ts",
+    "./internal/graph": "./src/internal/graph.ts",
+    "./internal/package-prefix": "./src/internal/package-prefix.ts"
   },
   "publishConfig": {
     "exports": {
       ".": {
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
+      },
+      "./internal/derivation": {
+        "types": "./dist/internal/derivation.d.mts",
+        "default": "./dist/internal/derivation.mjs"
+      },
+      "./internal/graph": {
+        "types": "./dist/internal/graph.d.mts",
+        "default": "./dist/internal/graph.mjs"
+      },
+      "./internal/package-prefix": {
+        "types": "./dist/internal/package-prefix.d.mts",
+        "default": "./dist/internal/package-prefix.mjs"
       }
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/index.ts --dts",
+    "build:dist": "vp pack src/index.ts src/internal/derivation.ts src/internal/graph.ts src/internal/package-prefix.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "devDependencies": {

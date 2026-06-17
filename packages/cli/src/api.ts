@@ -13,7 +13,8 @@ export { kovoCheck, kovoExplain } from './index.js';
 
 // Graph input shapes are owned and documented by @kovojs/core; re-export them
 // directly so the verifier signatures stay self-contained for `.` consumers.
-export type { DiagnosticCode, KovoCheckInput, KovoExplainInput } from '@kovojs/core';
+export type { DiagnosticCode } from '@kovojs/core';
+export type { KovoCheckInput, KovoExplainInput } from '@kovojs/core/internal/graph';
 
 export type {
   ExplainKind,
