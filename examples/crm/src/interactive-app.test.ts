@@ -1,9 +1,6 @@
 import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { CONTACT_LIST_TARGET } from './generated/contacts.js';
-import { DEAL_DETAIL_TARGET } from './generated/deal-detail.js';
-import { PIPELINE_TARGET } from './generated/pipeline.js';
 import { buildCrmInteractiveApp } from './interactive-app.js';
 import { contacts, deals } from './schema.js';
 
@@ -14,11 +11,23 @@ import { contacts, deals } from './schema.js';
 // the re-rendered fragment carries the new server truth. The handler attaches the
 // db + a demo session, so the mutations' `guards.authed` guard passes.
 
+const contactsTarget = 'contacts-region';
+const contactsComponent = 'components/contacts/contacts-region';
+const pipelineTarget = 'pipeline-region';
+const pipelineComponent = 'components/pipeline/pipeline-region';
+const dealDetailTarget = 'deal-detail-region';
+const dealDetailComponent = 'components/deal-detail/deal-detail-region';
+
+function liveHeader(target: string, component: string, props: Record<string, unknown> = {}): string {
+  return `${target}#${component}:${JSON.stringify(props)}`;
+}
+
 async function postForm(
   handler: (request: Request) => Promise<Response>,
   key: string,
   fields: Record<string, string>,
   targets: string,
+  liveTargets: string,
 ): Promise<{ status: number; html: string }> {
   const response = await handler(
     new Request(`http://example.test/_m/${key}`, {
@@ -27,6 +36,7 @@ async function postForm(
         'content-type': 'application/x-www-form-urlencoded',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': `${key}-${Object.values(fields).join('-')}`,
+        'Kovo-Live-Targets': liveTargets,
         'Kovo-Targets': targets,
       },
       body: new URLSearchParams(fields),
@@ -44,11 +54,12 @@ describe('crm interactive app', () => {
       handler,
       'addContact',
       { id: 'c-test-1', name: 'Edsger Dijkstra', email: 'edsger@demo.example.com', ownerId: 'u1' },
-      CONTACT_LIST_TARGET,
+      `${contactsTarget}=contactList`,
+      liveHeader(contactsTarget, contactsComponent),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${CONTACT_LIST_TARGET}"`);
+    expect(html).toContain(`target="${contactsTarget}"`);
     expect(html).toContain('Edsger Dijkstra');
 
     const rows = await db.select().from(contacts);
@@ -67,11 +78,12 @@ describe('crm interactive app', () => {
       handler,
       'createDeal',
       { id: 'd-test-1', contactId: contact.id, stage: 'open', amount: '7500', ownerId: 'u1' },
-      PIPELINE_TARGET,
+      `${pipelineTarget}=contactList openDeals pipelineByStage`,
+      liveHeader(pipelineTarget, pipelineComponent),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${PIPELINE_TARGET}"`);
+    expect(html).toContain(`target="${pipelineTarget}"`);
 
     const dealRows = await db.select().from(deals);
     expect(dealRows).toHaveLength(beforeDeals + 1);
@@ -89,11 +101,12 @@ describe('crm interactive app', () => {
       handler,
       'moveDeal',
       { dealId: 'd1', stage: 'proposal' },
-      DEAL_DETAIL_TARGET,
+      `${dealDetailTarget}=activityList contactList dealList`,
+      liveHeader(dealDetailTarget, dealDetailComponent, { dealId: 'd1' }),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${DEAL_DETAIL_TARGET}"`);
+    expect(html).toContain(`target="${dealDetailTarget}"`);
 
     const [after] = await db.select().from(deals).where(eq(deals.id, 'd1')).limit(1);
     expect(after?.stage).toBe('proposal');
@@ -109,11 +122,12 @@ describe('crm interactive app', () => {
       handler,
       'closeDeal',
       { dealId: 'd1' },
-      DEAL_DETAIL_TARGET,
+      `${dealDetailTarget}=activityList contactList dealList`,
+      liveHeader(dealDetailTarget, dealDetailComponent, { dealId: 'd1' }),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${DEAL_DETAIL_TARGET}"`);
+    expect(html).toContain(`target="${dealDetailTarget}"`);
 
     const [after] = await db.select().from(deals).where(eq(deals.id, 'd1')).limit(1);
     expect(after?.stage).toBe('won');

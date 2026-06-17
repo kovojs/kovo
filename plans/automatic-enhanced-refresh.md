@@ -510,7 +510,31 @@ removes app-authored bookkeeping from the enhanced path.
   - Route pages should compose `<PipelineRegion />`, `<ContactsRegion />`, and
     `<DealDetailRegion dealId={params.id} />` directly rather than calling
     `render*Page`, `render*Region`, or `render*RegionFromDb` helpers.
-  - Evidence: pending.
+  - Progress 2026-06-17:
+    - `examples/crm/src/interactive-app.ts` no longer defines an ordinary
+      `mutationResponse` switch, `fragmentRenderers`, generated target constant
+      imports, `render*RegionFromDb`, or `readInputField`. It registers
+      `createApp({ liveTargetRenderers, queries: crmQueries })` so ordinary
+      enhanced mutation success refreshes visible query-backed regions from
+      generated server truth.
+    - `examples/crm/scripts/emit-components.mjs` now emits
+      `src/generated/live-targets.ts`, which collects generated
+      `*$liveTargetRenderer` exports with the framework-owned collector.
+    - `examples/crm/src/queries.ts` registers all CRM query definitions for
+      app-level rerun selection while keeping the local Drizzle extractor-facing
+      loader shape; `examples/crm/src/mutations.ts` declares domain touches for
+      `addContact`, `createDeal`, `moveDeal`, and `closeDeal`.
+    - `examples/crm/src/interactive-app.test.ts` posts `Kovo-Live-Targets`
+      descriptors and proves real PGlite mutation responses render affected
+      contact, pipeline, and deal-detail fragments from generated renderers.
+    - Verified with
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gaps: route-page wrapper helpers and the transitional generated
+      live-target registry import are still present.
 - [ ] **9. Migrate commerce.**
   - Split the large commerce integration module so app-authored page/mutation
     code is separate from auth/webhook/test helpers.

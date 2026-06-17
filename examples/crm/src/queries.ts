@@ -11,9 +11,11 @@ import { activities, contacts, deals } from './schema.js';
 // extractor classifies the inline Drizzle select straight from the 2nd loader
 // parameter (`db`), and the loaders run directly over the real PGlite db in the
 // commuting tests. The key/`reads`/loader shape the extractor reads is identical.
+type CrmQueryLoadContext = CrmDb | { db?: CrmDb; request?: { db?: CrmDb } };
+
 interface QueryDefinition<Key extends string, Value> {
   key: Key;
-  load: (input: unknown, db: CrmDb) => Promise<Value>;
+  load: (input: unknown, context: CrmQueryLoadContext) => Promise<Value>;
   reads: readonly Domain<string>[];
 }
 
@@ -24,7 +26,13 @@ function query<const Key extends string, Value>(
     reads: readonly Domain<string>[];
   },
 ): QueryDefinition<Key, Value> {
-  return { key, ...definition };
+  return {
+    key,
+    reads: definition.reads,
+    load(input, context) {
+      return definition.load(input, crmQueryDb(context));
+    },
+  };
 }
 
 // SPEC.md §10.2 / §10.5 Stage 2: every read couples a stable key, an inline
@@ -193,4 +201,15 @@ export const crmQueries = [
   contactDealCountQuery,
   openDealsQuery,
   pipelineByStageQuery,
+  activityListQuery,
 ];
+
+function crmQueryDb(context: CrmQueryLoadContext): CrmDb {
+  if ('select' in context) return context;
+
+  const db = context.db ?? context.request?.db;
+  if (!db) {
+    throw new Error('CRM query loaders require a CrmDb or context.db/request.db');
+  }
+  return db;
+}

@@ -13,6 +13,7 @@ import {
   type MoveDealInput,
 } from './forms.js';
 import { contacts, deals } from './schema.js';
+import { contact, deal } from './domains.js';
 
 import { addContactDerivedOptimistic } from './generated/optimistic/add-contact.js';
 import { createDealDerivedOptimistic } from './generated/optimistic/create-deal.js';
@@ -68,6 +69,7 @@ export const addContact = mutation('addContact', {
     email: s.string(),
     ownerId: s.string(),
   }),
+  registry: { touches: [contact] },
   handler: addContactHandler,
 });
 
@@ -103,6 +105,7 @@ export const createDeal = mutation('createDeal', {
     amount: s.number().int().min(0),
     ownerId: s.string(),
   }),
+  registry: { touches: [contact, deal] },
   handler: createDealHandler,
 });
 
@@ -155,6 +158,7 @@ export const moveDeal = mutation('moveDeal', {
     dealId: s.string(),
     stage: s.string(),
   }),
+  registry: { touches: [deal] },
   handler: moveDealHandler,
 });
 
@@ -223,6 +227,7 @@ export const closeDeal = mutation('closeDeal', {
   input: s.object({
     dealId: s.string(),
   }),
+  registry: { touches: [deal] },
   handler: closeDealHandler,
 });
 
