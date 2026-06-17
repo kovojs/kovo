@@ -836,10 +836,7 @@
       "exports": ["ToggleGroup", "ToggleGroupItem", "ToggleGroupButton"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
           "CollectionOrientation",
-          "defineVariants",
           "TextDirection",
           "toggleGroupButtonAttributes",
           "ToggleGroupItem",
@@ -848,6 +845,7 @@
           "ToggleGroupType",
           "ToggleGroupValue"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []
@@ -871,9 +869,6 @@
       "exports": ["Toolbar", "ToolbarItem", "ToolbarButton"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
-          "defineVariants",
           "TextDirection",
           "toolbarButtonAttributes",
           "ToolbarItem",
@@ -881,6 +876,7 @@
           "ToolbarOrientation",
           "toolbarRootAttributes"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

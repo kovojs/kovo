@@ -343,11 +343,15 @@ describe('kovo add', () => {
       expect(toggle).toContain('export const toggleStyles =');
       expect(toggle).toContain('style?: style.StyleInput');
       expect(toggleGroup).toContain('export const ToggleGroup = component({');
-      expect(toggleGroup).toContain('export const toggleGroupClassNames = defineVariants');
+      expect(toggleGroup).toContain("import * as style from '@kovojs/style';");
+      expect(toggleGroup).toContain('export const toggleGroupStyles = style.create');
+      expect(toggleGroup).toContain('styles?: ToggleGroupStyleOverrides');
       expect(toast).toContain('export const Toast = component({');
       expect(toast).toContain('export const toastClassNames = defineVariants');
       expect(toolbar).toContain('export const Toolbar = component({');
-      expect(toolbar).toContain('export const toolbarClassNames = defineVariants');
+      expect(toolbar).toContain("import * as style from '@kovojs/style';");
+      expect(toolbar).toContain('export const toolbarStyles = style.create');
+      expect(toolbar).toContain('styles?: ToolbarStyleOverrides');
       const vendoredSource = [
         accordion,
         alert,

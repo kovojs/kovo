@@ -55,10 +55,6 @@ import {
   otpFieldGroupClasses,
   otpFieldHiddenInputClasses,
   otpFieldInputClasses,
-  toggleGroupButtonClasses,
-  toggleGroupItemClasses,
-  toolbarButtonClasses,
-  toolbarItemClasses,
 } from './index.js';
 
 describe('@kovojs/ui styled package foundation', () => {
@@ -275,12 +271,13 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(item).toContain('data-state="pressed" id="bold-item"');
     expect(button).toContain('aria-pressed="true"');
     expect(button).toContain('data-state="pressed"');
+    expect(button).toContain('data-style-src="toggle-group.tsx#button"');
     expect(button).toContain('id="bold-button" tabIndex="0" type="button" value="bold"');
     expect(disabledButton).toContain('aria-pressed="false"');
     expect(disabledButton).toContain('data-disabled="" data-state="off" disabled');
     expect(disabledButton).toContain('tabIndex="-1" type="button" value="strike"');
-    expect(toggleGroupItemClasses.join(' ')).toContain('data-[disabled]:opacity-50');
-    expect(toggleGroupButtonClasses.join(' ')).toContain('data-[state=pressed]:bg-white');
+    expect(item).toContain('data-style-src="toggle-group.tsx#item"');
+    expect(root).toContain('data-style-src="toggle-group.tsx#root"');
   });
 
   it('wraps the headless toolbar primitive as styled roving controls', () => {
@@ -325,12 +322,13 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(item).toContain('id="bold-item"');
     expect(button).toContain('aria-pressed="true"');
     expect(button).toContain('data-pressed="true"');
+    expect(button).toContain('data-style-src="toolbar.tsx#button"');
     expect(button).toContain('id="bold-button" tabIndex="0" type="button" value="bold"');
     expect(disabledButton).toContain('aria-pressed="false"');
     expect(disabledButton).toContain('data-disabled="" data-pressed="false" disabled');
     expect(disabledButton).toContain('tabIndex="-1" type="button" value="link"');
-    expect(toolbarItemClasses.join(' ')).toContain('data-[disabled]:opacity-50');
-    expect(toolbarButtonClasses.join(' ')).toContain('data-[pressed=true]:bg-neutral-950');
+    expect(item).toContain('data-style-src="toolbar.tsx#item"');
+    expect(root).toContain('data-style-src="toolbar.tsx#root"');
   });
 
   it('wraps the headless number-field primitive as a styled native number input', () => {

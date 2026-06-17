@@ -1038,13 +1038,15 @@ describe('gallery demo fixtures', () => {
     expect(toast.html).toContain('data-dismiss=""');
 
     expect(toggleGroup.html).toContain('data-ui-demo="toggle-group"');
-    expect(toggleGroup.html).toContain('rounded-md border border-neutral-200 bg-neutral-100');
-    expect(toggleGroup.html).toContain('data-[state=pressed]:bg-white');
+    expect(toggleGroup.html).toContain('class="kv-toggle-group-');
+    expect(toggleGroup.html).toContain('data-style-src="toggle-group.tsx#root"');
+    expect(toggleGroup.html).toContain('data-style-src="toggle-group.tsx#button"');
     expect(toggleGroup.html).toContain('gallery-toggle-group-bold');
 
     expect(toolbar.html).toContain('data-ui-demo="toolbar"');
-    expect(toolbar.html).toContain('rounded-md border border-neutral-200 bg-white');
-    expect(toolbar.html).toContain('data-[pressed=true]:bg-neutral-950');
+    expect(toolbar.html).toContain('class="kv-toolbar-');
+    expect(toolbar.html).toContain('data-style-src="toolbar.tsx#root"');
+    expect(toolbar.html).toContain('data-style-src="toolbar.tsx#button"');
     expect(toolbar.html).toContain('gallery-toolbar-bold');
   });
 });

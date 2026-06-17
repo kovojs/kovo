@@ -1,18 +1,22 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   toggleGroupButtonAttributes,
   toggleGroupItemAttributes,
   toggleGroupRootAttributes,
-  type ClassValue,
   type CollectionOrientation,
   type TextDirection,
   type ToggleGroupItem as HeadlessToggleGroupItem,
   type ToggleGroupType,
   type ToggleGroupValue,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface ToggleGroupStyleOverrides {
+  button?: style.StyleInput;
+  item?: style.StyleInput;
+  root?: style.StyleInput;
+}
 
 export interface ToggleGroupStateProps {
   activeValue?: string;
@@ -28,46 +32,95 @@ export interface ToggleGroupStateProps {
 
 export interface ToggleGroupProps extends ToggleGroupStateProps {
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   id?: string;
   labelledBy?: string;
+  styles?: ToggleGroupStyleOverrides;
 }
 
 export interface ToggleGroupItemProps extends ToggleGroupStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: ToggleGroupStyleOverrides;
 }
 
 export interface ToggleGroupButtonProps extends ToggleGroupStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: ToggleGroupStyleOverrides;
 }
 
-export const toggleGroupClassNames = defineVariants({
-  base: 'inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-100 p-1 text-neutral-950 data-[orientation=vertical]:flex-col data-[disabled]:opacity-50',
-  variants: {},
-});
+export const toggleGroupStyles = style.create(
+  {
+    button: {
+      alignItems: 'center',
+      borderRadius: 4,
+      color: '#525252',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 32,
+      justifyContent: 'center',
+      minWidth: 32,
+      paddingInline: 10,
+      transitionProperty: 'background-color, color, box-shadow',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-state=pressed]': {
+        backgroundColor: '#ffffff',
+        boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+        color: '#0a0a0a',
+      },
+      ':disabled': {
+        pointerEvents: 'none',
+      },
+      ':focus-visible': {
+        outlineColor: '#a3a3a3',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+    item: {
+      display: 'inline-flex',
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+    },
+    root: {
+      alignItems: 'center',
+      backgroundColor: '#f5f5f5',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      columnGap: 4,
+      display: 'inline-flex',
+      padding: 4,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-orientation=vertical]': {
+        flexDirection: 'column',
+        rowGap: 4,
+      },
+    },
+  },
+  { namespace: 'toggleGroup', source: 'toggle-group.tsx' },
+);
 
-export const toggleGroupItemClassNames = defineVariants({
-  base: 'inline-flex data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const toggleGroupButtonClassNames = defineVariants({
-  base: 'inline-flex h-8 min-w-8 items-center justify-center rounded px-2.5 text-sm font-medium text-neutral-600 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none data-[state=pressed]:bg-white data-[state=pressed]:text-neutral-950 data-[state=pressed]:shadow-sm data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const toggleGroupClasses = toggleGroupClassNames.classes;
-export const toggleGroupItemClasses = toggleGroupItemClassNames.classes;
-export const toggleGroupButtonClasses = toggleGroupButtonClassNames.classes;
+export const toggleGroupClasses = [style.attrs(toggleGroupStyles.root).class ?? ''] as const;
+export const toggleGroupItemClasses = [style.attrs(toggleGroupStyles.item).class ?? ''] as const;
+export const toggleGroupButtonClasses = [
+  style.attrs(toggleGroupStyles.button).class ?? '',
+] as const;
 
 export const ToggleGroup = component({
   render(props: ToggleGroupProps) {
@@ -86,12 +139,14 @@ export const ToggleGroup = component({
       ...(props.value === undefined ? {} : { value: props.value }),
     });
 
+    const styleAttrs = style.attrs(toggleGroupStyles.root, props.styles?.root);
+
     return (
       <div
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(toggleGroupClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         id={attrs.id}
@@ -120,9 +175,11 @@ export const ToggleGroupItem = component({
       ...(props.value === undefined ? {} : { value: props.value }),
     });
 
+    const styleAttrs = style.attrs(toggleGroupStyles.item, props.styles?.item);
+
     return (
       <span
-        class={cn(toggleGroupItemClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -150,10 +207,12 @@ export const ToggleGroupButton = component({
       ...(props.value === undefined ? {} : { value: props.value }),
     });
 
+    const styleAttrs = style.attrs(toggleGroupStyles.button, props.styles?.button);
+
     return (
       <button
+        {...styleAttrs}
         aria-pressed={attrs['aria-pressed']}
-        class={cn(toggleGroupButtonClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}

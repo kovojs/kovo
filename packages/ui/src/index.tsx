@@ -492,18 +492,17 @@ export {
   ToggleGroup,
   ToggleGroupButton,
   ToggleGroupItem,
-  toggleGroupButtonClassNames,
   toggleGroupButtonClasses,
-  toggleGroupClassNames,
   toggleGroupClasses,
-  toggleGroupItemClassNames,
   toggleGroupItemClasses,
+  toggleGroupStyles,
 } from './toggle-group.js';
 export type {
   ToggleGroupButtonProps,
   ToggleGroupItemProps,
   ToggleGroupProps,
   ToggleGroupStateProps,
+  ToggleGroupStyleOverrides,
 } from './toggle-group.js';
 export {
   Toast,
@@ -536,18 +535,17 @@ export {
   Toolbar,
   ToolbarButton,
   ToolbarItem,
-  toolbarButtonClassNames,
   toolbarButtonClasses,
-  toolbarClassNames,
   toolbarClasses,
-  toolbarItemClassNames,
   toolbarItemClasses,
+  toolbarStyles,
 } from './toolbar.js';
 export type {
   ToolbarButtonProps,
   ToolbarItemProps,
   ToolbarProps,
   ToolbarStateProps,
+  ToolbarStyleOverrides,
 } from './toolbar.js';
 
 export {

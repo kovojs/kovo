@@ -1,16 +1,20 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   toolbarButtonAttributes,
   toolbarItemAttributes,
   toolbarRootAttributes,
-  type ClassValue,
   type TextDirection,
   type ToolbarItem as HeadlessToolbarItem,
   type ToolbarOrientation,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface ToolbarStyleOverrides {
+  button?: style.StyleInput;
+  item?: style.StyleInput;
+  root?: style.StyleInput;
+}
 
 export interface ToolbarStateProps {
   activeValue?: string;
@@ -23,43 +27,94 @@ export interface ToolbarStateProps {
 
 export interface ToolbarProps extends ToolbarStateProps {
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
+  styles?: ToolbarStyleOverrides;
 }
 
 export interface ToolbarItemProps extends ToolbarStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: ToolbarStyleOverrides;
 }
 
 export interface ToolbarButtonProps extends ToolbarItemProps {
   pressed?: boolean;
 }
 
-export const toolbarClassNames = defineVariants({
-  base: 'inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-white p-1 text-neutral-950 shadow-sm data-[orientation=vertical]:flex-col data-[disabled]:opacity-50',
-  variants: {},
-});
+export const toolbarStyles = style.create(
+  {
+    button: {
+      alignItems: 'center',
+      borderRadius: 4,
+      color: '#525252',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 32,
+      justifyContent: 'center',
+      minWidth: 32,
+      paddingInline: 10,
+      transitionProperty: 'background-color, color, box-shadow',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-pressed=true]': {
+        backgroundColor: '#0a0a0a',
+        boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+        color: '#ffffff',
+      },
+      ':disabled': {
+        pointerEvents: 'none',
+      },
+      ':focus-visible': {
+        outlineColor: '#a3a3a3',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#f5f5f5',
+      },
+    },
+    item: {
+      display: 'inline-flex',
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+    },
+    root: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      columnGap: 4,
+      display: 'inline-flex',
+      padding: 4,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-orientation=vertical]': {
+        flexDirection: 'column',
+        rowGap: 4,
+      },
+    },
+  },
+  { namespace: 'toolbar', source: 'toolbar.tsx' },
+);
 
-export const toolbarItemClassNames = defineVariants({
-  base: 'inline-flex data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const toolbarButtonClassNames = defineVariants({
-  base: 'inline-flex h-8 min-w-8 items-center justify-center rounded px-2.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none data-[pressed=true]:bg-neutral-950 data-[pressed=true]:text-white data-[pressed=true]:shadow-sm data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const toolbarClasses = toolbarClassNames.classes;
-export const toolbarItemClasses = toolbarItemClassNames.classes;
-export const toolbarButtonClasses = toolbarButtonClassNames.classes;
+export const toolbarClasses = [style.attrs(toolbarStyles.root).class ?? ''] as const;
+export const toolbarItemClasses = [style.attrs(toolbarStyles.item).class ?? ''] as const;
+export const toolbarButtonClasses = [style.attrs(toolbarStyles.button).class ?? ''] as const;
 
 export const Toolbar = component({
   render(props: ToolbarProps) {
@@ -76,14 +131,16 @@ export const Toolbar = component({
       ...(props.orientation === undefined ? {} : { orientation: props.orientation }),
     });
 
+    const styleAttrs = style.attrs(toolbarStyles.root, props.styles?.root);
+
     return (
       <div
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-label={attrs['aria-label']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-orientation={attrs['aria-orientation']}
-        class={cn(toolbarClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         id={attrs.id}
@@ -109,9 +166,11 @@ export const ToolbarItem = component({
       ...(props.orientation === undefined ? {} : { orientation: props.orientation }),
     });
 
+    const styleAttrs = style.attrs(toolbarStyles.item, props.styles?.item);
+
     return (
       <span
-        class={cn(toolbarItemClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         id={attrs.id}
       >
@@ -136,10 +195,12 @@ export const ToolbarButton = component({
       ...(props.pressed === undefined ? {} : { pressed: props.pressed }),
     });
 
+    const styleAttrs = style.attrs(toolbarStyles.button, props.styles?.button);
+
     return (
       <button
+        {...styleAttrs}
         aria-pressed={attrs['aria-pressed']}
-        class={cn(toolbarButtonClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-pressed={attrs['data-pressed']}
         disabled={attrs.disabled}

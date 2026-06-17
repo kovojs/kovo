@@ -694,6 +694,32 @@ borrowing its concrete API/spike detail.
     `examples/gallery/src/visual-fixtures/tooltip.html.txt` are refreshed with `kv-*` classes plus
     `data-style-src`, and `examples/gallery/src/demo-fixtures.test.ts` moves overlay fixture checks
     to those StyleX markers instead of Tailwind class fragments.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/toggle-group.tsx` and
+    `packages/ui/src/toolbar.tsx` now use `@kovojs/style`, export `toggleGroupStyles` /
+    `toolbarStyles`, accept typed `styles` slot overrides for `root`/`item`/`button`, and drop
+    `defineVariants`/`cn` plus the `class` escape hatches while preserving
+    `toggleGroupRootAttributes(...)`, `toggleGroupItemAttributes(...)`,
+    `toggleGroupButtonAttributes(...)`, `toolbarRootAttributes(...)`,
+    `toolbarItemAttributes(...)`, and `toolbarButtonAttributes(...)` roving-control semantics.
+    `packages/ui/src/toggle-group.stylex.test.tsx` and `packages/ui/src/toolbar.stylex.test.tsx`
+    snapshot generated StyleX output, exported slot objects, and author-last overrides.
+  - Evidence (partial, 2026-06-16): `packages/ui/registry.json` records the copied-source
+    `@kovojs/style` dependency for Toggle Group and Toolbar; `packages/cli/src/index.kovo-add.test.ts`
+    asserts copied `toggle-group.tsx` / `toolbar.tsx` contain StyleX imports, exported style groups,
+    and typed `styles` overrides. The gallery Toggle Group and Toolbar visual fixtures now render
+    `kv-toggle-group-*` / `kv-toolbar-*` classes plus `data-style-src`, and shared form-control and
+    markup tests keep semantic roving assertions while moving brittle generated class coverage into the
+    focused StyleX snapshots.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run
+    packages/ui/src/toggle-group.stylex.test.tsx packages/ui/src/toolbar.stylex.test.tsx
+    packages/ui/src/index.form-controls.test.tsx packages/ui/src/copy-in.test.ts
+    packages/cli/src/index.kovo-add.test.ts`, `node packages/ui/scripts/build-registry.mjs --write`,
+    `node packages/ui/scripts/build-registry.mjs`, `pnpm --filter @kovojs/example-gallery exec vitest
+    --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.axe.browser.test.ts src/interactive-gallery.visual.browser.test.ts
+    src/interactive-gallery.interactions-b.browser.test.ts`, `pnpm exec tsc --noEmit`, and
+    `git diff --check` pass.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

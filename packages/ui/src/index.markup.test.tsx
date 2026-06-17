@@ -104,10 +104,8 @@ import {
   selectTriggerClasses,
   sliderClasses,
   sliderInputClasses,
-  toggleGroupClasses,
   toastClasses,
   toastViewportClasses,
-  toolbarClasses,
 } from './index.js';
 import { readSource } from './test-source.js';
 
@@ -181,8 +179,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(checkboxGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
     expect(dialogClasses.join(' ')).toContain('contents');
     expect(dialogContentClasses.join(' ')).toContain('backdrop:bg-black/30');
-    expect(toggleGroupClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
-    expect(toolbarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(numberFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');
     expect(otpFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');
     expect(fieldClasses.join(' ')).toContain('data-[required]');
