@@ -412,8 +412,8 @@ compiler-quality gaps found during the 2026-06-16 audit.
     - Evidence (2026-06-17): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo/packages/compiler/src/diagnostic-coverage-matrix.test.ts) compares `diagnosticDefinitions` against `compilerOwnedDiagnosticMatrix` plus `outOfScopeCompilerDiagnostics` and fails on uncovered new codes.
 
 - [x] Prove SPEC clause coverage for the quantified compiler promises.
-  - Evidence (2026-06-17): [packages/compiler/src/spec-coverage-map.ts](/Users/mini/kovo-agent-spec-coverage/packages/compiler/src/spec-coverage-map.ts) defines the authoritative coverage map for `SPEC.md` §4.3, §4.6, §4.8, §4.9, §5.2, §6.1.1, §6.4, and §11.3/§11.4.
-  - Evidence (2026-06-17): [packages/compiler/src/spec-coverage-map.test.ts](/Users/mini/kovo-agent-spec-coverage/packages/compiler/src/spec-coverage-map.test.ts) verifies each clause has accepted-path, diagnostic, and reference/commerce app citations; each cited file exists; each cited test name is present; and each cited diagnostic code exists in `diagnosticDefinitions`.
+  - Evidence (2026-06-17): [packages/compiler/src/spec-coverage-map.ts](/Users/mini/kovo/packages/compiler/src/spec-coverage-map.ts) defines the authoritative coverage map for `SPEC.md` §4.3, §4.6, §4.8, §4.9, §5.2, §6.1.1, §6.4, and §11.3/§11.4.
+  - Evidence (2026-06-17): [packages/compiler/src/spec-coverage-map.test.ts](/Users/mini/kovo/packages/compiler/src/spec-coverage-map.test.ts) verifies each clause has accepted-path, diagnostic, and reference/commerce app citations; each cited file exists; each cited test name is present; and each cited diagnostic code exists in `diagnosticDefinitions`.
   - Evidence (2026-06-17): `pnpm exec vitest --run packages/compiler/src/spec-coverage-map.test.ts` passed.
   - Evidence (2026-06-17): `pnpm exec tsc --noEmit --pretty false` passed.
   - [x] Create a SPEC coverage map for §4.3 handler/capture lowering accepted paths and diagnostics.
@@ -583,21 +583,21 @@ compiler-quality gaps found during the 2026-06-16 audit.
 
 - [x] Re-prove weak compatibility helper retirement.
   - [x] Verify `capturesUnserializableReferences()` requires a model-backed context.
-    - Evidence (2026-06-16): [packages/compiler/src/handler-lowering.test.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/handler-lowering.test.ts) now proves `capturesUnserializableReferences(['track', 'LABEL'], { model })` accepts parsed named-import/module-constant facts, while the same references are rejected against an empty parsed model.
+    - Evidence (2026-06-17): [packages/compiler/src/handler-lowering.test.ts](/Users/mini/kovo/packages/compiler/src/handler-lowering.test.ts) now proves `capturesUnserializableReferences(['track', 'LABEL'], { model })` accepts parsed named-import/module-constant facts, while the same references are rejected against an empty parsed model.
   - [x] Verify handler lowering calls `capturesUnserializableReferences()` with model-backed context.
-    - Evidence (2026-06-16): [packages/compiler/src/handler-lowering.test.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/handler-lowering.test.ts) keeps a direct `lowerEventHandlers(...)` fixture that allows named-import and module-constant captures and emits only KV210, proving the lowering path passes the parsed model-backed context into `capturesUnserializableReferences()`.
+    - Evidence (2026-06-17): [packages/compiler/src/handler-lowering.test.ts](/Users/mini/kovo/packages/compiler/src/handler-lowering.test.ts) keeps a direct `lowerEventHandlers(...)` fixture that allows named-import and module-constant captures and emits only KV210, proving the lowering path passes the parsed model-backed context into `capturesUnserializableReferences()`.
   - [x] Verify fragment-target validation calls `capturesUnserializableReferences()` with
         model-backed context.
-    - Evidence (2026-06-16): [packages/compiler/src/fragment-targets.test.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/fragment-targets.test.ts) now proves fragment-target children can reference a named import plus module constant (`formatMoney`, `CURRENCY`) without KV230, which depends on the model-backed allowlist in [packages/compiler/src/validate/component-contracts.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/validate/component-contracts.ts).
+    - Evidence (2026-06-17): [packages/compiler/src/fragment-targets.test.ts](/Users/mini/kovo/packages/compiler/src/fragment-targets.test.ts) now proves fragment-target children can reference a named import plus module constant (`formatMoney`, `CURRENCY`) without KV230, which depends on the model-backed allowlist in [packages/compiler/src/validate/component-contracts.ts](/Users/mini/kovo/packages/compiler/src/validate/component-contracts.ts).
   - [x] Verify no public compiler export exposes a weak capture-check helper.
-    - Evidence (2026-06-16): [packages/compiler/src/compatibility-boundary.test.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/compatibility-boundary.test.ts) asserts `packages/compiler/package.json` still publishes only `.` and `./graph`, and [packages/compiler/src/index.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/index.ts) does not export or re-export `capturesUnserializableReferences()`.
+    - Evidence (2026-06-17): [packages/compiler/src/compatibility-boundary.test.ts](/Users/mini/kovo/packages/compiler/src/compatibility-boundary.test.ts) asserts `packages/compiler/package.json` still publishes only `.` and `./graph`, and [packages/compiler/src/index.ts](/Users/mini/kovo/packages/compiler/src/index.ts) does not export or re-export `capturesUnserializableReferences()`.
   - [x] Verify tests use explicit fixtures rather than a weak helper mode.
-    - Evidence (2026-06-16): [packages/compiler/src/compatibility-boundary.test.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/compatibility-boundary.test.ts) asserts the KV201/KV230 coverage files keep explicit `compileComponentModule({ source: ... })` fixtures and do not reference helper-mode toggles.
+    - Evidence (2026-06-17): [packages/compiler/src/compatibility-boundary.test.ts](/Users/mini/kovo/packages/compiler/src/compatibility-boundary.test.ts) asserts the KV201/KV230 coverage files keep explicit `compileComponentModule({ source: ... })` fixtures and do not reference helper-mode toggles.
   - [x] Run KV201 handler capture fixtures.
-    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run src/handler-lowering.test.ts src/conformance-compat.test.ts src/compatibility-boundary.test.ts` passed.
+    - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest --run src/handler-lowering.test.ts src/conformance-compat.test.ts src/compatibility-boundary.test.ts` passed.
   - [x] Run KV230 fragment-target child capture fixtures.
-    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run src/fragment-targets.test.ts src/conformance-compat.test.ts src/compatibility-boundary.test.ts` passed.
-  - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run src/diagnostic-coverage-matrix.test.ts -t "keeps KV201 and KV230 teaching diagnostics compatibility-visible"` passed.
+    - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest --run src/fragment-targets.test.ts src/conformance-compat.test.ts src/compatibility-boundary.test.ts` passed.
+  - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest --run src/diagnostic-coverage-matrix.test.ts -t "keeps KV201 and KV230 teaching diagnostics compatibility-visible"` passed.
 
 ## Plan Cleanup
 

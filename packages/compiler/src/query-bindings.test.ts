@@ -104,7 +104,9 @@ export const CartBadge = component({
         {
           "code": "KV240",
           "fileName": "cart-badge.tsx",
-          "help": "Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
+          "help": "Would lower to: one query-shape fact per query name for server render, client updates, and binding validation.
+      Blocked reason: duplicate query-shape facts would make graph indexing silently choose one shape for all generated bindings.
+      Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
       SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
           "message": "Duplicate query-shape fact for one query name. query="cart" sources=generated/queries/cart-refresh.shape.ts, generated/queries/cart.shape.ts",
           "severity": "error",
@@ -136,7 +138,9 @@ export const CartBadge = component({
         {
           "code": "KV240",
           "fileName": "cart-badge.tsx",
-          "help": "Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
+          "help": "Would lower to: one query-shape fact per query name for server render, client updates, and binding validation.
+      Blocked reason: duplicate query-shape facts would make graph indexing silently choose one shape for all generated bindings.
+      Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
       SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
           "message": "Duplicate query-shape fact for one query name. query="cart" sources=generated/queries/cart-copy.shape.ts, generated/queries/cart.shape.ts",
           "severity": "error",

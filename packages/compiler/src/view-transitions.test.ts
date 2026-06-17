@@ -69,7 +69,9 @@ export const ProductCard = component({
         {
           "code": "KV239",
           "fileName": "product-card.tsx",
-          "help": "Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
+          "help": "Would lower to: static view-transition-name values that uniquely pair old and new DOM elements.
+      Blocked reason: duplicate static transition names leave the browser and compiler without one canonical element pair.
+      Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
       SPEC §8 uses view-transition-name as a cross-document element-pair identity; duplicate static names in one rendered module or supplied registry facts are ambiguous.
       View-transition name: product-p1-image
       First writer: ProductCard <img>
@@ -125,7 +127,9 @@ export const ProductCard = component({
         {
           "code": "KV239",
           "fileName": "product-card.tsx",
-          "help": "Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
+          "help": "Would lower to: static view-transition-name values that uniquely pair old and new DOM elements.
+      Blocked reason: duplicate static transition names leave the browser and compiler without one canonical element pair.
+      Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
       SPEC §8 uses view-transition-name as a cross-document element-pair identity; duplicate static names in one rendered module or supplied registry facts are ambiguous.
       View-transition name: product-p1-image
       Registry writer: registryFacts.viewTransitions
