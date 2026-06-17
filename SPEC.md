@@ -64,17 +64,17 @@ Every feature proposal is evaluated against five tests. A feature failing any te
 │ Transitions + bfcache. No client router. No hydration.                                   │
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
 │ DATA PLANE: queries (typed reads) ← invalidation graph → mutations (typed writes)        │
-│ derived from domain layer / Drizzle AST. Optimistic transforms hand-written (v1);        │
-│ compiler-derived transforms arrive in v2.                                                │
+│ derived from domain layer / Drizzle AST. Optimistic transforms may be hand-written        │
+│ or compiler-derived.                                                                     │
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
 │ WIRE: one fragment/query-JSON vocabulary, transport-agnostic:                            │
-│ document load · enhanced fetch (mutations) · SSE live queries (v2)                       │
+│ document load · enhanced fetch (mutations) · SSE live queries                            │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 3.1 Rejected from prior art
 
-Client router and SPA navigation; hydration; hash-named heuristic chunks; load-bearing semantic optimizer; single global state blob; **runtime signal graphs in the core client — proprietary or TC39** (the client dependency graph is compile-time-known, so the compiler emits a per-query update plan instead; a TC39 Signals interop adapter is v2); opaque closure capture (`useLexicalScope`); client-side cache with invalidation lifecycle; manual invalidation calls as the primary mechanism; **shadow DOM** (tree-scoped IDREFs, form participation, and ARIA all break at the boundary — fatal to L0 platform behaviors and the no-JS form contract; style scoping comes from the compiler instead, §13.1); **custom-element registration** (resumability comes from delegation + `import()`, never from `customElements.define`; component identity is the `kovo-c` stamp, dashed tags survive as inert sugar, and native hosts like `<tr kovo-c="cart-row">` avoid the table-nesting problem); **load-bearing import maps** (the compiler and server emit full module URLs with cache-busting they control; import maps remain an optional deployment strategy); **portals and runtime context APIs** (composition is lexical at render time and the DOM tree is the runtime context, §4.5 — framework code never reparents islands, so `closest('[kovo-c]')` resolution stays sound; native top-layer promotion (`<dialog>`, popover) does not reparent, which is exactly why no portal is needed).
+Client router and SPA navigation; hydration; hash-named heuristic chunks; load-bearing semantic optimizer; single global state blob; **runtime signal graphs in the core client — proprietary or TC39** (the client dependency graph is compile-time-known, so the compiler emits a per-query update plan instead; Signals interop is outside the core client); opaque closure capture (`useLexicalScope`); client-side cache with invalidation lifecycle; manual invalidation calls as the primary mechanism; **shadow DOM** (tree-scoped IDREFs, form participation, and ARIA all break at the boundary — fatal to L0 platform behaviors and the no-JS form contract; style scoping comes from the compiler instead, `plans/open-design-areas.md`); **custom-element registration** (resumability comes from delegation + `import()`, never from `customElements.define`; component identity is the `kovo-c` stamp, dashed tags survive as inert sugar, and native hosts like `<tr kovo-c="cart-row">` avoid the table-nesting problem); **load-bearing import maps** (the compiler and server emit full module URLs with cache-busting they control; import maps remain an optional deployment strategy); **portals and runtime context APIs** (composition is lexical at render time and the DOM tree is the runtime context, §4.5 — framework code never reparents islands, so `closest('[kovo-c]')` resolution stays sound; native top-layer promotion (`<dialog>`, popover) does not reparent, which is exactly why no portal is needed).
 
 ---
 
@@ -368,7 +368,7 @@ cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart
                        ├─▶ generated/registries/*.d.ts   (module aliases, fragment targets, query keys, domains,
                        │                                  routes, element ids, invalidation sets)
                        ├─▶ generated/touch-graph.ts      (§11.3 — committed, reviewable)
-                       └─▶ generated/optimistic/*.ts     (§10.4 — v2; committed, overridable)
+                       └─▶ generated/optimistic/*.ts     (§10.4; committed, overridable)
 ```
 
 \* Minification may never rename exported handler symbols or anything appearing in HTML attributes (Constitution #1 — enforced because those names are load-bearing at runtime); this holds in prod too, where payloads are delta-encoded (§9.1.1) but names stay verbatim. The prod build additionally stamps a **render-plan version token** into emitted module URLs (alongside the cache-busting hash, §5.2.1) and into delta/patch responses, so §9.1.1 base-version validation can fail loud on deploy skew instead of patching stale DOM silently.
@@ -392,7 +392,7 @@ The compiler's decision tree, on demand. Sub-commands (all output stable, diffab
 ```bash
 kovo explain component cart        # lowerings: extracted handlers, derives, capture channels, platform substitutions, attribute merges, triggers
 kovo explain mutation cart/add     # writes → domains → invalidated queries → consumers; guard chain
-kovo explain mutation cart/add --optimistic   # transform coverage per query; v2 adds derivation traces + punts (§10.5)
+kovo explain mutation cart/add --optimistic   # transform coverage per query; derivation traces + punts (§10.5)
 kovo explain query cart            # read set, consumers, every mutation that invalidates it
 kovo explain page /products/:id    # emitted modulepreloads, per-route prefetch config, param/search schemas, query payloads
 ```
@@ -662,8 +662,8 @@ Interactions must use the lowest layer that suffices. The compiler enforces L0 s
 | **L0**      | Platform behaviors: invoker commands, Popover API, `<details>`, `<dialog>`, `:has()`, scroll-driven animations                             | Open cart drawer                      | 0                                      |
 | **L1**      | Pure client islands: local state + the update plan (bindings/derives/stamps, §4.8); loaded on interaction or a declared trigger (§4.7)     | Price-range filter UI, tabs, carousel | handler module on first touch          |
 | **L2**      | Mutations: real forms + enhanced fetch → fragment/query patch                                                                              | Add to cart                           | loader (already present) + form module |
-| **L3**      | Optimistic: declared transforms over query values (compiler-derived in v2)                                                                 | Instant badge tick                    | transform module                       |
-| **L4 (v2)** | Live: SSE pushing the same fragment/query vocabulary — v1 covers the common cases with BroadcastChannel tab sync + refetch-on-focus (§9.3) | Order status, presence                | `<kovo-live>` subscriber (v2)          |
+| **L3**      | Optimistic: compiler-derived or declared transforms over query values                                                                      | Instant badge tick                    | transform module                       |
+| **L4**      | Live: SSE pushing the same fragment/query vocabulary; BroadcastChannel tab sync + refetch-on-focus cover common lower-cost cases (§9.3)    | Order status, presence                | `<kovo-live>` subscriber               |
 
 **Cross-island coordination**, in order of preference: (1) **the URL** — filter writes `?max=500`, or is a GET form whose fragment response is the grid, both typed against the route's `search` schema (§6.4); (2) **typed fire-and-forget events** — registry-checked `emit('cart:added', {…})`, payload types may not overlap query data (lint `KV320`: if you're sending server facts over an event, you wanted an optimistic transform); (3) **shared client state** — last resort, lint-gated with required justification comment.
 
@@ -682,7 +682,7 @@ Interactions must use the lowest layer that suffices. The compiler enforces L0 s
 
 ## 9. Wire Protocol
 
-One vocabulary, transport-agnostic: document load and enhanced fetch in v1; SSE joins as a third transport in v2 (§9.3). All payloads are human-readable (Constitution #4).
+One vocabulary, transport-agnostic: document load, enhanced fetch, and SSE live updates all carry the same fragment/query chunks (§9.3). All payloads are human-readable (Constitution #4).
 
 ### 9.1 Enhanced mutation round-trip
 
@@ -709,7 +709,7 @@ Kovo-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1
 ```
 
 - `Kovo-Targets` is read off the live DOM (`kovo-deps` stamps), so islands patched in after page load participate. The wire format is `target=queryInstance queryInstance`; singleton targets use the derived leaf (`cart-badge=cart`), and repeated targets include their stable keyed suffix (`product-form:p2=product:p2`). The server holds **no session of what's on screen** — it answers a stateless question.
-- `Kovo-Changes` is the sanitized wire summary of committed writes: each entry is `{domain, keys}`. It never includes mutation input, user-provided values, failure reasons, stack traces, or internal diagnostic detail; richer typed change records are internal compiler/runtime artifacts (§14).
+- `Kovo-Changes` is the sanitized wire summary of committed writes: each entry is `{domain, keys}`. It never includes mutation input, user-provided values, failure reasons, stack traces, or internal diagnostic detail; richer typed change records are internal compiler/runtime artifacts.
 - `<kovo-query>` replaces the client's query value and runs that query's update plan — bindings, named derives, stamps — across every dependent island. No runtime dependency tracking: the plan is the DOM itself (§4.8).
 - `<kovo-fragment>` is **DOM-morphed** by default (idiomorph-class algorithm): focus, scroll, selection, CSS transitions, and nested island state survive. `mode="append"` is the explicit append vocabulary for pagination and streams. Patched-in islands are inert-until-touched like everything else — _a fragment update is a tiny navigation, not a different programming model._
 - **Without JS:** the same endpoint sees no `Kovo-Fragment` header and answers POST-redirect-GET with errors re-rendered into the full page. One handler, two response modes.
@@ -741,7 +741,7 @@ Mutation handlers may attach response headers through a narrow context channel. 
 
 Raw HTTP integrations use declared `endpoint()` entries, not ad-hoc server escape hatches. An endpoint is registry-visible, receives `Request -> Response`, may opt out of CSRF with a named justification, and is enrolled in the endpoint and unguarded audits with the same auth metadata as routes, queries, and mutations. Endpoint handlers receive the raw `Request` before body parsing so signature verification can use wire bytes; exact and prefix mounts are declared; cookies are not interpreted and no ambient `req.session` is passed. A CSRF exemption is sound only because endpoint/webhook auth does not ride ambient browser authority. OAuth/SAML callbacks and adapter-owned mounts belong here; browser credential forms should still prefer typed `mutation()` flows so they keep schema validation, no-JS behavior, and the normal response vocabulary.
 
-`webhook()` is the shaped machine-endpoint primitive for third-party POSTs that write Kovo-owned data. Shape: `webhook(name, { path, verify, input, idempotency, handler })`, lowering to a registry-visible endpoint with `auth=verifier:<resolved scheme>` unless an explicitly justified custom/none verifier is used. The lifecycle is fixed: capture raw bytes → verify → parse/coerce a loose input schema (unknown provider fields pass through) → replay lookup by provider event id (`Kovo-Idem` machinery, via `idempotency(input)`) → `BEGIN` tx → handler receives a Tx-typed db/request context with no ambient session and must write through `domain()` writes (KV330/KV402/KV404 still apply) → `COMMIT` → emit the unified change record `{domain, keys, input}` (§14) and return the provider-appropriate 2xx. `fail()` rolls back and answers the declared 4xx/5xx response so provider retry semantics are explicit. A redelivered event id replays the stored response and must not re-execute the handler.
+`webhook()` is the shaped machine-endpoint primitive for third-party POSTs that write Kovo-owned data. Shape: `webhook(name, { path, verify, input, idempotency, handler })`, lowering to a registry-visible endpoint with `auth=verifier:<resolved scheme>` unless an explicitly justified custom/none verifier is used. The lifecycle is fixed: capture raw bytes → verify → parse/coerce a loose input schema (unknown provider fields pass through) → replay lookup by provider event id (`Kovo-Idem` machinery, via `idempotency(input)`) → `BEGIN` tx → handler receives a Tx-typed db/request context with no ambient session and must write through `domain()` writes (KV330/KV402/KV404 still apply) → `COMMIT` → emit the unified change record `{domain, keys, input}` and return the provider-appropriate 2xx. `fail()` rolls back and answers the declared 4xx/5xx response so provider retry semantics are explicit. A redelivered event id replays the stored response and must not re-execute the handler.
 
 The verifier kit is part of the normative surface for `webhook()`: `hmacSignature({ header, payload, encoding, tolerance, multiSig })` is the generic form, with `stripeSignature({ secret })` and `standardWebhooks({ secret })` as blessed presets that resolve to printed generic HMAC configuration. Verification is over raw bytes, uses constant-time comparison, enforces timestamp tolerance, and supports rotated secrets/multiple signatures. Non-HMAC providers use a custom `verify(request)` escape that appears as custom auth in the audit; `verify: 'none'` requires a named justification and appears as unauthenticated machine ingress.
 
@@ -757,18 +757,19 @@ selection.
 
 Unexpected server failures are not part of the typed union and must not leak internals. The typed query endpoint (§9.4) returns HTTP 500 with JSON `{"code":"SERVER_ERROR","payload":{}}`. Full-page route rendering returns HTTP 500 with the app's stable error shell or the fallback body `Internal Server Error`. Enhanced mutation responses that fail while rendering post-commit queries/fragments return a render-error fragment with HTTP 500 and `data-error-code="RENDER_ERROR"`; any `Kovo-Changes` header on that response remains sanitized to `{domain, keys}` for writes that already committed.
 
-### 9.3 Liveness (v1) and Live (L4 — v2)
+### 9.3 Liveness and Live
 
-**v1 ships liveness only where the server stays stateless:**
+Kovo separates low-cost liveness from explicit live subscriptions:
 
 - **BroadcastChannel rebroadcast** — a mutation's `<kovo-query>` response is rebroadcast to the user's other tabs; same-user multi-tab sync at zero server cost.
 - **Refetch on focus/visibility** — a loader behavior (per-query opt-out) that re-runs queries (over the typed read endpoint, §9.4) when a stale tab returns; it fakes an embarrassing share of "live" UX for one conditional in the loader.
+- **Live queries** — `<kovo-live query="cart">` subscribes over SSE to the identical `<kovo-query>`/`<kovo-fragment>` chunks; guards are re-checked at subscription **and** at each push (a guard that passed at render must pass at patch time — fragments must not become a privilege-escalation side channel); in-process emitter (single node) or Redis pub/sub (multi-node); instance-key routing; `live: true` opt-in per query.
 
-**The full L4 moves to v2**, arriving alongside the CDC adapter (§14): `<kovo-live query="cart">` subscribing over SSE to the identical `<kovo-query>`/`<kovo-fragment>` chunks; guards re-checked at subscription **and** at each push (a guard that passed at render must pass at patch time — fragments must not become a privilege-escalation side channel); in-process emitter (single node) or Redis pub/sub (multi-node); instance-key routing; `live: true` opt-in per query. The vocabulary is transport-agnostic by construction, so SSE is an additive transport, not a rearchitecture — and the v1 server stays stateless, full stop.
+The vocabulary is transport-agnostic by construction, so SSE is an additive transport, not a rearchitecture.
 
 ### 9.4 Typed reads: the query endpoint
 
-Every query is addressable over GET — one read surface serving refetch-on-focus (§9.3), GET-form fragment responses (§7), async option/search reads, and (v2) the SSE subscription key:
+Every query is addressable over GET — one read surface serving refetch-on-focus (§9.3), GET-form fragment responses (§7), async option/search reads, and the SSE subscription key:
 
 ```http
 GET /_q/product?id=p1 HTTP/1.1
@@ -847,7 +848,7 @@ export const cartQuery = query('cart', (db, req) =>
 // product.queries.ts — parameterized: args declared once, schema-style
 export const productQuery = query('product', {
   args: s.object({ id: s.string() }), // coerced wherever args arrive: props, route params, /_q/ search params (§9.4)
-  guard: authed, // optional — checked at page render AND at every typed read / (v2) live push
+  guard: authed, // optional — checked at page render AND at every typed read / live push
   load: (db, args, req) =>
     db
       .select({ name: products.name, stock: products.stock })
@@ -860,7 +861,7 @@ Derived from this one expression, statically:
 
 - **Read set** `{cart, product}` — the JOIN _is_ the declaration (forgetting a joined entity's dependency is unrepresentable).
 - **Result type** from the select shape — drives the client JSON, `data-bind` paths, derive inputs, and optimistic transform parameters. A column rename in `schema.ts` propagates through TypeScript static checking to every template. **Opaque projections are the read-side raw-SQL seam:** Drizzle's `sql<T>` generic is an unchecked assertion, so any `sql`/raw projection requires a declared `s.*` output schema (**KV410**), and the observed result shape is runtime-verified (§11.2). The inferred-type chain stays sound or the seam is visible; never both unsound and silent.
-- **Instance key** from the WHERE eq-predicates, resolved to `args.*` or `req.session.*` — only args are client-visible. Canonical encoding: `name:keyValue` in declared arg order (`product:p1`). This one string keys the client store (`<script kovo-query="product:p1">`), `kovo-deps` stamps, `Kovo-Targets` (§9.1), optimistic transform keys (§10.4), and (v2) live-push routing. Two instances of one query coexist on a page; `data-bind` inside an island resolves against that island's instance.
+- **Instance key** from the WHERE eq-predicates, resolved to `args.*` or `req.session.*` — only args are client-visible. Canonical encoding: `name:keyValue` in declared arg order (`product:p1`). This one string keys the client store (`<script kovo-query="product:p1">`), `kovo-deps` stamps, `Kovo-Targets` (§9.1), optimistic transform keys (§10.4), and live-push routing. Two instances of one query coexist on a page; `data-bind` inside an island resolves against that island's instance.
 
 **Args bind locally (Constitution #2).** A component declares how its args derive from its own props — `queries: { product: productQuery.args((p) => ({ id: p.productId })) }` — so any page rendering the component satisfies the dependency without call-site knowledge. Route params reach queries as ordinary props through `route().page`; no call site enumerates query dependencies.
 
@@ -913,12 +914,12 @@ export const adminRefund = mutation('admin/refund', { guard: role('admin') /*…
 
 Optimism is keyed to **queries** (the data), never islands. One transform per (mutation × invalidated query); every island consuming the query updates from it — including islands written after the mutation (Constitution #2).
 
-**Hand-written (v1):** transforms are authored in the mutation file as pure `(data, input)` functions against the query's inferred result type — the same IR derivation will later emit. **Explicitly deferred:** `'await-fragment'` documents "considered; 1-RTT latency accepted here."
+**Hand-written:** transforms are authored in the mutation file as pure `(data, input)` functions against the query's inferred result type. **Explicitly deferred:** `'await-fragment'` documents "considered; 1-RTT latency accepted here."
 
-**Derived (v2, preferred once available):** for writes whose dataflow is closed over `{mutation input, schema constants, data the query already ships}` and queries within the shape grammar `{scalar-from-keyed-row, COUNT, SUM(arith), jsonAgg, filtered-COUNT, membership transitions}`, the compiler generates the transform (full derivation algebra in §10.5). Because hand-written transforms share the IR, v2 adoption is incremental: deleting a hand-written transform lets derivation take over, pair by pair.
+**Derived:** for writes whose dataflow is closed over `{mutation input, schema constants, data the query already ships}` and queries within the shape grammar `{scalar-from-keyed-row, COUNT, SUM(arith), jsonAgg, filtered-COUNT, membership transitions}`, the compiler generates the transform (full derivation algebra in §10.5). Hand-written transforms share the same IR, so an app can override generated transforms pair by pair.
 
 ```ts
-// generated/optimistic/cart.add.ts (v2) — DO NOT EDIT (override in cart.mutations.ts)
+// generated/optimistic/cart.add.ts — DO NOT EDIT (override in cart.mutations.ts)
 export const derived = {
   [cartQuery.key]: (cart, $input) => {
     const r = cart.items.find((i) => i.productId === $input.productId);
@@ -938,9 +939,7 @@ Successful enhanced mutation responses should include `<kovo-query>` chunks for 
 
 **Concurrency:** a per-query pending-transform log; arriving server truth is morphed in, then still-pending transforms re-applied in order (rebase). Safe because transforms are pure `(data, input)` functions. Mutations needing serialization declare `queue: 'cart'` (named FIFO). Navigation is a free reconciliation point: in-flight requests complete via `keepalive`, the log dies with the document.
 
-### 10.5 Derivation algebra (v2 — summary)
-
-> **Phasing note:** everything in this subsection ships in v2 (see §14). It is specified now because the v1 transform IR, query shape inference, and runtime rebase protocol are designed to be derivation-compatible — v1 must not paint v2 into a corner.
+### 10.5 Derivation algebra
 
 ```
 Stage 1  write  →  symbolic row-effects
@@ -973,7 +972,7 @@ Every punt is named in `kovo explain --optimistic` with the exact expression and
 
 ### 10.6 Exhaustiveness
 
-Per mutation, coverage = invalidated-query set (derived) × status. Ships in v1; the valid statuses in v1 are `hand-written` and `await-fragment`:
+Per mutation, coverage = invalidated-query set (derived) × status. Valid statuses are `derived`, `hand-written`, and `await-fragment`:
 
 ```
 kovo check optimistic
@@ -984,7 +983,7 @@ mutation cart/applyCoupon:
      → hand-write in cart.mutations.ts, or declare 'await-fragment'
 ```
 
-In v2, `derived ✓` joins the status set and punts report their reasons inline (e.g. `PUNTED (Opaque: compute_discount)`).
+Punts report their reasons inline (e.g. `PUNTED (Opaque: compute_discount)`).
 
 The check runs at two altitudes off the same derived set: the compiler emits each mutation's invalidated-query keys into the registries (§6.1 `InvalidationSets`), so `OptimisticFor<typeof addToCart>` requires an entry — transform or `'await-fragment'` — per invalidated query, making KV310 an editor-visible type error; `kovo check` remains the CI/agent surface.
 
@@ -1070,7 +1069,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV302 | error      | `data-bind` path is not present in the declared query shape (§4.8)                                                                                                             |
 | KV303 | error      | Inferred refresh-target render input is not declared as query data or serializable stamped props (§4.5)                                                                        |
 | KV304 | error      | Reserved query name such as `state` is not allowed (§4.8 binding roots)                                                                                                        |
-| KV310 | warn       | Invalidated query lacks optimistic transform (write/defer; v2 adds derive)                                                                                                     |
+| KV310 | warn       | Invalidated query lacks optimistic transform (write/defer/derive)                                                                                                              |
 | KV311 | warn       | Query/state-dependent DOM position with no update status — plan/isomorphic/fragment/renderOnce (§4.9)                                                                          |
 | KV320 | lint       | Event payload overlaps query data — use a transform                                                                                                                            |
 | KV330 | lint       | Direct db access in a mutation handler — route through domain                                                                                                                  |
@@ -1103,7 +1102,7 @@ For a Kovo app, the following are checkable **without executing a browser**:
 1. TypeScript static checking — all wiring (handlers, routes & links, forms, targets, bindings, IDREFs, transforms, guards).
 2. `kovo check` — touch-graph consistency, optimistic exhaustiveness (KV310), update coverage (KV311), fixpoint + render-equivalence invariants, unguarded and unscoped audits.
 3. Graph queries over `kovo explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs.
-4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms; v2 adds derivation soundness (commuting diagrams).
+4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms and derivation soundness (commuting diagrams).
 5. HTTP-level integration tests — mutations as request/response assertions against pglite (real Postgres semantics, in-memory, no container).
 
 `kovo explain --endpoints` is the stable machine-ingress audit. Its diffable table lists every declared endpoint and webhook plus every route that returns `respond.file()`/`respond.stream()`: name, method, path, mount mode, auth scheme (`session+guard`, `verifier:<resolved scheme>`, `custom:<name>`, or `none:<justification>`), CSRF posture (`checked` or `exempt:<justification>`), and for webhooks the write→domain chain. The command is snapshot-locked with the rest of P8 output so security review can answer "what can reach this app, and what can it touch?" without executing a browser.
@@ -1136,7 +1135,7 @@ const cartMutations = kovoTest('cart mutations', async ({ exec, page, db }) => {
 it(cartMutations.name, cartMutations.run);
 
 // transform soundness: prediction ⊆ eventual truth over generated states
-// (v2: generated alongside derived transforms as the commuting-diagram suite)
+// generated alongside derived transforms as the commuting-diagram suite
 propertyTest(addToCart, cartQuery); // patch∘shape ≡ shape∘apply over generated states
 ```
 
