@@ -141,8 +141,11 @@ export interface RoutePageFact {
 
 /** One component invocation found under a JSX-authored route page. */
 export interface RoutePageComponentFact {
+  keyExpression?: string;
   localName: string;
   props: readonly RoutePageComponentPropFact[];
+  propsExpression: string;
+  serializedPropsExpression: string;
 }
 
 /** A serializable prop/key expression passed from a route page into a component. */

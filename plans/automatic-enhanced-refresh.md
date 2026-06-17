@@ -290,10 +290,22 @@ removes app-authored bookkeeping from the enhanced path.
     - `deriveAppGraph({ routePages })` now accepts compiled route-page facts and
       derives route registry facts from JSX-authored route modules, covered by
       `packages/compiler/src/registry.test.ts`.
+    - Additional progress 2026-06-17:
+      `RoutePageComponentFact` now carries `propsExpression`,
+      `serializedPropsExpression`, and optional `keyExpression` so generated
+      route IR can stamp `kovo-props` from the same JSX invocation facts instead
+      of re-parsing component calls.
+    - `packages/compiler/src/route-pages.test.ts` covers `key={params.id}`,
+      route-param props, static props, nested shell props, and empty props as
+      generated props serialization facts.
     - Verified with
       `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check -- SPEC.md plans/automatic-enhanced-refresh.md packages/compiler/src/types.ts packages/compiler/src/index.ts packages/compiler/src/route-pages.ts packages/compiler/src/route-pages.test.ts`.
+    - Additional verification 2026-06-17:
+      `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `node scripts/api-surface-gate.mjs`.
     - Remaining gap: this is fact extraction only; generated executable route IR,
       initial query loading, and app-shell integration are still open.
 - [ ] **5. Runtime: send complete live target descriptors.**
@@ -430,6 +442,9 @@ removes app-authored bookkeeping from the enhanced path.
       `CartBadge$liveTargetRenderer`; `packages/compiler/src/registry.test.ts`
       covers emitted prop-backed `ProductDetail$liveTargetRenderer` with a
       generated `args: (props) => ({ id: props.productId })` callback.
+    - `packages/compiler/src/route-pages.test.ts` covers route-param-backed
+      component invocation facts for generated props serialization and
+      `keyExpression`.
     - Remaining gap: keyed repeated and route-param-backed generated-renderer
       fixtures are still pending.
 - [ ] **Runtime/server tests prove no app-authored fragment renderers are needed.**

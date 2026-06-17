@@ -104,18 +104,12 @@ function routePageComponentFacts(
     if (ts.isJsxElement(node)) {
       const tag = jsxTagName(node.openingElement.tagName);
       if (tag && componentTagName(tag)) {
-        facts.push({
-          localName: tag,
-          props: routePageComponentProps(sourceFile, node.openingElement.attributes),
-        });
+        facts.push(routePageComponentFact(sourceFile, tag, node.openingElement.attributes));
       }
     } else if (ts.isJsxSelfClosingElement(node)) {
       const tag = jsxTagName(node.tagName);
       if (tag && componentTagName(tag)) {
-        facts.push({
-          localName: tag,
-          props: routePageComponentProps(sourceFile, node.attributes),
-        });
+        facts.push(routePageComponentFact(sourceFile, tag, node.attributes));
       }
     }
 
@@ -124,6 +118,25 @@ function routePageComponentFacts(
 
   visit(root);
   return facts;
+}
+
+function routePageComponentFact(
+  sourceFile: ts.SourceFile,
+  localName: string,
+  attributes: ts.JsxAttributes,
+): RoutePageComponentFact {
+  const allProps = routePageComponentProps(sourceFile, attributes);
+  const key = allProps.find((prop) => prop.name === 'key');
+  const props = allProps.filter((prop) => prop.name !== 'key');
+  const propsExpression = routePagePropsExpression(props);
+
+  return {
+    ...(key ? { keyExpression: key.expression } : {}),
+    localName,
+    props,
+    propsExpression,
+    serializedPropsExpression: `JSON.stringify(${propsExpression})`,
+  };
 }
 
 function routePageComponentProps(
@@ -157,6 +170,11 @@ function routePageComponentProps(
       },
     ];
   });
+}
+
+function routePagePropsExpression(props: readonly RoutePageComponentPropFact[]): string {
+  if (props.length === 0) return '{}';
+  return `{ ${props.map((prop) => `${prop.name}: ${prop.expression}`).join(', ')} }`;
 }
 
 function componentTagName(tag: string): boolean {

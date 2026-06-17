@@ -19,7 +19,14 @@ export const home = route('/', {
     expect(result.diagnostics).toEqual([]);
     expect(result.routePageFacts).toEqual([
       {
-        components: [{ localName: 'QuestionListRegion', props: [] }],
+        components: [
+          {
+            localName: 'QuestionListRegion',
+            props: [],
+            propsExpression: '{}',
+            serializedPropsExpression: 'JSON.stringify({})',
+          },
+        ],
         fileName: 'src/routes.tsx',
         route: '/',
       },
@@ -33,7 +40,7 @@ export const home = route('/', {
 import { route } from '@kovojs/server';
 
 export const detail = route('/questions/:id', {
-  page: ({ params }) => <QuestionDetail questionId={params.id} featured={true} pageSize={20} />,
+  page: ({ params }) => <QuestionDetail key={params.id} questionId={params.id} featured={true} pageSize={20} />,
 });
 `,
     });
@@ -42,6 +49,7 @@ export const detail = route('/questions/:id', {
       {
         components: [
           {
+            keyExpression: 'params.id',
             localName: 'QuestionDetail',
             props: [
               {
@@ -52,6 +60,9 @@ export const detail = route('/questions/:id', {
               { expression: 'true', name: 'featured', staticValue: true },
               { expression: '20', name: 'pageSize', staticValue: 20 },
             ],
+            propsExpression: '{ questionId: params.id, featured: true, pageSize: 20 }',
+            serializedPropsExpression:
+              'JSON.stringify({ questionId: params.id, featured: true, pageSize: 20 })',
           },
         ],
         fileName: 'src/routes.tsx',
@@ -82,8 +93,15 @@ export const home = route('/', {
           {
             localName: 'SoShell',
             props: [{ expression: '"questions"', name: 'section', staticValue: 'questions' }],
+            propsExpression: '{ section: "questions" }',
+            serializedPropsExpression: 'JSON.stringify({ section: "questions" })',
           },
-          { localName: 'QuestionListRegion', props: [] },
+          {
+            localName: 'QuestionListRegion',
+            props: [],
+            propsExpression: '{}',
+            serializedPropsExpression: 'JSON.stringify({})',
+          },
         ],
         fileName: 'src/routes.tsx',
         route: '/',
