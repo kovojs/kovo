@@ -11,13 +11,13 @@ import {
   QUESTION_LIST_TARGET,
   renderQuestionListPage,
   renderQuestionListRegion,
-} from './components/question-list.js';
+} from './generated/question-list.js';
 import {
   QUESTION_DETAIL_TARGET,
   renderQuestionDetailPage,
   renderQuestionDetailRegion,
   type AnswerDetail,
-} from './components/question-detail.js';
+} from './generated/question-detail.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';

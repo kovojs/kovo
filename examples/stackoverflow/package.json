@@ -6,6 +6,7 @@
   "scripts": {
     "build": "vp build",
     "dev": "vp dev",
+    "emit-components": "node scripts/emit-components.mjs",
     "emit-graph": "node scripts/emit-graph.mjs",
     "start": "node scripts/serve.mjs",
     "serve:prod": "vp build && node scripts/serve.mjs",
@@ -21,6 +22,7 @@
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
+    "@kovojs/compiler": "workspace:*",
     "@kovojs/conformance-fixtures": "workspace:*",
     "@kovojs/test": "workspace:*",
     "kovo": "workspace:*",

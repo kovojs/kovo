@@ -1,8 +1,8 @@
 import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { QUESTION_DETAIL_TARGET } from './components/question-detail.js';
-import { QUESTION_LIST_TARGET } from './components/question-list.js';
+import { QUESTION_DETAIL_TARGET } from './generated/question-detail.js';
+import { QUESTION_LIST_TARGET } from './generated/question-list.js';
 import { buildSoInteractiveApp } from './interactive-app.js';
 import { answers, questions } from './schema.js';
 

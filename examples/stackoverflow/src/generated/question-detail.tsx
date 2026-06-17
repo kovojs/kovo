@@ -1,4 +1,10 @@
+// @kovojs-ir — lowered from examples/stackoverflow/src/components/question-detail.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
+import { escapeText } from '@kovojs/server';
+import { derive } from '@kovojs/runtime';
+
+export const QuestionDetailRegion$input_value_derive = derive(["question"], (question) => question.id);
+
 import { component } from '@kovojs/core';
 
 import { postAnswerMutation } from '../mutations.js';
@@ -40,7 +46,7 @@ export interface QuestionDetailPageData {
 export const QuestionDetailRegion = component({
   queries: { question: questionList, answers: answerList },
   render: ({ question, answers }: QuestionDetailPageData) => (
-    <div class="space-y-6">
+    <div class="space-y-6" kovo-c="question-detail-region" kovo-deps="question answers" kovo-fragment-target="question-detail-region">
       <a
         class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
         href="/"
@@ -51,17 +57,17 @@ export const QuestionDetailRegion = component({
       <article class="flex items-start gap-4 rounded-lg border border-slate-200 bg-white p-5">
         {voteButton(question.id, question.score)}
         <div class="min-w-0 flex-1">
-          <h1 class="text-xl font-bold tracking-tight">{question.title}</h1>
-          <p class="mt-2 text-sm leading-relaxed text-slate-700">{question.body}</p>
+          <h1 class="text-xl font-bold tracking-tight" data-bind="question.title">{question.title}</h1>
+          <p class="mt-2 text-sm leading-relaxed text-slate-700" data-bind="question.body">{question.body}</p>
           <p class="mt-3 text-xs text-slate-400">
-            asked by <span>{question.authorId}</span>
+            asked by <span data-bind="question.authorId">{question.authorId}</span>
           </p>
         </div>
       </article>
 
       <section>
         <h2 class="mb-3 text-sm font-semibold text-slate-700">
-          <span>{question.answerCount}</span> {question.answerCount === 1 ? 'Answer' : 'Answers'}
+          <span data-bind="question.answerCount">{question.answerCount}</span> {question.answerCount === 1 ? 'Answer' : 'Answers'}
         </h2>
         <ul class="space-y-3">
           {answers.map((answer) => (
@@ -73,7 +79,7 @@ export const QuestionDetailRegion = component({
               <span class="flex w-12 shrink-0 flex-col items-center text-slate-500">
                 <span class="text-xs leading-none">&#9650;</span>
                 <span class="text-base font-semibold tabular-nums text-slate-700">
-                  {answer.score}
+                  {escapeText(answer.score)}
                 </span>
                 <span class="text-[10px] uppercase tracking-wide">votes</span>
               </span>
@@ -85,8 +91,8 @@ export const QuestionDetailRegion = component({
                 ) : (
                   ''
                 )}
-                <p class="text-sm leading-relaxed text-slate-700">{answer.body}</p>
-                <p class="mt-3 text-xs text-slate-400">answered by {answer.authorId}</p>
+                <p class="text-sm leading-relaxed text-slate-700">{escapeText(answer.body)}</p>
+                <p class="mt-3 text-xs text-slate-400">answered by {escapeText(answer.authorId)}</p>
               </div>
             </li>
           ))}
@@ -97,11 +103,11 @@ export const QuestionDetailRegion = component({
             and bumped count appear and the composer resets (fresh id). */}
         <form
           enhance
-          mutation={postAnswerMutation}
+          method="post" action="/_m/postAnswer" data-mutation="postAnswer" kovo-fragment-target="post-answer-mutation"
           class="mt-4 rounded-lg border border-slate-200 bg-white p-4"
         >
           <input type="hidden" name="id" value={freshId('a')} />
-          <input type="hidden" name="questionId" value={question.id} />
+          <input type="hidden" name="questionId" data-derive="question.QuestionDetailRegion$input_value_derive" data-derive-attr="value" />
           <input type="hidden" name="authorId" value="demo-viewer" />
           <label class="block text-sm font-semibold text-slate-700" for="answer-body">
             Your answer
@@ -125,6 +131,7 @@ export const QuestionDetailRegion = component({
     </div>
   ),
 });
+QuestionDetailRegion.name = "components/question-detail/question-detail-region";
 
 export function renderQuestionDetailRegion(data: QuestionDetailPageData): string {
   return QuestionDetailRegion.definition.render(data);

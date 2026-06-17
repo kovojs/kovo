@@ -1,4 +1,6 @@
+// @kovojs-ir — lowered from examples/stackoverflow/src/components/question-list.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
+import { escapeText } from '@kovojs/server';
 import { component } from '@kovojs/core';
 
 import { postQuestionMutation } from '../mutations.js';
@@ -40,12 +42,12 @@ export const QuestionListRegion = component({
     const totalVotes = questionScore.score;
 
     return (
-      <div class="space-y-5">
+      <div class="space-y-5" kovo-c="question-list-region" kovo-deps="questionList questionScore" kovo-fragment-target="question-list-region">
       <div class="flex items-end justify-between">
         <div>
           <h1 class="text-2xl font-bold tracking-tight">Top questions</h1>
           <p class="mt-1 text-sm text-slate-600">
-            {questions.length} questions ·{' '}
+            {escapeText(questions.length)} questions ·{' '}
             <span class="font-semibold tabular-nums text-slate-700">{totalVotes}</span> votes cast
           </p>
         </div>
@@ -57,7 +59,7 @@ export const QuestionListRegion = component({
           is minted at render time so each submission is unique. */}
       <form
         enhance
-        mutation={postQuestionMutation}
+        method="post" action="/_m/postQuestion" data-mutation="postQuestion" kovo-fragment-target="post-question-mutation"
         class="rounded-lg border border-slate-200 bg-white p-4"
       >
         <input type="hidden" name="id" value={freshId('q')} />
@@ -93,7 +95,7 @@ export const QuestionListRegion = component({
             {voteButton(question.id, question.score)}
             <div class="flex w-16 shrink-0 flex-col items-center">
               <span class="text-base font-semibold tabular-nums text-slate-700">
-                {question.answerCount}
+                {escapeText(question.answerCount)}
               </span>
               <span class="text-[10px] uppercase tracking-wide text-slate-500">answers</span>
             </div>
@@ -102,7 +104,7 @@ export const QuestionListRegion = component({
                 class="font-medium text-sky-700 underline-offset-2 hover:underline"
                 href={`/questions/${question.id}`}
               >
-                {question.title}
+                {escapeText(question.title)}
               </a>
             </div>
           </li>
@@ -112,6 +114,7 @@ export const QuestionListRegion = component({
     );
   },
 });
+QuestionListRegion.name = "components/question-list/question-list-region";
 
 export function renderQuestionListRegion({ questions, totalVotes }: QuestionListPageData): string {
   return QuestionListRegion.definition.render({

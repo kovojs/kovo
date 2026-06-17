@@ -539,9 +539,20 @@ export const AddToCartForm = component({
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
       `rg -n 'action="/_m/|data-mutation=' packages/create-kovo/templates/src/auth.tsx`
       on 2026-06-17.
-    - Remaining gap: StackOverflow/CRM region targets still need a
-      component-boundary migration before the `kovo-fragment-target` attributes
-      can be removed.
+    - StackOverflow route regions now compile from query-backed source
+      components: `examples/stackoverflow/src/components/question-list.tsx`
+      and `question-detail.tsx` no longer hand-author root
+      `kovo-fragment-target`, while `examples/stackoverflow/src/generated/*`
+      carries compiler-derived `kovo-c`, `kovo-deps`, and
+      `kovo-fragment-target` stamps for runtime imports.
+    - Verified with
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
+      `rg -n 'kovo-fragment-target=' examples/stackoverflow/src/components/question-list.tsx examples/stackoverflow/src/components/question-detail.tsx`
+      on 2026-06-17.
+    - Remaining gap: CRM region targets still need a component-boundary
+      migration before the `kovo-fragment-target` attributes can be removed.
 - [ ] **10. Final gates.**
   - Run focused compiler/runtime/server/example tests for inferred targets,
     form-target inference, mutation responses, query coverage, and commerce.
