@@ -276,15 +276,29 @@ export const ProductGrid = component({
     });
 
     expect(derived.registryFacts.routes).toEqual(['/cart', '/products/:id']);
-    expect(derived.diagnostics).toEqual([
-      {
-        code: 'KV228',
-        fileName: 'app graph route table',
-        help: diagnosticDefinitions.KV228.help,
-        message:
-          'Ambiguous route table: two routes can match the same canonical request path or duplicate route path. duplicate route path "/cart" appears 2 times in graph pages.',
-        severity: 'error',
+    expect(derived.diagnostics).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV228",
+          "fileName": "app graph route table",
+          "help": "Blocked reason: static-first route matching cannot choose a single canonical handler for at least one request path.
+      Fixes: remove duplicate route facts, split overlapping patterns, add a static segment, or make one route path more specific.
+      SPEC §9.5 requires route matching to be unambiguous at compile time.",
+          "message": "Ambiguous route table: two routes can match the same canonical request path or duplicate route path. duplicate route path "/cart" appears 2 times in graph pages.",
+          "severity": "error",
+        },
+      ]
+    `);
+  });
+
+  it('accepts distinct route facts without KV228 before registry route emission', () => {
+    const derived = deriveAppGraph({
+      graph: {
+        pages: [{ route: '/cart' }, { route: '/products/:id' }, { route: '/checkout' }],
       },
-    ]);
+    });
+
+    expect(derived.registryFacts.routes).toEqual(['/cart', '/checkout', '/products/:id']);
+    expect(derived.diagnostics.filter((diagnostic) => diagnostic.code === 'KV228')).toEqual([]);
   });
 });

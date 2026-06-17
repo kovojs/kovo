@@ -5,7 +5,6 @@ import { compileComponentModule } from './index.js';
 
 const kv230 = diagnosticDefinitions.KV230;
 const kv303 = diagnosticDefinitions.KV303;
-const kv238 = diagnosticDefinitions.KV238;
 
 describe('fragment target validation', () => {
   it('reports KV238 for duplicate derived fragment-target registry names', () => {
@@ -26,22 +25,30 @@ export const Cart_Row = component({
 `,
     });
 
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: 'KV238',
-        fileName: 'cart-row.tsx',
-        help: [
-          kv238.help,
-          'Fragment target: cart-row/cart-row',
-          'First writer: CartRow',
-          'Duplicate writer: Cart_Row',
-          "Would emit registry:\ninterface FragmentTargets {\n  'cart-row/cart-row': ...;\n}",
-        ].join('\n'),
-        message:
-          'Duplicate fragment-target wire name. cart-row/cart-row is used by CartRow and Cart_Row.',
-        severity: 'error',
-      }),
-    );
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238')).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV238",
+          "fileName": "cart-row.tsx",
+          "help": "Fixes: rename the exported component binding, move one component so its derived module path namespace differs, or remove fragmentTarget from the component that should not receive enhanced patches.
+      SPEC §4.5, §4.8, and §6.2 make fragment-target names derived registry-visible identities; duplicate keys make enhanced fragment patches ambiguous.
+      Fragment target: cart-row/cart-row
+      First writer: CartRow
+      Duplicate writer: Cart_Row
+      Would emit registry:
+      interface FragmentTargets {
+        'cart-row/cart-row': ...;
+      }",
+          "length": 8,
+          "message": "Duplicate fragment-target wire name. cart-row/cart-row is used by CartRow and Cart_Row.",
+          "severity": "error",
+          "start": {
+            "column": 14,
+            "line": 8,
+          },
+        },
+      ]
+    `);
   });
 
   it('accepts distinct fragment-target wire names', () => {
@@ -78,14 +85,30 @@ export const CartRow = component({
 `,
     });
 
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: 'KV238',
-        help: expect.stringContaining('registryFacts.fragmentTargets'),
-        message:
-          'Duplicate fragment-target wire name. cart-row/cart-row is already present in registry facts and is reused by CartRow.',
-      }),
-    );
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238')).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV238",
+          "fileName": "cart-row.tsx",
+          "help": "Fixes: rename the exported component binding, move one component so its derived module path namespace differs, or remove fragmentTarget from the component that should not receive enhanced patches.
+      SPEC §4.5, §4.8, and §6.2 make fragment-target names derived registry-visible identities; duplicate keys make enhanced fragment patches ambiguous.
+      Fragment target: cart-row/cart-row
+      Registry writer: registryFacts.fragmentTargets
+      Duplicate writer: CartRow
+      Would emit registry:
+      interface FragmentTargets {
+        'cart-row/cart-row': ...;
+      }",
+          "length": 7,
+          "message": "Duplicate fragment-target wire name. cart-row/cart-row is already present in registry facts and is reused by CartRow.",
+          "severity": "error",
+          "start": {
+            "column": 14,
+            "line": 2,
+          },
+        },
+      ]
+    `);
   });
 
   it('accepts fragment target render inputs declared as queries or stamped props', () => {

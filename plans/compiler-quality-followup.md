@@ -462,33 +462,53 @@ compiler-quality gaps found during the 2026-06-16 audit.
 
 ## Identity And Collision Checks
 
-- [ ] Re-prove duplicate component-name checks.
-  - [ ] Add or verify duplicate explicit component name fixture emits KV237.
-  - [ ] Add or verify inferred kebab-case collision fixture emits KV237.
-  - [ ] Add or verify registry-facts collision fixture emits KV237.
-  - [ ] Add or verify distinct-name fixture emits no KV237.
-  - [ ] Snapshot KV237 teaching help and source anchors.
+- [x] Re-prove duplicate component-name checks.
+  - [x] Add or verify duplicate explicit component binding fixture emits KV237.
+  - [x] Add or verify inferred kebab-case collision fixture emits KV237.
+  - [x] Add or verify registry-facts collision fixture emits KV237.
+  - [x] Add or verify distinct-name fixture emits no KV237.
+  - [x] Snapshot KV237 teaching help and source anchors.
+  - Evidence (2026-06-17): `packages/compiler/src/component-names.test.ts` snapshots KV237
+        diagnostics for duplicate exported component bindings, inferred kebab-case collisions, and
+        `registryFacts.components` collisions, including `SPEC §4.2`, `SPEC §4.8`, `SPEC §6.1.1`,
+        `start`, and `length`; the same file asserts distinct effective names emit no KV237.
 
-- [ ] Re-prove duplicate fragment-target checks.
-  - [ ] Add or verify module-local duplicate fragment-target fixture emits KV238.
-  - [ ] Add or verify registry-facts fragment-target collision fixture emits KV238.
-  - [ ] Add or verify distinct fragment-target fixture emits no KV238.
-  - [ ] Snapshot KV238 teaching help and source anchors.
+- [x] Re-prove duplicate fragment-target checks.
+  - [x] Add or verify module-local duplicate fragment-target fixture emits KV238.
+  - [x] Add or verify registry-facts fragment-target collision fixture emits KV238.
+  - [x] Add or verify distinct fragment-target fixture emits no KV238.
+  - [x] Snapshot KV238 teaching help and source anchors.
+  - Evidence (2026-06-17): `packages/compiler/src/fragment-targets.test.ts` snapshots KV238
+        diagnostics for module-local and `registryFacts.fragmentTargets` collisions, including
+        `SPEC §4.5`, `SPEC §4.8`, `SPEC §6.2`, `start`, and `length`; the same file asserts
+        distinct fragment targets emit no KV238.
 
-- [ ] Re-prove duplicate static view-transition checks.
-  - [ ] Add or verify module-local duplicate static `viewTransitionName` fixture emits KV239.
-  - [ ] Add or verify registry-facts static view-transition collision fixture emits KV239.
-  - [ ] Add or verify distinct static view-transition fixture emits no KV239.
-  - [ ] Document dynamic view-transition uniqueness scope until page-composition proof exists.
-  - [ ] Snapshot KV239 teaching help and source anchors.
+- [x] Re-prove duplicate static view-transition checks.
+  - [x] Add or verify module-local duplicate static `viewTransitionName` fixture emits KV239.
+  - [x] Add or verify registry-facts static view-transition collision fixture emits KV239.
+  - [x] Add or verify distinct static view-transition fixture emits no KV239.
+  - [x] Document dynamic view-transition uniqueness scope until page-composition proof exists.
+  - [x] Snapshot KV239 teaching help and source anchors.
+  - Evidence (2026-06-17): `packages/compiler/src/view-transitions.test.ts` snapshots KV239
+        diagnostics for module-local and `registryFacts.viewTransitions` collisions, including
+        `SPEC §8`, `start`, `length`, and the validator scope note that dynamic names require
+        page-composition proof; the same file asserts distinct static names emit no KV239.
 
-- [ ] Re-prove duplicate query-shape and route collision checks.
-  - [ ] Add or verify duplicate query-shape facts with different shapes emit KV240.
-  - [ ] Add or verify duplicate query-shape facts with identical shapes emit KV240.
-  - [ ] Add or verify distinct query-shape facts emit no KV240.
-  - [ ] Add or verify exact duplicate route facts emit KV228 before route registry dedupe.
-  - [ ] Add or verify distinct route facts emit no KV228.
-  - [ ] Snapshot KV240 and duplicate-route KV228 teaching help.
+- [x] Re-prove duplicate query-shape and route collision checks.
+  - [x] Add or verify duplicate query-shape facts with different shapes emit KV240.
+  - [x] Add or verify duplicate query-shape facts with identical shapes emit KV240.
+  - [x] Add or verify distinct query-shape facts emit no KV240.
+  - [x] Add or verify exact duplicate route facts emit KV228 before route registry dedupe.
+  - [x] Add or verify distinct route facts emit no KV228.
+  - [x] Snapshot KV240 and duplicate-route KV228 teaching help.
+  - Evidence (2026-06-17): `packages/compiler/src/query-bindings.test.ts` snapshots KV240 for
+        duplicate query-shape facts with different and identical shapes and asserts distinct query
+        shape facts emit no KV240; `packages/compiler/src/registry.test.ts` snapshots duplicate
+        route KV228 before route registry dedupe and asserts distinct route facts emit no KV228.
+  - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest --run
+        src/component-names.test.ts src/fragment-targets.test.ts src/view-transitions.test.ts
+        src/query-bindings.test.ts src/registry.test.ts src/diagnostic-coverage-matrix.test.ts`
+        passed.
 
 ## Compatibility Paths
 

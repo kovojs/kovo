@@ -99,19 +99,18 @@ export const CartBadge = component({
         count: 'number',
       },
     });
-    expect(result.diagnostics).toEqual([
-      {
-        code: 'KV240',
-        fileName: 'cart-badge.tsx',
-        help: [
-          'Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.',
-          'SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.',
-        ].join('\n'),
-        message:
-          'Duplicate query-shape fact for one query name. query="cart" sources=generated/queries/cart-refresh.shape.ts, generated/queries/cart.shape.ts',
-        severity: 'error',
-      },
-    ]);
+    expect(result.diagnostics).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV240",
+          "fileName": "cart-badge.tsx",
+          "help": "Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
+      SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
+          "message": "Duplicate query-shape fact for one query name. query="cart" sources=generated/queries/cart-refresh.shape.ts, generated/queries/cart.shape.ts",
+          "severity": "error",
+        },
+      ]
+    `);
   });
 
   it('reports KV240 when duplicate query-shape facts have the same shape', () => {
@@ -132,19 +131,18 @@ export const CartBadge = component({
       },
     ] as const;
 
-    expect(queryShapeFactDiagnostics('cart-badge.tsx', queryShapeFacts)).toEqual([
-      {
-        code: 'KV240',
-        fileName: 'cart-badge.tsx',
-        help: [
-          'Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.',
-          'SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.',
-        ].join('\n'),
-        message:
-          'Duplicate query-shape fact for one query name. query="cart" sources=generated/queries/cart-copy.shape.ts, generated/queries/cart.shape.ts',
-        severity: 'error',
-      },
-    ]);
+    expect(queryShapeFactDiagnostics('cart-badge.tsx', queryShapeFacts)).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV240",
+          "fileName": "cart-badge.tsx",
+          "help": "Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
+      SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
+          "message": "Duplicate query-shape fact for one query name. query="cart" sources=generated/queries/cart-copy.shape.ts, generated/queries/cart.shape.ts",
+          "severity": "error",
+        },
+      ]
+    `);
   });
 
   it('accepts distinct query-shape fact names', () => {

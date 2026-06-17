@@ -1,11 +1,8 @@
-import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
 import { viewTransitionLowering } from './lower/view-transitions.js';
 import { parseComponentModule } from './scan/parse.js';
-
-const kv239 = diagnosticDefinitions.KV239;
 
 describe('view transition lowering', () => {
   it('exposes view transition lowering as parsed source patches', () => {
@@ -67,23 +64,31 @@ export const ProductCard = component({
 `,
     });
 
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: 'KV239',
-        fileName: 'product-card.tsx',
-        help: [
-          kv239.help,
-          'View-transition name: product-p1-image',
-          'First writer: ProductCard <img>',
-          'Duplicate writer: ProductCard <a>',
-          "Would emit registry:\ninterface ViewTransitions {\n  'product-p1-image': unknown;\n}",
-          'Scope: module-local static rendered source plus registryFacts.viewTransitions when supplied; dynamic names require page-composition proof outside this validator.',
-        ].join('\n'),
-        message:
-          'Duplicate static view-transition name. product-p1-image is used by ProductCard <img> and ProductCard <a>.',
-        severity: 'error',
-      }),
-    );
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV239')).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV239",
+          "fileName": "product-card.tsx",
+          "help": "Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
+      SPEC §8 uses view-transition-name as a cross-document element-pair identity; duplicate static names in one rendered module or supplied registry facts are ambiguous.
+      View-transition name: product-p1-image
+      First writer: ProductCard <img>
+      Duplicate writer: ProductCard <a>
+      Would emit registry:
+      interface ViewTransitions {
+        'product-p1-image': unknown;
+      }
+      Scope: module-local static rendered source plus registryFacts.viewTransitions when supplied; dynamic names require page-composition proof outside this validator.",
+          "length": 37,
+          "message": "Duplicate static view-transition name. product-p1-image is used by ProductCard <img> and ProductCard <a>.",
+          "severity": "error",
+          "start": {
+            "column": 10,
+            "line": 6,
+          },
+        },
+      ]
+    `);
   });
 
   it('accepts distinct static view transition names', () => {
@@ -115,14 +120,31 @@ export const ProductCard = component({
 `,
     });
 
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: 'KV239',
-        help: expect.stringContaining('registryFacts.viewTransitions'),
-        message:
-          'Duplicate static view-transition name. product-p1-image is already present in registry facts and is reused by ProductCard <img>.',
-      }),
-    );
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV239')).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV239",
+          "fileName": "product-card.tsx",
+          "help": "Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
+      SPEC §8 uses view-transition-name as a cross-document element-pair identity; duplicate static names in one rendered module or supplied registry facts are ambiguous.
+      View-transition name: product-p1-image
+      Registry writer: registryFacts.viewTransitions
+      Duplicate writer: ProductCard <img>
+      Would emit registry:
+      interface ViewTransitions {
+        'product-p1-image': unknown;
+      }
+      Scope: module-local static rendered source plus registryFacts.viewTransitions when supplied; dynamic names require page-composition proof outside this validator.",
+          "length": 37,
+          "message": "Duplicate static view-transition name. product-p1-image is already present in registry facts and is reused by ProductCard <img>.",
+          "severity": "error",
+          "start": {
+            "column": 22,
+            "line": 3,
+          },
+        },
+      ]
+    `);
   });
 
   it('merges cross-document view transition stamps into existing static styles', () => {
