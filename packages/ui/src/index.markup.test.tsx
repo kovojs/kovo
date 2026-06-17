@@ -173,31 +173,33 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(Skeleton.definition.render({ style: skeletonOverride.root })).toContain(
       'data-style-src="skeleton.tsx#root; index.markup.test.tsx#root"',
     );
-    expect(alertDialogClasses.join(' ')).toContain('contents');
-    expect(alertDialogContentClasses.join(' ')).toContain('max-w-md');
-    expect(alertDialogActionClasses.join(' ')).toContain('data-[intent=destructive]');
-    expect(checkboxGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
-    expect(dialogClasses.join(' ')).toContain('contents');
-    expect(dialogContentClasses.join(' ')).toContain('backdrop:bg-black/30');
-    expect(numberFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');
-    expect(otpFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');
-    expect(fieldClasses.join(' ')).toContain('data-[required]');
-    expect(selectClasses.join(' ')).toContain('data-[invalid]:text-red-950');
-    expect(selectTriggerClasses.join(' ')).toContain('data-[placeholder]:text-neutral-500');
-    expect(comboboxClasses.join(' ')).toContain('data-[invalid]:text-red-950');
-    expect(comboboxListboxClasses.join(' ')).toContain('data-[state=closed]');
-    expect(comboboxInputClasses.join(' ')).toContain('aria-[invalid=true]:border-red-400');
-    expect(autocompleteClasses.join(' ')).toContain('data-[invalid]:text-red-950');
-    expect(autocompleteInputClasses.join(' ')).toContain('focus-visible:ring-2');
-    expect(sliderClasses.join(' ')).toContain('data-[orientation=vertical]:inline-grid');
-    expect(sliderInputClasses.join(' ')).toContain('accent-neutral-950');
-    expect(toastClasses.join(' ')).toContain('data-[variant=success]:bg-emerald-50');
-    expect(toastViewportClasses.join(' ')).toContain('data-[placement=bottom-end]');
-    expect(dropdownMenuClasses.join(' ')).toContain('relative inline-block');
-    expect(contextMenuClasses.join(' ')).toContain('data-[disabled]:opacity-50');
-    expect(menubarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
-    expect(navigationMenuClasses.join(' ')).toContain('data-[orientation=vertical]');
-    expect(commandClasses.join(' ')).toContain('grid gap-2');
+    expect({
+      alertDialogActionClasses,
+      alertDialogClasses,
+      alertDialogContentClasses,
+      autocompleteClasses,
+      autocompleteInputClasses,
+      checkboxGroupClasses,
+      commandClasses,
+      contextMenuClasses,
+      dialogClasses,
+      dialogContentClasses,
+      dropdownMenuClasses,
+      fieldClasses,
+      menubarClasses,
+      navigationMenuClasses,
+      numberFieldClasses,
+      otpFieldClasses,
+      selectClasses,
+      selectTriggerClasses,
+      sliderClasses,
+      sliderInputClasses,
+      toastClasses,
+      toastViewportClasses,
+      comboboxClasses,
+      comboboxInputClasses,
+      comboboxListboxClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps H1 primitives as styled vendorable TSX parts', () => {

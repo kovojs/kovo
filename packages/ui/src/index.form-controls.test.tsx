@@ -117,9 +117,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(disabledControl).toContain('id="notifications-security"');
     expect(disabledControl).toContain('tabIndex="-1" type="checkbox" value="security"');
     expect(label).toContain('for="notifications-updates"');
-    expect(checkboxGroupItemClasses.join(' ')).toContain('data-[disabled]:opacity-50');
-    expect(checkboxGroupControlClasses.join(' ')).toContain('accent-neutral-950');
-    expect(checkboxGroupLabelClasses.join(' ')).toContain('select-none');
+    expect({
+      checkboxGroupControlClasses,
+      checkboxGroupItemClasses,
+      checkboxGroupLabelClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps the headless radio-group primitive as styled native radios', () => {
@@ -391,9 +393,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(increment).toContain('data-action="increment"');
     expect(disabledAtMax).toContain('data-disabled=""');
     expect(disabledAtMax).toContain('disabled type="button"');
-    expect(numberFieldControlClasses.join(' ')).toContain('inline-flex h-9');
-    expect(numberFieldInputClasses.join(' ')).toContain('text-center');
-    expect(numberFieldButtonClasses.join(' ')).toContain('data-[action=increment]:border-l');
+    expect({
+      numberFieldButtonClasses,
+      numberFieldControlClasses,
+      numberFieldInputClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps the headless otp-field primitive as styled aggregate and slot inputs', () => {
@@ -438,7 +442,7 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(root).toContain('aria-invalid="true"');
     expect(root).toContain('data-required=""');
     expect(root).toContain('role="group"');
-    expect(group).toContain('flex items-center gap-2');
+    expect(group).toContain('data-style-src="otp-field.tsx#group"');
     expect(hidden).toContain('aria-hidden="true"');
     expect(hidden).toContain('data-slot="hidden-input"');
     expect(hidden).toContain('autoComplete="one-time-code"');
@@ -453,9 +457,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(firstSlot).toContain('maxLength="1"');
     expect(emptySlot).toContain('data-slot="5"');
     expect(completeDisabled).toContain('data-complete="" data-disabled=""');
-    expect(otpFieldGroupClasses.join(' ')).toContain('flex items-center gap-2');
-    expect(otpFieldHiddenInputClasses.join(' ')).toContain('sr-only');
-    expect(otpFieldInputClasses.join(' ')).toContain('data-[filled]:border-neutral-500');
+    expect({
+      otpFieldGroupClasses,
+      otpFieldHiddenInputClasses,
+      otpFieldInputClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps field and fieldset primitives as styled native form wiring', () => {
@@ -555,7 +561,7 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(control).toContain('required type="email"');
     expect(control).toContain('value="ada@example.com"');
     expect(control).not.toMatch(/\sdisabled(?:\s|>|=)/);
-    expect(textarea).toContain('<textarea aria-describedby="bio-description"');
+    expect(textarea).toContain('aria-describedby="bio-description"');
     expect(textarea).toContain('autoComplete="off"');
     expect(textarea).toContain('form="profile-form"');
     expect(textarea).toContain('id="bio"');
@@ -564,14 +570,13 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(textarea).toContain('rows="4"');
     expect(textarea).toContain('maxLength="240"');
     expect(textarea).not.toMatch(/\sdisabled(?:\s|>|=)/);
-    expect(select).toContain('<select aria-describedby="plan-description"');
+    expect(select).toContain('aria-describedby="plan-description"');
     expect(select).toContain('form="profile-form"');
     expect(select).toContain('id="plan" name="plan" required value="team"');
     expect(select).toContain('<option value="team" selected>Team</option>');
     expect(select).not.toMatch(/\sdisabled(?:\s|>|=)/);
-    expect(selectOption).toContain(
-      '<option class="text-neutral-950 disabled:text-neutral-400" disabled selected value="enterprise">Enterprise</option>',
-    );
+    expect(selectOption).toContain('data-style-src="field.tsx#selectOption"');
+    expect(selectOption).toContain('disabled selected value="enterprise">Enterprise</option>');
     expect(description).toContain('id="email-description"');
     expect(error).toContain('role="alert"');
     expect(fieldset).toContain('aria-describedby="plan-description"');
@@ -583,14 +588,16 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(fieldset).toContain('id="seat" name="seat"');
     expect(fieldset).toContain('id="plan-fieldset"');
     expect(fieldset).toContain('id="plan-legend"');
-    expect(fieldLabelClasses.join(' ')).toContain('text-sm font-medium');
-    expect(fieldControlClasses.join(' ')).toContain('aria-[invalid=true]:border-red-500');
-    expect(fieldTextareaClasses.join(' ')).toContain('min-h-24');
-    expect(fieldSelectClasses.join(' ')).toContain('h-9 w-full');
-    expect(fieldSelectOptionClasses.join(' ')).toContain('disabled:text-neutral-400');
-    expect(fieldDescriptionClasses.join(' ')).toContain('text-neutral-500');
-    expect(fieldErrorClasses.join(' ')).toContain('text-red-600');
-    expect(fieldsetClasses.join(' ')).toContain('rounded-md border border-neutral-200');
-    expect(fieldsetLegendClasses.join(' ')).toContain('px-1 text-sm font-medium');
+    expect({
+      fieldControlClasses,
+      fieldDescriptionClasses,
+      fieldErrorClasses,
+      fieldLabelClasses,
+      fieldSelectClasses,
+      fieldSelectOptionClasses,
+      fieldTextareaClasses,
+      fieldsetClasses,
+      fieldsetLegendClasses,
+    }).toMatchSnapshot();
   });
 });

@@ -33,15 +33,11 @@ export {
   AutocompleteList,
   AutocompleteOption,
   AutocompleteValue,
-  autocompleteClassNames,
   autocompleteClasses,
-  autocompleteInputClassNames,
   autocompleteInputClasses,
-  autocompleteListClassNames,
   autocompleteListClasses,
-  autocompleteOptionClassNames,
   autocompleteOptionClasses,
-  autocompleteValueClassNames,
+  autocompleteStyles,
   autocompleteValueClasses,
 } from './autocomplete.js';
 export type {
@@ -50,6 +46,7 @@ export type {
   AutocompleteOptionProps,
   AutocompleteProps,
   AutocompleteStateProps,
+  AutocompleteStyleOverrides,
   AutocompleteValueProps,
 } from './autocomplete.js';
 export { Kbd, kbdClasses, kbdStyles } from './kbd.js';
@@ -59,14 +56,11 @@ export {
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
-  checkboxGroupClassNames,
   checkboxGroupClasses,
-  checkboxGroupControlClassNames,
   checkboxGroupControlClasses,
-  checkboxGroupItemClassNames,
   checkboxGroupItemClasses,
-  checkboxGroupLabelClassNames,
   checkboxGroupLabelClasses,
+  checkboxGroupStyles,
 } from './checkbox-group.js';
 export type {
   CheckboxGroupControlProps,
@@ -74,6 +68,7 @@ export type {
   CheckboxGroupLabelProps,
   CheckboxGroupProps,
   CheckboxGroupStateProps,
+  CheckboxGroupStyleOverrides,
 } from './checkbox-group.js';
 export {
   Combobox,
@@ -81,15 +76,11 @@ export {
   ComboboxListbox,
   ComboboxOption,
   ComboboxValue,
-  comboboxClassNames,
   comboboxClasses,
-  comboboxInputClassNames,
   comboboxInputClasses,
-  comboboxListboxClassNames,
   comboboxListboxClasses,
-  comboboxOptionClassNames,
   comboboxOptionClasses,
-  comboboxValueClassNames,
+  comboboxStyles,
   comboboxValueClasses,
 } from './combobox.js';
 export type {
@@ -98,6 +89,7 @@ export type {
   ComboboxOptionProps,
   ComboboxProps,
   ComboboxStateProps,
+  ComboboxStyleOverrides,
   ComboboxValueProps,
 } from './combobox.js';
 export {
@@ -110,23 +102,15 @@ export {
   CommandListbox,
   CommandTrigger,
   CommandValue,
-  commandClassNames,
   commandClasses,
-  commandCloseClassNames,
   commandCloseClasses,
-  commandDialogClassNames,
   commandDialogClasses,
-  commandEmptyClassNames,
   commandEmptyClasses,
-  commandInputClassNames,
   commandInputClasses,
-  commandItemClassNames,
   commandItemClasses,
-  commandListboxClassNames,
   commandListboxClasses,
-  commandTriggerClassNames,
+  commandStyles,
   commandTriggerClasses,
-  commandValueClassNames,
   commandValueClasses,
 } from './command.js';
 export type {
@@ -138,6 +122,7 @@ export type {
   CommandListboxProps,
   CommandProps,
   CommandStateProps,
+  CommandStyleOverrides,
   CommandTriggerProps,
   CommandValueProps,
 } from './command.js';
@@ -148,17 +133,12 @@ export {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
-  contextMenuClassNames,
   contextMenuClasses,
-  contextMenuContentClassNames,
   contextMenuContentClasses,
-  contextMenuGroupClassNames,
   contextMenuGroupClasses,
-  contextMenuItemClassNames,
   contextMenuItemClasses,
-  contextMenuSeparatorClassNames,
   contextMenuSeparatorClasses,
-  contextMenuTriggerClassNames,
+  contextMenuStyles,
   contextMenuTriggerClasses,
 } from './context-menu.js';
 export type {
@@ -168,6 +148,7 @@ export type {
   ContextMenuProps,
   ContextMenuSeparatorProps,
   ContextMenuStateProps,
+  ContextMenuStyleOverrides,
   ContextMenuTriggerProps,
 } from './context-menu.js';
 export {
@@ -177,17 +158,12 @@ export {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  dropdownMenuClassNames,
   dropdownMenuClasses,
-  dropdownMenuContentClassNames,
   dropdownMenuContentClasses,
-  dropdownMenuGroupClassNames,
   dropdownMenuGroupClasses,
-  dropdownMenuItemClassNames,
   dropdownMenuItemClasses,
-  dropdownMenuSeparatorClassNames,
   dropdownMenuSeparatorClasses,
-  dropdownMenuTriggerClassNames,
+  dropdownMenuStyles,
   dropdownMenuTriggerClasses,
 } from './dropdown-menu.js';
 export type {
@@ -197,6 +173,7 @@ export type {
   DropdownMenuProps,
   DropdownMenuSeparatorProps,
   DropdownMenuStateProps,
+  DropdownMenuStyleOverrides,
   DropdownMenuTriggerProps,
 } from './dropdown-menu.js';
 export {
@@ -218,10 +195,35 @@ export type {
   RadioGroupStateProps,
   RadioGroupStyleOverrides,
 } from './radio-group.js';
-export { Drawer, drawerContentClassNames, drawerContentClasses } from './drawer.js';
-export type { DrawerProps, DrawerSide } from './drawer.js';
-export { Sheet, sheetContentClassNames, sheetContentClasses } from './sheet.js';
-export type { SheetProps, SheetSide } from './sheet.js';
+export {
+  Drawer,
+  drawerBodyClasses,
+  drawerClasses,
+  drawerCloseClasses,
+  drawerContentClasses,
+  drawerDescriptionClasses,
+  drawerHandleClasses,
+  drawerHeaderClasses,
+  drawerSideStyles,
+  drawerStyles,
+  drawerTitleClasses,
+  drawerTriggerClasses,
+} from './drawer.js';
+export type { DrawerProps, DrawerSide, DrawerStyleOverrides } from './drawer.js';
+export {
+  Sheet,
+  sheetBodyClasses,
+  sheetClasses,
+  sheetCloseClasses,
+  sheetContentClasses,
+  sheetDescriptionClasses,
+  sheetHeaderClasses,
+  sheetSideStyles,
+  sheetStyles,
+  sheetTitleClasses,
+  sheetTriggerClasses,
+} from './sheet.js';
+export type { SheetProps, SheetSide, SheetStyleOverrides } from './sheet.js';
 export {
   Field,
   FieldControl,
@@ -233,25 +235,16 @@ export {
   FieldTextarea,
   Fieldset,
   FieldsetLegend,
-  fieldClassNames,
   fieldClasses,
-  fieldControlClassNames,
   fieldControlClasses,
-  fieldDescriptionClassNames,
   fieldDescriptionClasses,
-  fieldErrorClassNames,
   fieldErrorClasses,
-  fieldLabelClassNames,
   fieldLabelClasses,
-  fieldSelectClassNames,
   fieldSelectClasses,
-  fieldSelectOptionClassNames,
   fieldSelectOptionClasses,
-  fieldTextareaClassNames,
+  fieldStyles,
   fieldTextareaClasses,
-  fieldsetClassNames,
   fieldsetClasses,
-  fieldsetLegendClassNames,
   fieldsetLegendClasses,
 } from './field.js';
 export type {
@@ -262,6 +255,7 @@ export type {
   FieldSelectOptionProps,
   FieldSelectProps,
   FieldStateProps,
+  FieldStyleOverrides,
   FieldTextareaProps,
   FieldsetLegendProps,
   FieldsetProps,
@@ -272,15 +266,11 @@ export {
   MenubarItem,
   MenubarSeparator,
   MenubarSubmenu,
-  menubarClassNames,
   menubarClasses,
-  menubarGroupClassNames,
   menubarGroupClasses,
-  menubarItemClassNames,
   menubarItemClasses,
-  menubarSeparatorClassNames,
   menubarSeparatorClasses,
-  menubarSubmenuClassNames,
+  menubarStyles,
   menubarSubmenuClasses,
 } from './menubar.js';
 export type {
@@ -289,6 +279,7 @@ export type {
   MenubarProps,
   MenubarSeparatorProps,
   MenubarStateProps,
+  MenubarStyleOverrides,
   MenubarSubmenuProps,
 } from './menubar.js';
 export {
@@ -300,21 +291,14 @@ export {
   NavigationMenuList,
   NavigationMenuTrigger,
   NavigationMenuViewport,
-  navigationMenuClassNames,
   navigationMenuClasses,
-  navigationMenuContentClassNames,
   navigationMenuContentClasses,
-  navigationMenuIndicatorClassNames,
   navigationMenuIndicatorClasses,
-  navigationMenuItemClassNames,
   navigationMenuItemClasses,
-  navigationMenuLinkClassNames,
   navigationMenuLinkClasses,
-  navigationMenuListClassNames,
   navigationMenuListClasses,
-  navigationMenuTriggerClassNames,
+  navigationMenuStyles,
   navigationMenuTriggerClasses,
-  navigationMenuViewportClassNames,
   navigationMenuViewportClasses,
 } from './navigation-menu.js';
 export type {
@@ -325,6 +309,7 @@ export type {
   NavigationMenuPartProps,
   NavigationMenuProps,
   NavigationMenuStateProps,
+  NavigationMenuStyleOverrides,
   NavigationMenuTriggerProps,
 } from './navigation-menu.js';
 export {
@@ -333,40 +318,36 @@ export {
   NumberFieldDecrement,
   NumberFieldIncrement,
   NumberFieldInput,
-  numberFieldButtonClassNames,
   numberFieldButtonClasses,
-  numberFieldClassNames,
   numberFieldClasses,
-  numberFieldControlClassNames,
   numberFieldControlClasses,
-  numberFieldInputClassNames,
   numberFieldInputClasses,
+  numberFieldStyles,
 } from './number-field.js';
 export type {
   NumberFieldButtonProps,
   NumberFieldInputProps,
   NumberFieldProps,
   NumberFieldStateProps,
+  NumberFieldStyleOverrides,
 } from './number-field.js';
 export {
   OtpField,
   OtpFieldGroup,
   OtpFieldHiddenInput,
   OtpFieldInput,
-  otpFieldClassNames,
   otpFieldClasses,
-  otpFieldGroupClassNames,
   otpFieldGroupClasses,
-  otpFieldHiddenInputClassNames,
   otpFieldHiddenInputClasses,
-  otpFieldInputClassNames,
   otpFieldInputClasses,
+  otpFieldStyles,
 } from './otp-field.js';
 export type {
   OtpFieldHiddenInputProps,
   OtpFieldInputProps,
   OtpFieldProps,
   OtpFieldStateProps,
+  OtpFieldStyleOverrides,
 } from './otp-field.js';
 export { Skeleton, skeletonClasses, skeletonStyles } from './skeleton.js';
 export type { SkeletonProps } from './skeleton.js';
@@ -398,15 +379,12 @@ export {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  selectClassNames,
   selectClasses,
-  selectContentClassNames,
   selectContentClasses,
-  selectItemClassNames,
+  selectHiddenInputClasses,
   selectItemClasses,
-  selectTriggerClassNames,
+  selectStyles,
   selectTriggerClasses,
-  selectValueClassNames,
   selectValueClasses,
 } from './select.js';
 export type {
@@ -415,6 +393,7 @@ export type {
   SelectItemProps,
   SelectProps,
   SelectStateProps,
+  SelectStyleOverrides,
   SelectTriggerProps,
   SelectValueProps,
 } from './select.js';
@@ -455,18 +434,21 @@ export {
   SliderRange,
   SliderThumb,
   SliderTrack,
-  sliderClassNames,
   sliderClasses,
-  sliderInputClassNames,
   sliderInputClasses,
-  sliderRangeClassNames,
   sliderRangeClasses,
-  sliderThumbClassNames,
+  sliderStyles,
   sliderThumbClasses,
-  sliderTrackClassNames,
   sliderTrackClasses,
 } from './slider.js';
-export type { SliderInputProps, SliderPartProps, SliderProps, SliderStateProps } from './slider.js';
+export type {
+  SliderInputProps,
+  SliderPartProps,
+  SliderProps,
+  SliderStateProps,
+  SliderStyleOverrides,
+  SliderThumbProps,
+} from './slider.js';
 export {
   Tabs,
   TabsList,
@@ -511,17 +493,12 @@ export {
   ToastDescription,
   ToastTitle,
   ToastViewport,
-  toastActionClassNames,
   toastActionClasses,
-  toastClassNames,
   toastClasses,
-  toastCloseClassNames,
   toastCloseClasses,
-  toastDescriptionClassNames,
   toastDescriptionClasses,
-  toastTitleClassNames,
+  toastStyles,
   toastTitleClasses,
-  toastViewportClassNames,
   toastViewportClasses,
 } from './toast.js';
 export type {
@@ -529,6 +506,7 @@ export type {
   ToastCloseProps,
   ToastPartProps,
   ToastProps,
+  ToastStyleOverrides,
   ToastViewportProps,
 } from './toast.js';
 export {
@@ -576,15 +554,11 @@ export {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogTrigger,
-  alertDialogActionClassNames,
   alertDialogActionClasses,
-  alertDialogCancelClassNames,
   alertDialogCancelClasses,
-  alertDialogClassNames,
   alertDialogClasses,
-  alertDialogContentClassNames,
   alertDialogContentClasses,
-  alertDialogTriggerClassNames,
+  alertDialogStyles,
   alertDialogTriggerClasses,
 } from './alert-dialog.js';
 export type {
@@ -593,6 +567,7 @@ export type {
   AlertDialogContentProps,
   AlertDialogProps,
   AlertDialogStateProps,
+  AlertDialogStyleOverrides,
   AlertDialogTriggerProps,
 } from './alert-dialog.js';
 export {
@@ -632,13 +607,10 @@ export {
   DialogClose,
   DialogContent,
   DialogTrigger,
-  dialogClassNames,
   dialogClasses,
-  dialogCloseClassNames,
   dialogCloseClasses,
-  dialogContentClassNames,
   dialogContentClasses,
-  dialogTriggerClassNames,
+  dialogStyles,
   dialogTriggerClasses,
 } from './dialog.js';
 export type {
@@ -646,6 +618,7 @@ export type {
   DialogContentProps,
   DialogProps,
   DialogStateProps,
+  DialogStyleOverrides,
   DialogTriggerProps,
 } from './dialog.js';
 export {

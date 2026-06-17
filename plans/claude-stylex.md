@@ -720,6 +720,38 @@ borrowing its concrete API/spike detail.
     src/interactive-gallery.axe.browser.test.ts src/interactive-gallery.visual.browser.test.ts
     src/interactive-gallery.interactions-b.browser.test.ts`, `pnpm exec tsc --noEmit`, and
     `git diff --check` pass.
+  - Evidence (partial, 2026-06-16): the remaining Tailwind-helper UI modules
+    (`alert-dialog`, `autocomplete`, `checkbox-group`, `combobox`, `command`, `context-menu`,
+    `dialog`, `drawer`, `dropdown-menu`, `field`, `menubar`, `navigation-menu`, `number-field`,
+    `otp-field`, `select`, `sheet`, `slider`, `toast`) now import `@kovojs/style`, export
+    `...Styles` groups, accept typed `...StyleOverrides`, and drop `defineVariants`/`cn`/
+    `ClassValue` from `packages/ui/src/*.tsx`; `rg -n "defineVariants|type ClassValue|cn\\("
+    packages/ui/src/*.tsx` returns no matches. Focused `*.stylex.test.tsx` files snapshot generated
+    StyleX output, exported slot objects, and author-last overrides for each migrated component.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/index.tsx` re-exports the new StyleX style groups
+    and override types, `packages/cli/src/index.kovo-add.test.ts` asserts copied sources contain
+    StyleX imports/style groups/typed overrides, `packages/ui/registry.json` is regenerated, and
+    shared UI/gallery assertions now keep semantic behavior checks while moving generated class coverage
+    to Vitest snapshots or `data-style-src` markers.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run
+    packages/ui/src/*.stylex.test.tsx packages/ui/src/index.markup.test.tsx
+    packages/ui/src/index.form-controls.test.tsx packages/ui/src/index.inputs.test.tsx
+    packages/ui/src/index.overlays.test.tsx packages/ui/src/copy-in.test.ts
+    packages/cli/src/index.kovo-add.test.ts examples/gallery/src/demo-fixtures.test.ts
+    examples/gallery/src/behavior-contracts.test.ts`, `pnpm exec vitest --run
+    examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`,
+    `node packages/ui/scripts/build-registry.mjs`, `pnpm exec tsc --noEmit --pretty false`, and
+    `git diff --check` pass.
+  - Evidence (partial, 2026-06-16): browser gates pass for the migrated gallery surface:
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.visual.browser.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.axe.browser.test.ts`, and
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.native.browser.test.ts src/interactive-gallery.interactions-b.browser.test.ts`.
+    `pnpm --filter @kovojs/example-gallery run emit:interactive-gallery` remains blocked by the
+    pre-existing compiler-quality follow-up gap where `examples/gallery/src/interactive/scroll-area-demo.tsx`
+    emits KV236 for dynamic raw `style` text.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

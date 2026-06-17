@@ -161,9 +161,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(hiddenInput).toContain('name="plan" type="hidden" value="growth"');
     expect(hiddenInput).not.toContain('required');
     expect(value).toContain('id="plan-value">Growth</span>');
-    expect(selectContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
-    expect(selectItemClasses.join(' ')).toContain('data-[state=checked]:font-medium');
-    expect(selectValueClasses.join(' ')).toContain('data-[placeholder]:text-neutral-500');
+    expect({
+      selectContentClasses,
+      selectItemClasses,
+      selectValueClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps the headless combobox primitive as styled input and listbox markup', () => {
@@ -219,9 +221,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(listbox).toContain('data-highlighted="" data-state="unchecked"');
     expect(listbox).toContain('aria-disabled="true"');
     expect(value).toContain('id="assignee-value">Ada Lovelace</span>');
-    expect(comboboxListboxClasses.join(' ')).toContain('data-[state=closed]:hidden');
-    expect(comboboxOptionClasses.join(' ')).toContain('data-[highlighted]:bg-neutral-100');
-    expect(comboboxValueClasses.join(' ')).toContain('data-[placeholder]:text-neutral-500');
+    expect({
+      comboboxListboxClasses,
+      comboboxOptionClasses,
+      comboboxValueClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps the headless autocomplete primitive as styled input and listbox markup', () => {
@@ -276,9 +280,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(list).toContain('data-highlighted="" data-state="checked"');
     expect(list).toContain('aria-disabled="true"');
     expect(value).toContain('id="plan-search-value">Growth plan</span>');
-    expect(autocompleteListClasses.join(' ')).toContain('rounded-md border border-neutral-200');
-    expect(autocompleteOptionClasses.join(' ')).toContain('data-[highlighted]:font-medium');
-    expect(autocompleteValueClasses.join(' ')).toContain('data-[placeholder]:text-neutral-500');
+    expect({
+      autocompleteListClasses,
+      autocompleteOptionClasses,
+      autocompleteValueClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps the headless slider primitive as styled range input and decorative parts', () => {
@@ -319,9 +325,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(root).toContain('data-part="range"');
     expect(root).toContain('data-part="thumb"');
     expect(root).toContain('data-value-ratio="0.65"');
-    expect(sliderTrackClasses.join(' ')).toContain('rounded-full bg-neutral-200');
-    expect(sliderRangeClasses.join(' ')).toContain('rounded-full bg-neutral-950');
-    expect(sliderThumbClasses.join(' ')).toContain('rounded-full border border-neutral-300');
+    expect({
+      sliderRangeClasses,
+      sliderThumbClasses,
+      sliderTrackClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps the headless tabs primitive as styled tablist parts', () => {

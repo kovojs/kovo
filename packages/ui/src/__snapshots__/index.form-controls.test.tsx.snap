@@ -1,0 +1,75 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui styled package foundation > wraps field and fieldset primitives as styled native form wiring 1`] = `
+{
+  "fieldControlClasses": [
+    "kv-field-bg-twio9x kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
+  ],
+  "fieldDescriptionClasses": [
+    "kv-field-fg-xo5wnt kv-field-font-1ditt9",
+  ],
+  "fieldErrorClasses": [
+    "kv-field-fg-1ljwu3 kv-field-font-1ditt9 kv-field-font-oqvzpu",
+  ],
+  "fieldLabelClasses": [
+    "kv-field-fg-1mudui kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-line-md0e74 kv-field-cursor-1uohhp kv-field-opacity-1cqgy8",
+  ],
+  "fieldSelectClasses": [
+    "kv-field-bg-twio9x kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
+  ],
+  "fieldSelectOptionClasses": [
+    "kv-field-fg-8bc8sj kv-field-fg-1hf8s9",
+  ],
+  "fieldTextareaClasses": [
+    "kv-field-bg-twio9x kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-min-1pjmnv kv-field-pad-kmxu12 kv-field-pad-7oar2q",
+  ],
+  "fieldsetClasses": [
+    "kv-field-bd-mxevf0 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-fg-8bc8sj kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-pad-g8j5fv kv-field-row-zmgosv kv-field-opacity-r0fqdm kv-field-bd-remj3z",
+  ],
+  "fieldsetLegendClasses": [
+    "kv-field-fg-1mudui kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-pad-135yro",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps the headless checkbox-group primitive as styled native checkboxes 1`] = `
+{
+  "checkboxGroupControlClasses": [
+    "kv-checkbox-group-accent-14rtb5 kv-checkbox-group-bd-53mqd3 kv-checkbox-group-bd-15tghl kv-checkbox-group-bd-1aw25w kv-checkbox-group-bd-11qmhr kv-checkbox-group-fg-8bc8sj kv-checkbox-group-h-164368 kv-checkbox-group-w-6iqu6x kv-checkbox-group-cursor-1evm4m kv-checkbox-group-opacity-1hh78w kv-checkbox-group-outline-9crfjn kv-checkbox-group-outline-1ukfww kv-checkbox-group-outline-6gshig kv-checkbox-group-outline-6qyzyk",
+  ],
+  "checkboxGroupItemClasses": [
+    "kv-checkbox-group-align-1vxg5e kv-checkbox-group-column-1wng6t kv-checkbox-group-d-1ks6ev kv-checkbox-group-cursor-el2a3t kv-checkbox-group-opacity-1icjyx",
+  ],
+  "checkboxGroupLabelClasses": [
+    "kv-checkbox-group-line-md0e74 kv-checkbox-group-user-12skah kv-checkbox-group-cursor-el2a3t",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps the headless number-field primitive as a styled native number input 1`] = `
+{
+  "numberFieldButtonClasses": [
+    "kv-number-field-align-1y3jg4 kv-number-field-bg-e07mph kv-number-field-bd-1z0wuh kv-number-field-bd-4z5b1i kv-number-field-fg-v1wptj kv-number-field-d-1fn6u0 kv-number-field-font-1rwqzl kv-number-field-font-jcobea kv-number-field-h-1oc3mb kv-number-field-justify-349ke2 kv-number-field-transition-b73h37 kv-number-field-w-t445li kv-number-field-bd-ulgdjb kv-number-field-bd-jna0we kv-number-field-opacity-1h6dwn kv-number-field-bg-uzfant kv-number-field-fg-19n6hz kv-number-field-cursor-h58pqt kv-number-field-outline-195ux2 kv-number-field-outline-h6kib kv-number-field-outline-iwu8tj kv-number-field-outline-3c9hx7 kv-number-field-bg-3a0jup",
+  ],
+  "numberFieldControlClasses": [
+    "kv-number-field-align-1y3jg4 kv-number-field-bg-twio9x kv-number-field-bd-53mqd3 kv-number-field-bd-gres8v kv-number-field-bd-4z5b1i kv-number-field-bd-11qmhr kv-number-field-box-2a3fpd kv-number-field-d-1fn6u0 kv-number-field-h-1oc3mb kv-number-field-overflow-1leduo kv-number-field-w-c15nat kv-number-field-opacity-1x4d36 kv-number-field-bd-jnildn",
+  ],
+  "numberFieldInputClasses": [
+    "kv-number-field-bg-10najn kv-number-field-bd-4p4cnm kv-number-field-fg-1qpiwv kv-number-field-font-1rwqzl kv-number-field-h-1oc3mb kv-number-field-outline-1ipo24 kv-number-field-pad-13ileu kv-number-field-text-1riyps kv-number-field-w-13yygs kv-number-field-fg-1y5pkf kv-number-field-bg-uzfant kv-number-field-fg-1k3no8 kv-number-field-cursor-h58pqt kv-number-field-outline-195ux2 kv-number-field-outline-iwu8tj kv-number-field-outline-3c9hx7",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps the headless otp-field primitive as styled aggregate and slot inputs 1`] = `
+{
+  "otpFieldGroupClasses": [
+    "kv-otp-field-align-1ktise kv-otp-field-column-16aop2 kv-otp-field-d-1ou0cj",
+  ],
+  "otpFieldHiddenInputClasses": [
+    "kv-otp-field-bd-dhbxdy kv-otp-field-clip-is8nbc kv-otp-field-h-2s8kot kv-otp-field-m-1inywp kv-otp-field-overflow-1j7625 kv-otp-field-pad-1x3ys8 kv-otp-field-position-fb4emz kv-otp-field-white-ex7o48 kv-otp-field-w-1muffd",
+  ],
+  "otpFieldInputClasses": [
+    "kv-otp-field-bg-1r5soy kv-otp-field-bd-1q3pu6 kv-otp-field-bd-1dgij3 kv-otp-field-bd-1qf6xu kv-otp-field-bd-1wna9r kv-otp-field-box-1ti0zz kv-otp-field-fg-1qpiwv kv-otp-field-font-1h5jqe kv-otp-field-font-10t3pk kv-otp-field-h-14pom0 kv-otp-field-text-1riyps kv-otp-field-transition-afk2ej kv-otp-field-w-2bzhgg kv-otp-field-bd-17coee kv-otp-field-bd-tvejbx kv-otp-field-bg-1nj58e kv-otp-field-fg-1k3no8 kv-otp-field-cursor-1puzf0 kv-otp-field-outline-nj20g6 kv-otp-field-outline-1ag1xs kv-otp-field-outline-piwjfh kv-otp-field-outline-1y03xn kv-otp-field-outline-15voy1",
+  ],
+}
+`;

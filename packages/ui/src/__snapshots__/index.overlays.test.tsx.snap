@@ -1,0 +1,114 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui styled package foundation > wraps H3 menu primitives as styled menu surfaces 1`] = `
+{
+  "dropdownMenuContentClasses": [
+    "kv-dropdown-menu-bg-dy7ce1 kv-dropdown-menu-bd-8qgrmx kv-dropdown-menu-bd-1957bb kv-dropdown-menu-bd-1t9yg7 kv-dropdown-menu-bd-1huuni kv-dropdown-menu-box-13xkzi kv-dropdown-menu-fg-v6e79r kv-dropdown-menu-font-1cumtw kv-dropdown-menu-min-vlkhou kv-dropdown-menu-outline-iqfugm kv-dropdown-menu-pad-1lv235 kv-dropdown-menu-d-1que9w",
+  ],
+  "dropdownMenuItemClasses": [
+    "kv-dropdown-menu-align-1vxg5e kv-dropdown-menu-bd-1j6izt kv-dropdown-menu-fg-5k20i8 kv-dropdown-menu-d-10jo0b kv-dropdown-menu-font-1cumtw kv-dropdown-menu-outline-iqfugm kv-dropdown-menu-pad-q8c2g9 kv-dropdown-menu-pad-g20wnv kv-dropdown-menu-text-k66u5a kv-dropdown-menu-w-5r2qzg kv-dropdown-menu-opacity-1ctby9 kv-dropdown-menu-pointer-1bgayk kv-dropdown-menu-bg-1wwixc kv-dropdown-menu-fg-1pdgiw",
+  ],
+  "dropdownMenuTriggerClasses": [
+    "kv-dropdown-menu-align-1vxg5e kv-dropdown-menu-bg-dy7ce1 kv-dropdown-menu-bd-rie3sg kv-dropdown-menu-bd-1957bb kv-dropdown-menu-bd-1t9yg7 kv-dropdown-menu-bd-1huuni kv-dropdown-menu-box-kdtwje kv-dropdown-menu-fg-v6e79r kv-dropdown-menu-d-1fob82 kv-dropdown-menu-font-1cumtw kv-dropdown-menu-font-pbx8x4 kv-dropdown-menu-h-ln0fuf kv-dropdown-menu-justify-edikmg kv-dropdown-menu-pad-raz2zz kv-dropdown-menu-transition-1icttj kv-dropdown-menu-bg-1rtfai kv-dropdown-menu-cursor-1eaeoz kv-dropdown-menu-opacity-18t10p kv-dropdown-menu-outline-1yt6dx kv-dropdown-menu-outline-1iz9f5 kv-dropdown-menu-outline-iee2jp kv-dropdown-menu-outline-1bfidg kv-dropdown-menu-bg-1b5q6p",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps H3 menu primitives as styled menu surfaces 2`] = `
+{
+  "contextMenuContentClasses": [
+    "kv-context-menu-bg-dy7ce1 kv-context-menu-bd-8qgrmx kv-context-menu-bd-1957bb kv-context-menu-bd-1t9yg7 kv-context-menu-bd-1huuni kv-context-menu-box-13xkzi kv-context-menu-fg-v6e79r kv-context-menu-font-1cumtw kv-context-menu-min-vlkhou kv-context-menu-outline-iqfugm kv-context-menu-pad-1lv235 kv-context-menu-d-1que9w",
+  ],
+  "contextMenuItemClasses": [
+    "kv-context-menu-align-1vxg5e kv-context-menu-bd-1j6izt kv-context-menu-fg-5k20i8 kv-context-menu-d-10jo0b kv-context-menu-font-1cumtw kv-context-menu-outline-iqfugm kv-context-menu-pad-q8c2g9 kv-context-menu-pad-g20wnv kv-context-menu-text-k66u5a kv-context-menu-w-5r2qzg kv-context-menu-opacity-1ctby9 kv-context-menu-pointer-1bgayk kv-context-menu-bg-1wwixc kv-context-menu-fg-1pdgiw",
+  ],
+  "contextMenuTriggerClasses": [
+    "kv-context-menu-bg-1v3sxg kv-context-menu-bd-rie3sg kv-context-menu-bd-1957bb kv-context-menu-bd-zqiq68 kv-context-menu-bd-1huuni kv-context-menu-fg-5k20i8 kv-context-menu-font-1cumtw kv-context-menu-outline-iqfugm kv-context-menu-pad-8um3et kv-context-menu-pad-1abp1i kv-context-menu-opacity-1ctby9 kv-context-menu-pointer-1bgayk kv-context-menu-bd-132daz kv-context-menu-outline-1yt6dx kv-context-menu-outline-1iz9f5 kv-context-menu-outline-iee2jp kv-context-menu-outline-1bfidg",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps command primitive as a styled native dialog combobox 1`] = `
+{
+  "commandDialogClasses": [
+    "kv-command-bg-wpm5im kv-command-bd-cuwiyw kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-box-jdt9qr kv-command-fg-1kcq42 kv-command-max-o30rta kv-command-pad-z0kd9j kv-command-w-d0w75t kv-command-bg-u81l6k kv-command-d-1yj8xg",
+  ],
+  "commandInputClasses": [
+    "kv-command-bg-wpm5im kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-fg-1kcq42 kv-command-font-kvxk8f kv-command-h-1crj27 kv-command-outline-1ipo24 kv-command-pad-n6qglr kv-command-transition-cgdjqu kv-command-w-d0w75t kv-command-fg-exm43b kv-command-bg-1nj58e kv-command-fg-1k3no8 kv-command-cursor-1guhaf kv-command-box-8pcjie",
+  ],
+  "commandItemClasses": [
+    "kv-command-align-1iqt7n kv-command-bd-1j6izt kv-command-fg-5k20i8 kv-command-d-10jo0b kv-command-font-kvxk8f kv-command-outline-1ipo24 kv-command-pad-q8c2g9 kv-command-pad-ptlnb7 kv-command-text-k66u5a kv-command-w-d0w75t kv-command-opacity-1icjyx kv-command-pointer-1bgayk kv-command-bg-1wwixc kv-command-fg-1pdgiw kv-command-font-1yiuj1",
+  ],
+  "commandListboxClasses": [
+    "kv-command-bg-wpm5im kv-command-bd-cuwiyw kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-m-1a8aat kv-command-max-1l3700 kv-command-overflow-1grxml kv-command-pad-spfybb kv-command-d-1yj8xg",
+  ],
+  "commandTriggerClasses": [
+    "kv-command-align-1iqt7n kv-command-bg-wpm5im kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-box-kdtwje kv-command-fg-1kcq42 kv-command-d-xsx1ae kv-command-font-kvxk8f kv-command-font-161lny kv-command-h-1crj27 kv-command-justify-fb6poo kv-command-pad-n6qglr kv-command-transition-14fi7d kv-command-bg-1rtfai kv-command-cursor-1guhaf kv-command-opacity-kqyp6b kv-command-outline-1xqxl4 kv-command-outline-ervi1a kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-1cm0cy",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps menubar and navigation-menu primitives as styled roving navigation 1`] = `
+{
+  "menubarItemClasses": [
+    "kv-menubar-align-1vxg5e kv-menubar-bd-1j6izt kv-menubar-fg-5k20i8 kv-menubar-d-1ks6ev kv-menubar-font-xjds0k kv-menubar-h-rrnk2m kv-menubar-outline-1qgzvg kv-menubar-pad-1xpfsp kv-menubar-opacity-1ctby9 kv-menubar-pointer-1bgayk kv-menubar-bg-1wwixc kv-menubar-fg-1pdgiw kv-menubar-bg-189zil",
+  ],
+  "menubarSubmenuClasses": [
+    "kv-menubar-bg-1e9h7l kv-menubar-bd-1nros8 kv-menubar-bd-135gc1 kv-menubar-bd-17dppo kv-menubar-bd-5grtwb kv-menubar-box-drp7nh kv-menubar-fg-1vjxc5 kv-menubar-font-xjds0k kv-menubar-min-5pwg6u kv-menubar-outline-1qgzvg kv-menubar-pad-1ky1bx kv-menubar-d-u8xv8n",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps menubar and navigation-menu primitives as styled roving navigation 2`] = `
+{
+  "navigationMenuContentClasses": [
+    "kv-navigation-menu-bg-dy7ce1 kv-navigation-menu-bd-8qgrmx kv-navigation-menu-bd-1957bb kv-navigation-menu-bd-1t9yg7 kv-navigation-menu-bd-1huuni kv-navigation-menu-box-13xkzi kv-navigation-menu-fg-1mu4zg kv-navigation-menu-font-1cumtw kv-navigation-menu-m-146lrb kv-navigation-menu-outline-iqfugm kv-navigation-menu-pad-1aqrkh kv-navigation-menu-d-1que9w",
+  ],
+  "navigationMenuLinkClasses": [
+    "kv-navigation-menu-align-cfbawe kv-navigation-menu-bd-1ofjyp kv-navigation-menu-fg-1mu4zg kv-navigation-menu-d-gt04nw kv-navigation-menu-font-1cumtw kv-navigation-menu-font-1w6lea kv-navigation-menu-h-q4iozl kv-navigation-menu-outline-iqfugm kv-navigation-menu-pad-5kfypd kv-navigation-menu-transition-8m2miz kv-navigation-menu-opacity-1icjyx kv-navigation-menu-pointer-bonmb9 kv-navigation-menu-bg-1alyqa kv-navigation-menu-outline-1mjiui kv-navigation-menu-outline-c2yl2s kv-navigation-menu-outline-e6up33 kv-navigation-menu-outline-1z0w18 kv-navigation-menu-bg-1b9bp5",
+  ],
+  "navigationMenuListClasses": [
+    "kv-navigation-menu-align-cfbawe kv-navigation-menu-bg-dy7ce1 kv-navigation-menu-bd-8qgrmx kv-navigation-menu-bd-1957bb kv-navigation-menu-bd-1t9yg7 kv-navigation-menu-bd-1huuni kv-navigation-menu-box-15oava kv-navigation-menu-d-13cr2c kv-navigation-menu-gap-1itukh kv-navigation-menu-list-13bp8i kv-navigation-menu-pad-lb8ayw kv-navigation-menu-align-njp20m kv-navigation-menu-flex-1bpccj",
+  ],
+  "navigationMenuTriggerClasses": [
+    "kv-navigation-menu-align-cfbawe kv-navigation-menu-bd-1ofjyp kv-navigation-menu-fg-1mu4zg kv-navigation-menu-d-gt04nw kv-navigation-menu-font-1cumtw kv-navigation-menu-font-1w6lea kv-navigation-menu-h-q4iozl kv-navigation-menu-outline-iqfugm kv-navigation-menu-pad-5kfypd kv-navigation-menu-transition-8m2miz kv-navigation-menu-opacity-1icjyx kv-navigation-menu-pointer-bonmb9 kv-navigation-menu-bg-1alyqa kv-navigation-menu-bg-1rtfai kv-navigation-menu-outline-1mjiui kv-navigation-menu-outline-c2yl2s kv-navigation-menu-outline-e6up33 kv-navigation-menu-outline-1z0w18 kv-navigation-menu-bg-1b9bp5",
+  ],
+  "navigationMenuViewportClasses": [
+    "kv-navigation-menu-bg-dy7ce1 kv-navigation-menu-bd-8qgrmx kv-navigation-menu-bd-1957bb kv-navigation-menu-bd-1t9yg7 kv-navigation-menu-bd-1huuni kv-navigation-menu-box-13xkzi kv-navigation-menu-m-146lrb kv-navigation-menu-d-1que9w",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps the headless dialog primitive for a bounded sheet component 1`] = `
+{
+  "drawerContentClasses": [
+    "kv-drawer-bg-wpm5im kv-drawer-bd-8qgrmx kv-drawer-bd-1hi42t kv-drawer-bd-b9bdux kv-drawer-box-5bneq7 kv-drawer-fg-1kcq42 kv-drawer-d-z1wnt7 kv-drawer-flex-ghzzqp kv-drawer-gap-53gj4t kv-drawer-pad-1kfxum kv-drawer-position-qymjrz kv-drawer-z-1ag0ds kv-drawer-side-bd-m1idbw kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y",
+    "kv-drawer-side-bd-8y7uhv kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-5ahn0m kv-drawer-side-top-1tjk6d kv-drawer-side-w-9lrs26",
+    "kv-drawer-side-bd-1tuf6s kv-drawer-side-bottom-jbyfoh kv-drawer-side-max-5ahn0m kv-drawer-side-right-19ea6y kv-drawer-side-top-1tjk6d kv-drawer-side-w-9lrs26",
+    "kv-drawer-side-bd-r2so6s kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y kv-drawer-side-top-1tjk6d",
+  ],
+  "sheetContentClasses": [
+    "kv-sheet-bg-wpm5im kv-sheet-bd-8qgrmx kv-sheet-bd-1hi42t kv-sheet-bd-b9bdux kv-sheet-box-5bneq7 kv-sheet-fg-1kcq42 kv-sheet-d-z1wnt7 kv-sheet-flex-ghzzqp kv-sheet-gap-53gj4t kv-sheet-pad-1kfxum kv-sheet-position-qymjrz kv-sheet-z-1ag0ds kv-sheet-side-bd-1tuf6s kv-sheet-side-bottom-jbyfoh kv-sheet-side-max-5ahn0m kv-sheet-side-right-19ea6y kv-sheet-side-top-1tjk6d kv-sheet-side-w-9lrs26",
+    "kv-sheet-side-bd-m1idbw kv-sheet-side-bottom-jbyfoh kv-sheet-side-left-xnn69v kv-sheet-side-max-1ipckk kv-sheet-side-right-19ea6y",
+    "kv-sheet-side-bd-8y7uhv kv-sheet-side-bottom-jbyfoh kv-sheet-side-left-xnn69v kv-sheet-side-max-5ahn0m kv-sheet-side-top-1tjk6d kv-sheet-side-w-9lrs26",
+    "kv-sheet-side-bd-r2so6s kv-sheet-side-left-xnn69v kv-sheet-side-max-1ipckk kv-sheet-side-right-19ea6y kv-sheet-side-top-1tjk6d",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps the headless toast primitive as styled live-region markup 1`] = `
+{
+  "toastActionClasses": [
+    "kv-toast-align-bzhsxc kv-toast-bg-ht8ju kv-toast-bd-tbx6n0 kv-toast-bd-4e1zgu kv-toast-bd-1c10d2 kv-toast-bd-9vb0yd kv-toast-fg-ypb60u kv-toast-d-4hu2a kv-toast-font-1h16nm kv-toast-font-11473q kv-toast-h-jrdi27 kv-toast-justify-jgpub0 kv-toast-pad-1y0ag3 kv-toast-transition-5isj31 kv-toast-cursor-1u0yaj kv-toast-opacity-1tcty7 kv-toast-outline-1y6lij kv-toast-outline-h73cxm kv-toast-outline-1olu66 kv-toast-outline-1ksugu kv-toast-bg-1lu0qs",
+  ],
+  "toastCloseClasses": [
+    "kv-toast-align-bzhsxc kv-toast-bd-4e1zgu kv-toast-fg-1ssrkv kv-toast-d-4hu2a kv-toast-h-jrdi27 kv-toast-justify-jgpub0 kv-toast-transition-5isj31 kv-toast-w-lph1yk kv-toast-cursor-1u0yaj kv-toast-opacity-1tcty7 kv-toast-outline-1y6lij kv-toast-outline-h73cxm kv-toast-outline-1olu66 kv-toast-outline-1ksugu kv-toast-bg-1lu0qs kv-toast-fg-6993ia",
+  ],
+  "toastDescriptionClasses": [
+    "kv-toast-fg-cmsmnz",
+  ],
+  "toastTitleClasses": [
+    "kv-toast-fg-ypb60u kv-toast-font-11473q",
+  ],
+}
+`;

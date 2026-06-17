@@ -527,20 +527,20 @@ describe('gallery demo fixtures', () => {
     expect(field.html).toContain('aria-invalid="true"');
     expect(field.html).toContain('role="alert"');
     expect(field.html).toContain('for="gallery-field-bio"');
-    expect(field.html).toContain('<textarea aria-describedby="gallery-field-bio-description"');
+    expect(field.html).toContain('<textarea class=');
+    expect(field.html).toContain('aria-describedby="gallery-field-bio-description"');
     expect(field.html).toContain('autoComplete="off"');
     expect(field.html).toContain('maxLength="240"');
     expect(field.html).toContain('id="gallery-field-bio"');
     expect(field.html).toContain('name="bio"');
     expect(field.html).toContain('rows="3"');
     expect(field.html).toContain('for="gallery-field-plan"');
-    expect(field.html).toContain('<select aria-describedby="gallery-field-plan-description"');
+    expect(field.html).toContain('<select class=');
+    expect(field.html).toContain('aria-describedby="gallery-field-plan-description"');
     expect(field.html).toContain('id="gallery-field-plan" name="plan" required value="team"');
+    expect(field.html).toContain('data-style-src="field.tsx#selectOption" selected value="team"');
     expect(field.html).toContain(
-      '<option class="text-neutral-950 disabled:text-neutral-400" selected value="team">Team</option>',
-    );
-    expect(field.html).toContain(
-      '<option class="text-neutral-950 disabled:text-neutral-400" disabled value="enterprise">Enterprise</option>',
+      'data-style-src="field.tsx#selectOption" disabled value="enterprise"',
     );
     expect(field.html).toContain('aria-describedby="gallery-fieldset-description"');
     expect(field.html).toContain(
@@ -924,8 +924,8 @@ describe('gallery demo fixtures', () => {
     expect(card.html).toContain('<h2>Release candidate</h2>');
 
     expect(checkboxGroup.html).toContain('data-ui-demo="checkbox-group"');
-    expect(checkboxGroup.html).toContain('data-[orientation=horizontal]:flex');
-    expect(checkboxGroup.html).toContain('accent-neutral-950');
+    expect(checkboxGroup.html).toContain('data-style-src="checkbox-group.tsx#root"');
+    expect(checkboxGroup.html).toContain('data-style-src="checkbox-group.tsx#control"');
     expect(checkboxGroup.html).toContain('gallery-checkbox-group-updates');
 
     expect(collapsible.html).toContain('data-ui-demo="collapsible"');
@@ -935,21 +935,21 @@ describe('gallery demo fixtures', () => {
     expect(collapsible.html).toContain('data-style-src="collapsible.tsx#content"');
 
     expect(autocomplete.html).toContain('data-ui-demo="autocomplete"');
-    expect(autocomplete.html).toContain('rounded-md border border-neutral-300');
+    expect(autocomplete.html).toContain('data-style-src="autocomplete.tsx#input"');
     expect(autocomplete.html).toContain('gallery-autocomplete-list');
     expect(autocomplete.html).toContain('Growth plan');
 
     expect(combobox.html).toContain('data-ui-demo="combobox"');
-    expect(combobox.html).toContain('rounded-md border border-neutral-300');
+    expect(combobox.html).toContain('data-style-src="combobox.tsx#input"');
     expect(combobox.html).toContain('role="listbox"');
     expect(combobox.html).toContain('Ada Lovelace');
 
     expect(command.html).toContain('data-ui-demo="command"');
-    expect(command.html).toContain('backdrop:bg-black/20');
+    expect(command.html).toContain('data-style-src="command.tsx#dialog"');
     expect(command.html).toContain('Type a command');
 
     expect(contextMenu.html).toContain('data-ui-demo="context-menu"');
-    expect(contextMenu.html).toContain('border-dashed border-neutral-300');
+    expect(contextMenu.html).toContain('data-style-src="context-menu.tsx#trigger"');
     expect(contextMenu.html).toContain('gallery-context-menu-inspect');
 
     expect(disclosure.html).toContain('data-ui-demo="disclosure"');
@@ -961,13 +961,14 @@ describe('gallery demo fixtures', () => {
 
     expect(drawer.html).toContain('data-ui-demo="drawer"');
     expect(drawer.html).toContain('command="show-modal" commandfor="gallery-drawer"');
-    expect(drawer.html).toContain('<dialog aria-describedby="gallery-drawer-description"');
+    expect(drawer.html).toContain('<dialog class=');
+    expect(drawer.html).toContain('aria-describedby="gallery-drawer-description"');
     expect(drawer.html).toContain('id="gallery-drawer" open>');
-    expect(drawer.html).toContain('bottom-0 max-h-[85vh] border-t');
+    expect(drawer.html).toContain('data-style-src="drawer.tsx#content; drawer.tsx#bottom"');
     expect(drawer.html).toContain('command="request-close" commandfor="gallery-drawer"');
 
     expect(dropdownMenu.html).toContain('data-ui-demo="dropdown-menu"');
-    expect(dropdownMenu.html).toContain('data-[state=open]:bg-neutral-100');
+    expect(dropdownMenu.html).toContain('data-style-src="dropdown-menu.tsx#trigger"');
     expect(dropdownMenu.html).toContain('gallery-dropdown-menu-rename');
 
     expect(hoverCard.html).toContain('data-ui-demo="hover-card"');
@@ -978,11 +979,11 @@ describe('gallery demo fixtures', () => {
     expect(kbd.html).toMatchSnapshot('kbd demo html');
 
     expect(menubar.html).toContain('data-ui-demo="menubar"');
-    expect(menubar.html).toContain('data-[state=open]:bg-neutral-100');
+    expect(menubar.html).toContain('data-style-src="menubar.tsx#item"');
     expect(menubar.html).toContain('gallery-menubar-file-menu');
 
     expect(navigationMenu.html).toContain('data-ui-demo="navigation-menu"');
-    expect(navigationMenu.html).toContain('data-[state=open]:bg-neutral-100');
+    expect(navigationMenu.html).toContain('data-style-src="navigation-menu.tsx#trigger"');
     expect(navigationMenu.html).toContain('gallery-navigation-products-panel');
 
     expect(popover.html).toContain('data-ui-demo="popover"');
@@ -991,13 +992,14 @@ describe('gallery demo fixtures', () => {
     expect(popover.html).toContain('class="kv-popover-');
 
     expect(select.html).toContain('data-ui-demo="select"');
-    expect(select.html).toContain('rounded-md border border-neutral-300');
+    expect(select.html).toContain('data-style-src="select.tsx#trigger"');
     expect(select.html).toContain('role="listbox"');
     expect(select.html).toContain('Growth</span>');
 
     expect(sheet.html).toContain('data-ui-demo="sheet"');
     expect(sheet.html).toContain('command="show-modal" commandfor="gallery-sheet"');
-    expect(sheet.html).toContain('<dialog aria-describedby="gallery-sheet-description"');
+    expect(sheet.html).toContain('<dialog class=');
+    expect(sheet.html).toContain('aria-describedby="gallery-sheet-description"');
     expect(sheet.html).toContain('id="gallery-sheet" open>');
     expect(sheet.html).toContain('command="request-close" commandfor="gallery-sheet"');
 
@@ -1008,7 +1010,7 @@ describe('gallery demo fixtures', () => {
     expect(skeleton.html).toContain('data-style-src="skeleton.tsx#root; demo-fixtures.tsx#panel"');
 
     expect(slider.html).toContain('data-ui-demo="slider"');
-    expect(slider.html).toContain('accent-neutral-950');
+    expect(slider.html).toContain('data-style-src="slider.tsx#input"');
     expect(slider.html).toContain('data-value-ratio="0.65"');
     expect(slider.html).toContain('type="range"');
 
@@ -1033,7 +1035,7 @@ describe('gallery demo fixtures', () => {
     expect(tooltip.html).toContain('class="kv-tooltip-');
 
     expect(toast.html).toContain('data-ui-demo="toast"');
-    expect(toast.html).toContain('data-[variant=success]:bg-emerald-50');
+    expect(toast.html).toContain('data-style-src="toast.tsx#root"');
     expect(toast.html).toContain('aria-live="polite"');
     expect(toast.html).toContain('data-dismiss=""');
 

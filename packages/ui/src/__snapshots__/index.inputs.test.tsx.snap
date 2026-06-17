@@ -1,0 +1,57 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui styled package foundation > wraps the headless autocomplete primitive as styled input and listbox markup 1`] = `
+{
+  "autocompleteListClasses": [
+    "kv-autocomplete-bg-1r5soy kv-autocomplete-bd-3jjuvk kv-autocomplete-bd-1dgij3 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-1qpiwv kv-autocomplete-font-1rygq8 kv-autocomplete-d-nhbelo",
+  ],
+  "autocompleteOptionClasses": [
+    "kv-autocomplete-fg-1qpiwv kv-autocomplete-fg-vadri7 kv-autocomplete-font-1r1rh9 kv-autocomplete-font-1wefqf",
+  ],
+  "autocompleteValueClasses": [
+    "kv-autocomplete-fg-gr6xd0 kv-autocomplete-font-1rygq8 kv-autocomplete-fg-exm43b",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps the headless combobox primitive as styled input and listbox markup 1`] = `
+{
+  "comboboxListboxClasses": [
+    "kv-combobox-bg-1r5soy kv-combobox-bd-37irmt kv-combobox-bd-1dgij3 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-1ti0zz kv-combobox-max-1ajqiv kv-combobox-overflow-1grxml kv-combobox-pad-spfybb kv-combobox-d-dphzaj",
+  ],
+  "comboboxOptionClasses": [
+    "kv-combobox-bd-sr0yl7 kv-combobox-fg-1hhygt kv-combobox-font-1rygq8 kv-combobox-pad-26pgt7 kv-combobox-pad-18yvo6 kv-combobox-opacity-uz1kyp kv-combobox-pointer-7bzpay kv-combobox-bg-15gnbm kv-combobox-fg-1lrnxp kv-combobox-font-1wefqf",
+  ],
+  "comboboxValueClasses": [
+    "kv-combobox-fg-1hhygt kv-combobox-font-1rygq8 kv-combobox-fg-exm43b",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps the headless select primitive as styled trigger, listbox, and hidden input markup 1`] = `
+{
+  "selectContentClasses": [
+    "kv-select-bg-dy7ce1 kv-select-fg-v6e79r kv-select-font-1cumtw kv-select-d-1que9w kv-select-d-1iqtij",
+  ],
+  "selectItemClasses": [
+    "kv-select-fg-v6e79r kv-select-fg-5e3gcx kv-select-font-1yiuj1",
+  ],
+  "selectValueClasses": [
+    "kv-select-fg-gr6xd0 kv-select-font-1cumtw kv-select-fg-1xku2b",
+  ],
+}
+`;
+
+exports[`@kovojs/ui styled package foundation > wraps the headless slider primitive as styled range input and decorative parts 1`] = `
+{
+  "sliderRangeClasses": [
+    "kv-slider-bg-1r44j6 kv-slider-bd-1mdkij kv-slider-d-2v1w0t kv-slider-h-11khpw kv-slider-w-1av78l",
+  ],
+  "sliderThumbClasses": [
+    "kv-slider-bg-15haqz kv-slider-bd-8od1s kv-slider-bd-1mdkij kv-slider-bd-38e0zs kv-slider-bd-555k3d kv-slider-box-qzf3yy kv-slider-d-2v1w0t kv-slider-h-6g3xs5 kv-slider-w-15ogf6 kv-slider-opacity-1wmp2v",
+  ],
+  "sliderTrackClasses": [
+    "kv-slider-bg-hm7tit kv-slider-bd-1mdkij kv-slider-h-1tqmpk kv-slider-overflow-qsrrc2 kv-slider-position-1pu332 kv-slider-w-lhhf6b kv-slider-h-k3ojn kv-slider-w-1gi3rz",
+  ],
+}
+`;

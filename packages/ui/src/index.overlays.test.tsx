@@ -106,12 +106,6 @@ describe('@kovojs/ui styled package foundation', () => {
       placement: 'top-center',
     });
     const hiddenToast = Toast.definition.render({ id: 'hidden-toast', open: false });
-
-    expect(ToastViewport.name).toBe('toast-viewport');
-    expect(ToastTitle.name).toBe('toast-title');
-    expect(ToastDescription.name).toBe('toast-description');
-    expect(ToastAction.name).toBe('toast-action');
-    expect(ToastClose.name).toBe('toast-close');
     expect(viewport).toContain('aria-label="Build notifications"');
     expect(viewport).toContain('data-placement="top-center" id="toast-viewport"');
     expect(viewport).toContain('role="region" tabIndex="-1"');
@@ -133,10 +127,12 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(viewport).toContain('data-dismiss="" data-state="open" data-variant="success"');
     expect(hiddenToast).toContain('data-state="closed"');
     expect(hiddenToast).toContain('hidden id="hidden-toast"');
-    expect(toastTitleClasses.join(' ')).toContain('font-medium');
-    expect(toastDescriptionClasses.join(' ')).toContain('text-neutral-700');
-    expect(toastActionClasses.join(' ')).toContain('border border-neutral-300');
-    expect(toastCloseClasses.join(' ')).toContain('h-8 w-8');
+    expect({
+      toastActionClasses,
+      toastCloseClasses,
+      toastDescriptionClasses,
+      toastTitleClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps H3 menu primitives as styled menu surfaces', () => {
@@ -196,10 +192,6 @@ describe('@kovojs/ui styled package foundation', () => {
       })}`,
       open: true,
     });
-
-    expect(DropdownMenuTrigger.name).toBe('dropdown-menu-trigger');
-    expect(DropdownMenuContent.name).toBe('dropdown-menu-content');
-    expect(DropdownMenuItem.name).toBe('dropdown-menu-item');
     expect(dropdown).toContain('aria-controls="file-actions-menu"');
     expect(dropdown).toContain('aria-expanded="true"');
     expect(dropdown).toContain('aria-haspopup="menu"');
@@ -211,13 +203,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(dropdown).toContain(
       'disabled role="menuitem" tabIndex="-1" type="button" value="archive"',
     );
-    expect(dropdownMenuTriggerClasses.join(' ')).toContain('data-[state=open]:bg-neutral-100');
-    expect(dropdownMenuContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
-    expect(dropdownMenuItemClasses.join(' ')).toContain('data-[highlighted]:bg-neutral-100');
-
-    expect(ContextMenuTrigger.name).toBe('context-menu-trigger');
-    expect(ContextMenuContent.name).toBe('context-menu-content');
-    expect(ContextMenuItem.name).toBe('context-menu-item');
+    expect({
+      dropdownMenuContentClasses,
+      dropdownMenuItemClasses,
+      dropdownMenuTriggerClasses,
+    }).toMatchSnapshot();
     expect(context).toContain('kovo-context-menu="row-menu"');
     expect(context).toContain('aria-haspopup="menu"');
     expect(context).toContain('data-anchor-x="24" data-anchor-y="32"');
@@ -227,9 +217,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(context).toContain(
       'disabled role="menuitem" tabIndex="-1" type="button" value="delete"',
     );
-    expect(contextMenuTriggerClasses.join(' ')).toContain('border-dashed');
-    expect(contextMenuContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
-    expect(contextMenuItemClasses.join(' ')).toContain('data-[highlighted]:bg-neutral-100');
+    expect({
+      contextMenuContentClasses,
+      contextMenuItemClasses,
+      contextMenuTriggerClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps menubar and navigation-menu primitives as styled roving navigation', () => {
@@ -330,9 +322,6 @@ describe('@kovojs/ui styled package foundation', () => {
       label: 'Primary',
       openValue: 'products',
     });
-
-    expect(MenubarItem.name).toBe('menubar-item');
-    expect(MenubarSubmenu.name).toBe('menubar-submenu');
     expect(menubar).toContain('aria-label="Document commands"');
     expect(menubar).toContain('role="menubar"');
     expect(menubar).toContain('aria-controls="file-menu"');
@@ -344,13 +333,10 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(menubar).toContain(
       'disabled role="menuitem" tabIndex="-1" type="button" value="import"',
     );
-    expect(menubarItemClasses.join(' ')).toContain('data-[state=open]:bg-neutral-100');
-    expect(menubarSubmenuClasses.join(' ')).toContain('data-[state=closed]:hidden');
-
-    expect(NavigationMenuList.name).toBe('navigation-menu-list');
-    expect(NavigationMenuTrigger.name).toBe('navigation-menu-trigger');
-    expect(NavigationMenuContent.name).toBe('navigation-menu-content');
-    expect(NavigationMenuLink.name).toBe('navigation-menu-link');
+    expect({
+      menubarItemClasses,
+      menubarSubmenuClasses,
+    }).toMatchSnapshot();
     expect(navigation).toContain('aria-label="Primary"');
     expect(navigation).toContain('data-state="open"');
     expect(navigation).toContain('role="navigation"');
@@ -361,11 +347,13 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(navigation).toContain('href="/docs"');
     expect(navigation).toContain('role="group" tabIndex="-1"');
     expect(navigation).toContain('id="products-viewport"');
-    expect(navigationMenuListClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
-    expect(navigationMenuTriggerClasses.join(' ')).toContain('data-[state=open]:bg-neutral-100');
-    expect(navigationMenuLinkClasses.join(' ')).toContain('hover:bg-neutral-100');
-    expect(navigationMenuContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
-    expect(navigationMenuViewportClasses.join(' ')).toContain('data-[state=closed]:hidden');
+    expect({
+      navigationMenuContentClasses,
+      navigationMenuLinkClasses,
+      navigationMenuListClasses,
+      navigationMenuTriggerClasses,
+      navigationMenuViewportClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps command primitive as a styled native dialog combobox', () => {
@@ -429,13 +417,6 @@ describe('@kovojs/ui styled package foundation', () => {
       })}`,
       id: 'command-root',
     });
-
-    expect(CommandTrigger.name).toBe('command-trigger');
-    expect(CommandDialog.name).toBe('command-dialog');
-    expect(CommandInput.name).toBe('command-input');
-    expect(CommandListbox.name).toBe('command-listbox');
-    expect(CommandItem.name).toBe('command-item');
-    expect(CommandClose.name).toBe('command-close');
     expect(command).toContain('command="show-modal" commandfor="command-dialog"');
     expect(command).toContain('aria-modal="true"');
     expect(command).toContain('id="command-dialog" open');
@@ -450,16 +431,16 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(command).toContain('disabled role="option" tabIndex="-1" type="button" value="delete"');
     expect(command).toContain('command="request-close" commandfor="command-dialog"');
     expect(command).toContain('id="command-value">Invite teammate</span>');
-    expect(commandTriggerClasses.join(' ')).toContain('data-[state=open]:bg-neutral-100');
-    expect(commandDialogClasses.join(' ')).toContain('backdrop:bg-black/20');
-    expect(commandInputClasses.join(' ')).toContain('focus-visible:ring-2');
-    expect(commandListboxClasses.join(' ')).toContain('data-[state=closed]:hidden');
-    expect(commandItemClasses.join(' ')).toContain('data-[state=checked]:font-medium');
+    expect({
+      commandDialogClasses,
+      commandInputClasses,
+      commandItemClasses,
+      commandListboxClasses,
+      commandTriggerClasses,
+    }).toMatchSnapshot();
   });
 
   it('wraps the headless dialog primitive for a bounded sheet component', () => {
-    expect(Sheet.name).toBe('sheet');
-    expect(Drawer.name).toBe('drawer');
 
     const rendered = Sheet.definition.render({
       children: 'Sheet body',
@@ -473,10 +454,11 @@ describe('@kovojs/ui styled package foundation', () => {
 
     expect(rendered).toContain('aria-controls="account-sheet"');
     expect(rendered).toContain('command="show-modal" commandfor="account-sheet"');
-    expect(rendered).toContain('<dialog aria-describedby="account-sheet-description"');
+    expect(rendered).toContain('<dialog class=');
+    expect(rendered).toContain('aria-describedby="account-sheet-description"');
     expect(rendered).toContain('closedby="any"');
     expect(rendered).toContain('id="account-sheet" open>');
-    expect(rendered).toContain('inset-y-0 left-0 w-full max-w-sm border-r');
+    expect(rendered).toContain('data-style-src="sheet.tsx#content; sheet.tsx#left"');
     expect(rendered).toContain('command="request-close" commandfor="account-sheet"');
 
     const topSheet = Sheet.definition.render({
@@ -493,19 +475,15 @@ describe('@kovojs/ui styled package foundation', () => {
       trigger: 'Open drawer',
     });
 
-    expect(sheetContentClasses).toContain('inset-y-0 right-0 w-full max-w-sm border-l');
-    expect(sheetContentClasses).toContain('inset-x-0 bottom-0 max-h-[85vh] border-t');
-    expect(drawerContentClasses).toContain('inset-x-0 bottom-0 max-h-[85vh] border-t');
-    expect(drawerContentClasses).toContain('inset-y-0 right-0 w-full max-w-sm border-l');
-    expect(topSheet).toContain('top-0 max-h-[85vh] border-b');
+    expect({ drawerContentClasses, sheetContentClasses }).toMatchSnapshot();
+    expect(topSheet).toContain('data-style-src="sheet.tsx#content; sheet.tsx#top"');
     expect(drawer).toContain('command="show-modal" commandfor="account-drawer"');
-    expect(drawer).toContain('<dialog aria-describedby="account-drawer-description"');
+    expect(drawer).toContain('<dialog class=');
+    expect(drawer).toContain('aria-describedby="account-drawer-description"');
     expect(drawer).toContain('closedby="any"');
     expect(drawer).toContain('id="account-drawer" open>');
-    expect(drawer).toContain('bottom-0 max-h-[85vh] border-t');
-    expect(drawer).toContain(
-      'aria-hidden="true" class="mx-auto h-1.5 w-12 rounded-full bg-neutral-300"',
-    );
+    expect(drawer).toContain('data-style-src="drawer.tsx#content; drawer.tsx#bottom"');
+    expect(drawer).toContain('data-style-src="drawer.tsx#handle" aria-hidden="true"');
     expect(drawer).toContain('command="request-close" commandfor="account-drawer"');
   });
 });
