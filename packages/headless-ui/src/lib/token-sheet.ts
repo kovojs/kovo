@@ -1,7 +1,11 @@
 export type KovoUiTokenCategory = 'color' | 'radius';
 export type KovoUiTokenMode = 'light' | 'dark';
 export type KovoUiTokenProperty = `--kovo-${string}`;
-export type KovoUiTailwindThemeProperty = `--color-${string}` | `--radius-${string}`;
+
+/**
+ * Document-level token aliases exposed for app styles and generated component CSS.
+ */
+export type KovoUiDocumentTokenProperty = `--color-${string}` | `--radius-${string}`;
 
 export interface KovoUiTokenDefinition {
   readonly category: KovoUiTokenCategory;
@@ -9,13 +13,13 @@ export interface KovoUiTokenDefinition {
   readonly light: string;
   readonly name: string;
   readonly property: KovoUiTokenProperty;
-  readonly tailwindThemeProperty?: KovoUiTailwindThemeProperty;
-  readonly tailwindThemeValue?: string;
+  readonly documentTokenProperty?: KovoUiDocumentTokenProperty;
+  readonly documentTokenValue?: string;
 }
 
-interface KovoUiTailwindTokenDefinition extends KovoUiTokenDefinition {
-  readonly tailwindThemeProperty: KovoUiTailwindThemeProperty;
-  readonly tailwindThemeValue: string;
+interface KovoUiDocumentTokenDefinition extends KovoUiTokenDefinition {
+  readonly documentTokenProperty: KovoUiDocumentTokenProperty;
+  readonly documentTokenValue: string;
 }
 
 export const kovoUiTokenSheet = [
@@ -45,8 +49,11 @@ export const kovoUiTokenSheet = [
 
 export type KovoUiTokenName = (typeof kovoUiTokenSheet)[number]['name'];
 
-export const kovoUiTailwindThemeCss = renderTailwindThemeCss();
-export const kovoUiTokenSheetCss = `${kovoUiTailwindThemeCss}\n\n${renderTokenBlock(
+/**
+ * CSS aliases that make Kovo UI semantic tokens available as document-scoped style tokens.
+ */
+export const kovoUiDocumentTokenCss = renderDocumentTokenCss();
+export const kovoUiTokenSheetCss = `${kovoUiDocumentTokenCss}\n\n${renderTokenBlock(
   ':root',
   'light',
 )}\n\n${renderTokenBlock(':root[data-theme="dark"]', 'dark')}\n`;
@@ -60,8 +67,8 @@ function colorToken<const Name extends string>(name: Name, light: string, dark: 
     light,
     name,
     property,
-    tailwindThemeProperty: `--color-${name}`,
-    tailwindThemeValue: `hsl(var(${property}))`,
+    documentTokenProperty: `--color-${name}`,
+    documentTokenValue: `hsl(var(${property}))`,
   } satisfies KovoUiTokenDefinition;
 }
 
@@ -74,8 +81,8 @@ function radiusToken<const Name extends string>(name: Name, value: string) {
     light: value,
     name: `radius-${name}` as const,
     property,
-    tailwindThemeProperty: `--radius-${name}`,
-    tailwindThemeValue: `var(${property})`,
+    documentTokenProperty: `--radius-${name}`,
+    documentTokenValue: `var(${property})`,
   } satisfies KovoUiTokenDefinition;
 }
 
@@ -87,19 +94,17 @@ function renderTokenBlock(selector: string, mode: KovoUiTokenMode): string {
   return `${selector} {\n${declarations}\n}`;
 }
 
-function renderTailwindThemeCss(): string {
+function renderDocumentTokenCss(): string {
   const declarations = kovoUiTokenSheet
-    .filter(hasTailwindThemeAlias)
-    .map((token) => `  ${token.tailwindThemeProperty}: ${token.tailwindThemeValue};`)
+    .filter(hasDocumentTokenAlias)
+    .map((token) => `  ${token.documentTokenProperty}: ${token.documentTokenValue};`)
     .join('\n');
 
-  // SPEC.md §13.1 keeps classes statically discoverable while design tokens stay as
-  // document-level CSS custom properties with no shadow boundary.
   return `@theme inline {\n${declarations}\n}`;
 }
 
-function hasTailwindThemeAlias(
+function hasDocumentTokenAlias(
   token: KovoUiTokenDefinition,
-): token is KovoUiTailwindTokenDefinition {
-  return token.tailwindThemeProperty !== undefined && token.tailwindThemeValue !== undefined;
+): token is KovoUiDocumentTokenDefinition {
+  return token.documentTokenProperty !== undefined && token.documentTokenValue !== undefined;
 }

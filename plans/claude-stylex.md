@@ -832,6 +832,16 @@ borrowing its concrete API/spike detail.
     "tailwind|@tailwindcss|tailwindcss|@source" Dockerfile pnpm-lock.yaml package.json
     packages/**/package.json examples/**/package.json tests/**/package.json site/package.json`
     returns no matches.
+  - Evidence (partial, 2026-06-17): `@kovojs/headless-ui` token aliases now use document-token names
+    (`KovoUiDocumentTokenProperty`, `kovoUiDocumentTokenCss`, `documentTokenProperty` /
+    `documentTokenValue`) and `packages/headless-ui/src/lib/variants.ts` no longer carries stale
+    utility-discovery wording. `packages/headless-ui/src/lib/token-sheet.test.ts` snapshots the
+    generated token CSS and alias map. `api-surface-baseline.json` was regenerated and shrank by the
+    two removed old headless-ui exports. `rg -n
+    "tailwind|Tailwind|@source|tailwindcss|KovoUiTailwindThemeProperty|kovoUiTailwindThemeCss|tailwindThemeProperty|tailwindThemeValue|renderTailwindThemeCss"
+    packages/headless-ui` returns no matches. `pnpm exec vitest --run packages/headless-ui/src`,
+    `pnpm run check:api-surface`, `pnpm exec tsc --noEmit --pretty false`, and `git diff --check`
+    pass in `agent/stylex-headless-cleanup`.
 - [x] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
   - Evidence (2026-06-17): `examples/commerce/scripts/measure-style-size.mjs` builds the commerce

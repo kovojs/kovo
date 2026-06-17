@@ -13,9 +13,9 @@ export type {
   VariantValues,
 } from './variants.js';
 
-export { kovoUiTailwindThemeCss, kovoUiTokenSheet, kovoUiTokenSheetCss } from './token-sheet.js';
+export { kovoUiDocumentTokenCss, kovoUiTokenSheet, kovoUiTokenSheetCss } from './token-sheet.js';
 export type {
-  KovoUiTailwindThemeProperty,
+  KovoUiDocumentTokenProperty,
   KovoUiTokenCategory,
   KovoUiTokenDefinition,
   KovoUiTokenMode,
