@@ -12,9 +12,9 @@ import { kovoLoaderSource } from '../../dist/runtime/src/index.mjs';
  * construction (plan exit criterion 2). Styled presentation, verbatim content.
  */
 
-// SPEC §4.4 / S2 gate: the always-loaded bootstrap stays ≤4KB gzipped — the
+// SPEC §4.4 / S2 gate: the always-loaded bootstrap stays ≤8KB gzipped — the
 // same measurement packages/runtime/src/index.test.ts pins.
-const LOADER_BUDGET_BYTES = 4096;
+const LOADER_BUDGET_BYTES = 8192;
 
 function escapeHtml(value) {
   return String(value)

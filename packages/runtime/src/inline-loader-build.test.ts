@@ -120,7 +120,7 @@ describe('inline loader build source', () => {
   });
 
   it('rejects generated inline loader modules that exceed the gzip budget', () => {
-    // SPEC.md §4.4: the package build/check path enforces the always-loaded 4KB bootstrap budget.
+    // SPEC.md §4.4: the package build/check path enforces the always-loaded 8KB bootstrap budget.
     const source = createOversizedInlineLoaderSource();
     const minifiedSource = buildInlineKovoLoaderInstallerSource(source);
     const bootstrapSource = `(${minifiedSource})((url)=>import(url));`;

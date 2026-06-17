@@ -101,7 +101,10 @@ function m(c: Element, n: Element): Element {
     return n;
   }
 
-  for (const a of Array.from(c.attributes)) if (!n.hasAttribute(a.name)) c.removeAttribute(a.name);
+  for (let i = c.attributes.length; i--; ) {
+    const a = c.attributes[i];
+    if (a && !n.hasAttribute(a.name)) c.removeAttribute(a.name);
+  }
   for (const a of n.attributes) c.setAttribute(a.name, a.value);
 
   // SPEC.md §9.1: a focused keyed input/textarea keeps its browser-owned

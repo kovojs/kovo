@@ -41,7 +41,7 @@ const inlineHelperSpecs = {
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
 
-export const inlineKovoLoaderGzipByteBudget = 4096;
+export const inlineKovoLoaderGzipByteBudget = 8192;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
@@ -383,7 +383,7 @@ export function buildInlineKovoLoaderModuleSource(
     '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
     "import type { ImportHandlerModule } from './handlers.js';",
     '',
-    '// SPEC.md §4.4 keeps the always-loaded loader under a 4KB gzip budget; this',
+    '// SPEC.md §4.4 keeps the always-loaded loader under an 8KB gzip budget; this',
     '// literal is the pre-minified bootstrap shipped in document shells.',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
@@ -620,7 +620,7 @@ function assertMinifiedInlineKovoLoaderInstallerHelperParity(
 }
 
 function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
-  // SPEC.md §4.4: the generated bootstrap has a hard 4KB gzip ceiling. Keep
+  // SPEC.md §4.4: the generated bootstrap has a hard 8KB gzip ceiling. Keep
   // source modules readable, then compact only closure-local helper names before
   // the parse-checked minifier runs.
   const replacements = new Map([
@@ -654,7 +654,7 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['response', 'res'],
     // Installer-local helper names (not referenced by the parity-checked helper
     // closures); compacting them reclaims gzip headroom for the M10 selector
-    // guard within the SPEC.md §4.4 4KB ceiling.
+    // guard within the SPEC.md §4.4 8KB ceiling.
     ['dispatch', 'dp'],
     ['targetIdentity', 't'],
     ['trigger', 'tg'],

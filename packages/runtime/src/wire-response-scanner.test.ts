@@ -136,7 +136,7 @@ describe('wire response scanner', () => {
     // modular runtime collapse their scan + fragment-decode skeleton onto
     // readMutationResponseBodyCore. The core decodes fragments once and returns
     // kovo-query chunks UNDECODED so the inline reader can defer JSON decode to the
-    // modular runtime under the SPEC.md §4.4 4KB gzip budget.
+    // modular runtime under the SPEC.md §4.4 8KB gzip budget.
     const body = [
       '<kovo-query name="cart">{"count":1}</kovo-query>',
       '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',

@@ -104,7 +104,7 @@ Everything else in Kovo is a consequence of four choices.
 ### Components compile; they don't hydrate
 
 Other frameworks ship a runtime that re-runs your components in the browser to "hydrate" the HTML.
-Kovo doesn't. The HTML already carries everything it needs as attributes, and a 4KB loader handles
+Kovo doesn't. The HTML already carries everything it needs as attributes, and an 8KB loader handles
 events globally. Until you interact with something, zero component JavaScript loads. The handler for
 a button is right there in the markup:
 

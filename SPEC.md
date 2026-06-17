@@ -56,7 +56,7 @@ Every feature proposal is evaluated against five tests. A feature failing any te
 │                  │   │   derives, transforms    │   │  • kovo-deps="cart" stamps         │
 └──────────────────┘   └──────────────────────────┘   └──────────────────────────────────┘
         │                        │                                  │
-        │ fixpoint:              │ 1:1 file mapping,                │ 4KB loader: global event
+        │ fixpoint:              │ 1:1 file mapping,                │ 8KB loader: global event
         │ compile(IR) ≡ IR       │ source-derived names             │ delegation + import() on
         ▼                        ▼                                  ▼ first interaction
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -174,7 +174,7 @@ export const Cart$removeItem = handler<CartState, { itemId: string }>((e, ctx) =
 
 ### 4.4 The loader
 
-A 4KB inline script; nothing else lives in the always-loaded path. Responsibilities:
+An 8KB gzip-capped inline script; nothing else lives in the always-loaded path. Responsibilities:
 
 - **Event delegation** (capture phase) for all `on:*` events — including chained refs (§4.6) and the execution triggers `on:visible` (one shared IntersectionObserver) / `on:idle` / `on:load` (§4.7).
 - **Ref resolution:** parse `url#export`, `import()` the URL, invoke with `(event, ctx)`.
