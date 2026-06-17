@@ -37,9 +37,11 @@ routes.push(
   }) as AnyRoute,
 );
 
-// Content sections: a section index plus a page per markdown document.
+// Content sections: a section index plus a page per markdown document. The
+// `reference` section's index is replaced by the unified Reference hub (it links
+// out to the API reference, this diagnostics catalog, and the spec).
 for (const section of sections) {
-  routes.push(sectionIndexRoute(section));
+  routes.push(section.key === 'reference' ? referenceHubRoute() : sectionIndexRoute(section));
   for (const [position, page] of section.pages.entries()) {
     routes.push(pageRoute(section, page, section.pages[position - 1], section.pages[position + 1]));
   }
@@ -98,12 +100,53 @@ function pageRoute(
     },
     {
       activePath: page.url,
+      ...(page.apiSidebar ? { apiSidebar: page.apiSidebar } : {}),
       contentHtml: page.html,
       eyebrow: section.title,
       groups,
       headings: page.headings,
       next: link(next),
       prev: link(prev),
+    },
+  );
+}
+
+// The unified Reference landing hub at /reference/: a card grid linking to the
+// API reference, the diagnostics catalog, and the normative spec. Their URLs
+// (/api/, /reference/diagnostics/, /spec/) are unchanged; this only replaces the
+// /reference/ index that previously listed just the diagnostics catalog.
+function referenceHubRoute(): AnyRoute {
+  return docRoute(
+    '/reference/',
+    {
+      description: 'Reference — generated API docs, the diagnostics catalog, and the normative spec.',
+      title: 'Reference · Kovo',
+    },
+    {
+      activePath: '/reference/',
+      contentHtml: renderSectionIndex({
+        key: 'reference',
+        title: 'Reference',
+        pages: [
+          {
+            title: 'API Reference',
+            url: '/api/',
+            description: 'Generated reference for every public package — types, functions, and contracts.',
+          },
+          {
+            title: 'Diagnostics',
+            url: '/reference/diagnostics/',
+            description: 'Every framework diagnostic (KV###) and its fix, kept in sync with the registry.',
+          },
+          {
+            title: 'Specification',
+            url: '/spec/',
+            description: 'The normative spec, rendered verbatim from SPEC.md. The docs explain; the spec decides.',
+          },
+        ],
+      }),
+      groups,
+      prose: false,
     },
   );
 }

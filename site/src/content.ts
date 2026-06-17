@@ -25,6 +25,9 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const genDir = path.join(siteRoot, 'gen');
 
 export interface DocPage {
+  /** API-reference pages carry their generated sidebar manifest so the route can
+   * render the category-grouped API navigation instead of the flat heading TOC. */
+  apiSidebar?: ApiSidebar;
   body: string;
   description: string;
   headings: Heading[];
@@ -52,6 +55,31 @@ export interface DocSection {
   title: string;
 }
 
+export interface ApiSidebarSymbol {
+  anchor: string;
+  documented: boolean;
+  kind: string;
+  name: string;
+  sourceHref: string;
+}
+
+export interface ApiSidebarCategory {
+  anchor: string;
+  symbols: ApiSidebarSymbol[];
+  title: string;
+}
+
+/** Structured API navigation for a generated reference page, produced by
+ * `api-ref.mjs` (`gen/api/<slug>.sidebar.json`) and consumed by the `ApiSidebar`
+ * component so the right rail can group symbols by category with counts,
+ * source links, and scroll-spy — instead of a flat 200-item heading list. */
+export interface ApiSidebar {
+  categories: ApiSidebarCategory[];
+  package: string;
+  slug: string;
+  sourceHref: string;
+}
+
 export interface NavLink {
   title: string;
   url: string;
@@ -63,6 +91,10 @@ export interface NavGroup {
 }
 
 export interface SearchEntry {
+  /** Symbol kind for API-symbol entries (function/type/const); absent for page
+   * entries. Lets the ⌘K result list show a kind badge and deep-link to the
+   * symbol anchor. */
+  kind?: string;
   section: string;
   text: string;
   title: string;
@@ -101,7 +133,7 @@ export const SECTION_INTROS: Record<string, string> = {
     'Rendered component fixtures covering the headless primitive contracts and the styled UI package.',
   guides: 'Task-focused deep dives into each part of the framework, from queries to deployment.',
   reference:
-    'Generated catalogs for agents and humans — every framework diagnostic and its fix, kept in sync with the registry.',
+    'Everything generated from the framework itself — the per-package API reference, the diagnostics catalog, and the normative specification.',
   tutorial:
     'Build a real e-commerce app in eight chapters — catalog, cart, optimistic updates, streaming, and a behavior graph your CI can check.',
 };
@@ -232,7 +264,17 @@ async function buildSiteContent(): Promise<SiteContent> {
         title: string;
       };
       const html = finish(rendered.html);
+      // API pages carry their generated sidebar manifest, used both for the
+      // category-grouped navigation and for per-symbol search entries.
+      const apiSidebar =
+        section.key === 'api'
+          ? readJsonIfPresent<ApiSidebar | undefined>(
+              path.join(genDir, 'api', `${raw.slug}.sidebar.json`),
+              undefined,
+            )
+          : undefined;
       pages.push({
+        ...(apiSidebar ? { apiSidebar } : {}),
         body: raw.body,
         description: raw.description,
         headings: rendered.headings,
@@ -255,6 +297,21 @@ async function buildSiteContent(): Promise<SiteContent> {
         title: raw.title || rendered.title,
         url: raw.url,
       });
+      // One search entry per documented API symbol, deep-linked to its anchor so
+      // ⌘K lands directly on the symbol rather than the package page top.
+      if (apiSidebar) {
+        for (const category of apiSidebar.categories) {
+          for (const symbol of category.symbols) {
+            search.push({
+              kind: symbol.kind,
+              section: `${apiSidebar.package} · ${category.title}`,
+              text: `${symbol.name} ${apiSidebar.package} ${symbol.kind}`,
+              title: symbol.name,
+              url: `${raw.url}#${symbol.anchor}`,
+            });
+          }
+        }
+      }
     }
     sections.push({ key: section.key, pages, title: section.title });
   }

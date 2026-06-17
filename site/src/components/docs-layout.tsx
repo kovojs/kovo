@@ -1,9 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { escapeHtml } from '@kovojs/server';
 
-import type { DocSection, Heading, NavGroup, NavLink } from '../content.js';
+import type { ApiSidebar as ApiSidebarData, DocSection, Heading, NavGroup, NavLink } from '../content.js';
 import { SECTION_INTROS } from '../content.js';
 import {
+  ApiSidebar,
   DocsSidebar,
   PrevNext,
   SiteFooter,
@@ -20,6 +21,9 @@ import {
 
 export interface PageOptions {
   activePath: string;
+  /** When set (API reference pages), the right rail renders the category-grouped
+   * API navigation instead of the flat heading TOC. */
+  apiSidebar?: ApiSidebarData | undefined;
   clients: ClientHrefs;
   contentHtml: string;
   eyebrow?: string | undefined;
@@ -35,6 +39,7 @@ export interface PageOptions {
 export function renderDocsBody(options: PageOptions): string {
   const {
     activePath,
+    apiSidebar,
     clients,
     contentHtml,
     eyebrow,
@@ -45,7 +50,7 @@ export function renderDocsBody(options: PageOptions): string {
     prose = true,
   } = options;
   const sidebar = DocsSidebar.definition.render({ activePath, groups });
-  const toc = renderToc(headings);
+  const toc = apiSidebar ? ApiSidebar.definition.render({ apiSidebar }) : renderToc(headings);
 
   return (
     <>
