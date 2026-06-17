@@ -218,7 +218,7 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
         // leading `<link rel=stylesheet>` would REPLACE the region with a bare
         // `<link>`, destroying the UI. The served page already loaded the app
         // stylesheet (the route `stylesheets` below); the re-rendered region
-        // reuses the already-present Tailwind classes.
+        // reuses the already-present app stylesheet classes.
         fragmentRenderers: [
           {
             render: async () => CartBadge.definition.render({ cart: await loadCartQuery(db) }),

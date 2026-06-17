@@ -6,7 +6,7 @@ export interface CommerceGraphCartSummary {
   count: number;
 }
 
-export const commerceStylesheets = ['/assets/tailwind.css'] as const;
+export const commerceStylesheets = ['/assets/styles.css'] as const;
 
 // SPEC.md §10.2/§11.2: commerce graph facts are declared once and consumed by
 // both the runtime example and generated acceptance artifacts.

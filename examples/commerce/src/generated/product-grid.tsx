@@ -51,6 +51,7 @@ export const ProductGrid = component({
     );
   },
 });
+ProductGrid.name = "components/product-grid/product-grid";
 
 // Card list without the component host, shared by the grid render and the
 // mode="append" pagination fragment (which morphs into the existing host).

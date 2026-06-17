@@ -106,7 +106,7 @@
       "prefetch": false,
       "queries": [],
       "route": "/admin",
-      "stylesheets": ["/assets/tailwind.css"]
+      "stylesheets": ["/assets/styles.css"]
     },
     {
       "i18n": ["en-US:cartLabel,productStock"],
@@ -118,7 +118,7 @@
       "prefetch": false,
       "queries": ["cart", "productGrid", "orderHistory"],
       "route": "/cart",
-      "stylesheets": ["/assets/tailwind.css"]
+      "stylesheets": ["/assets/styles.css"]
     }
   ],
   "queries": [
