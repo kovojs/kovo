@@ -112,13 +112,49 @@ describe('api-ref generator', () => {
     }
   }, 60_000);
 
-  it('renders @param/@returns as a markdown table for documented exports', () => {
-    // The `component` export is documented with params + a returns row.
+  it('renders @param/@returns as a markdown table with a Type column', () => {
+    // The `component` export is documented with a param + a returns row.
     const section = corePage.slice(corePage.indexOf('### `component`'));
-    expect(section).toContain('| Parameter | Description |');
-    expect(section).toContain('| --- | --- |');
-    expect(section).toMatch(/^\| `name` \| .+\|$/m);
-    expect(section).toMatch(/^\| \*\(returns\)\* \| .+\|$/m);
+    expect(section).toContain('| Parameter | Type | Description |');
+    expect(section).toContain('| --- | --- | --- |');
+    expect(section).toMatch(/^\| `definition` \|.*\|.+\|$/m);
+    expect(section).toMatch(/^\| \*\(returns\)\* \|.*\|.+\|$/m);
+  });
+
+  it('renders parameter types from the real signature and links documented types', () => {
+    const section = corePage.slice(
+      corePage.indexOf('### `component`'),
+      corePage.indexOf('### `route`'),
+    );
+    // The return type is the documented `Component` type, linked to its anchor;
+    // the type-parameter `Definition` stays plain text. Type cells are inline
+    // `<code>` HTML so generics survive the GFM table.
+    expect(section).toMatch(/\| \*\(returns\)\* \| <code><a href="#component">Component<\/a>/);
+    // Generics are HTML-escaped so `<` / `>` cannot be parsed as tags.
+    expect(section).toContain('&lt;Definition&gt;');
+  });
+
+  it('emits a per-package sidebar manifest with categories, anchors, and source links', async () => {
+    const manifest = JSON.parse(await readFile(path.join(outDir, 'core.sidebar.json'), 'utf8'));
+    expect(manifest.package).toBe('@kovojs/core');
+    expect(manifest.slug).toBe('core');
+    expect(manifest.sourceHref).toMatch(/^https:\/\/github\.com\/kovojs\/kovo\/blob\/main\/.+/);
+    expect(manifest.sourceHref).not.toContain(repoRoot);
+
+    const functions = manifest.categories.find((category) => category.title === 'Functions');
+    expect(functions.anchor).toBe('functions');
+    const component = functions.symbols.find((symbol) => symbol.name === 'component');
+    // The anchor matches the page heading id (slugify), so deep links resolve.
+    expect(component.anchor).toBe('component');
+    expect(component.kind).toBe('function');
+    expect(component.sourceHref).toMatch(/\/packages\/core\/.+#L\d+$/);
+
+    // Every symbol on the page is represented in the manifest (no silent drops).
+    const manifestNames = manifest.categories.flatMap((category) =>
+      category.symbols.map((symbol) => symbol.name),
+    );
+    const core = result.packages.find((pkg) => pkg.name === '@kovojs/core');
+    expect(new Set(manifestNames)).toEqual(new Set(core.names));
   });
 
   it('renders @example blocks as fenced ts sections after an Example marker', () => {

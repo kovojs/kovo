@@ -7,6 +7,8 @@ import ts from 'typescript';
 
 import { documentedPackages } from '../../scripts/public-packages.mjs';
 
+import { slugify } from './md.mjs';
+
 /**
  * Generated API reference (plan W6): one markdown page per app-facing package,
  * emitted from the real TypeScript sources so the docs cannot drift silently.
@@ -26,6 +28,12 @@ const PACKAGES = documentedPackages();
 
 const UNDOCUMENTED = '*Undocumented.*';
 const MAX_SIGNATURE_LINES = 40;
+// Type cells in the params table can balloon for complex generics; elide so the
+// table stays readable (mirrors MAX_SIGNATURE_LINES discipline for signatures).
+const MAX_TYPE_LENGTH = 120;
+// Source links in the sidebar manifest point at the real defining file + line on
+// GitHub. A fixed ref keeps output deterministic (no timestamps/abs paths).
+const GITHUB_BASE = 'https://github.com/kovojs/kovo/blob/main';
 
 function createApiProgram(entryFiles) {
   const configPath = path.join(repoRoot, 'tsconfig.json');
@@ -85,6 +93,71 @@ function groupOf(kind) {
 
 function stripExportPrefix(text) {
   return text.replace(/^export\s+(declare\s+)?(default\s+)?/, '');
+}
+
+/** The function-like node behind a declaration, if any (a function declaration,
+ * or an arrow/function-expression initializing a `const`). Used to read real
+ * parameter and return types from the TypeScript AST. */
+function functionLikeOf(decl) {
+  if (ts.isFunctionDeclaration(decl)) return decl;
+  if (
+    ts.isVariableDeclaration(decl) &&
+    decl.initializer &&
+    (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))
+  ) {
+    return decl.initializer;
+  }
+  return undefined;
+}
+
+/** Collapse whitespace and elide overlong type text so the params table stays
+ * legible (object-literal and deep-generic types can be enormous). */
+function normalizeType(text) {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  return collapsed.length > MAX_TYPE_LENGTH ? `${collapsed.slice(0, MAX_TYPE_LENGTH - 1)}…` : collapsed;
+}
+
+/** Parameter and return types from a declaration's real signature (the
+ * TypeScript checker, never JSDoc — JSDoc carries no types). Returns a map of
+ * parameter name → type text and the return type, so the params table can show
+ * types that cannot drift from the source. */
+function signatureTypes(decl, checker) {
+  const fn = functionLikeOf(decl);
+  const paramTypes = new Map();
+  if (!fn) return { paramTypes, returnType: undefined };
+
+  for (const param of fn.parameters) {
+    if (!ts.isIdentifier(param.name)) continue;
+    let type = param.type ? param.type.getText() : '';
+    if (!type) {
+      try {
+        type = checker.typeToString(checker.getTypeAtLocation(param));
+      } catch {
+        type = '';
+      }
+    }
+    if (type) paramTypes.set(param.name.text, normalizeType(type));
+  }
+
+  let returnType = fn.type ? fn.type.getText() : undefined;
+  if (!returnType) {
+    try {
+      const signature = checker.getSignatureFromDeclaration(fn);
+      if (signature) returnType = checker.typeToString(signature.getReturnType());
+    } catch {
+      returnType = undefined;
+    }
+  }
+  return { paramTypes, returnType: returnType ? normalizeType(returnType) : undefined };
+}
+
+/** GitHub blob URL for a declaration's defining file + line. Repo-relative path
+ * + a fixed branch ref keep this deterministic. */
+function sourceHrefOf(decl) {
+  const sourceFile = decl.getSourceFile();
+  const relative = path.relative(repoRoot, sourceFile.fileName);
+  const { line } = sourceFile.getLineAndCharacterOfPosition(decl.getStart(sourceFile));
+  return `${GITHUB_BASE}/${relative}#L${line + 1}`;
 }
 
 /** Render one declaration as a signature: full for functions (bodies
@@ -212,15 +285,57 @@ function escapeTableCell(text) {
   return text.replace(/\|/g, '\\|').replace(/\n+/g, ' ').trim();
 }
 
-function renderParamsTable(parsed) {
+/** Escape type text for a table cell: HTML-escape, and replace `|` (union
+ * types) with its entity so it cannot split the GFM table cell. Identifiers are
+ * emitted unescaped (they are `[A-Za-z0-9_$]` only) so they can be wrapped in
+ * links. */
+function escapeTypeText(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\|/g, '&#124;');
+}
+
+/** Render a parameter/return type as an inline `<code>` cell, linking every
+ * identifier that resolves to a documented export (same page → `#anchor`, other
+ * documented package → `/api/<slug>/#anchor`). Primitives, type parameters, and
+ * external/unresolved names stay plain text. Raw inline HTML survives in a GFM
+ * table cell, and pipes are entity-escaped so unions don't break the row. */
+function renderTypeCell(typeText, slug, targets) {
+  if (!typeText) return '';
+  let out = '';
+  let last = 0;
+  const identifier = /[A-Za-z_$][A-Za-z0-9_$]*/g;
+  let match;
+  while ((match = identifier.exec(typeText)) !== null) {
+    out += escapeTypeText(typeText.slice(last, match.index));
+    const name = match[0];
+    const target = targets.get(name);
+    if (target) {
+      const href = target.slug === slug ? `#${target.anchor}` : `/api/${target.slug}/#${target.anchor}`;
+      out += `<a href="${href}">${name}</a>`;
+    } else {
+      out += name;
+    }
+    last = match.index + name.length;
+  }
+  out += escapeTypeText(typeText.slice(last));
+  return `<code>${out}</code>`;
+}
+
+function renderParamsTable(parsed, sig, slug, targets) {
   const rows = parsed.params.map(
-    (param) => `| \`${param.name}\` | ${escapeTableCell(param.description)} |`,
+    (param) =>
+      `| \`${param.name}\` | ${renderTypeCell(sig.paramTypes.get(param.name) ?? '', slug, targets)} | ${escapeTableCell(param.description)} |`,
   );
   if (parsed.returns !== undefined) {
-    rows.push(`| *(returns)* | ${escapeTableCell(parsed.returns)} |`);
+    rows.push(
+      `| *(returns)* | ${renderTypeCell(sig.returnType ?? '', slug, targets)} | ${escapeTableCell(parsed.returns)} |`,
+    );
   }
   if (rows.length === 0) return [];
-  return ['| Parameter | Description |', '| --- | --- |', ...rows];
+  return ['| Parameter | Type | Description |', '| --- | --- | --- |', ...rows];
 }
 
 /** JSDoc comment for a declaration (variable declarations carry their docs on
@@ -273,7 +388,16 @@ function entryFromSymbol(name, symbol, checker, packageName) {
   );
   const doc = declarations.map((decl) => docCommentOf(decl)).find((text) => text !== '') ?? '';
 
-  return { doc, internal, kind, name, signature };
+  return {
+    anchor: slugify(name),
+    doc,
+    internal,
+    kind,
+    name,
+    signature,
+    sig: signatureTypes(rendered[0], checker),
+    sourceHref: sourceHrefOf(declarations[0]),
+  };
 }
 
 function hasExportModifier(statement) {
@@ -363,14 +487,14 @@ function collectExports(sourceFile, checker, packageName) {
  * signature, then each `@example` as its own fenced `ts` block (the shape the
  * `@example` typecheck gate extracts). Undocumented exports keep the explicit
  * marker so they are flagged, never omitted. */
-function renderEntry(entry) {
+function renderEntry(entry, slug, targets) {
   const parsed = entry.doc === '' ? undefined : parseJsDoc(entry.doc);
   const body = parsed && parsed.summary !== '' ? parsed.summary : entry.doc;
 
   const lines = [`### \`${entry.name}\``, '', entry.doc === '' ? UNDOCUMENTED : body, ''];
 
   if (parsed) {
-    const table = renderParamsTable(parsed);
+    const table = renderParamsTable(parsed, entry.sig, slug, targets);
     if (table.length > 0) lines.push(...table, '');
   }
 
@@ -385,8 +509,10 @@ function renderEntry(entry) {
   return lines.join('\n');
 }
 
-function renderPage(pkg, entries, entryRel) {
-  const groups = [
+/** The category grouping shared by the rendered page and the sidebar manifest,
+ * in display order. */
+function categoryGroups(entries) {
+  return [
     { entries: entries.filter((entry) => groupOf(entry.kind) === 'Functions'), title: 'Functions' },
     {
       entries: entries.filter((entry) => groupOf(entry.kind) === 'Types & interfaces'),
@@ -394,7 +520,10 @@ function renderPage(pkg, entries, entryRel) {
     },
     { entries: entries.filter((entry) => groupOf(entry.kind) === 'Constants'), title: 'Constants' },
   ].filter((group) => group.entries.length > 0);
+}
 
+function renderPage(pkg, entries, entryRel, targets) {
+  const groups = categoryGroups(entries);
   const documented = entries.filter((entry) => entry.doc !== '').length;
 
   return [
@@ -411,11 +540,34 @@ function renderPage(pkg, entries, entryRel) {
     ...groups.flatMap((group) => [
       `## ${group.title}`,
       '',
-      ...group.entries.flatMap((entry) => [renderEntry(entry), '']),
+      ...group.entries.flatMap((entry) => [renderEntry(entry, pkg.slug, targets), '']),
     ]),
   ]
     .join('\n')
     .replace(/\n{3,}/g, '\n\n');
+}
+
+/** Structured sidebar data consumed by the docs site's API navigation: one
+ * collapsible group per category, each symbol carrying its anchor, kind, and a
+ * link to the defining source line. Deterministic (repo-relative source paths +
+ * a fixed GitHub ref). */
+function buildSidebar(pkg, entries, entryRel) {
+  return {
+    package: pkg.name,
+    slug: pkg.slug,
+    sourceHref: `${GITHUB_BASE}/${entryRel}`,
+    categories: categoryGroups(entries).map((group) => ({
+      title: group.title,
+      anchor: slugify(group.title),
+      symbols: group.entries.map((entry) => ({
+        name: entry.name,
+        anchor: entry.anchor,
+        kind: entry.kind,
+        documented: entry.doc !== '',
+        sourceHref: entry.sourceHref,
+      })),
+    })),
+  };
 }
 
 /**
@@ -472,7 +624,11 @@ export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/a
   await rm(outDir, { force: true, recursive: true });
   await mkdir(outDir, { recursive: true });
 
-  const report = [];
+  // Pass 1: collect every package's exports and build the global name → target
+  // map (symbol name → its page slug + anchor) so type tokens can be linked
+  // across packages, not just within a page.
+  const collected = [];
+  const targets = new Map();
   for (const [index, pkg] of PACKAGES.entries()) {
     const sourceFile = program.getSourceFile(entryFiles[index]);
     if (!sourceFile) {
@@ -484,9 +640,28 @@ export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/a
     if (entries.length === 0) {
       throw new Error(`api-ref: ${pkg.name} has no exports — wrong entry point?`);
     }
+    collected.push({ entries, entryRel: resolvedEntries[index].repoRelative, pkg });
+    for (const entry of entries) {
+      // First package that owns a name wins (packages are in display order), so
+      // links are stable and a re-export does not flip the target.
+      if (!targets.has(entry.name)) {
+        targets.set(entry.name, { slug: pkg.slug, anchor: entry.anchor });
+      }
+    }
+  }
+
+  // Pass 2: render each page (type links resolved against the global map) and
+  // emit its sidebar manifest.
+  const report = [];
+  for (const { entries, entryRel, pkg } of collected) {
     await writeFile(
       path.join(outDir, `${pkg.slug}.md`),
-      `${renderPage(pkg, entries, resolvedEntries[index].repoRelative)}\n`,
+      `${renderPage(pkg, entries, entryRel, targets)}\n`,
+      'utf8',
+    );
+    await writeFile(
+      path.join(outDir, `${pkg.slug}.sidebar.json`),
+      `${JSON.stringify(buildSidebar(pkg, entries, entryRel), null, 2)}\n`,
       'utf8',
     );
     report.push({
