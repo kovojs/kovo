@@ -31,7 +31,7 @@ export const Recommendations = component({
       {
         end: insertPosition,
         replacement:
-          ' kovo-c="recommendations" kovo-fragment-target="recommendations" kovo-state="{&quot;open&quot;:true}"',
+          ' kovo-c="recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations" kovo-state="{&quot;open&quot;:true}"',
         start: insertPosition,
       },
     ]);
@@ -57,6 +57,13 @@ export const Recommendations = component({
           "sink": "kovo-fragment-target",
           "source": "server-render",
           "writer": "host fragment target stamp",
+        },
+        {
+          "context": "attribute",
+          "expression": "recommendations",
+          "sink": "kovo-live-component",
+          "source": "server-render",
+          "writer": "host live component stamp",
         },
         {
           "context": "attribute",
@@ -86,6 +93,12 @@ export const Recommendations = component({
           "mode": "insert",
           "value": "recommendations",
           "writer": "host fragment target stamp",
+        },
+        {
+          "attr": "kovo-live-component",
+          "mode": "insert",
+          "value": "recommendations",
+          "writer": "host live component stamp",
         },
         {
           "attr": "kovo-state",
@@ -297,7 +310,7 @@ export const CartBadge = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<cart-badge kovo-deps="cart productPage" kovo-fragment-target="cart-badge">',
+      '<cart-badge kovo-deps="cart productPage" kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -345,7 +358,7 @@ export const OrderHistory = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<ol kovo-c="order-history" kovo-deps="orderHistory" kovo-fragment-target="order-history">',
+      '<ol kovo-c="order-history" kovo-deps="orderHistory" kovo-fragment-target="order-history" kovo-live-component="order-history/order-history">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
     expect(() => assertRenderEquivalence(result)).not.toThrow();
@@ -427,7 +440,7 @@ export const CartBadge = component({
 
     const serverSource = result.files[0]?.source ?? '';
     expect(serverSource).toContain(
-      '<cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge" kovo-state="{&quot;open&quot;:true}">',
+      '<cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-state="{&quot;open&quot;:true}">',
     );
     expect(serverSource).toContain("'<not-the-host></not-the-host>'");
     expect(serverSource).not.toContain('<not-the-host kovo-deps=');
@@ -455,7 +468,7 @@ export const Recommendations = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section kovo-c="recommendations" kovo-deps="product:p1 cart" kovo-fragment-target="recommendations">',
+      '<section kovo-c="recommendations" kovo-deps="product:p1 cart" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
     );
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -477,7 +490,7 @@ export const Recommendations = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section class="card" kovo-deps="product:p1 cart" kovo-c="recommendations" kovo-fragment-target="recommendations">',
+      '<section class="card" kovo-deps="product:p1 cart" kovo-c="recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });

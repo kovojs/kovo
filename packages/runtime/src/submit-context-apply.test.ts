@@ -88,6 +88,7 @@ describe('submit context apply', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_ctx',
+        'Kovo-Live-Targets': 'cart-badge#cart-badge:{}',
         'Kovo-Targets': 'cart-badge',
       },
       keepalive: true,

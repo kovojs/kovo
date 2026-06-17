@@ -280,7 +280,29 @@ removes app-authored bookkeeping from the enhanced path.
     reconstruct props/query instances.
   - Preserve backward compatibility while examples migrate, then remove legacy
     target-only assumptions once tests cover the new path.
-  - Evidence: pending.
+  - Progress 2026-06-17:
+    - `packages/compiler/src/emit/server.ts` stamps inferred refreshable hosts
+      with generated `kovo-live-component` registry keys while keeping the stamp
+      generated-only for semantic render equivalence.
+    - `packages/runtime/src/mutation-targets.ts` collects both legacy
+      `Kovo-Targets` dependency entries and structured `Kovo-Live-Targets`
+      descriptors from one live DOM scan; modular enhanced fetch and the inline
+      loader now send both headers.
+    - `packages/server/src/mutation-wire.ts` parses `Kovo-Live-Targets` into
+      structured `{ target, component, props }` descriptors while preserving
+      legacy `Kovo-Targets` parsing for current selection behavior.
+    - `packages/runtime/src/mutation-targets.test.ts`,
+      `packages/runtime/src/inline-loader-enhanced-submit.test.ts`,
+      `packages/server/src/mutation-wire.test.ts`, and
+      `packages/compiler/src/stamps.test.ts` cover descriptor collection,
+      inline/modular parity, server parsing, and compiler host stamping.
+    - Verified with
+      `pnpm exec vitest --run packages/runtime/src/mutation-targets.test.ts packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-submit.test.ts packages/runtime/src/loader-enhanced-mutation-submit.test.ts packages/runtime/src/submit-context-apply.test.ts packages/runtime/src/mutation-optimistic-pagehide.test.ts packages/runtime/src/inline-loader-enhanced-submit.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/server/src/mutation-wire.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/compile-component.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `pnpm --filter @kovojs/runtime run check:inline-loader`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gap: generated route/render lowering does not yet stamp actual
+      serializable component props or consume descriptors to render fragments.
 - [ ] **6. Server: auto-render affected targets.**
   - Add a generated-registry-aware response selector to `createApp()` /
     mutation response handling.

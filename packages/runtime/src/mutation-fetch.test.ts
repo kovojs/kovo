@@ -54,6 +54,8 @@ describe('enhanced mutation fetch', () => {
       new FakeTargetElement(undefined, {
         'kovo-deps': 'recommendations',
         'kovo-fragment-target': 'recommendations:p1',
+        'kovo-live-component': 'components/recommendations/recommendations',
+        'kovo-props': '{"productId":"p1"}',
       }),
       new FakeTargetElement('cart-badge', { 'kovo-deps': 'cart product:p1' }),
     ]);
@@ -88,6 +90,8 @@ describe('enhanced mutation fetch', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_fetch',
+        'Kovo-Live-Targets':
+          'cart-badge#cart-badge:{}; recommendations:p1#components/recommendations/recommendations:{"productId":"p1"}',
         'Kovo-Targets': 'cart-badge=cart product:p1; recommendations:p1=recommendations',
       },
       keepalive: true,
@@ -134,6 +138,7 @@ describe('enhanced mutation fetch', () => {
         'Kovo-Form-Target': 'product-form:p1',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_form_target',
+        'Kovo-Live-Targets': '',
         'Kovo-Targets': '',
       },
       keepalive: true,
@@ -162,6 +167,7 @@ describe('enhanced mutation fetch', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_default',
+        'Kovo-Live-Targets': '',
         'Kovo-Targets': '',
       },
       keepalive: true,

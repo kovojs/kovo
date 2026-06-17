@@ -77,6 +77,7 @@ export async function fetchEnhancedMutation(
       'Kovo-Fragment': 'true',
       ...definedProps({ 'Kovo-Form-Target': submittedFormTarget }),
       'Kovo-Idem': idem,
+      'Kovo-Live-Targets': targetSnapshot.liveHeader,
       'Kovo-Targets': targetSnapshot.header,
     },
     keepalive: true,

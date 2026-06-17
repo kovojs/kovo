@@ -172,7 +172,13 @@ describe('inline loader enhanced submit source', () => {
       const targetDeps = [
         { deps: 'cart', id: 'cart-badge' },
         { deps: 'cart', id: 'cart-badge' },
-        { deps: 'inventory, stock', id: 'inventory-panel', target: 'inventory' },
+        {
+          component: 'components/inventory/inventory',
+          deps: 'inventory, stock',
+          id: 'inventory-panel',
+          props: '{"warehouseId":"w1"}',
+          target: 'inventory',
+        },
         { deps: 'debug', id: 'empty-fragment-target-fallback', target: '' },
         { deps: '', id: 'standalone-target' },
         { component: 'cart-summary', deps: 'cart summary' },
@@ -246,6 +252,8 @@ describe('inline loader enhanced submit source', () => {
               getAttribute(name: string) {
                 if (name === 'kovo-deps') return dep.deps;
                 if (name === 'kovo-fragment-target') return dep.target ?? null;
+                if (name === 'kovo-live-component') return dep.component ?? null;
+                if (name === 'kovo-props') return dep.props ?? null;
                 if (name === 'kovo-c') return dep.component ?? null;
                 return null;
               },
@@ -279,6 +287,9 @@ describe('inline loader enhanced submit source', () => {
         expect(inlineRequest).toEqual(modularFetch.mock.calls[0]);
         expect(inlineRequest?.[1].headers['Kovo-Targets']).toBe(
           'cart-badge=cart; inventory=inventory stock; standalone-target; cart-summary=cart summary',
+        );
+        expect(inlineRequest?.[1].headers['Kovo-Live-Targets']).toBe(
+          'cart-badge#cart-badge:{}; inventory#components/inventory/inventory:{"warehouseId":"w1"}; standalone-target#standalone-target:{}; cart-summary#cart-summary:{}',
         );
         expect(inlineRequest?.[1].headers['Kovo-Form-Target']).toBe('product-form:p1');
       } finally {

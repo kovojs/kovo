@@ -92,6 +92,7 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_bfcache',
+        'Kovo-Live-Targets': '',
         'Kovo-Targets': '',
       },
       keepalive: true,

@@ -48,13 +48,14 @@ export interface ServerRenderLowering {
 }
 
 export interface ServerRenderStampWriteFact {
-  attr: 'kovo-c' | 'kovo-deps' | 'kovo-fragment-target' | 'kovo-state';
+  attr: 'kovo-c' | 'kovo-deps' | 'kovo-fragment-target' | 'kovo-live-component' | 'kovo-state';
   mode: 'insert' | 'preserve' | 'replace';
   value: string;
   writer:
     | 'host dependency stamp'
     | 'host fragment target stamp'
     | 'host identity stamp'
+    | 'host live component stamp'
     | 'host state stamp';
 }
 
@@ -69,7 +70,12 @@ export function serverRenderLowering(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
   domComponentName: string,
-  options?: { fileName: string; registryFacts?: RegistryFacts; source: string },
+  options?: {
+    fileName: string;
+    registryComponentName?: string;
+    registryFacts?: RegistryFacts;
+    source: string;
+  },
 ): ServerRenderLowering {
   return serverRenderPatches(handlers, model, domComponentName, options);
 }
@@ -468,6 +474,7 @@ function isGeneratedOnlyRenderAttribute(name: string): boolean {
     name === 'kovo-c' ||
     name === 'kovo-deps' ||
     name === 'kovo-fragment-target' ||
+    name === 'kovo-live-component' ||
     name === 'kovo-key' ||
     name === 'kovo-state' ||
     name === 'kovo-param-types' ||
@@ -488,7 +495,12 @@ function serverRenderPatches(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
   domComponentName: string,
-  options?: { fileName: string; registryFacts?: RegistryFacts; source: string },
+  options?: {
+    fileName: string;
+    registryComponentName?: string;
+    registryFacts?: RegistryFacts;
+    source: string;
+  },
 ): ServerRenderLowering {
   const diagnostics: CompilerDiagnostic[] = [];
   const host = componentRenderHost(model);
@@ -535,7 +547,12 @@ function serverRenderPatches(
         .filter((handler) => !chainedHandlers.has(handler))
         .flatMap((handler) => handlerOutputContexts(handler)),
     );
-    const hostStamps = renderHostStampWrites(model, hostElement, domComponentName);
+    const hostStamps = renderHostStampWrites(
+      model,
+      hostElement,
+      domComponentName,
+      options?.registryComponentName ?? domComponentName,
+    );
     stampWrites.push(...hostStamps.writes);
     patches.push(...renderHostStampPatches(hostElement, hostStamps.writes));
     outputContexts.push(...renderHostStampOutputContexts(hostStamps.writes));
@@ -995,6 +1012,7 @@ function renderHostStampWrites(
   model: ComponentModuleModel,
   hostElement: JsxElementModel,
   domComponentName: string,
+  registryComponentName: string,
 ): {
   conflicts: readonly HostStampConflict[];
   writes: readonly ServerRenderStampWriteFact[];
@@ -1004,6 +1022,7 @@ function renderHostStampWrites(
   const componentIdentity = componentIdentityStamp(hostElement, domComponentName);
   const declaredQueryDeps = declaredQueryDepsStamp(model, hostElement);
   const fragmentTarget = inferredFragmentTargetStamp(model, hostElement, domComponentName);
+  const liveComponent = liveComponentStamp(model, registryComponentName);
   const stateJson = staticStateJson(model);
 
   if (componentIdentity) {
@@ -1033,6 +1052,9 @@ function renderHostStampWrites(
     }
     writes.push(fragmentTarget);
   }
+  if (liveComponent) {
+    writes.push(liveComponent);
+  }
   if (stateJson) {
     const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-state');
     if (existing) {
@@ -1056,6 +1078,20 @@ function renderHostStampWrites(
   }
 
   return { conflicts, writes };
+}
+
+function liveComponentStamp(
+  model: ComponentModuleModel,
+  registryComponentName: string,
+): ServerRenderStampWriteFact | null {
+  if (!componentHasInferredServerRefreshTarget(model)) return null;
+
+  return {
+    attr: 'kovo-live-component',
+    mode: 'insert',
+    value: registryComponentName,
+    writer: 'host live component stamp',
+  };
 }
 
 function inferredFragmentTargetStamp(

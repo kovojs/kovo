@@ -179,6 +179,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     : [];
   const serverRender = serverRenderLowering(versionedHandlers, model, componentNames.domName, {
     fileName: options.fileName,
+    registryComponentName: componentNames.registryKey,
     ...(compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {}),
     source,
   });

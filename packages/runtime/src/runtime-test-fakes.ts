@@ -145,7 +145,13 @@ export class FakeMorphTarget {
 
 export class FakeMorphRoot {
   bindings: FakeQueryBindingElement[] = [];
-  deps: { deps?: string; id?: string; target?: string }[] = [];
+  deps: {
+    component?: string;
+    deps?: string;
+    id?: string;
+    props?: string;
+    target?: string;
+  }[] = [];
   planElements: FakeQueryPlanElement[] = [];
   targets = new Map<string, FakeMorphTarget>();
   wildcardSelectorCalls = 0;
@@ -177,7 +183,10 @@ export class FakeMorphRoot {
     return this.deps.map((dep) => ({
       getAttribute: (name) => {
         if (name === 'kovo-fragment-target') return dep.target ?? null;
+        if (name === 'kovo-live-component') return dep.component ?? null;
+        if (name === 'kovo-props') return dep.props ?? null;
         if (name === 'kovo-deps') return dep.deps ?? null;
+        if (name === 'kovo-c') return dep.component ?? null;
         return null;
       },
       ...(dep.id ? { id: dep.id } : {}),

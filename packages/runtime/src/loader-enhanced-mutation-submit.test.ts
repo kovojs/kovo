@@ -89,6 +89,7 @@ describe('loader enhanced mutation submits', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_loader',
+        'Kovo-Live-Targets': 'cart-badge#cart-badge:{}',
         'Kovo-Targets': 'cart-badge=cart',
       },
       keepalive: true,

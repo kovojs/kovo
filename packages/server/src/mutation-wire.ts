@@ -56,6 +56,7 @@ export interface MutationWireRequest<
   fragment?: boolean;
   fragmentRenderers?: readonly FragmentRenderer[];
   idem?: string;
+  liveTargetDescriptors?: readonly MutationLiveTargetDescriptor[];
   liveTargets?: readonly MutationLiveTarget[];
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   replayStore?: MutationReplayStore<MutationWireResponse>;
@@ -75,6 +76,17 @@ export interface MutationLiveTarget {
 }
 
 /**
+ * @internal Structured entry from the `Kovo-Live-Targets` header. `component` is the
+ * generated component registry key and `props` are the serialized component props that
+ * let generated renderers reconstruct the instance (SPEC §9.1).
+ */
+export interface MutationLiveTargetDescriptor {
+  component: string;
+  props: Record<string, unknown>;
+  target: string;
+}
+
+/**
  * @internal Mutation-wire protocol type (SPEC.md §9.1). The parsed
  * `Kovo-Fragment`/`Kovo-Idem`/`Kovo-Targets` request headers. Exported only for in-repo
  * consumers and compiler-emitted code, not app authors.
@@ -82,6 +94,7 @@ export interface MutationLiveTarget {
 export interface MutationWireHeaders {
   fragment: boolean;
   idem?: string;
+  liveTargetDescriptors: readonly MutationLiveTargetDescriptor[];
   liveTargets: readonly MutationLiveTarget[];
   submittedFormTarget?: string;
   targets: readonly string[];
@@ -187,11 +200,15 @@ export function readMutationWireHeaders(headers: MutationWireHeaderSource): Muta
   const idem = readHeader(headers, 'Kovo-Idem')?.trim();
   const submittedFormTarget = readHeader(headers, 'Kovo-Form-Target')?.trim();
   const liveTargets = parseLiveTargetHeader(readHeader(headers, 'Kovo-Targets') ?? '');
+  const liveTargetDescriptors = parseLiveTargetDescriptorHeader(
+    readHeader(headers, 'Kovo-Live-Targets') ?? '',
+  );
   const targets = dedupe(liveTargets.map((entry) => entry.target));
 
   return {
     fragment,
     ...(idem ? { idem } : {}),
+    liveTargetDescriptors,
     liveTargets,
     ...(submittedFormTarget ? { submittedFormTarget } : {}),
     targets,
@@ -225,6 +242,7 @@ export function mutationWireRequestFromHeaders<Request>(
       : { fragmentRenderers: options.fragmentRenderers }),
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(headers.idem === undefined ? {} : { idem: headers.idem }),
+    liveTargetDescriptors: headers.liveTargetDescriptors,
     liveTargets: headers.liveTargets,
     ...(options.renderFailureFragment === undefined
       ? {}
@@ -269,6 +287,82 @@ function readTargetDeps(value: string): string[] {
     .filter(Boolean);
 }
 
+function parseLiveTargetDescriptorHeader(value: string): MutationLiveTargetDescriptor[] {
+  return dedupeLiveTargetDescriptors(
+    splitLiveTargetDescriptorEntries(value)
+      .map((entry) => parseLiveTargetDescriptorEntry(entry))
+      .filter((entry): entry is MutationLiveTargetDescriptor => entry !== null),
+  );
+}
+
+function splitLiveTargetDescriptorEntries(value: string): string[] {
+  const entries: string[] = [];
+  let depth = 0;
+  let quote: '"' | undefined;
+  let start = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (quote) {
+      if (char === '\\') {
+        index += 1;
+        continue;
+      }
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === '{' || char === '[') {
+      depth += 1;
+      continue;
+    }
+    if (char === '}' || char === ']') {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (char !== ';' || depth !== 0) continue;
+    entries.push(value.slice(start, index));
+    start = index + 1;
+  }
+
+  entries.push(value.slice(start));
+  return entries;
+}
+
+function parseLiveTargetDescriptorEntry(entry: string): MutationLiveTargetDescriptor | null {
+  const trimmed = entry.trim();
+  if (!trimmed) return null;
+
+  const componentSeparator = trimmed.indexOf('#');
+  if (componentSeparator <= 0) return null;
+
+  const propsSeparator = trimmed.indexOf(':', componentSeparator + 1);
+  if (propsSeparator <= componentSeparator + 1) return null;
+
+  const target = trimmed.slice(0, componentSeparator).trim();
+  const component = trimmed.slice(componentSeparator + 1, propsSeparator).trim();
+  const props = parseLiveTargetProps(trimmed.slice(propsSeparator + 1).trim());
+  if (!target || !component || props === null) return null;
+
+  return { component, props, target };
+}
+
+function parseLiveTargetProps(value: string): Record<string, unknown> | null {
+  try {
+    const props = JSON.parse(value);
+    return isRecord(props) ? props : null;
+  } catch {
+    return null;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function dedupe(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
@@ -276,6 +370,21 @@ function dedupe(values: readonly string[]): string[] {
 function dedupeLiveTargets(values: readonly MutationLiveTarget[]): MutationLiveTarget[] {
   const seen = new Set<string>();
   const targets: MutationLiveTarget[] = [];
+
+  for (const value of values) {
+    if (seen.has(value.target)) continue;
+    seen.add(value.target);
+    targets.push(value);
+  }
+
+  return targets;
+}
+
+function dedupeLiveTargetDescriptors(
+  values: readonly MutationLiveTargetDescriptor[],
+): MutationLiveTargetDescriptor[] {
+  const seen = new Set<string>();
+  const targets: MutationLiveTargetDescriptor[] = [];
 
   for (const value of values) {
     if (seen.has(value.target)) continue;

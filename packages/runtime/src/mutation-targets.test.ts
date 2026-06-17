@@ -35,16 +35,24 @@ describe('mutation targets', () => {
   it('collects live DOM Kovo-Targets in first-seen order with dedupe and nullish id fallback', () => {
     const root = new FakeTargetRoot([
       new FakeTargetElement(
-        { 'kovo-deps': 'cart', 'kovo-fragment-target': null },
+        {
+          'kovo-deps': 'cart',
+          'kovo-fragment-target': null,
+          'kovo-live-component': 'components/cart/cart-badge/cart-badge',
+        },
         { id: 'cart-badge' },
       ),
       new FakeTargetElement({
         'kovo-deps': 'inventory stock',
         'kovo-fragment-target': 'inventory',
+        'kovo-live-component': 'components/inventory/inventory',
+        'kovo-props': '{"warehouseId":"w1"}',
       }),
       new FakeTargetElement({
         'kovo-deps': 'inventory stock',
         'kovo-fragment-target': 'inventory',
+        'kovo-live-component': 'components/inventory/duplicate',
+        'kovo-props': '{"warehouseId":"w2"}',
       }),
       new FakeTargetElement({ 'kovo-deps': 'debug', 'kovo-fragment-target': '' }, { id: 'debug' }),
       new FakeTargetElement({
@@ -66,12 +74,20 @@ describe('mutation targets', () => {
     expect(readLiveTargetSnapshot(root).header).toBe(
       'cart-badge=cart; inventory=inventory stock; empty-deps; cart-summary=cart summary',
     );
+    expect(readLiveTargetSnapshot(root).liveHeader).toBe(
+      'cart-badge#components/cart/cart-badge/cart-badge:{}; inventory#components/inventory/inventory:{"warehouseId":"w1"}; empty-deps#empty-deps:{}; cart-summary#cart-summary:{}',
+    );
   });
 
   it('reads one live target snapshot for enhanced mutation request headers', () => {
     const root = new FakeTargetRoot([
       new FakeTargetElement({ 'kovo-deps': 'cart', 'kovo-fragment-target': null }, { id: 'cart' }),
-      new FakeTargetElement({ 'kovo-deps': 'reviews', 'kovo-fragment-target': 'reviews:p1' }),
+      new FakeTargetElement({
+        'kovo-deps': 'reviews',
+        'kovo-fragment-target': 'reviews:p1',
+        'kovo-live-component': 'components/reviews/reviews',
+        'kovo-props': '{"productId":"p1"}',
+      }),
     ]);
 
     const snapshot = readLiveTargetSnapshot(root);
@@ -80,6 +96,16 @@ describe('mutation targets', () => {
     // live Kovo-Targets snapshot, not separate compatibility serialization passes.
     expect(snapshot).toEqual({
       header: 'cart=cart; reviews:p1=reviews',
+      liveHeader:
+        'cart#cart:{}; reviews:p1#components/reviews/reviews:{"productId":"p1"}',
+      liveTargets: [
+        { component: 'cart', props: {}, target: 'cart' },
+        {
+          component: 'components/reviews/reviews',
+          props: { productId: 'p1' },
+          target: 'reviews:p1',
+        },
+      ],
       targets: ['cart=cart', 'reviews:p1=reviews'],
     });
     expect(root.queries).toBe(1);

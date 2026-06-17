@@ -179,6 +179,16 @@ function installInlineKovoLoader(im) {
       .filter(Boolean);
   const targetIdentity = (el) =>
     el.getAttribute('kovo-fragment-target') ?? el.id ?? el.getAttribute('kovo-c') ?? '';
+  const liveTargetIdentity = (el) =>
+    el.getAttribute('kovo-live-component') ?? el.getAttribute('kovo-c') ?? targetIdentity(el);
+  const liveProps = (el) => {
+    try {
+      const props = JSON.parse(el.getAttribute('kovo-props') || '{}');
+      return props && typeof props === 'object' && !Array.isArray(props) ? props : {};
+    } catch {
+      return {};
+    }
+  };
   const rt = () => [
     ...new Set(
       [...doc.querySelectorAll('[kovo-deps]')]
@@ -190,6 +200,17 @@ function installInlineKovoLoader(im) {
         .filter(Boolean)
     )
   ];
+  const rlt = () => {
+    const seen = new Set();
+    const targets = [];
+    for (const el of doc.querySelectorAll('[kovo-deps]')) {
+      const target = targetIdentity(el);
+      if (!target || seen.has(target)) continue;
+      seen.add(target);
+      targets.push(target + '#' + liveTargetIdentity(el) + ':' + JSON.stringify(liveProps(el)));
+    }
+    return targets;
+  };
   // SPEC.md §9.1 + security finding M10: fragment targets round-trip un-escaped
   // wire data into CSS selectors, so a malformed target containing quote/bracket
   // characters throws a SyntaxError that would abort the whole apply pass. Guard
@@ -254,6 +275,7 @@ function installInlineKovoLoader(im) {
         'Kovo-Form-Target': targetIdentity(form),
         'Kovo-Fragment': 'true',
         'Kovo-Idem': ci(),
+        'Kovo-Live-Targets': rlt().join('; '),
         'Kovo-Targets': rt().join('; '),
       },
       keepalive: true,

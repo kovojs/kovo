@@ -29,8 +29,17 @@ describe('enhanced mutation submit', () => {
     root.bindings.push(count);
     root.planElements.push(summary, host);
     root.deps = [
-      { deps: 'cart', id: 'cart-badge' },
-      { deps: 'product:p1', target: 'recommendations' },
+      {
+        component: 'components/cart/cart-badge/cart-badge',
+        deps: 'cart',
+        id: 'cart-badge',
+      },
+      {
+        component: 'components/recommendations/recommendations',
+        deps: 'product:p1',
+        props: '{"productId":"p1"}',
+        target: 'recommendations',
+      },
       { deps: 'cart', id: 'cart-badge' },
     ];
     root.targets.set('cart-badge', new FakeMorphTarget());
@@ -95,6 +104,8 @@ describe('enhanced mutation submit', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_01HX',
+        'Kovo-Live-Targets':
+          'cart-badge#components/cart/cart-badge/cart-badge:{}; recommendations#components/recommendations/recommendations:{"productId":"p1"}',
         'Kovo-Targets': 'cart-badge=cart; recommendations=product:p1',
       },
       keepalive: true,
