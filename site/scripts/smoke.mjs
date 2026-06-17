@@ -159,11 +159,12 @@ try {
     'JS: folded toggle gallery page runs the compiled handler',
   );
 
-  // Examples: static-exportable apps load inside the docs page's sandboxed iframe,
-  // while dynamic server-mutation demos keep their authored source visible until
-  // a live service URL is configured for the docs build (SPEC §9.5).
+  // Examples: public demo services load inside the docs page's sandboxed iframe
+  // while the authored source stays visible beside them (SPEC §9.5).
   const EMBED_CHECKS = [
     { name: 'commerce', marker: '[data-commerce-shell]', text: 'Cart' },
+    { name: 'crm', marker: 'body', text: 'Pipeline' },
+    { name: 'stackoverflow', marker: 'body', text: 'Questions' },
   ];
   for (const embed of EMBED_CHECKS) {
     await page.goto(`${origin}/examples/${embed.name}/`, { waitUntil: 'networkidle' });
@@ -180,17 +181,6 @@ try {
     );
   }
 
-  for (const name of ['crm', 'stackoverflow']) {
-    await page.goto(`${origin}/examples/${name}/`, { waitUntil: 'networkidle' });
-    check(
-      (await page.locator('.example-source .code-window').count()) >= 2,
-      `JS: ${name} dynamic example keeps authored source windows`,
-    );
-    check(
-      (await page.locator('iframe.example-frame').count()) === 0,
-      `JS: ${name} dynamic example does not emit a broken static iframe`,
-    );
-  }
   await context.close();
 } finally {
   await browser.close();

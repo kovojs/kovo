@@ -28,14 +28,14 @@ import { renderMarkdown } from '../scripts/md.mjs';
 //  - exportExampleApps: a build-time hook (called by scripts/export-static.mjs
 //    after the main replay) that statically exports only L0/L1-safe examples
 //    into <outDir>/examples/<name>/app/ with refs re-rooted (SPEC §9.5). Dynamic
-//    PGlite mutation demos render iframes only when their service URL env var is
-//    configured for the docs build.
+//    PGlite mutation demos render iframes from configured service URLs.
 
 interface ExampleManifest {
   blurb: string;
   dir: string;
   embed: 'static' | 'service';
   name: string;
+  serviceUrl?: string;
   serviceUrlEnv?: string;
   sources: string[];
   title: string;

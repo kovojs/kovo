@@ -20,7 +20,7 @@ import { pathToFileURL } from 'node:url';
 
 /** @typedef {{ name: string, title: string, blurb: string, dir: string,
  *   exportModule: string, exportFn: string, appExportField: string,
- *   embed: 'static' | 'service', serviceUrlEnv?: string,
+ *   embed: 'static' | 'service', serviceUrlEnv?: string, serviceUrl?: string,
  *   sources: string[] }} ExampleManifest */
 
 /** @type {ExampleManifest[]} */
@@ -34,7 +34,9 @@ export const EXAMPLES = [
     exportModule: 'examples/commerce/scripts/export-static.mjs',
     exportFn: 'exportCommerceStaticApp',
     appExportField: 'commerce.client.js',
-    embed: 'static',
+    embed: 'service',
+    serviceUrlEnv: 'KOVO_EXAMPLE_COMMERCE_URL',
+    serviceUrl: 'https://kovo-commerce-sfqtuclaza-uc.a.run.app',
     sources: [
       'src/components/product-grid.tsx',
       'src/components/cart-badge.tsx',
@@ -54,6 +56,7 @@ export const EXAMPLES = [
     appExportField: '',
     embed: 'service',
     serviceUrlEnv: 'KOVO_EXAMPLE_CRM_URL',
+    serviceUrl: 'https://kovo-crm-sfqtuclaza-uc.a.run.app',
     sources: [
       'src/components/pipeline.tsx',
       'src/components/contacts.tsx',
@@ -74,6 +77,7 @@ export const EXAMPLES = [
     appExportField: '',
     embed: 'service',
     serviceUrlEnv: 'KOVO_EXAMPLE_STACKOVERFLOW_URL',
+    serviceUrl: 'https://kovo-stackoverflow-sfqtuclaza-uc.a.run.app',
     sources: [
       'src/components/question-list.tsx',
       'src/components/question-detail.tsx',
@@ -97,7 +101,8 @@ export function examplePagePath(name) {
 export function exampleLiveAppHref(manifest) {
   if (manifest.embed === 'static') return exampleAppBase(manifest.name);
   const href = process.env[manifest.serviceUrlEnv ?? '']?.trim();
-  return href ? href.replace(/\/?$/, '/') : undefined;
+  const serviceUrl = href || manifest.serviceUrl;
+  return serviceUrl ? serviceUrl.replace(/\/?$/, '/') : undefined;
 }
 
 function escapeHtml(value) {
