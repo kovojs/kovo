@@ -25,7 +25,7 @@ export async function exportCommerceStaticApp({
 
   try {
     const [appShellModule, coreModule, viteModule, staticExportModule] = await Promise.all([
-      viteServer.ssrLoadModule('/src/app-shell.tsx'),
+      viteServer.ssrLoadModule('/src/generated/app-shell.kovo-route.tsx'),
       viteServer.ssrLoadModule('@kovojs/server/app-shell/core'),
       viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
       viteServer.ssrLoadModule('@kovojs/server/app-shell/static-export'),
@@ -78,7 +78,9 @@ export async function exportCommerceStaticApp({
     const app = appShellModule.commerceStaticExportApp;
 
     if (!isKovoApp(app)) {
-      throw new Error('src/app-shell.tsx must export commerceStaticExportApp for public export.');
+      throw new Error(
+        'src/generated/app-shell.kovo-route.tsx must export commerceStaticExportApp for public export.',
+      );
     }
 
     await kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile);

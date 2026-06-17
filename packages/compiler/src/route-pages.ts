@@ -1,6 +1,8 @@
 import { dirname, relative, resolve } from 'node:path';
+import { diagnosticDefinitions } from '@kovojs/core';
 import ts from 'typescript';
 
+import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type {
   CompileRouteModuleOptions,
   CompileRouteModuleResult,
@@ -43,11 +45,12 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
 
   visit(sourceFile);
   const routePageFacts = routePages.map((routePage) => routePage.fact);
+  const diagnostics = routeAuthoringSurfaceDiagnostics(options.fileName, options.source, sourceFile);
 
   const artifactFileName = options.artifactFileName ?? routeArtifactFileName(options.fileName);
 
   return {
-    diagnostics: [],
+    diagnostics,
     files:
       routePages.length === 0
         ? []
@@ -58,6 +61,7 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
               source: emitCompiledRouteModule({
                 artifactFileName,
                 routePages,
+                componentImportRewrites: options.componentImportRewrites ?? [],
                 source: options.source,
                 sourceFile,
               }),
@@ -304,6 +308,7 @@ function propertyAccessReceiverSegments(expression: ts.Expression): string[] | n
 
 function emitCompiledRouteModule(options: {
   artifactFileName: string;
+  componentImportRewrites: readonly { localName: string; specifier: string }[];
   routePages: readonly CompiledRoutePage[];
   source: string;
   sourceFile: ts.SourceFile;
@@ -312,7 +317,11 @@ function emitCompiledRouteModule(options: {
     (routePage) => routePage.pageReplacement,
   );
   const lowered = applySourceReplacements(options.source, [
-    ...rebaseRelativeImportReplacements(options.sourceFile, options.artifactFileName),
+    ...routeImportReplacements(
+      options.sourceFile,
+      options.artifactFileName,
+      options.componentImportRewrites,
+    ),
     ...replacements,
   ]);
   const importSource =
@@ -335,17 +344,60 @@ function routeModuleImportInsertionIndex(source: string): number {
   return shebang;
 }
 
+function routeAuthoringSurfaceDiagnostics(
+  fileName: string,
+  source: string,
+  sourceFile: ts.SourceFile,
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isImportDeclaration(node) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteralLike(node.moduleSpecifier) &&
+      appLocalGeneratedImport(node.moduleSpecifier.text)
+    ) {
+      diagnostics.push({
+        ...diagnosticFor(
+          fileName,
+          'KV235',
+          source,
+          node.moduleSpecifier.getStart(sourceFile),
+          node.moduleSpecifier.getWidth(sourceFile),
+        ),
+        help: [
+          diagnosticDefinitions.KV235.help,
+          'Route/layout source should import the authored component, for example `../components/question-list.js`; the route compiler rewrites the generated route artifact to the lowered component module.',
+        ].join('\n'),
+        message: `${diagnosticDefinitions.KV235.message} app-local generated component import ${node.moduleSpecifier.getText(sourceFile)} in route/layout source.`,
+      });
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return diagnostics;
+}
+
+function appLocalGeneratedImport(specifier: string): boolean {
+  return /^\.{1,2}\/(?:.*\/)?generated\//.test(specifier);
+}
+
 function routeArtifactFileName(fileName: string): string {
   return replaceExtension(fileName, '.kovo-route.tsx');
 }
 
-function rebaseRelativeImportReplacements(
+function routeImportReplacements(
   sourceFile: ts.SourceFile,
   artifactFileName: string,
+  componentImportRewrites: readonly { localName: string; specifier: string }[],
 ): SourceReplacement[] {
-  if (sameDirectory(sourceFile.fileName, artifactFileName)) return [];
-
   const replacements: SourceReplacement[] = [];
+  const rewriteByLocalName = new Map(
+    componentImportRewrites.map((rewrite) => [rewrite.localName, rewrite.specifier]),
+  );
+
   const visit = (node: ts.Node): void => {
     if (
       (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
@@ -353,7 +405,12 @@ function rebaseRelativeImportReplacements(
       ts.isStringLiteralLike(node.moduleSpecifier)
     ) {
       const specifier = node.moduleSpecifier.text;
-      const rebased = rebaseRelativeSpecifier(specifier, sourceFile.fileName, artifactFileName);
+      const rewritten = ts.isImportDeclaration(node)
+        ? componentImportRewriteSpecifier(node, rewriteByLocalName)
+        : null;
+      const rebased =
+        rewritten ??
+        rebaseRelativeSpecifier(specifier, sourceFile.fileName, artifactFileName);
       if (rebased && rebased !== specifier) {
         replacements.push({
           end: node.moduleSpecifier.getEnd(),
@@ -369,8 +426,20 @@ function rebaseRelativeImportReplacements(
   return replacements;
 }
 
-function sameDirectory(leftFileName: string, rightFileName: string): boolean {
-  return normalizePath(dirname(leftFileName)) === normalizePath(dirname(rightFileName));
+function componentImportRewriteSpecifier(
+  node: ts.ImportDeclaration,
+  rewriteByLocalName: ReadonlyMap<string, string>,
+): string | null {
+  const namedBindings = node.importClause?.namedBindings;
+  if (!namedBindings || !ts.isNamedImports(namedBindings)) return null;
+
+  const matches = namedBindings.elements.flatMap((element) => {
+    const localName = element.name.text;
+    const specifier = rewriteByLocalName.get(localName);
+    return specifier ? [specifier] : [];
+  });
+  const unique = [...new Set(matches)];
+  return unique.length === 1 ? (unique[0] ?? null) : null;
 }
 
 function rebaseRelativeSpecifier(

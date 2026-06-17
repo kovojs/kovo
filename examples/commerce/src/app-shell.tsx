@@ -40,9 +40,9 @@ import {
   type CommerceRequest,
   type CommerceSession,
 } from './app.js';
-import { CartBadge } from './generated/cart-badge.js';
-import { OrderHistory } from './generated/order-history.js';
-import { ProductGrid } from './generated/product-grid.js';
+import { CartBadge } from './components/cart-badge.js';
+import { OrderHistory } from './components/order-history.js';
+import { ProductGrid } from './components/product-grid.js';
 import { products } from './schema.js';
 
 export type CommerceShellRequest = Request & CommerceAuthRequest;

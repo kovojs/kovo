@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
 
-import { buildCrmInteractiveApp } from './interactive-app.js';
+import { buildCrmInteractiveApp } from './generated/interactive-app.kovo-route.js';
 import { crmCsrf } from './mutations.js';
 import { contacts, deals } from './schema.js';
 

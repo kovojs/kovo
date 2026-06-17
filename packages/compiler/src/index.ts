@@ -18,6 +18,7 @@ export type {
   CompileResult,
   CompileRouteModuleOptions,
   CompileRouteModuleResult,
+  RouteComponentImportRewrite,
   RoutePageComponentFact,
   RoutePageComponentPropFact,
   RoutePageFact,

@@ -109,6 +109,10 @@ const routeFileName = 'examples/stackoverflow/src/interactive-app.tsx';
 const routeArtifactFileName = 'examples/stackoverflow/src/generated/interactive-app.kovo-route.tsx';
 const routeResult = compileRouteModule({
   artifactFileName: routeArtifactFileName,
+  componentImportRewrites: [
+    { localName: 'QuestionDetailRegion', specifier: './question-detail.js' },
+    { localName: 'QuestionListRegion', specifier: './question-list.js' },
+  ],
   fileName: routeFileName,
   source: readFileSync(routeSourcePath, 'utf8'),
 });

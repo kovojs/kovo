@@ -16,10 +16,14 @@ export function createCrmDemoServer(options = {}) {
     root: crmRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     async loadInstanceFactory(vite) {
-      const { buildCrmInteractiveApp } = await vite.ssrLoadModule('/src/interactive-app.tsx');
+      const { buildCrmInteractiveApp } = await vite.ssrLoadModule(
+        '/src/generated/interactive-app.kovo-route.tsx',
+      );
       const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server/app-shell/node');
       if (typeof buildCrmInteractiveApp !== 'function') {
-        throw new Error('crm /src/interactive-app.tsx must export buildCrmInteractiveApp.');
+        throw new Error(
+          'crm /src/generated/interactive-app.kovo-route.tsx must export buildCrmInteractiveApp.',
+        );
       }
       // buildCrmInteractiveApp() with no db mints a fresh seeded PGlite; the
       // reference instance only supplies the route table for the ownership

@@ -1,6 +1,6 @@
 import { toNodeHandler } from '@kovojs/server/app-shell/node';
 
-import { buildCrmInteractiveApp } from './interactive-app.js';
+import { buildCrmInteractiveApp } from './generated/interactive-app.kovo-route.js';
 
 // SPEC.md §9.1/§9.5: the CRM example app shell. It builds the FULLY INTERACTIVE
 // multi-page Kovo app (a pipeline dashboard with a new-deal form, a contact book

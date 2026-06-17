@@ -7,8 +7,8 @@ import {
 } from '@kovojs/server/app-shell/core';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 
-import { QuestionDetailRegion } from './generated/question-detail.js';
-import { QuestionListRegion } from './generated/question-list.js';
+import { QuestionDetailRegion } from './components/question-detail.js';
+import { QuestionListRegion } from './components/question-list.js';
 import { renderSoShell } from './components/chrome.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';

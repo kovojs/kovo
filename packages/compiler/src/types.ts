@@ -152,8 +152,21 @@ export interface CompileAppGraphResult {
  */
 export interface CompileRouteModuleOptions {
   artifactFileName?: string;
+  componentImportRewrites?: readonly RouteComponentImportRewrite[];
   fileName: string;
   source: string;
+}
+
+/**
+ * Route-IR import rewrite from an authored component symbol to its generated component artifact.
+ * Build tools provide these when emitting executable route modules from JSX-authored pages
+ * (SPEC.md §4.5/§5.2).
+ */
+export interface RouteComponentImportRewrite {
+  /** Local import binding used by the authored route module, for example `QuestionListRegion`. */
+  localName: string;
+  /** Generated artifact specifier the emitted route module should import, for example `./question-list.js`. */
+  specifier: string;
 }
 
 /**

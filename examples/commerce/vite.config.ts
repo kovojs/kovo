@@ -82,7 +82,7 @@ export function commerceSharedAppShellDevPlugin(): CommerceDevPlugin {
       }
 
       const sharedPlugin = sharedPluginFactory({
-        moduleId: '/src/app-shell.tsx',
+        moduleId: '/src/generated/app-shell.kovo-route.tsx',
         name: 'kovo-commerce-app-shell-dev',
         nodeHandlerExportName: 'commerceNodeHandler',
         order: 'post',

@@ -4,9 +4,9 @@ import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
 import type { RequestHandler } from '@kovojs/server/app-shell/core';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 
-import { ContactsRegion } from './generated/contacts.js';
-import { DealDetailRegion } from './generated/deal-detail.js';
-import { PipelineRegion } from './generated/pipeline.js';
+import { ContactsRegion } from './components/contacts.js';
+import { DealDetailRegion } from './components/deal-detail.js';
+import { PipelineRegion } from './components/pipeline.js';
 import { renderCrmShell } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';

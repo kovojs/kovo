@@ -36,7 +36,7 @@ import {
   commerceClientModuleHref,
   createCommerceAppShell,
   createCommerceStaticExportShell,
-} from './app-shell.js';
+} from './generated/app-shell.kovo-route.js';
 import { readOrders } from './app-test-helpers.js';
 import { commerceSharedAppShellDevPlugin, commerceViteConfig } from '../vite.config.ts';
 
@@ -153,7 +153,7 @@ describe('commerce app shell HTTP entry', () => {
     expect(plugin.name).toBe('kovo-commerce-app-shell-dev-loader');
     expect(delegatedOptions).toEqual([
       {
-        moduleId: '/src/app-shell.tsx',
+        moduleId: '/src/generated/app-shell.kovo-route.tsx',
         name: 'kovo-commerce-app-shell-dev',
         nodeHandlerExportName: 'commerceNodeHandler',
         order: 'post',
@@ -191,7 +191,7 @@ describe('commerce app shell HTTP entry', () => {
     server = createServer(vite.middlewares);
 
     try {
-      const viteShell = (await vite.ssrLoadModule('/src/app-shell.tsx')) as {
+      const viteShell = (await vite.ssrLoadModule('/src/generated/app-shell.kovo-route.tsx')) as {
         commerceAppShell: ReturnType<typeof createCommerceAppShell>;
       };
       await listen(server);

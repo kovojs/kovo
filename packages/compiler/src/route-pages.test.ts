@@ -76,11 +76,14 @@ export const detail = route('/questions/:id', {
   it('rebases relative imports when emitting route IR into generated artifacts', () => {
     const result = compileRouteModule({
       artifactFileName: 'examples/app/src/generated/routes.kovo-route.tsx',
+      componentImportRewrites: [
+        { localName: 'QuestionListRegion', specifier: './question-list.js' },
+      ],
       fileName: 'examples/app/src/routes.tsx',
       source: `/** @jsxImportSource @kovojs/server */
 import { route } from '@kovojs/server';
 import { Shell } from './components/shell.js';
-import { QuestionListRegion } from './generated/question-list.js';
+import { QuestionListRegion } from './components/question-list.js';
 export { shared } from './shared.js';
 
 export const home = route('/', {
@@ -95,6 +98,29 @@ export const home = route('/', {
       'import { QuestionListRegion } from "./question-list.js";',
     );
     expect(result.files[0]?.source).toContain('export { shared } from "../shared.js";');
+  });
+
+  it('reports KV235 for app-local generated imports in route source', () => {
+    const result = compileRouteModule({
+      fileName: 'examples/app/src/routes.tsx',
+      source: `/** @jsxImportSource @kovojs/server */
+import { route } from '@kovojs/server';
+import { QuestionListRegion } from './generated/question-list.js';
+
+export const home = route('/', {
+  page: () => <QuestionListRegion />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV235',
+        message:
+          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. app-local generated component import \'./generated/question-list.js\' in route/layout source.',
+        help: expect.stringContaining('Route/layout source should import the authored component'),
+      }),
+    ]);
   });
 
   it('records route param props passed to parameterized component pages', () => {

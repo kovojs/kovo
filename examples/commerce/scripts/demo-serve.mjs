@@ -17,10 +17,12 @@ export function createCommerceDemoServer(options = {}) {
     root: commerceRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     async loadInstanceFactory(vite) {
-      const appShell = await vite.ssrLoadModule('/src/app-shell.tsx');
+      const appShell = await vite.ssrLoadModule('/src/generated/app-shell.kovo-route.tsx');
       const { createCommerceAppShell } = appShell;
       if (typeof createCommerceAppShell !== 'function') {
-        throw new Error('commerce /src/app-shell.tsx must export createCommerceAppShell.');
+        throw new Error(
+          'commerce /src/generated/app-shell.kovo-route.tsx must export createCommerceAppShell.',
+        );
       }
       // A reference instance only supplies the route table for the ownership
       // predicate; every visitor's requests run against their own fresh instance

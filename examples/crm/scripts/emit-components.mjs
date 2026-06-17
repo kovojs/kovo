@@ -113,6 +113,11 @@ const routeFileName = 'examples/crm/src/interactive-app.tsx';
 const routeArtifactFileName = 'examples/crm/src/generated/interactive-app.kovo-route.tsx';
 const routeResult = compileRouteModule({
   artifactFileName: routeArtifactFileName,
+  componentImportRewrites: [
+    { localName: 'ContactsRegion', specifier: './contacts.js' },
+    { localName: 'DealDetailRegion', specifier: './deal-detail.js' },
+    { localName: 'PipelineRegion', specifier: './pipeline.js' },
+  ],
   fileName: routeFileName,
   source: readFileSync(routeSourcePath, 'utf8'),
 });

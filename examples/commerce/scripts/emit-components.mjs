@@ -187,6 +187,11 @@ const routeFileName = 'examples/commerce/src/app-shell.tsx';
 const routeArtifactFileName = 'examples/commerce/src/generated/app-shell.kovo-route.tsx';
 const routeResult = compileRouteModule({
   artifactFileName: routeArtifactFileName,
+  componentImportRewrites: [
+    { localName: 'CartBadge', specifier: './cart-badge.js' },
+    { localName: 'OrderHistory', specifier: './order-history.js' },
+    { localName: 'ProductGrid', specifier: './product-grid.js' },
+  ],
   fileName: routeFileName,
   source: readFileSync(routeSourcePath, 'utf8'),
 });
