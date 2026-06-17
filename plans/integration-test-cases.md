@@ -1129,21 +1129,36 @@ specs/a11y-value-controls-terminal.spec.ts --config tests/integration/playwright
 
 ## Suggested implementation batches
 
-- [ ] Batch A: finish first-wave gaps from `plans/integration-test-suite.md` I3:
+- [x] Batch A: finish first-wave gaps from `plans/integration-test-suite.md` I3:
       `query-refetch`, `optimistic-success`, `optimistic-rollback`, `enhanced-submit-controls`, and
       `loader-lifecycle`.
-- [ ] Batch B: add update-plan fixtures:
+  - Evidence: each named fixture is checked above with focused Playwright/runtime evidence; latest
+    same-session verification included the focused `bfcache-hygiene`, `fragment-slot-hoist`, and
+    `kovo-defer-initial-stream` Playwright/Vitest gates plus their worker-recorded first-wave gates.
+- [x] Batch B: add update-plan fixtures:
       `binding-text-attr`, `nullable-binding`, `derive-binding`, `stamp-list-insert-remove`,
       `stamp-list-reorder`, and `multi-instance-query`.
-- [ ] Batch C: add morph-survival fixtures:
+  - Evidence: each named update-plan fixture is checked above with fixture/spec paths and proving
+    commands; no unchecked individual update-plan items remain in this ledger.
+- [x] Batch C: add morph-survival fixtures:
       `morph-focus-caret`, `morph-scroll`, `morph-nested-island-state`, `morph-remove-aborts`, and
       `fragment-append`.
-- [ ] Batch D: add route/auth fixtures:
+  - Evidence: each named morph-survival fixture is checked above; latest same-session focused
+    verification reran `morph-nested-island-state` and `morph-remove-aborts` in the aggregate gate.
+- [x] Batch D: add route/auth fixtures:
       `typed-link-navigation`, `get-form-search`, `redirect-typed-target`, `guarded-query-read`,
       `guarded-mutation`, and `forbidden-route`.
-- [ ] Batch E: add data-plane and wire-hardening fixtures:
+  - Evidence: each named route/auth fixture is checked above with fixture/spec paths and proving
+    commands; no unchecked individual route/auth items remain in this ledger.
+- [x] Batch E: add data-plane and wire-hardening fixtures:
       `csrf-required`, `idempotent-mutation`, `post-commit-rerun`,
       `touch-graph-runtime-crosscheck`, `manual-touches-raw-write`, and
       `query-readset-runtime-crosscheck`.
-- [ ] Batch F: add endpoints/files/streaming/static-export fixtures once the corresponding public APIs
+  - Evidence: each named data-plane and wire-hardening fixture is checked above with runtime or
+    browser integration evidence; no unchecked individual data-plane items remain in this ledger.
+- [x] Batch F: add endpoints/files/streaming/static-export fixtures once the corresponding public APIs
       are stable enough for browser/server integration coverage.
+  - Evidence: endpoint, file, streaming, CSS, and static-export integration cases are checked above,
+    including `endpoint-raw-request`, `endpoint-csrf-exempt-audited`, `respond-file`,
+    `respond-stream`, `storage-download-route`, `kovo-defer-initial-stream`,
+    `deferred-fragment-styles`, `static-export-l0-l1`, and `static-export-rejects-dynamic`.

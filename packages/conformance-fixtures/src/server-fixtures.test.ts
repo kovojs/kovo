@@ -228,7 +228,7 @@ describe('@kovojs/test server fixture facts', () => {
           rel: 'stylesheet',
         },
         sectionAttrs: { class: 'border-slate-200' },
-        tags: ['main', 'kovo-defer', 'kovo-fragment', 'link', 'section'],
+        tags: ['main', 'kovo-defer', 'kovo-fragment', 'link', 'section', 'script', 'script'],
       },
       failure: {
         body: '<kovo-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/tailwind.css"><form class="border-slate-200"><output role="alert">Only 0 left.</output></form></kovo-fragment>',
