@@ -1,4 +1,6 @@
+// @kovojs-ir — lowered from examples/crm/src/components/contacts.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
+import { escapeText } from '@kovojs/server';
 import { component } from '@kovojs/core';
 import { mutationFormAttributes } from '@kovojs/server';
 
@@ -37,10 +39,10 @@ export const ContactsRegion = component({
     const contacts = contactList.items;
 
     return (
-      <div class="space-y-6">
+      <div class="space-y-6" kovo-c="contacts-region" kovo-deps="contactList" kovo-fragment-target="contacts-region">
       <div>
         <h1 class="text-2xl font-bold tracking-tight">Contacts</h1>
-        <p class="mt-1 text-sm text-slate-600">{contacts.length} people in the book.</p>
+        <p class="mt-1 text-sm text-slate-600">{escapeText(contacts.length)} people in the book.</p>
       </div>
 
       {/* SPEC.md §6.3: a no-JS "add contact" form. POSTs to the addContact
@@ -84,11 +86,11 @@ export const ContactsRegion = component({
               {initials(contact.name)}
             </span>
             <div class="min-w-0 flex-1">
-              <p class="truncate font-medium">{contact.name}</p>
-              <p class="truncate text-sm text-slate-500">{contact.email}</p>
+              <p class="truncate font-medium">{escapeText(contact.name)}</p>
+              <p class="truncate text-sm text-slate-500">{escapeText(contact.email)}</p>
             </div>
             <span class="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-              {contact.dealCount} {contact.dealCount === 1 ? 'deal' : 'deals'}
+              {escapeText(contact.dealCount)} {contact.dealCount === 1 ? 'deal' : 'deals'}
             </span>
           </li>
         ))}
@@ -97,6 +99,7 @@ export const ContactsRegion = component({
     );
   },
 });
+ContactsRegion.name = "components/contacts/contacts-region";
 
 export function renderContactsRegion({ contacts }: ContactsPageData): string {
   return ContactsRegion.definition.render({ contactList: { items: contacts } });

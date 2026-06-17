@@ -1,4 +1,6 @@
+// @kovojs-ir — lowered from examples/crm/src/components/deal-detail.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
+import { escapeText } from '@kovojs/server';
 import { component } from '@kovojs/core';
 import { mutationFormAttributes } from '@kovojs/server';
 
@@ -65,7 +67,7 @@ export const DealDetailRegion = component({
     if (!deal) return <div class="space-y-6"></div>;
 
     return (
-      <div class="space-y-6">
+      <div class="space-y-6" kovo-c="deal-detail-region" kovo-deps="activityList contactList dealList" kovo-fragment-target="deal-detail-region">
       <a
         class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
         href="/"
@@ -78,7 +80,7 @@ export const DealDetailRegion = component({
           <div>
             <h1 class="text-xl font-bold tracking-tight">Deal {deal.id.toUpperCase()}</h1>
             <p class="mt-1 text-sm text-slate-600">
-              {contact ? contact.name : deal.contactId} · owner {deal.ownerId}
+              {contact ? contact.name : deal.contactId} · owner {escapeText(deal.ownerId)}
             </p>
           </div>
           <div class="text-right">
@@ -88,7 +90,7 @@ export const DealDetailRegion = component({
         </div>
         {contact ? (
           <p class="mt-4 border-t border-slate-100 pt-4 text-sm text-slate-600">
-            <span class="font-medium text-slate-900">{contact.name}</span> · {contact.email}
+            <span class="font-medium text-slate-900">{escapeText(contact.name)}</span> · {escapeText(contact.email)}
           </p>
         ) : (
           ''
@@ -127,7 +129,7 @@ export const DealDetailRegion = component({
         <div class="mt-4 border-t border-slate-100 pt-4">
           {closed ? (
             <p class="text-sm text-slate-500">
-              This deal is closed ({deal.stage}). Commission is final.
+              This deal is closed ({escapeText(deal.stage)}). Commission is final.
             </p>
           ) : (
             <form {...mutationFormAttributes(closeDeal)}>
@@ -154,9 +156,9 @@ export const DealDetailRegion = component({
             {activities.map((activity) => (
               <li class="rounded-lg border border-slate-200 bg-white p-4">
                 <p class="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {activity.kind}
+                  {escapeText(activity.kind)}
                 </p>
-                <p class="mt-1 text-sm text-slate-700">{activity.note}</p>
+                <p class="mt-1 text-sm text-slate-700">{escapeText(activity.note)}</p>
               </li>
             ))}
           </ol>
@@ -166,6 +168,7 @@ export const DealDetailRegion = component({
     );
   },
 });
+DealDetailRegion.name = "components/deal-detail/deal-detail-region";
 
 export function renderDealDetailRegion({ deal, contact, activities }: DealDetailPageData): string {
   return DealDetailRegion.definition.render({

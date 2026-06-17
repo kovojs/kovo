@@ -8,17 +8,17 @@ import {
   CONTACT_LIST_TARGET,
   renderContactsPage,
   renderContactsRegion,
-} from './components/contacts.js';
+} from './generated/contacts.js';
 import {
   DEAL_DETAIL_TARGET,
   renderDealDetailPage,
   renderDealDetailRegion,
-} from './components/deal-detail.js';
+} from './generated/deal-detail.js';
 import {
   PIPELINE_TARGET,
   renderPipelinePage,
   renderPipelineRegion,
-} from './components/pipeline.js';
+} from './generated/pipeline.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
 import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';

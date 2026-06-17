@@ -454,7 +454,7 @@ export const AddToCartForm = component({
       and
       `rg -n 'failureTarget|kovo-fragment-target="cart-badge"|fragmentTarget: true|action="/_m/cart/add"|data-mutation="cart/add"' examples/commerce/src/components examples/commerce/src/app.ts examples/commerce/src/app-shell.ts`
       on 2026-06-17.
-- [ ] **9. Broader example/docs migration.**
+- [x] **9. Broader example/docs migration.**
   - Audit StackOverflow and CRM components that currently hand-author
     `kovo-fragment-target` and remove attributes where inference covers them.
   - Audit enhanced forms across examples and starters for manual failure target
@@ -512,8 +512,8 @@ export const AddToCartForm = component({
       `examples/stackoverflow/src/components/{chrome,question-detail,question-list}.tsx`
       and
       `examples/crm/src/components/{contacts,deal-detail,pipeline}.tsx`
-      use `mutation={...}` instead of hard-coded `action="/_m/*"` and
-      `data-mutation` strings.
+      use typed `mutation={...}` or `mutationFormAttributes(...)` instead of
+      hard-coded `action="/_m/*"` and `data-mutation` strings.
     - Reference auth and commerce auth/upload string renderers now use
       `renderMutationFormAttributes()` with real mutation definitions in
       `examples/reference/src/app.ts` and `examples/commerce/src/app.ts`.
@@ -526,10 +526,6 @@ export const AddToCartForm = component({
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
       `rg -n 'action="/_m/|data-mutation=' examples/stackoverflow/src/components examples/crm/src/components examples/reference/src/app.ts examples/commerce/src/app.ts`
       on 2026-06-17.
-    - Audit result: StackOverflow and CRM still hand-author region-level
-      `kovo-fragment-target` hosts in plain route render helpers; inference does
-      not cover those wrappers until the regions become compiler-managed
-      query-backed `component()` roots.
     - Starter auth forms in `packages/create-kovo/templates/src/auth.tsx` now
       require the generated `StarterAuthBindings` value and render
       `mutation={auth.signIn}` / `mutation={auth.signOut}` instead of
@@ -551,8 +547,24 @@ export const AddToCartForm = component({
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
       `rg -n 'kovo-fragment-target=' examples/stackoverflow/src/components/question-list.tsx examples/stackoverflow/src/components/question-detail.tsx`
       on 2026-06-17.
-    - Remaining gap: CRM region targets still need a component-boundary
-      migration before the `kovo-fragment-target` attributes can be removed.
+    - CRM route regions now compile from query-backed source components:
+      `examples/crm/src/components/{contacts,pipeline,deal-detail}.tsx` no
+      longer hand-author root `kovo-fragment-target`, while
+      `examples/crm/src/generated/*` carries compiler-derived `kovo-c`,
+      `kovo-deps`, and `kovo-fragment-target` stamps for runtime imports.
+      The deal-detail component declares `dealId` as a stamped prop and uses
+      `activityListQuery`/`contactListQuery`/`dealListQuery` as reconstructible
+      render inputs.
+    - Verified with
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
+      `rg -n 'kovo-fragment-target=' examples/crm/src/components/contacts.tsx examples/crm/src/components/pipeline.tsx examples/crm/src/components/deal-detail.tsx`
+      on 2026-06-17.
+    - Final authored-source audit no-matched
+      `rg -n 'failureTarget|kovo-fragment-target=|fragmentTarget: true|action="/_m/|data-mutation=' examples/stackoverflow/src/components examples/crm/src/components examples/commerce/src/components examples/commerce/src/app.ts examples/commerce/src/app-shell.ts examples/reference/src/app.ts packages/create-kovo/templates/src/auth.tsx site/tutorial/steps/*/src/components site/tutorial/steps/*/src/app.ts`
+      on 2026-06-17; remaining hits in the broader scan are generated/runtime
+      artifacts or tests asserting emitted wire output.
 - [ ] **10. Final gates.**
   - Run focused compiler/runtime/server/example tests for inferred targets,
     form-target inference, mutation responses, query coverage, and commerce.

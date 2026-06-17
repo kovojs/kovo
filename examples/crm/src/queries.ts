@@ -2,8 +2,8 @@ import { count, eq, sql } from 'drizzle-orm';
 
 import type { CrmDb } from './db.js';
 import type { Domain } from '@kovojs/server';
-import { contact, deal } from './domains.js';
-import { contacts, deals } from './schema.js';
+import { activity, contact, deal } from './domains.js';
+import { activities, contacts, deals } from './schema.js';
 
 // SPEC.md §10.2: a query couples a stable key, its `reads` (the invalidation
 // declaration), and a `load(input, db)` loader. We declare it with this local
@@ -75,6 +75,17 @@ export interface PipelineStageBucket {
 
 export interface PipelineByStageResult {
   buckets: PipelineStageBucket[];
+}
+
+export interface ActivityRow {
+  id: number;
+  dealId: string;
+  kind: string;
+  note: string;
+}
+
+export interface ActivityListResult {
+  items: ActivityRow[];
 }
 
 /** AGG(contacts) — the full contact book, ordered by id (a derivable rowset). */
@@ -156,6 +167,23 @@ export const pipelineByStageQuery = query('pipelineByStage', {
       .groupBy(deals.stage)
       .orderBy(deals.stage);
     return { buckets: buckets };
+  },
+});
+
+/** AGG(activities) ordered by id — timeline rows for deal-detail regions. */
+export const activityListQuery = query('activityList', {
+  reads: [activity],
+  load: async (_input: unknown, db: CrmDb): Promise<ActivityListResult> => {
+    const items = await db
+      .select({
+        id: activities.id,
+        dealId: activities.dealId,
+        kind: activities.kind,
+        note: activities.note,
+      })
+      .from(activities)
+      .orderBy(activities.id);
+    return { items: items };
   },
 });
 

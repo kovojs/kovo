@@ -1,4 +1,6 @@
+// @kovojs-ir — lowered from examples/crm/src/components/pipeline.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
+import { escapeText } from '@kovojs/server';
 import { component } from '@kovojs/core';
 import { mutationFormAttributes } from '@kovojs/server';
 
@@ -60,11 +62,11 @@ export const PipelineRegion = component({
     const total = buckets.reduce((sum, bucket) => sum + bucket.total, 0);
 
     return (
-      <div class="space-y-8">
+      <div class="space-y-8" kovo-c="pipeline-region" kovo-deps="contactList openDeals pipelineByStage" kovo-fragment-target="pipeline-region">
       <div>
         <h1 class="text-2xl font-bold tracking-tight">Sales pipeline</h1>
         <p class="mt-1 text-sm text-slate-600">
-          {money(total)} across {buckets.length} stages, <span>{openDeals.items.length}</span>{' '}
+          {money(total)} across {escapeText(buckets.length)} stages, <span data-bind="openDeals.items.length">{openDeals.items.length}</span>{' '}
           deals open now.
         </p>
       </div>
@@ -101,7 +103,7 @@ export const PipelineRegion = component({
               class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             >
               {contacts.map((contact) => (
-                <option value={contact.id}>{contact.name}</option>
+                <option value={contact.id}>{escapeText(contact.name)}</option>
               ))}
             </select>
             <select
@@ -168,6 +170,7 @@ export const PipelineRegion = component({
     );
   },
 });
+PipelineRegion.name = "components/pipeline/pipeline-region";
 
 export function renderPipelineRegion({ buckets, openDeals, contacts }: PipelinePageData): string {
   return PipelineRegion.definition.render({
