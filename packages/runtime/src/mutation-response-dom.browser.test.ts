@@ -152,6 +152,52 @@ describe('browser mutation response DOM apply', () => {
     );
   });
 
+  it('keeps escaped refreshed fragment payloads as text instead of markup', () => {
+    const root = document.createElement('main');
+    root.innerHTML = '<section kovo-c="promo">stale promo</section>';
+    document.body.append(root);
+
+    const applied = applyMutationResponseBodyToRuntime({
+      body: [
+        '<kovo-fragment target="promo">',
+        '<section kovo-c="promo">&lt;img src=x onerror=alert(1)&gt; &amp; &quot;quoted&quot; &#39;single&#39;</section>',
+        '</kovo-fragment>',
+      ].join(''),
+      root: new DomMorphRoot(root),
+      store: createQueryStore(),
+    });
+
+    const target = root.querySelector('[kovo-c="promo"]');
+    if (!target) throw new Error('missing refreshed fragment target');
+
+    // SPEC.md §9.1 says a mutation fragment is server-rendered truth; this
+    // verifies escaped server text remains text after browser fragment morphing.
+    expect({
+      applied,
+      html: root.innerHTML,
+      imgCount: root.querySelectorAll('img').length,
+      text: target.textContent,
+    }).toMatchInlineSnapshot(`
+      {
+        "applied": {
+          "appliedFragments": [
+            "promo",
+          ],
+          "fragments": [
+            {
+              "html": "<section kovo-c="promo">&lt;img src=x onerror=alert(1)&gt; &amp; &quot;quoted&quot; &#39;single&#39;</section>",
+              "target": "promo",
+            },
+          ],
+          "queries": [],
+        },
+        "html": "<section kovo-c="promo">&lt;img src=x onerror=alert(1)&gt; &amp; "quoted" 'single'</section>",
+        "imgCount": 0,
+        "text": "<img src=x onerror=alert(1)> & "quoted" 'single'",
+      }
+    `);
+  });
+
   it('reports browser query apply failures and still applies later fragments', () => {
     const root = document.createElement('main');
     root.innerHTML =

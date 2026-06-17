@@ -7,6 +7,55 @@ afterEach(() => {
 });
 
 describe('browser query template stamps', () => {
+  it('keeps server-rendered escaped text and client text updates equivalent for HTML payloads', () => {
+    const payload = `<img src=x onerror=alert(1)> & "quoted" 'single'`;
+    const root = document.createElement('section');
+    root.innerHTML =
+      '<h2 data-bind="product.name">&lt;img src=x onerror=alert(1)&gt; &amp; &quot;quoted&quot; &#39;single&#39;</h2>';
+    document.body.append(root);
+
+    const heading = root.querySelector('h2');
+    if (!heading) throw new Error('missing text binding fixture');
+
+    const before = {
+      html: root.innerHTML,
+      imgCount: root.querySelectorAll('img').length,
+      text: heading.textContent,
+    };
+    const applied = applyCompiledQueryUpdatePlan(root, 'product', { name: payload });
+    const after = {
+      applied,
+      html: root.innerHTML,
+      imgCount: root.querySelectorAll('img').length,
+      text: heading.textContent,
+    };
+
+    // SPEC.md §4.8 requires server-rendered query text and client query updates
+    // to share the same empty/text semantics without interpreting payloads as HTML.
+    expect({ after, before }).toMatchInlineSnapshot(`
+      {
+        "after": {
+          "applied": {
+            "bindings": [
+              "product.name",
+            ],
+            "derives": [],
+            "stamps": [],
+            "templateStamps": [],
+          },
+          "html": "<h2 data-bind="product.name">&lt;img src=x onerror=alert(1)&gt; &amp; "quoted" 'single'</h2>",
+          "imgCount": 0,
+          "text": "<img src=x onerror=alert(1)> & "quoted" 'single'",
+        },
+        "before": {
+          "html": "<h2 data-bind="product.name">&lt;img src=x onerror=alert(1)&gt; &amp; "quoted" 'single'</h2>",
+          "imgCount": 0,
+          "text": "<img src=x onerror=alert(1)> & "quoted" 'single'",
+        },
+      }
+    `);
+  });
+
   it('reconciles plain DOM data-bind-list hosts by kovo-key and item-relative bindings', () => {
     const list = document.createElement('ul');
     list.setAttribute('data-bind-list', 'cart.items');

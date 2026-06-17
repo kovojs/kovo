@@ -132,16 +132,22 @@ compiler-quality gaps found during the 2026-06-16 audit.
   - [ ] Add a static test that fails if a generated interpolation is emitted without an output-context
         fact.
 
-- [ ] Complete the security payload matrix.
-  - [ ] Add server-render and client-update agreement tests for text payloads containing `<`, `>`,
+- [x] Complete the security payload matrix.
+  - [x] Add server-render and client-update agreement tests for text payloads containing `<`, `>`,
         `&`, and quotes.
-    - Evidence (partial, 2026-06-16): `packages/compiler/src/output-context-payloads.test.ts`
+    - Evidence (2026-06-16): `packages/compiler/src/output-context-payloads.test.ts`
       snapshots initial server text escaping through `escapeText(...)` and client query text
       updates through `textContent` for payloads containing `<`, `>`, `&`, double quotes, and
-      single quotes; keep this row open until one fixture proves the browser-observed
-      server-rendered text and the client-updated text agree for the same payload.
+      single quotes.
     - Evidence (2026-06-16): `pnpm exec vitest --run
       packages/compiler/src/output-context-payloads.test.ts` passes.
+    - Evidence (2026-06-16): `packages/runtime/src/query-bindings.browser.test.ts` snapshots one
+      browser DOM fixture where escaped server-rendered query text and a later
+      `applyCompiledQueryUpdatePlan(...)` text update produce the same `textContent` for a payload
+      containing `<`, `>`, `&`, double quotes, and single quotes, with zero parsed `<img>` nodes.
+    - Evidence (2026-06-16): `pnpm exec vitest --run --config vitest.browser.config.ts
+      packages/runtime/src/query-bindings.browser.test.ts
+      packages/runtime/src/mutation-response-dom.browser.test.ts` passes.
   - [x] Add title and ARIA attribute payload tests.
     - Evidence (2026-06-16): `packages/compiler/src/output-context-payloads.test.ts`
       snapshots compiler-generated `title`, `aria-label`, and `aria-description` derive stamps,
@@ -183,7 +189,14 @@ compiler-quality gaps found during the 2026-06-16 audit.
       quotes.
     - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run -u
       src/output-context-payloads.test.ts` passes.
-  - [ ] Add fragment-target tests where refreshed fragment values attempt HTML injection.
+  - [x] Add fragment-target tests where refreshed fragment values attempt HTML injection.
+    - Evidence (2026-06-16): `packages/runtime/src/mutation-response-dom.browser.test.ts`
+      snapshots a real browser mutation fragment refresh whose server-escaped payload contains
+      `<`, `>`, `&`, double quotes, and single quotes; fragment morphing preserves the decoded
+      `textContent` and leaves zero parsed `<img>` nodes.
+    - Evidence (2026-06-16): `pnpm exec vitest --run --config vitest.browser.config.ts
+      packages/runtime/src/query-bindings.browser.test.ts
+      packages/runtime/src/mutation-response-dom.browser.test.ts` passes.
   - [x] Add raw HTML rejection tests for plain strings at every supported raw HTML sink.
     - Evidence (2026-06-16): `packages/compiler/src/output-context-raw-html.test.ts`
       snapshots KV236 diagnostics for statically visible plain strings at
