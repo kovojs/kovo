@@ -52,13 +52,13 @@ integration harness uniquely proves.
     Runtime unit coverage continues to pin the shared visible-return refetch ledger and typed-read
     apply path. Proving commands:
     `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts
-    specs/binding-text-attr.spec.ts specs/shared-query-consumers.spec.ts --config
-    playwright.config.ts --workers=1`; `pnpm exec vitest run
-    packages/runtime/src/query-visible-return-refetch.test.ts
-    packages/runtime/src/loader-visible-return-refetch.test.ts
-    packages/runtime/src/loader-query-hydration.test.ts
-    packages/runtime/src/query-visible-return.browser.test.ts`; `pnpm --filter @kovojs/runtime run
-    check:inline-loader`.
+specs/binding-text-attr.spec.ts specs/shared-query-consumers.spec.ts --config
+playwright.config.ts --workers=1`; `pnpm exec vitest run
+packages/runtime/src/query-visible-return-refetch.test.ts
+packages/runtime/src/loader-visible-return-refetch.test.ts
+packages/runtime/src/loader-query-hydration.test.ts
+packages/runtime/src/query-visible-return.browser.test.ts`; `pnpm --filter @kovojs/runtime run
+check:inline-loader`.
 - [x] `optimistic-success` / `optimistic-success.spec.ts`: a hand-written optimistic transform
       updates every consumer of the invalidated query immediately, marks affected islands pending,
       and reconciles cleanly when the server response arrives.
@@ -73,12 +73,12 @@ integration harness uniquely proves.
     confirms database truth. Runtime unit coverage continues to pin optimistic success/rebase and
     pagehide cleanup primitives. Proving commands:
     `pnpm --filter @kovojs/integration-tests exec playwright test specs/optimistic-success.spec.ts
-    --config playwright.config.ts --workers=1`; `pnpm exec vitest run
-    packages/runtime/src/mutation-optimistic.test.ts packages/runtime/src/optimism-rebase.test.ts
-    packages/runtime/src/mutation-optimistic-pagehide.test.ts`; `pnpm exec vp check
-    tests/integration/fixtures/optimistic-success/app.tsx
-    tests/integration/fixtures/optimistic-success/client.ts
-    tests/integration/specs/optimistic-success.spec.ts`.
+--config playwright.config.ts --workers=1`; `pnpm exec vitest run
+packages/runtime/src/mutation-optimistic.test.ts packages/runtime/src/optimism-rebase.test.ts
+packages/runtime/src/mutation-optimistic-pagehide.test.ts`; `pnpm exec vp check
+tests/integration/fixtures/optimistic-success/app.tsx
+tests/integration/fixtures/optimistic-success/client.ts
+tests/integration/specs/optimistic-success.spec.ts`.
 - [ ] `optimistic-rollback` / `optimistic-rollback.spec.ts`: an optimistic transform predicts a
       change, the mutation returns a typed error, snapshots are restored, and the error fragment is
       rendered.
@@ -109,21 +109,39 @@ integration harness uniquely proves.
     parity is pinned by `packages/runtime/src/loader-enhanced-mutation-submit.test.ts` and
     `packages/runtime/src/inline-loader-enhanced-submit.test.ts`. Proving commands:
     `pnpm exec playwright test tests/integration/specs/enhanced-submit-controls.spec.ts --config
-    tests/integration/playwright.config.ts --workers=1`; `pnpm exec vitest run
-    packages/runtime/src/loader-enhanced-mutation-submit.test.ts
-    packages/runtime/src/inline-loader-enhanced-submit.test.ts`; `pnpm --filter @kovojs/runtime run
-    check:inline-loader`.
-- [ ] `loader-lifecycle` / `loader-lifecycle.spec.ts`: a long-running handler receives
+tests/integration/playwright.config.ts --workers=1`; `pnpm exec vitest run
+packages/runtime/src/loader-enhanced-mutation-submit.test.ts
+packages/runtime/src/inline-loader-enhanced-submit.test.ts`; `pnpm --filter @kovojs/runtime run
+check:inline-loader`.
+- [x] `loader-lifecycle` / `loader-lifecycle.spec.ts`: a long-running handler receives
       `ctx.signal`, fragment morph removes its island, and cleanup runs without mount/unmount hooks.
   - SPEC refs: §4.4 loader, §4.7 lifecycle.
   - Assertions: handler starts only after declared trigger/interaction; removal aborts signal;
     replacement island remains inert until touched.
-  - Partial evidence: `tests/integration/fixtures/loader-lifecycle` and
-    `tests/integration/specs/loader-lifecycle.spec.ts` now exercise the intended trigger + morph
-    shape, but the spec remains skipped because the browser fixture path morphs in the replacement
-    island without aborting the running delegated handler signal, so SPEC.md §4.7 cleanup is not yet
-    provable end-to-end. Focused command:
-    `pnpm exec playwright test tests/integration/specs/loader-lifecycle.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+  - Evidence: `tests/integration/fixtures/loader-lifecycle` and
+    `tests/integration/specs/loader-lifecycle.spec.ts` verify the inline loader starts the long task
+    only after the primary click, aborts its `ctx.signal` when an enhanced fragment morph removes the
+    `primary-runner` island, keeps the replacement island inert until clicked, and records a semantic
+    snapshot of the replaced shell. Runtime parity is pinned by inline delegated signal reuse and
+    modular loader lifecycle tests. Proving commands:
+    `pnpm exec playwright test tests/integration/specs/loader-lifecycle.spec.ts
+tests/integration/specs/morph-remove-aborts.spec.ts --config tests/integration/playwright.config.ts
+--workers=1`; `pnpm exec vitest run packages/runtime/src/inline-loader-delegated.test.ts
+packages/runtime/src/inline-loader-artifact-minifier.test.ts
+packages/runtime/src/inline-loader-response-apply-extract.test.ts
+packages/runtime/src/inline-loader-response-apply-runtime.test.ts
+packages/runtime/src/response-fragment-apply.test.ts
+packages/runtime/src/delegated-loader-lifecycle.test.ts packages/runtime/src/handler-context.test.ts`;
+    `pnpm --filter @kovojs/runtime run check:inline-loader`; `pnpm exec vp check
+packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts
+packages/runtime/src/inline-loader-delegated.test.ts
+packages/runtime/src/inline-loader-artifact-minifier.test.ts
+tests/integration/fixtures/loader-lifecycle/app.tsx
+tests/integration/fixtures/loader-lifecycle/client.ts
+tests/integration/specs/loader-lifecycle.spec.ts
+tests/integration/fixtures/morph-remove-aborts/app.tsx
+tests/integration/fixtures/morph-remove-aborts/client.ts
+tests/integration/specs/morph-remove-aborts.spec.ts plans/integration-test-cases.md`.
 
 ## Render and document shell
 
@@ -344,13 +362,13 @@ integration harness uniquely proves.
     `packages/runtime/src/inline-loader-response-apply-runtime.test.ts` verifies the generated
     bootstrap dispatches query chunks to shared hydration while staying within the SPEC §4.4 budget.
     Proving commands: `pnpm exec vitest run packages/runtime/src/inline-loader-artifact-minifier.test.ts
-    packages/runtime/src/query-apply.test.ts packages/runtime/src/query-events.test.ts
-    packages/runtime/src/inline-loader-response-apply-runtime.test.ts
-    packages/runtime/src/inline-loader-build.test.ts`; `pnpm --filter @kovojs/runtime run
-    check:inline-loader`; `pnpm --filter @kovojs/integration-tests exec playwright test
-    specs/binding-text-attr.spec.ts specs/derive-binding.spec.ts specs/multi-instance-query.spec.ts
-    specs/stamp-list-insert-remove.spec.ts specs/stamp-list-reorder.spec.ts --config
-    playwright.config.ts --workers=1`.
+packages/runtime/src/query-apply.test.ts packages/runtime/src/query-events.test.ts
+packages/runtime/src/inline-loader-response-apply-runtime.test.ts
+packages/runtime/src/inline-loader-build.test.ts`; `pnpm --filter @kovojs/runtime run
+check:inline-loader`; `pnpm --filter @kovojs/integration-tests exec playwright test
+specs/binding-text-attr.spec.ts specs/derive-binding.spec.ts specs/multi-instance-query.spec.ts
+specs/stamp-list-insert-remove.spec.ts specs/stamp-list-reorder.spec.ts --config
+playwright.config.ts --workers=1`.
 - [x] `shared-query-consumers` / `shared-query-consumers.spec.ts`: a single query value ships once and
       updates multiple islands consuming the same `kovo-deps` key.
   - SPEC refs: §4.2 query data ships once, §10.4 optimism keyed to queries.
@@ -401,14 +419,19 @@ integration harness uniquely proves.
   - Current gap: not implemented in this slice because current DOM morph syncs the server fragment's
     attributes onto matched keyed elements, so a nested island's client-owned `kovo-state` would be
     overwritten instead of preserved.
-- [ ] `morph-remove-aborts` / `morph-remove-aborts.spec.ts`: removing an island through morph aborts
+- [x] `morph-remove-aborts` / `morph-remove-aborts.spec.ts`: removing an island through morph aborts
       its `ctx.signal` and clears pending trigger observation.
   - SPEC refs: §4.4 loader, §4.7 lifecycle.
   - Assertions: abort callback fires; no later handler side effects from removed island.
-  - Gap: left unchecked because the emitted inline loader used by the integration fixture shell creates
-    a fresh `AbortController().signal` per delegated event and does not retain a per-island signal
-    scope that fragment removal can abort. The full `installKovoLoader` path has
-    `abortRemovedIslandSignals(...)`, but this harness path cannot currently prove removal aborts.
+  - Evidence: `tests/integration/fixtures/morph-remove-aborts` and
+    `tests/integration/specs/morph-remove-aborts.spec.ts` verify an enhanced fragment morph aborts the
+    running `abortable-island` handler signal, prevents the handler's delayed side effect, removes a
+    pending non-intersecting `on:visible` trigger without later effects, and keeps the replacement
+    island inert until clicked. The inline loader now retains island-scoped handler signals through
+    the public document bootstrap and aborts removed stamped islands before fragment morphing, while
+    `check:inline-loader` keeps the generated artifact within the SPEC.md §4.4 4096-byte gzip budget.
+    Proving commands: same focused Playwright, runtime vitest, inline-loader check, and `vp check`
+    command recorded under `loader-lifecycle`.
 - [x] `fragment-append` / `fragment-append.spec.ts`: `<kovo-fragment mode="append">` appends paged rows
       without replacing existing keyed content.
   - SPEC refs: §9.1 append vocabulary, §13.2 pagination.
@@ -573,10 +596,10 @@ integration harness uniquely proves.
   - SPEC refs: §6.4 routes and links, §8 no client router.
   - Assertions: anchor `href` is readable; browser navigation loads new document; no router runtime.
   - Evidence: `pnpm exec playwright test tests/integration/specs/typed-link-navigation.spec.ts
-    tests/integration/specs/get-form-search.spec.ts
-    tests/integration/specs/trailing-slash-308.spec.ts
-    tests/integration/specs/guarded-query-read.spec.ts
-    tests/integration/specs/forbidden-route.spec.ts --config tests/integration/playwright.config.ts`
+tests/integration/specs/get-form-search.spec.ts
+tests/integration/specs/trailing-slash-308.spec.ts
+tests/integration/specs/guarded-query-read.spec.ts
+tests/integration/specs/forbidden-route.spec.ts --config tests/integration/playwright.config.ts`
     passed on 2026-06-16; `tests/integration/specs/typed-link-navigation.spec.ts` asserts
     readable `Link()`/`href()` anchor hrefs and document navigation to typed path/search targets.
 - [x] `get-form-search` / `get-form-search.spec.ts`: GET forms write typed route search params and
@@ -591,7 +614,7 @@ integration harness uniquely proves.
   - Assertions: response status/location; final page semantic content.
   - Evidence: added `tests/integration/fixtures/redirect-typed-target/app.tsx` and
     `tests/integration/specs/redirect-typed-target.spec.ts`; the no-JS POST returns `303 Location:
-    /orders/ord-42?source=mutation&tab=receipt` from `redirect('/orders/:id', ...)`, and the final
+/orders/ord-42?source=mutation&tab=receipt` from `redirect('/orders/:id', ...)`, and the final
     route renders the typed params/search content. Proving command: the Slice I Playwright command
     recorded under `query-args-search`.
 - [x] `trailing-slash-308` / `trailing-slash-308.spec.ts`: trailing slashes normalize before matching.
@@ -848,13 +871,13 @@ integration harness uniquely proves.
     compiler-emitted `/assets/deferred-review.css` link appears once, and assert the deferred
     content's computed background style plus semantic snapshot. Proving commands:
     `pnpm exec playwright test tests/integration/specs/scoped-component-css.spec.ts
-    tests/integration/specs/fragment-style-metadata.spec.ts
-    tests/integration/specs/deferred-fragment-styles.spec.ts --config
-    tests/integration/playwright.config.ts --workers=1` and `pnpm exec vitest run
-    packages/compiler/src/css.test.ts packages/server/src/hints.test.ts
-    packages/server/src/deferred-stream.test.ts packages/server/src/mutation-response.test.ts
-    packages/runtime/src/inline-loader-build.test.ts
-    packages/runtime/src/inline-loader-response-apply-extract.test.ts`.
+tests/integration/specs/fragment-style-metadata.spec.ts
+tests/integration/specs/deferred-fragment-styles.spec.ts --config
+tests/integration/playwright.config.ts --workers=1` and `pnpm exec vitest run
+packages/compiler/src/css.test.ts packages/server/src/hints.test.ts
+packages/server/src/deferred-stream.test.ts packages/server/src/mutation-response.test.ts
+packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-response-apply-extract.test.ts`.
 - [x] `static-export-l0-l1` / `static-export-l0-l1.spec.ts`: an exportable L0/L1 route replays through
       the same handler and writes HTML plus immutable client modules.
   - SPEC refs: §9.5 static export.
@@ -886,7 +909,7 @@ integration harness uniquely proves.
     carry a deduped late stylesheet link, the linked `/assets/fragment.css` asset is served, and the
     browser applies the fragment-only class styles after morph. Proving command:
     `pnpm exec playwright test specs/tailwind-fragment-css.spec.ts --config
-    tests/integration/playwright.config.ts --workers=1`.
+tests/integration/playwright.config.ts --workers=1`.
   - Gap: left unchecked because this fixture uses a prebuilt CSS asset; it does not prove Tailwind
     source scanning or safelist generation for classes that exist only in mutation/deferred
     fragments.
@@ -935,9 +958,9 @@ integration harness uniquely proves.
     `packages/server/src/vite-dev.test.ts` verifies the same non-blocking channel and replacement
     semantics when a later error diagnostic supersedes a lint record. Proving commands:
     `pnpm exec vitest run packages/server/src/vite-dev.test.ts
-    packages/server/src/vite-diagnostics.test.ts`; `pnpm exec playwright test
-    tests/integration/specs/diagnostic-warning-nonblocking.spec.ts --config
-    tests/integration/playwright.config.ts --workers=1`.
+packages/server/src/vite-diagnostics.test.ts`; `pnpm exec playwright test
+tests/integration/specs/diagnostic-warning-nonblocking.spec.ts --config
+tests/integration/playwright.config.ts --workers=1`.
 - [x] `fixpoint-render-equivalence-fixture` / `fixpoint-render-equivalence-fixture.spec.ts`: a fixture
       that imports emitted/lowered IR renders byte/semantic-equivalent HTML to source TSX.
   - SPEC refs: §5.2 fixpoint + render-equivalence, §4.8 hand-written stamps.
@@ -950,8 +973,8 @@ integration harness uniquely proves.
     snapshot captured in
     `tests/integration/specs/__snapshots__/fixpoint-render-equivalence-fixture.spec.ts/fixpoint-render-equivalence-fixture-semantic.txt`.
     Proving command: `pnpm exec playwright test
-    tests/integration/specs/fixpoint-render-equivalence-fixture.spec.ts --config
-    tests/integration/playwright.config.ts --workers=1`.
+tests/integration/specs/fixpoint-render-equivalence-fixture.spec.ts --config
+tests/integration/playwright.config.ts --workers=1`.
 - [x] `explain-artifact-smoke` / `explain-artifact-smoke.spec.ts`: a browser-driven behavior has a
       matching stable `kovo explain` graph for component/mutation/query intent.
   - SPEC refs: §5.3 explain, §11.4 verification surface.
@@ -1014,9 +1037,9 @@ integration harness uniquely proves.
     violations for every accessibility terminal-state spec. Proving command for all accessibility
     cases:
     `pnpm exec playwright test specs/a11y-dialog-terminal.spec.ts specs/a11y-tabs-terminal.spec.ts
-    specs/a11y-menu-terminal.spec.ts specs/a11y-form-error-terminal.spec.ts
-    specs/a11y-value-controls-terminal.spec.ts --config tests/integration/playwright.config.ts
-    --workers=1`.
+specs/a11y-menu-terminal.spec.ts specs/a11y-form-error-terminal.spec.ts
+specs/a11y-value-controls-terminal.spec.ts --config tests/integration/playwright.config.ts
+--workers=1`.
 
 ## Suggested implementation batches
 

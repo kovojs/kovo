@@ -205,6 +205,7 @@ function installInlineKovoLoader(im) {
       return;
     }
   };
+  const hs = (el) => ((el = el.closest('[kovo-c]') || el).a ||= new AbortController()).signal;
   for (const el of qa(
     doc,
     'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
@@ -223,9 +224,15 @@ function installInlineKovoLoader(im) {
         ['quer' + 'ies']: chunks.queries,
       },
     });
-    applyInlineMutationResponseChunks(chunks, {
-      findFragmentTarget: ft,
-    });
+    for (const x of chunks.fragments) {
+      if (x.mode === 'append') continue;
+      const e = ft(x.target);
+      if (e) for (const y of qa(e, '[kovo-c]')) {
+        if (x.html.includes(y.getAttribute('kovo-c'))) continue;
+        y.a?.abort();
+      }
+    }
+    applyInlineMutationResponseChunks(chunks, { findFragmentTarget: ft });
   };
   const fsb = (form) => {
     if (typeof form.submit === 'function') {
@@ -273,7 +280,7 @@ function installInlineKovoLoader(im) {
     const pt = rp(el);
     const state = rs(el);
     const st = rh(el);
-    const context = { params, state, signal: new AbortController().signal };
+    const context = { params, state, signal: hs(el) };
     for (const attr of el.attributes || []) {
       if (!attr.name.startsWith('data-p-')) continue;
       const name = attr.name
@@ -646,6 +653,12 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['crossing', 'cr'],
     ['enterType', 'en'],
     ['overType', 'ov'],
+    ['selector', 'sl'],
+    ['component', 'cp'],
+    ['island', 'is'],
+    ['existing', 'ex'],
+    ['controller', 'ac'],
+    ['nextHtml', 'nh'],
   ]);
   let compacted = source;
 

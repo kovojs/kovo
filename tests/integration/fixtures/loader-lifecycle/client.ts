@@ -25,10 +25,7 @@ async function waitForAbort(signal: AbortSignal): Promise<void> {
   });
 }
 
-export async function startLongTask(
-  _event: Event,
-  ctx: { signal: AbortSignal },
-): Promise<void> {
+export async function startLongTask(_event: Event, ctx: { signal: AbortSignal }): Promise<void> {
   state().starts.push('primary');
   setStatus('primary-running');
   ctx.signal.addEventListener(
