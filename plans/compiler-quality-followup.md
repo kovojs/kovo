@@ -330,16 +330,25 @@ compiler-quality gaps found during the 2026-06-16 audit.
 
 ## Conformance Bar
 
-- [ ] Build a mechanically auditable diagnostic coverage matrix for compiler-owned diagnostics.
-  - [ ] Define the authoritative list of compiler-owned KV2xx/KV3xx codes in one test/table.
-  - [ ] Mark non-compiler-owned or future-domain diagnostics out of scope with an explicit reason.
-  - [ ] For every in-scope code, add a positive fixture showing accepted behavior.
-  - [ ] For every in-scope code, add a negative fixture emitting the diagnostic.
-  - [ ] For every in-scope code, snapshot code, severity, message, help/fix menu, source position,
+- [x] Build a mechanically auditable diagnostic coverage matrix for compiler-owned diagnostics.
+  - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) defines one authoritative `compilerOwnedDiagnosticMatrix` table covering in-scope compiler-owned KV2xx/KV3xx diagnostics and an explicit `outOfScopeCompilerDiagnostics` table for `KV310`.
+  - Evidence (2026-06-16): `./node_modules/.bin/vitest run packages/compiler/src/diagnostic-coverage-matrix.test.ts -u` passes in the diagnostic-matrix worktree.
+  - [x] Define the authoritative list of compiler-owned KV2xx/KV3xx codes in one test/table.
+    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) centralizes the list in `compilerOwnedDiagnosticMatrix`.
+  - [x] Mark non-compiler-owned or future-domain diagnostics out of scope with an explicit reason.
+    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) snapshots `outOfScopeCompilerDiagnostics`, explicitly documenting why `KV310` is excluded from the executable compiler matrix.
+  - [x] For every in-scope code, add a positive fixture showing accepted behavior.
+    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) runs one `positive` fixture per matrix row and asserts zero emissions for that row's diagnostic.
+  - [x] For every in-scope code, add a negative fixture emitting the diagnostic.
+    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) runs one `negative` fixture per matrix row and asserts at least one emission for that row's diagnostic.
+  - [x] For every in-scope code, snapshot code, severity, message, help/fix menu, source position,
         source length, and source file.
-  - [ ] Include KV201 and KV230 compatibility snapshots because they guard SPEC §4.3/§4.5 capture
+    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) snapshots representative normalized diagnostic facts with `code`, `severity`, `message`, `help`, `start`, `length`, and `fileName`.
+  - [x] Include KV201 and KV230 compatibility snapshots because they guard SPEC §4.3/§4.5 capture
         channels.
-  - [ ] Add a guard that fails when a new compiler-owned KV2xx/KV3xx diagnostic lacks matrix rows.
+    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) keeps a dedicated `keeps KV201 and KV230 teaching diagnostics compatibility-visible` snapshot.
+  - [x] Add a guard that fails when a new compiler-owned KV2xx/KV3xx diagnostic lacks matrix rows.
+    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) compares `diagnosticDefinitions` against `compilerOwnedDiagnosticMatrix` plus `outOfScopeCompilerDiagnostics` and fails on uncovered new codes.
 
 - [ ] Prove SPEC clause coverage for the quantified compiler promises.
   - [ ] Create a SPEC coverage map for §4.3 handler/capture lowering accepted paths and diagnostics.

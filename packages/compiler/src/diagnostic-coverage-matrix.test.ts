@@ -1,0 +1,1698 @@
+import {
+  diagnosticDefinitions,
+  type DiagnosticCode,
+  type DiagnosticSeverity,
+} from '@kovojs/core';
+import { describe, expect, it } from 'vitest';
+
+import { compileComponentModule, deriveAppGraph, queryShapeFactDiagnostics } from './index.js';
+import type { CompilerDiagnostic } from './diagnostics.js';
+
+type DiagnosticRunner = () => readonly CompilerDiagnostic[];
+
+interface DiagnosticMatrixRow {
+  code: Extract<DiagnosticCode, `KV${2 | 3}${number}${number}`>;
+  negative: DiagnosticRunner;
+  positive: DiagnosticRunner;
+  spec: string;
+}
+
+interface OutOfScopeDiagnosticRow {
+  code: Extract<DiagnosticCode, `KV${2 | 3}${number}${number}`>;
+  reason: string;
+}
+
+interface DiagnosticSnapshotFact {
+  code: DiagnosticCode;
+  fileName: string;
+  help: string | null;
+  length: number | null;
+  message: string;
+  severity: DiagnosticSeverity;
+  start: { column: number; line: number } | null;
+}
+
+const compilerOwnedDiagnosticMatrix = [
+  {
+    code: 'KV201',
+    spec: 'SPEC.md §4.3/§5.2',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'handler-captures-ok.tsx',
+        source: `
+import { openPanel } from './actions';
+
+export const HandlerCapturesOk = component({
+  state: () => ({ open: false }),
+  render: () => <button onClick={openPanel}>Open</button>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'handler-captures-bad.tsx',
+        source: '<button onClick={() => window.alert("x")}>x</button>',
+      }).diagnostics,
+  },
+  {
+    code: 'KV210',
+    spec: 'SPEC.md §5.2',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'handler-name-ok.tsx',
+        source: `
+import { openPanel } from './actions';
+
+export const HandlerNameOk = component({
+  state: () => ({ open: false }),
+  render: () => <button onClick={openPanel}>Open</button>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'handler-name-bad.tsx',
+        source: `
+export const HandlerNameBad = component({
+  state: () => ({ open: false }),
+  render: () => <button onClick={() => state.open = true}>Open</button>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV211',
+    spec: 'SPEC.md §4.7',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'trigger-load-ok.tsx',
+        source: `
+export const TriggerLoadOk = component({
+  render: () => (
+    <stock-ticker>
+      {/* KV211: market-open pages intentionally start this ticker at parse time. */}
+      <span on:load="/c/ticker.client.js#Ticker$start">Open</span>
+    </stock-ticker>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'trigger-load-bad.tsx',
+        source: `
+export const TriggerLoadBad = component({
+  render: () => <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV212',
+    spec: 'SPEC.md §4.7',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'trigger-known-ok.tsx',
+        source: `
+export const TriggerKnownOk = component({
+  render: () => <video-player on:visible="/c/video.client.js#Video$mount"></video-player>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'trigger-known-bad.tsx',
+        source: `
+export const TriggerKnownBad = component({
+  render: () => <video-player on:media="/c/video.client.js#Video$mount"></video-player>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV220',
+    spec: 'SPEC.md §6.4/§9.5',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'navigation-ok.tsx',
+        registryFacts: { routes: ['/cart'] },
+        source: `
+export const NavigationOk = component({
+  render: () => <a href="/cart">Cart</a>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'navigation-bad.tsx',
+        registryFacts: { routes: ['/cart'] },
+        source: `
+export const NavigationBad = component({
+  render: () => <a href="/checkout">Checkout</a>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV221',
+    spec: 'SPEC.md §4.5/§6.4',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'idref-ok.tsx',
+        source: `
+export const IdrefOk = component({
+  render: () => (
+    <section>
+      <input id="name" />
+      <label for="name">Name</label>
+    </section>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'idref-bad.tsx',
+        source: `
+export const IdrefBad = component({
+  render: () => <label for="missing">Name</label>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV222',
+    spec: 'SPEC.md §4.8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'binding-drift-ok.tsx',
+        queryShapes: { cart: { count: 'number' } },
+        source: `
+export const BindingDriftOk = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span>{cart.count}</span>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'binding-drift-bad.tsx',
+        queryShapes: { cart: { count: 'number', total: 'number' } },
+        source: `
+export const BindingDriftBad = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span data-bind="cart.total">{cart.count}</span>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV223',
+    spec: 'SPEC.md §4.8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'binding-redundancy-ok.tsx',
+        queryShapes: { cart: { count: 'number' } },
+        source: `
+export const BindingRedundancyOk = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span>{cart.count}</span>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'binding-redundancy-bad.tsx',
+        queryShapes: { cart: { count: 'number' } },
+        source: `
+export const BindingRedundancyBad = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span data-bind="cart.count">{cart.count}</span>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV224',
+    spec: 'SPEC.md §4.5',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'ids-ok.tsx',
+        source: `
+export const IdsOk = component({
+  render: () => <section><h2 id="title">A</h2><output id="summary">B</output></section>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'ids-bad.tsx',
+        source: `
+export const IdsBad = component({
+  render: () => <section><h2 id="title">A</h2><output id="title">B</output></section>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV225',
+    spec: 'SPEC.md §4.2',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'markup-ok.tsx',
+        source: `
+export const MarkupOk = component({
+  render: () => <section><p>Good</p><div>Still good</div></section>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'markup-bad.tsx',
+        source: `
+export const MarkupBad = component({
+  render: () => <p><div>Bad</div></p>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV226',
+    spec: 'SPEC.md §5.2',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'residual-ok.tsx',
+        source: `
+export const ResidualOk = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section kovo-c="residual-ok" kovo-deps="cart">
+      <span>{cart.count}</span>
+    </section>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'residual-bad.tsx',
+        source: `
+export const ResidualBad = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section kovo-c="unknown-component" kovo-deps="cart">
+      <span>{cart.count}</span>
+    </section>
+  ),
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV227',
+    spec: 'SPEC.md §4.8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'nullable-ok.tsx',
+        queryShapes: {
+          product: { details: { kind: 'nullable', shape: { name: 'string' } } },
+        },
+        source: `
+export const NullableOk = component({
+  render: () => <span data-bind="product.details?.name">Coffee</span>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'nullable-bad.tsx',
+        queryShapes: {
+          product: { details: { kind: 'nullable', shape: { name: 'string' } } },
+        },
+        source: `
+export const NullableBad = component({
+  render: () => <span data-bind="product.details.name">Coffee</span>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV228',
+    spec: 'SPEC.md §9.5',
+    positive: () =>
+      deriveAppGraph({
+        graph: {
+          pages: [{ route: '/cart' }, { route: '/products/:id' }],
+        },
+      }).diagnostics,
+    negative: () =>
+      deriveAppGraph({
+        graph: {
+          pages: [{ route: '/cart' }, { route: '/cart' }, { route: '/products/:id' }],
+        },
+      }).diagnostics,
+  },
+  {
+    code: 'KV230',
+    spec: 'SPEC.md §4.5',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'fragment-children-ok.tsx',
+        source: `
+export const CartRow = component({
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }, _state, { children }) => <tr data-row={rowId}>{children}</tr>,
+});
+
+export const CartTable = component({
+  render: ({ cart }) => (
+    <table>
+      <CartRow rowId={cart.rowId}>
+        <span>{cart.rowId}</span>
+      </CartRow>
+    </table>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'fragment-children-bad.tsx',
+        source: `
+export const CartRow = component({
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
+});
+
+export const CartTable = component({
+  render: ({ cart }) => {
+    const snapshot = readSnapshot();
+    return (
+      <table>
+        <CartRow rowId={cart.rowId}>
+          <span>{snapshot.total}</span>
+        </CartRow>
+      </table>
+    );
+  },
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV231',
+    spec: 'SPEC.md §4.6',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'attribute-conflict-ok.tsx',
+        source: `
+export const AttributeConflictOk = component({
+  render: () => <button commandfor="drawer">Open</button>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'attribute-conflict-bad.tsx',
+        source: `
+export const AttributeConflictBad = component({
+  render: () => <button commandfor="drawer" commandfor="confirm">Open</button>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV232',
+    spec: 'SPEC.md §4.6',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'attribute-override-ok.tsx',
+        source: `
+export const AttributeOverrideOk = component({
+  render: () => <button role="button">Open</button>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'attribute-override-bad.tsx',
+        source: `
+export const AttributeOverrideBad = component({
+  render: () => <button role="button" role="link">Open</button>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV233',
+    spec: 'SPEC.md §4.6/§4.8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'binding-slot-ok.tsx',
+        source: `
+export const BindingSlotOk = component({
+  render: () => <span data-bind="cart.count" data-bind:aria-label="cart.count">2</span>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'binding-slot-bad.tsx',
+        source: `
+export const BindingSlotBad = component({
+  render: () => <span data-bind="cart.count" data-bind="cart.total">2</span>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV234',
+    spec: 'SPEC.md §6.1.1',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'prefix-ok.tsx',
+        packageComponentPrefixes: [{ packageName: '@acme/widgets', prefix: 'acme-' }],
+        source: `
+export const PrefixOk = component({
+  render: () => <section></section>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'prefix-bad.tsx',
+        packageComponentPrefixes: [{ packageName: '@acme/widgets', prefix: 'kovo-' }],
+        source: `
+export const PrefixBad = component({
+  render: () => <section></section>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV235',
+    spec: 'SPEC.md §5.2',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'authoring-surface-ok.tsx',
+        source: `
+export const AuthoringSurfaceOk = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <cart-badge><span>{cart.count}</span></cart-badge>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'authoring-surface-bad.tsx',
+        source: `
+export const AuthoringSurfaceBad = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => \`<cart-badge kovo-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV236',
+    spec: 'SPEC.md §1/§5.2',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'output-context-ok.tsx',
+        registryFacts: { routes: ['/pricing'] },
+        source: `
+export const OutputContextOk = component({
+  render: ({ product }) => (
+    <article title={product.name} aria-label={product.name}>
+      <a href="/pricing">Pricing</a>
+      <h2>{product.name}</h2>
+    </article>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'output-context-bad.tsx',
+        registryFacts: { routes: ['/pricing'] },
+        source: `
+export const OutputContextBad = component({
+  render: () => <a href="javascript:alert(1)">bad</a>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV237',
+    spec: 'SPEC.md §6.1.1',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'component-name-ok.tsx',
+        source: `
+export const CartBadge = component({
+  render: () => <cart-badge></cart-badge>,
+});
+
+export const MiniCartBadge = component({
+  render: () => <mini-cart-badge></mini-cart-badge>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'component-name-bad.tsx',
+        source: `
+export const CartBadge = component({
+  render: () => <cart-badge></cart-badge>,
+});
+
+export const Cart_Badge = component({
+  render: () => <mini-cart-badge></mini-cart-badge>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV238',
+    spec: 'SPEC.md §4.5/§6.2',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'fragment-target-name-ok.tsx',
+        source: `
+export const ProductGrid = component({
+  fragmentTarget: true,
+  render: () => <product-grid></product-grid>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'fragment-target-name-bad.tsx',
+        source: `
+export const ProductGrid = component({
+  fragmentTarget: true,
+  render: () => <product-grid></product-grid>,
+});
+
+export const Product_Grid = component({
+  fragmentTarget: true,
+  render: () => <mini-grid></mini-grid>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV239',
+    spec: 'SPEC.md §8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'view-transition-ok.tsx',
+        source: `
+export const ViewTransitionOk = component({
+  render: () => (
+    <section>
+      <img viewTransitionName="product-hero" src="/hero.png" />
+      <img viewTransitionName="product-thumb" src="/thumb.png" />
+    </section>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'view-transition-bad.tsx',
+        source: `
+export const ViewTransitionBad = component({
+  render: () => (
+    <section>
+      <img viewTransitionName="product-hero" src="/hero.png" />
+      <img viewTransitionName="product-hero" src="/thumb.png" />
+    </section>
+  ),
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV240',
+    spec: 'SPEC.md §4.8',
+    positive: () =>
+      queryShapeFactDiagnostics('query-shapes-ok.tsx', [
+        {
+          query: 'cart',
+          shape: { count: 'number' },
+          source: 'generated/queries/cart.shape.ts',
+        },
+        {
+          query: 'productGrid',
+          shape: { items: [{ id: 'string' }] },
+          source: 'generated/queries/product-grid.shape.ts',
+        },
+      ]),
+    negative: () =>
+      queryShapeFactDiagnostics('query-shapes-bad.tsx', [
+        {
+          query: 'cart',
+          shape: { count: 'number' },
+          source: 'generated/queries/cart.shape.ts',
+        },
+        {
+          query: 'cart',
+          shape: { total: 'number' },
+          source: 'generated/queries/cart-refresh.shape.ts',
+        },
+      ]),
+  },
+  {
+    code: 'KV241',
+    spec: 'SPEC.md §4.2/§4.8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'component-key-stability-ok.tsx',
+        previousRegistryFacts: { components: ['component-key-stability-ok/component-key-stability-ok'] },
+        source: `
+export const ComponentKeyStabilityOk = component({
+  render: () => <component-key-stability-ok></component-key-stability-ok>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'components/cart/badge.tsx',
+        previousRegistryFacts: { components: ['components/old-cart/cart-badge'] },
+        source: `
+export const CartBadge = component({
+  render: () => <cart-badge></cart-badge>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV301',
+    spec: 'SPEC.md §4.1',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'state-ownership-ok.tsx',
+        source: `
+export const StateOwnershipOk = component({
+  state: () => ({ open: false }),
+  render: (_queries, state) => <span>{state.open}</span>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'state-ownership-bad.tsx',
+        source: `
+export const StateOwnershipBad = component({
+  queries: { cart: cartQuery },
+  state: () => ({ saved: cart.count }),
+  render: ({ cart }, state) => <span>{state.saved}</span>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV302',
+    spec: 'SPEC.md §4.8/§6.2',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'binding-shape-ok.tsx',
+        queryShapes: { cart: { count: 'number' } },
+        source: `
+export const BindingShapeOk = component({
+  render: () => <span data-bind="cart.count">2</span>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'binding-shape-bad.tsx',
+        queryShapes: { cart: { count: 'number' } },
+        source: `
+export const BindingShapeBad = component({
+  render: () => <span data-bind="cart.total">2</span>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV303',
+    spec: 'SPEC.md §4.5',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'fragment-input-ok.tsx',
+        source: `
+export const FragmentInputOk = component({
+  fragmentTarget: true,
+  props: { priceList: String },
+  render: ({ priceList }) => <section>{priceList}</section>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'fragment-input-bad.tsx',
+        source: `
+export const FragmentInputBad = component({
+  fragmentTarget: true,
+  queries: { cart: cartQuery },
+  render: ({ cart, priceList }) => <section>{renderOnce(cart.count)}{priceList.version}</section>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV304',
+    spec: 'SPEC.md §4.8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'reserved-query-ok.tsx',
+        source: `
+export const ReservedQueryOk = component({
+  queries: { cart: cartQuery },
+  render: () => <section></section>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'reserved-query-bad.tsx',
+        source: `
+export const ReservedQueryBad = component({
+  queries: { state: stateQuery },
+  render: () => <section></section>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV311',
+    spec: 'SPEC.md §4.9',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'coverage-ok.tsx',
+        source: `
+export const CoverageOk = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span data-bind="cart.count">{cart.count}</span>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'coverage-bad.tsx',
+        source: `
+export const CoverageBad = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <strong className={cart.discount}>Discount</strong>,
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV320',
+    spec: 'SPEC.md §6.4',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'event-payload-ok.tsx',
+        source: `
+export function notifyCart(emit) {
+  emit('cart:added', { quantity: 1 });
+}
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'event-payload-bad.tsx',
+        queryShapes: { product: { unitPrice: 'number' } },
+        source: `
+export function notifyPrice(product, emit) {
+  emit('cart:added', { product: { unitPrice: product.unitPrice } });
+}
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV330',
+    spec: 'SPEC.md §11.4/§14',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'mutation-surface-ok.ts',
+        source: `
+export const addToCart = mutation('cart/add', {
+  handler(input) {
+    return addCartItem(input);
+  },
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'mutation-surface-bad.ts',
+        source: `
+export const addToCart = mutation('cart/add', {
+  handler(input, request) {
+    request.db.insert(cartItems).values(input);
+  },
+});
+`,
+      }).diagnostics,
+  },
+] as const satisfies readonly DiagnosticMatrixRow[];
+
+const outOfScopeCompilerDiagnostics = [
+  {
+    code: 'KV310',
+    reason:
+      'Compiler-owned, but emitted by the optimistic coverage/check path (`tests/kovo-check.node.mjs`) rather than compileComponentModule/deriveAppGraph/query-shape validation.',
+  },
+] as const satisfies readonly OutOfScopeDiagnosticRow[];
+
+describe('compiler diagnostic coverage matrix', () => {
+  it('guards the authoritative compiler-owned KV2xx/KV3xx code list', () => {
+    expect(matrixCodes()).toEqual(
+      allCompilerOwnedKv2xxKv3xxCodes().filter((code) => !outOfScopeCodeSet().has(code)),
+    );
+    expect([...matrixCodes(), ...outOfScopeCompilerDiagnostics.map((row) => row.code)].sort()).toEqual(
+      allCompilerOwnedKv2xxKv3xxCodes(),
+    );
+    expect(outOfScopeCompilerDiagnostics).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV310",
+          "reason": "Compiler-owned, but emitted by the optimistic coverage/check path (\`tests/kovo-check.node.mjs\`) rather than compileComponentModule/deriveAppGraph/query-shape validation.",
+        },
+      ]
+    `);
+  });
+
+  it('proves every in-scope compiler-owned diagnostic has positive and negative coverage', () => {
+    const coverageFacts = compilerOwnedDiagnosticMatrix.map((row) => {
+      const positiveDiagnostics = row.positive().filter((diagnostic) => diagnostic.code === row.code);
+      const negativeDiagnostics = row.negative().filter((diagnostic) => diagnostic.code === row.code);
+
+      expect(
+        positiveDiagnostics,
+        `${row.code} accepted-path fixture should not emit ${row.code} (${row.spec}).`,
+      ).toEqual([]);
+      expect(
+        negativeDiagnostics.length,
+        `${row.code} negative fixture should emit ${row.code} (${row.spec}).`,
+      ).toBeGreaterThan(0);
+
+      return {
+        code: row.code,
+        negativeCount: negativeDiagnostics.length,
+        positiveCount: positiveDiagnostics.length,
+        spec: row.spec,
+      };
+    });
+
+    expect(coverageFacts).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV201",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.3/§5.2",
+        },
+        {
+          "code": "KV210",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §5.2",
+        },
+        {
+          "code": "KV211",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.7",
+        },
+        {
+          "code": "KV212",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.7",
+        },
+        {
+          "code": "KV220",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §6.4/§9.5",
+        },
+        {
+          "code": "KV221",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.5/§6.4",
+        },
+        {
+          "code": "KV222",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV223",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV224",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.5",
+        },
+        {
+          "code": "KV225",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.2",
+        },
+        {
+          "code": "KV226",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §5.2",
+        },
+        {
+          "code": "KV227",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV228",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §9.5",
+        },
+        {
+          "code": "KV230",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.5",
+        },
+        {
+          "code": "KV231",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.6",
+        },
+        {
+          "code": "KV232",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.6",
+        },
+        {
+          "code": "KV233",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.6/§4.8",
+        },
+        {
+          "code": "KV234",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §6.1.1",
+        },
+        {
+          "code": "KV235",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §5.2",
+        },
+        {
+          "code": "KV236",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §1/§5.2",
+        },
+        {
+          "code": "KV237",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §6.1.1",
+        },
+        {
+          "code": "KV238",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.5/§6.2",
+        },
+        {
+          "code": "KV239",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §8",
+        },
+        {
+          "code": "KV240",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV241",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.2/§4.8",
+        },
+        {
+          "code": "KV301",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.1",
+        },
+        {
+          "code": "KV302",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.8/§6.2",
+        },
+        {
+          "code": "KV303",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.5",
+        },
+        {
+          "code": "KV304",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV311",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.9",
+        },
+        {
+          "code": "KV320",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §6.4",
+        },
+        {
+          "code": "KV330",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §11.4/§14",
+        },
+      ]
+    `);
+  });
+
+  it('snapshots representative compiler-owned diagnostics with file, position, length, message, and help', () => {
+    const diagnosticFacts = compilerOwnedDiagnosticMatrix.map((row) => {
+      const diagnostic = representativeDiagnostic(row.code, row.negative());
+      return snapshotDiagnostic(diagnostic);
+    });
+
+    expect(diagnosticFacts).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV201",
+          "fileName": "handler-captures-bad.tsx",
+          "help": "Would lower to: on:click="/c/handler-captures-bad.client.js?v=<version>#HandlerCapturesBad$button_click"
+      Blocked expression: () => window.alert("x")
+      Element params: -
+      Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.
+      Handlers may reference only state/ctx/event, data-p-* element params, named imports, and statically serializable module constants.
+      SPEC §4.3 and §5.2 require handler lowering to cross only explicit serializable capture channels.",
+          "length": 8,
+          "message": "Closure captures unserializable value.",
+          "severity": "error",
+          "start": {
+            "column": 9,
+            "line": 1,
+          },
+        },
+        {
+          "code": "KV210",
+          "fileName": "handler-name-bad.tsx",
+          "help": "Would lower to: a generated Component$element_event handler export with a stable source-derived URL.
+      Blocked reason: anonymous handler identity is less stable for generated artifacts, explanations, and agent repairs.
+      Fixes: extract a named function in module scope or reference a named local handler from the JSX event.
+      SPEC §5.2 requires readable, source-derived emitted names; this lint is advisory and has no suppression beyond accepting the generated fallback name.",
+          "length": 5,
+          "message": "Anonymous handler; name it for stable identity.",
+          "severity": "lint",
+          "start": {
+            "column": 25,
+            "line": 4,
+          },
+        },
+        {
+          "code": "KV211",
+          "fileName": "trigger-load-bad.tsx",
+          "help": "Blocked reason: on:load runs at parse time and adds eager JavaScript to the page budget.
+      Fixes: use a user/event trigger instead, or attach an adjacent KV211 justification comment when parse-time execution is intentional.
+      SPEC §4.7 keeps on:load grep-visible as the eager-JS escape hatch.
+      Escape: an attached KV211 justification comment preserves the lint trail without blocking compilation.",
+          "length": 7,
+          "message": "on:load eager trigger requires a justification comment. on:load",
+          "severity": "lint",
+          "start": {
+            "column": 31,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV212",
+          "fileName": "trigger-known-bad.tsx",
+          "help": "Blocked reason: unknown on:* triggers cannot be mapped to the closed event/trigger vocabulary the loader understands.
+      Fixes: use a DOM event name, use one of Kovo's declared execution triggers, or move the behavior into a component primitive that owns the attribute.
+      SPEC §4.7 requires declared execution so generated artifacts remain auditable.",
+          "length": 8,
+          "message": "Unknown on:* event or execution trigger name. on:media",
+          "severity": "lint",
+          "start": {
+            "column": 31,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV220",
+          "fileName": "navigation-bad.tsx",
+          "help": "Would lower to: a route-checked href/action that participates in the typed route registry.
+      Blocked reason: the literal target does not match any declared canonical route path.
+      Fixes: use a typed route helper, declare the route, correct the literal path, or mark an intentional full-origin/external navigation with the external escape hatch.
+      SPEC §6.4 and §9.5 require navigation targets to stay type-checked against the route table.
+      Escape: external/full-origin URLs opt out because they are outside the app route graph.",
+          "length": 16,
+          "message": "Literal href or form action matches no declared route. /checkout",
+          "severity": "error",
+          "start": {
+            "column": 20,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV221",
+          "fileName": "idref-bad.tsx",
+          "help": "Would lower to: light-DOM IDREF wiring whose target id exists in the same component scope.
+      Blocked reason: the referenced id is absent, outside the validated scope, or hidden behind a different component boundary.
+      Fixes: add the target id in this component scope, pass a generated id through props, or correct the IDREF attribute value.
+      SPEC §4.5 and §6.4 require IDREFs such as commandfor, popovertarget, for, and aria-* to resolve at compile time.",
+          "length": 13,
+          "message": "IDREF references an id not present in component scope. missing",
+          "severity": "error",
+          "start": {
+            "column": 24,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV222",
+          "fileName": "binding-drift-bad.tsx",
+          "help": "Would lower to: the compiler-derived data-bind stamp for the typed JSX expression.
+      Blocked reason: a hand-written stamp names a different path than the expression it wraps, so server render and client update semantics could drift.
+      Fixes: remove the hand-written stamp and let the compiler derive it, or make the stamp path exactly match the typed expression.
+      SPEC §4.8 treats typed expressions and binding stamps as one fact and rejects drift.",
+          "length": 22,
+          "message": "Hand-written binding stamp disagrees with the typed expression it wraps. data-bind="cart.total" wraps {cart.count}",
+          "severity": "error",
+          "start": {
+            "column": 31,
+            "line": 4,
+          },
+        },
+        {
+          "code": "KV223",
+          "fileName": "binding-redundancy-bad.tsx",
+          "help": "Would lower to: the same data-bind stamp the author already wrote by hand.
+      Blocked reason: the stamp is redundant in app-authored TSX because the compiler can derive it from the typed expression.
+      Fixes: remove the hand-written data-bind stamp and keep the typed JSX expression as the source of truth.
+      SPEC §4.8 permits residual stamps for emitted IR fixpoint validation, but app TSX should not hand-author derivable stamps.
+      Escape: emitted compiler artifacts may retain residual stamps for fixpoint checks; app source should use TSX sugar.",
+          "length": 22,
+          "message": "Redundant hand-written binding stamp in sugar; the compiler derives it. data-bind="cart.count" wraps {cart.count}",
+          "severity": "lint",
+          "start": {
+            "column": 31,
+            "line": 4,
+          },
+        },
+        {
+          "code": "KV224",
+          "fileName": "ids-bad.tsx",
+          "help": "Blocked reason: duplicate static ids make IDREF proofs ambiguous, and static ids inside repeatable stamps can produce multiple elements with the same id.
+      Fixes: generate ids from props/kovo-key, move the id outside the repeatable subtree, or pass a unique id down to the component.
+      SPEC §4.5 requires ids to be unique by construction so KV221 IDREF validation remains meaningful.",
+          "length": 10,
+          "message": "Static id is duplicated in component scope or appears inside a repeatable stamp. duplicate id="title"",
+          "severity": "error",
+          "start": {
+            "column": 55,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV225",
+          "fileName": "markup-bad.tsx",
+          "help": "Would lower to: HTML whose parsed DOM preserves the authored JSX tree.
+      Blocked reason: the HTML parser would re-parent or drop invalid children, changing morph identity and fragment targets after serving.
+      Fixes: use content-model-valid wrapper elements, move table rows into table/section parents, or split paragraph/block content into valid siblings.
+      SPEC §4.2 requires compiler-served HTML and parsed DOM shape to agree.",
+          "length": 5,
+          "message": "JSX nesting violates the HTML content model. <div> cannot appear inside <p>",
+          "severity": "error",
+          "start": {
+            "column": 20,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV226",
+          "fileName": "residual-bad.tsx",
+          "help": "Would lower to: emitted IR stamps whose kovo-c and kovo-deps names resolve to known components and query instances.
+      Blocked reason: residual compiler stamps reference a component or query that is not present in the module/registry facts.
+      Fixes: recompile from TSX source, correct the generated stamp, or add the missing component/query fact to the compile graph.
+      SPEC §5.2 allows lowered IR only as compiler output/fixpoint input, and fixpoint validation must reject stale names.",
+          "length": 26,
+          "message": "kovo-deps or kovo-c names an unknown query instance or component. kovo-c="unknown-component"",
+          "severity": "error",
+          "start": {
+            "column": 14,
+            "line": 5,
+          },
+        },
+        {
+          "code": "KV227",
+          "fileName": "nullable-bad.tsx",
+          "help": "Blocked reason: the binding path crosses a nullable query segment without declaring empty-on-null behavior.
+      Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.
+      SPEC §4.8 requires empty-on-null semantics to be explicit so the server renderer and loader cannot drift.",
+          "length": 32,
+          "message": "Binding path traverses a nullable segment without ?. product.details.name (segment: details)",
+          "severity": "error",
+          "start": {
+            "column": 23,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV228",
+          "fileName": "app graph route table",
+          "help": "Blocked reason: static-first route matching cannot choose a single canonical handler for at least one request path.
+      Fixes: remove duplicate route facts, split overlapping patterns, add a static segment, or make one route path more specific.
+      SPEC §9.5 requires route matching to be unambiguous at compile time.",
+          "length": null,
+          "message": "Ambiguous route table: two routes can match the same canonical request path or duplicate route path. duplicate route path "/cart" appears 2 times in graph pages.",
+          "severity": "error",
+          "start": null,
+        },
+        {
+          "code": "KV230",
+          "fileName": "fragment-children-bad.tsx",
+          "help": "Would hoist children to: CartRow$slot_children
+      Blocked children: <span>{escapeText(snapshot.total)}</span>
+      Blocked reason: fragment responses must fully describe the DOM they produce, but these children cannot be hoisted through serializable props.
+      Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.
+      SPEC §4.5 requires fragment-target children to lower to component references when they cross the target boundary.",
+          "length": 41,
+          "message": "Fragment-target children cannot lower to a component reference. CartRow",
+          "severity": "error",
+          "start": {
+            "column": 11,
+            "line": 15,
+          },
+        },
+        {
+          "code": "KV231",
+          "fileName": "attribute-conflict-bad.tsx",
+          "help": "Would lower to: a single composed attribute set for primitive composition.
+      Blocked reason: both primitive and author write an attribute whose merge rule is ambiguous or unsafe, such as IDREF, data-p-*, kovo-c, or kovo-state.
+      Fixes: keep one writer, pass the value through the primitive API, or move the relationship/state ownership to one component.
+      SPEC §4.6 defines primitive attribute merge rules and treats double-wired relationships as errors.",
+          "length": 19,
+          "message": "Unmergeable attribute conflict in primitive composition. commandfor",
+          "severity": "error",
+          "start": {
+            "column": 25,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV232",
+          "fileName": "attribute-override-bad.tsx",
+          "help": "Would lower to: author-visible override of a primitive-owned ARIA, role, or state attribute.
+      Blocked reason: the override is allowed but can change accessibility semantics or be clobbered by runtime-updated primitive state.
+      Fixes: prefer the primitive API, remove the override, or keep it intentionally and audit the generated merge explanation.
+      SPEC §4.6 keeps this override as a lint-level escape hatch so author intent stays visible.
+      Escape: compilation continues; the lint documents the override for review.",
+          "length": 11,
+          "message": "Author overrides a primitive-owned ARIA or state attribute. role",
+          "severity": "lint",
+          "start": {
+            "column": 39,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV233",
+          "fileName": "binding-slot-bad.tsx",
+          "help": "Would lower to: exactly one writer for each data-bind target slot.
+      Blocked reason: multiple bindings target the same text/attribute slot, so the client loader cannot choose a single update source.
+      Fixes: keep one binding, split values across distinct elements/attributes, or combine the values in a named derive before binding.
+      SPEC §4.6 and §4.8 require binding slots to have a single writer.",
+          "length": 22,
+          "message": "Two writers target the same binding slot. data-bind",
+          "severity": "error",
+          "start": {
+            "column": 23,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV234",
+          "fileName": "prefix-bad.tsx",
+          "help": "Would lower to: package-scoped component names, CSS scopes, and behavior attributes using one effective prefix.
+      Blocked reason: the prefix is missing, invalid, duplicated, or reserves kovo-* outside @kovojs/* packages.
+      Fixes: assign a lowercase dash-terminated unique prefix, alias one package, or use kovo-* only for framework packages.
+      SPEC §6.1.1 requires app-wide unique package component prefixes.
+      SPEC §6.1.1 reserves the kovo-* prefix family for packages whose manifest name is in the @kovojs/* scope.
+      SPEC §6.1.1 reserves the kovo-* attribute namespace for framework-owned attributes and future loader/compiler growth.
+      Fix: choose a non-reserved prefix, or add an explicit app-side alias such as "acme-kovo-".",
+          "length": null,
+          "message": "Package component prefix registration conflict or reservation violation. @acme/widgets cannot use reserved kovo-* package prefix "kovo-".",
+          "severity": "error",
+          "start": null,
+        },
+        {
+          "code": "KV235",
+          "fileName": "authoring-surface-bad.tsx",
+          "help": "Blocked reason: app source is hand-authoring lowered string/render IR instead of TSX.
+      Fixes: write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.
+      SPEC §5.2: TSX is the sole app-authoring surface.
+      Escape: there is no v1 suppression or ejection workflow for hand-authored lowered IR.
+      TSX equivalent direction: render with JSX, for example \`render: (...) => (<cart-badge>...</cart-badge>)\`, and use typed expressions such as \`{cart.count}\` instead of data-bind strings.",
+          "length": 93,
+          "message": "App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.",
+          "severity": "error",
+          "start": {
+            "column": 25,
+            "line": 4,
+          },
+        },
+        {
+          "code": "KV236",
+          "fileName": "output-context-bad.tsx",
+          "help": "Blocked reason: the output context can execute script, navigate unexpectedly, inject unsafe CSS, or bypass normal JSX escaping.
+      Fixes: route URLs through typed route helpers; mark intentional external links with external; keep dynamic styling to compiler-generated safe properties; or pass raw HTML only as a Kovo TrustedHtml value.
+      SPEC §1 and §5.2 require compiler output to be auditable; unsafe output contexts cannot depend on implicit browser or runtime sanitization.",
+          "length": 26,
+          "message": "Unsafe output context requires an explicit trusted Kovo escape hatch. href="javascript:alert(1)" uses an unsafe URL scheme",
+          "severity": "error",
+          "start": {
+            "column": 20,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV237",
+          "fileName": "component-name-bad.tsx",
+          "help": "Would lower to: one derived component registry key per component across the app graph.
+      Blocked reason: duplicate derived registry keys make component identity, CSS scoping, fragment routing, and graph facts ambiguous.
+      Fixes: rename the exported component binding, or move one component so its derived module path namespace differs.
+      SPEC §4.2 and §4.8 make derived component names load-bearing for identity, scoped CSS, fragments, and graph facts; duplicate registry keys are ambiguous.
+      Effective name: component-name-bad/cart-badge
+      First definition: CartBadge
+      Duplicate definition: Cart_Badge
+      SPEC §6.1.1 package prefixes remain the cross-package namespace mechanism; app-authored/vendored components in one module must not share an effective wire name.",
+          "length": 10,
+          "message": "Duplicate component effective wire name. component-name-bad/cart-badge is used by CartBadge and Cart_Badge.",
+          "severity": "error",
+          "start": {
+            "column": 14,
+            "line": 6,
+          },
+        },
+        {
+          "code": "KV238",
+          "fileName": "fragment-target-name-bad.tsx",
+          "help": "Fixes: rename the exported component binding, move one component so its derived module path namespace differs, or remove fragmentTarget from the component that should not receive enhanced patches.
+      SPEC §4.5, §4.8, and §6.2 make fragment-target names derived registry-visible identities; duplicate keys make enhanced fragment patches ambiguous.
+      Fragment target: fragment-target-name-bad/product-grid
+      First writer: ProductGrid
+      Duplicate writer: Product_Grid
+      Would emit registry:
+      interface FragmentTargets {
+        'fragment-target-name-bad/product-grid': ...;
+      }",
+          "length": 12,
+          "message": "Duplicate fragment-target wire name. fragment-target-name-bad/product-grid is used by ProductGrid and Product_Grid.",
+          "severity": "error",
+          "start": {
+            "column": 14,
+            "line": 7,
+          },
+        },
+        {
+          "code": "KV239",
+          "fileName": "view-transition-bad.tsx",
+          "help": "Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
+      SPEC §8 uses view-transition-name as a cross-document element-pair identity; duplicate static names in one rendered module or supplied registry facts are ambiguous.
+      View-transition name: product-hero
+      First writer: ViewTransitionBad <img>
+      Duplicate writer: ViewTransitionBad <img>
+      Would emit registry:
+      interface ViewTransitions {
+        'product-hero': unknown;
+      }
+      Scope: module-local static rendered source plus registryFacts.viewTransitions when supplied; dynamic names require page-composition proof outside this validator.",
+          "length": 33,
+          "message": "Duplicate static view-transition name. product-hero is used by ViewTransitionBad <img> and ViewTransitionBad <img>.",
+          "severity": "error",
+          "start": {
+            "column": 12,
+            "line": 6,
+          },
+        },
+        {
+          "code": "KV240",
+          "fileName": "query-shapes-bad.tsx",
+          "help": "Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
+      SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
+          "length": null,
+          "message": "Duplicate query-shape fact for one query name. query="cart" sources=generated/queries/cart-refresh.shape.ts, generated/queries/cart.shape.ts",
+          "severity": "error",
+          "start": null,
+        },
+        {
+          "code": "KV241",
+          "fileName": "components/cart/badge.tsx",
+          "help": "Blocked reason: derived component registry keys are deploy-load-bearing; changing one can strand in-flight documents whose morph identity still names the prior emitted component.
+      Fixes: keep the component binding and module path stable across deploys, or review the rename/move as an intentional identity migration and refresh the previous registry facts.
+      SPEC §4.2 and §4.8 make derived component names load-bearing for kovo-c identity, scoped CSS, fragments, and graph facts.
+      Previous registry key: components/old-cart/cart-badge
+      Current registry key: components/cart/badge/cart-badge
+      DOM leaf: cart-badge
+      Registry writer: previousRegistryFacts.components",
+          "length": 9,
+          "message": "Derived component registry key changed since the previous emitted graph. components/old-cart/cart-badge -> components/cart/badge/cart-badge.",
+          "severity": "warn",
+          "start": {
+            "column": 14,
+            "line": 2,
+          },
+        },
+        {
+          "code": "KV301",
+          "fileName": "state-ownership-bad.tsx",
+          "help": "Blocked reason: server/query facts stored in island-local state create a second client-owned copy of server truth.
+      Fixes: keep the value in query data, derive UI-only state from client intent, or store only local presentation state.
+      SPEC §4.1 keeps query data server-owned and local state private/client-owned.",
+          "length": 10,
+          "message": "Server fact stored in island-local state.",
+          "severity": "lint",
+          "start": {
+            "column": 26,
+            "line": 4,
+          },
+        },
+        {
+          "code": "KV302",
+          "fileName": "binding-shape-bad.tsx",
+          "help": "Would lower to: a data-bind path that the server renderer and loader can both read from the declared query/state shape.
+      Blocked reason: the path is absent from the declared shape, so a server render or client update would read undefined.
+      Fixes: correct the binding path, update the query projection/schema, or extract a named derive with declared inputs.
+      SPEC §4.8 and §6.2 require bindings to type-check against query shapes.",
+          "length": 22,
+          "message": "data-bind path is not present in the declared query shape. cart.total",
+          "severity": "error",
+          "start": {
+            "column": 23,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV303",
+          "fileName": "fragment-input-bad.tsx",
+          "help": "Would lower to: a fragment target that can be re-rendered from declared query data plus stamped props.
+      Blocked reason: the render input is outside those channels, so a fragment response could not reconstruct the subtree.
+      Fixes: declare the value as query data, stamp it as a serializable prop, or move the dependency inside the fragment target.
+      SPEC §4.5 requires fragment targets to be reconstructible from declared server inputs.",
+          "length": 9,
+          "message": "Fragment target render input is not declared as query data or stamped props. priceList",
+          "severity": "error",
+          "start": {
+            "column": 20,
+            "line": 6,
+          },
+        },
+        {
+          "code": "KV304",
+          "fileName": "reserved-query-bad.tsx",
+          "help": "Blocked reason: the query name collides with a reserved binding root such as state.
+      Fixes: rename the query instance to an app-owned root and update its bindings.
+      SPEC §4.8 reserves binding roots so query paths and island-local state paths stay unambiguous.",
+          "length": null,
+          "message": "Reserved query name is not allowed. state",
+          "severity": "error",
+          "start": null,
+        },
+        {
+          "code": "KV311",
+          "fileName": "coverage-bad.tsx",
+          "help": "Coverage classification: CoverageBad expression UNHANDLED
+      Blocked update: query expression has no data-bind, renderOnce, fragment, or isomorphic status
+      Fixes: add a data-bind/query update plan, mark the expression renderOnce, move the subtree behind a fragment target, or make the component isomorphic.
+      SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.",
+          "length": 13,
+          "message": "Query/state-dependent DOM position has no update status. CoverageBad cart.discount expression",
+          "severity": "warn",
+          "start": {
+            "column": 44,
+            "line": 4,
+          },
+        },
+        {
+          "code": "KV320",
+          "fileName": "event-payload-bad.tsx",
+          "help": "Blocked reason: a fire-and-forget event payload is carrying data that overlaps server-owned query facts.
+      Fixes: send only client intent, use an optimistic transform for query data, or route the change through a mutation/domain write.
+      SPEC §6.4 keeps cross-island events for intent, not as a shadow transport for server facts.",
+          "length": 45,
+          "message": "Event payload overlaps query data; use a transform. product.unitPrice",
+          "severity": "lint",
+          "start": {
+            "column": 22,
+            "line": 3,
+          },
+        },
+        {
+          "code": "KV330",
+          "fileName": "mutation-surface-bad.ts",
+          "help": "Blocked reason: direct request/db access in a mutation handler bypasses the domain write surface and weakens touch-graph analysis.
+      Fixes: move writes behind a domain() module, inject the domain operation into the handler, or use the typed transaction context only inside the domain layer.
+      SPEC §11.4 and §14 require writes to flow through domains so invalidation and verifier diagnostics stay complete.",
+          "length": 10,
+          "message": "Direct db access in a mutation handler; route through domain.",
+          "severity": "lint",
+          "start": {
+            "column": 5,
+            "line": 4,
+          },
+        },
+      ]
+    `);
+  });
+
+  it('keeps KV201 and KV230 teaching diagnostics compatibility-visible', () => {
+    const compatibilityFacts = compilerOwnedDiagnosticMatrix
+      .filter((row) => row.code === 'KV201' || row.code === 'KV230')
+      .map((row) => snapshotDiagnostic(representativeDiagnostic(row.code, row.negative())));
+
+    expect(compatibilityFacts).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV201",
+          "fileName": "handler-captures-bad.tsx",
+          "help": "Would lower to: on:click="/c/handler-captures-bad.client.js?v=<version>#HandlerCapturesBad$button_click"
+      Blocked expression: () => window.alert("x")
+      Element params: -
+      Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.
+      Handlers may reference only state/ctx/event, data-p-* element params, named imports, and statically serializable module constants.
+      SPEC §4.3 and §5.2 require handler lowering to cross only explicit serializable capture channels.",
+          "length": 8,
+          "message": "Closure captures unserializable value.",
+          "severity": "error",
+          "start": {
+            "column": 9,
+            "line": 1,
+          },
+        },
+        {
+          "code": "KV230",
+          "fileName": "fragment-children-bad.tsx",
+          "help": "Would hoist children to: CartRow$slot_children
+      Blocked children: <span>{escapeText(snapshot.total)}</span>
+      Blocked reason: fragment responses must fully describe the DOM they produce, but these children cannot be hoisted through serializable props.
+      Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.
+      SPEC §4.5 requires fragment-target children to lower to component references when they cross the target boundary.",
+          "length": 41,
+          "message": "Fragment-target children cannot lower to a component reference. CartRow",
+          "severity": "error",
+          "start": {
+            "column": 11,
+            "line": 15,
+          },
+        },
+      ]
+    `);
+  });
+});
+
+function matrixCodes(): DiagnosticCode[] {
+  return [...compilerOwnedDiagnosticMatrix.map((row) => row.code)].sort();
+}
+
+function outOfScopeCodeSet(): Set<DiagnosticCode> {
+  return new Set(outOfScopeCompilerDiagnostics.map((row) => row.code));
+}
+
+function allCompilerOwnedKv2xxKv3xxCodes(): DiagnosticCode[] {
+  return Object.keys(diagnosticDefinitions)
+    .filter(isCompilerOwnedKv2xxKv3xxCode)
+    .sort() as DiagnosticCode[];
+}
+
+function isCompilerOwnedKv2xxKv3xxCode(code: string): code is Extract<
+  DiagnosticCode,
+  `KV${2 | 3}${number}${number}`
+> {
+  return /^KV[23]\d{2}$/.test(code);
+}
+
+function representativeDiagnostic(
+  code: DiagnosticCode,
+  diagnostics: readonly CompilerDiagnostic[],
+): CompilerDiagnostic {
+  const diagnostic = diagnostics.find((candidate) => candidate.code === code);
+  if (!diagnostic) throw new Error(`Expected ${code} diagnostic in representative fixture.`);
+  return diagnostic;
+}
+
+function snapshotDiagnostic(diagnostic: CompilerDiagnostic): DiagnosticSnapshotFact {
+  return {
+    code: diagnostic.code,
+    fileName: diagnostic.fileName,
+    help: diagnostic.help ? normalizeDiagnosticText(diagnostic.help) : null,
+    length: diagnostic.length ?? null,
+    message: normalizeDiagnosticText(diagnostic.message),
+    severity: diagnostic.severity,
+    start: diagnostic.start ?? null,
+  };
+}
+
+function normalizeDiagnosticText(text: string): string {
+  return text.replaceAll(/\?v=[0-9a-f]{8}/g, '?v=<version>');
+}
