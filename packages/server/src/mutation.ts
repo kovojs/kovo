@@ -35,6 +35,7 @@ import {
   mutationWireRequestFromHeaders,
   type ErrorBoundaryRenderer,
   type FragmentRenderer,
+  type MutationLiveTarget,
   type MutationEndpointRequest,
   type MutationEndpointResponse,
   type MutationWireRequest,
@@ -493,16 +494,22 @@ export async function renderMutationResponse<
     let queryChunks: string[];
     let fragmentChunks: string[];
     try {
+      const selection = selectMutationResponseTargets({
+        fragmentRenderers: wireRequest.fragmentRenderers ?? [],
+        liveTargets: wireRequest.liveTargets,
+        rerunQueries: result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
+        targets: wireRequest.targets ?? [],
+      });
       queryChunks = await renderQueryChunks(
         definition.registry?.queries ?? [],
-        result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
+        selection.rerunQueries,
         renderInput,
         wireRequest.request,
         result.changes,
       );
       fragmentChunks = await renderFragmentChunks(
         wireRequest.fragmentRenderers ?? [],
-        wireRequest.targets ?? [],
+        selection.fragmentTargets,
         renderInput,
       );
     } catch (error) {
@@ -958,11 +965,109 @@ async function renderFragmentChunks(
   return chunks;
 }
 
+interface MutationResponseSelectionInput {
+  fragmentRenderers: readonly FragmentRenderer[];
+  liveTargets?: readonly MutationLiveTarget[];
+  rerunQueries: readonly QueryRerun[];
+  targets: readonly string[];
+}
+
+interface MutationResponseSelection {
+  fragmentTargets: readonly string[];
+  rerunQueries: readonly QueryRerun[];
+}
+
+function selectMutationResponseTargets(
+  input: MutationResponseSelectionInput,
+): MutationResponseSelection {
+  if (input.liveTargets === undefined) {
+    return {
+      fragmentTargets: input.targets,
+      rerunQueries: input.rerunQueries,
+    };
+  }
+
+  if (input.liveTargets.length === 0) return { fragmentTargets: [], rerunQueries: [] };
+
+  if (!input.liveTargets.some((target) => target.deps.length > 0)) {
+    return {
+      fragmentTargets: input.targets,
+      rerunQueries: input.rerunQueries,
+    };
+  }
+
+  const renderersByTarget = fragmentRenderersByTarget(input.fragmentRenderers);
+  const affectedQueryTokens = new Set<string>();
+  for (const query of input.rerunQueries) {
+    const tokens = queryRerunTokens(query);
+    if (input.liveTargets.some((target) => depsMatch(target, tokens))) {
+      for (const token of tokens) affectedQueryTokens.add(token);
+    }
+  }
+
+  const rerunQueries = input.rerunQueries.filter((query) => {
+    const tokens = queryRerunTokens(query);
+    if (
+      !input.liveTargets?.some(
+        (target) =>
+          targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const fragmentTargets = input.fragmentRenderers
+    .filter((renderer) => {
+      if (renderer.updateCoverage === 'plan') return false;
+      const liveTarget = input.liveTargets?.find((target) => target.target === renderer.target);
+      return liveTarget !== undefined && depsMatch(liveTarget, affectedQueryTokens);
+    })
+    .map((renderer) => renderer.target);
+
+  return { fragmentTargets, rerunQueries };
+}
+
+function fragmentRenderersByTarget(
+  renderers: readonly FragmentRenderer[],
+): ReadonlyMap<string, FragmentRenderer> {
+  const byTarget = new Map<string, FragmentRenderer>();
+  for (const renderer of renderers) {
+    const existing = byTarget.get(renderer.target);
+    if (existing && existing.updateCoverage !== 'plan') continue;
+    byTarget.set(renderer.target, renderer);
+  }
+  return byTarget;
+}
+
+function targetIsPlanCovered(
+  target: string,
+  renderersByTarget: ReadonlyMap<string, FragmentRenderer>,
+): boolean {
+  return (
+    renderersByTarget.get(target)?.updateCoverage === 'plan' || !renderersByTarget.has(target)
+  );
+}
+
+function queryRerunTokens(query: QueryRerun): string[] {
+  return query.instanceKey === undefined ? [query.key] : [query.key, query.instanceKey];
+}
+
+function depsMatch(
+  liveTarget: MutationLiveTarget,
+  queryTokens: ReadonlySet<string> | readonly string[],
+): boolean {
+  const tokens = queryTokens instanceof Set ? queryTokens : new Set(queryTokens);
+  return liveTarget.deps.some((dep) => tokens.has(dep));
+}
+
 async function renderFailureFragment<Request>(
   failure: MutationFail,
   wireRequest: MutationWireRequest<Request>,
 ): Promise<string> {
-  const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
+  const target = mutationFailureTarget(wireRequest);
   const html = wireRequest.renderFailureFragment
     ? await wireRequest.renderFailureFragment(failure, wireRequest.rawInput)
     : renderDefaultFailureFragmentContent(failure);
@@ -977,7 +1082,7 @@ async function renderFailureFragment<Request>(
 function renderMutationRenderErrorFragment<Request>(
   wireRequest: MutationWireRequest<Request>,
 ): string {
-  const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
+  const target = mutationFailureTarget(wireRequest);
 
   return renderFragmentWireHtml({
     html: '<output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output>',
@@ -988,13 +1093,19 @@ function renderMutationRenderErrorFragment<Request>(
 function renderMutationServerErrorFragment<Request>(
   wireRequest: MutationWireRequest<Request>,
 ): string {
-  const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
+  const target = mutationFailureTarget(wireRequest);
 
   return renderFragmentWireHtml({
     html: '<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output>',
     stylesheets: wireRequest.failureStylesheets,
     target,
   });
+}
+
+function mutationFailureTarget<Request>(wireRequest: MutationWireRequest<Request>): string {
+  return (
+    wireRequest.failureTarget ?? wireRequest.submittedFormTarget ?? wireRequest.targets?.[0] ?? 'error'
+  );
 }
 
 function renderDefaultFailureFragmentContent(failure: MutationFail): string {

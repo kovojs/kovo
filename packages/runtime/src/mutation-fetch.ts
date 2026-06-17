@@ -8,6 +8,8 @@ import { definedProps } from './defined-props.js';
 /** @internal */
 export interface EnhancedFormLike {
   action: string;
+  getAttribute?(name: string): string | null;
+  id?: string;
   method?: string;
 }
 
@@ -67,11 +69,13 @@ export async function fetchEnhancedMutation(
   idem = options.idem ?? createMutationIdem(),
 ): Promise<FetchedEnhancedMutation> {
   const targetSnapshot = readLiveTargetSnapshot(options.root);
+  const submittedFormTarget = readSubmittedFormTarget(options.form);
   const response = await options.fetch(options.form.action, {
     body: options.formData,
     headers: {
       Accept: 'text/vnd.kovo.fragment+html',
       'Kovo-Fragment': 'true',
+      ...definedProps({ 'Kovo-Form-Target': submittedFormTarget }),
       'Kovo-Idem': idem,
       'Kovo-Targets': targetSnapshot.header,
     },
@@ -92,6 +96,16 @@ export async function fetchEnhancedMutation(
     response,
     targets: targetSnapshot.targets,
   };
+}
+
+function readSubmittedFormTarget(form: EnhancedFormLike): string | undefined {
+  const target =
+    form.getAttribute?.('kovo-fragment-target') ??
+    form.id ??
+    form.getAttribute?.('kovo-c') ??
+    undefined;
+
+  return target === '' ? undefined : target;
 }
 
 export function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {

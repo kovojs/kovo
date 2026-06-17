@@ -23,6 +23,17 @@ class FakeTargetElement {
   }
 }
 
+class FakeFormElement extends FakeTargetElement {
+  constructor(
+    id: string | undefined,
+    attrs: Record<string, string | null>,
+    readonly action: string,
+    readonly method?: string,
+  ) {
+    super(id, attrs);
+  }
+}
+
 class FakeTargetRoot {
   queries = 0;
 
@@ -92,6 +103,42 @@ describe('enhanced mutation fetch', () => {
       targets: ['cart-badge=cart product:p1', 'recommendations:p1=recommendations'],
     });
     expect(root.queries).toBe(1);
+  });
+
+  it('sends the submitted enhanced form target when the form carries runtime identity', async () => {
+    const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
+      async text() {
+        return '<kovo-fragment target="product-form:p1"><form></form></kovo-fragment>';
+      },
+    }));
+
+    await fetchEnhancedMutation({
+      fetch,
+      form: new FakeFormElement(
+        undefined,
+        {
+          'kovo-c': 'product-form',
+          'kovo-fragment-target': 'product-form:p1',
+        },
+        '/_m/cart/add',
+      ),
+      formData: new FormData(),
+      idem: 'idem_form_target',
+      root: new FakeTargetRoot([]),
+    });
+
+    expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
+      body: expect.any(FormData),
+      headers: {
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Form-Target': 'product-form:p1',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_form_target',
+        'Kovo-Targets': '',
+      },
+      keepalive: true,
+      method: 'POST',
+    });
   });
 
   it('defaults to POST and omits upload progress when no progress hook is configured', async () => {

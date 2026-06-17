@@ -21,6 +21,7 @@ export interface FragmentRenderer {
   render(input: unknown): string | Promise<string>;
   stylesheets?: readonly (string | StylesheetAsset)[];
   target: string;
+  updateCoverage?: 'fragment' | 'plan';
 }
 
 /**
@@ -55,11 +56,22 @@ export interface MutationWireRequest<
   fragment?: boolean;
   fragmentRenderers?: readonly FragmentRenderer[];
   idem?: string;
+  liveTargets?: readonly MutationLiveTarget[];
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   replayStore?: MutationReplayStore<MutationWireResponse>;
   rawInput: unknown;
   request: Request;
+  submittedFormTarget?: string;
   targets?: readonly string[];
+}
+
+/**
+ * @internal Structured entry from the `Kovo-Targets` header. `target` is the live
+ * DOM patch target; `deps` are the target's `kovo-deps` tokens (SPEC §9.1).
+ */
+export interface MutationLiveTarget {
+  deps: readonly string[];
+  target: string;
 }
 
 /**
@@ -70,6 +82,8 @@ export interface MutationWireRequest<
 export interface MutationWireHeaders {
   fragment: boolean;
   idem?: string;
+  liveTargets: readonly MutationLiveTarget[];
+  submittedFormTarget?: string;
   targets: readonly string[];
 }
 
@@ -171,17 +185,15 @@ export type MutationEndpointResponse = MutationWireResponse | NoJsMutationRespon
 export function readMutationWireHeaders(headers: MutationWireHeaderSource): MutationWireHeaders {
   const fragment = readHeader(headers, 'Kovo-Fragment')?.toLowerCase() === 'true';
   const idem = readHeader(headers, 'Kovo-Idem')?.trim();
-  const targets = dedupe(
-    (readHeader(headers, 'Kovo-Targets') ?? '')
-      .split(/[;,]/)
-      .map((target) => target.trim())
-      .map((target) => target.split('=')[0]?.trim() ?? '')
-      .filter(Boolean),
-  );
+  const submittedFormTarget = readHeader(headers, 'Kovo-Form-Target')?.trim();
+  const liveTargets = parseLiveTargetHeader(readHeader(headers, 'Kovo-Targets') ?? '');
+  const targets = dedupe(liveTargets.map((entry) => entry.target));
 
   return {
     fragment,
     ...(idem ? { idem } : {}),
+    liveTargets,
+    ...(submittedFormTarget ? { submittedFormTarget } : {}),
     targets,
   };
 }
@@ -213,14 +225,63 @@ export function mutationWireRequestFromHeaders<Request>(
       : { fragmentRenderers: options.fragmentRenderers }),
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(headers.idem === undefined ? {} : { idem: headers.idem }),
+    liveTargets: headers.liveTargets,
     ...(options.renderFailureFragment === undefined
       ? {}
       : { renderFailureFragment: options.renderFailureFragment }),
     ...(options.replayStore === undefined ? {} : { replayStore: options.replayStore }),
+    ...(headers.submittedFormTarget === undefined
+      ? {}
+      : { submittedFormTarget: headers.submittedFormTarget }),
     targets: headers.targets,
   };
 }
 
+function parseLiveTargetHeader(value: string): MutationLiveTarget[] {
+  return dedupeLiveTargets(
+    value
+      .split(/[;,]/)
+      .map((entry) => parseLiveTargetEntry(entry))
+      .filter((entry): entry is MutationLiveTarget => entry !== null),
+  );
+}
+
+function parseLiveTargetEntry(entry: string): MutationLiveTarget | null {
+  const trimmed = entry.trim();
+  if (!trimmed) return null;
+
+  const separator = trimmed.indexOf('=');
+  if (separator === -1) return { deps: [], target: trimmed };
+
+  const target = trimmed.slice(0, separator).trim();
+  if (!target) return null;
+
+  return {
+    deps: readTargetDeps(trimmed.slice(separator + 1)),
+    target,
+  };
+}
+
+function readTargetDeps(value: string): string[] {
+  return value
+    .split(/[\s,]+/)
+    .map((dep) => dep.trim())
+    .filter(Boolean);
+}
+
 function dedupe(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+function dedupeLiveTargets(values: readonly MutationLiveTarget[]): MutationLiveTarget[] {
+  const seen = new Set<string>();
+  const targets: MutationLiveTarget[] = [];
+
+  for (const value of values) {
+    if (seen.has(value.target)) continue;
+    seen.add(value.target);
+    targets.push(value);
+  }
+
+  return targets;
 }
