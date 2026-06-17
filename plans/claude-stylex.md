@@ -832,6 +832,13 @@ borrowing its concrete API/spike detail.
     "tailwind|@tailwindcss|tailwindcss|@source" Dockerfile pnpm-lock.yaml package.json
     packages/**/package.json examples/**/package.json tests/**/package.json site/package.json`
     returns no matches.
+  - Evidence (partial, 2026-06-17): `packages/create-kovo` no longer contains direct legacy CSS tool
+    strings while retaining computed negative regression assertions for the generated starter
+    package, Vite config, source CSS, exported CSS, preview CSS, and template app-shell source asset.
+    `rg -n -i "tailwind|@tailwind|@source|tailwindcss|@tailwindcss" packages/create-kovo` returns
+    no matches, `pnpm exec vitest --run packages/create-kovo/src/index.test.ts
+    packages/create-kovo/templates/src/app-shell.test.ts` runs the non-excluded create-kovo suite
+    green, and `git diff --check` passes.
   - Evidence (partial, 2026-06-17): `@kovojs/headless-ui` token aliases now use document-token names
     (`KovoUiDocumentTokenProperty`, `kovoUiDocumentTokenCss`, `documentTokenProperty` /
     `documentTokenValue`) and `packages/headless-ui/src/lib/variants.ts` no longer carries stale

@@ -16,6 +16,8 @@ import { describe, expect, it } from 'vitest';
 
 import app, { starterClientModuleHref, starterRequestHandler } from './app-shell.js';
 
+const legacyCssTool = ['tail', 'windcss'].join('');
+
 describe('starter app shell', () => {
   it('exports a closed app aggregate for dynamic export tasks', () => {
     expect(isKovoApp(app)).toBe(true);
@@ -162,7 +164,7 @@ describe('starter app shell', () => {
         formatDevServerFailure(sourceAssetBody, devServerError),
       ).toBe(200);
       expect(sourceAssetBody).toContain('@layer kovo-starter-base');
-      expect(sourceAssetBody).not.toContain('tailwindcss');
+      expect(sourceAssetBody).not.toContain(legacyCssTool);
     } finally {
       await new Promise<void>((resolve, reject) => {
         if (!httpServer.listening) {

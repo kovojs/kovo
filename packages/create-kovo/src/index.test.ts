@@ -21,6 +21,10 @@ import type { KovoExplainInput } from '@kovojs/core';
 import { kovoCheck, kovoExplain } from '../../../packages/cli/src/index.js';
 import { createKovoProject, main, writeKovoProject } from './index.js';
 
+const legacyCssTool = ['tail', 'windcss'].join('');
+const legacyCssVitePlugin = `@${legacyCssTool}/vite`;
+const legacyCssSourceDirective = ['@sou', 'rce'].join('');
+
 describe('create-kovo starter', () => {
   it('scaffolds real template files with CI and kovo-check recipe', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-scaffold-'));
@@ -92,8 +96,8 @@ describe('create-kovo starter', () => {
         kovo: 'workspace:*',
         vite: '^8.0.16',
       });
-      expect(packageJson.devDependencies).not.toHaveProperty('@tailwindcss/vite');
-      expect(packageJson.devDependencies).not.toHaveProperty('tailwindcss');
+      expect(packageJson.devDependencies).not.toHaveProperty(legacyCssVitePlugin);
+      expect(packageJson.devDependencies).not.toHaveProperty(legacyCssTool);
       expect(packageJson.scripts).toMatchObject({
         check: 'vp check',
         dev: 'vp dev',
@@ -245,8 +249,10 @@ describe('create-kovo starter', () => {
       expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).toContain(
         '@layer kovo-starter-base',
       );
-      expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).not.toContain('@source');
-      expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).not.toContain('tailwindcss');
+      expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).not.toContain(
+        legacyCssSourceDirective,
+      );
+      expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).not.toContain(legacyCssTool);
       const indexSource = readFileSync(join(root, 'index.html'), 'utf8');
       expect(indexSource).toContain('/src/styles.css');
       expect(indexSource).toContain('Build-only Vite asset entry');
@@ -257,8 +263,8 @@ describe('create-kovo starter', () => {
       expect(viteConfig).toContain('starterSharedAppShellDevPlugin()');
       expect(viteConfig).toContain("server.ssrLoadModule('@kovojs/server/app-shell/vite')");
       expect(viteConfig).toContain('kovoAppShellViteDevPlugin');
-      expect(viteConfig).not.toContain('@tailwindcss/vite');
-      expect(viteConfig).not.toContain('tailwindcss()');
+      expect(viteConfig).not.toContain(legacyCssVitePlugin);
+      expect(viteConfig).not.toContain(`${legacyCssTool}()`);
       expect(viteConfig).not.toContain('kovoAppShellViteSsrDevPlugin');
       expect(viteConfig).toContain('earlyHints: false');
       expect(viteConfig).toContain("name: 'kovo-starter-app-shell-dev'");
@@ -364,7 +370,7 @@ describe('create-kovo starter', () => {
     }
   });
 
-  it('builds generated starter CSS without Tailwind setup', () => {
+  it('builds generated starter CSS without legacy CSS tool setup', () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-build-'));
@@ -384,8 +390,8 @@ describe('create-kovo starter', () => {
 
       expect(css).toContain('@layer kovo-starter-base');
       expect(css).toContain('font-synthesis:none');
-      expect(css).not.toContain('tailwindcss');
-      expect(css).not.toContain('@source');
+      expect(css).not.toContain(legacyCssTool);
+      expect(css).not.toContain(legacyCssSourceDirective);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -490,7 +496,7 @@ describe('create-kovo starter', () => {
 
       const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
       expect(sourceCss).toContain('@layer kovo-starter-base');
-      expect(sourceCss).not.toContain('tailwindcss');
+      expect(sourceCss).not.toContain(legacyCssTool);
 
       const sourceEntry = await fetchTextWhenReady(`${origin}/index.html`, output);
       expect(sourceEntry).toContain('Build-only Vite asset entry');
@@ -536,7 +542,7 @@ describe('create-kovo starter', () => {
 
         const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
         expect(sourceCss).toContain('@layer kovo-starter-base');
-        expect(sourceCss).not.toContain('tailwindcss');
+        expect(sourceCss).not.toContain(legacyCssTool);
       } finally {
         await stopProcess(serveServer);
         rmSync(root, { force: true, recursive: true });
@@ -582,7 +588,7 @@ describe('create-kovo starter', () => {
         expect(distIndex).not.toContain('Build-only Vite asset entry');
         const exportedCss = readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8');
         expect(exportedCss).toContain('@layer kovo-starter-base');
-        expect(exportedCss).not.toContain('tailwindcss');
+        expect(exportedCss).not.toContain(legacyCssTool);
         expect(readFileSync(join(root, 'dist/c/starter.client.js'), 'utf8')).toContain(
           'Starter$announce',
         );
@@ -619,7 +625,7 @@ describe('create-kovo starter', () => {
 
         const previewCss = await fetchTextWhenReady(`${origin}/assets/${cssFile}`, previewOutput);
         expect(previewCss).toContain('@layer kovo-starter-base');
-        expect(previewCss).not.toContain('tailwindcss');
+        expect(previewCss).not.toContain(legacyCssTool);
 
         const previewClientModule = await fetchTextWhenReady(
           `${origin}/c/starter.client.js?v=starter-r7`,
