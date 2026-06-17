@@ -39,6 +39,27 @@
       "dir": "test",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          ".",
+          "./assertions",
+          "./headers",
+          "./harness",
+          "./harness-operations",
+          "./html-fragment",
+          "./page",
+          "./pglite",
+          "./sql-observer",
+          "./test-case",
+          "./verifier",
+          "./verifier-diagnostics",
+          "./verifier-sql"
+        ],
+        "internal": [
+          "./internal/integration",
+          "./internal/integration/define"
+        ]
+      },
       "apiRef": {
         "order": 4,
         "slug": "test",
@@ -50,6 +71,13 @@
       "dir": "drizzle",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          ".",
+          "./derive",
+          "./static"
+        ]
+      },
       "apiRef": {
         "order": 5,
         "slug": "drizzle",
@@ -67,6 +95,14 @@
       "dir": "style",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          "."
+        ],
+        "internal": [
+          "./internal"
+        ]
+      },
       "apiRef": {
         "order": 6,
         "slug": "style",
@@ -78,6 +114,14 @@
       "dir": "better-auth",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          "."
+        ],
+        "internal": [
+          "./internal"
+        ]
+      },
       "apiRef": {
         "order": 7,
         "slug": "better-auth",

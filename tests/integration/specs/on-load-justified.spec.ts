@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 const fixturesRoot = fileURLToPath(new URL('../fixtures/', import.meta.url));
 

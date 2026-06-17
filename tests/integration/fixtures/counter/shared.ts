@@ -1,7 +1,7 @@
 // Shared query + domain for the counter fixture. This module declares no Kovo
 // components, so the compiler plugin leaves it untouched.
 import { domain, query, type QueryLoadContext } from '@kovojs/server';
-import type { KovoFixtureRequest } from '@kovojs/test/integration/define';
+import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export interface CountResult {
   count: number;

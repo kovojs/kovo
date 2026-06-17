@@ -1,5 +1,5 @@
 // SPEC.md §4.5 requires fragment-target children to re-render from hoisted component refs.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'fragment-slot-hoist' });
 

@@ -1,5 +1,5 @@
 // SPEC.md §8: Speculation Rules stay default-off and emit only on routes that opt in.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'speculation-rules-opt-in' });
 

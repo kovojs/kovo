@@ -8,7 +8,7 @@ import {
   s,
   type Schema,
 } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const product = domain('product');
 

@@ -1,7 +1,7 @@
 // SPEC.md §6.3/§9.1: enhanced submission preserves real POST form markup, and
 // schema-coerced inputs remain observable on the server after enhancement.
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface SubmissionRow {
   [key: string]: unknown;

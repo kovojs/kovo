@@ -1,7 +1,7 @@
 // I0 smoke spec: the static-home fixture boots, serves, and renders. Establishes
 // the whole pipeline — per-worker boot, baseURL wiring, web-first assertions, and a
 // semantic-structure snapshot.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'static-home' });
 

@@ -1,5 +1,5 @@
 // SPEC §9.5: trailing slashes produce a 308 to the canonical route URL.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'trailing-slash-308' });
 

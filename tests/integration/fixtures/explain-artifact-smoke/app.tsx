@@ -1,6 +1,6 @@
 // SPEC.md §5.3 + §11.4: explain output names the behavior surface humans drive.
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function renderCartBadge(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ count: number }>('select count(*)::int as count from cart_items');

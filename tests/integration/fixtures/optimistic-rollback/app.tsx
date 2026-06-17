@@ -9,7 +9,7 @@ import {
   type MutationFail,
   type QueryLoadContext,
 } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type CartSummary = Record<string, unknown> & {
   count: number;

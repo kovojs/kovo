@@ -1,4 +1,4 @@
-// @kovojs/test/integration — framework-owned integration suite harness.
+// @kovojs/test/internal/integration — framework-owned integration suite harness.
 //
 // Boots a single-file Kovo fixture app on a real server and drives it in a real
 // browser via @playwright/test, with non-brittle semantic-structure assertions.

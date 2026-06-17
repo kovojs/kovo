@@ -1,6 +1,6 @@
 // SPEC §6.5 + §9.4: guarded typed reads run the same auth guard on route render
 // and on the /_q endpoint.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'guarded-query-read' });
 

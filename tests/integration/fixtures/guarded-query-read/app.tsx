@@ -1,7 +1,7 @@
 // SPEC §6.5 + §9.4: query guards run for initial render callers and typed-read
 // endpoint callers; the query endpoint must not leak protected data anonymously.
 import { createApp, domain, guards, query, route, runQuery, s } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {
   user: { id: string; roles: readonly string[] };

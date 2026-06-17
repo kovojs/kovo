@@ -1,4 +1,4 @@
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'module-scope-shared' });
 

@@ -1,7 +1,7 @@
 // SPEC.md §6.4: stream route outcomes declare content type/disposition and remain
 // guarded routes before a body is streamed.
 import { createApp, guards, respond, route } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface StreamSession {
   user: { id: string; roles: readonly string[] };

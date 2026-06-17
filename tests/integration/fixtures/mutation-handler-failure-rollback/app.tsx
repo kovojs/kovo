@@ -1,7 +1,7 @@
 // SPEC.md §9.2/§10.3: unexpected mutation failures inside a configured
 // transaction roll back writes and return sanitized server-error responses.
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type TxLike = {
   exec(statement: string): Promise<unknown>;

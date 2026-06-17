@@ -1,14 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 
-import { expect } from '@kovojs/test/integration';
+import { expect } from '@kovojs/test/internal/integration';
 
 const require = createRequire(import.meta.url);
 const axePath = require.resolve('axe-core/axe.min.js');
 
 let axeSource: Promise<string> | undefined;
 
-export async function expectAxeClean(page: import('@kovojs/test/integration').Page): Promise<void> {
+export async function expectAxeClean(page: import('@kovojs/test/internal/integration').Page): Promise<void> {
   axeSource ??= readFile(axePath, 'utf8');
   await page.addScriptTag({ content: await axeSource });
   const violations = await page.evaluate(async () => {

@@ -1,5 +1,5 @@
 // SPEC §9.4 + §10.2: /_q reads coerce search args and emit canonical instance keys.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'query-args-search' });
 

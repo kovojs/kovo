@@ -1,7 +1,7 @@
 // SPEC.md §4.4/§4.7: delegated handlers receive ctx.signal, and enhanced
 // fragment morphs that remove an island abort its loader-scoped lifecycle.
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type LifecycleStage = 'active' | 'replaced';
 

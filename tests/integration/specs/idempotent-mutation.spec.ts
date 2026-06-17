@@ -1,5 +1,5 @@
 // SPEC.md §9.1/§10.3: duplicate Kovo-Idem submissions replay without re-running writes.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'idempotent-mutation' });
 

@@ -1,6 +1,6 @@
 // SPEC.md §10.4: optimistic query predictions should update all dependent
 // consumers before server truth, then reconcile cleanly on success.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'optimistic-success' });
 

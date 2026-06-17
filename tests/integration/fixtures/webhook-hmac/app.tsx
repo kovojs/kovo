@@ -2,7 +2,7 @@
 // loose provider fields, writes Kovo-owned data, and emits unified changes.
 import { hmacSignature } from '@kovojs/core';
 import { createApp, domain, s, webhook } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type WebhookRequest = Request & KovoFixtureRequest;
 

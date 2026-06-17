@@ -2,7 +2,7 @@
 // then serves bytes through the swappable StorageCapability.
 import { createMemoryStorage } from '@kovojs/core';
 import { createApp, guards, notFound, respond, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface StorageSession {
   user: { id: string; roles: readonly string[] };

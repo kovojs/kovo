@@ -1,6 +1,6 @@
 // SPEC §6.4 + §8: typed links lower to readable href attributes and navigate
 // by loading the target document.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'typed-link-navigation' });
 

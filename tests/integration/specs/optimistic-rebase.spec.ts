@@ -1,6 +1,6 @@
 // SPEC.md §10.4: pending optimistic transforms for one query must rebase in
 // order as server truth arrives out of order.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'optimistic-rebase' });
 

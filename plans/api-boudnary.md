@@ -144,6 +144,20 @@ already excludes `@internal`, but the root barrels can still export those names.
     declarations move behind internal subpaths or become package-private.
   - Preserve existing intentional public subpaths such as build-time/static
     entries when they are app-consumed, documented, and not `@internal`.
+  - Evidence, 2026-06-17 adapter/test/style slice: `@kovojs/better-auth` root now
+    re-exports only app-facing auth/session/credential helpers and publishes
+    schema/touch-graph helpers through `@kovojs/better-auth/internal`;
+    `@kovojs/style` moved `getPriority` to `@kovojs/style/internal`;
+    `@kovojs/test` moved framework-owned integration fixtures to
+    `@kovojs/test/internal/integration`; `@kovojs/drizzle` export map was audited
+    as public root/derive/static only.
+  - Prove, 2026-06-17 adapter/test/style slice:
+    `pnpm --filter @kovojs/better-auth exec vitest run`;
+    `pnpm --filter @kovojs/style exec vitest run`;
+    `pnpm --filter @kovojs/drizzle exec vitest run`;
+    `pnpm --filter @kovojs/test exec vitest run`;
+    `node scripts/api-surface-gate.mjs`;
+    `pnpm run check:publish`.
   - Prove: package-specific tests, `node scripts/api-surface-gate.mjs`,
     `pnpm --filter @kovojs/site run api:check`, and `pnpm run check:publish`.
 

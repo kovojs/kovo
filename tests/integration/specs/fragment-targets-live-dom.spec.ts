@@ -1,5 +1,5 @@
 // SPEC.md §9.1: enhanced requests derive Kovo-Targets from current live DOM.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'fragment-targets-live-dom' });
 

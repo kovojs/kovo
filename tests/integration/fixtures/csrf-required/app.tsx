@@ -1,6 +1,6 @@
 // SPEC.md §6.6/§9.1: mutation POSTs validate CSRF before parsing or guards.
 import { createApp, csrfField, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const csrf = {
   secret: 'csrf-required-secret',

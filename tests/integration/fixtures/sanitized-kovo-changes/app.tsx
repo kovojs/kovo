@@ -1,6 +1,6 @@
 // SPEC.md §9.1: Kovo-Changes exposes sanitized domain/key summaries only.
 import { createApp, domain, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const auditRecord = domain('audit-record');
 

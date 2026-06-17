@@ -1,6 +1,6 @@
 // I2: the login() helper establishes an authenticated session through the rendered
 // sign-in form, so a guards.authed() route renders the signed-in user.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'auth' });
 

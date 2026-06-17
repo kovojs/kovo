@@ -1,7 +1,7 @@
 // Morph application fixture: an island patched in by a fragment is discovered by
 // delegated future events, but its handler module is not imported eagerly (SPEC §4.4, §9.1).
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readInstalled(db: KovoFixtureRequest['db']): Promise<boolean> {
   const rows = await db.query<{ installed: number }>(

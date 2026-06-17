@@ -1,13 +1,13 @@
 // I3: typed mutation error union. A successful buy morphs the stock badge; a buy
 // against empty stock morphs a typed error fragment (data-error-code), no nav.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'stock' });
 
 const STOCK = '[data-bind="item.stock"]';
 const ERROR = '[data-error-code="OUT_OF_STOCK"]';
 
-async function clickBuy(page: import('@kovojs/test/integration').Page): Promise<void> {
+async function clickBuy(page: import('@kovojs/test/internal/integration').Page): Promise<void> {
   await Promise.all([
     page.waitForResponse((response) => response.url().endsWith('/_m/stock/buy')),
     page.getByRole('button', { name: 'Buy' }).click(),

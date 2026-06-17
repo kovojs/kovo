@@ -1,6 +1,6 @@
 // I3: the core interactive round trip. Click an enhanced form → the mutation runs
 // server-side against PGlite → the bound component morphs in place (no navigation).
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'counter' });
 

@@ -7,13 +7,13 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./integration": "./src/integration/index.ts",
-    "./integration/define": "./src/integration/define-fixture.ts",
     "./assertions": "./src/assertions.ts",
     "./headers": "./src/headers.ts",
     "./harness-operations": "./src/harness-operations.ts",
     "./harness": "./src/harness.ts",
     "./html-fragment": "./src/html-fragment.ts",
+    "./internal/integration": "./src/integration/index.ts",
+    "./internal/integration/define": "./src/integration/define-fixture.ts",
     "./page": "./src/page.ts",
     "./pglite": "./src/pglite.ts",
     "./sql-observer": "./src/sql-observer.ts",
@@ -48,11 +48,11 @@
         "types": "./dist/html-fragment.d.mts",
         "default": "./dist/html-fragment.mjs"
       },
-      "./integration": {
+      "./internal/integration": {
         "types": "./dist/integration/index.d.mts",
         "default": "./dist/integration/index.mjs"
       },
-      "./integration/define": {
+      "./internal/integration/define": {
         "types": "./dist/integration/define-fixture.d.mts",
         "default": "./dist/integration/define-fixture.mjs"
       },

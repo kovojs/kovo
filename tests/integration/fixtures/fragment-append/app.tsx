@@ -1,7 +1,7 @@
 // Append-mode fixture: a mutation returns a kovo-fragment with mode="append",
 // so existing keyed rows stay connected while the new row is added (SPEC §9.1).
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface FeedRow {
   [key: string]: unknown;

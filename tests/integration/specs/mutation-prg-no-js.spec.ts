@@ -1,5 +1,5 @@
 // SPEC.md §9.1/§9.2: no-JS mutation requests share the handler but use PRG/full page errors.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'mutation-prg-no-js' });
 

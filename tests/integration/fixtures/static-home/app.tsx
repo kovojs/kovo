@@ -3,7 +3,7 @@
 // a single file: `export default defineFixture(...)`.
 import { route } from '@kovojs/server';
 import { createApp } from '@kovojs/server/app-shell/core';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const app = createApp({
   document: { lang: 'en-US' },

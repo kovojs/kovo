@@ -19,7 +19,7 @@ import {
   createBetterAuthCredentialMutationTouchGraph,
   createBetterAuthDbVerificationConfig,
   validateBetterAuthSchemaBridge,
-} from './index.js';
+} from './internal.js';
 import { authTable } from './test-fakes.js';
 
 describe('schema bridge', () => {

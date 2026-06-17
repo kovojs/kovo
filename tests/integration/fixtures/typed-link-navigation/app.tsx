@@ -2,7 +2,7 @@
 // a real document load, not a client-router transition.
 import { Link, href } from '@kovojs/core';
 import { createApp, route, s } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 declare module '@kovojs/core' {
   interface RouteRegistry {

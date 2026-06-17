@@ -1,6 +1,6 @@
 // SPEC.md §9.1/§10.3: simultaneous enhanced submissions with one Kovo-Idem
 // execute once and replay the reserved response to the duplicate.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'mutation-idempotency-concurrent' });
 

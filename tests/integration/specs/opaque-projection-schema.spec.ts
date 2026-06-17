@@ -1,6 +1,6 @@
 // SPEC.md §10.2 KV410 + §11.2: opaque read projections must be backed by a
 // declared output schema, and the live typed-read path verifies observed rows.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'opaque-projection-schema' });
 

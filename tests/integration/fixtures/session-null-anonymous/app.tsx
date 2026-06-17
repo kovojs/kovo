@@ -1,7 +1,7 @@
 // SPEC §6.5: null/undefined sessionProvider results mean anonymous, not a
 // malformed session value.
 import { createApp, guards, route } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface AppSession {
   user: { id: string; roles: readonly string[] };

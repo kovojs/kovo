@@ -1,6 +1,6 @@
 // SPEC.md §9.1 and §9.5: endpoint() is raw Request -> Response machine ingress
 // and dispatches before the route table without ambient session.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'endpoint-raw-request' });
 

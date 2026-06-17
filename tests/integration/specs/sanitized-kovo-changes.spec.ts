@@ -1,5 +1,5 @@
 // SPEC.md §9.1: Kovo-Changes contains only sanitized domain/key metadata.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'sanitized-kovo-changes' });
 

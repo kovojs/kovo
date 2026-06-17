@@ -1,4 +1,4 @@
-import upstreamGetPriority from './property-priorities.js';
+import { getPriority } from './internal.js';
 
 const CSS_MARKER = '$$css';
 const STYLE_SRC = 'data-style-src';
@@ -331,12 +331,6 @@ export function emitAtomicCss(rules: readonly AtomicRule[], options: CssEmitOpti
       return `@layer ${layerName}.${priority}{${body}}`;
     })
     .join('\n');
-}
-
-/** @internal Priority bucket compatible with StyleX's shorthand-before-longhand cascade model. */
-export function getPriority(property: string): number {
-  const cssProperty = property.startsWith('--') ? property : toKebabCase(property);
-  return upstreamGetPriority(cssProperty);
 }
 
 interface CompileContext {

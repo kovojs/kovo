@@ -1,5 +1,5 @@
 // SPEC §6.4 + §7: a GET form updates route search params via normal navigation.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'get-form-search' });
 

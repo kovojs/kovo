@@ -1,6 +1,6 @@
 import { type Guard, guards as serverGuards } from '@kovojs/server';
 import { describe, expect, it } from 'vitest';
-import { type ActiveOrganizationRequest, activeOrganization, authed, role } from './index.js';
+import { type ActiveOrganizationRequest, activeOrganization, authed, role } from './internal.js';
 import { type AppRequest } from './test-fakes.js';
 
 describe('guard bindings', () => {

@@ -1,7 +1,7 @@
 // SPEC §6.5 + §10.3: mutation guards run before the transaction/write path, and
 // enhanced guard failures stay on the typed mutation error fragment vocabulary.
 import { createApp, guards, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {
   user: { id: string; roles: readonly string[] };

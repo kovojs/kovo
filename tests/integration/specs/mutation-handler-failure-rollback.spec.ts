@@ -1,6 +1,6 @@
 // SPEC.md §9.2/§10.3: unexpected handler failures roll back transactional
 // writes and return stable no-internals error responses.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'mutation-handler-failure-rollback' });
 

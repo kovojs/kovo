@@ -1,5 +1,5 @@
 // SPEC.md §6.3/§9.2: validation failures are typed wire errors with field paths.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'validation-field-errors' });
 

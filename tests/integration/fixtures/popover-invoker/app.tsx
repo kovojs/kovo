@@ -1,7 +1,7 @@
 // L0 platform fixture: native popover IDREF wiring remains light DOM and works
 // without Kovo client handler imports (SPEC §4.6, §7).
 import { createApp, route } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
   page: () => `<main>

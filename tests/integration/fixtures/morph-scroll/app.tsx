@@ -1,7 +1,7 @@
 // Morph survival fixture: a keyed scroll container keeps browser-owned
 // scrollTop while server-truth content is reconciled (SPEC §9.1).
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readVersion(db: KovoFixtureRequest['db']): Promise<number> {
   const rows = await db.query<{ version: number }>('select version from scroll_state where id = 1');
