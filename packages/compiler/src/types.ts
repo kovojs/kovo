@@ -134,11 +134,12 @@ export interface CompileRouteModuleOptions {
 }
 
 /**
- * Result of {@link compileRouteModule}. The first implementation is fact-only: it proves the
- * compiler can see route JSX composition before later slices emit executable route IR.
+ * Result of {@link compileRouteModule}: route-page facts plus executable lowered route IR
+ * artifacts for JSX-authored pages.
  */
 export interface CompileRouteModuleResult {
   diagnostics: readonly CompilerDiagnostic[];
+  files: readonly EmittedFile[];
   routePageFacts: readonly RoutePageFact[];
 }
 
@@ -172,7 +173,7 @@ export interface RoutePageComponentPropFact {
  */
 export interface EmittedFile {
   fileName: string;
-  kind: 'client' | 'css' | 'registry' | 'server';
+  kind: 'client' | 'css' | 'registry' | 'route' | 'server';
   source: string;
 }
 

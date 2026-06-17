@@ -362,6 +362,18 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
       `node scripts/api-surface-gate.mjs`.
     - Additional progress 2026-06-17:
+      `compileRouteModule()` now emits executable `*.kovo-route.tsx` lowered IR
+      artifacts for JSX-authored route modules. The generated artifact wraps each
+      JSX `page` handler with `defineCompiledRoutePage()` metadata from
+      `@kovojs/server/internal/route`, preserving the server JSX execution path
+      while making route JSX compiler-owned source rather than an unprocessed
+      runtime convention.
+    - Verified with
+      `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts packages/server/src/route-ir.test.ts packages/server/src/route-jsx.test.tsx`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and
+      `git diff --check -- packages/server/src/route-ir.ts packages/server/src/internal/route.ts packages/server/src/route-ir.test.ts packages/compiler/src/types.ts packages/compiler/src/route-pages.ts packages/compiler/src/route-pages.test.ts`.
+    - Additional progress 2026-06-17:
       server route execution now installs request context for server JSX, and
       `@kovojs/server/jsx-runtime` recognizes Kovo `component(...)` descriptors,
       loads direct and prop-bound declared queries, and renders async JSX

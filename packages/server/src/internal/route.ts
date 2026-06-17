@@ -8,6 +8,13 @@ export {
   type RouteMatch,
 } from '../match.js';
 export {
+  defineCompiledRoutePage,
+  type CompiledRoutePageComponent,
+  type CompiledRoutePageComponentProp,
+  type CompiledRoutePageFunction,
+  type CompiledRoutePageMetadata,
+} from '../route-ir.js';
+export {
   matchShellDispatch,
   shellDispatchTable,
   type EndpointLike,
