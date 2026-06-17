@@ -12,11 +12,13 @@ import {
   diagnosticDefinitionText,
   diagnosticDefinitions,
   isDiagnosticCode,
-  puntReasonLabel,
-  validateKovoExplainInput,
-  type ComponentExplain,
   type DiagnosticCode,
   type DiagnosticSeverity,
+} from '@kovojs/core';
+import { puntReasonLabel } from '@kovojs/core/internal/derivation';
+import {
+  validateKovoExplainInput,
+  type ComponentExplain,
   type EndpointExplain,
   type EventPayloadFact,
   type FixpointCheck,
@@ -35,7 +37,7 @@ import {
   type TouchGraph,
   type UpdateCoverageFact,
   type VerificationDiagnosticFact,
-} from '@kovojs/core';
+} from '@kovojs/core/internal/graph';
 import type { KovoApp, StaticExportCompileDiagnostic } from '@kovojs/server';
 
 import {

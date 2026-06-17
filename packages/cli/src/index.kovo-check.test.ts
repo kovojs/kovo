@@ -978,16 +978,38 @@ describe('kovo check', () => {
       mkdirSync(join(parent, 'node_modules/@kovojs/core'), { recursive: true });
       writeFileSync(
         join(parent, 'node_modules/@kovojs/core/package.json'),
-        '{"type":"module","exports":"./index.js"}\n',
+        JSON.stringify({
+          type: 'module',
+          exports: {
+            '.': './index.js',
+            './internal/derivation': './internal/derivation.js',
+            './internal/graph': './internal/graph.js',
+          },
+        }) + '\n',
         'utf8',
       );
+      mkdirSync(join(parent, 'node_modules/@kovojs/core/internal'), { recursive: true });
       writeFileSync(
         join(parent, 'node_modules/@kovojs/core/index.js'),
         [
           'export const diagnosticDefinitions = {};',
           'export function diagnosticDefinitionText() { return ""; }',
           'export function isDiagnosticCode() { return false; }',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(parent, 'node_modules/@kovojs/core/internal/derivation.js'),
+        [
           'export function puntReasonLabel() { return ""; }',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(parent, 'node_modules/@kovojs/core/internal/graph.js'),
+        [
           'export function validateKovoExplainInput() { return []; }',
           '',
         ].join('\n'),
