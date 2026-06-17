@@ -58,6 +58,17 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
                     })),
                   }
                 : {}),
+              ...(page.navigationSegments && page.navigationSegments.length > 0
+                ? {
+                    navigationSegments: page.navigationSegments.map((segment) => ({
+                      ...(segment.components === undefined ? {} : { components: segment.components }),
+                      id: segment.id,
+                      kind: segment.kind,
+                      name: segment.localName,
+                      ...(segment.queries === undefined ? {} : { queries: segment.queries }),
+                    })),
+                  }
+                : {}),
               route: page.route,
             })),
           ],

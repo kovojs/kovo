@@ -1402,6 +1402,18 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     for (const layout of page.layouts ?? []) {
       lines.push(`layout: ${layout.name} queries=${list(layout.queries)}`);
     }
+    lines.push(`navigation-segments: ${list(page.navigationSegments?.map((segment) => segment.id))}`);
+    for (const segment of page.navigationSegments ?? []) {
+      lines.push(
+        [
+          `segment: ${segment.kind}`,
+          `id=${segment.id}`,
+          `name=${segment.name}`,
+          `queries=${list(segment.queries)}`,
+          `components=${list(segment.components)}`,
+        ].join(' '),
+      );
+    }
   }
   lines.push(`view-transitions: ${list(page.viewTransitions)}`);
   return ok(lines);

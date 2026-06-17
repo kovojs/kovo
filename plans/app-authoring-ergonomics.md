@@ -160,7 +160,7 @@ item inherits from rather than re-deciding it:
     - Example checks pass: `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`; `pnpm --filter @kovojs/example-crm run emit-components -- --check`; `pnpm --filter @kovojs/example-commerce run emit-components -- --check`; `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.rendering.test.ts`.
     - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
 
-- [ ] **3. First-class nested layouts (supersedes the old "no layouts yet" item).**
+- [x] **3. First-class nested layouts (supersedes the old "no layouts yet" item).**
   - Decision 2026-06-17: ship nested layouts for authoring parity with peer
     frameworks, on Kovo's explicit `route()` model (no file-system-convention
     routing — that would contradict §6.4's static route table). Layouts are the
@@ -246,10 +246,14 @@ item inherits from rather than re-deciding it:
       packages/runtime/src/mutation-targets.test.ts` passes with an app-shell
       fixture where `Kovo-Targets: <generated-layout-target>=cart` returns the
       refreshed `cart` query chunk.
+    - Route lowering now derives navigation segment facts for each layout and
+      page leaf and threads them into `kovo explain page --layouts`; `pnpm exec
+      vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts
+      packages/cli/src/index.kovo-explain.test.ts packages/core/src/graph.test.ts`
+      passes with fixtures for emitted route IR facts, graph page facts, and
+      explain output.
     - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
-  - Remaining gaps:
-    - Compiler route lowering does not yet derive navigation segment metadata.
 
 - [ ] **4. Replace string shell helpers with layouts + `documentTemplate`.**
   - Framework direction: convert document-level shells to

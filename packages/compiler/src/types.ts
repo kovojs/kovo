@@ -184,6 +184,7 @@ export interface RoutePageFact {
   components: readonly RoutePageComponentFact[];
   fileName: string;
   layouts?: readonly RoutePageLayoutFact[];
+  navigationSegments?: readonly RouteNavigationSegmentFact[];
   route: string;
 }
 
@@ -191,6 +192,15 @@ export interface RoutePageFact {
 export interface RoutePageLayoutFact {
   localName: string;
   queries: readonly string[];
+}
+
+/** One compiler-derived navigation segment for future enhanced navigation proofs. */
+export interface RouteNavigationSegmentFact {
+  components?: readonly string[];
+  id: string;
+  kind: 'layout' | 'page';
+  localName: string;
+  queries?: readonly string[];
 }
 
 /** One component invocation found under a JSX-authored route page. */

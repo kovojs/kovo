@@ -383,6 +383,26 @@ export const admin = route('/admin', {
           { name: 'AppLayout', queries: ['viewer', 'cart'] },
           { name: 'AdminLayout', queries: ['permissions'] },
         ],
+        navigationSegments: [
+          {
+            id: 'layout:AppLayout',
+            kind: 'layout',
+            name: 'AppLayout',
+            queries: ['viewer', 'cart'],
+          },
+          {
+            id: 'layout:AdminLayout',
+            kind: 'layout',
+            name: 'AdminLayout',
+            queries: ['permissions'],
+          },
+          {
+            components: ['AdminDashboard'],
+            id: 'page:/admin',
+            kind: 'page',
+            name: 'page',
+          },
+        ],
         route: '/admin',
       },
     ]);

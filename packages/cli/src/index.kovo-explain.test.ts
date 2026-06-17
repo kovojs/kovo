@@ -853,6 +853,26 @@ describe('kovo explain', () => {
                 { name: 'AppLayout', queries: ['viewer', 'cart'] },
                 { name: 'AdminLayout', queries: ['permissions'] },
               ],
+              navigationSegments: [
+                {
+                  id: 'layout:AppLayout',
+                  kind: 'layout',
+                  name: 'AppLayout',
+                  queries: ['viewer', 'cart'],
+                },
+                {
+                  id: 'layout:AdminLayout',
+                  kind: 'layout',
+                  name: 'AdminLayout',
+                  queries: ['permissions'],
+                },
+                {
+                  components: ['AdminUsers'],
+                  id: 'page:/admin',
+                  kind: 'page',
+                  name: 'page',
+                },
+              ],
               queries: ['adminUsers'],
               route: '/admin',
             },
@@ -872,6 +892,10 @@ describe('kovo explain', () => {
         'layouts: AppLayout,AdminLayout',
         'layout: AppLayout queries=viewer,cart',
         'layout: AdminLayout queries=permissions',
+        'navigation-segments: layout:AppLayout,layout:AdminLayout,page:/admin',
+        'segment: layout id=layout:AppLayout name=AppLayout queries=viewer,cart components=-',
+        'segment: layout id=layout:AdminLayout name=AdminLayout queries=permissions components=-',
+        'segment: page id=page:/admin name=page queries=- components=AdminUsers',
         'view-transitions: -',
         '',
       ].join('\n'),
@@ -895,6 +919,19 @@ describe('kovo explain', () => {
           pages: [
             {
               layouts: [{ name: 'AppLayout', queries: ['viewer'] }],
+              navigationSegments: [
+                {
+                  id: 'layout:AppLayout',
+                  kind: 'layout',
+                  name: 'AppLayout',
+                  queries: ['viewer'],
+                },
+                {
+                  id: 'page:/admin',
+                  kind: 'page',
+                  name: 'page',
+                },
+              ],
               route: '/admin',
             },
           ],
@@ -918,6 +955,9 @@ describe('kovo explain', () => {
         'queries: -',
         'layouts: AppLayout',
         'layout: AppLayout queries=viewer',
+        'navigation-segments: layout:AppLayout,page:/admin',
+        'segment: layout id=layout:AppLayout name=AppLayout queries=viewer components=-',
+        'segment: page id=page:/admin name=page queries=- components=-',
         'view-transitions: -',
         '',
       ].join('\n'),

@@ -29,6 +29,14 @@ export const home = route('/', {
           },
         ],
         fileName: 'src/routes.tsx',
+        navigationSegments: [
+          {
+            components: ['QuestionListRegion'],
+            id: 'page:/',
+            kind: 'page',
+            localName: 'page',
+          },
+        ],
         route: '/',
       },
     ]);
@@ -40,7 +48,7 @@ export const home = route('/', {
       "import { defineCompiledRoutePage as __kovoDefineCompiledRoutePage } from '@kovojs/server/internal/route';",
     );
     expect(result.files[0]?.source).toContain(
-      `page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionListRegion","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"src/routes.tsx","route":"/"}, () => <QuestionListRegion />)`,
+      `page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionListRegion","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"src/routes.tsx","navigationSegments":[{"components":["QuestionListRegion"],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, () => <QuestionListRegion />)`,
     );
   });
 
@@ -74,6 +82,26 @@ export const home = route('/', {
         layouts: [
           { localName: 'AppLayout', queries: ['viewer', 'cart'] },
           { localName: 'AdminLayout', queries: ['permissions'] },
+        ],
+        navigationSegments: [
+          {
+            id: 'layout:AppLayout',
+            kind: 'layout',
+            localName: 'AppLayout',
+            queries: ['viewer', 'cart'],
+          },
+          {
+            id: 'layout:AdminLayout',
+            kind: 'layout',
+            localName: 'AdminLayout',
+            queries: ['permissions'],
+          },
+          {
+            components: ['QuestionListRegion'],
+            id: 'page:/',
+            kind: 'page',
+            localName: 'page',
+          },
         ],
         route: '/',
       }),
@@ -163,7 +191,7 @@ import { defineCompiledRoutePage as __kovoDefineCompiledRoutePage } from '@kovoj
 import { route } from '@kovojs/server';
 
 export const detail = route('/questions/:id', {
-  page: __kovoDefineCompiledRoutePage({"components":[{"keyExpression":"params.id","localName":"QuestionDetail","props":[{"expression":"params.id","name":"questionId","propertyAccesses":["params.id"]}],"propsExpression":"{ questionId: params.id }","serializedPropsExpression":"JSON.stringify({ questionId: params.id })"}],"fileName":"src/routes.tsx","route":"/questions/:id"}, ({ params }) => <QuestionDetail key={params.id} questionId={params.id} />),
+  page: __kovoDefineCompiledRoutePage({"components":[{"keyExpression":"params.id","localName":"QuestionDetail","props":[{"expression":"params.id","name":"questionId","propertyAccesses":["params.id"]}],"propsExpression":"{ questionId: params.id }","serializedPropsExpression":"JSON.stringify({ questionId: params.id })"}],"fileName":"src/routes.tsx","navigationSegments":[{"components":["QuestionDetail"],"id":"page:/questions/:id","kind":"page","localName":"page"}],"route":"/questions/:id"}, ({ params }) => <QuestionDetail key={params.id} questionId={params.id} />),
 });
 `,
       },
@@ -253,6 +281,14 @@ export const detail = route('/questions/:id', {
           },
         ],
         fileName: 'src/routes.tsx',
+        navigationSegments: [
+          {
+            components: ['QuestionDetail'],
+            id: 'page:/questions/:id',
+            kind: 'page',
+            localName: 'page',
+          },
+        ],
         route: '/questions/:id',
       },
     ]);
@@ -306,6 +342,14 @@ export const products = route('/products', {
           },
         ],
         fileName: 'src/routes.tsx',
+        navigationSegments: [
+          {
+            components: ['ProductShell', 'ProductCard'],
+            id: 'page:/products',
+            kind: 'page',
+            localName: 'page',
+          },
+        ],
         route: '/products',
       },
     ]);
@@ -344,6 +388,14 @@ export const home = route('/', {
           },
         ],
         fileName: 'src/routes.tsx',
+        navigationSegments: [
+          {
+            components: ['SoShell', 'QuestionListRegion'],
+            id: 'page:/',
+            kind: 'page',
+            localName: 'page',
+          },
+        ],
         route: '/',
       },
     ]);
@@ -372,11 +424,19 @@ export const home = route('/', {
           },
         ],
         fileName: 'src/routes.tsx',
+        navigationSegments: [
+          {
+            components: ['QuestionListRegion'],
+            id: 'page:/',
+            kind: 'page',
+            localName: 'page',
+          },
+        ],
         route: '/',
       },
     ]);
     expect(result.files[0]?.source).toContain(
-      'page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionListRegion","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"src/routes.tsx","route":"/"}, () => renderShell(<QuestionListRegion />))',
+      'page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionListRegion","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"src/routes.tsx","navigationSegments":[{"components":["QuestionListRegion"],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, () => renderShell(<QuestionListRegion />))',
     );
   });
 
@@ -409,7 +469,7 @@ export const detail = route('/questions/:id', {
       },
     ]);
     expect(result.files[0]?.source).toContain(
-      'page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionDetail","props":[{"expression":"params.id","name":"questionId","propertyAccesses":["params.id"]}],"propsExpression":"{ questionId: params.id }","serializedPropsExpression":"JSON.stringify({ questionId: params.id })"}],"fileName":"src/routes.tsx","route":"/questions/:id"}, function page({ params }: { params: { id: string } }) {',
+      'page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionDetail","props":[{"expression":"params.id","name":"questionId","propertyAccesses":["params.id"]}],"propsExpression":"{ questionId: params.id }","serializedPropsExpression":"JSON.stringify({ questionId: params.id })"}],"fileName":"src/routes.tsx","navigationSegments":[{"components":["QuestionDetail"],"id":"page:/questions/:id","kind":"page","localName":"page"}],"route":"/questions/:id"}, function page({ params }: { params: { id: string } }) {',
     );
   });
 

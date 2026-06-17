@@ -174,12 +174,22 @@ export interface PageLayoutExplain {
 }
 
 /** @internal */
+export interface PageNavigationSegmentExplain {
+  components?: readonly string[];
+  id: string;
+  kind: 'layout' | 'page';
+  name: string;
+  queries?: readonly string[];
+}
+
+/** @internal */
 export interface PageExplain {
   guards?: readonly string[];
   i18n?: readonly string[];
   layouts?: readonly PageLayoutExplain[];
   meta?: PageMetaExplain;
   modulepreloads?: readonly string[];
+  navigationSegments?: readonly PageNavigationSegmentExplain[];
   prefetch?: 'conservative' | 'moderate' | false;
   queries?: readonly string[];
   route: string;

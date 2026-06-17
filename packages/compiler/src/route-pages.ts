@@ -10,6 +10,7 @@ import type {
   RoutePageComponentPropFact,
   RoutePageFact,
   RoutePageLayoutFact,
+  RouteNavigationSegmentFact,
 } from './types.js';
 import type { StaticLiteralValue } from './scan/object.js';
 import { applySourceReplacements, replaceExtension, type SourceReplacement } from './shared.js';
@@ -111,10 +112,12 @@ function routePageFromCall(
   const components = routePageComponentFacts(sourceFile, pageHandler.node);
   if (components.length === 0) return null;
   const routeLayouts = routeLayoutFacts(fileName, source, sourceFile, definitionArg, layouts, diagnostics);
+  const navigationSegments = routeNavigationSegments(pathArg.text, components, routeLayouts);
   const fact = {
     components,
     fileName,
     ...(routeLayouts.length > 0 ? { layouts: routeLayouts } : {}),
+    navigationSegments,
     route: pathArg.text,
   };
 
@@ -126,6 +129,27 @@ function routePageFromCall(
       start: pageHandler.replacementStart,
     },
   };
+}
+
+function routeNavigationSegments(
+  routePath: string,
+  components: readonly RoutePageComponentFact[],
+  layouts: readonly RoutePageLayoutFact[],
+): RouteNavigationSegmentFact[] {
+  return [
+    ...layouts.map((layout) => ({
+      id: `layout:${layout.localName}`,
+      kind: 'layout' as const,
+      localName: layout.localName,
+      queries: layout.queries,
+    })),
+    {
+      components: components.map((component) => component.localName),
+      id: `page:${routePath}`,
+      kind: 'page' as const,
+      localName: 'page',
+    },
+  ];
 }
 
 function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, RouteLayoutModel> {
