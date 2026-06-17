@@ -123,6 +123,107 @@ describe('decoded query runtime apply', () => {
   });
 });
 
+describe('delta query chunk apply (SPEC §9.1.1)', () => {
+  it('applies a delta chunk by merging into the existing store base', () => {
+    // SPEC §9.1.1: when delta=true, applyQueryDelta merges into the held base
+    // instead of overwriting; the update plan runs on the merged result.
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const countEl = new FakeQueryBindingElement({ 'data-bind': 'cart.count' });
+    root.bindings.push(countEl);
+
+    store.set('cart', { count: 1, items: [{ id: 'p1', qty: 1 }] });
+
+    const applied = applyQueryChunksToRuntime(
+      store,
+      [
+        {
+          delta: true,
+          name: 'cart',
+          value: {
+            set: { count: 2 },
+            lists: { items: { key: 'id', upsert: [{ id: 'p1', qty: 2 }] } },
+          },
+        },
+      ],
+      { queryPlans: { cart: { bindings: true } }, root },
+    );
+
+    // Applied and store contain the merged full value (SPEC §9.1.1).
+    expect(applied).toEqual(['cart']);
+    expect(store.get('cart')).toEqual({ count: 2, items: [{ id: 'p1', qty: 2 }] });
+    // Update plan ran on the merged result.
+    expect(countEl.textContent).toBe('2');
+  });
+
+  it('round-trip: store base + delta chunk = expected full value', () => {
+    // SPEC §9.1.1: apply_delta(base, render_prod(Δ)) ≡ render_dev(full).
+    const store = createQueryStore();
+    store.set('cart', { count: 2, items: [{ id: 'p1', qty: 1 }, { id: 'p2', qty: 3 }] });
+
+    applyQueryChunksToRuntime(store, [
+      {
+        delta: true,
+        name: 'cart',
+        value: {
+          set: { count: 4 },
+          lists: { items: { key: 'id', upsert: [{ id: 'p2', qty: 4 }], remove: [] } },
+        },
+      },
+    ]);
+
+    expect(store.get('cart')).toEqual({
+      count: 4,
+      items: [{ id: 'p1', qty: 1 }, { id: 'p2', qty: 4 }],
+    });
+  });
+
+  it('triggers onDeltaMiss and does NOT set the store when base is missing', () => {
+    // SPEC §9.1.1: no base → QueryDeltaApplyError → miss handler, store unchanged.
+    const store = createQueryStore();
+    const onDeltaMiss = vi.fn();
+
+    const applied = applyQueryChunksToRuntime(
+      store,
+      [{ delta: true, name: 'cart', value: { set: { count: 2 } } }],
+      { onDeltaMiss },
+    );
+
+    // The chunk was not applied (no store write, not in applied list).
+    expect(applied).toEqual([]);
+    expect(store.get('cart')).toBeUndefined();
+    expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+  });
+
+  it('triggers onDeltaMiss with the correct key for a keyed delta chunk', () => {
+    const store = createQueryStore();
+    const onDeltaMiss = vi.fn();
+
+    applyQueryChunksToRuntime(
+      store,
+      [{ delta: true, key: 'p1', name: 'product', value: { set: { stock: 5 } } }],
+      { onDeltaMiss },
+    );
+
+    expect(onDeltaMiss).toHaveBeenCalledWith('product', 'p1');
+    expect(store.get('product', 'p1')).toBeUndefined();
+  });
+
+  it('does not call onDeltaMiss for full (non-delta) chunks', () => {
+    const store = createQueryStore();
+    const onDeltaMiss = vi.fn();
+
+    applyQueryChunksToRuntime(
+      store,
+      [{ name: 'cart', value: { count: 5 } }],
+      { onDeltaMiss },
+    );
+
+    expect(onDeltaMiss).not.toHaveBeenCalled();
+    expect(store.get('cart')).toEqual({ count: 5 });
+  });
+});
+
 function scopedBinding(
   deps: string,
   path: string,

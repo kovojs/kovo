@@ -10,6 +10,8 @@ import type { FragmentChunk } from './wire-response-scanner.js';
 import { readAttribute, unescapeHtml } from './wire-html.js';
 
 export interface QueryChunk {
+  /** When true, `value` is a QueryDelta envelope (SPEC §9.1.1), not a full value. */
+  delta?: boolean;
   key?: string;
   name: string;
   value: unknown;
@@ -111,15 +113,31 @@ export function readQueryElementChunk(
   chunk: QueryElementChunkLike,
   onError?: RuntimeErrorReporter,
 ): QueryChunk | undefined {
+  // SPEC §9.1.1: the boolean `delta` attribute (present = true, no value) marks
+  // the body JSON as a QueryDelta envelope rather than a full query value.
+  // readAttribute cannot distinguish absent from valueless (both return null);
+  // use a dedicated presence check on the attrs string instead.
   return readQueryChunkPayload(
     {
       content: chunk.content,
       decodeHtmlEntities: true,
+      delta: hasBooleanAttribute(chunk.attrs, 'delta'),
       key: readAttribute(chunk.attrs, 'key'),
       name: readAttribute(chunk.attrs, 'name'),
     },
     onError,
   );
+}
+
+/**
+ * Test whether a boolean HTML attribute is present in an attrs string (presence
+ * only — no value). Returns true when the attribute name appears, false when
+ * absent. Does not distinguish valueless from valued; use `readAttribute` for
+ * valued attributes.
+ */
+function hasBooleanAttribute(attrs: string, name: string): boolean {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('(?:^|\\s)' + escapedName + '(?:\\s|=|$|/|>)', 'i').test(attrs);
 }
 
 export function readQueryScriptChunks(
@@ -157,6 +175,7 @@ export function readQueryScriptChunk(
 interface QueryChunkPayload {
   content: string;
   decodeHtmlEntities: boolean;
+  delta?: boolean;
   key?: string | null;
   name: string | null;
 }
@@ -177,6 +196,7 @@ function readQueryChunkPayload(
 
   const identity = readQueryChunkIdentity(payload.name, payload.key);
   return {
+    ...(payload.delta ? { delta: true } : {}),
     ...(identity.key === undefined ? {} : { key: identity.key }),
     name: identity.name,
     value: parsed.value,

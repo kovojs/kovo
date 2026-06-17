@@ -54,6 +54,8 @@ export interface FetchEnhancedMutationOptions {
 
 export interface FetchedEnhancedMutation {
   body: string;
+  /** The `Kovo-Build` response header value, if present (SPEC §9.1.1). */
+  buildToken: string | undefined;
   changes: MutationChangeRecord[];
   idem: string;
   response: EnhancedMutationResponseLike;
@@ -78,9 +80,13 @@ export async function fetchEnhancedMutation(
     ...definedProps({ onUploadProgress: options.onUploadProgress }),
   });
   const changes = readMutationChangeHeader(response, options.onError);
+  // SPEC §9.1.1: read build token from response header for delta validation.
+  const buildToken =
+    response.headers?.get('Kovo-Build') ?? response.headers?.get('kovo-build') ?? undefined;
 
   return {
     body: await response.text(),
+    buildToken,
     changes,
     idem,
     response,

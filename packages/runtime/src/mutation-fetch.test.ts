@@ -158,4 +158,44 @@ describe('enhanced mutation fetch', () => {
     expect(isFailedMutationResponse({ ok: true, status: 204, text: async () => '' })).toBe(false);
     expect(isFailedMutationResponse({ text: async () => '' })).toBe(false);
   });
+
+  it('reads the Kovo-Build response header into buildToken (SPEC §9.1.1)', async () => {
+    // SPEC §9.1.1: every mutation response carries Kovo-Build so the runtime
+    // can validate deltas against the expected page build token.
+    const fetched = await fetchEnhancedMutation({
+      fetch: async () => ({
+        headers: {
+          get(name: string) {
+            return name === 'Kovo-Build' ? 'build-abc123' : null;
+          },
+        },
+        async text() {
+          return '';
+        },
+      }),
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_build',
+      root: new FakeTargetRoot([]),
+    });
+
+    expect(fetched.buildToken).toBe('build-abc123');
+  });
+
+  it('sets buildToken to undefined when Kovo-Build header is absent', async () => {
+    const fetched = await fetchEnhancedMutation({
+      fetch: async () => ({
+        headers: { get: () => null },
+        async text() {
+          return '';
+        },
+      }),
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_no_build',
+      root: new FakeTargetRoot([]),
+    });
+
+    expect(fetched.buildToken).toBeUndefined();
+  });
 });

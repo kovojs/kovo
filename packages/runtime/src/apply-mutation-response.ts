@@ -1,4 +1,4 @@
-import { applyQueryChunksToRuntime, type QueryApplyInterposition } from './query-apply.js';
+import { applyQueryChunksToRuntime, type OnDeltaMiss, type QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import { definedProps } from './defined-props.js';
 import { applyFragments } from './morph.js';
@@ -19,9 +19,17 @@ export interface ApplyMutationResponseChunksToRuntimeOptions {
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
+  /** Invoked for each delta chunk whose base is missing or stale (SPEC §9.1.1). */
+  onDeltaMiss?: OnDeltaMiss;
   onError?: (error: unknown) => void;
   queryRoot?: unknown;
   queryPlans?: CompiledQueryUpdatePlans;
+  /** Build token from the response `Kovo-Build` header (SPEC §9.1.1). When set
+   * and `expectedBuildToken` differs, all delta chunks in this response are
+   * treated as misses; full chunks still apply normally. */
+  responseBuildToken?: string;
+  /** The page-level build token, read once from `<meta name="kovo-build">`. */
+  expectedBuildToken?: string;
   root?: MorphRoot | undefined;
   store: QueryStore;
 }
@@ -53,13 +61,47 @@ export function applyMutationResponseChunksToRuntime(
 ): AppliedMutationResponse | AppliedMutationResponseWithRoot {
   // SPEC.md §9.1: mutation, deferred, broadcast, and typed-read responses all
   // converge here after their transport-specific parser has decoded wire chunks.
-  options.beforeApplyQueries?.(chunks.queries);
+
+  // SPEC §9.1.1: build-token mismatch — when the response carries a different
+  // build token than the page's, treat ALL delta chunks as misses so we never
+  // apply a delta against a base from a different build. Full chunks are unaffected.
+  const buildTokenMismatch =
+    options.responseBuildToken !== undefined &&
+    options.expectedBuildToken !== undefined &&
+    options.responseBuildToken !== options.expectedBuildToken;
+
+  // When a build-token mismatch is detected, wrap onDeltaMiss so it fires even
+  // for delta chunks that would otherwise succeed; we never attempt applyQueryDelta
+  // against a stale base in that case. We do this by pre-converting all delta
+  // chunks to misses before they reach applyQueryChunk.
+  let effectiveChunks = chunks;
+  if (buildTokenMismatch && options.onDeltaMiss) {
+    // Route all delta chunks directly to onDeltaMiss, keep full chunks as-is.
+    const missedQueries: typeof chunks.queries = [];
+    for (const q of chunks.queries) {
+      if (q.delta) {
+        options.onDeltaMiss(q.name, q.key);
+      } else {
+        missedQueries.push(q);
+      }
+    }
+    effectiveChunks = { fragments: chunks.fragments, queries: missedQueries };
+  } else if (buildTokenMismatch) {
+    // No onDeltaMiss, but still skip applying deltas (drop them silently).
+    effectiveChunks = {
+      fragments: chunks.fragments,
+      queries: chunks.queries.filter((q) => !q.delta),
+    };
+  }
+
+  options.beforeApplyQueries?.(effectiveChunks.queries);
   const applied: AppliedMutationResponse = {
-    fragments: chunks.fragments,
+    fragments: effectiveChunks.fragments,
     queries: [
-      ...applyQueryChunksToRuntime(options.store, chunks.queries, {
+      ...applyQueryChunksToRuntime(options.store, effectiveChunks.queries, {
         ...definedProps({
           applyQuery: options.applyQuery,
+          onDeltaMiss: options.onDeltaMiss,
           onError: options.onError,
           queryPlans: options.queryPlans,
           root: options.queryRoot ?? options.root,
