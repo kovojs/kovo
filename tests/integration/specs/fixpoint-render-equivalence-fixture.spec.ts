@@ -90,7 +90,10 @@ function renderLoweredComponent(loweredSource: string): string {
   const rendered = module.exports.FixpointRenderEquivalenceCard as
     | {
         definition?: {
-          render?: (queries: Record<string, never>, state: { count: number; open: boolean }) => string;
+          render?: (
+            queries: Record<string, never>,
+            state: { count: number; open: boolean },
+          ) => string;
           state?: () => { count: number; open: boolean };
         };
       }
@@ -121,7 +124,14 @@ function renderJsxAttributes(props: JsxProps): string {
 function renderJsxChildren(children: unknown): string {
   if (children === null || children === undefined || typeof children === 'boolean') return '';
   if (Array.isArray(children)) return children.map((child) => renderJsxChildren(child)).join('');
-  return String(children);
+  if (
+    typeof children === 'string' ||
+    typeof children === 'number' ||
+    typeof children === 'bigint'
+  ) {
+    return children.toString();
+  }
+  return JSON.stringify(children) ?? '';
 }
 
 function attributeText(value: unknown): string {
