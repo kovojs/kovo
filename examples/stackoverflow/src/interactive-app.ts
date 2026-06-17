@@ -11,6 +11,7 @@ import {
   QUESTION_LIST_TARGET,
   renderQuestionListPage,
   renderQuestionListRegion,
+  type QuestionRow,
 } from './components/question-list.js';
 import {
   QUESTION_DETAIL_TARGET,
@@ -56,7 +57,53 @@ async function loadAnswersForQuestion(db: SoDb, questionId: string): Promise<Ans
     score: row.score,
     accepted: row.accepted,
     authorId: row.authorId,
+    authorName: row.authorName,
+    createdAt: row.createdAt,
   }));
+}
+
+// Presentational enrichment for question rows. The proven `questionList` query
+// (queries.ts) selects only the §10.5 columns; here we join the cosmetic
+// authorName / tags / createdAt + a body excerpt from the questions table, keyed
+// by id, so both the page render and the fragment re-render show rich rows. These
+// columns are never read by a query loader, so derived optimism is unaffected; a
+// runtime-posted question (no demo metadata) simply renders with defaults.
+async function enrichQuestionRows(
+  db: SoDb,
+  items: QuestionListItemBare[],
+): Promise<QuestionRow[]> {
+  const rows = await db
+    .select({
+      id: questions.id,
+      authorName: questions.authorName,
+      tags: questions.tags,
+      createdAt: questions.createdAt,
+      body: questions.body,
+    })
+    .from(questions);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return items.map((item) => {
+    const meta = byId.get(item.id);
+    const excerpt = meta?.body
+      ? meta.body.length > 140
+        ? `${meta.body.slice(0, 140).trimEnd()}…`
+        : meta.body
+      : undefined;
+    return {
+      ...item,
+      ...(meta?.authorName ? { authorName: meta.authorName } : {}),
+      ...(meta?.tags ? { tags: meta.tags } : {}),
+      ...(meta?.createdAt ? { createdAt: meta.createdAt } : {}),
+      ...(excerpt ? { excerpt } : {}),
+    };
+  });
+}
+
+interface QuestionListItemBare {
+  id: string;
+  title: string;
+  score: number;
+  answerCount: number;
 }
 
 // The voteUp / postQuestion fragment payload: the question-list region re-rendered
@@ -67,7 +114,8 @@ async function renderQuestionListRegionFromDb(db: SoDb): Promise<string> {
     questionList.load(undefined, context),
     questionScore.load(undefined, context),
   ]);
-  return renderQuestionListRegion({ questions: items, totalVotes });
+  const enriched = await enrichQuestionRows(db, items);
+  return renderQuestionListRegion({ questions: enriched, totalVotes });
 }
 
 // The voteUp (on a detail page) / postAnswer fragment payload: the question detail
@@ -85,6 +133,9 @@ async function renderQuestionDetailRegionFromDb(db: SoDb, questionId: string): P
       authorId: row.authorId,
       score: row.score,
       answerCount: row.answerCount,
+      authorName: row.authorName,
+      tags: row.tags,
+      createdAt: row.createdAt,
     },
   });
 }
@@ -165,6 +216,9 @@ export async function buildSoInteractiveApp(
           authorId: row.authorId,
           score: row.score,
           answerCount: row.answerCount,
+          authorName: row.authorName,
+          tags: row.tags,
+          createdAt: row.createdAt,
         },
       });
     },
@@ -223,7 +277,8 @@ export async function buildSoInteractiveApp(
             questionList.load(undefined, context),
             questionScore.load(undefined, context),
           ]);
-          return renderQuestionListPage({ questions: items, totalVotes });
+          const enriched = await enrichQuestionRows(database, items);
+          return renderQuestionListPage({ questions: enriched, totalVotes });
         },
         stylesheets: soStylesheets,
       }),
