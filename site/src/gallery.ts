@@ -108,6 +108,7 @@ function registerGalleryInteractiveSupportClientModules(
   const runtimeSource = [
     'export const derive = (inputs, run) => ({ inputs, run });',
     'export const handler = (fn) => fn;',
+    'export const kovoStyleProperty = (name, value) => value == null || value === false ? "" : `${name}: ${value}`;',
     '',
   ].join('\n');
   const runtimePath = '/c/examples/gallery/src/generated/kovo-runtime.client.js';
@@ -181,6 +182,7 @@ function registerGalleryInteractiveClientModules(
 
 function rewriteGalleryClientImports(source: string, support: SupportRegistration): string {
   return source
+    .replaceAll("from '@kovojs/runtime/generated';", `from '${support.runtimeHref}';`)
     .replaceAll("from '@kovojs/runtime';", `from '${support.runtimeHref}';`)
     .replaceAll('from "@kovojs/headless-ui/primitives";', `from '${support.primitivesHref}';`)
     .replaceAll("from '@kovojs/headless-ui/primitives';", `from '${support.primitivesHref}';`);

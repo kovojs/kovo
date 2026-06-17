@@ -150,7 +150,7 @@ export const CartBadge = component({
       ]
     `);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, kovoEscapeHtml } from '@kovojs/runtime';",
+      "import { applyCompiledQueryUpdatePlan, kovoEscapeHtml } from '@kovojs/runtime/generated';",
     );
     expect(clientSource).toContain('export const CartBadge$queryUpdatePlans = {');
     expect(clientSource).toContain(
@@ -242,7 +242,7 @@ export const CartBadge = component({
       },
     ]);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime';",
+      "import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime/generated';",
     );
     expect(clientSource).toContain(
       'export const CartBadge$isEmpty = derive(["cart"], (cart) => cart.count === 0);',

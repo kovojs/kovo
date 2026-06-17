@@ -6,7 +6,7 @@ import {
   derive,
   kovoEscapeHtml,
   kovoStyleProperty,
-} from '@kovojs/runtime';
+} from '@kovojs/runtime/generated';
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
@@ -957,7 +957,7 @@ function executeClientModule(source: string): Record<string, unknown> {
   const exports: Record<string, unknown> = {};
   const moduleSource = source
     .replace(
-      /import\s+\{([^}]+)\}\s+from\s+['"]@kovojs\/runtime['"];\n?/g,
+      /import\s+\{([^}]+)\}\s+from\s+['"]@kovojs\/runtime(?:\/generated)?['"];\n?/g,
       (_match, names: string) => `const { ${names.trim()} } = runtime;\n`,
     )
     .replace(/export const ([A-Za-z_$][\w$]*)/g, 'const $1 = exports.$1');

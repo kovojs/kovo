@@ -1,5 +1,7 @@
 import { compilerIrHeader } from '../ir.js';
 
+const RUNTIME_GENERATED_IMPORT = '@kovojs/runtime/generated';
+
 /**
  * One compiled query-update-plan module to wire into the app bootstrap: the module's
  * `importPath` and the named `exportName` whose plans get spread into the client loader.
@@ -48,7 +50,7 @@ export function emitQueryPlanBootstrapModule(
     fileName,
     kind: 'client',
     source: `${compilerIrHeader}
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '${RUNTIME_GENERATED_IMPORT}';
 ${imports ? `${imports}\n` : ''}
 const store = createQueryStore();
 const queryPlans = {

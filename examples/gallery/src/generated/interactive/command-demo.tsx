@@ -1,6 +1,6 @@
 // @kovojs-ir - lowered from examples/gallery/src/interactive/command-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @kovojs/server */
-import { derive } from '@kovojs/runtime';
+import { derive } from '@kovojs/runtime/generated';
 
 export const GalleryCommandDemo$section_data_placeholder_derive = derive(['state'], (state: any) =>
   state.inputValue === '' ? '' : null,
@@ -216,9 +216,9 @@ export const GalleryCommandDemo = component({
         data-gallery-interactive="command"
         {...commandRootAttributes(commandState)}
         data-placeholder={state.inputValue === '' ? '' : null}
-        data-bind:data-placeholder="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$section_data_placeholder_derive"
+        data-bind:data-placeholder="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$section_data_placeholder_derive"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$section_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$section_data_state_derive"
         kovo-c="gallery-command-demo"
         kovo-state='{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":false,"value":"dashboard"}'
       >
@@ -226,12 +226,12 @@ export const GalleryCommandDemo = component({
         <button
           class={TRIGGER_CLASS}
           id="gallery-command-trigger"
-          on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_click"
           {...commandTriggerAttributes({ ...commandState, contentId })}
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_aria_expanded_derive"
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_state_derive"
         >
           Open command
         </button>
@@ -244,16 +244,16 @@ export const GalleryCommandDemo = component({
             titleId: 'gallery-command-title',
           })}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$dialog_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$dialog_data_state_derive"
           open={state.open}
-          data-bind:open="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$dialog_open_derive"
+          data-bind:open="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$dialog_open_derive"
         >
           <h2 id="gallery-command-title">Command menu</h2>
           <p id="gallery-command-description">Search project actions.</p>
           <input
             class={INPUT_CLASS}
-            on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_input"
-            on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_keydown"
+            on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$input_input"
+            on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$input_keydown"
             {...commandInputAttributes({
               ...commandState,
               id: 'gallery-command-input',
@@ -268,27 +268,27 @@ export const GalleryCommandDemo = component({
                     ? 'gallery-command-listbox-item-0'
                     : null
             }
-            data-bind:aria-activedescendant="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_aria_activedescendant_derive"
+            data-bind:aria-activedescendant="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$input_aria_activedescendant_derive"
             aria-expanded={state.open ? 'true' : 'false'}
-            data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_aria_expanded_derive"
+            data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$input_aria_expanded_derive"
             data-placeholder={state.inputValue === '' ? '' : null}
-            data-bind:data-placeholder="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_data_placeholder_derive"
+            data-bind:data-placeholder="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$input_data_placeholder_derive"
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_data_state_derive"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$input_data_state_derive"
             value={state.inputValue}
-            data-bind:value="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_value_derive"
+            data-bind:value="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$input_value_derive"
           />
           <div
             class={LISTBOX_CLASS}
             {...commandListboxAttributes({ ...commandState, id: listboxId })}
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$div_data_state_derive"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$div_data_state_derive"
             hidden={!state.open}
-            data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$div_hidden_derive"
+            data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$div_hidden_derive"
           >
             <button
               class={ITEM_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_click_2"
               {...commandItemAttributes({
                 ...commandState,
                 id: 'gallery-command-listbox-item-0',
@@ -296,26 +296,26 @@ export const GalleryCommandDemo = component({
                 itemValue: 'dashboard',
               })}
               aria-selected={state.highlightedValue === 'dashboard' ? 'true' : 'false'}
-              data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_aria_selected_derive"
+              data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_aria_selected_derive"
               data-highlighted={state.highlightedValue === 'dashboard' ? '' : null}
-              data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_highlighted_derive"
+              data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_highlighted_derive"
               data-selected={state.value === 'dashboard' ? '' : null}
-              data-bind:data-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_selected_derive"
+              data-bind:data-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_selected_derive"
               data-state={state.highlightedValue === 'dashboard' ? 'active' : 'inactive'}
-              data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_state_derive_2"
+              data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_state_derive_2"
               hidden={
                 state.inputValue !== '' &&
                 !'open dashboard dashboard'.includes(state.inputValue.toLocaleLowerCase())
               }
-              data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_hidden_derive"
+              data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_hidden_derive"
               tabIndex={state.highlightedValue === 'dashboard' ? 0 : -1}
-              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_tabIndex_derive"
+              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_tabIndex_derive"
             >
               Open dashboard
             </button>
             <button
               class={ITEM_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click_3"
+              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_click_3"
               {...commandItemAttributes({
                 ...commandState,
                 id: 'gallery-command-listbox-item-1',
@@ -323,20 +323,20 @@ export const GalleryCommandDemo = component({
                 itemValue: 'invite',
               })}
               aria-selected={state.highlightedValue === 'invite' ? 'true' : 'false'}
-              data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_aria_selected_derive_2"
+              data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_aria_selected_derive_2"
               data-highlighted={state.highlightedValue === 'invite' ? '' : null}
-              data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_highlighted_derive_2"
+              data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_highlighted_derive_2"
               data-selected={state.value === 'invite' ? '' : null}
-              data-bind:data-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_selected_derive_2"
+              data-bind:data-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_selected_derive_2"
               data-state={state.highlightedValue === 'invite' ? 'active' : 'inactive'}
-              data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_state_derive_3"
+              data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_state_derive_3"
               hidden={
                 state.inputValue !== '' &&
                 !'invite teammate invite'.includes(state.inputValue.toLocaleLowerCase())
               }
-              data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_hidden_derive_2"
+              data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_hidden_derive_2"
               tabIndex={state.highlightedValue === 'invite' ? 0 : -1}
-              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_tabIndex_derive_2"
+              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_tabIndex_derive_2"
             >
               Invite teammate
             </button>
@@ -351,18 +351,18 @@ export const GalleryCommandDemo = component({
                 itemValue: 'delete',
               })}
               aria-selected={state.highlightedValue === 'delete' ? 'true' : 'false'}
-              data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_aria_selected_derive_3"
+              data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_aria_selected_derive_3"
               data-highlighted={state.highlightedValue === 'delete' ? '' : null}
-              data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_highlighted_derive_3"
+              data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_highlighted_derive_3"
               data-selected={state.value === 'delete' ? '' : null}
-              data-bind:data-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_selected_derive_3"
+              data-bind:data-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_selected_derive_3"
               data-state={state.highlightedValue === 'delete' ? 'active' : 'inactive'}
-              data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_state_derive_4"
+              data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_state_derive_4"
               hidden={
                 state.inputValue !== '' &&
                 !'delete project delete'.includes(state.inputValue.toLocaleLowerCase())
               }
-              data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_hidden_derive_3"
+              data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_hidden_derive_3"
             >
               Delete project
             </button>
@@ -374,24 +374,24 @@ export const GalleryCommandDemo = component({
                   state.inputValue.toLocaleLowerCase(),
                 )
               }
-              data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$p_hidden_derive"
+              data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$p_hidden_derive"
             >
               No commands found.
             </p>
           </div>
           <button
             class={CLOSE_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click_4"
+            on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_click_4"
             {...commandCloseAttributes({ ...commandState, contentId })}
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_state_derive_5"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$button_data_state_derive_5"
           >
             Close
           </button>
         </dialog>
         <output
           data-demo-state="command-input"
-          data-bind="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$output_text_derive"
         >
           {state.inputValue || 'empty'}
         </output>
@@ -400,7 +400,7 @@ export const GalleryCommandDemo = component({
         </output>
         <output
           data-demo-state="command-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$output_text_derive_2"
+          data-bind="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=cc29a41c#GalleryCommandDemo$output_text_derive_2"
         >
           {state.value === 'invite' ? 'Invite teammate' : 'Open dashboard'}
         </output>

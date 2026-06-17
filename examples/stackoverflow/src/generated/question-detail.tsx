@@ -1,7 +1,7 @@
 // @kovojs-ir — lowered from examples/stackoverflow/src/components/question-detail.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
 import { escapeText } from '@kovojs/server';
-import { derive } from '@kovojs/runtime';
+import { derive } from '@kovojs/runtime/generated';
 
 export const QuestionDetailRegion$input_value_derive = derive(["question"], (question) => question.id);
 

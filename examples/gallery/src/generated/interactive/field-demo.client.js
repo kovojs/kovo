@@ -1,5 +1,5 @@
 // @kovojs-ir
-import { derive, handler } from '@kovojs/runtime';
+import { derive, handler } from '@kovojs/runtime/generated';
 
 export const GalleryFieldDemo$input_input = handler((event, ctx) => {
   const target = Object(event)['target'];

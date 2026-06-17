@@ -1,5 +1,5 @@
 // @kovojs-ir
-import { derive, handler, kovoStyleProperty } from '@kovojs/runtime';
+import { derive, handler, kovoStyleProperty } from '@kovojs/runtime/generated';
 
 import {
   scrollAreaThumbDrag as _scrollAreaThumbDrag,

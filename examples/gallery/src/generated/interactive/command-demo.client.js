@@ -1,5 +1,5 @@
 // @kovojs-ir
-import { derive, handler } from '@kovojs/runtime';
+import { derive, handler } from '@kovojs/runtime/generated';
 
 import {
   commandCloseClick as _commandCloseClick,

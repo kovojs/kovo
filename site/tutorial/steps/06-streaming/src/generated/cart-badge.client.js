@@ -1,5 +1,5 @@
 // @kovojs-ir
-import { applyCompiledQueryUpdatePlan } from '@kovojs/runtime';
+import { applyCompiledQueryUpdatePlan } from '@kovojs/runtime/generated';
 
 export const CartBadge$queryUpdatePlans = {
   "cart"(root, value) {

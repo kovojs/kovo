@@ -1,6 +1,6 @@
 // @kovojs-ir - lowered from examples/gallery/src/interactive/disclosure-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @kovojs/server */
-import { derive } from '@kovojs/runtime';
+import { derive } from '@kovojs/runtime/generated';
 
 export const GalleryDisclosureDemo$button_aria_expanded_derive = derive(['state'], (state: any) =>
   String(state.open),
@@ -46,12 +46,12 @@ export const GalleryDisclosureDemo = component({
       <button
         aria-controls="gallery-interactive-disclosure-panel"
         class={TRIGGER_CLASS}
-        on:click="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_click"
+        on:click="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=80b5ef2d#GalleryDisclosureDemo$button_click"
         type="button"
         aria-expanded={String(state.open)}
-        data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_aria_expanded_derive"
+        data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=80b5ef2d#GalleryDisclosureDemo$button_aria_expanded_derive"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=80b5ef2d#GalleryDisclosureDemo$button_data_state_derive"
       >
         Shipping rules
       </button>
@@ -59,9 +59,9 @@ export const GalleryDisclosureDemo = component({
         class={CONTENT_CLASS}
         id="gallery-interactive-disclosure-panel"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$div_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=80b5ef2d#GalleryDisclosureDemo$div_data_state_derive"
         hidden={!state.open}
-        data-bind:hidden="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$div_hidden_derive"
+        data-bind:hidden="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=80b5ef2d#GalleryDisclosureDemo$div_hidden_derive"
       >
         Orders over $50 ship free.
       </div>

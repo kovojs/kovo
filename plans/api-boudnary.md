@@ -129,6 +129,17 @@ already excludes `@internal`, but the root barrels can still export those names.
     when compiler/runtime ship together, but emitted code must compile against the
     real runtime export map and deployed immutable artifacts still obey the
     framework's deploy-skew/version-retention guarantees.
+  - Evidence 2026-06-17: branch `agent/api-boundary-runtime-generated` adds
+    `@kovojs/runtime/generated` as a source and publish export, moves compiler
+    emitted client/bootstrap/derive imports to that subpath, and pins the emitted
+    bootstrap contract against the real generated barrel. Verified with
+    `pnpm --filter @kovojs/compiler exec vitest run`,
+    `pnpm --filter @kovojs/runtime exec vitest run`,
+    `pnpm run check:inline-loader`, and
+    `pnpm --filter @kovojs/runtime run build:dist`; gallery generated fixtures
+    refreshed with `pnpm --filter @kovojs/example-gallery run emit:interactive-gallery`
+    and checked with
+    `pnpm --filter @kovojs/example-gallery exec vitest run src/interactive-gallery.static-export.test.ts src/interactive-gallery.artifacts.test.ts`.
   - Prove: `pnpm --filter @kovojs/runtime exec vitest run`,
     `pnpm --filter @kovojs/compiler exec vitest run`, generated fixture tests,
     and `pnpm run check:inline-loader`.

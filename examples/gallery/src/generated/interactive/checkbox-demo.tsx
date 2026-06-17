@@ -1,6 +1,6 @@
 // @kovojs-ir - lowered from examples/gallery/src/interactive/checkbox-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @kovojs/server */
-import { derive } from '@kovojs/runtime';
+import { derive } from '@kovojs/runtime/generated';
 
 export const GalleryCheckboxDemo$input_aria_checked_derive = derive(['state'], (state: any) =>
   state.checked === 'indeterminate' ? 'mixed' : String(state.checked),
@@ -52,13 +52,13 @@ export const GalleryCheckboxDemo = component({
       <input
         class={INPUT_CLASS}
         name="gallery-email-summary"
-        on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_click"
+        on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1e0711bb#GalleryCheckboxDemo$input_click"
         type="checkbox"
         value="enabled"
         aria-checked={state.checked === 'indeterminate' ? 'mixed' : String(state.checked)}
-        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_aria_checked_derive"
+        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1e0711bb#GalleryCheckboxDemo$input_aria_checked_derive"
         checked={state.checked === true}
-        data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_checked_derive"
+        data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1e0711bb#GalleryCheckboxDemo$input_checked_derive"
         data-state={
           state.checked === 'indeterminate'
             ? 'indeterminate'
@@ -66,15 +66,15 @@ export const GalleryCheckboxDemo = component({
               ? 'checked'
               : 'unchecked'
         }
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1e0711bb#GalleryCheckboxDemo$input_data_state_derive"
         indeterminate={state.checked === 'indeterminate'}
-        data-bind:indeterminate="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_indeterminate_derive"
+        data-bind:indeterminate="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1e0711bb#GalleryCheckboxDemo$input_indeterminate_derive"
       />
       <span class="select-none leading-none">Email summary</span>
       <output
         class="text-xs text-neutral-500"
         data-demo-state="checked"
-        data-bind="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$output_text_derive"
+        data-bind="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1e0711bb#GalleryCheckboxDemo$output_text_derive"
       >
         {String(state.checked)}
       </output>
