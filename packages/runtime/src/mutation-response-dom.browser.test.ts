@@ -54,6 +54,46 @@ describe('browser mutation response DOM apply', () => {
     expect(root.querySelector('label')?.textContent).toBe('Updated quantity');
   });
 
+  it('preserves client-owned nested island state when a parent fragment morph reuses it', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section kovo-fragment-target="profile-panel" kovo-key="profile-panel">',
+      '<output data-bind="profile.version">0</output>',
+      '<nested-counter kovo-c="nested-counter" kovo-key="nested-counter" kovo-state="{&quot;count&quot;:3}">',
+      '<button data-bind="state.count">3</button>',
+      '</nested-counter>',
+      '</section>',
+    ].join('');
+    document.body.append(root);
+    const nested = root.querySelector('nested-counter');
+
+    if (!nested) throw new Error('missing nested island fixture');
+
+    const applied = applyMutationResponseBodyToRuntime({
+      body: [
+        '<kovo-fragment target="profile-panel">',
+        '<section kovo-fragment-target="profile-panel" kovo-key="profile-panel">',
+        '<output data-bind="profile.version">1</output>',
+        '<nested-counter kovo-c="nested-counter" kovo-key="nested-counter" kovo-state="{&quot;count&quot;:0}">',
+        '<button data-bind="state.count">0</button>',
+        '</nested-counter>',
+        '</section>',
+        '</kovo-fragment>',
+      ].join(''),
+      morph: keyedDomMorph,
+      root: new DomMorphRoot(root),
+      store: createQueryStore(),
+    });
+
+    // SPEC.md §9.1/§4.2: a keyed nested island is browser-owned state inside a
+    // parent fragment morph; server-initial `kovo-state` must not clobber it.
+    expect(applied.appliedFragments).toEqual(['profile-panel']);
+    expect(root.querySelector('nested-counter')).toBe(nested);
+    expect(nested.getAttribute('kovo-state')).toBe('{"count":3}');
+    expect(nested.querySelector('[data-bind="state.count"]')?.textContent).toBe('3');
+    expect(root.querySelector('[data-bind="profile.version"]')?.textContent).toBe('1');
+  });
+
   it('appends real DOM fragments without replacing keyed list nodes', () => {
     const root = document.createElement('main');
     root.innerHTML = [

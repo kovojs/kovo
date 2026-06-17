@@ -405,13 +405,25 @@ integration harness uniquely proves.
   - Evidence: added `tests/integration/fixtures/morph-scroll/app.tsx` and
     `tests/integration/specs/morph-scroll.spec.ts`; passed
     `pnpm exec playwright test --config tests/integration/playwright.config.ts morph-scroll.spec.ts patched-in-island-inert.spec.ts popover-invoker.spec.ts module-scope-shared.spec.ts`.
-- [ ] `morph-nested-island-state` / `morph-nested-island-state.spec.ts`: nested island local state
+- [x] `morph-nested-island-state` / `morph-nested-island-state.spec.ts`: nested island local state
       survives a parent fragment morph when the nested island identity is preserved.
   - SPEC refs: §9.1 morph contract, §4.2 component identity.
   - Assertions: local state value remains; parent query text updates.
-  - Current gap: not implemented in this slice because current DOM morph syncs the server fragment's
-    attributes onto matched keyed elements, so a nested island's client-owned `kovo-state` would be
-    overwritten instead of preserved.
+  - Evidence: `packages/runtime/src/morph.ts` now treats reused `kovo-state` hosts as client-owned
+    subtree boundaries during DOM morph; `packages/runtime/src/mutation-response-dom.browser.test.ts`
+    verifies a parent fragment morph updates sibling server content while preserving the nested
+    island node, `kovo-state`, and state-bound text. `tests/integration/fixtures/morph-nested-island-state`
+    and `tests/integration/specs/morph-nested-island-state.spec.ts` prove the same path in-browser:
+    a nested counter increments local state to `1`, a parent fragment mutation updates server
+    version text to `1`, and the nested island identity/state/text survive with a semantic snapshot.
+    Proving commands: `pnpm --filter @kovojs/integration-tests exec playwright test
+    specs/morph-nested-island-state.spec.ts --config playwright.config.ts --workers=1`;
+    `pnpm exec vitest run packages/runtime/src/mutation-response-dom.browser.test.ts
+    packages/runtime/src/morph.test.ts`; `pnpm exec vp check packages/runtime/src/morph.ts
+    packages/runtime/src/mutation-response-dom.browser.test.ts
+    tests/integration/fixtures/morph-nested-island-state/app.tsx
+    tests/integration/fixtures/morph-nested-island-state/client.ts
+    tests/integration/specs/morph-nested-island-state.spec.ts`.
 - [ ] `morph-remove-aborts` / `morph-remove-aborts.spec.ts`: removing an island through morph aborts
       its `ctx.signal` and clears pending trigger observation.
   - SPEC refs: §4.4 loader, §4.7 lifecycle.

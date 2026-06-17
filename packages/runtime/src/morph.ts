@@ -141,6 +141,9 @@ export function morphDomElement(current: Element, next: Element): Element {
   }
 
   syncDomAttributes(current, next);
+  if (current.getAttribute('kovo-state') !== null) {
+    return current;
+  }
   if (isActiveDomFormControl(current)) {
     return current;
   }
@@ -285,11 +288,15 @@ function domMorphKey(element: Element): string | null {
 }
 
 function syncDomAttributes(current: Element, next: Element): void {
+  const currentState = current.getAttribute('kovo-state');
+
   for (const name of Array.from(current.attributes, (attribute) => attribute.name)) {
+    if (name === 'kovo-state' && currentState !== null) continue;
     if (!next.hasAttribute(name)) current.removeAttribute(name);
   }
 
   for (const attribute of next.attributes) {
+    if (attribute.name === 'kovo-state' && currentState !== null) continue;
     current.setAttribute(attribute.name, attribute.value);
   }
 }
