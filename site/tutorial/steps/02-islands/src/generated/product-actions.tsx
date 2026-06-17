@@ -31,11 +31,12 @@ export const ProductActions = component({
       <button
         type="button"
         class="save"
-        on:click="/c/site/tutorial/steps/02-islands/src/components/product-actions.client.js?v=519f2610#ProductActions$button_click"
+        on:click="/c/site/tutorial/steps/02-islands/src/components/product-actions.client.js?v=cfc86d30#ProductActions$button_click"
       >
         Save for later
       </button>
     </product-actions>
   ),
 });
+ProductActions.name = "components/product-actions/product-actions";
 // /snippet

@@ -138,6 +138,11 @@ export type ComponentRenderResult = unknown;
 
 type ComponentMutationDefinitions = Record<string, Form<string, Record<string, JsonValue>, unknown>>;
 type NoComponentMutations = Record<never, never>;
+type ComponentDefinitionMutations<Definition> = Definition extends { mutations: infer Mutations }
+  ? Mutations extends ComponentMutationDefinitions
+    ? Mutations
+    : NoComponentMutations
+  : NoComponentMutations;
 
 /** Render state for one typed mutation form instance. */
 export interface ComponentMutationFormState<Failure> {
@@ -166,19 +171,20 @@ export type ComponentRenderSlots<
 
 /** Typed body of a component: its query bindings, island state factory, and `render`. */
 export interface ComponentDefinition<
-  Queries = Record<string, unknown>,
+  RenderQueries = Record<string, unknown>,
   State extends JsonValue = JsonValue,
   Mutations extends ComponentMutationDefinitions = NoComponentMutations,
+  QueryBindings = Record<string, unknown>,
 > {
   /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
   disableServerRefresh?: boolean;
   /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
   fragmentTarget?: never;
   mutations?: Mutations;
-  queries?: Queries;
+  queries?: QueryBindings;
   state?: () => State;
   render: (
-    queries: Queries,
+    queries: RenderQueries,
     state: State,
     slots: ComponentRenderSlots<Mutations>,
   ) => ComponentRenderResult;
@@ -195,6 +201,11 @@ export interface ComponentDefinitionInput {
   state?: () => JsonValue;
   render: (...args: never[]) => ComponentRenderResult;
 }
+
+type ComponentDefinitionShape = Omit<ComponentDefinitionInput, 'mutations' | 'render'> & {
+  mutations?: ComponentMutationDefinitions;
+  render: (...args: any[]) => any;
+};
 
 /** A component descriptor returned by `component()`; the compiler injects `name` after derivation. */
 export interface Component<Definition extends ComponentDefinitionInput> {
@@ -225,13 +236,15 @@ export interface Component<Definition extends ComponentDefinitionInput> {
  *     `<button>${state.count}</button>`,
  * });
  */
-export function component<
-  Queries = Record<string, unknown>,
-  State extends JsonValue = JsonValue,
-  Mutations extends ComponentMutationDefinitions = NoComponentMutations,
->(definition: ComponentDefinition<Queries, State, Mutations>): Component<
-  ComponentDefinition<Queries, State, Mutations>
-> {
+export function component<const Definition extends ComponentDefinitionShape>(
+  definition: Definition & {
+    render: (
+      queries: any,
+      state: any,
+      slots: ComponentRenderSlots<ComponentDefinitionMutations<Definition>>,
+    ) => any;
+  },
+): Component<Definition> {
   return { definition };
 }
 

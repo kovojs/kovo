@@ -470,9 +470,23 @@ export const AddToCartForm = component({
       wire hooks.
     - Verified with `pnpm --filter @kovojs/site run content` and
       `pnpm --filter @kovojs/site test -- --runInBand` on 2026-06-17.
-    - Remaining gap: tutorial step source/generated artifacts, StackOverflow,
-      CRM, starter/reference auth forms, and remaining commerce auth/upload
-      forms still need migration after typed failure-state support lands.
+    - Tutorial step components now rely on query-derived fragment targets:
+      `site/tutorial/steps/04-mutations`, `05-optimistic`, `06-streaming`, and
+      `07-verification` source components no longer use `fragmentTarget: true`,
+      and `node site/tutorial/run-steps.mjs --write` refreshed generated
+      artifacts.
+    - Core `component()` typing now preserves exact authored render signatures
+      while still typing `forms.<mutation>.failure`, so tutorial generated
+      components can be called with their existing render arity.
+    - Verified with `node site/tutorial/run-steps.mjs`,
+      `pnpm exec vitest --run packages/core/src/index.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
+      `rg -n 'fragmentTarget: true' site/tutorial/steps/*/src/components site/tutorial/steps/*/src/generated`
+      on 2026-06-17.
+    - Remaining gap: tutorial add-to-cart form source/generated artifacts,
+      StackOverflow, CRM, starter/reference auth forms, and remaining commerce
+      auth/upload forms still need migration after typed failure-state support
+      lands.
 - [ ] **10. Final gates.**
   - Run focused compiler/runtime/server/example tests for inferred targets,
     form-target inference, mutation responses, query coverage, and commerce.

@@ -21,7 +21,6 @@ export interface ProductListRenderContext {
 }
 
 export const ProductList = component({
-  fragmentTarget: true,
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
     <ul class="products" kovo-c="product-list" kovo-deps="products">
@@ -38,6 +37,7 @@ export const ProductList = component({
     </ul>
   ),
 });
+ProductList.name = "components/product-list/product-list";
 
 // snippet:add-to-cart-form
 // SPEC.md section 6.3: the no-JS add-to-cart form posts to the mutation

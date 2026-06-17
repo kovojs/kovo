@@ -25,4 +25,5 @@ export const ProductList = component({
     </ul>
   ),
 });
+ProductList.name = "components/product-list/product-list";
 // /snippet

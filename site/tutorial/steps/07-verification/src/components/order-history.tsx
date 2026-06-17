@@ -11,7 +11,6 @@ import { orderHistoryQuery, type OrderHistoryResult } from '../queries.js';
 
 // snippet:order-history
 export const OrderHistory = component({
-  fragmentTarget: true,
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
     <ol>

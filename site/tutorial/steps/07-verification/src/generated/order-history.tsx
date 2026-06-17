@@ -13,7 +13,6 @@ import { orderHistoryQuery, type OrderHistoryResult } from '../queries.js';
 
 // snippet:order-history
 export const OrderHistory = component({
-  fragmentTarget: true,
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
     <ol kovo-c="order-history" kovo-deps="orderHistory">
@@ -25,4 +24,5 @@ export const OrderHistory = component({
     </ol>
   ),
 });
+OrderHistory.name = "components/order-history/order-history";
 // /snippet

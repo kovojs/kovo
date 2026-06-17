@@ -19,7 +19,6 @@ export interface ProductListRenderContext {
 }
 
 export const ProductList = component({
-  fragmentTarget: true,
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
     <ul class="products">
