@@ -1,6 +1,38 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderFragmentWireHtml, renderQueryScript } from './wire-html.js';
+import { renderFragmentWireHtml, renderQueryScript, renderQueryWireHtml } from './wire-html.js';
+
+describe('renderQueryWireHtml', () => {
+  it('emits a full query chunk without delta attribute by default', () => {
+    expect(
+      renderQueryWireHtml({ name: 'cart', value: { count: 2 } }),
+    ).toBe('<kovo-query name="cart">{"count":2}</kovo-query>');
+  });
+
+  it('emits the boolean delta attribute when delta: true (SPEC §9.1.1)', () => {
+    expect(
+      renderQueryWireHtml({
+        name: 'cart',
+        key: 'cart:c1',
+        value: { set: { count: 3 } },
+        delta: true,
+        version: '7',
+      }),
+    ).toBe(
+      '<kovo-query name="cart" key="cart:c1" version="7" delta>{"set":{"count":3}}</kovo-query>',
+    );
+  });
+
+  it('does not emit the delta attribute when delta: false', () => {
+    const html = renderQueryWireHtml({ name: 'cart', value: { count: 2 }, delta: false });
+    expect(html).not.toContain(' delta');
+  });
+
+  it('does not emit the delta attribute when delta is undefined', () => {
+    const html = renderQueryWireHtml({ name: 'cart', value: { count: 2 } });
+    expect(html).not.toContain(' delta');
+  });
+});
 
 describe('server wire html emitters', () => {
   it('renders initial query scripts for document-load hydration', () => {

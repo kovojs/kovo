@@ -43,7 +43,12 @@ export async function handleAppMutationRequest(
     Record<string, Schema<unknown>>,
     Request
   >;
+  // Derive the build token from the app's client-module registry so it is
+  // identical for the page render and this mutation response (SPEC §5.1, §9.1.1).
+  const buildToken = app.clientModules.buildToken();
+
   const mutationResponse = await renderMutationEndpointResponse(requestMutation, {
+    ...(buildToken !== '' ? { buildToken } : {}),
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
     ...(app.onError === undefined ? {} : { onError: app.onError }),

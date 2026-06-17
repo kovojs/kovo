@@ -1,3 +1,4 @@
+import type { QueryDeltaListMeta } from '@kovojs/core';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
 import {
@@ -56,6 +57,13 @@ export interface QueryDefinition<
   Request = unknown,
 > {
   args?: Schema<Input>;
+  /**
+   * Delta-eligible collections for this query. When present, the server can
+   * emit a change-record-scoped delta (SPEC §9.1.1) instead of the full value
+   * when the delta is smaller. The compiler populates this; framework/test code
+   * may set it directly.
+   */
+  delta?: readonly QueryDeltaListMeta[];
   guard?: Guard<Request>;
   instanceKey?: ((input: unknown) => string | undefined) | string;
   load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
@@ -71,6 +79,7 @@ type BivariantGuard<Request> = {
 
 interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Request> {
   args: Schema<Input>;
+  delta?: readonly QueryDeltaListMeta[];
   guard?: BivariantGuard<Request>;
   instanceKey?: ((input: unknown) => string | undefined) | string;
   key?: Key;
@@ -94,6 +103,11 @@ type BivariantQueryVersion = {
 
 export interface RegisteredQueryDefinition {
   args?: Schema<unknown>;
+  /**
+   * Delta-eligible collections for this query (SPEC §9.1.1). The compiler
+   * populates this; framework/test code may set it directly.
+   */
+  delta?: readonly QueryDeltaListMeta[];
   guard?: BivariantQueryGuard;
   instanceKey?: ((input: unknown) => string | undefined) | string;
   key: string;

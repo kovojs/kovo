@@ -142,6 +142,7 @@ describe('server static export', () => {
     try {
       const app = createApp({
         clientModules: {
+          buildToken() { return ''; },
           put() {
             throw new Error('unused');
           },
@@ -186,6 +187,7 @@ describe('server static export', () => {
       const badHref = '/c/%2Fescape.client.js?v=v1';
       const app = createApp({
         clientModules: {
+          buildToken() { return ''; },
           put() {
             throw new Error('unused');
           },

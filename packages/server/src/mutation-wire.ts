@@ -42,6 +42,13 @@ export interface MutationWireRequest<
   Request,
   SessionValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue> {
+  /**
+   * Build-global render-plan version token for this server build (SPEC §5.1,
+   * §9.1.1). When set, the server emits it as the `Kovo-Build` response header
+   * on 200 mutation responses so the client can detect deploy skew and fall back
+   * to full rather than applying a delta against a stale base.
+   */
+  buildToken?: string;
   csrf?: CsrfValidationOptions<Request>;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
@@ -82,6 +89,8 @@ export interface MutationWireRequestOptions<
   Request,
   SessionValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue> {
+  /** Build-global render-plan version token (SPEC §5.1, §9.1.1). */
+  buildToken?: string;
   csrf?: CsrfValidationOptions<Request>;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
@@ -192,6 +201,7 @@ export function mutationWireRequestFromHeaders<Request>(
     fragment: headers.fragment,
     rawInput: options.rawInput,
     request: options.request,
+    ...(options.buildToken === undefined ? {} : { buildToken: options.buildToken }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
     ...(options.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),
