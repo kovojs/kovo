@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { arch, cpus, platform, release, totalmem } from 'node:os';
 import { performance } from 'node:perf_hooks';
 
 import { describe, expect, it } from 'vitest';
@@ -33,7 +34,6 @@ interface CompilerPerfCorpus {
 }
 
 interface CompilerPerfCounters {
-  authoredParseCount: number;
   clientExportCount: number;
   compileCount: number;
   cssAssetCount: number;
@@ -69,14 +69,14 @@ interface CompilerPerfCorpusResult {
 const budgets = JSON.parse(
   readFileSync(new URL('./compiler-perf.budgets.json', import.meta.url), 'utf8'),
 ) as CompilerPerfBudgets;
-const perfIt = process.env.KOVO_RUN_COMPILER_PERF === '1' ? it : it.skip;
 
 describe('compiler performance gates', () => {
-  perfIt(
+  it(
     'keeps generated compiler corpora within checked-in budgets',
     () => {
       // SPEC.md §5.2 defines compileComponentModule as the TSX-to-lowered-IR pipeline; this gate
       // times that public compiler path over generated app-scale TSX corpora.
+      printEnvironmentMetadata();
       const corpora = compilerPerfCorpora();
       const results = corpora.map(runCorpus);
       const totals = totalResults(results);
@@ -140,9 +140,6 @@ function measureCompile(files: readonly CompilerPerfFile[]): CompilerPerfRunMetr
 
 function addResultCounters(counters: CompilerPerfCounters, result: CompileResult): void {
   counters.compileCount += 1;
-  // Public compileComponentModule entry point performs at least one authored TSX parse per call.
-  // Hidden re-parse passes are intentionally not instrumented in this gate.
-  counters.authoredParseCount += 1;
   counters.clientExportCount += result.clientExports.length;
   counters.cssAssetCount += result.cssAssets.length;
   counters.diagnosticCount += result.diagnostics.length;
@@ -203,22 +200,42 @@ function printCorpusResult(result: CompilerPerfCorpusResult): void {
     [
       `compiler-perf ${result.name}`,
       `files=${result.input.fileCount}`,
-      `loc=${result.input.loc}`,
+      `inputLoc=${result.input.loc}`,
       `coldMs=${result.cold.elapsedMs.toFixed(1)}`,
       `warmMs=${result.warm.elapsedMs.toFixed(1)}`,
       `compileCount=${result.cold.counters.compileCount + result.warm.counters.compileCount}`,
-      `authoredParseCount=${
-        result.cold.counters.authoredParseCount + result.warm.counters.authoredParseCount
-      }`,
       `emittedFiles=${result.cold.counters.emittedFileCount}`,
       `emittedLoc=${result.cold.counters.emittedLoc}`,
       `transformFacts=${result.cold.counters.transformFactCount}`,
+      `clientExports=${result.cold.counters.clientExportCount}`,
       `handlers=${result.cold.counters.handlerExportCount}`,
       `queryPlans=${result.cold.counters.queryUpdatePlanCount}`,
       `cssAssets=${result.cold.counters.cssAssetCount}`,
       `platformSubstitutions=${result.cold.counters.platformSubstitutionCount}`,
+      `renderEquivalenceChecks=${result.cold.counters.renderEquivalenceCheckCount}`,
+      `updateCoverage=${result.cold.counters.updateCoverageCount}`,
       `viewTransitions=${result.cold.counters.viewTransitionCount}`,
       `diagnostics=${result.cold.counters.diagnosticCount}`,
+    ].join(' '),
+  );
+}
+
+function printEnvironmentMetadata(): void {
+  const cpu = cpus()[0];
+
+  console.info(
+    [
+      'compiler-perf environment',
+      `node=${process.version}`,
+      `v8=${process.versions.v8}`,
+      `vitest=4.1.8`,
+      `platform=${platform()}`,
+      `release=${release()}`,
+      `arch=${arch()}`,
+      `cpuCount=${cpus().length}`,
+      `cpuModel=${JSON.stringify(cpu?.model ?? 'unknown')}`,
+      `totalMemMb=${Math.round(totalmem() / 1024 / 1024)}`,
+      `warnOnly=${process.env.KOVO_COMPILER_PERF_WARN_ONLY === '1'}`,
     ].join(' '),
   );
 }
@@ -244,7 +261,6 @@ function totalResults(results: readonly CompilerPerfCorpusResult[]): CompilerPer
 }
 
 function addCounters(target: CompilerPerfCounters, source: CompilerPerfCounters): void {
-  target.authoredParseCount += source.authoredParseCount;
   target.clientExportCount += source.clientExportCount;
   target.compileCount += source.compileCount;
   target.cssAssetCount += source.cssAssetCount;
@@ -262,7 +278,6 @@ function addCounters(target: CompilerPerfCounters, source: CompilerPerfCounters)
 
 function emptyCounters(): CompilerPerfCounters {
   return {
-    authoredParseCount: 0,
     clientExportCount: 0,
     compileCount: 0,
     cssAssetCount: 0,

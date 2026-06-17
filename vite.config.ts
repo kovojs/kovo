@@ -64,7 +64,7 @@ export default defineConfig({
         ],
       },
       'compiler-perf': {
-        command: 'KOVO_RUN_COMPILER_PERF=1 vitest --run tests/compiler-perf.test.ts',
+        command: 'vitest --run tests/compiler-perf.test.ts',
         input: [
           { auto: true },
           { pattern: 'tests/compiler-perf.test.ts', base: 'workspace' },

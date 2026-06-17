@@ -438,22 +438,49 @@ compiler-quality gaps found during the 2026-06-16 audit.
 
 ## Performance Gates
 
-- [ ] Make compiler performance gates honest and reproducible.
-  - [ ] Keep generated corpora for one large TSX component.
-  - [ ] Keep generated corpora for many small components.
-  - [ ] Keep generated corpora for many routes and registry facts.
-  - [ ] Keep generated corpora for CSS-heavy components.
-  - [ ] Keep generated corpora for heavy primitive composition.
-  - [ ] Keep generated corpora for a mixed real-app-style fixture.
-  - [ ] Check exact file counts and LOC floors for every corpus.
-  - [ ] Check cold and warm elapsed budgets for every corpus and total.
-  - [ ] Print file count, input LOC, emitted LOC, compile count, transform fact counts,
+- [x] Make compiler performance gates honest and reproducible.
+  - [x] Keep generated corpora for one large TSX component.
+  - [x] Keep generated corpora for many small components.
+  - [x] Keep generated corpora for many routes and registry facts.
+  - [x] Keep generated corpora for CSS-heavy components.
+  - [x] Keep generated corpora for heavy primitive composition.
+  - [x] Keep generated corpora for a mixed real-app-style fixture.
+  - [x] Check exact file counts and LOC floors for every corpus.
+  - [x] Check cold and warm elapsed budgets for every corpus and total.
+  - [x] Print file count, input LOC, emitted LOC, compile count, transform fact counts,
         diagnostics, cold elapsed time, and warm elapsed time.
-  - [ ] Either instrument real parse count or rename the metric so it does not imply hidden reparses
+  - [x] Either instrument real parse count or rename the metric so it does not imply hidden reparses
         are counted.
-  - [ ] Wire `pnpm run test:compiler-perf` into acceptance.
-  - [ ] Make `pnpm exec vitest --run tests/compiler-perf.test.ts` intentionally skip with a clear
-        reason or run a non-budget smoke path.
+  - [x] Wire `pnpm run test:compiler-perf` into acceptance.
+  - [x] Make `pnpm exec vitest --run tests/compiler-perf.test.ts` run the real gate.
+  - Evidence (2026-06-17): `tests/compiler-perf.test.ts` defines the six generated corpora
+        (`large-component`, `many-small-components`, `many-routes-registries`,
+        `css-heavy-components`, `heavy-primitive-composition`, and `mixed-real-app`) and reads
+        exact `fileCount`, `minLoc`, cold, warm, and total budgets from
+        `tests/compiler-perf.budgets.json`.
+  - Evidence (2026-06-17): `tests/compiler-perf.test.ts` now runs under direct Vitest without the
+        old `KOVO_RUN_COMPILER_PERF` skip guard, prints environment metadata, prints `inputLoc`
+        instead of ambiguous `loc`, prints no inferred parse-count metric, and prints emitted LOC,
+        compile count, aggregate transform facts, client exports, handlers, query plans, CSS assets,
+        platform substitutions, render-equivalence checks, update coverage, view transitions,
+        diagnostics, and cold/warm elapsed times.
+  - Evidence (2026-06-17): `package.json` keeps `pnpm run test:compiler-perf` in `acceptance`, and
+        `vite.config.ts` wires the `compiler-perf` task directly to
+        `vitest --run tests/compiler-perf.test.ts`.
+  - Evidence (2026-06-17): `pnpm exec vitest --run tests/compiler-perf.test.ts --reporter verbose`
+        passed and printed: environment `node=v24.12.0`, `platform=darwin`, `arch=arm64`,
+        `cpuCount=10`; corpus metrics `large-component files=1 inputLoc=610 coldMs=141.8
+        warmMs=102.1`, `many-small-components files=48 inputLoc=624 coldMs=60.6 warmMs=55.1`,
+        `many-routes-registries files=32 inputLoc=384 coldMs=25.8 warmMs=24.7`,
+        `css-heavy-components files=16 inputLoc=2480 coldMs=13.2 warmMs=9.6`,
+        `heavy-primitive-composition files=20 inputLoc=2800 coldMs=57.8 warmMs=47.1`,
+        `mixed-real-app files=8 inputLoc=200 coldMs=15.9 warmMs=12.6`, and
+        `total files=125 inputLoc=7098 coldMs=315.0 warmMs=251.1`.
+  - Evidence (2026-06-17): `pnpm run test:compiler-perf` passed through `vp run compiler-perf`;
+        `pnpm exec tsc --noEmit --pretty false` passed; `pnpm run check:build` passed. A broader
+        `node --test tests/kovo-check.node.mjs` run after building still failed on unrelated
+        baseline fixture drift in wire, loader, CSP, and commerce page-hint assertions, not in the
+        compiler performance gate.
 
 ## Diagnostics
 
