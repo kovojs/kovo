@@ -139,6 +139,7 @@ export const Badge = component({
       'export const Badge$style_class_derive = derive(["state"], (state) =>',
     );
     expect(clientSource).toContain('state.bouncing');
+    expect(clientSource).not.toContain('setAttribute');
     expect(result.clientExports).toContain('Badge$style_class_derive');
     expect(result.queryUpdatePlans).toEqual([]);
     expect(result.updateCoverage).toContainEqual(
@@ -196,6 +197,7 @@ export const CartButton = component({
     expect(clientSource).toContain(
       'stamps: [{ attr: "class", selector: "[data-derive=\\"cart.CartButton$style_class_derive\\"]"',
     );
+    expect(clientSource).not.toContain('setAttribute');
     expect(result.queryUpdatePlans).toEqual([
       {
         componentName: 'CartButton',

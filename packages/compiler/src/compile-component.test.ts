@@ -109,15 +109,29 @@ export const CartBadge = component({
         '',
       ].join('\n'),
     );
-    expect(result.cssAssets).toEqual([
-      {
-        componentName: 'cart-badge',
-        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
-        fragmentTargets: ['components/cart/cart-badge/cart-badge'],
-        href: '/assets/components/cart/cart-badge.css',
-        sourceFileName: 'components/cart/cart-badge.css',
-      },
-    ]);
+    expect(result.cssAssets).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "cart-badge",
+          "criticalCss": "/* @kovojs-ir */
+      /* @kovojs-scope-fallback */
+      cart-badge button:not([kovo-c]):not([kovo-c] *) { color: teal; }
+      cart-badge .count:not([kovo-c]):not([kovo-c] *) { font-weight: 700; }
+
+      @scope (cart-badge) to (:scope [kovo-c]) {
+        button { color: teal; }
+            .count { font-weight: 700; }
+      }
+      ",
+          "cspHash": "sha256-VMQASrbporv43Ur8CvstaEAqVxE88nOkUzGLaMN8P2s=",
+          "fragmentTargets": [
+            "components/cart/cart-badge/cart-badge",
+          ],
+          "href": "/assets/components/cart/cart-badge.css",
+          "sourceFileName": "components/cart/cart-badge.css",
+        },
+      ]
+    `);
     expect(server?.source).toContain('export function renderSource()');
     expect(client?.source).toContain('// no client handlers emitted');
     expect(registry?.source).toContain("'components/cart/cart-badge/cart-badge': {};");

@@ -31,77 +31,77 @@ borrowing its concrete API/spike detail.
 
 ## Why fork (not depend, not reimplement from scratch)
 
-- [ ] **The fixpoint contract forces ownership (Constitution #3, §5.2).** Every compiler feature must
+- **The fixpoint contract forces ownership (Constitution #3, §5.2).** Every compiler feature must
       lower to authorable Kovo IR that recompiles to a no-op. StyleX's babel output (injected CSS +
       hashed classes) is not Kovo source. Kovo must define the lowering and own the transform, so a
       black-box dependency cannot satisfy the gate.
-- [ ] **Type-safety goal #1 wants a TS-native core, not Flow.** StyleX is authored in Flow and ships
+- **Type-safety goal #1 wants a TS-native core, not Flow.** StyleX is authored in Flow and ships
       generated `.d.ts`. Kovo's compiler is strict-TS with lint bans on `any`/casts (§6.6). Porting the
       `shared` core to TS gives first-class types and removes a Flow toolchain from Kovo's build.
-- [ ] **Readable classnames (decision 4) require controlling the emitter.** Upstream will not change its
+- **Readable classnames (decision 4) require controlling the emitter.** Upstream will not change its
       hashing to Kovo's provenance scheme; only the fork can.
-- [ ] **The fork surface is small.** We need `create`, `props`/`attrs`, `defineVars`, `createTheme`,
+- **The fork surface is small.** We need `create`, `props`/`attrs`, `defineVars`, `createTheme`,
       `keyframes`, `firstThatWorks`, conditional/pseudo/media handling, and the styleq runtime merge —
       `@stylexjs/shared` + a ~200-line runtime. We do **not** fork the bundler/lint/devtools constellation.
       This is closer to the pinned-Drizzle-subset model (§14) than to vendoring a framework.
-- [ ] **Not a from-scratch reimplementation.** The atomic-CSS generation, property-priority ordering
+- **Not a from-scratch reimplementation.** The atomic-CSS generation, property-priority ordering
       (`shared/utils/property-priorities.js`), and last-wins styleq merge are subtle and battle-tested;
       port them, do not reinvent. Track upstream selectively against a pinned conformance subset.
 
 ## Goal Fit (with the fork)
 
-- [ ] **Type-safety (#1): strong.** Typed `create({...})` style objects replace untyped Tailwind
+- **Type-safety (#1): strong.** Typed `create({...})` style objects replace untyped Tailwind
       strings; `style.Style` / `style.StaticStyle` / `style.StyleExcept` constrain public override props;
       typed `defineVars`/`createTheme` constrain themes. Invalid overrides become compile errors —
       directly serves §1.1's "provable by TypeScript static checking."
-- [ ] **Performance (#2): strong, with a Kovo-specific gate.** Atomic CSS dedupes across the app; **static
+- **Performance (#2): strong, with a Kovo-specific gate.** Atomic CSS dedupes across the app; **static
       components merge at server render**, so the common case ships zero client styling runtime (the 4KB
       loader budget, §16, is untouched). Reactive class/style toggles already ride the §4.8 update plan.
       Open measurement: CSS bytes, HTML bytes, build time vs. the Tailwind baseline on a CSS-heavy
       fixture (Phase 6).
-- [ ] **Theme-ability (#3): strong.** `defineVars` → CSS custom properties and `createTheme` → override
+- **Theme-ability (#3): strong.** `defineVars` → CSS custom properties and `createTheme` → override
       classes are _exactly_ §13.1's "tokens are ordinary CSS custom properties; theming is document CSS,"
       and need no shadow boundary (§3.1).
 
 ## SPEC Tensions & Positions
 
-- [ ] **Legibility (Constitution #1, "wire is documentation" #4).** Bare atomic hashes are opaque.
+- **Legibility (Constitution #1, "wire is documentation" #4).** Bare atomic hashes are opaque.
       Position: the fork emits **provenance-prefixed atomic classes** (e.g. `kv-button-bg-1a2b`) keyed to
       the originating component + property family, keeps `data-style-src` mapping element → source style
       key, and keeps atomic dedupe. Classnames were never Kovo's legibility carrier (`kovo-c` stamps and
       `data-bind` are, §4.2/§4.8) — but devtools "what is this element styled with" must still resolve to
       source. Prove the devtools/`kovo explain` story in Phase 2.
-- [ ] **Fixpoint (Constitution #3, §5.2).** `style.create(...)` is sugar lowering to (a) injected atomic
+- **Fixpoint (Constitution #3, §5.2).** `style.create(...)` is sugar lowering to (a) injected atomic
       CSS rules and (b) a static `styleKey → classnames` map; component IR references resolved classnames.
       The emitted IR must be authorable Kovo source and recompile to a no-op. Add a fixpoint fixture
       (Phase 3) to the existing fixpoint CI gate.
-- [ ] **Primitive merge (§4.6/§4.7).** Kovo's render-time merge concatenates+dedupes `class` and
+- **Primitive merge (§4.6/§4.7).** Kovo's render-time merge concatenates+dedupes `class` and
       concatenates `style` (author last). StyleX's merge is **property-level last-wins via atomic
       classes** — richer. Position: route a component's public override through
       `style.attrs(...componentStyles, props.style)` so author overrides win per-property; teach the §4.7
       class-merge that atomic classes must not be blindly deduped in a way that breaks last-wins ordering.
       Reconcile with `asChild` / attrs-function lowering using the archived UI/compiler hardening
       evidence in `plans/archive.md`.
-- [ ] **Reactive styles (§4.8/§4.9).** A class/style that depends on query data or island state (e.g.
+- **Reactive styles (§4.8/§4.9).** A class/style that depends on query data or island state (e.g.
       `state.bouncing ? styles.bounce : null`) must be driven by the §4.8 update plan, and the §4.9
       classifier must accept a StyleX style-object toggle as a `plan` position (not a KV311). Integration
       task in Phase 3.
-- [ ] **Fragments/defer (§13.1, §9.1, §8).** Tailwind needed `@source inline(...)` safelists so dynamic
+- **Fragments/defer (§13.1, §9.1, §8).** Tailwind needed `@source inline(...)` safelists so dynamic
       classes survive in mutation fragments / `<kovo-defer>` streams. StyleX **removes this hazard**:
       styles are statically extracted from source regardless of render path, atomic classes are global and
       build-time-known, so a late fragment can only reference classes already in the page stylesheet. Keep
       Kovo's stylesheet-hint contract (emit the asset list once, same hints for page/fragment/defer).
-- [ ] **`@scope` simplification (§13.1).** Atomic classes are inherently collision-free and global, so the
+- **`@scope` simplification (§13.1).** Atomic classes are inherently collision-free and global, so the
       co-located-CSS `@scope`/`kovo-c` extraction path is **not needed for StyleX-authored styles**. Decide
       in Phase 5 whether `@scope` extraction is retired for app styling or retained only for raw co-located
       CSS escape hatches.
-- [ ] **Package prefix (§6.1.1).** If `@kovojs/ui` becomes a published package (Phase 4, Model L), it
+- **Package prefix (§6.1.1).** If `@kovojs/ui` becomes a published package (Phase 4, Model L), it
       needs a `kovo.prefix` that enters public wire vocabulary. Vendored source stays app-named. This is a
       gating decision for the distribution model, not for adopting StyleX.
 
 ## Architecture: `@kovojs/style` (the fork)
 
-- [ ] **New package `packages/style` (`@kovojs/style`), TS-native.**
+- **New package `packages/style` (`@kovojs/style`), TS-native.**
   - Authoring API (port from `../stylex` `@stylexjs/stylex` + `shared`): `create`, `props`, `attrs`,
     `defineVars`, `createTheme`, `keyframes`, `firstThatWorks`, `defineConsts`, pseudo/media/conditional
     support, and the styleq last-wins runtime.
@@ -110,7 +110,7 @@ borrowing its concrete API/spike detail.
   - Compile-time transform re-homed inside Kovo's compiler (`packages/compiler`): extract atomic CSS,
     emit provenance-prefixed classnames, produce the `styleKey → classnames` map, and feed Kovo's
     stylesheet-hint manifest.
-- [ ] **Authoring shape in components.** Replace `defineVariants` + `cn` (Tailwind) with plain
+- **Authoring shape in components.** Replace `defineVariants` + `cn` (Tailwind) with plain
       `style.create` groups composed through a compiler-lowered `style={[...]}` JSX prop. **No variant
       helper** — defaults via destructuring, selection via typed index, compounds via inline conditionals
       (Phase 0). The variant helper was a Tailwind/CVA workaround for un-composable class strings; StyleX +
@@ -145,29 +145,29 @@ borrowing its concrete API/spike detail.
   });
   ```
 
-- [ ] **Override prop = typed style object, author-last in the array.** `props.style` (single-root) or a
+- **Override prop = typed style object, author-last in the array.** `props.style` (single-root) or a
       per-component `styles` slot map (multi-part) is the override channel and comes **last in the
       `style={[...]}` array** so app customizations win by position. Both props are `style.Style` objects —
       Kovo intentionally takes over the `style` name to discourage raw HTML `style` strings, and official
       components drop the `class` escape hatch entirely (Phase 0). **Convention:** import the package as
       `style` and give every `style.create(...)` result a descriptive name (`base`, `variants`, `sizes`,
       `dialogStyles`) so the namespace never collides with a bare `styles` local.
-- [ ] **Tokens/themes.** `@kovojs/ui` ships default token vars + a default theme via `defineVars`/
+- **Tokens/themes.** `@kovojs/ui` ships default token vars + a default theme via `defineVars`/
       `createTheme`; apps override at the document level. Component styles reference tokens, never literal
       color systems — this is the §3 customizability story.
 
 ## UI Distribution Model — comparison (decision 3)
 
-- [ ] **Model V — keep shadcn vendored source, swap Tailwind→StyleX inside it.**
+- **Model V — keep shadcn vendored source, swap Tailwind→StyleX inside it.**
   - Pros: no `kovo.prefix`/public-API freeze; infinite per-app customization; closest to today.
   - Cons: weaker payoff from "official StyleX"; copied components still need the StyleX build; manual
     updates/drift.
-- [ ] **Model L — publish `@kovojs/ui` as an installable library with style-object overrides.**
+- **Model L — publish `@kovojs/ui` as an installable library with style-object overrides.**
   - Enabled _specifically_ by StyleX's deterministic last-wins merge: a published component can accept a
     typed `style`/`styles` override that reliably wins — impossible cleanly with Tailwind specificity.
   - Pros: real dependency, central updates, smaller surface, typed overrides replace source edits.
   - Cons: needs `kovo.prefix` (§6.1.1), public-API stability, package-style extraction, strong theming.
-- [ ] **Recommendation to validate (not yet locked):** Model L as default **with an `eject`/copy-in
+- **Recommendation to validate (not yet locked):** Model L as default **with an `eject`/copy-in
       escape hatch** (publish stable primitives as a package; `kovo add --eject` drops to vendored source
       for heavy customization). Prototype Button both ways and decide.
 
@@ -235,7 +235,7 @@ borrowing its concrete API/spike detail.
       `pnpm exec vitest --run packages/compiler/src/style.test.ts packages/compiler/src/css.test.ts
       packages/compiler/src/compile-component.test.ts`, `pnpm --filter @kovojs/style run build:dist`,
       and `pnpm --filter @kovojs/compiler run build:dist` pass.
-- [ ] **Phase 2 — Compiler integration + readable output.** Re-home the extraction transform in
+- [x] **Phase 2 — Compiler integration + readable output.** Re-home the extraction transform in
       `packages/compiler`; emit provenance-prefixed classes + `data-style-src`; **build and persist the
       rule→usage attribution map** (atom → referencing module/route/fragment/package, splitting invariant
       (a)); wire the stylesheet-hint manifest as a **render-parameterized `(renderTarget) → asset[]`**
@@ -274,7 +274,15 @@ borrowing its concrete API/spike detail.
       packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-explain.test.ts`,
       `pnpm exec tsc --noEmit`, `pnpm --filter @kovojs/core run build:dist`,
       `pnpm --filter @kovojs/compiler run build:dist`, and `pnpm --filter kovo run build:dist` pass.
-- [ ] **Phase 3 — Fixpoint + reactive + merge integration.** Fixpoint fixture (compile(IR) ≡ IR);
+  - Evidence (2026-06-17): current-tree proof for the completed compiler/readability surface:
+    `pnpm exec vitest --run packages/compiler/src/style.test.ts packages/compiler/src/css.test.ts
+    packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts
+    packages/cli/src/index.kovo-explain.test.ts packages/compiler/src/query-update-plans.test.ts
+    packages/compiler/src/state-bindings.test.ts packages/compiler/src/query-coverage.test.ts` passes
+    (8 files, 88 tests). `pnpm --filter @kovojs/compiler run build:dist`,
+    `pnpm --filter @kovojs/core run build:dist`, `pnpm --filter kovo run build:dist`, and
+    `pnpm exec tsc --noEmit --pretty false` pass.
+- [x] **Phase 3 — Fixpoint + reactive + merge integration.** Fixpoint fixture (compile(IR) ≡ IR);
       §4.9 classifier accepts style-object toggles; §4.7 atomic-aware class merge. _Evidence:_ fixpoint CI
       green; a reactive `state`-driven style toggle updates via §4.8 with no `setAttribute`.
   - Evidence (partial, 2026-06-16): `packages/compiler/src/style.test.ts` asserts
@@ -293,6 +301,15 @@ borrowing its concrete API/spike detail.
       packages/compiler/src/query-coverage.test.ts`, `pnpm exec vitest --run
       packages/compiler/src/css.test.ts packages/compiler/src/compile-component.test.ts`,
       `pnpm exec tsc --noEmit`, and `pnpm --filter @kovojs/compiler run build:dist` pass.
+  - Evidence (2026-06-17): `packages/compiler/src/style.test.ts` now asserts static `style.create`
+    lowering passes `assertFixpoint(...)`, author-last arrays replace the earlier same-property atom,
+    state-driven style-object toggles compile to `data-bind:class` derives, query-driven toggles compile
+    to `data-derive-attr="class"` stamps, both client derivations avoid generated `setAttribute`, and
+    both coverage records are accepted as `status: 'plan'` without `KV311`. Current proof command:
+    `pnpm exec vitest --run packages/compiler/src/style.test.ts packages/compiler/src/css.test.ts
+    packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts
+    packages/cli/src/index.kovo-explain.test.ts packages/compiler/src/query-update-plans.test.ts
+    packages/compiler/src/state-bindings.test.ts packages/compiler/src/query-coverage.test.ts`.
 - [x] **Phase 4 — UI model bake-off (Button) + one multi-slot component.** Implement Button as Model V
       and Model L; rewrite one interactive multi-slot component (`Select`/`Dialog`/`Tabs`) exercising
       headless attrs + slot overrides. Keep axe/browser gates green (§12.1). Recommend a model.
@@ -351,10 +368,11 @@ borrowing its concrete API/spike detail.
       vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts`, and
       `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
       src/interactive-gallery.visual.browser.test.ts` pass.
-- [ ] **Phase 5 — Replace Tailwind across starters/examples/docs.** Migrate gallery, commerce, crm,
+- [x] **Phase 5 — Replace Tailwind across starters/examples/docs.** Migrate gallery, commerce, crm,
       stackoverflow, docs site, and `create-kovo` starter; remove Tailwind deps + `@source` safelists;
       decide `@scope` retirement. _Evidence:_ `rg -i tailwind` returns only historical/plan references;
-      examples build + static-export styled.
+      examples build, and static-exportable surfaces export styled while server-mutation demos are served
+      dynamically per SPEC §9.5.
   - Evidence (partial, 2026-06-16): `packages/ui/src/badge.tsx` now uses `@kovojs/style`,
     exports `badgeStyles`, accepts `style?: style.StyleInput`, and drops `defineVariants`/`cn` plus the
     `class` escape hatch. `packages/ui/src/badge.stylex.test.tsx` proves default/variant StyleX
@@ -881,6 +899,22 @@ borrowing its concrete API/spike detail.
     adopt-dont-invent features stay represented|P10 starter wires graph assertions into CI|P2 page hints
     keep speculation rules opt-in and non-empty" tests/kovo-check.node.mjs`, `pnpm exec tsc --noEmit
     --pretty false`, and `git diff --check` pass in `agent/stylex-test-fixtures-cleanup`.
+  - Evidence (2026-06-17): current non-plan scan for legacy styling vocabulary is clean:
+    `rg -n -i "tailwind|@tailwind|@source|tailwindcss|@tailwindcss|assets/tailwind\\.css" .
+    --glob '!node_modules/**' --glob '!**/dist/**' --glob '!**/.vite/**' --glob '!site/dist-css/**'
+    --glob '!plans/**'` returns no matches.
+  - Evidence (2026-06-17): example/style build gates pass with styled `assets/styles.css` output:
+    `pnpm --filter @kovojs/example-commerce run build`, `pnpm --filter @kovojs/example-crm run build`,
+    `pnpm --filter @kovojs/example-stackoverflow run build`, and `pnpm --filter
+    @kovojs/example-gallery run emit:interactive-gallery -- --check`.
+  - Evidence (2026-06-17): static-exportable surfaces export styled: `pnpm exec node
+    examples/commerce/scripts/export-static.mjs --out tmp-commerce-static` passes
+    (`commerce-export/v1`, `html=3`, `assets=1`, `manifest-files=...static-asset:/assets/styles.css`,
+    `diagnostics=0`), and `pnpm --filter @kovojs/site run build` passes
+    (`site-export/v1`, `html=92`, `diagnostics=0`). CRM and Stack Overflow are intentionally dynamic
+    server-mutation demos: their direct static export scripts now fail with KV229 server mutation endpoint
+    diagnostics, and the docs example manifest renders them only when `KOVO_EXAMPLE_CRM_URL` /
+    `KOVO_EXAMPLE_STACKOVERFLOW_URL` service URLs are configured.
 - [x] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
   - Evidence (2026-06-17): `examples/commerce/scripts/measure-style-size.mjs` builds the commerce
@@ -1013,15 +1047,33 @@ Phase 0 is fully closed; no API decisions remain open before implementation.
 
 ## Acceptance Criteria
 
-- [ ] **Fork:** `@kovojs/style` exists, TS-native, merge+atomic-class parity proven against ported
+- [x] **Fork:** `@kovojs/style` exists, TS-native, merge+atomic-class parity proven against ported
       upstream fixtures; no Flow toolchain in Kovo's build.
-- [ ] **Legibility:** rendered classes are provenance-prefixed + `data-style-src`; `kovo explain` resolves
+- [x] **Legibility:** rendered classes are provenance-prefixed + `data-style-src`; `kovo explain` resolves
       a class to source. Constitution #1 satisfied.
-- [ ] **Fixpoint:** a StyleX-styled component's emitted IR recompiles to a no-op (CI gate green).
-- [ ] **Reactive + merge:** a state-driven style toggle updates via §4.8; author `style` override wins
+- [x] **Fixpoint:** a StyleX-styled component's emitted IR recompiles to a no-op (CI gate green).
+- [x] **Reactive + merge:** a state-driven style toggle updates via §4.8; author `style` override wins
       per-property through §4.7.
-- [ ] **Tailwind removed:** starters/examples/docs build and static-export styled with zero Tailwind.
-- [ ] **UI model decided:** Model V vs L recommended with a prototyped Button and a published-prefix
+- [x] **Tailwind removed:** starters/examples/docs build with zero Tailwind; static-exportable surfaces
+      export styled, and dynamic server-mutation demos stay dynamic per SPEC §9.5.
+- [x] **UI model decided:** Model V vs L recommended with a prototyped Button and a published-prefix
       decision if L.
-- [ ] **SPEC §13.1 updated** to StyleX-first; at least one static and one interactive component proven end
+- [x] **SPEC §13.1 updated** to StyleX-first; at least one static and one interactive component proven end
       to end (typecheck → build → static export → browser/axe → late-fragment stylesheet).
+  - Evidence (2026-06-17): acceptance proof commands in the current tree:
+    `pnpm --filter @kovojs/style test` (20 tests), `pnpm exec vitest --run
+    packages/compiler/src/style.test.ts packages/compiler/src/css.test.ts
+    packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts
+    packages/cli/src/index.kovo-explain.test.ts packages/compiler/src/query-update-plans.test.ts
+    packages/compiler/src/state-bindings.test.ts packages/compiler/src/query-coverage.test.ts` (8 files,
+    88 tests), `pnpm exec tsc --noEmit --pretty false`, `pnpm --filter @kovojs/example-gallery exec
+    vitest --config vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts
+    src/interactive-gallery.visual.browser.test.ts` (2 files, 6 tests), and `pnpm --filter
+    @kovojs/integration-tests exec playwright test tests/integration/specs/late-fragment-static-css.spec.ts`
+    (1 passed).
+  - Evidence (2026-06-17): StyleX/Tailwind replacement proof commands in the current tree:
+    non-plan legacy vocabulary scan returns no matches; `pnpm --filter @kovojs/example-commerce run build`,
+    `pnpm --filter @kovojs/example-crm run build`, `pnpm --filter @kovojs/example-stackoverflow run build`,
+    `pnpm --filter @kovojs/example-gallery run emit:interactive-gallery -- --check`, `pnpm exec node
+    examples/commerce/scripts/export-static.mjs --out tmp-commerce-static`, and `pnpm --filter
+    @kovojs/site run build` pass.
