@@ -530,10 +530,18 @@ export const AddToCartForm = component({
       `kovo-fragment-target` hosts in plain route render helpers; inference does
       not cover those wrappers until the regions become compiler-managed
       query-backed `component()` roots.
-    - Remaining gap: starter auth forms still need a concrete generated/auth
-      mutation value at render time, and StackOverflow/CRM region targets still
-      need a component-boundary migration before the `kovo-fragment-target`
-      attributes can be removed.
+    - Starter auth forms in `packages/create-kovo/templates/src/auth.tsx` now
+      require the generated `StarterAuthBindings` value and render
+      `mutation={auth.signIn}` / `mutation={auth.signOut}` instead of
+      hard-coded auth endpoint strings.
+    - Verified with
+      `pnpm exec vitest --run packages/create-kovo/src/index.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
+      `rg -n 'action="/_m/|data-mutation=' packages/create-kovo/templates/src/auth.tsx`
+      on 2026-06-17.
+    - Remaining gap: StackOverflow/CRM region targets still need a
+      component-boundary migration before the `kovo-fragment-target` attributes
+      can be removed.
 - [ ] **10. Final gates.**
   - Run focused compiler/runtime/server/example tests for inferred targets,
     form-target inference, mutation responses, query coverage, and commerce.
