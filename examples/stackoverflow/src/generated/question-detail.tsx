@@ -19,7 +19,7 @@ import {
   renderTags,
   voteButton,
 } from '../components/chrome.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // Question detail (route `/questions/:id`). Shows the question and its answers
@@ -169,7 +169,7 @@ export const QuestionDetailRegion = component({
 });
 QuestionDetailRegion.name = "components/question-detail/question-detail-region";
 
-export const QuestionDetailRegion$liveTargetRenderer = componentLiveTargetRenderer({
+export const QuestionDetailRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: QuestionDetailRegion,
   componentId: "components/question-detail/question-detail-region",
   queries: [
@@ -184,4 +184,4 @@ export const QuestionDetailRegion$liveTargetRenderer = componentLiveTargetRender
       args: (props) => ({ id: props.questionId }),
     },
   ],
-});
+}));

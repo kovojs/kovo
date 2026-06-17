@@ -7,7 +7,7 @@ import { Badge } from '@kovojs/ui/badge';
 import type { OrderHistoryResult } from '../app.js';
 import { orderHistoryQuery } from '../queries.js';
 import { priceLabel } from './product-grid.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native <ol>
@@ -55,7 +55,7 @@ export function renderOrderHistoryItems(result: OrderHistoryResult): string {
   );
 }
 
-export const OrderHistory$liveTargetRenderer = componentLiveTargetRenderer({
+export const OrderHistory$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: OrderHistory,
   componentId: "components/order-history/order-history",
   queries: [
@@ -64,4 +64,4 @@ export const OrderHistory$liveTargetRenderer = componentLiveTargetRenderer({
       query: orderHistoryQuery,
     },
   ],
-});
+}));

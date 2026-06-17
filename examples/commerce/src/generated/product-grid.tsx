@@ -9,7 +9,7 @@ import { Card } from '@kovojs/ui/card';
 
 import { commerceCsrf, type CommerceRequest, type ProductGridResult } from '../app.js';
 import { productGridQuery } from '../queries.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native
@@ -229,7 +229,7 @@ function addToCartFailureFromMutation(failure: MutationFail): AddToCartFailure {
   return formFailure;
 }
 
-export const ProductGrid$liveTargetRenderer = componentLiveTargetRenderer({
+export const ProductGrid$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductGrid,
   componentId: "components/product-grid/product-grid",
   queries: [
@@ -238,4 +238,4 @@ export const ProductGrid$liveTargetRenderer = componentLiveTargetRenderer({
       query: productGridQuery,
     },
   ],
-});
+}));

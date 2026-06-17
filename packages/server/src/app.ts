@@ -2,6 +2,7 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { handleAppRequest } from './app-request.js';
 import { routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
+import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 export type {
   AppDocumentOptions,
   AppErrorShellOptions,
@@ -45,7 +46,7 @@ export function createApp<SessionValue = unknown>(
     document: options.document ?? {},
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},
-    liveTargetRenderers: options.liveTargetRenderers ?? [],
+    liveTargetRenderers: options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers(),
     mutations: options.mutations ?? [],
     queries: options.queries ?? [],
     routes: options.routes ?? [],

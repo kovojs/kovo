@@ -10,6 +10,7 @@ import { endpoint } from './endpoint.js';
 import { guards } from './guards.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
+import { registerGeneratedLiveTargetRenderer } from './live-target-registry.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 
@@ -37,6 +38,22 @@ describe('server createApp request shell', () => {
     expect(app.diagnostics).toEqual([]);
     expect(app.sessionProvider).toBe(sessionProvider);
     expect('use' in app).toBe(false);
+  });
+
+  it('uses compiler-registered live target renderers when createApp does not receive explicit wiring', () => {
+    const renderer = {
+      component: 'test/create-app-registered-live-target',
+      queries: ['cart'],
+      render: () => '<cart-badge>1</cart-badge>',
+    };
+    registerGeneratedLiveTargetRenderer(renderer);
+
+    expect(
+      createApp().liveTargetRenderers.filter(
+        (candidate) => candidate.component === renderer.component,
+      ),
+    ).toEqual([renderer]);
+    expect(createApp({ liveTargetRenderers: [] }).liveTargetRenderers).toEqual([]);
   });
 
   it('rejects malformed compatibility shells before request dispatch', () => {

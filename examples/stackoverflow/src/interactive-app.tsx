@@ -9,7 +9,6 @@ import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-sh
 
 import { QuestionDetailRegion } from './generated/question-detail.js';
 import { QuestionListRegion } from './generated/question-list.js';
-import { liveTargetRenderers } from './generated/live-targets.js';
 import { renderSoShell } from './components/chrome.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
@@ -76,7 +75,6 @@ export async function buildSoInteractiveApp(
   const app = createApp({
     clientModules: createMemoryVersionedClientModuleRegistry(),
     document: { lang: 'en-US' },
-    liveTargetRenderers,
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
     queries: [questionList, questionScore, questionDetail, questionAnswers],
     routes: [

@@ -14,7 +14,7 @@ import {
   type DealListResult,
 } from '../queries.js';
 import { money, stageBadge } from '../components/chrome.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // Deal detail (route `/deals/:id`). Joins a single deal to its contact and the
@@ -186,7 +186,7 @@ export const DealDetailRegion = component({
 });
 DealDetailRegion.name = "components/deal-detail/deal-detail-region";
 
-export const DealDetailRegion$liveTargetRenderer = componentLiveTargetRenderer({
+export const DealDetailRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: DealDetailRegion,
   componentId: "components/deal-detail/deal-detail-region",
   queries: [
@@ -203,4 +203,4 @@ export const DealDetailRegion$liveTargetRenderer = componentLiveTargetRenderer({
       query: dealListQuery,
     },
   ],
-});
+}));

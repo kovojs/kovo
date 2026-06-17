@@ -27,7 +27,7 @@ import {
   type PipelineStageBucket,
 } from '../queries.js';
 import { freshId, money, stageBadge } from '../components/chrome.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // Pipeline dashboard (route `/`). Reads the `pipelineByStage` aggregate (SUM by
@@ -196,7 +196,7 @@ export const PipelineRegion = component({
 });
 PipelineRegion.name = "components/pipeline/pipeline-region";
 
-export const PipelineRegion$liveTargetRenderer = componentLiveTargetRenderer({
+export const PipelineRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: PipelineRegion,
   componentId: "components/pipeline/pipeline-region",
   queries: [
@@ -213,4 +213,4 @@ export const PipelineRegion$liveTargetRenderer = componentLiveTargetRenderer({
       query: pipelineByStageQuery,
     },
   ],
-});
+}));

@@ -15,7 +15,7 @@ import {
   renderTags,
   voteButton,
 } from '../components/chrome.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // Question list (route `/`). Reads the `questionList` rowset (id/title/score/
@@ -138,7 +138,7 @@ export const QuestionListRegion = component({
 });
 QuestionListRegion.name = "components/question-list/question-list-region";
 
-export const QuestionListRegion$liveTargetRenderer = componentLiveTargetRenderer({
+export const QuestionListRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: QuestionListRegion,
   componentId: "components/question-list/question-list-region",
   queries: [
@@ -151,4 +151,4 @@ export const QuestionListRegion$liveTargetRenderer = componentLiveTargetRenderer
       query: questionScore,
     },
   ],
-});
+}));

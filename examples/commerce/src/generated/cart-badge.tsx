@@ -5,7 +5,7 @@ import { t } from '@kovojs/server';
 
 import { commerceMessages, type CartQueryResult } from '../app.js';
 import { cartQuery } from '../queries.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // SPEC.md section 4.1: authored sugar carries no stamps. The compiler derives
@@ -31,7 +31,7 @@ export const CartBadge = component({
 });
 CartBadge.name = "components/cart-badge/cart-badge";
 
-export const CartBadge$liveTargetRenderer = componentLiveTargetRenderer({
+export const CartBadge$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: CartBadge,
   componentId: "components/cart-badge/cart-badge",
   queries: [
@@ -40,4 +40,4 @@ export const CartBadge$liveTargetRenderer = componentLiveTargetRenderer({
       query: cartQuery,
     },
   ],
-});
+}));

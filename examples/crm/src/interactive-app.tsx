@@ -6,7 +6,6 @@ import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-sh
 
 import { ContactsRegion } from './generated/contacts.js';
 import { DealDetailRegion } from './generated/deal-detail.js';
-import { liveTargetRenderers } from './generated/live-targets.js';
 import { PipelineRegion } from './generated/pipeline.js';
 import { renderCrmShell } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
@@ -84,7 +83,6 @@ export async function buildCrmInteractiveApp(
   const app = createApp({
     clientModules: createMemoryVersionedClientModuleRegistry(),
     document: { lang: 'en-US' },
-    liveTargetRenderers,
     mutations: [addContact, createDeal, moveDeal, closeDeal],
     queries: crmQueries,
     routes: [

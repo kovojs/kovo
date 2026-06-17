@@ -476,6 +476,23 @@ removes app-authored bookkeeping from the enhanced path.
       generated renderer exports without app-authored `createApp()` wiring; the
       broad app-authored `mutationResponse` success-routing escape hatch is
       still present until examples migrate.
+    - Additional progress 2026-06-17:
+      Compiler-emitted live-target renderer exports now call the internal
+      `registerGeneratedLiveTargetRenderer()` helper as generated component
+      modules load, and `createApp()` defaults `liveTargetRenderers` from the
+      registered generated registry when app authors do not pass explicit
+      renderer wiring. This lets app shells that import generated components for
+      route JSX get ordinary enhanced mutation refresh without importing
+      `src/generated/live-targets`.
+    - Verified with
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `git diff --check`.
+    - Remaining gaps: Commerce still needs its ProductGrid request-slot and
+      error-boundary adapter generated before its app modules can drop the
+      explicit generated live-target registry import; the broad app-authored
+      `mutationResponse` success-routing escape hatch is still present until
+      failure/auth routing is split onto narrower surfaces.
 - [ ] **7. Migrate StackOverflow.**
   - Move presentational enrichment and detail filtering into declared queries or
     query arg bindings.
@@ -548,9 +565,22 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-stackoverflow test`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gaps: list-region presentational enrichment is still outside the
-      declared query model, and the transitional generated live-target registry
-      import is still present.
+    - Remaining gap after this checkpoint: list-region presentational enrichment
+      is still outside the declared query model.
+    - Additional progress 2026-06-17:
+      `examples/stackoverflow/src/interactive-app.tsx` no longer imports
+      `./generated/live-targets.js` or passes `liveTargetRenderers` to
+      `createApp()`. Its generated component modules register their live-target
+      renderers as they are imported for route JSX, and `createApp()` picks up
+      that generated registry by default.
+    - Verified with
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gap: list-region presentational enrichment is still outside the
+      declared query model.
 - [ ] **8. Migrate CRM.**
   - Move contact/deal/detail presentation data into declared queries or explicit
     component query args.
@@ -611,8 +641,21 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-crm test`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gap: the transitional generated live-target registry import is
-      still present.
+    - Additional progress 2026-06-17:
+      `examples/crm/src/interactive-app.tsx` no longer imports
+      `./generated/live-targets.js` or passes `liveTargetRenderers` to
+      `createApp()`. The generated contacts, pipeline, and deal-detail modules
+      self-register their live-target renderers, and the app default registry
+      handles ordinary enhanced mutation refresh.
+    - Verified with
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gap: none recorded for the explicit generated live-target
+      registry import; keep this phase open until a final no-match pass verifies
+      all CRM authoring-surface claims together.
 - [ ] **9. Migrate commerce.**
   - Split the large commerce integration module so app-authored page/mutation
     code is separate from auth/webhook/test helpers.
@@ -716,9 +759,20 @@ removes app-authored bookkeeping from the enhanced path.
       live-target renderer `errorBoundary` handles a failing selected descriptor
       as a per-target fragment.
     - Remaining gap: build/app-shell wiring still needs to collect generated
-      renderer exports automatically; examples still import transitional
-      generated live-target registries and some escape-hatch `mutationResponse`
-      failure/auth routing remains.
+      renderer exports automatically for Commerce's custom ProductGrid adapter;
+      Commerce still imports a transitional generated live-target registry and
+      some escape-hatch `mutationResponse` failure/auth routing remains.
+  - Additional progress 2026-06-17:
+    - StackOverflow and CRM now prove ordinary enhanced mutation success without
+      app-authored generated live-target registry imports; generated component
+      modules self-register their `*$liveTargetRenderer` exports and
+      `createApp()` consumes the generated registry by default.
+    - Verified with
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      and `rg -n "liveTargetRenderers|generated/live-targets" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx`.
 - [ ] **Example no-match checks prove the DX outcome.**
   - `rg -n 'fragmentRenderers|mutationResponse\\(|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb' examples/stackoverflow/src examples/crm/src examples/commerce/src`
     should have no ordinary app-authored success-routing hits after migration

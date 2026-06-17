@@ -33,7 +33,7 @@ function insertLiveTargetRendererImport(source: string): string {
   );
   const importDeclarationEnd =
     sourceFile.statements.findLast((statement) => ts.isImportDeclaration(statement))?.end ?? 0;
-  const importLine = `import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';\n`;
+  const importLine = `import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';\n`;
 
   if (importDeclarationEnd > 0) {
     const prefix = source.slice(0, importDeclarationEnd);
@@ -51,11 +51,11 @@ function liveTargetRendererExport(componentExpression: string, fact: LiveTargetF
       ? '[]'
       : `[\n${fact.queryBindings.map((binding) => liveTargetQueryBindingSource(binding)).join(',\n')},\n  ]`;
 
-  return `export const ${exportName} = componentLiveTargetRenderer({
+  return `export const ${exportName} = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ${componentExpression},
   componentId: ${JSON.stringify(fact.component)},
   queries: ${queries},
-});`;
+}));`;
 }
 
 function liveTargetRendererExportName(componentExpression: string): string {

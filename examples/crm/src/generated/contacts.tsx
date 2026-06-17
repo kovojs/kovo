@@ -11,7 +11,7 @@ import { Card } from '@kovojs/ui/card';
 import { addContact } from '../mutations.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
 import { freshId } from '../components/chrome.js';
-import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // Contact book (route `/contacts`). Reads the `contactList` rowset and shows
@@ -113,7 +113,7 @@ export const ContactsRegion = component({
 });
 ContactsRegion.name = "components/contacts/contacts-region";
 
-export const ContactsRegion$liveTargetRenderer = componentLiveTargetRenderer({
+export const ContactsRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ContactsRegion,
   componentId: "components/contacts/contacts-region",
   queries: [
@@ -122,4 +122,4 @@ export const ContactsRegion$liveTargetRenderer = componentLiveTargetRenderer({
       query: contactListQuery,
     },
   ],
-});
+}));

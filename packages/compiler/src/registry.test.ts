@@ -118,7 +118,7 @@ export const ProductDetail = component({
     expect(registry).toContain(`export interface LiveTargetRegistry {
   'components/products/product-detail/product-detail': { component: 'components/products/product-detail/product-detail'; queries: readonly ['product']; queryBindings: readonly [{ name: 'product'; queryExpression: "productQuery"; argsExpression: "({ id: props.productId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId'] }]; props: { productId: string }; };
 }`);
-    expect(result.loweredSource).toContain(`export const ProductDetail$liveTargetRenderer = componentLiveTargetRenderer({
+    expect(result.loweredSource).toContain(`export const ProductDetail$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductDetail,
   componentId: "components/products/product-detail/product-detail",
   queries: [
@@ -128,7 +128,7 @@ export const ProductDetail = component({
       args: (props) => ({ id: props.productId }),
     },
   ],
-});`);
+}));`);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 

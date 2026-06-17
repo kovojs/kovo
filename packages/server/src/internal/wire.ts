@@ -5,6 +5,8 @@ export {
 } from '../live-target-renderer.js';
 export {
   collectGeneratedLiveTargetRenderers,
+  registerGeneratedLiveTargetRenderer,
+  registeredGeneratedLiveTargetRenderers,
   type GeneratedLiveTargetModule,
 } from '../live-target-registry.js';
 export {
