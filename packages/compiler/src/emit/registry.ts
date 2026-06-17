@@ -198,9 +198,21 @@ function liveTargetFactLines(facts: readonly LiveTargetFact[]): string {
         fact.queryBindings.length === 0
           ? 'readonly []'
           : `readonly [${fact.queryBindings.map(liveTargetQueryBindingFact).join(', ')}]`;
-      return `  '${fact.target}': { component: '${fact.component}'; queries: ${queries}; queryBindings: ${queryBindings}; props: ${fact.propsType}; };`;
+      const identityProps =
+        fact.identityProps.length === 0
+          ? 'readonly []'
+          : `readonly [${fact.identityProps.map((prop) => `'${prop}'`).join(', ')}]`;
+      const coverage =
+        fact.coverage.length === 0
+          ? 'readonly []'
+          : `readonly [${fact.coverage.map(liveTargetCoverageFact).join(', ')}]`;
+      return `  '${fact.target}': { component: '${fact.component}'; targetBase: '${fact.targetBase}'; identityProps: ${identityProps}; queries: ${queries}; queryBindings: ${queryBindings}; props: ${fact.propsType}; coverage: ${coverage}; };`;
     })
     .join('\n');
+}
+
+function liveTargetCoverageFact(fact: LiveTargetFact['coverage'][number]): string {
+  return `{ query: '${fact.query}'; position: ${JSON.stringify(fact.position)}; status: '${fact.status}' }`;
 }
 
 function liveTargetQueryBindingFact(fact: LiveTargetFact['queryBindings'][number]): string {

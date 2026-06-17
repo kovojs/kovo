@@ -64,7 +64,7 @@ describe('compiler registry and graph emission', () => {
   'cart/add': 'cart' | 'orderHistory' | 'productGrid';
 }`);
     expect(registry).toContain(`export interface LiveTargetRegistry {
-  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; queries: readonly ['cart']; queryBindings: readonly [{ name: 'cart'; queryExpression: "{}" }]; props: {}; };
+  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; targetBase: 'cart-badge'; identityProps: readonly []; queries: readonly ['cart']; queryBindings: readonly [{ name: 'cart'; queryExpression: "{}" }]; props: {}; coverage: readonly [{ query: 'cart.count'; position: "binding"; status: 'plan' }]; };
 }`);
     expect(registry).toContain(`declare module '@kovojs/core' {`);
     expect(registry).toContain(`  interface ComponentRegistry {
@@ -75,7 +75,7 @@ describe('compiler registry and graph emission', () => {
   'components/cart/cart-badge/cart-badge': {};
   }`);
     expect(registry).toContain(`  interface LiveTargetRegistry {
-  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; queries: readonly ['cart']; queryBindings: readonly [{ name: 'cart'; queryExpression: "{}" }]; props: {}; };
+  'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; targetBase: 'cart-badge'; identityProps: readonly []; queries: readonly ['cart']; queryBindings: readonly [{ name: 'cart'; queryExpression: "{}" }]; props: {}; coverage: readonly [{ query: 'cart.count'; position: "binding"; status: 'plan' }]; };
   }`);
     expect(registry).toContain(`  interface QueryRegistry {
   'cart': typeof cartQuery;
@@ -116,7 +116,7 @@ export const ProductDetail = component({
     const registry = result.files[2]?.source ?? '';
 
     expect(registry).toContain(`export interface LiveTargetRegistry {
-  'components/products/product-detail/product-detail': { component: 'components/products/product-detail/product-detail'; queries: readonly ['product']; queryBindings: readonly [{ name: 'product'; queryExpression: "productQuery"; argsExpression: "({ id: props.productId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId'] }]; props: { productId: string }; };
+  'components/products/product-detail/product-detail': { component: 'components/products/product-detail/product-detail'; targetBase: 'product-detail'; identityProps: readonly ['productId']; queries: readonly ['product']; queryBindings: readonly [{ name: 'product'; queryExpression: "productQuery"; argsExpression: "({ id: props.productId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId'] }]; props: { productId: string }; coverage: readonly [{ query: 'product.name'; position: "binding"; status: 'plan' }]; };
 }`);
     expect(result.loweredSource).toContain(`export const ProductDetail$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductDetail,
@@ -176,7 +176,7 @@ export const detail = route('/questions/:id', {
       serializedPropsExpression: 'JSON.stringify({ questionId: params.id })',
     });
     expect(registry).toContain(
-      `'components/questions/question-detail/question-detail': { component: 'components/questions/question-detail/question-detail'; queries: readonly ['question', 'answers']; queryBindings: readonly [{ name: 'question'; queryExpression: "questionQuery"; argsExpression: "({ id: props.questionId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.questionId'] }, { name: 'answers'; queryExpression: "answerListQuery"; argsExpression: "({ questionId: props.questionId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.questionId'] }]; props: { questionId: string }; };`,
+      `'components/questions/question-detail/question-detail': { component: 'components/questions/question-detail/question-detail'; targetBase: 'question-detail'; identityProps: readonly ['questionId']; queries: readonly ['question', 'answers']; queryBindings: readonly [{ name: 'question'; queryExpression: "questionQuery"; argsExpression: "({ id: props.questionId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.questionId'] }, { name: 'answers'; queryExpression: "answerListQuery"; argsExpression: "({ questionId: props.questionId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.questionId'] }]; props: { questionId: string }; coverage: readonly [{ query: 'question.title'; position: "binding"; status: 'plan' }, { query: 'answers.items.length'; position: "binding"; status: 'plan' }]; };`,
     );
     expect(component.loweredSource).toContain(`export const QuestionDetail$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: QuestionDetail,

@@ -268,10 +268,18 @@ removes app-authored bookkeeping from the enhanced path.
       `examples/crm/src/generated`, `examples/stackoverflow/src/generated`, and
       `site/tutorial/steps/*/src/generated` now expose generated
       `*$liveTargetRenderer` exports.
-    - Remaining gaps: target identity expressions for keyed/parameterized
-      instances and coverage facts are not emitted yet; build/app-shell
-      integration still needs to collect generated renderer exports
-      automatically.
+    - Additional progress 2026-06-17:
+      generated `LiveTargetRegistry` metadata now includes `targetBase`,
+      `identityProps`, and compact update `coverage` facts alongside component
+      id, declared queries, query arg bindings, and props. This gives route IR
+      and `kovo explain` an inspectable target-identity/coverage surface without
+      requiring app-authored target constants.
+    - Verified with
+      `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/route-pages.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `git diff --check -- packages/compiler/src/types.ts packages/compiler/src/internal-graph.ts packages/compiler/src/compile.ts packages/compiler/src/emit/registry.ts packages/compiler/src/registry.test.ts packages/compiler/src/compile-component.test.ts`.
+    - Remaining gap: compiler-generated executable route IR and build/app-shell
+      integration still need to consume these facts.
 - [ ] **3. Compiler/core: make query args from props/routes usable.**
   - Ensure `query.args((props) => ...)` style authoring is typed, scanned, emitted,
     and available to generated server renderers.

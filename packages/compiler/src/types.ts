@@ -48,10 +48,20 @@ export interface FragmentTargetFact {
  */
 export interface LiveTargetFact {
   component: string;
+  coverage: readonly LiveTargetCoverageFact[];
+  identityProps: readonly string[];
   propsType: string;
   queryBindings: readonly LiveTargetQueryBindingFact[];
   queries: readonly string[];
   target: string;
+  targetBase: string;
+}
+
+/** @internal Compact update-coverage fact emitted into generated live-target registry metadata. */
+export interface LiveTargetCoverageFact {
+  position: string;
+  query: string;
+  status: QueryUpdateCoverageFact['status'];
 }
 
 /** @internal One declared component query binding, including optional prop-derived args. */

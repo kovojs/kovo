@@ -14,7 +14,9 @@ import type {
   ComponentGraphFact,
   FragmentTargetFact,
   LiveTargetFact,
+  LiveTargetCoverageFact,
   LiveTargetQueryBindingFact,
+  QueryUpdateCoverageFact,
   RegistryFacts,
   RegistryGraphInput,
   RegistryTypeFactOptions,
@@ -83,18 +85,23 @@ export function findFragmentTargetFacts(
  * fragment rendering.
  */
 export function findLiveTargetFacts(
+  domName: string,
   registryComponentName: string,
   model: ComponentModuleModel,
+  updateCoverage: readonly QueryUpdateCoverageFact[] = [],
 ): LiveTargetFact[] {
   if (!componentHasInferredServerRefreshTarget(model)) return [];
 
   return [
     {
       component: registryComponentName,
+      coverage: liveTargetCoverageFacts(updateCoverage),
+      identityProps: componentPropNames(model),
       propsType: fragmentTargetPropsType(model),
       queryBindings: componentQueryBindingFacts(model),
       queries: componentQueryNames(model),
       target: registryComponentName,
+      targetBase: domName,
     },
   ];
 }
@@ -240,6 +247,10 @@ function componentQueryNames(model: ComponentModuleModel): string[] {
   return componentOptionObjectKeys(model, 'queries');
 }
 
+function componentPropNames(model: ComponentModuleModel): string[] {
+  return componentOptionObjectEntries(model, 'props').map((entry) => entry.key);
+}
+
 function componentQueryBindingFacts(model: ComponentModuleModel): LiveTargetQueryBindingFact[] {
   return componentOptionObjectEntries(model, 'queries').map((entry) => {
     const parsed = entry.value ? queryBindingFromExpression(entry.value) : null;
@@ -339,6 +350,16 @@ function fragmentTargetPropsType(model: ComponentModuleModel): string {
   if (props.length === 0) return '{}';
 
   return `{ ${props.map((prop) => `${prop.key}: ${prop.type}`).join('; ')} }`;
+}
+
+function liveTargetCoverageFacts(
+  coverage: readonly QueryUpdateCoverageFact[],
+): LiveTargetCoverageFact[] {
+  return coverage.map((fact) => ({
+    position: fact.position,
+    query: fact.query,
+    status: fact.status,
+  }));
 }
 
 function deriveInvalidationFactsFromGraph(

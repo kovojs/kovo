@@ -152,7 +152,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       : (componentCssSource ?? styleCssSource ?? '');
   const fragmentTargetFacts = findFragmentTargetFacts(componentNames.registryKey, model);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
-  const liveTargetFacts = findLiveTargetFacts(componentNames.registryKey, model);
+  const liveTargetFacts = findLiveTargetFacts(
+    componentNames.domName,
+    componentNames.registryKey,
+    model,
+    updateCoverage,
+  );
   const componentGraphFacts = [
     componentGraphFact(
       componentNames.registryKey,
