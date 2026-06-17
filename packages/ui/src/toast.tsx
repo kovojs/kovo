@@ -1,96 +1,211 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   toastActionAttributes,
   toastCloseAttributes,
   toastDescriptionAttributes,
   toastRootAttributes,
   toastTitleAttributes,
   toastViewportAttributes,
-  type ClassValue,
   type ToastPlacement,
   type ToastPoliteness,
   type ToastVariant,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface ToastStyleOverrides {
+  action?: style.StyleInput;
+  close?: style.StyleInput;
+  description?: style.StyleInput;
+  root?: style.StyleInput;
+  title?: style.StyleInput;
+  viewport?: style.StyleInput;
+}
 
 export interface ToastViewportProps {
   children?: string;
-  class?: ClassValue;
   disabled?: boolean;
   id?: string;
   label?: string;
   placement?: ToastPlacement;
+  styles?: ToastStyleOverrides;
 }
 
 export interface ToastProps {
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   disabled?: boolean;
   id: string;
   open?: boolean;
   politeness?: ToastPoliteness;
+  styles?: ToastStyleOverrides;
   titleId?: string;
   variant?: ToastVariant;
 }
 
 export interface ToastPartProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: ToastStyleOverrides;
 }
 
 export interface ToastActionProps {
   actionValue?: string;
   children?: string;
-  class?: ClassValue;
   disabled?: boolean;
   dismissOnAction?: boolean;
   id: string;
   open?: boolean;
+  styles?: ToastStyleOverrides;
   variant?: ToastVariant;
 }
 
 export type ToastCloseProps = ToastActionProps;
 
-export const toastViewportClassNames = defineVariants({
-  base: 'fixed z-50 grid w-full max-w-sm gap-2 p-4 outline-none data-[placement=top-start]:left-0 data-[placement=top-start]:top-0 data-[placement=top-end]:right-0 data-[placement=top-end]:top-0 data-[placement=bottom-start]:bottom-0 data-[placement=bottom-start]:left-0 data-[placement=bottom-end]:bottom-0 data-[placement=bottom-end]:right-0 data-[placement=top-center]:left-1/2 data-[placement=top-center]:top-0 data-[placement=bottom-center]:bottom-0 data-[placement=bottom-center]:left-1/2 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const toastStyles = style.create(
+  {
+    action: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 32,
+      justifyContent: 'center',
+      paddingInline: 12,
+      transitionProperty: 'background-color, color',
+      ':disabled': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#f5f5f5',
+      },
+    },
+    close: {
+      alignItems: 'center',
+      borderRadius: 6,
+      color: '#737373',
+      display: 'inline-flex',
+      height: 32,
+      justifyContent: 'center',
+      transitionProperty: 'background-color, color',
+      width: 32,
+      ':disabled': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#f5f5f5',
+        color: '#0a0a0a',
+      },
+    },
+    description: {
+      color: '#404040',
+    },
+    root: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      padding: 16,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-state=closed]': {
+        display: 'none',
+      },
+      '[data-variant=error]': {
+        backgroundColor: '#fef2f2',
+        borderColor: '#fecaca',
+      },
+      '[data-variant=info]': {
+        backgroundColor: '#f0f9ff',
+        borderColor: '#bae6fd',
+      },
+      '[data-variant=success]': {
+        backgroundColor: '#ecfdf5',
+        borderColor: '#a7f3d0',
+      },
+      '[data-variant=warning]': {
+        backgroundColor: '#fffbeb',
+        borderColor: '#fde68a',
+      },
+    },
+    title: {
+      color: '#0a0a0a',
+      fontWeight: 500,
+    },
+    viewport: {
+      display: 'grid',
+      maxWidth: 384,
+      outlineStyle: 'none',
+      padding: 16,
+      position: 'fixed',
+      rowGap: 8,
+      width: '100%',
+      zIndex: 50,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-placement=bottom-center]': {
+        bottom: 0,
+        left: '50%',
+      },
+      '[data-placement=bottom-end]': {
+        bottom: 0,
+        right: 0,
+      },
+      '[data-placement=bottom-start]': {
+        bottom: 0,
+        left: 0,
+      },
+      '[data-placement=top-center]': {
+        left: '50%',
+        top: 0,
+      },
+      '[data-placement=top-end]': {
+        right: 0,
+        top: 0,
+      },
+      '[data-placement=top-start]': {
+        left: 0,
+        top: 0,
+      },
+    },
+  },
+  { namespace: 'toast', source: 'toast.tsx' },
+);
 
-export const toastClassNames = defineVariants({
-  base: 'grid gap-2 rounded-md border border-neutral-200 bg-white p-4 text-sm text-neutral-950 shadow-lg data-[state=closed]:hidden data-[variant=success]:border-emerald-200 data-[variant=success]:bg-emerald-50 data-[variant=warning]:border-amber-200 data-[variant=warning]:bg-amber-50 data-[variant=error]:border-red-200 data-[variant=error]:bg-red-50 data-[variant=info]:border-sky-200 data-[variant=info]:bg-sky-50 data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const toastTitleClassNames = defineVariants({
-  base: 'font-medium text-neutral-950',
-  variants: {},
-});
-
-export const toastDescriptionClassNames = defineVariants({
-  base: 'text-neutral-700',
-  variants: {},
-});
-
-export const toastActionClassNames = defineVariants({
-  base: 'inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50',
-  variants: {},
-});
-
-export const toastCloseClassNames = defineVariants({
-  base: 'inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50',
-  variants: {},
-});
-
-export const toastViewportClasses = toastViewportClassNames.classes;
-export const toastClasses = toastClassNames.classes;
-export const toastTitleClasses = toastTitleClassNames.classes;
-export const toastDescriptionClasses = toastDescriptionClassNames.classes;
-export const toastActionClasses = toastActionClassNames.classes;
-export const toastCloseClasses = toastCloseClassNames.classes;
+export const toastViewportClasses = [style.attrs(toastStyles.viewport).class ?? ''] as const;
+export const toastClasses = [style.attrs(toastStyles.root).class ?? ''] as const;
+export const toastTitleClasses = [style.attrs(toastStyles.title).class ?? ''] as const;
+export const toastDescriptionClasses = [style.attrs(toastStyles.description).class ?? ''] as const;
+export const toastActionClasses = [style.attrs(toastStyles.action).class ?? ''] as const;
+export const toastCloseClasses = [style.attrs(toastStyles.close).class ?? ''] as const;
 
 export const ToastViewport = component({
   render(props: ToastViewportProps) {
@@ -100,11 +215,12 @@ export const ToastViewport = component({
       ...(props.label === undefined ? {} : { label: props.label }),
       ...(props.placement === undefined ? {} : { placement: props.placement }),
     });
+    const styleAttrs = style.attrs(toastStyles.viewport, props.styles?.viewport);
 
     return (
       <div
+        {...styleAttrs}
         aria-label={attrs['aria-label']}
-        class={cn(toastViewportClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-placement={attrs['data-placement']}
         id={attrs.id}
@@ -128,14 +244,15 @@ export const Toast = component({
       ...(props.titleId === undefined ? {} : { titleId: props.titleId }),
       ...(props.variant === undefined ? {} : { variant: props.variant }),
     });
+    const styleAttrs = style.attrs(toastStyles.root, props.styles?.root);
 
     return (
       <div
+        {...styleAttrs}
         aria-atomic={attrs['aria-atomic']}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-live={attrs['aria-live']}
-        class={cn(toastClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         data-variant={attrs['data-variant']}
@@ -152,10 +269,11 @@ export const Toast = component({
 export const ToastTitle = component({
   render(props: ToastPartProps) {
     const attrs = toastTitleAttributes(props.id === undefined ? {} : { id: props.id });
+    const styleAttrs = style.attrs(toastStyles.title, props.styles?.title);
 
     return (
       <div
-        class={cn(toastTitleClassNames(), props.class)}
+        {...styleAttrs}
         data-part={attrs['data-part']}
         id={attrs.id}
       >
@@ -168,10 +286,11 @@ export const ToastTitle = component({
 export const ToastDescription = component({
   render(props: ToastPartProps) {
     const attrs = toastDescriptionAttributes(props.id === undefined ? {} : { id: props.id });
+    const styleAttrs = style.attrs(toastStyles.description, props.styles?.description);
 
     return (
       <div
-        class={cn(toastDescriptionClassNames(), props.class)}
+        {...styleAttrs}
         data-part={attrs['data-part']}
         id={attrs.id}
       >
@@ -191,10 +310,11 @@ export const ToastAction = component({
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.variant === undefined ? {} : { variant: props.variant }),
     });
+    const styleAttrs = style.attrs(toastStyles.action, props.styles?.action);
 
     return (
       <button
-        class={cn(toastActionClassNames(), props.class)}
+        {...styleAttrs}
         data-action={attrs['data-action']}
         data-dismiss-on-action={attrs['data-dismiss-on-action']}
         data-disabled={attrs['data-disabled']}
@@ -218,10 +338,11 @@ export const ToastClose = component({
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.variant === undefined ? {} : { variant: props.variant }),
     });
+    const styleAttrs = style.attrs(toastStyles.close, props.styles?.close);
 
     return (
       <button
-        class={cn(toastCloseClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-dismiss={attrs['data-dismiss']}
         data-state={attrs['data-state']}

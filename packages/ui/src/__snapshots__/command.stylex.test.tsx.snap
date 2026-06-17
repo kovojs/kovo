@@ -1,0 +1,63 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Command StyleX slots > exports StyleX style groups 1`] = `
+{
+  "keys": [
+    "close",
+    "dialog",
+    "empty",
+    "input",
+    "item",
+    "listbox",
+    "root",
+    "trigger",
+    "value",
+  ],
+  "markers": {
+    "close": true,
+    "dialog": true,
+    "empty": true,
+    "input": true,
+    "item": true,
+    "listbox": true,
+    "root": true,
+    "trigger": true,
+    "value": true,
+  },
+}
+`;
+
+exports[`@kovojs/ui Command StyleX slots > matches author-last slot override output 1`] = `"<div class="kv-command-fg-1kcq42 kv-command-d-1mghfj kv-command-font-kvxk8f kv-command-opacity-1icjyx kv-app-command-row-zuedtz" data-style-src="command.tsx#root; app-command.tsx#root" data-state="open"><button class="kv-command-align-1iqt7n kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-box-kdtwje kv-command-fg-1kcq42 kv-command-d-xsx1ae kv-command-font-kvxk8f kv-command-font-161lny kv-command-h-1crj27 kv-command-justify-fb6poo kv-command-pad-n6qglr kv-command-transition-14fi7d kv-command-bg-1rtfai kv-command-cursor-1guhaf kv-command-opacity-kqyp6b kv-command-outline-1xqxl4 kv-command-outline-ervi1a kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-1cm0cy kv-app-command-bg-1mzkpj" data-style-src="command.tsx#trigger; app-command.tsx#trigger" aria-expanded="true" aria-haspopup="dialog" data-state="open" type="button">Custom command</button><dialog class="kv-command-bg-wpm5im kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-box-jdt9qr kv-command-fg-1kcq42 kv-command-max-o30rta kv-command-pad-z0kd9j kv-command-w-d0w75t kv-command-bg-u81l6k kv-command-d-1yj8xg kv-app-command-bd-1qzfhj" data-style-src="command.tsx#dialog; app-command.tsx#dialog" aria-modal="true" data-state="open" open><input class="kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-fg-1kcq42 kv-command-font-kvxk8f kv-command-h-1crj27 kv-command-outline-1ipo24 kv-command-pad-n6qglr kv-command-transition-cgdjqu kv-command-w-d0w75t kv-command-fg-exm43b kv-command-bg-1nj58e kv-command-fg-1k3no8 kv-command-cursor-1guhaf kv-command-box-8pcjie kv-app-command-bg-1wbxks" data-style-src="command.tsx#input; app-command.tsx#input" aria-autocomplete="list" aria-expanded="true" autocomplete="off" data-state="open" role="combobox" type="text" value=""><div class="kv-command-bd-cuwiyw kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-m-1a8aat kv-command-max-1l3700 kv-command-overflow-1grxml kv-command-pad-spfybb kv-command-d-1yj8xg kv-app-command-bg-s8yqrw" data-style-src="command.tsx#listbox; app-command.tsx#listbox" data-state="open" role="listbox"><button class="kv-command-align-1iqt7n kv-command-bd-1j6izt kv-command-d-10jo0b kv-command-font-kvxk8f kv-command-outline-1ipo24 kv-command-pad-q8c2g9 kv-command-pad-ptlnb7 kv-command-text-k66u5a kv-command-w-d0w75t kv-command-opacity-1icjyx kv-command-pointer-1bgayk kv-command-bg-1wwixc kv-command-fg-1pdgiw kv-command-font-1yiuj1 kv-app-command-fg-dwb4td" data-style-src="command.tsx#item; app-command.tsx#item" aria-selected="false" data-state="inactive" role="option" tabIndex="-1" type="button" value="first">first</button><div class="kv-command-font-kvxk8f kv-command-pad-s4z8gq kv-command-pad-ptlnb7 kv-command-text-dfsfhe kv-app-command-fg-15o7q8" data-style-src="command.tsx#empty; app-command.tsx#empty" data-empty="">No results</div><span class="kv-command-font-kvxk8f kv-app-command-fg-1oi3mq" data-style-src="command.tsx#value; app-command.tsx#value">first</span><button class="kv-command-align-1iqt7n kv-command-bg-wpm5im kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-d-xsx1ae kv-command-font-kvxk8f kv-command-font-161lny kv-command-h-sx26or kv-command-justify-fb6poo kv-command-m-1a8aat kv-command-pad-n6qglr kv-command-transition-14fi7d kv-command-cursor-1guhaf kv-command-opacity-kqyp6b kv-command-outline-1xqxl4 kv-command-outline-ervi1a kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-1cm0cy kv-app-command-fg-1oi3mq" data-style-src="command.tsx#close; app-command.tsx#close" data-state="closed" type="button">Close</button></div></dialog></div>"`;
+
+exports[`@kovojs/ui Command StyleX slots > matches command states with StyleX output 1`] = `
+{
+  "classes": [
+    "kv-command-fg-1kcq42 kv-command-d-1mghfj kv-command-font-kvxk8f kv-command-row-1m16zq kv-command-opacity-1icjyx",
+  ],
+  "closeClasses": [
+    "kv-command-align-1iqt7n kv-command-bg-wpm5im kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-fg-1kcq42 kv-command-d-xsx1ae kv-command-font-kvxk8f kv-command-font-161lny kv-command-h-sx26or kv-command-justify-fb6poo kv-command-m-1a8aat kv-command-pad-n6qglr kv-command-transition-14fi7d kv-command-cursor-1guhaf kv-command-opacity-kqyp6b kv-command-outline-1xqxl4 kv-command-outline-ervi1a kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-1cm0cy",
+  ],
+  "dialogClasses": [
+    "kv-command-bg-wpm5im kv-command-bd-cuwiyw kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-box-jdt9qr kv-command-fg-1kcq42 kv-command-max-o30rta kv-command-pad-z0kd9j kv-command-w-d0w75t kv-command-bg-u81l6k kv-command-d-1yj8xg",
+  ],
+  "emptyClasses": [
+    "kv-command-fg-uv2l3u kv-command-font-kvxk8f kv-command-pad-s4z8gq kv-command-pad-ptlnb7 kv-command-text-dfsfhe",
+  ],
+  "inputClasses": [
+    "kv-command-bg-wpm5im kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-fg-1kcq42 kv-command-font-kvxk8f kv-command-h-1crj27 kv-command-outline-1ipo24 kv-command-pad-n6qglr kv-command-transition-cgdjqu kv-command-w-d0w75t kv-command-fg-exm43b kv-command-bg-1nj58e kv-command-fg-1k3no8 kv-command-cursor-1guhaf kv-command-box-8pcjie",
+  ],
+  "itemClasses": [
+    "kv-command-align-1iqt7n kv-command-bd-1j6izt kv-command-fg-5k20i8 kv-command-d-10jo0b kv-command-font-kvxk8f kv-command-outline-1ipo24 kv-command-pad-q8c2g9 kv-command-pad-ptlnb7 kv-command-text-k66u5a kv-command-w-d0w75t kv-command-opacity-1icjyx kv-command-pointer-1bgayk kv-command-bg-1wwixc kv-command-fg-1pdgiw kv-command-font-1yiuj1",
+  ],
+  "listboxClasses": [
+    "kv-command-bg-wpm5im kv-command-bd-cuwiyw kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-m-1a8aat kv-command-max-1l3700 kv-command-overflow-1grxml kv-command-pad-spfybb kv-command-d-1yj8xg",
+  ],
+  "rendered": "<div class="kv-command-fg-1kcq42 kv-command-d-1mghfj kv-command-font-kvxk8f kv-command-row-1m16zq kv-command-opacity-1icjyx" data-style-src="command.tsx#root" data-state="open" id="command-root"><button class="kv-command-align-1iqt7n kv-command-bg-wpm5im kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-box-kdtwje kv-command-fg-1kcq42 kv-command-d-xsx1ae kv-command-font-kvxk8f kv-command-font-161lny kv-command-h-1crj27 kv-command-justify-fb6poo kv-command-pad-n6qglr kv-command-transition-14fi7d kv-command-bg-1rtfai kv-command-cursor-1guhaf kv-command-opacity-kqyp6b kv-command-outline-1xqxl4 kv-command-outline-ervi1a kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-1cm0cy" data-style-src="command.tsx#trigger" aria-controls="command-dialog" aria-expanded="true" aria-haspopup="dialog" command="show-modal" commandfor="command-dialog" data-state="open" id="command-trigger" type="button">Open command menu</button><dialog class="kv-command-bg-wpm5im kv-command-bd-cuwiyw kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-box-jdt9qr kv-command-fg-1kcq42 kv-command-max-o30rta kv-command-pad-z0kd9j kv-command-w-d0w75t kv-command-bg-u81l6k kv-command-d-1yj8xg" data-style-src="command.tsx#dialog" aria-labelledby="command-title" aria-modal="true" data-state="open" id="command-dialog" open><input class="kv-command-bg-wpm5im kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-fg-1kcq42 kv-command-font-kvxk8f kv-command-h-1crj27 kv-command-outline-1ipo24 kv-command-pad-n6qglr kv-command-transition-cgdjqu kv-command-w-d0w75t kv-command-fg-exm43b kv-command-bg-1nj58e kv-command-fg-1k3no8 kv-command-cursor-1guhaf kv-command-box-8pcjie" data-style-src="command.tsx#input" aria-activedescendant="command-listbox-item-0" aria-autocomplete="list" aria-controls="command-listbox" aria-expanded="true" autocomplete="off" data-state="open" id="command-input" placeholder="Search commands" role="combobox" type="text" value=""><div class="kv-command-bg-wpm5im kv-command-bd-cuwiyw kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-m-1a8aat kv-command-max-1l3700 kv-command-overflow-1grxml kv-command-pad-spfybb kv-command-d-1yj8xg" data-style-src="command.tsx#listbox" data-state="open" id="command-listbox" role="listbox"><button class="kv-command-align-1iqt7n kv-command-bd-1j6izt kv-command-fg-5k20i8 kv-command-d-10jo0b kv-command-font-kvxk8f kv-command-outline-1ipo24 kv-command-pad-q8c2g9 kv-command-pad-ptlnb7 kv-command-text-k66u5a kv-command-w-d0w75t kv-command-opacity-1icjyx kv-command-pointer-1bgayk kv-command-bg-1wwixc kv-command-fg-1pdgiw kv-command-font-1yiuj1" data-style-src="command.tsx#item" aria-selected="true" data-highlighted="" data-state="active" role="option" tabIndex="0" type="button" value="open-file">Open file</button><button class="kv-command-align-1iqt7n kv-command-bd-1j6izt kv-command-fg-5k20i8 kv-command-d-10jo0b kv-command-font-kvxk8f kv-command-outline-1ipo24 kv-command-pad-q8c2g9 kv-command-pad-ptlnb7 kv-command-text-k66u5a kv-command-w-d0w75t kv-command-opacity-1icjyx kv-command-pointer-1bgayk kv-command-bg-1wwixc kv-command-fg-1pdgiw kv-command-font-1yiuj1" data-style-src="command.tsx#item" aria-disabled="true" aria-selected="false" data-disabled="" data-state="inactive" disabled role="option" tabIndex="-1" type="button" value="archive-file">Archive file</button><div class="kv-command-fg-uv2l3u kv-command-font-kvxk8f kv-command-pad-s4z8gq kv-command-pad-ptlnb7 kv-command-text-dfsfhe" data-style-src="command.tsx#empty" data-empty="">No commands matched</div></div><span class="kv-command-fg-5k20i8 kv-command-font-kvxk8f" data-style-src="command.tsx#value">Open file</span><button class="kv-command-align-1iqt7n kv-command-bg-wpm5im kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-fg-1kcq42 kv-command-d-xsx1ae kv-command-font-kvxk8f kv-command-font-161lny kv-command-h-sx26or kv-command-justify-fb6poo kv-command-m-1a8aat kv-command-pad-n6qglr kv-command-transition-14fi7d kv-command-cursor-1guhaf kv-command-opacity-kqyp6b kv-command-outline-1xqxl4 kv-command-outline-ervi1a kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-1cm0cy" data-style-src="command.tsx#close" command="request-close" commandfor="command-dialog" data-state="open" type="button">Close</button></dialog></div>",
+  "triggerClasses": [
+    "kv-command-align-1iqt7n kv-command-bg-wpm5im kv-command-bd-6z92hc kv-command-bd-smofdm kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-box-kdtwje kv-command-fg-1kcq42 kv-command-d-xsx1ae kv-command-font-kvxk8f kv-command-font-161lny kv-command-h-1crj27 kv-command-justify-fb6poo kv-command-pad-n6qglr kv-command-transition-14fi7d kv-command-bg-1rtfai kv-command-cursor-1guhaf kv-command-opacity-kqyp6b kv-command-outline-1xqxl4 kv-command-outline-ervi1a kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-1cm0cy",
+  ],
+  "valueClasses": [
+    "kv-command-fg-5k20i8 kv-command-font-kvxk8f",
+  ],
+}
+`;

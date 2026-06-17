@@ -1,7 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
   commandCloseAttributes,
   commandDialogAttributes,
   commandEmptyAttributes,
@@ -11,11 +10,22 @@ import {
   commandRootAttributes,
   commandTriggerAttributes,
   commandValueText,
-  defineVariants,
-  type ClassValue,
   type CommandItem as HeadlessCommandItem,
 } from '@kovojs/headless-ui';
 import { escapeHtml } from '@kovojs/server';
+import * as style from '@kovojs/style';
+
+export interface CommandStyleOverrides {
+  close?: style.StyleInput;
+  dialog?: style.StyleInput;
+  empty?: style.StyleInput;
+  input?: style.StyleInput;
+  item?: style.StyleInput;
+  listbox?: style.StyleInput;
+  root?: style.StyleInput;
+  trigger?: style.StyleInput;
+  value?: style.StyleInput;
+}
 
 export interface CommandStateProps {
   disabled?: boolean;
@@ -33,130 +43,255 @@ export interface CommandStateProps {
 
 export interface CommandProps extends CommandStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: CommandStyleOverrides;
 }
 
 export interface CommandTriggerProps extends CommandStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   id?: string;
   labelledBy?: string;
+  styles?: CommandStyleOverrides;
 }
 
 export interface CommandDialogProps extends CommandStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   descriptionId?: string;
+  styles?: CommandStyleOverrides;
   titleId?: string;
 }
 
 export interface CommandCloseProps extends CommandStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
+  styles?: CommandStyleOverrides;
 }
 
 export interface CommandInputProps extends CommandStateProps {
   autocomplete?: string;
-  class?: ClassValue;
   descriptionId?: string;
   id?: string;
   labelledBy?: string;
   listboxId?: string;
+  styles?: CommandStyleOverrides;
 }
 
 export interface CommandListboxProps extends CommandStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   labelledBy?: string;
+  styles?: CommandStyleOverrides;
 }
 
 export interface CommandItemProps extends CommandStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;
   itemValue: string;
+  styles?: CommandStyleOverrides;
 }
 
 export interface CommandEmptyProps extends CommandStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: CommandStyleOverrides;
 }
 
 export interface CommandValueProps extends CommandStateProps {
-  class?: ClassValue;
   id?: string;
+  styles?: CommandStyleOverrides;
 }
 
-export const commandClassNames = defineVariants({
-  base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const commandStyles = style.create(
+  {
+    close: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 32,
+      justifyContent: 'center',
+      marginTop: 12,
+      paddingInline: 12,
+      transitionProperty: 'background-color, color',
+      ':disabled': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#f5f5f5',
+      },
+    },
+    dialog: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+      color: '#0a0a0a',
+      maxWidth: 512,
+      padding: 16,
+      width: '100%',
+      '::backdrop': {
+        backgroundColor: 'rgb(0 0 0 / 0.2)',
+      },
+      '[data-state=closed]': {
+        display: 'none',
+      },
+    },
+    empty: {
+      color: '#737373',
+      fontSize: 14,
+      paddingBlock: 16,
+      paddingInline: 8,
+      textAlign: 'center',
+    },
+    input: {
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      fontSize: 14,
+      height: 36,
+      outlineStyle: 'none',
+      paddingInline: 12,
+      transitionProperty: 'background-color, border-color, box-shadow',
+      width: '100%',
+      '[data-placeholder]': {
+        color: '#737373',
+      },
+      ':disabled': {
+        backgroundColor: '#f5f5f5',
+        color: '#737373',
+        cursor: 'not-allowed',
+      },
+      ':focus-visible': {
+        boxShadow: '0 0 0 2px #0a0a0a',
+      },
+    },
+    item: {
+      alignItems: 'center',
+      borderRadius: 4,
+      color: '#404040',
+      display: 'flex',
+      fontSize: 14,
+      outlineStyle: 'none',
+      paddingBlock: 6,
+      paddingInline: 8,
+      textAlign: 'left',
+      width: '100%',
+      '[data-disabled]': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      '[data-highlighted]': {
+        backgroundColor: '#f5f5f5',
+        color: '#0a0a0a',
+      },
+      '[data-state=checked]': {
+        fontWeight: 500,
+      },
+    },
+    listbox: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      marginTop: 12,
+      maxHeight: 256,
+      overflow: 'auto',
+      padding: 4,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    trigger: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 36,
+      justifyContent: 'center',
+      paddingInline: 12,
+      transitionProperty: 'background-color, color',
+      '[data-state=open]': {
+        backgroundColor: '#f5f5f5',
+      },
+      ':disabled': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#f5f5f5',
+      },
+    },
+    value: {
+      color: '#404040',
+      fontSize: 14,
+    },
+  },
+  { namespace: 'command', source: 'command.tsx' },
+);
 
-export const commandTriggerClassNames = defineVariants({
-  base: 'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50 data-[state=open]:bg-neutral-100',
-  variants: {},
-});
-
-export const commandDialogClassNames = defineVariants({
-  base: 'w-full max-w-lg rounded-md border border-neutral-200 bg-white p-4 text-neutral-950 shadow-lg backdrop:bg-black/20 data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const commandInputClassNames = defineVariants({
-  base: 'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 data-[placeholder]:text-neutral-500',
-  variants: {},
-});
-
-export const commandListboxClassNames = defineVariants({
-  base: 'mt-3 max-h-64 overflow-auto rounded-md border border-neutral-200 bg-white p-1 data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const commandItemClassNames = defineVariants({
-  base: 'flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-neutral-700 outline-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[state=checked]:font-medium data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const commandCloseClassNames = defineVariants({
-  base: 'mt-3 inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50',
-  variants: {},
-});
-
-export const commandEmptyClassNames = defineVariants({
-  base: 'px-2 py-4 text-center text-sm text-neutral-500',
-  variants: {},
-});
-
-export const commandValueClassNames = defineVariants({
-  base: 'text-sm text-neutral-700',
-  variants: {},
-});
-
-export const commandClasses = commandClassNames.classes;
-export const commandTriggerClasses = commandTriggerClassNames.classes;
-export const commandDialogClasses = commandDialogClassNames.classes;
-export const commandInputClasses = commandInputClassNames.classes;
-export const commandListboxClasses = commandListboxClassNames.classes;
-export const commandItemClasses = commandItemClassNames.classes;
-export const commandCloseClasses = commandCloseClassNames.classes;
-export const commandEmptyClasses = commandEmptyClassNames.classes;
-export const commandValueClasses = commandValueClassNames.classes;
+export const commandClasses = [style.attrs(commandStyles.root).class ?? ''] as const;
+export const commandTriggerClasses = [style.attrs(commandStyles.trigger).class ?? ''] as const;
+export const commandDialogClasses = [style.attrs(commandStyles.dialog).class ?? ''] as const;
+export const commandInputClasses = [style.attrs(commandStyles.input).class ?? ''] as const;
+export const commandListboxClasses = [style.attrs(commandStyles.listbox).class ?? ''] as const;
+export const commandItemClasses = [style.attrs(commandStyles.item).class ?? ''] as const;
+export const commandCloseClasses = [style.attrs(commandStyles.close).class ?? ''] as const;
+export const commandEmptyClasses = [style.attrs(commandStyles.empty).class ?? ''] as const;
+export const commandValueClasses = [style.attrs(commandStyles.value).class ?? ''] as const;
 
 export const Command = component({
   render(props: CommandProps) {
     const attrs = commandRootAttributes(toCommandState(props));
+    const styleAttrs = style.attrs(commandStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(commandClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -177,14 +312,15 @@ export const CommandTrigger = component({
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.labelledBy === undefined ? {} : { labelledBy: props.labelledBy }),
     });
+    const styleAttrs = style.attrs(commandStyles.trigger, props.styles?.trigger);
 
     return (
       <button
+        {...styleAttrs}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         aria-haspopup={attrs['aria-haspopup']}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(commandTriggerClassNames(), props.class)}
         command={attrs.command}
         commandfor={attrs.commandfor}
         data-disabled={attrs['data-disabled']}
@@ -207,13 +343,14 @@ export const CommandDialog = component({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.titleId === undefined ? {} : { titleId: props.titleId }),
     });
+    const styleAttrs = style.attrs(commandStyles.dialog, props.styles?.dialog);
 
     return (
       <dialog
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-modal={attrs['aria-modal']}
-        class={cn(commandDialogClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -235,9 +372,11 @@ export const CommandInput = component({
       ...(props.labelledBy === undefined ? {} : { labelledBy: props.labelledBy }),
       ...(props.listboxId === undefined ? {} : { listboxId: props.listboxId }),
     });
+    const styleAttrs = style.attrs(commandStyles.input, props.styles?.input);
 
     return (
       <input
+        {...styleAttrs}
         aria-activedescendant={attrs['aria-activedescendant']}
         aria-autocomplete={attrs['aria-autocomplete']}
         aria-controls={attrs['aria-controls']}
@@ -246,7 +385,6 @@ export const CommandInput = component({
         aria-invalid={attrs['aria-invalid']}
         aria-labelledby={attrs['aria-labelledby']}
         autocomplete={attrs.autocomplete}
-        class={cn(commandInputClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -272,11 +410,12 @@ export const CommandListbox = component({
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.labelledBy === undefined ? {} : { labelledBy: props.labelledBy }),
     });
+    const styleAttrs = style.attrs(commandStyles.listbox, props.styles?.listbox);
 
     return (
       <div
+        {...styleAttrs}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(commandListboxClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
@@ -298,12 +437,13 @@ export const CommandItem = component({
       ...(props.itemLabel === undefined ? {} : { itemLabel: props.itemLabel }),
       itemValue: props.itemValue,
     });
+    const styleAttrs = style.attrs(commandStyles.item, props.styles?.item);
 
     return (
       <button
+        {...styleAttrs}
         aria-disabled={attrs['aria-disabled']}
         aria-selected={attrs['aria-selected']}
-        class={cn(commandItemClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -326,10 +466,11 @@ export const CommandClose = component({
       ...toCommandState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(commandStyles.close, props.styles?.close);
 
     return (
       <button
-        class={cn(commandCloseClassNames(), props.class)}
+        {...styleAttrs}
         command={attrs.command}
         commandfor={attrs.commandfor}
         data-disabled={attrs['data-disabled']}
@@ -349,10 +490,11 @@ export const CommandEmpty = component({
       ...toCommandState(props),
       ...(props.id === undefined ? {} : { id: props.id }),
     });
+    const styleAttrs = style.attrs(commandStyles.empty, props.styles?.empty);
 
     return (
       <div
-        class={cn(commandEmptyClassNames(), props.class)}
+        {...styleAttrs}
         data-empty={attrs['data-empty']}
         hidden={attrs.hidden}
         id={attrs.id}
@@ -365,8 +507,10 @@ export const CommandEmpty = component({
 
 export const CommandValue = component({
   render(props: CommandValueProps) {
+    const styleAttrs = style.attrs(commandStyles.value, props.styles?.value);
+
     return (
-      <span class={cn(commandValueClassNames(), props.class)} id={props.id}>
+      <span {...styleAttrs} id={props.id}>
         {escapeHtml(commandValueText(props))}
       </span>
     );
