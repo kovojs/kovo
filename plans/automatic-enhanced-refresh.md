@@ -543,7 +543,38 @@ removes app-authored bookkeeping from the enhanced path.
     webhooks, downloads, or other non-component responses.
   - Route pages should compose cart/product/history components directly rather
     than using hand-authored fragment wrapper strings.
-  - Evidence: pending.
+  - Progress 2026-06-17:
+    - `examples/commerce/src/app.ts` and `examples/commerce/src/app-shell.ts`
+      no longer pass app-authored `fragmentRenderers` for ordinary
+      `cart/add` success. Both paths register/use generated
+      `liveTargetRenderers`; the app-shell `mutationResponse` remains only for
+      auth redirect/failure and add-to-cart failure page/fragment handling.
+    - `examples/commerce/scripts/emit-components.mjs` now emits
+      `src/generated/live-targets.ts`. The generated registry collects the
+      cart-badge and order-history renderers and adds the Commerce-specific
+      ProductGrid request-slot adapter so generated success rerenders keep
+      CSRF/request-scoped forms.
+    - `packages/server/src/mutation.ts` / `mutation-wire.ts` now support
+      generated live-target `errorBoundary`, preserving ProductGrid per-island
+      failure fallback without restoring app-authored success fragment routing.
+    - `examples/commerce/src/app.add-to-cart.test.ts`,
+      `examples/commerce/src/app-shell.test.ts`, and
+      `packages/conformance-fixtures/src/commerce-fixtures.ts` now post
+      `Kovo-Live-Targets` descriptors plus query-dependency `Kovo-Targets`,
+      proving generated renderers update cart badge, product grid, and order
+      history from server truth.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/mutation-response.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/live-target-registry.test.ts`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app-shell.test.ts`,
+      `pnpm --filter @kovojs/example-commerce test`,
+      `pnpm exec vitest --run packages/conformance-fixtures/src/commerce-fixtures.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gaps: route-page wrapper helpers and the transitional generated
+      live-target registry import are still present; the app-shell still uses
+      `mutationResponse` for auth redirects and add-to-cart failure rendering.
 - [ ] **10. Docs/tutorial update.**
   - Teach the authoring model as "declare queries and serializable props; Kovo
     updates enhanced mutations from server truth automatically."
@@ -575,9 +606,13 @@ removes app-authored bookkeeping from the enhanced path.
     - `packages/server/src/mutation-response.test.ts` proves generated live
       descriptors render from `liveTargetRenderers` and are selected from
       renderer-declared query keys even when DOM deps are component-local aliases.
+    - `packages/server/src/mutation-response.test.ts` also proves generated
+      live-target renderer `errorBoundary` handles a failing selected descriptor
+      as a per-target fragment.
     - Remaining gap: build/app-shell wiring still needs to collect generated
-      renderer exports automatically, and example success paths still use
-      transitional app-authored `mutationResponse` fragment routing.
+      renderer exports automatically; examples still import transitional
+      generated live-target registries and some escape-hatch `mutationResponse`
+      failure/auth routing remains.
 - [ ] **Example no-match checks prove the DX outcome.**
   - `rg -n 'fragmentRenderers|mutationResponse\\(|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb' examples/stackoverflow/src examples/crm/src examples/commerce/src`
     should have no ordinary app-authored success-routing hits after migration

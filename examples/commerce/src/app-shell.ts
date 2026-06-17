@@ -1,5 +1,4 @@
 import {
-  errorBoundary,
   route,
   type CsrfValidationOptions,
   type ServerErrorHandler,
@@ -26,8 +25,6 @@ import {
   commerceSignOut,
   commerceStylesheets,
   createCommerceDb,
-  loadCartQuery,
-  loadProductGrid,
   orderCsvRoute,
   orderHistoryQuery,
   paymentWebhook,
@@ -37,14 +34,12 @@ import {
   renderCartPage,
   renderCartPageBody,
   renderCommerceLoginForm,
-  renderOrderHistory,
-  renderProductGrid,
   type CommerceAuthRequest,
   type CommerceDb,
   type CommerceRequest,
   type CommerceSession,
 } from './app.js';
-import { CartBadge } from './generated/cart-badge.js';
+import { liveTargetRenderers } from './generated/live-targets.js';
 import { products } from './schema.js';
 
 export type CommerceShellRequest = Request & CommerceAuthRequest;
@@ -216,41 +211,11 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
 
       if (key !== addToCart.key) return undefined;
 
-      const commerceRequest = request as CommerceShellRequest;
       const productId = productIdFromRawInput(rawInput);
       return {
-        // No per-fragment `stylesheets` (Phase R1 learning): the inline loader's
-        // morph takes the fragment's first child as the new region root, and a
-        // leading `<link rel=stylesheet>` would REPLACE the region with a bare
-        // `<link>`, destroying the UI. The served page already loaded the app
-        // stylesheet (the route `stylesheets` below); the re-rendered region
-        // reuses the already-present app stylesheet classes.
-        fragmentRenderers: [
-          {
-            render: async () => CartBadge.definition.render({ cart: await loadCartQuery(db) }),
-            target: 'cart-badge',
-          },
-          errorBoundary(
-            {
-              render: async () => renderProductGrid(await loadProductGrid(db), commerceRequest),
-              target: 'product-grid',
-            },
-            {
-              render(error) {
-                return `<section role="alert" class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">Product grid failed: ${escapeHtml((error as Error).message)}</section>`;
-              },
-            },
-          ),
-          {
-            // SECURITY (SECURITY_FINDINGS.md M9): scope order history to the
-            // authenticated session user resolved onto the mutation request.
-            render: () => renderOrderHistory(db, commerceRequest.session?.user?.id),
-            target: 'order-history',
-          },
-        ],
         redirectTo: '/cart',
         renderFailureFragment: (failure) =>
-          renderAddToCartFailureFragment(db, rawInput, failure, commerceRequest),
+          renderAddToCartFailureFragment(db, rawInput, failure, request as CommerceShellRequest),
         renderFailurePage: (failure) =>
           renderCartPage(
             db,
@@ -258,10 +223,11 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
               failure,
               ...(productId ? { productId } : {}),
             },
-            commerceRequest,
+            request as CommerceShellRequest,
           ),
       };
     },
+    liveTargetRenderers,
     mutations: [addToCart, commerceSignIn, commerceSignOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     queries: [cartQuery, productGridQuery, orderHistoryQuery],
@@ -364,10 +330,6 @@ function authRedirectTo(value: unknown): string {
   }
 
   return '/cart';
-}
-
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 export const commerceAppShell = createCommerceAppShell();

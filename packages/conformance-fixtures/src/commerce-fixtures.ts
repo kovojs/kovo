@@ -325,9 +325,15 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Kovo
     { db: verifiedDb, session: { id: 's-commerce-acceptance-2', user: { id: 'u1' } } },
     {
       'Kovo-Fragment': 'true',
+      'Kovo-Live-Targets': addToCartUpdateQueries
+        .map((query) => {
+          const target = graphFragmentTargetForQuery(options.graph, query);
+          return `${target}#${commerceLiveComponentForTarget(target)}:{}`;
+        })
+        .join('; '),
       'Kovo-Targets': addToCartUpdateQueries
-        .map((query) => graphFragmentTargetForQuery(options.graph, query))
-        .join(','),
+        .map((query) => `${graphFragmentTargetForQuery(options.graph, query)}=${query}`)
+        .join('; '),
     },
   );
   const responseFact = kovoResponseBodyFact(response.body);
@@ -359,4 +365,12 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Kovo
       updateQueries: uploadReceiptUpdateQueries,
     },
   };
+}
+
+function commerceLiveComponentForTarget(target: string): string {
+  if (target === 'cart-badge') return 'components/cart-badge/cart-badge';
+  if (target === 'order-history') return 'components/order-history/order-history';
+  if (target === 'product-grid') return 'components/product-grid/product-grid';
+
+  throw new Error(`No Commerce live component registered for target ${JSON.stringify(target)}.`);
 }

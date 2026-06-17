@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { createMemoryStorage, form, stripeSignature } from '@kovojs/core';
 import {
   createMemoryMutationReplayStore,
-  errorBoundary,
   csrfField,
   csrfToken,
   guards,
@@ -28,7 +27,7 @@ import {
   type MutationFail,
   type StoredFileUpload,
 } from '@kovojs/server';
-import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
+import { escapeAttribute } from '@kovojs/server/internal/html';
 import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 import {
   authed as betterAuthAuthed,
@@ -46,6 +45,7 @@ import { and, count, eq, sql } from 'drizzle-orm';
 import { createCommerceDb, type CommerceDb } from './db.js';
 import { attachment, cart, order, product } from './domains.js';
 import { CartBadge } from './generated/cart-badge.js';
+import { liveTargetRenderers } from './generated/live-targets.js';
 import { cartAddDerivedOptimistic } from './generated/optimistic/cart-add.js';
 import { OrderHistory } from './generated/order-history.js';
 import * as productGridComponent from './generated/product-grid.js';
@@ -953,36 +953,8 @@ export function submitAddToCart(
   return renderMutationEndpointResponse(addToCart, {
     csrf: commerceCsrf,
     failureStylesheets: commerceStylesheets,
-    fragmentRenderers: [
-      {
-        render: async () => CartBadge.definition.render({ cart: await loadCartQuery(request.db) }),
-        stylesheets: commerceStylesheets,
-        target: 'cart-badge',
-      },
-      errorBoundary(
-        {
-          render: async () =>
-            renderProductGrid(
-              await loadProductGridForRequest(request.db, undefined, request),
-              request,
-            ),
-          stylesheets: commerceStylesheets,
-          target: 'product-grid',
-        },
-        {
-          render(error) {
-            return `<section role="alert" class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">Product grid failed: ${escapeHtml((error as Error).message)}</section>`;
-          },
-        },
-      ),
-      {
-        // SECURITY (SECURITY_FINDINGS.md M9): scope to the session user.
-        render: () => renderOrderHistory(request.db, request.session?.user?.id),
-        stylesheets: commerceStylesheets,
-        target: 'order-history',
-      },
-    ],
     headers,
+    liveTargetRenderers,
     rawInput: submittedInput,
     redirectTo: '/cart',
     renderFailureFragment: (failure) =>

@@ -28,6 +28,13 @@ import {
   type CommerceAddToCartPropertyState,
 } from './app-test-helpers.js';
 
+const cartPageTargets = 'cart-badge=cart; product-grid=productGrid; order-history=orderHistory';
+const cartPageLiveTargets = [
+  'cart-badge#components/cart-badge/cart-badge:{}',
+  'product-grid#components/product-grid/product-grid:{}',
+  'order-history#components/order-history/order-history:{}',
+].join('; ');
+
 describe('commerce example', () => {
   it('predicts cart count with the compiler-derived addToCart optimistic transform', () => {
     expect(addToCartOptimistic.queue).toBe('cart');
@@ -114,7 +121,8 @@ describe('commerce example', () => {
         { db, session: { id: 's-enhanced-success', user: { id: 'u1' } } },
         {
           'Kovo-Fragment': 'true',
-          'Kovo-Targets': 'cart-badge,product-grid,order-history',
+          'Kovo-Live-Targets': cartPageLiveTargets,
+          'Kovo-Targets': cartPageTargets,
         },
       ),
     ).resolves.toMatchObject({
@@ -129,18 +137,15 @@ describe('commerce example', () => {
       { db, session: { id: 's-enhanced-success-2', user: { id: 'u1' } } },
       {
         'Kovo-Fragment': 'true',
-        'Kovo-Targets': 'cart-badge,product-grid,order-history',
+        'Kovo-Live-Targets': cartPageLiveTargets,
+        'Kovo-Targets': cartPageTargets,
       },
     );
 
     const responseFact = kovoResponseBodyFact(response.body);
     expect(responseFact.queryNames).toEqual(['cart', 'productGrid', 'orderHistory']);
     expect(responseFact.fragmentTargets).toEqual(['cart-badge', 'product-grid', 'order-history']);
-    expect(responseFact.fragments.flatMap((fragment) => fragment.stylesheetHrefs)).toEqual([
-      '/assets/styles.css',
-      '/assets/styles.css',
-      '/assets/styles.css',
-    ]);
+    expect(responseFact.fragments.flatMap((fragment) => fragment.stylesheetHrefs)).toEqual([]);
     expect(responseFact.keyValues).toContain('order-2');
     expect(transactions).toBe(2);
   });
@@ -159,7 +164,8 @@ describe('commerce example', () => {
       },
       {
         'Kovo-Fragment': 'true',
-        'Kovo-Targets': 'cart-badge,product-grid,order-history',
+        'Kovo-Live-Targets': cartPageLiveTargets,
+        'Kovo-Targets': cartPageTargets,
       },
     );
 
@@ -175,7 +181,7 @@ describe('commerce example', () => {
     ).toMatchObject([
       {
         attrs: { 'error-boundary': 'product-grid', target: 'product-grid' },
-        stylesheetHrefs: ['/assets/styles.css'],
+        stylesheetHrefs: [],
       },
     ]);
     expect(

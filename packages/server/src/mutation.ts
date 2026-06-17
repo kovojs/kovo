@@ -1034,18 +1034,32 @@ async function renderLiveTargetChunks<Request>(
     const renderer = renderersByComponent.get(target.component);
     if (!renderer) continue;
 
-    chunks.push(
-      renderFragmentWireHtml({
-        html: await renderer.render({
-          input,
-          props: target.props,
-          request,
+    try {
+      chunks.push(
+        renderFragmentWireHtml({
+          html: await renderer.render({
+            input,
+            props: target.props,
+            request,
+            target: target.target,
+          }),
+          stylesheets: renderer.stylesheets,
           target: target.target,
         }),
-        stylesheets: renderer.stylesheets,
-        target: target.target,
-      }),
-    );
+      );
+    } catch (error) {
+      if (!renderer.errorBoundary) throw error;
+
+      const boundaryTarget = renderer.errorBoundary.target ?? target.target;
+      chunks.push(
+        renderFragmentWireHtml({
+          errorBoundary: target.target,
+          html: await renderer.errorBoundary.render(error, input),
+          stylesheets: renderer.stylesheets,
+          target: boundaryTarget,
+        }),
+      );
+    }
   }
 
   return chunks;

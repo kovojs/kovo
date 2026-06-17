@@ -47,6 +47,14 @@ const commerceShellSelector = {
   tag: 'div',
 } as const;
 
+const cartBadgeLiveTarget = 'cart-badge#components/cart-badge/cart-badge:{}';
+const cartPageTargets = 'cart-badge=cart; product-grid=productGrid; order-history=orderHistory';
+const cartPageLiveTargets = [
+  cartBadgeLiveTarget,
+  'product-grid#components/product-grid/product-grid:{}',
+  'order-history#components/order-history/order-history:{}',
+].join('; ');
+
 afterEach(async () => {
   if (!server) return;
   await new Promise<void>((resolve, reject) => {
@@ -250,7 +258,8 @@ describe('commerce app shell HTTP entry', () => {
           cookie: sessionCookie,
           'Content-Type': 'application/x-www-form-urlencoded',
           'Kovo-Fragment': 'true',
-          'Kovo-Targets': 'cart-badge',
+          'Kovo-Live-Targets': cartBadgeLiveTarget,
+          'Kovo-Targets': 'cart-badge=cart',
         },
         method: 'POST',
       });
@@ -407,7 +416,8 @@ describe('commerce app shell HTTP entry', () => {
         cookie: sessionCookie,
         'Content-Type': 'application/x-www-form-urlencoded',
         'Kovo-Fragment': 'true',
-        'Kovo-Targets': 'cart-badge,product-grid,order-history',
+        'Kovo-Live-Targets': cartPageLiveTargets,
+        'Kovo-Targets': cartPageTargets,
       },
       method: 'POST',
     });

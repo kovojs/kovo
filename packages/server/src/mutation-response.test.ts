@@ -143,6 +143,62 @@ describe('server mutation primitives', () => {
     expect(renderCartPanel).toHaveBeenCalledOnce();
   });
 
+  it('renders generated live target error boundaries per affected descriptor', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: () => ({ count: 2 }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+    const renderCartPanel = vi.fn(() => {
+      throw new Error('cart panel unavailable');
+    });
+
+    await expect(
+      renderMutationEndpointResponse(addToCart, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{"cartId":"c1"}',
+          'Kovo-Targets': 'cart-panel=cart',
+        },
+        liveTargetRenderers: [
+          {
+            component: 'components/cart/panel',
+            errorBoundary: {
+              render(error) {
+                return `<section role="alert">${(error as Error).message}</section>`;
+              },
+            },
+            queries: ['cart'],
+            render: renderCartPanel,
+          },
+        ],
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: [
+        '<kovo-query name="cart">{"count":2}</kovo-query>',
+        '<kovo-fragment target="cart-panel" error-boundary="cart-panel"><section role="alert">cart panel unavailable</section></kovo-fragment>',
+      ].join('\n'),
+      headers: {
+        'Kovo-Changes': '[{"domain":"cart"}]',
+      },
+      status: 200,
+    });
+    expect(renderCartPanel).toHaveBeenCalledOnce();
+  });
+
   it('bypasses success selection on failures and rerenders the submitted form target', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
