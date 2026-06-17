@@ -145,7 +145,7 @@ compiler-quality gaps found during the 2026-06-16 audit.
         attribute stamps.
   - [x] Thread output-context facts through template stamp emission before HTML-fragment assembly.
   - [x] Thread output-context facts through state derive emission and runtime state binding updates.
-  - [x] Thread output-context facts through URL-bearing attributes and dynamic URL updates.
+  - [ ] Thread output-context facts through URL-bearing attributes and dynamic URL updates.
   - [ ] Thread output-context facts through generated style properties and CSS text.
   - [ ] Add a static test that fails if a generated interpolation is emitted without an output-context
         fact.
@@ -161,9 +161,16 @@ compiler-quality gaps found during the 2026-06-16 audit.
         `packages/compiler/src/lower/inline-derives.ts`,
         `packages/compiler/src/lower/structural-jsx.ts`, and `packages/compiler/src/style.ts`
         attach output-context facts to generated server stamps/handlers, query text/attribute
-        stamps, template stamps, state derives, URL-bearing attributes, and style/class updates.
-  - Evidence (2026-06-17): `packages/compiler/src/stamps.test.ts` snapshots server host stamp
-        output-context facts; `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts
+        stamps, template stamps, state derives, and style/class updates. Dedicated URL-update,
+        CSS-text, script-text, and trusted/raw HTML fact coverage remains open.
+  - Evidence (2026-06-17): `packages/compiler/src/output-context-facts.test.ts` asserts
+        `CompileResult.outputContextFacts` contains facts for generated server text, query
+        attributes, query text, state text derives, and template stamps; `packages/compiler/src/stamps.test.ts`
+        snapshots server host stamp output-context facts.
+  - Evidence (2026-06-17): `pnpm exec vitest --run packages/compiler/src/output-context-facts.test.ts
+        packages/compiler/src/output-context-payloads.test.ts packages/compiler/src/output-context-security.test.ts
+        packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts
+        packages/compiler/src/state-bindings.test.ts packages/compiler/src/compile-component.test.ts
         packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.compile-mcp.test.ts
         packages/compiler/src/stamps.test.ts packages/compiler/src/view-transitions.test.ts
         packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/handler-lowering.test.ts`

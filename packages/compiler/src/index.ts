@@ -43,6 +43,7 @@ export {
   scopeComponentCss,
   selectCssAssets,
 } from './css.js';
+export type { GeneratedOutputWriteFact, OutputContext } from './output-context-facts.js';
 export type {
   CompileArtifactFileNames,
   CompileComponentOptions,

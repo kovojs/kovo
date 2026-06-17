@@ -27,27 +27,38 @@ export const CartBadge = component({
       '<button data-derive="cart.CartBadge$button_disabled_derive" data-derive-attr="disabled">Checkout</button>',
     );
     expect(serverSource).not.toContain('disabled={cart.count === 0}');
-    expect(result.queryUpdatePlans).toEqual([
-      {
-        componentName: 'CartBadge',
-        paths: [],
-        query: 'cart',
-        stamps: [
-          {
-            attr: 'disabled',
-            derive: {
-              exportName: 'CartBadge$button_disabled_derive',
-              expression: 'cart.count === 0',
-              input: 'cart',
-              name: 'CartBadge$button_disabled_derive',
-              param: 'cart',
-              selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+    expect(result.queryUpdatePlans).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "CartBadge",
+          "outputContexts": [
+            {
+              "context": "boolean-attribute",
+              "expression": "cart.count === 0",
+              "sink": "disabled",
+              "source": "client-query",
+              "writer": "query attribute stamp",
             },
-            selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
-          },
-        ],
-      },
-    ]);
+          ],
+          "paths": [],
+          "query": "cart",
+          "stamps": [
+            {
+              "attr": "disabled",
+              "derive": {
+                "exportName": "CartBadge$button_disabled_derive",
+                "expression": "cart.count === 0",
+                "input": "cart",
+                "name": "CartBadge$button_disabled_derive",
+                "param": "cart",
+                "selector": "[data-derive="cart.CartBadge$button_disabled_derive"]",
+              },
+              "selector": "[data-derive="cart.CartBadge$button_disabled_derive"]",
+            },
+          ],
+        },
+      ]
+    `);
     expect(clientSource).toContain(
       "import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime';",
     );
@@ -136,13 +147,26 @@ export const CartBadge = component({
     expect(serverSource).toContain('<span>{"cart.count"}</span>');
     expect(serverSource).toContain('<output data-bind="cart.count">{cart.count}</output>');
     expect(serverSource).not.toContain('button_title_derive');
-    expect(result.queryUpdatePlans).toEqual([
-      {
-        componentName: 'CartBadge',
-        paths: ['cart.count'],
-        query: 'cart',
-      },
-    ]);
+    expect(result.queryUpdatePlans).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "CartBadge",
+          "outputContexts": [
+            {
+              "context": "text",
+              "expression": "cart.count",
+              "sink": "textContent",
+              "source": "client-query",
+              "writer": "query text binding",
+            },
+          ],
+          "paths": [
+            "cart.count",
+          ],
+          "query": "cart",
+        },
+      ]
+    `);
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -166,13 +190,26 @@ export const CartBadge = component({
     const clientSource = result.files[1]?.source ?? '';
 
     expect(serverSource).toContain('<span data-bind="cart.count">{cart.count}</span>');
-    expect(result.queryUpdatePlans).toEqual([
-      {
-        componentName: 'CartBadge',
-        paths: ['cart.count'],
-        query: 'cart',
-      },
-    ]);
+    expect(result.queryUpdatePlans).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "CartBadge",
+          "outputContexts": [
+            {
+              "context": "text",
+              "expression": "cart.count",
+              "sink": "textContent",
+              "source": "client-query",
+              "writer": "query text binding",
+            },
+          ],
+          "paths": [
+            "cart.count",
+          ],
+          "query": "cart",
+        },
+      ]
+    `);
     expect(result.updateCoverage).toEqual([
       {
         componentName: 'CartBadge',
@@ -207,13 +244,26 @@ export const CartBadge = component({
     const serverSource = result.files[0]?.source ?? '';
 
     expect(serverSource).toContain('Total: <span data-bind="cart.count">{cart.count}</span> items');
-    expect(result.queryUpdatePlans).toEqual([
-      {
-        componentName: 'CartBadge',
-        paths: ['cart.count'],
-        query: 'cart',
-      },
-    ]);
+    expect(result.queryUpdatePlans).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "CartBadge",
+          "outputContexts": [
+            {
+              "context": "text",
+              "expression": "cart.count",
+              "sink": "textContent",
+              "source": "client-query",
+              "writer": "query text binding",
+            },
+          ],
+          "paths": [
+            "cart.count",
+          ],
+          "query": "cart",
+        },
+      ]
+    `);
     expect(result.updateCoverage).toEqual([
       {
         componentName: 'CartBadge',

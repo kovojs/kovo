@@ -411,10 +411,11 @@ function serverRenderPatches(
 ): ServerRenderLowering {
   const host = componentRenderHost(model);
   const patches: SourceReplacement[] = [];
-  const outputContexts: GeneratedOutputWriteFact[] = [...handlerOutputContexts(handlers)];
+  const outputContexts: GeneratedOutputWriteFact[] = [];
   const chained = chainedPrimitiveHandlerPatches(handlers, model);
   const chainedHandlers = new Set(chained.handlers);
   patches.push(...chained.patches);
+  outputContexts.push(...chained.outputContexts);
   const hostHandlers = host
     ? handlers.filter(
         (handler) => handler.attributeStart >= host.start && handler.attributeEnd <= host.end,
@@ -429,6 +430,7 @@ function serverRenderPatches(
       replacement: handlerAttributeReplacement(handler),
       start: handler.attributeStart,
     });
+    outputContexts.push(...handlerOutputContexts(handler));
   }
 
   if (host) {
@@ -440,6 +442,11 @@ function serverRenderPatches(
         .filter((handler) => !chainedHandlers.has(handler))
         .map(handlerSourceReplacement),
     );
+    outputContexts.push(
+      ...hostHandlers
+        .filter((handler) => !chainedHandlers.has(handler))
+        .flatMap((handler) => handlerOutputContexts(handler)),
+    );
     patches.push(...renderHostStampPatches(model, hostElement, domComponentName));
     outputContexts.push(...renderHostStampOutputContexts(model, hostElement, domComponentName));
   }
@@ -448,9 +455,9 @@ function serverRenderPatches(
 }
 
 function handlerOutputContexts(
-  handlers: readonly HandlerLowering[],
+  handler: HandlerLowering,
 ): GeneratedOutputWriteFact[] {
-  return handlers.flatMap((handler) => [
+  return [
     {
       context: outputContextForAttribute(handler.attributeName),
       expression: handler.attributeValue,
@@ -465,15 +472,20 @@ function handlerOutputContexts(
       source: 'server-render' as const,
       writer: 'event handler param lowering',
     })),
-  ]);
+  ];
 }
 
 function chainedPrimitiveHandlerPatches(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
-): { handlers: readonly HandlerLowering[]; patches: readonly SourceReplacement[] } {
+): {
+  handlers: readonly HandlerLowering[];
+  outputContexts: readonly GeneratedOutputWriteFact[];
+  patches: readonly SourceReplacement[];
+} {
   const patches: SourceReplacement[] = [];
   const chainedHandlers: HandlerLowering[] = [];
+  const outputContexts: GeneratedOutputWriteFact[] = [];
 
   for (const element of model.jsxElements) {
     const elementHandlers = handlers.filter(
@@ -500,6 +512,16 @@ function chainedPrimitiveHandlerPatches(
         ),
         start: attribute.start,
       });
+      outputContexts.push(
+        {
+          context: 'attribute',
+          expression: attribute.value,
+          sink: attribute.name,
+          source: 'server-render',
+          writer: 'primitive handler chain',
+        },
+        ...attributeHandlers.flatMap((handler) => handlerOutputContexts(handler)),
+      );
       for (const handler of attributeHandlers) {
         patches.push({ end: handler.attributeEnd, replacement: '', start: handler.attributeStart });
         chainedHandlers.push(handler);
@@ -507,7 +529,7 @@ function chainedPrimitiveHandlerPatches(
     }
   }
 
-  return { handlers: chainedHandlers, patches };
+  return { handlers: chainedHandlers, outputContexts, patches };
 }
 
 function chainedPrimitiveHandlerAttribute(

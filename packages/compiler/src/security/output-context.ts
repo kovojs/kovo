@@ -8,17 +8,7 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import type { CompileComponentOptions } from '../types.js';
-
-export type OutputContext =
-  | 'text'
-  | 'attribute'
-  | 'boolean-attribute'
-  | 'url-attribute'
-  | 'style-property'
-  | 'css-text'
-  | 'html-fragment'
-  | 'script-text'
-  | 'trusted-html';
+export type { OutputContext } from '../output-context-facts.js';
 
 export const runtimeOutputHelpers = {
   escapeHtml: 'kovoEscapeHtml',

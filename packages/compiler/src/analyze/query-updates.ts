@@ -50,16 +50,19 @@ export function collectQueryUpdatePlans(
   componentName: string,
 ): QueryUpdatePlanFact[] {
   const pathsByQuery = new Map<string, Set<string>>();
+  const outputContextsByQuery = new Map<string, GeneratedOutputWriteFact[]>();
   const derivesByQuery = new Map<string, QueryDeriveFact[]>();
   const stampsByQuery = new Map<string, QueryStampFact[]>();
   const listStampsByQuery = new Map<string, QueryTemplateStampFact[]>();
 
-  for (const { path, query } of dataBindAttributes(model)) {
+  for (const binding of dataBindAttributes(model)) {
+    const { path, query } = binding;
     if (!query || query === 'state') continue;
 
     const paths = pathsByQuery.get(query) ?? new Set<string>();
     paths.add(path);
     pathsByQuery.set(query, paths);
+    pushOutputContext(outputContextsByQuery, query, dataBindOutputContextFact(binding));
   }
 
   for (const stamp of collectDataBindListStamps(model)) {
@@ -70,6 +73,10 @@ export function collectQueryUpdatePlans(
     paths.add(stamp.list);
     pathsByQuery.set(query, paths);
     listStampsByQuery.set(query, [...(listStampsByQuery.get(query) ?? []), stamp]);
+    pushOutputContext(outputContextsByQuery, query, stamp.outputContext);
+    for (const placeholder of stamp.itemBindingPlaceholders ?? []) {
+      pushOutputContext(outputContextsByQuery, query, placeholder.outputContext);
+    }
   }
 
   const deriveStamps = dataDeriveStamps(model, exportedDerives(model));
@@ -84,6 +91,7 @@ export function collectQueryUpdatePlans(
     const stamps = stampsByQuery.get(stamp.derive.input) ?? [];
     stamps.push(stamp);
     stampsByQuery.set(stamp.derive.input, stamps);
+    pushOutputContext(outputContextsByQuery, stamp.derive.input, stamp.outputContext);
   }
 
   const queries = new Set([
@@ -95,32 +103,37 @@ export function collectQueryUpdatePlans(
 
   return [...queries]
     .sort((left, right) => left.localeCompare(right))
-    .map((query) => ({
-      componentName,
-      ...(derivesByQuery.has(query)
-        ? {
-            derives: [...(derivesByQuery.get(query) ?? [])].sort((left, right) =>
-              left.name.localeCompare(right.name),
-            ),
-          }
-        : {}),
-      paths: [...(pathsByQuery.get(query) ?? [])].sort(),
-      query,
-      ...(stampsByQuery.has(query)
-        ? {
-            stamps: [...(stampsByQuery.get(query) ?? [])].sort((left, right) =>
-              left.attr.localeCompare(right.attr),
-            ),
-          }
-        : {}),
-      ...(listStampsByQuery.has(query)
-        ? {
-            templateStamps: [...(listStampsByQuery.get(query) ?? [])].sort((left, right) =>
-              left.list.localeCompare(right.list),
-            ),
-          }
-        : {}),
-    }));
+    .map((query) => {
+      const plan: QueryUpdatePlanFact = {
+        componentName,
+        ...(derivesByQuery.has(query)
+          ? {
+              derives: [...(derivesByQuery.get(query) ?? [])].sort((left, right) =>
+                left.name.localeCompare(right.name),
+              ),
+            }
+          : {}),
+        paths: [...(pathsByQuery.get(query) ?? [])].sort(),
+        query,
+        ...(stampsByQuery.has(query)
+          ? {
+              stamps: [...(stampsByQuery.get(query) ?? [])].sort((left, right) =>
+                left.attr.localeCompare(right.attr),
+              ),
+            }
+          : {}),
+        ...(listStampsByQuery.has(query)
+          ? {
+              templateStamps: [...(listStampsByQuery.get(query) ?? [])].sort((left, right) =>
+                left.list.localeCompare(right.list),
+              ),
+            }
+          : {}),
+      };
+      return outputContextsByQuery.has(query)
+        ? withOutputContexts(plan, outputContextsByQuery.get(query) ?? [])
+        : plan;
+    });
 }
 
 export function collectQueryUpdateCoverage(
@@ -312,23 +325,22 @@ function dataDeriveStamps(
 
       const derive = derives.get(nameSegment.name);
       if (!derive || derive.input !== inputSegment.name || derive.input === 'state') continue;
-      const attr = attribute.name.slice('data-bind:'.length);
 
-      stampFacts.push({
+      const attr = attribute.name.slice('data-bind:'.length);
+      stampFacts.push(withOutputContext({
         attr,
         derive: {
           ...derive,
           selector: `[${attribute.name}="${attribute.value}"]`,
         },
-        outputContext: {
-          context: outputContextForAttribute(attr),
-          expression: derive.expression,
-          sink: attr,
-          source: 'client-query',
-          writer: 'query attribute binding',
-        },
         selector: `[${attribute.name}="${attribute.value}"]`,
-      });
+      }, {
+        context: outputContextForAttribute(attr),
+        expression: derive.expression,
+        sink: attr,
+        source: 'client-query',
+        writer: 'query attribute binding',
+      }));
     }
 
     const deriveAttribute = element.attributes.find(
@@ -354,18 +366,17 @@ function dataDeriveStamps(
     };
 
     if (attr) {
-      stampFacts.push({
+      stampFacts.push(withOutputContext({
         attr,
         derive: deriveFact,
-        outputContext: {
-          context: outputContextForAttribute(attr),
-          expression: derive.expression,
-          sink: attr,
-          source: 'client-query',
-          writer: 'query attribute stamp',
-        },
         selector: deriveFact.selector,
-      });
+      }, {
+        context: outputContextForAttribute(attr),
+        expression: derive.expression,
+        sink: attr,
+        source: 'client-query',
+        writer: 'query attribute stamp',
+      }));
     } else {
       deriveFacts.push(deriveFact);
     }
@@ -549,6 +560,35 @@ function dataBindAttributeFact(name: string, path: string): DataBindAttribute {
   };
 }
 
+function dataBindOutputContextFact(binding: DataBindAttribute): GeneratedOutputWriteFact {
+  if (binding.name === 'data-bind') {
+    return {
+      context: 'text',
+      expression: binding.path,
+      sink: 'textContent',
+      source: 'client-query',
+      writer: 'query text binding',
+    };
+  }
+
+  const attr = binding.name.slice('data-bind:'.length);
+  return {
+    context: outputContextForAttribute(attr),
+    expression: binding.path,
+    sink: attr,
+    source: 'client-query',
+    writer: 'query attribute binding',
+  };
+}
+
+function pushOutputContext(
+  factsByQuery: Map<string, GeneratedOutputWriteFact[]>,
+  query: string,
+  fact: GeneratedOutputWriteFact,
+): void {
+  factsByQuery.set(query, [...(factsByQuery.get(query) ?? []), fact]);
+}
+
 export function collectDataBindListStamps(model: ComponentModuleModel): QueryTemplateStampFact[] {
   const elements = jsxElements(model);
 
@@ -566,22 +606,21 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
           : [];
 
       return [
-        {
+        withOutputContext({
           itemBindingPlaceholders,
           key,
           list,
           listReadPath: queryRelativePath(list),
           listReadSegments: queryRelativeSegments(list),
-          outputContext: {
-            context: 'html-fragment',
-            expression: list,
-            sink: 'template.innerHTML',
-            source: 'template-stamp',
-            writer: 'template stamp assembly',
-          } satisfies GeneratedOutputWriteFact,
           selector: `[data-bind-list="${list}"]`,
           template: templateBody?.source ?? '',
-        },
+        }, {
+          context: 'html-fragment',
+          expression: list,
+          sink: 'template.innerHTML',
+          source: 'template-stamp',
+          writer: 'template stamp assembly',
+        }),
       ];
     })
     .filter((stamp) => (stamp.itemBindingPlaceholders?.length ?? 0) > 0);
@@ -622,24 +661,39 @@ function templateItemBindingPlaceholders(
           const childBody = jsxElementChildBody(candidate);
           const templateStart = childBody ? childBody.offset - templateBody.offset : 0;
           const templateEnd = templateStart + (childBody?.source.length ?? 0);
-          return {
-            outputContext: {
-              context: 'html-fragment',
-              expression: fact.path,
-              sink: 'template item placeholder',
-              source: 'template-stamp',
-              writer: 'template stamp interpolation',
-            } satisfies GeneratedOutputWriteFact,
+          return withOutputContext({
             path: fact.path,
             readPath: fact.relativeReadPath ?? '',
             readSegments: parseBindingPath(fact.relativeReadPath ?? ''),
             templateEnd,
             templateStart,
             value: childBody?.source ?? '',
-          };
+          }, {
+            context: 'html-fragment',
+            expression: fact.path,
+            sink: 'template item placeholder',
+            source: 'template-stamp',
+            writer: 'template stamp interpolation',
+          });
         }),
     )
     .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function withOutputContext<Value extends object>(
+  value: Value,
+  outputContext: GeneratedOutputWriteFact,
+): Value & { outputContext: GeneratedOutputWriteFact } {
+  Object.defineProperty(value, 'outputContext', { enumerable: false, value: outputContext });
+  return value as Value & { outputContext: GeneratedOutputWriteFact };
+}
+
+function withOutputContexts<Value extends object>(
+  value: Value,
+  outputContexts: readonly GeneratedOutputWriteFact[],
+): Value & { outputContexts: readonly GeneratedOutputWriteFact[] } {
+  Object.defineProperty(value, 'outputContexts', { enumerable: false, value: outputContexts });
+  return value as Value & { outputContexts: readonly GeneratedOutputWriteFact[] };
 }
 
 function templateStampElement(

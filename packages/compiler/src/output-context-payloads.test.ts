@@ -193,6 +193,57 @@ export const PayloadCard = component({
         "queryUpdatePlans": [
           {
             "componentName": "PayloadCard",
+            "outputContexts": [
+              {
+                "context": "attribute",
+                "expression": "product.PayloadCard$article_title_derive",
+                "sink": "title",
+                "source": "client-query",
+                "writer": "query attribute binding",
+              },
+              {
+                "context": "attribute",
+                "expression": "product.PayloadCard$article_aria_label_derive",
+                "sink": "aria-label",
+                "source": "client-query",
+                "writer": "query attribute binding",
+              },
+              {
+                "context": "attribute",
+                "expression": "product.PayloadCard$article_aria_description_derive",
+                "sink": "aria-description",
+                "source": "client-query",
+                "writer": "query attribute binding",
+              },
+              {
+                "context": "text",
+                "expression": "product.name",
+                "sink": "textContent",
+                "source": "client-query",
+                "writer": "query text binding",
+              },
+              {
+                "context": "attribute",
+                "expression": "product.name",
+                "sink": "title",
+                "source": "client-query",
+                "writer": "query attribute binding",
+              },
+              {
+                "context": "attribute",
+                "expression": "product.label",
+                "sink": "aria-label",
+                "source": "client-query",
+                "writer": "query attribute binding",
+              },
+              {
+                "context": "attribute",
+                "expression": "product.summary",
+                "sink": "aria-description",
+                "source": "client-query",
+                "writer": "query attribute binding",
+              },
+            ],
             "paths": [
               "product.PayloadCard$article_aria_description_derive",
               "product.PayloadCard$article_aria_label_derive",

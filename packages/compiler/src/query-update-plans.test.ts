@@ -30,47 +30,125 @@ export const CartBadge = component({
     const clientSource = result.files[1]?.source ?? '';
     const registrySource = result.files[2]?.source ?? '';
 
-    expect(result.queryUpdatePlans).toEqual([
-      {
-        componentName: 'CartBadge',
-        paths: ['cart.count', 'cart.empty', 'cart.items', 'cart.total'],
-        query: 'cart',
-        templateStamps: [
-          {
-            itemBindingPlaceholders: [
-              {
-                path: '.name',
-                readPath: 'name',
-                readSegments: [{ name: 'name', optional: false }],
-                templateEnd: 91,
-                templateStart: 87,
-                value: 'Item',
-              },
-              {
-                path: '.qty',
-                readPath: 'qty',
-                readSegments: [{ name: 'qty', optional: false }],
-                templateEnd: 53,
-                templateStart: 52,
-                value: '0',
-              },
-            ],
-            key: 'productId',
-            list: 'cart.items',
-            listReadPath: 'items',
-            listReadSegments: [{ name: 'items', optional: false }],
-            selector: '[data-bind-list="cart.items"]',
-            template:
-              '<li kovo-key="">\n            <span data-bind=".qty">0</span> × <span data-bind=".name">Item</span>\n          </li>',
-          },
-        ],
-      },
-      {
-        componentName: 'CartBadge',
-        paths: ['product.name'],
-        query: 'product',
-      },
-    ]);
+    expect(result.queryUpdatePlans).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "CartBadge",
+          "outputContexts": [
+            {
+              "context": "text",
+              "expression": "cart.count",
+              "sink": "textContent",
+              "source": "client-query",
+              "writer": "query text binding",
+            },
+            {
+              "context": "boolean-attribute",
+              "expression": "cart.empty",
+              "sink": "hidden",
+              "source": "client-query",
+              "writer": "query attribute binding",
+            },
+            {
+              "context": "text",
+              "expression": "cart.total",
+              "sink": "textContent",
+              "source": "client-query",
+              "writer": "query text binding",
+            },
+            {
+              "context": "html-fragment",
+              "expression": "cart.items",
+              "sink": "template.innerHTML",
+              "source": "template-stamp",
+              "writer": "template stamp assembly",
+            },
+            {
+              "context": "html-fragment",
+              "expression": ".name",
+              "sink": "template item placeholder",
+              "source": "template-stamp",
+              "writer": "template stamp interpolation",
+            },
+            {
+              "context": "html-fragment",
+              "expression": ".qty",
+              "sink": "template item placeholder",
+              "source": "template-stamp",
+              "writer": "template stamp interpolation",
+            },
+          ],
+          "paths": [
+            "cart.count",
+            "cart.empty",
+            "cart.items",
+            "cart.total",
+          ],
+          "query": "cart",
+          "templateStamps": [
+            {
+              "itemBindingPlaceholders": [
+                {
+                  "path": ".name",
+                  "readPath": "name",
+                  "readSegments": [
+                    {
+                      "name": "name",
+                      "optional": false,
+                    },
+                  ],
+                  "templateEnd": 91,
+                  "templateStart": 87,
+                  "value": "Item",
+                },
+                {
+                  "path": ".qty",
+                  "readPath": "qty",
+                  "readSegments": [
+                    {
+                      "name": "qty",
+                      "optional": false,
+                    },
+                  ],
+                  "templateEnd": 53,
+                  "templateStart": 52,
+                  "value": "0",
+                },
+              ],
+              "key": "productId",
+              "list": "cart.items",
+              "listReadPath": "items",
+              "listReadSegments": [
+                {
+                  "name": "items",
+                  "optional": false,
+                },
+              ],
+              "selector": "[data-bind-list="cart.items"]",
+              "template": "<li kovo-key="">
+                  <span data-bind=".qty">0</span> × <span data-bind=".name">Item</span>
+                </li>",
+            },
+          ],
+        },
+        {
+          "componentName": "CartBadge",
+          "outputContexts": [
+            {
+              "context": "text",
+              "expression": "product.name",
+              "sink": "textContent",
+              "source": "client-query",
+              "writer": "query text binding",
+            },
+          ],
+          "paths": [
+            "product.name",
+          ],
+          "query": "product",
+        },
+      ]
+    `);
     expect(clientSource).toContain(
       "import { applyCompiledQueryUpdatePlan, kovoEscapeHtml } from '@kovojs/runtime';",
     );
