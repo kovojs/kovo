@@ -373,8 +373,8 @@ import {
   type ServerPageHintsRuntime,
 } from '@kovojs/conformance-fixtures/server-fixtures';
 import {
+  cssLayerNames,
   cssScopeRules,
-  cssSourceDirectives,
   drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
   forbiddenBrowserArchitectureProjectFact,
@@ -676,15 +676,15 @@ describe('@kovojs/test package subpath exports', () => {
     });
     expect(
       htmlDocumentRegions(
-        '<html><head><link rel="stylesheet" href="/assets/tailwind.css"></head><body>Ready</body></html>',
+        '<html><head><link rel="stylesheet" href="/assets/styles.css"></head><body>Ready</body></html>',
       ).head.tag,
     ).toBe('head');
     expect(
       htmlLinkHrefs(
-        '<link rel="modulepreload" href="/c/app.js"><link rel="stylesheet" href="/assets/tailwind.css">',
+        '<link rel="modulepreload" href="/c/app.js"><link rel="stylesheet" href="/assets/styles.css">',
         { rel: 'stylesheet' },
       ),
-    ).toEqual(['/assets/tailwind.css']);
+    ).toEqual(['/assets/styles.css']);
     expect(htmlMainMarkerFact('<main data-kovo-check-export="api"></main>')).toEqual({
       attribute: 'data-kovo-check-export',
       mainCount: 1,
@@ -715,10 +715,10 @@ describe('@kovojs/test package subpath exports', () => {
     ).toMatchObject([{ json: { count: 1 }, name: 'cart' }]);
     expect(
       kovoFragmentFacts(
-        '<kovo-fragment target="cart"><link rel="stylesheet" href="/assets/tailwind.css"></kovo-fragment>',
+        '<kovo-fragment target="cart"><link rel="stylesheet" href="/assets/styles.css"></kovo-fragment>',
         'cart',
       ),
-    ).toMatchObject([{ stylesheetHrefs: ['/assets/tailwind.css'], target: 'cart' }]);
+    ).toMatchObject([{ stylesheetHrefs: ['/assets/styles.css'], target: 'cart' }]);
     expect(
       kovoResponseBodyFact(
         '<kovo-query name="cart">{"count":1}</kovo-query><kovo-fragment target="cart"><article kovo-key="order-1">Order</article></kovo-fragment>',
@@ -830,7 +830,7 @@ describe('@kovojs/test package subpath exports', () => {
     expect(generatedTypedRouteNavigationBehaviorFact).toBeTypeOf('function');
     expect(generatedViewTransitionStampBehaviorFact).toBeTypeOf('function');
     expect(generatedWireDeferredBehaviorFact).toBeTypeOf('function');
-    expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
+    expect(cssLayerNames('@layer kovo-starter-base;')).toEqual(['kovo-starter-base']);
     expect(cssScopeRules('@scope (doc-card) to (:scope [kovo-c]) {')).toEqual([
       {
         limit: ':scope [kovo-c]',

@@ -89,8 +89,11 @@ describe('@kovojs/test server fixture facts', () => {
       },
       emptyOptInHtml: '',
       renderedHtml:
-        '<script type="speculationrules">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
-      scriptAttrs: { type: 'speculationrules' },
+        '<script type="speculationrules" data-kovo-csp-hash="sha256-VDbRXdVrG1h/HSZeEzeFOKzfY6aegZfd8rNURnGGk4A=">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
+      scriptAttrs: {
+        'data-kovo-csp-hash': 'sha256-VDbRXdVrG1h/HSZeEzeFOKzfY6aegZfd8rNURnGGk4A=',
+        type: 'speculationrules',
+      },
     });
   });
 
@@ -227,25 +230,29 @@ describe('@kovojs/test server fixture facts', () => {
           href: '/assets/recommendations.css',
           rel: 'stylesheet',
         },
-        sectionAttrs: { class: 'border-slate-200' },
+        sectionAttrs: { class: 'recommendation-panel' },
         tags: ['main', 'kovo-defer', 'kovo-fragment', 'link', 'section', 'script', 'script'],
       },
       failure: {
-        body: '<kovo-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/tailwind.css"><form class="border-slate-200"><output role="alert">Only 0 left.</output></form></kovo-fragment>',
+        body: '<kovo-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/styles.css"><form class="cart-form-panel"><output role="alert">Only 0 left.</output></form></kovo-fragment>',
         headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
         status: 422,
       },
       pageHints: {
-        earlyHints: {
-          Link: '</assets/tailwind.css>; rel=preload; as=style',
+        csp: {
+          scripts: [],
+          styles: ['sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s='],
         },
-        html: '<style data-kovo-critical-href="/assets/tailwind.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/tailwind.css"><link rel="stylesheet" href="/assets/recommendations.css">',
+        earlyHints: {
+          Link: '</assets/styles.css>; rel=preload; as=style',
+        },
+        html: '<style data-kovo-critical-href="/assets/styles.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/styles.css"><link rel="stylesheet" href="/assets/recommendations.css">',
       },
       selectedStylesheets: [
         {
           criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
           fragmentTargets: ['cart-badge'],
-          href: '/assets/tailwind.css',
+          href: '/assets/styles.css',
         },
       ],
     });
@@ -275,7 +282,7 @@ describe('@kovojs/test server fixture facts', () => {
           prefetch: false,
           queries: ['cart', 'productGrid', 'orderHistory'],
           route: '/cart',
-          stylesheets: ['/assets/tailwind.css'],
+          stylesheets: ['/assets/styles.css'],
         },
       ],
     });
@@ -290,7 +297,7 @@ describe('@kovojs/test server fixture facts', () => {
       prefetch: false,
       queries: ['cart', 'productGrid', 'orderHistory'],
       route: '/cart',
-      stylesheets: ['/assets/tailwind.css'],
+      stylesheets: ['/assets/styles.css'],
     });
     expect(fact.graph.receiptMutation).toEqual({
       enctype: 'multipart/form-data',
@@ -304,12 +311,16 @@ describe('@kovojs/test server fixture facts', () => {
     expect(fact.pageHints).toEqual({
       missingQueryMessage: 'Missing query data for route meta: cart',
       rendered: {
+        csp: {
+          scripts: ['sha256-428PRljyKzl7OW83C4phJF4OKCzGr42vPOLbx/jnYFI='],
+          styles: [],
+        },
         earlyHints: {},
         html: [
           '<title>Kovo Commerce (1)</title>',
           '<meta name="description" content="Browse products and checkout with 1 verifiable cart item.">',
           '<meta property="og:description" content="Browse products and checkout with 1 verifiable cart item.">',
-          '<script type="application/json" kovo-i18n locale="en-US">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
+          '<script type="application/json" kovo-i18n locale="en-US" data-kovo-csp-hash="sha256-428PRljyKzl7OW83C4phJF4OKCzGr42vPOLbx/jnYFI=">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
         ].join(''),
       },
       translation: 'Cart (1)',
@@ -362,7 +373,7 @@ describe('@kovojs/test server fixture facts', () => {
     expect(fact.upload.pendingDuringResponse).toBe('');
     expect(fact.upload.pendingAfterSubmit).toBeNull();
     expect(fact.fragmentFailure).toEqual({
-      body: '<kovo-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section role="alert">fragment failed</section></kovo-fragment>',
+      body: '<kovo-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/styles.css"><section role="alert">fragment failed</section></kovo-fragment>',
       headers: {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[]',

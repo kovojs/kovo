@@ -829,7 +829,7 @@ describe('kovo explain', () => {
               prefetch: 'conservative',
               queries: ['cart'],
               route: '/cart',
-              stylesheets: ['/assets/tailwind.css'],
+              stylesheets: ['/assets/styles.css'],
               viewTransitions: ['product-p1-image'],
             },
           ],
@@ -839,7 +839,7 @@ describe('kovo explain', () => {
     ).toEqual({
       exitCode: 0,
       output:
-        'kovo-explain/v1\nPAGE /cart\nprefetch: conservative\nmeta: title=Kovo Commerce description=Browse products. image=-\ni18n: en-US:cartLabel,productStock\nmodulepreloads: /c/cart-badge.client.js\nstylesheets: /assets/tailwind.css\nqueries: cart\nview-transitions: product-p1-image\n',
+        'kovo-explain/v1\nPAGE /cart\nprefetch: conservative\nmeta: title=Kovo Commerce description=Browse products. image=-\ni18n: en-US:cartLabel,productStock\nmodulepreloads: /c/cart-badge.client.js\nstylesheets: /assets/styles.css\nqueries: cart\nview-transitions: product-p1-image\n',
     });
   });
 

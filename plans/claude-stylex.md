@@ -863,6 +863,24 @@ borrowing its concrete API/spike detail.
     packages/headless-ui` returns no matches. `pnpm exec vitest --run packages/headless-ui/src`,
     `pnpm run check:api-surface`, `pnpm exec tsc --noEmit --pretty false`, and `git diff --check`
     pass in `agent/stylex-headless-cleanup`.
+  - Evidence (partial, 2026-06-17): conformance/test/CLI/server fixture cleanup removes the remaining
+    Tailwind-named CSS assets, utility-class fixture strings, source-directive starter expectations, and
+    starter Tailwind dev-dependency expectations from the owned fixture paths. The obsolete
+    `cssSourceDirectives(...)` parser was replaced with `cssLayerNames(...)`, preserving CSS structure
+    coverage without carrying the old directive vocabulary. `rg -n
+    "tailwind|Tailwind|@tailwind|tailwind\\.css|TailwindCSS|TAILWIND|@tailwindcss|tailwindcss|@source"
+    packages/conformance-fixtures packages/test tests/kovo-check.node.mjs
+    packages/cli/src/index.kovo-explain.test.ts packages/server/src/hints.test.ts` returns no matches;
+    `pnpm exec vitest --run packages/conformance-fixtures/src/source-fixtures.test.ts
+    packages/conformance-fixtures/src/package-exports.test.ts
+    packages/conformance-fixtures/src/server-fixtures.test.ts
+    packages/conformance-fixtures/src/starter-template-fixtures.test.ts
+    packages/conformance-fixtures/src/command-fixtures.test.ts packages/test/src/html-fragment.test.ts
+    packages/server/src/hints.test.ts packages/cli/src/index.kovo-explain.test.ts`, `node --test
+    --test-name-pattern "D1 commerce enhanced fragments carry stylesheet hints|D4 commerce
+    adopt-dont-invent features stay represented|P10 starter wires graph assertions into CI|P2 page hints
+    keep speculation rules opt-in and non-empty" tests/kovo-check.node.mjs`, `pnpm exec tsc --noEmit
+    --pretty false`, and `git diff --check` pass in `agent/stylex-test-fixtures-cleanup`.
 - [x] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
   - Evidence (2026-06-17): `examples/commerce/scripts/measure-style-size.mjs` builds the commerce

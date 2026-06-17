@@ -561,11 +561,11 @@ export async function loadVitePlusConfig(source: string): Promise<VitePlusConfig
       if (specifier === 'vite-plus') {
         return { defineConfig: (config: VitePlusConfig) => config };
       }
-      if (specifier === '@tailwindcss/vite') {
-        const tailwindcss = () => ({ name: 'tailwindcss-test-stub' });
-        tailwindcss.default = tailwindcss;
-        tailwindcss.__esModule = true;
-        return tailwindcss;
+      if (specifier === 'fixture-vite-plugin') {
+        const fixturePlugin = () => ({ name: 'fixture-vite-plugin-test-stub' });
+        fixturePlugin.default = fixturePlugin;
+        fixturePlugin.__esModule = true;
+        return fixturePlugin;
       }
       assert.fail(`unexpected Vite+ config import ${specifier}`);
     },

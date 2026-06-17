@@ -22,7 +22,7 @@ import {
   type KovoExplainQueryAssertionFact,
 } from './kovo-explain-fixtures.ts';
 import { htmlElementFacts, type HtmlElementFact } from '@kovojs/test/html-fragment';
-import { cssSourceDirectives } from './source-fixtures.ts';
+import { cssLayerNames } from './source-fixtures.ts';
 
 export interface StarterTemplateSources {
   ciWorkflowSource: string;
@@ -53,7 +53,7 @@ export interface StarterTemplateFacts {
   appSource?: string;
   ciRunCommands: readonly string[];
   clientSource?: string;
-  cssDirectives: readonly string[];
+  cssLayers: readonly string[];
   graph: Record<string, unknown>;
   indexHtml: StarterTemplateIndexHtmlFacts;
   package: StarterTemplatePackageFacts;
@@ -103,7 +103,7 @@ export interface StarterTemplateAcceptanceFact {
   };
   browserClient: StarterClientTemplateBehaviorFact;
   ciRunCommands: readonly string[];
-  cssDirectives: readonly string[];
+  cssLayers: readonly string[];
   devDependencyCoverage: StarterTemplateDevDependencyCoverage;
   emittedGraph: StarterTemplateExecutionResult;
   graph: StarterTemplateGraphFact;
@@ -203,7 +203,7 @@ export async function starterTemplateFacts(
       ciRunCommands.length > 0
         ? commandSequence(ciRunCommands.join(' && ')).map((command) => command.raw)
         : [],
-    cssDirectives: cssSourceDirectives(sources.stylesSource),
+    cssLayers: cssLayerNames(sources.stylesSource),
     graph: JSON.parse(sources.graphSource) as Record<string, unknown>,
     indexHtml: {
       htmlAttrs: indexElements.find((element) => element.tag === 'html')?.attrs,
@@ -313,7 +313,7 @@ export async function starterTemplateAcceptanceFact(
     },
     browserClient: await starterClientTemplateBehaviorFact(starterFacts.clientSource),
     ciRunCommands: starterFacts.ciRunCommands,
-    cssDirectives: starterFacts.cssDirectives,
+    cssLayers: starterFacts.cssLayers,
     devDependencyCoverage: starterTemplateDevDependencyCoverage(
       starterFacts.package,
       options.expectedDevDependencies,

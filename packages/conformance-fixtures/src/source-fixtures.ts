@@ -125,12 +125,12 @@ export interface CssScopeRuleFact {
 
 type TypeScriptModule = typeof import('typescript');
 
-export function cssSourceDirectives(source: string): string[] {
+export function cssLayerNames(source: string): string[] {
   return source
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line.startsWith('@source '))
-    .map((line) => line.slice('@source '.length).replace(/;$/, ''));
+    .map((line) => /^@layer\s+([^;{]+)(?:[;{].*)?$/.exec(line)?.[1]?.trim())
+    .filter((layer): layer is string => Boolean(layer));
 }
 
 export function cssScopeRules(source: string): CssScopeRuleFact[] {

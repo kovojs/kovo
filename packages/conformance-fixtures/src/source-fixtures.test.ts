@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest';
 import * as ts from 'typescript';
 
 import {
+  cssLayerNames,
   cssScopeRules,
-  cssSourceDirectives,
   drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
   forbiddenBrowserArchitectureProjectFact,
@@ -27,16 +27,16 @@ import {
 } from './source-fixtures.js';
 
 describe('@kovojs/test source fixture seam', () => {
-  it('extracts Tailwind source directives without keeping a local kovo-check parser', () => {
+  it('extracts CSS layer names without keeping a local kovo-check parser', () => {
     expect(
-      cssSourceDirectives(
+      cssLayerNames(
         [
-          '@import "tailwindcss";',
-          '  @source "../index.html";',
-          '@source inline("bg-emerald-50 text-emerald-700");',
+          ':root { color-scheme: light; }',
+          '  @layer kovo-starter-base;',
+          '@layer kovo-style.1000 {',
         ].join('\n'),
       ),
-    ).toEqual(['"../index.html"', 'inline("bg-emerald-50 text-emerald-700")']);
+    ).toEqual(['kovo-starter-base', 'kovo-style.1000']);
   });
 
   it('extracts structured CSS scope rules from generated component styles', () => {

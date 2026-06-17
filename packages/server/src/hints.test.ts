@@ -70,22 +70,22 @@ describe('page hints', () => {
     );
   });
 
-  it('renders stylesheet assets for Tailwind-first CSS delivery', () => {
+  it('renders stylesheet assets for StyleX-first CSS delivery', () => {
     expect(
       renderPageHints({
         modulepreloads: ['/c/cart.client.js'],
         stylesheets: [
-          '/assets/tailwind.css',
-          '/assets/tailwind.css',
+          '/assets/styles.css',
+          '/assets/styles.css',
           { href: '/assets/print.css', preload: false },
         ],
       }),
     ).toEqual({
       earlyHints: {
-        Link: '</assets/tailwind.css>; rel=preload; as=style, </c/cart.client.js>; rel=modulepreload',
+        Link: '</assets/styles.css>; rel=preload; as=style, </c/cart.client.js>; rel=modulepreload',
       },
       html: [
-        '<link rel="stylesheet" href="/assets/tailwind.css">',
+        '<link rel="stylesheet" href="/assets/styles.css">',
         '<link rel="stylesheet" href="/assets/print.css">',
         '<link rel="modulepreload" href="/c/cart.client.js">',
       ].join(''),
@@ -176,14 +176,14 @@ describe('page hints', () => {
     expect(
       renderPageHints({
         modulepreloads: ['/c/cart client.js?target=<badge>'],
-        stylesheets: ['/assets/tailwind,print.css'],
+        stylesheets: ['/assets/styles,print.css'],
       }),
     ).toEqual({
       earlyHints: {
-        Link: '</assets/tailwind%2Cprint.css>; rel=preload; as=style, </c/cart%20client.js?target=%3Cbadge%3E>; rel=modulepreload',
+        Link: '</assets/styles%2Cprint.css>; rel=preload; as=style, </c/cart%20client.js?target=%3Cbadge%3E>; rel=modulepreload',
       },
       html: [
-        '<link rel="stylesheet" href="/assets/tailwind,print.css">',
+        '<link rel="stylesheet" href="/assets/styles,print.css">',
         '<link rel="modulepreload" href="/c/cart client.js?target=&lt;badge&gt;">',
       ].join(''),
     });
