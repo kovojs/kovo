@@ -68,6 +68,13 @@ export type {
   VerificationDiagnosticFact,
 } from './graph.js';
 export { validateKovoExplainInput } from './graph.js';
+export type { QueryDelta, QueryDeltaListMeta, QueryListDelta } from './query-delta.js';
+export {
+  applyQueryDelta,
+  buildQueryDelta,
+  QueryDeltaApplyError,
+  queryDeltaIsSmaller,
+} from './query-delta.js';
 export type { PackageComponentPrefixManifestOptions } from './package-prefix.js';
 export { packageComponentPrefixFactFromPackageManifest } from './package-prefix.js';
 export type {
