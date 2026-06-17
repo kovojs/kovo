@@ -16,7 +16,7 @@ import {
 } from './generated/deal-detail.js';
 // Types only — the persisted-row shapes the detail page loads carry the
 // presentational title/company columns the rowset queries omit (SPEC.md §10.5).
-import type { DetailContact, DetailDeal } from './components/deal-detail.js';
+import type { DetailContact } from './components/deal-detail.js';
 import { PIPELINE_TARGET, renderPipelinePage, renderPipelineRegion } from './generated/pipeline.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';

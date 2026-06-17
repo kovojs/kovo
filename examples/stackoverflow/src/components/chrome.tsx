@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
+import * as style from '@kovojs/style';
 
 import { voteUpMutation } from '../mutations.js';
 
@@ -53,6 +54,13 @@ export function parseTags(tags: string | undefined): string[] {
     .filter(Boolean);
 }
 
+const chromeStyles = style.create(
+  {
+    authorAvatar: { fontSize: 12, height: 28, width: 28 },
+  },
+  { namespace: 'stackoverflowChrome', source: 'components/chrome.tsx' },
+);
+
 /** Render a row of tags as neutral @kovojs/ui Badges. */
 export function renderTags(tags: string[]): string {
   if (tags.length === 0) return '';
@@ -71,7 +79,7 @@ export function renderAuthor(name: string, iso: string | undefined, verb: string
   const avatar = Avatar.definition.render({
     label: name,
     children: AvatarFallback.definition.render({ children: initials(name) }),
-    styles: { root: { height: 28, width: 28, fontSize: 12 } },
+    styles: { root: chromeStyles.authorAvatar },
   });
   const when = iso ? relativeTime(iso) : '';
   return (

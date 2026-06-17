@@ -5,7 +5,7 @@
 import { createApp, mutation, route, s, type MutationFail } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-import { item, readStock } from './shared';
+import { readStock } from './shared';
 import { StockBadge } from './stock-badge';
 
 function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {

@@ -12,9 +12,7 @@ import {
   type ActivityListResult,
   type ActivityRow,
   type ContactListResult,
-  type ContactRow,
   type DealListResult,
-  type DealRow,
 } from '../queries.js';
 import { money, renderCrmShell, stageBadge } from '../components/chrome.js';
 
@@ -63,14 +61,6 @@ export interface DealDetailPageData {
   deal: DetailDeal;
   contact: DetailContact | undefined;
   activities: ActivityRow[];
-}
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
 }
 
 // The interactive region, rendered inside the page and as the moveDeal /

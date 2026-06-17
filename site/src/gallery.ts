@@ -24,7 +24,6 @@ import { docRoute, routePath, type AnyRoute } from './route-kit.js';
 // build: scripts/build.mjs (loadGalleryData, renderGalleryPage) and
 // scripts/app-shell.mjs (gallery client-module registration).
 
-const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const headlessUiSourceRoot = path.join(repoRoot, 'packages/headless-ui/src');
 const galleryGeneratedDir = path.join(repoRoot, 'examples/gallery/src/generated/interactive');
