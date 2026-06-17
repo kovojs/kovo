@@ -16,4 +16,3 @@ export {
   type ShellDispatchMatch,
   type ShellDispatchPhase,
 } from '../shell.js';
-

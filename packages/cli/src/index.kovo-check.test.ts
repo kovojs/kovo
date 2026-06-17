@@ -1001,18 +1001,12 @@ describe('kovo check', () => {
       );
       writeFileSync(
         join(parent, 'node_modules/@kovojs/core/internal/derivation.js'),
-        [
-          'export function puntReasonLabel() { return ""; }',
-          '',
-        ].join('\n'),
+        ['export function puntReasonLabel() { return ""; }', ''].join('\n'),
         'utf8',
       );
       writeFileSync(
         join(parent, 'node_modules/@kovojs/core/internal/graph.js'),
-        [
-          'export function validateKovoExplainInput() { return []; }',
-          '',
-        ].join('\n'),
+        ['export function validateKovoExplainInput() { return []; }', ''].join('\n'),
         'utf8',
       );
       writeFileSync(join(parent, 'package.json'), '{"type":"module"}\n', 'utf8');

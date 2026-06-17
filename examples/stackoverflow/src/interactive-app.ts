@@ -68,10 +68,7 @@ async function loadAnswersForQuestion(db: SoDb, questionId: string): Promise<Ans
 // by id, so both the page render and the fragment re-render show rich rows. These
 // columns are never read by a query loader, so derived optimism is unaffected; a
 // runtime-posted question (no demo metadata) simply renders with defaults.
-async function enrichQuestionRows(
-  db: SoDb,
-  items: QuestionListItemBare[],
-): Promise<QuestionRow[]> {
+async function enrichQuestionRows(db: SoDb, items: QuestionListItemBare[]): Promise<QuestionRow[]> {
   const rows = await db
     .select({
       id: questions.id,

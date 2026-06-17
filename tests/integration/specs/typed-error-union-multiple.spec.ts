@@ -3,7 +3,10 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'typed-error-union-multiple' });
 
-async function submitQuantity(page: import('@kovojs/test/internal/integration').Page, quantity: string) {
+async function submitQuantity(
+  page: import('@kovojs/test/internal/integration').Page,
+  quantity: string,
+) {
   await page.getByRole('spinbutton', { name: 'Quantity' }).fill(quantity);
   const responsePromise = page.waitForResponse(
     (response) => response.url().endsWith('/_m/checkout/submit') && response.status() === 422,

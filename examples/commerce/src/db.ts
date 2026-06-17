@@ -23,7 +23,7 @@ const SCHEMA_DDL = [
 ].join('\n');
 
 const SEED_PRODUCTS =
-  "INSERT INTO products (id, name, category, emoji, stock, unit_price) VALUES " +
+  'INSERT INTO products (id, name, category, emoji, stock, unit_price) VALUES ' +
   "('p1', 'Aero Wireless Keyboard', 'Peripherals', '⌨️', 5, 1499), " +
   "('p2', 'Lumen 4K Monitor', 'Displays', '🖥️', 2, 2599), " +
   "('p3', 'Pulse USB-C Hub', 'Accessories', '🔌', 8, 399);";

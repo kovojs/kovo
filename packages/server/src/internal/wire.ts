@@ -14,4 +14,3 @@ export {
   type NoJsMutationRequest,
   type NoJsMutationResponse,
 } from '../mutation-wire.js';
-

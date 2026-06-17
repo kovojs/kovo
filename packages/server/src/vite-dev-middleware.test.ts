@@ -10,9 +10,7 @@ import {
   kovoAppShellVitePlugin,
   type KovoAppShellViteMiddleware,
 } from './internal/app-shell-vite.js';
-import {
-  kovoAppShellViteDevPlugin,
-} from './api/app-shell/vite.js';
+import { kovoAppShellViteDevPlugin } from './api/app-shell/vite.js';
 import { nodeFetch } from './vite-test-http.js';
 
 describe('server app shell Vite plugin', () => {

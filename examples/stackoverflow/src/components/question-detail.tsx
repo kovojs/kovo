@@ -62,7 +62,9 @@ function renderQuestionCard(question: QuestionDetail): string {
         <p class="so-detail-body">{question.body}</p>
         <div class="so-row-meta">
           {renderTags(tags)}
-          {question.authorName ? renderAuthor(question.authorName, question.createdAt, 'asked') : ''}
+          {question.authorName
+            ? renderAuthor(question.authorName, question.createdAt, 'asked')
+            : ''}
         </div>
       </div>
     </div>
@@ -85,7 +87,9 @@ function renderAnswerCard(answer: AnswerDetail): string {
         {acceptedBadge ? <div class="mb-2">{acceptedBadge}</div> : ''}
         <p class="so-answer-body">{answer.body}</p>
         {answer.authorName ? (
-          <div class="so-row-meta">{renderAuthor(answer.authorName, answer.createdAt, 'answered')}</div>
+          <div class="so-row-meta">
+            {renderAuthor(answer.authorName, answer.createdAt, 'answered')}
+          </div>
         ) : (
           ''
         )}
@@ -95,7 +99,10 @@ function renderAnswerCard(answer: AnswerDetail): string {
   const surface = Card.definition.render({ children: body });
   // Keyed child of the detail fragment host; accepted answers get the accent rail.
   return (
-    <li kovo-key={answer.id} class={answer.accepted ? 'so-answer so-answer--accepted' : 'so-answer'}>
+    <li
+      kovo-key={answer.id}
+      class={answer.accepted ? 'so-answer so-answer--accepted' : 'so-answer'}
+    >
       {surface}
     </li>
   );

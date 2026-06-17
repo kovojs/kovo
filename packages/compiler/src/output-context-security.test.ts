@@ -107,7 +107,9 @@ export const ProductCard = component({
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
     const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
-    expect(serverSource).toContain(`import { derive, kovoStyleProperty } from '@kovojs/runtime/generated';`);
+    expect(serverSource).toContain(
+      `import { derive, kovoStyleProperty } from '@kovojs/runtime/generated';`,
+    );
     expect(serverSource).toContain(
       `derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));`,
     );

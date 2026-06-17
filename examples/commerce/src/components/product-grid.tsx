@@ -140,9 +140,7 @@ function renderProductCard(
   );
   // `kovo-key` stays on the keyed child of the grid fragment host (§9.1 morph);
   // the @kovojs/ui Card provides the surface inside it.
-  return (
-    <article kovo-key={item.id}>{Card.definition.render({ children: body })}</article>
-  );
+  return <article kovo-key={item.id}>{Card.definition.render({ children: body })}</article>;
 }
 
 // SPEC.md section 6.3: the no-JS add-to-cart form posts to the mutation

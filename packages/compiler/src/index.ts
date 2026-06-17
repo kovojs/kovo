@@ -9,21 +9,11 @@ export type {
   MergeableAttributeValue,
 } from './lower/attribute-merge.js';
 export { mergePrimitiveAndAuthorAttributes } from './lower/attribute-merge.js';
-export type {
-  KovoVitePlugin,
-  KovoVitePluginOptions,
-} from './vite.js';
+export type { KovoVitePlugin, KovoVitePluginOptions } from './vite.js';
 export { deriveAppGraph } from './graph.js';
 export { composePageComponentArtifacts } from './page-composition.js';
-export type {
-  CompileComponentOptions,
-  CompileResult,
-} from './types.js';
-export {
-  assertFixpoint,
-  assertRenderEquivalence,
-  compileComponentModule,
-} from './compile.js';
+export type { CompileComponentOptions, CompileResult } from './types.js';
+export { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './compile.js';
 
 /**
  * The Kovo Vite plugin: lowers authored component modules through compileComponentModule

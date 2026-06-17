@@ -65,7 +65,9 @@ function renderQuestionRow(question: QuestionRow): string {
         {question.excerpt ? <p class="so-row-excerpt">{question.excerpt}</p> : ''}
         <div class="so-row-meta">
           {renderTags(tags)}
-          {question.authorName ? renderAuthor(question.authorName, question.createdAt, 'asked') : ''}
+          {question.authorName
+            ? renderAuthor(question.authorName, question.createdAt, 'asked')
+            : ''}
         </div>
       </div>
     </div>

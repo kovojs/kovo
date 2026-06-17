@@ -11,4 +11,3 @@ export {
 } from '../static-export-output.js';
 export { staticExportOutputTargets } from '../static-export-output-targets.js';
 export type { StaticExportOutputTarget } from '../static-export-output-targets.js';
-

@@ -10,14 +10,14 @@ One organizing constraint governs everything: every artifact the system produces
 
 ## Documents
 
-| Document                                                     | Role                                                               |
-| ------------------------------------------------------------ | ------------------------------------------------------------------ |
-| [`SPEC.md`](SPEC.md)                                         | The normative source of truth for framework behavior               |
-| [`rules/`](rules)                                            | Standing agent, release, and conformance rules                     |
-| [`plans/archive.md`](plans/archive.md)                       | Completed and retired implementation plan registry                 |
-| [`rules/constitution.md`](rules/constitution.md)             | The five design tests every feature must pass (summary of SPEC §2) |
+| Document                                                       | Role                                                               |
+| -------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [`SPEC.md`](SPEC.md)                                           | The normative source of truth for framework behavior               |
+| [`rules/`](rules)                                              | Standing agent, release, and conformance rules                     |
+| [`plans/archive.md`](plans/archive.md)                         | Completed and retired implementation plan registry                 |
+| [`rules/constitution.md`](rules/constitution.md)               | The five design tests every feature must pass (summary of SPEC §2) |
 | [`rules/compiler-hard-rules.md`](rules/compiler-hard-rules.md) | Compiler release gates (summary of SPEC §5.2)                      |
-| [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md)          | Instructions for coding agents working in this repo                |
+| [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md)            | Instructions for coding agents working in this repo                |
 
 ## Prior art
 
@@ -36,20 +36,20 @@ What it deliberately rejects (client routers, hydration, shadow DOM, custom elem
 
 ## Repository layout
 
-| Path                   | Contents                                                |
-| ---------------------- | ------------------------------------------------------- |
-| `packages/core`        | Component model, diagnostics registry                   |
-| `packages/compiler`    | Lowering pipeline, registries, `kovo explain`           |
-| `packages/runtime`     | Loader, update plan, morph, optimistic protocol         |
-| `packages/server`      | Mutations, queries, guards, wire protocol               |
-| `packages/drizzle`     | Touch-set extraction and schema-as-registry adapter     |
-| `packages/cli`         | The `kovo` command-line surface                         |
-| `packages/test`        | `kovoTest` harness                                      |
-| `packages/create-kovo` | Starter-template scaffolder                             |
+| Path                   | Contents                                                     |
+| ---------------------- | ------------------------------------------------------------ |
+| `packages/core`        | Component model, diagnostics registry                        |
+| `packages/compiler`    | Lowering pipeline, registries, `kovo explain`                |
+| `packages/runtime`     | Loader, update plan, morph, optimistic protocol              |
+| `packages/server`      | Mutations, queries, guards, wire protocol                    |
+| `packages/drizzle`     | Touch-set extraction and schema-as-registry adapter          |
+| `packages/cli`         | The `kovo` command-line surface                              |
+| `packages/test`        | `kovoTest` harness                                           |
+| `packages/create-kovo` | Starter-template scaffolder                                  |
 | `examples/commerce`    | The reference commerce app (`rules/v1-acceptance.md` target) |
-| `conformance/`         | Pinned Drizzle-surface conformance suite                |
-| `docs/`                | Explanation, studies, evidence, and examples            |
-| `rules/`               | Standing agent, release, and conformance rules          |
+| `conformance/`         | Pinned Drizzle-surface conformance suite                     |
+| `docs/`                | Explanation, studies, evidence, and examples                 |
+| `rules/`               | Standing agent, release, and conformance rules               |
 
 ## Development
 

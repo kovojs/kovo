@@ -96,7 +96,11 @@ export const ContactsRegion = component({
               placeholder="name@example.com"
               class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
-            {Button.definition.render({ children: 'Add contact', type: 'submit', variant: 'primary' })}
+            {Button.definition.render({
+              children: 'Add contact',
+              type: 'submit',
+              variant: 'primary',
+            })}
           </div>
         </form>
 

@@ -1,11 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
-import {
-  assertFixpoint,
-  compileComponentModule,
-  deriveAppGraph,
-} from './index.js';
+import { assertFixpoint, compileComponentModule, deriveAppGraph } from './index.js';
 import { deriveRegistryFactsFromGraph } from './internal-graph.js';
 
 const cartBadgeSource = `

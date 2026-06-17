@@ -166,9 +166,7 @@ export function markdownBoldSectionHeadings(source: string): MarkdownBoldSection
   return source
     .split('\n')
     .map((line) =>
-      /^\s*(?:-\s+\[[ x]\]\s+)?\*\*(\d+(?:\.\d+)*)\s+(.+?)[.:]\*\*(?:\s+.*)?$/.exec(
-        line,
-      ),
+      /^\s*(?:-\s+\[[ x]\]\s+)?\*\*(\d+(?:\.\d+)*)\s+(.+?)[.:]\*\*(?:\s+.*)?$/.exec(line),
     )
     .filter((match): match is RegExpExecArray => match !== null)
     .map((match) => ({

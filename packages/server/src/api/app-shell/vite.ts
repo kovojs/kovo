@@ -1,6 +1,4 @@
-export {
-  kovoAppShellViteDevPlugin,
-} from '../../vite-dev.js';
+export { kovoAppShellViteDevPlugin } from '../../vite-dev.js';
 export {
   createKovoAppShellViteBuild,
   createKovoAppShellViteBuildFromBundle,

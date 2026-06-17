@@ -168,10 +168,7 @@ describe('@kovojs/test markdown fixture seam', () => {
           '1. **Legibility is load-bearing.**',
           '2. **Local code must not require global knowledge.**',
         ].join('\n'),
-        openDesignAreas: [
-          '# Open Design Areas',
-          '- [ ] **13.1 CSS.** details',
-        ].join('\n'),
+        openDesignAreas: ['# Open Design Areas', '- [ ] **13.1 CSS.** details'].join('\n'),
         spec: [
           '## 2. The Constitution (Design Tests)',
           '| # | Test |',

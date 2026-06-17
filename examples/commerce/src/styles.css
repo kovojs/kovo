@@ -184,21 +184,59 @@ button {
 
 /* Layout utilities for the @kovojs/ui-based product grid, order history, and
    cart badge (page chrome around the styled components). */
-.justify-between { justify-content: space-between; }
-.justify-center { justify-content: center; }
-.place-items-center { place-items: center; }
-.gap-0\.5 { gap: 0.125rem; }
-.gap-3 { gap: 0.75rem; }
-.h-5 { height: 1.25rem; }
-.h-12 { height: 3rem; }
-.w-12 { width: 3rem; }
-.min-w-5 { min-width: 1.25rem; }
-.rounded-full { border-radius: 9999px; }
-.px-1\.5 { padding-inline: 0.375rem; }
-.py-1\.5 { padding-block: 0.375rem; }
-.py-3 { padding-block: 0.75rem; }
-.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
-.text-2xl { font-size: 1.5rem; line-height: 2rem; }
-.text-slate-500 { color: #64748b; }
-.tabular-nums { font-variant-numeric: tabular-nums; }
-.tracking-tight { letter-spacing: -0.025em; }
+.justify-between {
+  justify-content: space-between;
+}
+.justify-center {
+  justify-content: center;
+}
+.place-items-center {
+  place-items: center;
+}
+.gap-0\.5 {
+  gap: 0.125rem;
+}
+.gap-3 {
+  gap: 0.75rem;
+}
+.h-5 {
+  height: 1.25rem;
+}
+.h-12 {
+  height: 3rem;
+}
+.w-12 {
+  width: 3rem;
+}
+.min-w-5 {
+  min-width: 1.25rem;
+}
+.rounded-full {
+  border-radius: 9999px;
+}
+.px-1\.5 {
+  padding-inline: 0.375rem;
+}
+.py-1\.5 {
+  padding-block: 0.375rem;
+}
+.py-3 {
+  padding-block: 0.75rem;
+}
+.text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+.text-slate-500 {
+  color: #64748b;
+}
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+.tracking-tight {
+  letter-spacing: -0.025em;
+}

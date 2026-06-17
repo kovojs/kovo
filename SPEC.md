@@ -657,13 +657,13 @@ The §1.1 proof claims are claims about TypeScript programs that stay inside the
 
 Interactions must use the lowest layer that suffices. The compiler enforces L0 substitutions; lints nudge the rest. Navigation between _places_ is always a real navigation (§8); the ladder governs interaction _within_ a place.
 
-| Layer       | Mechanism                                                                                                                                  | Example                               | JS shipped                             |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | -------------------------------------- |
-| **L0**      | Platform behaviors: invoker commands, Popover API, `<details>`, `<dialog>`, `:has()`, scroll-driven animations                             | Open cart drawer                      | 0                                      |
-| **L1**      | Pure client islands: local state + the update plan (bindings/derives/stamps, §4.8); loaded on interaction or a declared trigger (§4.7)     | Price-range filter UI, tabs, carousel | handler module on first touch          |
-| **L2**      | Mutations: real forms + enhanced fetch → fragment/query patch                                                                              | Add to cart                           | loader (already present) + form module |
-| **L3**      | Optimistic: compiler-derived or declared transforms over query values                                                                      | Instant badge tick                    | transform module                       |
-| **L4**      | Live: SSE pushing the same fragment/query vocabulary; BroadcastChannel tab sync + refetch-on-focus cover common lower-cost cases (§9.3)    | Order status, presence                | `<kovo-live>` subscriber               |
+| Layer  | Mechanism                                                                                                                               | Example                               | JS shipped                             |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------- |
+| **L0** | Platform behaviors: invoker commands, Popover API, `<details>`, `<dialog>`, `:has()`, scroll-driven animations                          | Open cart drawer                      | 0                                      |
+| **L1** | Pure client islands: local state + the update plan (bindings/derives/stamps, §4.8); loaded on interaction or a declared trigger (§4.7)  | Price-range filter UI, tabs, carousel | handler module on first touch          |
+| **L2** | Mutations: real forms + enhanced fetch → fragment/query patch                                                                           | Add to cart                           | loader (already present) + form module |
+| **L3** | Optimistic: compiler-derived or declared transforms over query values                                                                   | Instant badge tick                    | transform module                       |
+| **L4** | Live: SSE pushing the same fragment/query vocabulary; BroadcastChannel tab sync + refetch-on-focus cover common lower-cost cases (§9.3) | Order status, presence                | `<kovo-live>` subscriber               |
 
 **Cross-island coordination**, in order of preference: (1) **the URL** — filter writes `?max=500`, or is a GET form whose fragment response is the grid, both typed against the route's `search` schema (§6.4); (2) **typed fire-and-forget events** — registry-checked `emit('cart:added', {…})`, payload types may not overlap query data (lint `KV320`: if you're sending server facts over an event, you wanted an optimistic transform); (3) **shared client state** — last resort, lint-gated with required justification comment.
 

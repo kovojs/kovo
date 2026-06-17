@@ -42,7 +42,9 @@ describe('public-packages manifest', () => {
   it('classifies every workspace package under packages/* exactly once', () => {
     const classifiedDirs = manifest.map((pkg) => pkg.dir).sort();
     expect(new Set(classifiedDirs).size, 'no duplicate dirs').toBe(classifiedDirs.length);
-    expect(classifiedDirs).toEqual([...workspacePackageDirs()].sort());
+    expect(classifiedDirs).toEqual(
+      [...workspacePackageDirs()].sort((left, right) => left.localeCompare(right)),
+    );
   });
 
   it('matches each package.json name and exists on disk', () => {
@@ -87,7 +89,9 @@ describe('public-packages manifest', () => {
       const publicSubpaths = publicEntrySubpaths(pkg);
       const generatedSubpaths = generatedEntrySubpaths(pkg);
       const internalSubpaths = internalEntrySubpaths(pkg);
-      const declaredSubpaths = [...publicSubpaths, ...generatedSubpaths, ...internalSubpaths].sort();
+      const declaredSubpaths = [...publicSubpaths, ...generatedSubpaths, ...internalSubpaths].sort(
+        (left, right) => left.localeCompare(right),
+      );
 
       expect(pkg.apiBoundary, `${pkg.name} must declare apiBoundary metadata`).toBeDefined();
       expect(new Set(declaredSubpaths).size, `${pkg.name} boundary subpaths are unique`).toBe(

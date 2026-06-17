@@ -4,7 +4,9 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'view-transition-names' });
 
-async function transitionNames(page: import('@kovojs/test/internal/integration').Page): Promise<string[]> {
+async function transitionNames(
+  page: import('@kovojs/test/internal/integration').Page,
+): Promise<string[]> {
   return page.locator('[data-transition]').evaluateAll((elements) =>
     elements.map((element) => {
       const style = element.getAttribute('style') ?? '';

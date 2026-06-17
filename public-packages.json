@@ -7,15 +7,9 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": [
-          "."
-        ],
+        "public": ["."],
         "generated": [],
-        "internal": [
-          "./internal/derivation",
-          "./internal/graph",
-          "./internal/package-prefix"
-        ]
+        "internal": ["./internal/derivation", "./internal/graph", "./internal/package-prefix"]
       },
       "apiRef": {
         "order": 1,
@@ -60,12 +54,8 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": [
-          "."
-        ],
-        "generated": [
-          "./generated"
-        ],
+        "public": ["."],
+        "generated": ["./generated"],
         "internal": []
       },
       "apiRef": {
@@ -96,10 +86,7 @@
           "./verifier-sql"
         ],
         "generated": [],
-        "internal": [
-          "./internal/integration",
-          "./internal/integration/define"
-        ]
+        "internal": ["./internal/integration", "./internal/integration/define"]
       },
       "apiRef": {
         "order": 4,
@@ -113,11 +100,7 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": [
-          ".",
-          "./derive",
-          "./static"
-        ],
+        "public": [".", "./derive", "./static"],
         "generated": [],
         "internal": []
       },
@@ -181,13 +164,9 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": [
-          "."
-        ],
+        "public": ["."],
         "generated": [],
-        "internal": [
-          "./internal"
-        ]
+        "internal": ["./internal"]
       },
       "apiRef": {
         "order": 6,
@@ -201,13 +180,9 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": [
-          "."
-        ],
+        "public": ["."],
         "generated": [],
-        "internal": [
-          "./internal"
-        ]
+        "internal": ["./internal"]
       },
       "apiRef": {
         "order": 7,
@@ -221,16 +196,9 @@
       "visibility": "public",
       "kind": "build-tool",
       "apiBoundary": {
-        "public": [
-          ".",
-          "./graph",
-          "./package-styles"
-        ],
+        "public": [".", "./graph", "./package-styles"],
         "generated": [],
-        "internal": [
-          "./internal",
-          "./internal/graph"
-        ]
+        "internal": ["./internal", "./internal/graph"]
       },
       "apiRef": {
         "order": 8,
@@ -244,13 +212,9 @@
       "visibility": "public",
       "kind": "cli",
       "apiBoundary": {
-        "public": [
-          "."
-        ],
+        "public": ["."],
         "generated": [],
-        "internal": [
-          "./internal"
-        ]
+        "internal": ["./internal"]
       },
       "apiRef": {
         "order": 9,

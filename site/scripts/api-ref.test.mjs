@@ -164,9 +164,10 @@ describe('api-ref generator', () => {
       const page = await readFile(path.join(outDir, pkg.file), 'utf8');
       expect(page, `${pkg.file} leaked @internal`).not.toContain('@internal');
       expect(page, `${pkg.file} leaked @generated`).not.toContain('@generated');
-      expect(pkg.file, 'generated/internal subpaths must not receive public docs pages').not.toMatch(
-        /(?:^|-)(?:generated|internal)(?:-|\.md$)/,
-      );
+      expect(
+        pkg.file,
+        'generated/internal subpaths must not receive public docs pages',
+      ).not.toMatch(/(?:^|-)(?:generated|internal)(?:-|\.md$)/);
     }
   });
 

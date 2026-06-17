@@ -99,6 +99,7 @@ Pattern proven on commerce: import `@kovojs/ui` components and render them with 
 `.definition.render` pattern). The `kv-*` classes are styled by Part A's generated stylesheet.
 
 **commerce (DONE — 55/55 tests, build clean):**
+
 - [x] **B1.** `@kovojs/ui` + `@kovojs/style` deps (+ `@kovojs/headless-ui` devDep); `styles.css`
       `@import`s `generated/kovo-ui.css`.
 - [x] **B2.** `products` gained `name`/`category`/`emoji` (defaulted, optimism/fixtures unaffected) +
@@ -108,6 +109,7 @@ Pattern proven on commerce: import `@kovojs/ui` components and render them with 
 - [x] **B4.** Added the missing layout utilities to `styles.css`.
 
 **crm (DONE — `agent/crm`, 20/20 tests, build clean, tsc clean):**
+
 - [x] B1 deps+theme · B2 `contacts.company`/`title` + `deals.title` (defaulted; **kept off derivable
       rowset selects** so derived optimism stays untouched — verified `emit-graph --check` no-diff) ·
       B3 chrome `Badge` stages, contacts `Card`+`Avatar`+`Button`, pipeline `Card`+`Table`+`Badge`,
@@ -115,6 +117,7 @@ Pattern proven on commerce: import `@kovojs/ui` components and render them with 
 - Note: Badge has only neutral/success/warning, so 6 stages map onto 3 tones.
 
 **stackoverflow (DONE — `agent/stackoverflow`, 25/25 tests, build clean):**
+
 - [x] B1 deps+theme · B2 `questions.author_name`/`tags`/`created_at` + `answers.author_name`/
       `created_at` (defaulted; not selected by loaders, so §10.5 shapes untouched), demo data with
       authors/tags/timestamps/excerpts · B3 question rows + answers + composers → `Card`, tags/accepted
@@ -125,6 +128,7 @@ Pattern proven on commerce: import `@kovojs/ui` components and render them with 
 gates green — compiler 348, api-surface clean, all three example builds emit `kv-*`, suites 55/20/25.
 
 ## Known follow-ups (tracked, not blocking)
+
 - Upstream `@kojvojs/style` emit fixes: unitless lengths + digit-leading `@layer` idents (currently
   normalized in served text only).
 - `@kojvojs/ui` `style`/`styles` override props are dropped for runtime `style.attrs` objects

@@ -2,7 +2,10 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'nullable-binding' });
 
-async function submit(page: import('@kovojs/test/internal/integration').Page, name: string): Promise<void> {
+async function submit(
+  page: import('@kovojs/test/internal/integration').Page,
+  name: string,
+): Promise<void> {
   await Promise.all([
     page.waitForResponse((response) => response.url().includes('/_m/nullable-binding/')),
     page.getByRole('button', { name }).click(),

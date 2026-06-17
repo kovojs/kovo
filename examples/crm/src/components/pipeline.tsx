@@ -85,7 +85,7 @@ function renderOpenDealsTable(openDeals: DealRow[], contactsById: Map<string, Co
             children: contactsById.get(deal.contactId)?.name ?? deal.contactId,
           }) +
           TableCell.definition.render({
-            children: (<span class="tabular-nums">{money(deal.amount)}</span>),
+            children: <span class="tabular-nums">{money(deal.amount)}</span>,
           }),
       }),
     )

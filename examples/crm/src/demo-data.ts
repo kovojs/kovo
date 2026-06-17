@@ -66,14 +66,70 @@ const DEMO_CONTACTS = [
 ];
 
 const DEMO_DEALS = [
-  { id: 'd3', contactId: 'c3', stage: 'open', amount: 8000, ownerId: 'u1', title: 'Apollo Guidance — Onboarding package' },
-  { id: 'd4', contactId: 'c3', stage: 'proposal', amount: 15000, ownerId: 'u1', title: 'Apollo Guidance — Platform expansion' },
-  { id: 'd5', contactId: 'c4', stage: 'qualified', amount: 6000, ownerId: 'u1', title: 'Apollo Guidance — Analytics add-on' },
-  { id: 'd6', contactId: 'c5', stage: 'open', amount: 9500, ownerId: 'u2', title: 'Bletchley Labs — Security tier' },
-  { id: 'd7', contactId: 'c5', stage: 'won', amount: 22000, ownerId: 'u2', title: 'Bletchley Labs — Enterprise rollout' },
-  { id: 'd8', contactId: 'c6', stage: 'lead', amount: 3000, ownerId: 'u2', title: 'MIT Systems — Pilot program' },
-  { id: 'd9', contactId: 'c7', stage: 'lost', amount: 4000, ownerId: 'u1', title: 'Stanford Press — Seat licenses' },
-  { id: 'd10', contactId: 'c8', stage: 'open', amount: 11000, ownerId: 'u2', title: 'Spanning Tree — Network module' },
+  {
+    id: 'd3',
+    contactId: 'c3',
+    stage: 'open',
+    amount: 8000,
+    ownerId: 'u1',
+    title: 'Apollo Guidance — Onboarding package',
+  },
+  {
+    id: 'd4',
+    contactId: 'c3',
+    stage: 'proposal',
+    amount: 15000,
+    ownerId: 'u1',
+    title: 'Apollo Guidance — Platform expansion',
+  },
+  {
+    id: 'd5',
+    contactId: 'c4',
+    stage: 'qualified',
+    amount: 6000,
+    ownerId: 'u1',
+    title: 'Apollo Guidance — Analytics add-on',
+  },
+  {
+    id: 'd6',
+    contactId: 'c5',
+    stage: 'open',
+    amount: 9500,
+    ownerId: 'u2',
+    title: 'Bletchley Labs — Security tier',
+  },
+  {
+    id: 'd7',
+    contactId: 'c5',
+    stage: 'won',
+    amount: 22000,
+    ownerId: 'u2',
+    title: 'Bletchley Labs — Enterprise rollout',
+  },
+  {
+    id: 'd8',
+    contactId: 'c6',
+    stage: 'lead',
+    amount: 3000,
+    ownerId: 'u2',
+    title: 'MIT Systems — Pilot program',
+  },
+  {
+    id: 'd9',
+    contactId: 'c7',
+    stage: 'lost',
+    amount: 4000,
+    ownerId: 'u1',
+    title: 'Stanford Press — Seat licenses',
+  },
+  {
+    id: 'd10',
+    contactId: 'c8',
+    stage: 'open',
+    amount: 11000,
+    ownerId: 'u2',
+    title: 'Spanning Tree — Network module',
+  },
 ];
 
 const DEMO_ACTIVITIES = [

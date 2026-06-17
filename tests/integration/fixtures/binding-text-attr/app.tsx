@@ -1,10 +1,4 @@
-import {
-  createApp,
-  mutation,
-  renderQueryScript,
-  route,
-  s,
-} from '@kovojs/server';
+import { createApp, mutation, renderQueryScript, route, s } from '@kovojs/server';
 import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
