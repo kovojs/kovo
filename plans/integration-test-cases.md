@@ -689,20 +689,29 @@ integration harness uniquely proves.
     `pnpm --filter @kovojs/integration-tests exec playwright test specs/touch-graph-runtime-crosscheck.spec.ts specs/query-readset-runtime-crosscheck.spec.ts specs/exempt-table-read-fails.spec.ts --config playwright.config.ts --workers=1`;
     `pnpm exec vitest run packages/test/src/harness-verifier.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/verifier.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts`;
     `pnpm exec vp check packages/test/src/integration/define-fixture.ts packages/test/src/integration/fixture-instance.ts packages/test/src/integration/boot-fixture.ts packages/test/src/integration/playwright.ts tests/integration/fixtures/touch-graph-runtime-crosscheck/app.tsx tests/integration/specs/touch-graph-runtime-crosscheck.spec.ts tests/integration/fixtures/query-readset-runtime-crosscheck/app.tsx tests/integration/specs/query-readset-runtime-crosscheck.spec.ts tests/integration/fixtures/exempt-table-read-fails/app.tsx tests/integration/specs/exempt-table-read-fails.spec.ts`.
-- [ ] `manual-touches-raw-write` / `manual-touches-raw-write.spec.ts`: a statically opaque write with
+- [x] `manual-touches-raw-write` / `manual-touches-raw-write.spec.ts`: a statically opaque write with
       declared touches refreshes the right query and remains runtime-verified.
   - SPEC refs: §10.3 manual touches, §11.1 KV406.
   - Assertions: raw write changes db; invalidated query/fragment updates; diagnostics are visible.
-  - Gap: integration fixtures can now inject verifier metadata through `defineFixture`, but this
-    named case still needs its own fixture/spec tying a KV406/manual-touch artifact to the raw write
-    and invalidated query/fragment behavior.
-- [ ] `table-level-invalidation` / `table-level-invalidation.spec.ts`: non-eq predicates degrade to
+  - Evidence: `tests/integration/fixtures/manual-touches-raw-write/app.tsx` declares a `touchGraph`
+    entry with both `touches` and a scoped `KV406` unresolved site for the raw SQL insert, and
+    `tests/integration/specs/manual-touches-raw-write.spec.ts` verifies the enhanced mutation
+    response serves the refreshed cart query + fragment while runtime verification stays clean.
+    Proving commands: `pnpm --filter @kovojs/integration-tests exec playwright test specs/manual-touches-raw-write.spec.ts --config playwright.config.ts --workers=1`;
+    `pnpm exec vp check tests/integration/fixtures/manual-touches-raw-write/app.tsx tests/integration/specs/manual-touches-raw-write.spec.ts`.
+- [x] `table-level-invalidation` / `table-level-invalidation.spec.ts`: non-eq predicates degrade to
       table-level invalidation and refresh all affected query instances.
   - SPEC refs: §11.1 KV409, §10.1 row-level keys.
   - Assertions: multiple instances refresh; explain/diagnostic assertion may be browser-free.
-  - Gap: row/table-level degradation is covered in Drizzle extraction units, but the current
-    integration runner has no public path from fixture source to a KV409 diagnostic/explain artifact
-    for a browser-served fixture.
+  - Evidence: `tests/integration/fixtures/table-level-invalidation/app.tsx` exercises a range-style
+    update and emits the coarse unkeyed invalidation that a KV409 path degrades to, while
+    `tests/integration/specs/table-level-invalidation.spec.ts` verifies both visible product query
+    instances rerun and repaint through the enhanced mutation response. Browser-free KV409 proof was
+    re-verified with `packages/drizzle/src/index.columns-keys-predicates.test.ts` test
+    `marks direct non-equality predicates as KV409 degraded table-level invalidation`. Proving
+    commands: `pnpm --filter @kovojs/integration-tests exec playwright test specs/table-level-invalidation.spec.ts --config playwright.config.ts --workers=1`;
+    `pnpm exec vitest run packages/drizzle/src/index.columns-keys-predicates.test.ts -t "marks direct non-equality predicates as KV409 degraded table-level invalidation"`;
+    `pnpm exec vp check tests/integration/fixtures/table-level-invalidation/app.tsx tests/integration/specs/table-level-invalidation.spec.ts`.
 - [x] `query-readset-runtime-crosscheck` / `query-readset-runtime-crosscheck.spec.ts`: query loaders'
       observed SELECT/JOIN tables match derived read sets during integration runs.
   - SPEC refs: §10.2 queries, §11.2 runtime verification.
@@ -718,9 +727,11 @@ integration harness uniquely proves.
       declared output schema render when observed rows match and fail when runtime shape drifts.
   - SPEC refs: §10.2 KV410, §11.2 runtime shape verification.
   - Assertions: matching projection binds in UI; drift fixture reports KV410 without leaking internals.
-  - Gap: query `output` schemas can be exercised through typed-read endpoints, but KV410 is a
-    compiler/Drizzle opaque-projection diagnostic and no integration fixture hook currently surfaces
-    that artifact for raw/`sql<T>` projection source.
+  - Gap: the public harness path validates query `output` schemas in
+    `packages/test/src/harness-operations.ts`, but the live server query path in
+    `packages/server/src/query.ts` renders `runQuery(...)` results without any `output` parse step,
+    so a browser-served `/_q/...` or mutation-rerun fixture cannot currently surface a real KV410
+    runtime-shape failure for opaque projections.
 - [x] `exempt-table-read-fails` / `exempt-table-read-fails.spec.ts`: a query reading an exempt table is
       rejected because exemptions are write-side only.
   - SPEC refs: §10.1 KV411, §11.2 runtime verification.
