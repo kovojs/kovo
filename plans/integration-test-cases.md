@@ -585,15 +585,31 @@ tests/integration/specs/morph-nested-island-state.spec.ts`.
   - Evidence: added `tests/integration/fixtures/children-render-time` and
     `tests/integration/specs/children-render-time.spec.ts`; passed
     `pnpm --filter @kovojs/integration-tests exec playwright test specs/children-render-time.spec.ts specs/layout-function-composition.spec.ts specs/native-host-kovo-c.spec.ts --config playwright.config.ts --workers=1`.
-- [ ] `fragment-slot-hoist` / `fragment-slot-hoist.spec.ts`: fragment-target children that capture only
+- [x] `fragment-slot-hoist` / `fragment-slot-hoist.spec.ts`: fragment-target children that capture only
       serializable stamped props re-render in the fragment response.
   - SPEC refs: §4.5 fragment-target children, §9.1 fragments.
   - Assertions: slot subtree updates after mutation; semantic snapshot includes hoisted child output.
-  - Gap: left unchecked because current integration fixture components still expose
-    `definition.render(queries, state)` rather than the SPEC §4.5 third `Html` composition
-    argument, and the fixture compiler does not emit fragment slot-hoist render metadata for
-    mutation fragment responses. Compiler-only acceptance/diagnostic coverage exists in
-    `packages/compiler/src/fragment-targets.test.ts`.
+  - Evidence: added `renderComponent()` and the SPEC §4.5 render-time slots type so mutation
+    fragment renderers can call component renders with hoisted slot output; added
+    `tests/integration/fixtures/fragment-slot-hoist` and
+    `tests/integration/specs/fragment-slot-hoist.spec.ts`, which verify the enhanced mutation
+    response includes committed `<kovo-query>` truth and re-rendered hoisted child HTML, the live DOM
+    morphs the slot subtree from `10` to `17`, database truth matches, and the semantic snapshot
+    includes the hoisted child output. Proving commands:
+    `pnpm exec playwright test tests/integration/specs/fragment-slot-hoist.spec.ts --config
+tests/integration/playwright.config.ts --workers=1`;
+    `pnpm exec vitest run packages/compiler/src/fragment-targets.test.ts
+packages/server/src/component-render.test.tsx packages/server/src/mutation-response.test.ts
+packages/runtime/src/mutation-response-dom.test.ts
+packages/runtime/src/mutation-response-wire-apply.test.ts`;
+    `pnpm exec vitest run packages/server/src/api/app.test.ts`;
+    `pnpm exec vp check packages/core/src/index.ts packages/server/src/component-render.ts
+packages/server/src/component-render.test.tsx packages/server/src/api/rendering.ts
+tests/integration/fixtures/fragment-slot-hoist/app.tsx
+tests/integration/fixtures/fragment-slot-hoist/balance-shell.tsx
+tests/integration/fixtures/fragment-slot-hoist/shared.ts
+tests/integration/specs/fragment-slot-hoist.spec.ts
+tests/integration/specs/__snapshots__/fragment-slot-hoist.spec.ts/fragment-slot-hoist-semantic.txt`.
 - [x] `layout-function-composition` / `layout-function-composition.spec.ts`: route-level layout
       composition renders a full document per navigation without persistent layout state.
   - SPEC refs: §4.5 layouts, §8 MPA spine.
