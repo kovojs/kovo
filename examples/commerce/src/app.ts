@@ -45,7 +45,6 @@ import { and, count, eq, sql } from 'drizzle-orm';
 import { createCommerceDb, type CommerceDb } from './db.js';
 import { attachment, cart, order, product } from './domains.js';
 import { CartBadge } from './generated/cart-badge.js';
-import { liveTargetRenderers } from './generated/live-targets.js';
 import { cartAddDerivedOptimistic } from './generated/optimistic/cart-add.js';
 import { OrderHistory } from './generated/order-history.js';
 import * as productGridComponent from './generated/product-grid.js';
@@ -954,7 +953,6 @@ export function submitAddToCart(
     csrf: commerceCsrf,
     failureStylesheets: commerceStylesheets,
     headers,
-    liveTargetRenderers,
     rawInput: submittedInput,
     redirectTo: '/cart',
     renderFailureFragment: (failure) =>

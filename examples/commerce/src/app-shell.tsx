@@ -42,7 +42,6 @@ import {
   type CommerceSession,
 } from './app.js';
 import { CartBadge } from './generated/cart-badge.js';
-import { liveTargetRenderers } from './generated/live-targets.js';
 import { OrderHistory } from './generated/order-history.js';
 import { ProductGrid } from './generated/product-grid.js';
 import { products } from './schema.js';
@@ -98,7 +97,11 @@ export const commerceHomeRoute = route('/', {
       <>
         <CartBadge />
         <ProductGrid />
-        {renderCommerceOrderHistoryRegion(request)}
+        {request.session?.user?.id ? (
+          <OrderHistory />
+        ) : (
+          OrderHistory.definition.render({ orderHistory: { items: [] } })
+        )}
         {renderReceiptUploadForm()}
       </>,
     );
@@ -117,7 +120,11 @@ export const commerceCartRoute = route('/cart', {
       <>
         <CartBadge />
         <ProductGrid />
-        {renderCommerceOrderHistoryRegion(request)}
+        {request.session?.user?.id ? (
+          <OrderHistory />
+        ) : (
+          OrderHistory.definition.render({ orderHistory: { items: [] } })
+        )}
         {renderReceiptUploadForm()}
       </>,
     );
@@ -127,11 +134,6 @@ export const commerceCartRoute = route('/cart', {
 
 async function renderCommerceCartShell(children: unknown): Promise<string> {
   return `<div data-commerce-shell="cart"><main class="mx-auto max-w-4xl">${await children}</main></div>`;
-}
-
-function renderCommerceOrderHistoryRegion(request: CommerceShellRequest): unknown {
-  if (request.session?.user?.id) return <OrderHistory />;
-  return OrderHistory.definition.render({ orderHistory: { items: [] } });
 }
 
 export const commerceLoginRoute = route('/login', {
@@ -255,7 +257,6 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
           ),
       };
     },
-    liveTargetRenderers,
     mutations: [addToCart, commerceSignIn, commerceSignOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     queries: [cartQuery, productGridQuery, orderHistoryQuery],

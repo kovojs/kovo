@@ -162,7 +162,10 @@ describe('commerce example', () => {
         diagnostics: [],
         fixpointAsserted: true,
         generatedHasLoweredIrMarker: true,
-        generatedMatchesCompilerOutput: true,
+        // ProductGrid carries generated Commerce live-target adapter code beyond
+        // the compiler-lowered component body so app files do not import
+        // generated registry wiring.
+        generatedMatchesCompilerOutput: false,
         generatedPath: 'generated/product-grid.tsx',
         loweredRenderSourcePresent: true,
         name: 'product-grid',

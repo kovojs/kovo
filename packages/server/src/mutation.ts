@@ -18,6 +18,7 @@ import {
   type Guard,
   type RequestLifecycleOptions,
 } from './guards.js';
+import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
 import {
   readQueryInstanceKey,
@@ -674,7 +675,11 @@ export async function renderMutationEndpointResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   endpointRequest: MutationEndpointRequest<Request, Value>,
 ): Promise<MutationEndpointResponse> {
-  const wireRequest = mutationWireRequestFromHeaders(endpointRequest);
+  const wireRequest = mutationWireRequestFromHeaders({
+    ...endpointRequest,
+    liveTargetRenderers:
+      endpointRequest.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers(),
+  });
   if (wireRequest.fragment) return renderMutationResponse(definition, wireRequest);
 
   return renderNoJsMutationResponse(definition, {

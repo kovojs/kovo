@@ -9,7 +9,7 @@ import { Card } from '@kovojs/ui/card';
 
 import { commerceCsrf, type CommerceRequest, type ProductGridResult } from '../app.js';
 import { productGridQuery } from '../queries.js';
-import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer, type LiveTargetRenderContext, type LiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native
@@ -239,3 +239,19 @@ export const ProductGrid$liveTargetRenderer = registerGeneratedLiveTargetRendere
     },
   ],
 }));
+
+const ProductGrid$commerceLiveTargetRenderer: LiveTargetRenderer<CommerceRequest> = {
+  ...ProductGrid$liveTargetRenderer,
+  errorBoundary: {
+    render(error: unknown) {
+      return `<section role="alert" class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">Product grid failed: ${escapeText((error as Error).message)}</section>`;
+    },
+  },
+  render(context: LiveTargetRenderContext<CommerceRequest>) {
+    const productGridError = context.request.renderFaults?.productGrid?.();
+    if (productGridError) throw productGridError;
+    return ProductGrid$liveTargetRenderer.render(context);
+  },
+};
+
+registerGeneratedLiveTargetRenderer(ProductGrid$commerceLiveTargetRenderer);

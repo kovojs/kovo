@@ -720,9 +720,33 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-commerce test`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Additional progress 2026-06-17:
+      Commerce no longer imports `./generated/live-targets.js` or passes
+      `liveTargetRenderers` from either `examples/commerce/src/app.ts` or
+      `examples/commerce/src/app-shell.tsx`. `renderMutationEndpointResponse()`
+      now defaults enhanced responses to the registered generated live-target
+      registry, matching `createApp()`.
+    - `packages/server/src/live-target-renderer.ts` now provides generated
+      live-target renders with default mutation-form and request slots, so
+      ProductGrid's CSRF/request-scoped forms do not require app-authored slot
+      plumbing. `examples/commerce/scripts/emit-components.mjs` emits the
+      Commerce ProductGrid error-boundary wrapper into
+      `examples/commerce/src/generated/product-grid.tsx`, where it
+      self-registers as generated IR instead of being wired by app modules.
+    - Verified with
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app-shell.test.ts`,
+      `pnpm --filter @kovojs/example-commerce test`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`,
+      `rg -n "liveTargetRenderers|generated/live-targets" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`,
+      and `git diff --check`.
     - Remaining gaps: static export and the legacy `renderCartPage()` failure
-      page path still use `renderCartPageBody`; the transitional generated
-      live-target registry import is still present; the app-shell still uses
+      page path still use `renderCartPageBody`; the app-shell still uses
       `mutationResponse` for auth redirects and add-to-cart failure rendering.
 - [ ] **10. Docs/tutorial update.**
   - Teach the authoring model as "declare queries and serializable props; Kovo
@@ -758,10 +782,9 @@ removes app-authored bookkeeping from the enhanced path.
     - `packages/server/src/mutation-response.test.ts` also proves generated
       live-target renderer `errorBoundary` handles a failing selected descriptor
       as a per-target fragment.
-    - Remaining gap: build/app-shell wiring still needs to collect generated
-      renderer exports automatically for Commerce's custom ProductGrid adapter;
-      Commerce still imports a transitional generated live-target registry and
-      some escape-hatch `mutationResponse` failure/auth routing remains.
+    - Remaining gap: escape-hatch `mutationResponse` failure/auth routing
+      remains in Commerce until those paths move onto narrower declared
+      framework surfaces.
   - Additional progress 2026-06-17:
     - StackOverflow and CRM now prove ordinary enhanced mutation success without
       app-authored generated live-target registry imports; generated component
@@ -773,6 +796,16 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
       `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
       and `rg -n "liveTargetRenderers|generated/live-targets" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx`.
+  - Additional progress 2026-06-17:
+    - Commerce now also proves ordinary enhanced mutation success without
+      app-authored generated live-target registry imports; the ProductGrid
+      request-slot/error-boundary adapter is generated into the ProductGrid IR
+      module and self-registers with the generated registry.
+    - Verified with
+      `pnpm --filter @kovojs/example-commerce test`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
+      and `rg -n "liveTargetRenderers|generated/live-targets" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`.
 - [ ] **Example no-match checks prove the DX outcome.**
   - `rg -n 'fragmentRenderers|mutationResponse\\(|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb' examples/stackoverflow/src examples/crm/src examples/commerce/src`
     should have no ordinary app-authored success-routing hits after migration

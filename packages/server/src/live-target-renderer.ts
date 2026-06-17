@@ -87,13 +87,30 @@ async function componentLiveTargetRenderOptions<
   const renderOptions = (await options.renderOptions?.(context)) ?? {};
   const slots = await options.slots?.(context);
 
-  return slots === undefined
-    ? renderOptions
-    : {
-        ...renderOptions,
-        slots: {
-          ...(renderOptions.slots ?? {}),
-          ...slots,
-        },
-      };
+  return {
+    ...renderOptions,
+    slots: {
+      ...componentLiveTargetDefaultSlots(options.component, context.request),
+      ...(renderOptions.slots ?? {}),
+      ...(slots ?? {}),
+    },
+  };
+}
+
+function componentLiveTargetDefaultSlots(
+  component: Component<ComponentDefinitionInput>,
+  request: unknown,
+): ComponentRenderSlots {
+  const forms = isRecord(component.definition.mutations)
+    ? Object.fromEntries(Object.keys(component.definition.mutations).map((key) => [key, { failure: null }]))
+    : undefined;
+
+  return {
+    ...(forms === undefined ? {} : { forms }),
+    ...(request === undefined ? {} : { request }),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

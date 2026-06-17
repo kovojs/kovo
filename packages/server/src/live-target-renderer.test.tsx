@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, form } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
@@ -84,5 +84,37 @@ describe('generated component live target renderers', () => {
         target: 'product-detail',
       }),
     ).rejects.toThrow('Live target query failed: product');
+  });
+
+  it('provides request and default mutation form slots while rendering', async () => {
+    const cart = domain('cart');
+    const addToCart = form('cart/add');
+    const cartQuery = query('cart', {
+      load: () => ({ count: 1 }),
+      reads: [cart],
+    });
+    const CartForm = component({
+      mutations: { addToCart },
+      queries: { cart: cartQuery },
+      render: ({ cart }: { cart: { count: number } }, _state, slots) => (
+        <form data-count={cart.count} data-request={slots.request === undefined ? 'no' : 'yes'}>
+          {slots.forms.addToCart.failure ? 'failed' : 'ready'}
+        </form>
+      ),
+    });
+    const renderer = componentLiveTargetRenderer({
+      component: CartForm,
+      componentId: 'components/cart-form/cart-form',
+      queries: [{ name: 'cart', query: cartQuery }],
+    });
+
+    await expect(
+      renderer.render({
+        input: {},
+        props: {},
+        request: { csrf: 'token' },
+        target: 'cart-form',
+      }),
+    ).resolves.toBe('<form data-count="1" data-request="yes">ready</form>');
   });
 });

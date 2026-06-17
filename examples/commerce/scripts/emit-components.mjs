@@ -58,7 +58,8 @@ for (const name of componentNames) {
   const lowered = result.loweredSource;
   assert.ok(lowered, `${fileName} produced no lowered render source`);
 
-  const generated = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.\n${lowered}`;
+  let generated = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.\n${lowered}`;
+  if (name === 'product-grid') generated = withCommerceProductGridLiveTargetAdapter(generated);
 
   if (process.argv.includes('--check')) {
     assert.equal(
@@ -69,6 +70,32 @@ for (const name of componentNames) {
   } else {
     writeFileSync(generatedPath, generated);
   }
+}
+
+function withCommerceProductGridLiveTargetAdapter(source) {
+  const sourceWithTypes = source.replace(
+    "import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
+    "import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer, type LiveTargetRenderContext, type LiveTargetRenderer } from '@kovojs/server/internal/wire';",
+  );
+
+  return `${sourceWithTypes.trimEnd()}
+
+const ProductGrid$commerceLiveTargetRenderer: LiveTargetRenderer<CommerceRequest> = {
+  ...ProductGrid$liveTargetRenderer,
+  errorBoundary: {
+    render(error: unknown) {
+      return \`<section role="alert" class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">Product grid failed: \${escapeText((error as Error).message)}</section>\`;
+    },
+  },
+  render(context: LiveTargetRenderContext<CommerceRequest>) {
+    const productGridError = context.request.renderFaults?.productGrid?.();
+    if (productGridError) throw productGridError;
+    return ProductGrid$liveTargetRenderer.render(context);
+  },
+};
+
+registerGeneratedLiveTargetRenderer(ProductGrid$commerceLiveTargetRenderer);
+`;
 }
 
 const liveTargetsPath = resolve(commerceRoot, 'src/generated/live-targets.ts');
