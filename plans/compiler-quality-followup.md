@@ -411,21 +411,25 @@ compiler-quality gaps found during the 2026-06-16 audit.
   - [x] Add a guard that fails when a new compiler-owned KV2xx/KV3xx diagnostic lacks matrix rows.
     - Evidence (2026-06-17): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo/packages/compiler/src/diagnostic-coverage-matrix.test.ts) compares `diagnosticDefinitions` against `compilerOwnedDiagnosticMatrix` plus `outOfScopeCompilerDiagnostics` and fails on uncovered new codes.
 
-- [ ] Prove SPEC clause coverage for the quantified compiler promises.
-  - [ ] Create a SPEC coverage map for §4.3 handler/capture lowering accepted paths and diagnostics.
-  - [ ] Create a SPEC coverage map for §4.6 primitive composition and attribute merge accepted paths
+- [x] Prove SPEC clause coverage for the quantified compiler promises.
+  - Evidence (2026-06-17): [packages/compiler/src/spec-coverage-map.ts](/Users/mini/kovo-agent-spec-coverage/packages/compiler/src/spec-coverage-map.ts) defines the authoritative coverage map for `SPEC.md` §4.3, §4.6, §4.8, §4.9, §5.2, §6.1.1, §6.4, and §11.3/§11.4.
+  - Evidence (2026-06-17): [packages/compiler/src/spec-coverage-map.test.ts](/Users/mini/kovo-agent-spec-coverage/packages/compiler/src/spec-coverage-map.test.ts) verifies each clause has accepted-path, diagnostic, and reference/commerce app citations; each cited file exists; each cited test name is present; and each cited diagnostic code exists in `diagnosticDefinitions`.
+  - Evidence (2026-06-17): `pnpm exec vitest --run packages/compiler/src/spec-coverage-map.test.ts` passed.
+  - Evidence (2026-06-17): `pnpm exec tsc --noEmit --pretty false` passed.
+  - [x] Create a SPEC coverage map for §4.3 handler/capture lowering accepted paths and diagnostics.
+  - [x] Create a SPEC coverage map for §4.6 primitive composition and attribute merge accepted paths
         and diagnostics.
-  - [ ] Create a SPEC coverage map for §4.8 bindings, derives, stamps, nullability, and residual-stamp
+  - [x] Create a SPEC coverage map for §4.8 bindings, derives, stamps, nullability, and residual-stamp
         accepted paths and diagnostics.
-  - [ ] Create a SPEC coverage map for §4.9 coverage classification accepted paths and diagnostics.
-  - [ ] Create a SPEC coverage map for §5.2 TSX-only authoring, fixpoint, semantic equivalence,
+  - [x] Create a SPEC coverage map for §4.9 coverage classification accepted paths and diagnostics.
+  - [x] Create a SPEC coverage map for §5.2 TSX-only authoring, fixpoint, semantic equivalence,
         teaching diagnostics, and post-parse typed-facts checks.
-  - [ ] Create a SPEC coverage map for §6.1.1 component/package naming accepted paths and diagnostics.
-  - [ ] Create a SPEC coverage map for §6.4 typed navigation, IDREF, and cross-island event accepted
+  - [x] Create a SPEC coverage map for §6.1.1 component/package naming accepted paths and diagnostics.
+  - [x] Create a SPEC coverage map for §6.4 typed navigation, IDREF, and cross-island event accepted
         paths and diagnostics.
-  - [ ] Create a SPEC coverage map for §11.3/§11.4 diagnostic registry and mutation/domain-related
+  - [x] Create a SPEC coverage map for §11.3/§11.4 diagnostic registry and mutation/domain-related
         compiler checks.
-  - [ ] Ensure the map cites fixtures from the reference app, commerce app, and focused generated
+  - [x] Ensure the map cites fixtures from the reference app, commerce app, and focused generated
         fixtures, not only helper/unit tests.
 
 - [ ] Add the browser matrix promised by the conformance bar.
