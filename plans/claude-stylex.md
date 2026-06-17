@@ -791,6 +791,11 @@ borrowing its concrete API/spike detail.
     @kovojs/site run build` reaches Vite CSS output (`dist-css/assets/site.css`) but stops on the
     existing static-export diagnostic `KV229 route=/deals/:id`; `pnpm --filter @kovojs/site test`
     stops in the existing API-ref expectation drift for the newly public `style.md` page.
+  - Evidence (partial, 2026-06-17): after main-thread integration, `pnpm install --frozen-lockfile`,
+    `pnpm --filter @kovojs/site exec tsc --noEmit --pretty false`, `pnpm --filter @kovojs/site test`,
+    `pnpm exec tsc --noEmit --pretty false`, and `git diff --check` pass. `pnpm --filter
+    @kovojs/site run build` reaches `dist-css/assets/site.css` and still stops on the known commerce
+    static-export `KV229 route=/deals/:id` gap.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L
