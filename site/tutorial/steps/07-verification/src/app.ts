@@ -1,4 +1,4 @@
-import { form, type KovoExplainInput } from '@kovojs/core';
+import { form } from '@kovojs/core';
 import type { OptimisticFor } from '@kovojs/runtime';
 import {
   guards,
@@ -204,7 +204,7 @@ export const shopGraph = {
     { domains: ['order'], query: 'orderHistory' },
   ],
   touchGraph: shopTouchGraph,
-} satisfies KovoExplainInput;
+} as const;
 // /snippet
 
 export function renderShopPage(

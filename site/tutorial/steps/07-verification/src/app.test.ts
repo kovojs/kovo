@@ -173,15 +173,18 @@ describe('tutorial step 07 — testing & verification', () => {
   it('matches the reference commerce app: wire vocabulary and optimistic statuses', async () => {
     // The committed graph artifact of examples/commerce — the rules/v1-acceptance.md
     // acceptance target this tutorial has been building toward.
+    interface TutorialGraphComparison {
+      mutations: Array<{ inputFields: string[]; key: string; writes: string[] }>;
+      optimistic: Array<{ mutation: string; query: string; status: string }>;
+    }
+
+    const compareStrings = (left: string, right: string) => left.localeCompare(right);
     const commerceGraph = JSON.parse(
       readFileSync(
         new URL('../../../../../examples/commerce/src/generated/graph.json', import.meta.url),
         'utf8',
       ),
-    ) as {
-      mutations: { inputFields: string[]; key: string; writes: string[] }[];
-      optimistic: { mutation: string; query: string; status: string }[];
-    };
+    ) as TutorialGraphComparison;
     const commerceCartAdd = commerceGraph.mutations.find((entry) => entry.key === 'cart/add');
     const shopCartAdd = shopGraph.mutations.find((entry) => entry.key === 'cart/add');
 
@@ -192,8 +195,8 @@ describe('tutorial step 07 — testing & verification', () => {
 
     // Same input field vocabulary and write set.
     expect(shopCartAdd?.inputFields).toEqual(commerceCartAdd?.inputFields);
-    expect([...(shopCartAdd?.writes ?? [])].sort()).toEqual(
-      [...(commerceCartAdd?.writes ?? [])].sort(),
+    expect([...(shopCartAdd?.writes ?? [])].sort(compareStrings)).toEqual(
+      [...(commerceCartAdd?.writes ?? [])].sort(compareStrings),
     );
 
     // Same optimistic COVERAGE per pair (the list query is named productGrid in
@@ -216,7 +219,7 @@ describe('tutorial step 07 — testing & verification', () => {
       .filter((entry) => entry.mutation === 'cart/add')
       .map(pairKey);
     // Both apps cover exactly the same three cart/add (mutation × query) pairs.
-    expect([...shopPairs].sort()).toEqual([...commercePairs].sort());
+    expect([...shopPairs].sort(compareStrings)).toEqual([...commercePairs].sort(compareStrings));
     expect(shopPairs).toHaveLength(3);
     // No pair is UNHANDLED on either side (commerce derived, shop hand-written/await).
     expect(commerceGraph.optimistic.every((entry) => entry.status !== 'UNHANDLED')).toBe(true);
