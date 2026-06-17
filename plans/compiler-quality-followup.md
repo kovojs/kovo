@@ -213,15 +213,39 @@ compiler-quality gaps found during the 2026-06-16 audit.
       src/output-context-raw-html.test.ts src/output-context-security.test.ts
       src/output-context-payloads.test.ts` passes.
 
-- [ ] Implement the CSP/nonce or hash metadata contract promised by the D4 decision.
-  - [ ] Decide and document whether Kovo emits nonces, hashes, or both for generated inline scripts
+- [x] Implement the CSP/nonce or hash metadata contract promised by the D4 decision.
+  - [x] Decide and document whether Kovo emits nonces, hashes, or both for generated inline scripts
         and styles.
-  - [ ] Extend compiler-emitted script/style artifact metadata to carry the chosen CSP data.
-  - [ ] Extend server/app-shell document assembly to consume and emit that metadata.
-  - [ ] Add tests proving generated document HTML includes nonce/hash data where required.
-  - [ ] Add tests proving generated headers or CSP policy assembly can reference the emitted metadata.
-  - [ ] Add tests proving metadata is stable or intentionally per-request according to the chosen
+    - Evidence (2026-06-16): Kovo emits deterministic `sha256-...` hashes rather than request
+      nonces for generated inline style/script content; `packages/server/src/csp.ts` defines the
+      hash format and `renderContentSecurityPolicy(...)` assembly helper.
+  - [x] Extend compiler-emitted script/style artifact metadata to carry the chosen CSP data.
+    - Evidence (2026-06-16): `packages/compiler/src/css.ts` adds `cspHash` to generated
+      `CssAsset`/`ComponentCssAsset` metadata for critical component CSS assets, computed from the
+      exact escaped style text rendered by the server.
+  - [x] Extend server/app-shell document assembly to consume and emit that metadata.
+    - Evidence (2026-06-16): `packages/server/src/hints.ts` carries CSP hashes through page hints
+      for critical styles, i18n scripts, and speculation-rule scripts, and
+      `packages/server/src/document-core.ts` returns combined document CSP metadata while emitting
+      hash attributes for the inline loader and document query scripts.
+  - [x] Add tests proving generated document HTML includes nonce/hash data where required.
+    - Evidence (2026-06-16): `packages/server/src/document.test.ts` asserts generated document
+      HTML contains `data-kovo-csp-hash="sha256-..."` on critical CSS, the inline loader, and query
+      hydration scripts; `packages/server/src/hints.test.ts`, `packages/server/src/meta.test.ts`,
+      and `packages/server/src/route.test.ts` cover i18n and speculation-rule script hashes.
+  - [x] Add tests proving generated headers or CSP policy assembly can reference the emitted metadata.
+    - Evidence (2026-06-16): `packages/server/src/document.test.ts` snapshots
+      `renderContentSecurityPolicy(document.csp)`, proving `script-src`/`style-src` policy assembly
+      can reference the emitted hashes.
+  - [x] Add tests proving metadata is stable or intentionally per-request according to the chosen
         contract.
+    - Evidence (2026-06-16): `packages/compiler/src/css.test.ts` snapshots stable generated
+      `cspHash` values for compiler CSS assets, and `packages/server/src/document.test.ts` snapshots
+      stable document CSP metadata for generated inline scripts/styles.
+    - Evidence (2026-06-16): `pnpm exec vitest --run packages/compiler/src/css.test.ts
+      packages/server/src/hints.test.ts packages/server/src/document.test.ts
+      packages/server/src/meta.test.ts packages/server/src/route.test.ts
+      packages/server/src/wire-html.test.ts` passes.
 
 - [ ] Tighten Trusted HTML to an actual escape-hatch contract.
   - [ ] Define the runtime/browser-compatible TrustedHTML shape Kovo accepts.

@@ -116,8 +116,12 @@ describe('server route meta and i18n hints', () => {
     expect(t(en, 'cartCount')).toBe('Cart has {count} items');
     expect(() => t(en, 'missing' as 'cartCount')).toThrow('Missing i18n message: missing');
     expect(renderPageHints({ i18n: en })).toEqual({
+      csp: {
+        scripts: ['sha256-EIplYLOXD0CrpSrilranaOD5BAzgvnAuyLvbvLshN8k='],
+        styles: [],
+      },
       earlyHints: {},
-      html: '<script type="application/json" kovo-i18n locale="en-US">{"cartCount":"Cart has {count} items","unsafe":"Use \\u003cstrong>server text\\u003c/strong>"}</script>',
+      html: '<script type="application/json" kovo-i18n locale="en-US" data-kovo-csp-hash="sha256-EIplYLOXD0CrpSrilranaOD5BAzgvnAuyLvbvLshN8k=">{"cartCount":"Cart has {count} items","unsafe":"Use \\u003cstrong>server text\\u003c/strong>"}</script>',
     });
   });
 });

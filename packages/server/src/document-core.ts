@@ -1,6 +1,12 @@
 import { kovoLoaderSource } from '@kovojs/runtime';
+import {
+  cspHashAttribute,
+  cspSha256,
+  mergeCspInlineMetadata,
+  type CspInlineMetadata,
+} from './csp.js';
 import { renderDeferredStream, type DeferredStreamChunk } from './deferred-stream.js';
-import { escapeAttribute, escapeHtml } from './html.js';
+import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
 import {
   renderPageHints,
   type PageHintOptions,
@@ -18,6 +24,7 @@ export interface DocumentParts {
 }
 
 export interface DocumentTemplateContext {
+  csp: CspInlineMetadata;
   parts: DocumentParts;
 }
 
@@ -29,6 +36,7 @@ export interface DeferredDocumentFrame {
 }
 
 export interface DeferredDocumentTemplateContext {
+  csp: CspInlineMetadata;
   parts: DocumentParts;
 }
 
@@ -64,15 +72,15 @@ export interface ErrorDocumentOptions {
 }
 
 export interface DocumentRenderResult {
+  csp: CspInlineMetadata;
   earlyHints: PageHints['earlyHints'];
   html: string;
 }
 
-export interface DeferredDocumentRenderResult extends ServerResponseBase<
-  string,
-  Record<string, string>,
-  200
-> {}
+export interface DeferredDocumentRenderResult
+  extends ServerResponseBase<string, Record<string, string>, 200> {
+  csp: CspInlineMetadata;
+}
 
 const fallbackTitles = {
   403: 'Forbidden',
@@ -84,8 +92,12 @@ export function renderDocument(options: DocumentAssemblyOptions): DocumentRender
   const assembled = assembleDocumentParts(options);
 
   return {
+    csp: assembled.csp,
     earlyHints: assembled.earlyHints,
-    html: (options.template ?? defaultDocumentTemplate)({ parts: assembled.parts }),
+    html: (options.template ?? defaultDocumentTemplate)({
+      csp: assembled.csp,
+      parts: assembled.parts,
+    }),
   };
 }
 
@@ -93,7 +105,10 @@ export function renderDeferredDocument(
   options: DeferredDocumentAssemblyOptions,
 ): DeferredDocumentRenderResult {
   const assembled = assembleDocumentParts(options);
-  const frame = (options.template ?? defaultDeferredDocumentTemplate)({ parts: assembled.parts });
+  const frame = (options.template ?? defaultDeferredDocumentTemplate)({
+    csp: assembled.csp,
+    parts: assembled.parts,
+  });
   const response = renderDeferredStream({
     chunks: options.chunks,
     closeHtml: frame.closeHtml,
@@ -103,23 +118,31 @@ export function renderDeferredDocument(
 
   return {
     ...response,
+    csp: assembled.csp,
     headers: mergeDocumentHeaders(response.headers, assembled.earlyHints),
   };
 }
 
 function assembleDocumentParts(
   options: Pick<DocumentAssemblyOptions, 'body' | 'hints' | 'lang' | 'queries'>,
-): { earlyHints: PageHints['earlyHints']; parts: DocumentParts } {
+): { csp: CspInlineMetadata; earlyHints: PageHints['earlyHints']; parts: DocumentParts } {
   const hints = renderPageHints(options.hints ?? {});
-  const queryScripts = (options.queries ?? []).map(renderQueryScript);
+  const queryScripts = (options.queries ?? []).map(renderDocumentQueryScriptWithCsp);
+  const loader = inlineLoaderScript();
+  const csp = mergeCspInlineMetadata(
+    hints.csp,
+    loader.csp,
+    ...queryScripts.map((query) => query.csp),
+  );
 
   return {
+    csp,
     earlyHints: hints.earlyHints,
     parts: {
       body: options.body,
-      head: `${hints.html}${inlineLoaderScript()}`,
+      head: `${hints.html}${loader.html}`,
       lang: options.lang ?? langFromHints(options.hints) ?? 'en',
-      queryScripts,
+      queryScripts: queryScripts.map((query) => query.html),
     },
   };
 }
@@ -215,8 +238,25 @@ function defaultDeferredDocumentTemplate({
   };
 }
 
-function inlineLoaderScript(): string {
-  return `<script>${kovoLoaderSource}</script>`;
+function inlineLoaderScript(): { csp: CspInlineMetadata; html: string } {
+  const hash = cspSha256(kovoLoaderSource);
+  return {
+    csp: { scripts: [hash], styles: [] },
+    html: `<script ${cspHashAttribute(hash)}>${kovoLoaderSource}</script>`,
+  };
+}
+
+function renderDocumentQueryScriptWithCsp(
+  options: QueryScriptRenderOptions,
+): { csp: CspInlineMetadata; html: string } {
+  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
+  const scriptText = escapeScriptJson(JSON.stringify(options.value));
+  const hash = cspSha256(scriptText);
+
+  return {
+    csp: { scripts: [hash], styles: [] },
+    html: `<script type="application/json" kovo-query="${escapeAttribute(options.name)}"${keyAttribute} ${cspHashAttribute(hash)}>${scriptText}</script>`,
+  };
 }
 
 function langFromHints(hints: PageHintOptions | undefined): string | undefined {

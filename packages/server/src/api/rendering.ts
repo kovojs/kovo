@@ -1,4 +1,6 @@
 export { renderDeferredStream } from '../deferred-stream.js';
+export { renderContentSecurityPolicy } from '../csp.js';
+export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
 export type {
   DeferredFragmentChunk,
   DeferredPriority,

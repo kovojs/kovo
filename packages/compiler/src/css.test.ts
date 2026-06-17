@@ -110,6 +110,7 @@ export const CartDrawer = component({
       {
         componentName: 'cart-badge',
         criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
+        cspHash: 'sha256-48na4dosBulm/lAbYlLZ/FVLEDHrOYHv9gVNdtAeDF8=',
         fragmentTargets: [],
         href: '/_kovo/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
@@ -119,6 +120,7 @@ export const CartDrawer = component({
         criticalCss: expect.stringContaining(
           '@scope ([kovo-c="cart-drawer"]) to (:scope [kovo-c])',
         ),
+        cspHash: 'sha256-1Dq6YEhupr5PUc5bHQbISCSL0u23zC71ihSEA7HWmR0=',
         fragmentTargets: [],
         href: '/_kovo/components/cart/cart-drawer.css',
         sourceFileName: 'components/cart/cart-drawer.css',
@@ -130,6 +132,7 @@ export const CartDrawer = component({
         criticalCss: expect.stringContaining(
           '@scope ([kovo-c="cart-drawer"]) to (:scope [kovo-c])',
         ),
+        cspHash: 'sha256-1Dq6YEhupr5PUc5bHQbISCSL0u23zC71ihSEA7HWmR0=',
         fragmentTargets: [],
         href: '/_kovo/components/cart/cart-drawer.css',
         sourceFileName: 'components/cart/cart-drawer.css',
@@ -149,6 +152,7 @@ export const CartDrawer = component({
         criticalCss: expect.stringContaining(
           '@scope ([kovo-c="cart-drawer"]) to (:scope [kovo-c])',
         ),
+        cspHash: 'sha256-1Dq6YEhupr5PUc5bHQbISCSL0u23zC71ihSEA7HWmR0=',
         fragmentTargets: [],
         href: '/_kovo/components/cart/cart-drawer.css',
         sourceFileName: 'components/cart/cart-drawer.css',
@@ -163,6 +167,7 @@ export const CartDrawer = component({
       {
         componentName: 'cart-badge',
         criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
+        cspHash: 'sha256-48na4dosBulm/lAbYlLZ/FVLEDHrOYHv9gVNdtAeDF8=',
         fragmentTargets: [],
         href: '/_kovo/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
@@ -191,6 +196,7 @@ export const CartBadge = component({
       {
         componentName: 'cart-badge',
         criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
+        cspHash: 'sha256-48na4dosBulm/lAbYlLZ/FVLEDHrOYHv9gVNdtAeDF8=',
         fragmentTargets: ['components/cart/cart-badge/cart-badge'],
         href: '/assets/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
@@ -221,6 +227,7 @@ export const Reviews = component({
       {
         componentName: 'reviews',
         criticalCss: expect.stringContaining('@scope ([kovo-c="reviews"]) to (:scope [kovo-c])'),
+        cspHash: 'sha256-MYalTaUpJ7chCrawgiV0MWzhUVzExnn4DaRoAsw6+60=',
         fragmentTargets: [],
         href: '/assets/components/reviews.css',
         preload: false,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { renderContentSecurityPolicy } from './csp.js';
 import {
   renderDeferredDocument,
   renderDocument,
@@ -25,18 +26,35 @@ describe('server app shell document assembly', () => {
     expect(document.earlyHints).toEqual({
       Link: '</assets/app.css>; rel=preload; as=style, </c/cart.client.js>; rel=modulepreload',
     });
+    expect(document.csp).toMatchInlineSnapshot(`
+      {
+        "scripts": [
+          "sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=",
+          "sha256-mxqYebJyJ7GkY4SIYwJIQWKO2KGN0u1Zw/PntuofaVo=",
+          "sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE=",
+        ],
+        "styles": [
+          "sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E=",
+        ],
+      }
+    `);
+    expect(renderContentSecurityPolicy(document.csp)).toMatchInlineSnapshot(
+      `"default-src 'self'; script-src 'self' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' 'sha256-mxqYebJyJ7GkY4SIYwJIQWKO2KGN0u1Zw/PntuofaVo=' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='"`,
+    );
     expect(document.html).toContain('<!doctype html><html lang="en-US"><head>');
     expect(document.html).toContain('<title>Cart</title>');
     expect(document.html).toContain(
-      '<style data-kovo-critical-href="/assets/app.css">body{color:red}</style><link rel="stylesheet" href="/assets/app.css">',
+      '<style data-kovo-critical-href="/assets/app.css" data-kovo-csp-hash="sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E=">body{color:red}</style><link rel="stylesheet" href="/assets/app.css">',
     );
-    expect(document.html).toContain('<script>');
+    expect(document.html).toContain(
+      '<script data-kovo-csp-hash="sha256-mxqYebJyJ7GkY4SIYwJIQWKO2KGN0u1Zw/PntuofaVo=">',
+    );
     expect(document.html).toContain('installInlineKovoLoader');
     expect(document.html.indexOf('kovo-query="cart"')).toBeLessThan(
       document.html.indexOf('<body>'),
     );
     expect(document.html).toContain(
-      '<script type="application/json" kovo-query="cart" key="cart:c1">{"count":1}</script>',
+      '<script type="application/json" kovo-query="cart" key="cart:c1" data-kovo-csp-hash="sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE=">{"count":1}</script>',
     );
     expect(document.html).toContain(
       '<body><main><cart-badge kovo-deps="cart"></cart-badge></main></body></html>',
@@ -129,7 +147,9 @@ describe('server app shell document assembly', () => {
       status: 200,
     });
     expect(response.body).toContain('<link rel="stylesheet" href="/app.css">');
-    expect(response.body).toContain('<script>');
+    expect(response.body).toContain(
+      '<script data-kovo-csp-hash="sha256-mxqYebJyJ7GkY4SIYwJIQWKO2KGN0u1Zw/PntuofaVo=">',
+    );
     expect(response.body.indexOf('<kovo-defer target="reviews:p1">')).toBeLessThan(
       response.body.indexOf('--kovo-boundary'),
     );

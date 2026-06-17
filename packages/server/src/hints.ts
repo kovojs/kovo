@@ -1,3 +1,10 @@
+import {
+  cspHashAttribute,
+  cspSha256,
+  hasCspInlineMetadata,
+  mergeCspInlineMetadata,
+  type CspInlineMetadata,
+} from './csp.js';
 import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
 
 export type RoutePrefetch = 'conservative' | 'moderate' | false;
@@ -22,6 +29,7 @@ export interface I18nCatalog<Messages extends Record<string, string> = Record<st
 
 export interface StylesheetAsset {
   criticalCss?: string;
+  cspHash?: string;
   href: string;
   preload?: boolean;
 }
@@ -47,7 +55,13 @@ export interface PageHintRenderContext {
 }
 
 export interface PageHints {
+  csp?: CspInlineMetadata;
   earlyHints: Record<string, string>;
+  html: string;
+}
+
+interface InlineHtmlWithCsp {
+  csp?: CspInlineMetadata;
   html: string;
 }
 
@@ -72,20 +86,32 @@ export function renderPageHints(
     ...(options.bootstrapScript ? [options.bootstrapScript] : []),
   ]);
   const stylesheets = dedupeStylesheets(options.stylesheets ?? []);
+  const stylesheetHints = stylesheets.map(renderPageStylesheetHint);
+  const i18nCatalogs = renderI18nCatalogs(options.i18n);
+  const speculationRules = renderSpeculationRules(
+    options.prefetch ?? false,
+    options.prerenderUrls ?? [],
+  );
+  const csp = mergeCspInlineMetadata(
+    ...stylesheetHints.map((hint) => hint.csp),
+    ...i18nCatalogs.map((catalog) => catalog.csp),
+    speculationRules.csp,
+  );
   const html = [
     ...renderRouteMeta(options.meta, context),
-    ...renderI18nCatalogs(options.i18n),
-    ...stylesheets.map(renderPageStylesheetHint),
+    ...i18nCatalogs.map((catalog) => catalog.html),
+    ...stylesheetHints.map((hint) => hint.html),
     ...modulepreloads.map((href) => `<link rel="modulepreload" href="${escapeAttribute(href)}">`),
     options.bootstrapScript
       ? `<script type="module" src="${escapeAttribute(options.bootstrapScript)}"></script>`
       : '',
-    renderSpeculationRules(options.prefetch ?? false, options.prerenderUrls ?? []),
+    speculationRules.html,
   ]
     .filter(Boolean)
     .join('');
 
   return {
+    ...(hasCspInlineMetadata(csp) ? { csp } : {}),
     earlyHints: renderEarlyHints(stylesheets, modulepreloads),
     html,
   };
@@ -125,11 +151,17 @@ function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): Style
   return assets;
 }
 
-function renderPageStylesheetHint(asset: StylesheetAsset): string {
+function renderPageStylesheetHint(asset: StylesheetAsset): InlineHtmlWithCsp {
   const link = `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`;
-  if (!asset.criticalCss) return link;
+  if (!asset.criticalCss) return { html: link };
 
-  return `<style data-kovo-critical-href="${escapeAttribute(asset.href)}">${escapeStyleText(asset.criticalCss)}</style>${link}`;
+  const cssText = escapeStyleText(asset.criticalCss);
+  const hash = asset.cspHash ?? cspSha256(cssText);
+
+  return {
+    csp: { scripts: [], styles: [hash] },
+    html: `<style data-kovo-critical-href="${escapeAttribute(asset.href)}" ${cspHashAttribute(hash)}>${cssText}</style>${link}`,
+  };
 }
 
 function renderEarlyHints(
@@ -153,11 +185,11 @@ function formatLinkHeaderTarget(href: string): string {
   );
 }
 
-function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]): string {
+function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]): InlineHtmlWithCsp {
   const prerenderUrls = dedupe(urls);
-  if (!prefetch || prerenderUrls.length === 0) return '';
+  if (!prefetch || prerenderUrls.length === 0) return { html: '' };
 
-  return `<script type="speculationrules">${escapeScriptJson(
+  const scriptText = escapeScriptJson(
     JSON.stringify({
       prerender: [
         {
@@ -166,7 +198,13 @@ function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]
         },
       ],
     }),
-  )}</script>`;
+  );
+  const hash = cspSha256(scriptText);
+
+  return {
+    csp: { scripts: [hash], styles: [] },
+    html: `<script type="speculationrules" ${cspHashAttribute(hash)}>${scriptText}</script>`,
+  };
 }
 
 function renderRouteMeta(
@@ -214,13 +252,18 @@ function isRouteMetaFactory(source: RouteMetaSource): source is RouteMetaFactory
   return typeof (source as RouteMetaFactory).resolve === 'function';
 }
 
-function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): string[] {
+function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): InlineHtmlWithCsp[] {
   const catalogs = Array.isArray(i18nInput) ? i18nInput : i18nInput ? [i18nInput] : [];
 
-  return catalogs.map(
-    (catalog) =>
-      `<script type="application/json" kovo-i18n locale="${escapeAttribute(catalog.locale)}">${escapeScriptJson(JSON.stringify(catalog.messages))}</script>`,
-  );
+  return catalogs.map((catalog) => {
+    const scriptText = escapeScriptJson(JSON.stringify(catalog.messages));
+    const hash = cspSha256(scriptText);
+
+    return {
+      csp: { scripts: [hash], styles: [] },
+      html: `<script type="application/json" kovo-i18n locale="${escapeAttribute(catalog.locale)}" ${cspHashAttribute(hash)}>${scriptText}</script>`,
+    };
+  });
 }
 
 function escapeStyleText(value: string): string {

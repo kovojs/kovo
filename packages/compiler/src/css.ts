@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { findMatchingToken } from './scan/text.js';
 import {
   componentOptionStaticTemplateValue,
@@ -13,6 +15,7 @@ import { escapeAttribute, indent } from './shared.js';
  */
 export interface CssAsset {
   criticalCss?: string;
+  cspHash?: string;
   href: string;
   preload?: boolean;
   sourceFileName: string;
@@ -186,6 +189,7 @@ export function componentCssAssetForFile(
   return {
     componentName,
     ...(criticalCss ? { criticalCss } : {}),
+    ...(criticalCss ? { cspHash: cspSha256(escapeStyleText(criticalCss)) } : {}),
     fragmentTargets,
     href: `${options.baseHref ?? '/assets/'}${normalizeAssetPath(fileName)}`,
     ...(options.preload === undefined ? {} : { preload: options.preload }),
@@ -208,6 +212,14 @@ function normalizeAssetPath(fileName: string): string {
 
 function formatFallbackCss(css: string): string {
   return css.replace(/}\s*/g, '}\n').trimEnd();
+}
+
+function cspSha256(value: string): string {
+  return `sha256-${createHash('sha256').update(value).digest('base64')}`;
+}
+
+function escapeStyleText(value: string): string {
+  return value.replace(/<\/style/gi, '<\\/style');
 }
 
 function prefixCssSelectors(

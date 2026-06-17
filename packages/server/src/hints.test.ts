@@ -13,13 +13,17 @@ describe('page hints', () => {
         prerenderUrls: ['/cart', '/checkout'],
       }),
     ).toEqual({
+      csp: {
+        scripts: ['sha256-/aovN5oxwLTJnSx2AWnlCNGwIbyhuoijwj3ORkZ7lac='],
+        styles: [],
+      },
       earlyHints: {
         Link: '</c/cart.client.js>; rel=modulepreload, </c/recs.client.js>; rel=modulepreload',
       },
       html: [
         '<link rel="modulepreload" href="/c/cart.client.js">',
         '<link rel="modulepreload" href="/c/recs.client.js">',
-        '<script type="speculationrules">{"prerender":[{"eagerness":"conservative","urls":["/cart","/checkout"]}]}</script>',
+        '<script type="speculationrules" data-kovo-csp-hash="sha256-/aovN5oxwLTJnSx2AWnlCNGwIbyhuoijwj3ORkZ7lac=">{"prerender":[{"eagerness":"conservative","urls":["/cart","/checkout"]}]}</script>',
       ].join(''),
     });
   });
@@ -100,11 +104,15 @@ describe('page hints', () => {
         ],
       }),
     ).toEqual({
+      csp: {
+        scripts: [],
+        styles: ['sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s='],
+      },
       earlyHints: {
         Link: '</assets/components/cart/cart-badge.css>; rel=preload; as=style',
       },
       html: [
-        '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style>',
+        '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style>',
         '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
       ].join(''),
     });
@@ -131,11 +139,15 @@ describe('page hints', () => {
     ];
 
     expect(renderPageHints({ stylesheets: stylesheetsForTargets(manifest) })).toEqual({
+      csp: {
+        scripts: [],
+        styles: ['sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY='],
+      },
       earlyHints: {
         Link: '</assets/components/cart/cart-badge.css>; rel=preload; as=style, </assets/components/cart/cart-drawer.css>; rel=preload; as=style',
       },
       html: [
-        '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css">cart-badge { color: teal; }</style>',
+        '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY=">cart-badge { color: teal; }</style>',
         '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
         '<link rel="stylesheet" href="/assets/components/cart/cart-drawer.css">',
       ].join(''),
@@ -199,8 +211,12 @@ describe('page hints', () => {
         prerenderUrls: ['/cart', '', '/cart', '/search?q=</script><x>'],
       }),
     ).toEqual({
+      csp: {
+        scripts: ['sha256-moDWLGVl123UjqovUCtXndhtW0kiYXVMQE8nqaw9SHo='],
+        styles: [],
+      },
       earlyHints: {},
-      html: '<script type="speculationrules">{"prerender":[{"eagerness":"moderate","urls":["/cart","/search?q=\\u003c/script>\\u003cx>"]}]}</script>',
+      html: '<script type="speculationrules" data-kovo-csp-hash="sha256-moDWLGVl123UjqovUCtXndhtW0kiYXVMQE8nqaw9SHo=">{"prerender":[{"eagerness":"moderate","urls":["/cart","/search?q=\\u003c/script>\\u003cx>"]}]}</script>',
     });
   });
 });

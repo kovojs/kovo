@@ -39,10 +39,14 @@ describe('route primitives', () => {
     });
     expect(await productRoute.page?.(request, {})).toBe('p1:25');
     expect(renderPageHints(productRoute)).toEqual({
+      csp: {
+        scripts: ['sha256-fKxQlvzc78mE71qhW0Eccfc4+tOL6x+GN3K5zPR3noE='],
+        styles: [],
+      },
       earlyHints: {},
       html: [
         '<title>Product detail</title>',
-        '<script type="speculationrules">{"prerender":[{"eagerness":"conservative","urls":["/products/p1"]}]}</script>',
+        '<script type="speculationrules" data-kovo-csp-hash="sha256-fKxQlvzc78mE71qhW0Eccfc4+tOL6x+GN3K5zPR3noE=">{"prerender":[{"eagerness":"conservative","urls":["/products/p1"]}]}</script>',
       ].join(''),
     });
     expect(
