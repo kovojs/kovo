@@ -63,6 +63,12 @@ steps:
       - --platform
       - managed
       - --allow-unauthenticated
+      - --command
+      - node
+      - --args
+      - site/scripts/serve-static.mjs,--strictPort
+      - --set-env-vars
+      - HOST=0.0.0.0,NODE_ENV=production
       - --memory
       - ${_MEMORY}
       - --cpu
