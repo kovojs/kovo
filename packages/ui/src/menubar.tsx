@@ -10,7 +10,6 @@ import {
   type MenubarItem as HeadlessMenubarItem,
   type TextDirection,
 } from '@kovojs/headless-ui';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 export interface MenubarStyleOverrides {
@@ -69,6 +68,10 @@ export interface MenubarGroupProps extends MenubarStateProps {
 export interface MenubarSeparatorProps {
   id?: string;
   styles?: MenubarStyleOverrides;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 export const menubarStyles = style.create(

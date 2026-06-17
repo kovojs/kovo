@@ -40,6 +40,7 @@ describe('kovo add', () => {
       expect(entry.source).toContain("import { component } from '@kovojs/core';");
       expect(entry.source).toContain('component({');
       expect(entry.source).not.toContain('@kovojs/ui');
+      expect(entry.source).not.toContain('@kovojs/server/internal');
       expect(entry.source).not.toContain('kovo-c=');
       expect(entry.source).not.toContain('data-bind=');
     }

@@ -12,7 +12,6 @@ import {
   commandValueText,
   type CommandItem as HeadlessCommandItem,
 } from '@kovojs/headless-ui';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 export interface CommandStyleOverrides {
@@ -103,6 +102,10 @@ export interface CommandEmptyProps extends CommandStateProps {
 export interface CommandValueProps extends CommandStateProps {
   id?: string;
   styles?: CommandStyleOverrides;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 export const commandStyles = style.create(

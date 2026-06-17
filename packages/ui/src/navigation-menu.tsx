@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import {
   navigationMenuContentAttributes,
   navigationMenuIndicatorAttributes,
@@ -83,6 +82,10 @@ export interface NavigationMenuPartProps extends NavigationMenuStateProps {
   children?: string;
   id?: string;
   styles?: NavigationMenuStyleOverrides;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 export const navigationMenuStyles = style.create(

@@ -9,7 +9,6 @@ import {
   comboboxValueText,
   type ComboboxItem as HeadlessComboboxItem,
 } from '@kovojs/headless-ui';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 export interface ComboboxStyleOverrides {
@@ -67,6 +66,10 @@ export interface ComboboxOptionProps extends ComboboxStateProps {
 export interface ComboboxValueProps extends ComboboxStateProps {
   id?: string;
   styles?: ComboboxStyleOverrides;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 export const comboboxStyles = style.create(

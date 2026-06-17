@@ -6,7 +6,6 @@ import {
   dialogRootAttributes,
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 export type DrawerSide = 'top' | 'right' | 'bottom' | 'left';
@@ -34,6 +33,10 @@ export interface DrawerProps {
   styles?: DrawerStyleOverrides;
   title: string;
   trigger?: string;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 export const drawerStyles = style.create(

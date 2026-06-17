@@ -1,7 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
-import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
 
 export interface TableStyleOverrides {
   body?: style.StyleInput;
@@ -30,6 +29,14 @@ export interface TableCellProps {
   colSpan?: number;
   scope?: 'col' | 'row';
   styles?: TableStyleOverrides;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+function escapeAttribute(value: string): string {
+  return escapeHtml(value).replaceAll('"', '&quot;');
 }
 
 export const tableStyles = style.create(

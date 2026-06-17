@@ -6,7 +6,6 @@ import {
   dialogRootAttributes,
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 export type SheetSide = 'top' | 'right' | 'bottom' | 'left';
@@ -38,6 +37,10 @@ export interface SheetProps {
 
 export interface DrawerProps extends SheetProps {
   side?: DrawerSide;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 export const sheetStyles = style.create(

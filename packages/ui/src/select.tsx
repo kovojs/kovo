@@ -10,7 +10,6 @@ import {
   selectValueText,
   type SelectItem as HeadlessSelectItem,
 } from '@kovojs/headless-ui';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 export interface SelectStyleOverrides {
@@ -75,6 +74,10 @@ export interface SelectItemProps extends SelectStateProps {
 export interface SelectValueProps extends SelectStateProps {
   id?: string;
   styles?: SelectStyleOverrides;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 export const selectStyles = style.create(

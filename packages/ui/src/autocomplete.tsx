@@ -9,7 +9,6 @@ import {
   autocompleteValueText,
   type AutocompleteItem as HeadlessAutocompleteItem,
 } from '@kovojs/headless-ui';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 export interface AutocompleteStyleOverrides {
@@ -69,6 +68,10 @@ export interface AutocompleteOptionProps extends AutocompleteStateProps {
 export interface AutocompleteValueProps extends AutocompleteStateProps {
   id?: string;
   styles?: AutocompleteStyleOverrides;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 export const autocompleteStyles = style.create(

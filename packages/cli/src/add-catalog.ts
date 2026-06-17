@@ -106,6 +106,11 @@ function readVendoredSource(sourcePath: string): string {
   if (source.includes('@kovojs/ui')) {
     throw new Error(`vendored @kovojs/ui source must not import @kovojs/ui: ${sourcePath}`);
   }
+  if (importsNonPublicKovoSubpath(source)) {
+    throw new Error(
+      `vendored @kovojs/ui source must not import non-public Kovo subpaths: ${sourcePath}`,
+    );
+  }
   // SPEC.md §5.2 requires kovo add to vendor app-authored TSX source, not lowered IR artifacts.
   if (
     source.includes('kovo-c=') ||
@@ -115,6 +120,12 @@ function readVendoredSource(sourcePath: string): string {
     throw new Error(`vendored @kovojs/ui source must be TSX, not lowered IR: ${sourcePath}`);
   }
   return source.endsWith('\n') ? source : `${source}\n`;
+}
+
+function importsNonPublicKovoSubpath(source: string): boolean {
+  const nonPublicKovoSubpath =
+    /['"](?:@kovojs\/[^'"]+\/(?:internal|generated)(?:\/[^'"]*)?|kovo\/internal(?:\/[^'"]*)?)['"]/;
+  return new RegExp(`(?:from\\s+|import\\s*\\()${nonPublicKovoSubpath.source}`).test(source);
 }
 
 function isUiPackageManifest(value: unknown): value is UiPackageManifest {
