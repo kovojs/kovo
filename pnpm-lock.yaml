@@ -282,13 +282,25 @@ importers:
       '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
+      '@kovojs/style':
+        specifier: workspace:*
+        version: link:../../packages/style
+      '@kovojs/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
     devDependencies:
+      '@kovojs/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
       '@kovojs/conformance-fixtures':
         specifier: workspace:*
         version: link:../../packages/conformance-fixtures
+      '@kovojs/headless-ui':
+        specifier: workspace:*
+        version: link:../../packages/headless-ui
       '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
