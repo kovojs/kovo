@@ -17,7 +17,7 @@ export interface GeneratedOutputWriteFact {
   context: OutputContext;
   expression?: string;
   sink: string;
-  source: 'client-query' | 'client-state' | 'server-render' | 'template-stamp';
+  source: 'client-query' | 'client-state' | 'server-render' | 'style-extraction' | 'template-stamp';
   writer: string;
 }
 

@@ -40,6 +40,7 @@ import { validatePackageComponentPrefixes } from './validate/package-prefixes.js
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { extractKovoStyles } from './style.js';
+import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import type {
   CompileComponentOptions,
@@ -230,6 +231,8 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     outputContextFacts: dedupeOutputContextFacts([
       ...structuralLowering.outputContexts,
       ...serverRender.outputContexts,
+      ...styleExtraction.outputContexts,
+      ...collectTrustedHtmlOutputContextFacts(originalModel),
       ...queryUpdatePlans.flatMap((plan) => [...(plan.outputContexts ?? [])]),
       ...stateDerives.map((derive) => derive.outputContext),
     ]),

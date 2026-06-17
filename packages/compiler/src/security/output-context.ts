@@ -1,6 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import type { GeneratedOutputWriteFact } from '../output-context-facts.js';
 import {
   jsxElements,
   type ComponentModuleModel,
@@ -37,6 +38,30 @@ export function validateOutputContexts(
   diagnostics.push(...validateComponentCssText(source, model, options.fileName));
 
   return diagnostics;
+}
+
+export function collectTrustedHtmlOutputContextFacts(
+  model: ComponentModuleModel,
+): GeneratedOutputWriteFact[] {
+  const facts: GeneratedOutputWriteFact[] = [];
+
+  for (const element of jsxElements(model)) {
+    for (const attribute of element.attributes) {
+      if (!isRawHtmlAttribute(attribute.name) || literalAttributeStringValue(attribute) !== null) {
+        continue;
+      }
+
+      facts.push({
+        context: 'trusted-html',
+        ...(attribute.expression ? { expression: attribute.expression } : {}),
+        sink: attribute.name,
+        source: 'server-render',
+        writer: 'trusted raw HTML attribute',
+      });
+    }
+  }
+
+  return facts;
 }
 
 function validateElementAttributes(

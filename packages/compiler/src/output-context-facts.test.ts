@@ -81,6 +81,173 @@ export const OutputContextFacts = component({
       },
     ]);
   });
+
+  it('records URL attribute facts for generated dynamic URL updates', () => {
+    const result = compileComponentModule({
+      fileName: 'dynamic-url-facts.tsx',
+      source: `
+export const DynamicUrlFacts = component({
+  queries: { product: productQuery },
+  render: ({ product }) => (
+    <article>
+      <a href={product.href}>Product</a>
+      <img src={product.image} />
+    </article>
+  ),
+});
+`,
+    });
+
+    expect(expectFacts(result, { context: 'url-attribute' })).toMatchInlineSnapshot(`
+      [
+        {
+          "context": "url-attribute",
+          "expression": "product.href",
+          "sink": "href",
+          "source": "client-query",
+          "writer": "inline query attribute derive",
+        },
+        {
+          "context": "url-attribute",
+          "expression": "product.image",
+          "sink": "src",
+          "source": "client-query",
+          "writer": "inline query attribute derive",
+        },
+        {
+          "context": "url-attribute",
+          "expression": "product.href",
+          "sink": "href",
+          "source": "client-query",
+          "writer": "query attribute stamp",
+        },
+        {
+          "context": "url-attribute",
+          "expression": "product.image",
+          "sink": "src",
+          "source": "client-query",
+          "writer": "query attribute stamp",
+        },
+      ]
+    `);
+  });
+
+  it('records generated style-property and CSS-text facts', () => {
+    const result = compileComponentModule({
+      fileName: 'style-output-context-facts.tsx',
+      source: `
+import * as style from '@kovojs/style';
+
+const styles = style.create({
+  root: {
+    backgroundColor: 'black',
+    color: 'white',
+  },
+}, { namespace: 'facts', source: 'facts.tsx' });
+
+export const StyleOutputContextFacts = component({
+  state: () => ({ value: 50 }),
+  render: (_queries, state) => (
+    <article>
+      <button style={styles.root}>Buy</button>
+      <span style={{ width: \`\${state.value}%\` }} />
+    </article>
+  ),
+});
+`,
+    });
+
+    expect(snapshotFacts(expectFacts(result, { context: 'style-property' }))).toMatchInlineSnapshot(`
+      [
+        {
+          "context": "style-property",
+          "expression": "[kovoStyleProperty('width', \`\${state.value}%\`)].filter(Boolean).join('; ')",
+          "sink": "style",
+          "source": "client-state",
+          "writer": "inline state attribute derive",
+        },
+      ]
+    `);
+    expect(expectFacts(result, { context: 'css-text' })).toMatchInlineSnapshot(`
+      [
+        {
+          "context": "css-text",
+          "sink": "StyleOutputContextFacts.css",
+          "source": "style-extraction",
+          "writer": "style extraction css text",
+        },
+      ]
+    `);
+  });
+
+  it('records trusted/raw HTML facts for accepted raw HTML sinks', () => {
+    const result = compileComponentModule({
+      fileName: 'trusted-output-context-facts.tsx',
+      source: `
+import { trustedHtml } from '@kovojs/runtime';
+
+export const TrustedOutputContextFacts = component({
+  render: () => <article dangerouslySetInnerHTML={trustedHtml("<b>safe</b>")} />,
+});
+`,
+    });
+
+    expect(snapshotFacts(expectFacts(result, { context: 'trusted-html' }))).toMatchInlineSnapshot(`
+      [
+        {
+          "context": "trusted-html",
+          "expression": "trustedHtml('<b>safe</b>')",
+          "sink": "dangerouslySetInnerHTML",
+          "source": "server-render",
+          "writer": "trusted raw HTML attribute",
+        },
+      ]
+    `);
+  });
+
+  it('keeps generated interpolation helper calls covered by output-context facts', () => {
+    const result = compileComponentModule({
+      fileName: 'generated-interpolation-guard.tsx',
+      source: `
+export const GeneratedInterpolationGuard = component({
+  queries: { product: productQuery },
+  state: () => ({ value: 50 }),
+  render: ({ product, profile }, state) => (
+    <article title={product.name}>
+      <h2>{product.name}</h2>
+      <p>{profile.name}</p>
+      <span style={{ width: \`\${state.value}%\` }} />
+    </article>
+  ),
+});
+`,
+    });
+    const emittedSource = result.files.map((file) => file.source).join('\n');
+
+    // SPEC §1.2/§5.2: every compiler-generated interpolation helper must have a typed
+    // output-context fact before generated artifacts choose escaping or sanitization.
+    expect(emittedSource).toContain('escapeText(profile.name)');
+    expect(emittedSource).toContain('kovoStyleProperty("width",');
+    expectGeneratedInterpolationFacts(result, [
+      {
+        context: 'text',
+        expression: 'profile.name',
+        source: 'server-render',
+        writer: 'static text interpolation escape',
+      },
+      {
+        context: 'attribute',
+        expression: 'product.name',
+        source: 'client-query',
+        writer: 'inline query attribute derive',
+      },
+      {
+        context: 'style-property',
+        source: 'client-state',
+        writer: 'inline state attribute derive',
+      },
+    ]);
+  });
 });
 
 function expectGeneratedInterpolationFacts(
@@ -92,4 +259,24 @@ function expectGeneratedInterpolationFacts(
       expect.arrayContaining([expect.objectContaining(fact)]),
     );
   }
+}
+
+function expectFacts(
+  result: CompileResult,
+  expected: Partial<GeneratedOutputWriteFact>,
+): GeneratedOutputWriteFact[] {
+  return result.outputContextFacts.filter((fact) =>
+    Object.entries(expected).every(
+      ([key, value]) => fact[key as keyof GeneratedOutputWriteFact] === value,
+    ),
+  );
+}
+
+function snapshotFacts(
+  facts: readonly GeneratedOutputWriteFact[],
+): readonly GeneratedOutputWriteFact[] {
+  return facts.map((fact) => ({
+    ...fact,
+    ...(fact.expression ? { expression: fact.expression.replaceAll('"', "'") } : {}),
+  }));
 }

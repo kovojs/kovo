@@ -29,6 +29,7 @@ import type {
 export interface KovoStyleExtraction {
   css: string | null;
   handledSpans: readonly SourceSpan[];
+  outputContexts: readonly GeneratedOutputWriteFact[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   replacements: readonly SourceReplacement[];
   ruleUsages: readonly StyleRuleUsage[];
@@ -98,6 +99,16 @@ export function extractKovoStyles(
   return {
     css,
     handledSpans: lowered.dynamic.map((entry) => entry.handledSpan),
+    outputContexts: css
+      ? [
+          outputWriteFact({
+            context: 'css-text',
+            sink: `${componentName}.css`,
+            source: 'style-extraction',
+            writer: 'style extraction css text',
+          }),
+        ]
+      : [],
     queryUpdatePlans: lowered.dynamic.flatMap((entry) => entry.queryPlan ?? []),
     replacements: lowered.replacements,
     ruleUsages: environment.usages,
@@ -110,6 +121,7 @@ function emptyStyleExtraction(): KovoStyleExtraction {
   return {
     css: null,
     handledSpans: [],
+    outputContexts: [],
     queryUpdatePlans: [],
     replacements: [],
     ruleUsages: [],

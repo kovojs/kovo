@@ -174,7 +174,7 @@ compiler-quality gaps found during the 2026-06-16 audit.
     src/interactive-gallery.native.browser.test.ts` pass for the scroll-area/slider gallery
     coverage that previously hit KV236.
 
-- [ ] Represent generated output contexts as typed compiler facts.
+- [x] Represent generated output contexts as typed compiler facts.
   - [x] Add a shared compiler type for generated output writes with at least these contexts: text,
         attribute, boolean attribute, URL attribute, style property, CSS text, HTML fragment, script
         text, and trusted/raw HTML.
@@ -183,9 +183,9 @@ compiler-quality gaps found during the 2026-06-16 audit.
         attribute stamps.
   - [x] Thread output-context facts through template stamp emission before HTML-fragment assembly.
   - [x] Thread output-context facts through state derive emission and runtime state binding updates.
-  - [ ] Thread output-context facts through URL-bearing attributes and dynamic URL updates.
-  - [ ] Thread output-context facts through generated style properties and CSS text.
-  - [ ] Add a static test that fails if a generated interpolation is emitted without an output-context
+  - [x] Thread output-context facts through URL-bearing attributes and dynamic URL updates.
+  - [x] Thread output-context facts through generated style properties and CSS text.
+  - [x] Add a static test that fails if a generated interpolation is emitted without an output-context
         fact.
   - Evidence (2026-06-17): `packages/compiler/src/output-context-facts.ts` defines
         `GeneratedOutputWriteFact` and `OutputContext` with text, attribute, boolean-attribute,
@@ -199,12 +199,28 @@ compiler-quality gaps found during the 2026-06-16 audit.
         `packages/compiler/src/lower/inline-derives.ts`,
         `packages/compiler/src/lower/structural-jsx.ts`, and `packages/compiler/src/style.ts`
         attach output-context facts to generated server stamps/handlers, query text/attribute
-        stamps, template stamps, state derives, and style/class updates. Dedicated URL-update,
-        CSS-text, script-text, and trusted/raw HTML fact coverage remains open.
+        stamps, template stamps, state derives, and style/class updates.
   - Evidence (2026-06-17): `packages/compiler/src/output-context-facts.test.ts` asserts
         `CompileResult.outputContextFacts` contains facts for generated server text, query
         attributes, query text, state text derives, and template stamps; `packages/compiler/src/stamps.test.ts`
         snapshots server host stamp output-context facts.
+  - Evidence (2026-06-17): `packages/compiler/src/output-context-facts.test.ts` snapshots
+        URL-bearing `href`/`src` query derives as `url-attribute` facts, generated state
+        `style={{ ... }}` derives as `style-property` facts, StyleX extracted CSS artifacts as
+        `css-text` facts, and accepted `trustedHtml(...)` raw HTML sinks as `trusted-html` facts;
+        it also asserts generated `escapeText(...)` and `kovoStyleProperty(...)` interpolation
+        helper calls have matching output-context facts.
+  - Evidence (2026-06-17): `packages/compiler/src/style.ts` returns `css-text` output-context
+        facts from `extractKovoStyles`, `packages/compiler/src/security/output-context.ts`
+        exposes `collectTrustedHtmlOutputContextFacts(...)`, and `packages/compiler/src/compile.ts`
+        aggregates both into `CompileResult.outputContextFacts`.
+  - Evidence (2026-06-17): `rg "script-text|<script|script\\b" packages/compiler/src -n`
+        found no current generated script-text writer beyond the declared `OutputContext` member
+        and unrelated diagnostics/tests.
+  - Evidence (2026-06-17): `pnpm exec vitest --run packages/compiler/src/output-context-facts.test.ts
+        packages/compiler/src/output-context-payloads.test.ts packages/compiler/src/output-context-security.test.ts
+        packages/compiler/src/output-context-raw-html.test.ts` passed; `pnpm exec tsc --noEmit
+        --pretty false` passed.
   - Evidence (2026-06-17): `pnpm exec vitest --run packages/compiler/src/output-context-facts.test.ts
         packages/compiler/src/output-context-payloads.test.ts packages/compiler/src/output-context-security.test.ts
         packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts
