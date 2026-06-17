@@ -571,7 +571,28 @@ export const AddToCartForm = component({
   - Run the broad acceptance gate if the implementation changes shared compiler,
     runtime, or SPEC behavior across packages.
   - Evidence:
-    - Pending.
+    - Focused generated-artifact and tutorial gates passed on 2026-06-17:
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `node site/tutorial/run-steps.mjs`, and
+      `pnpm --filter @kovojs/site run content`.
+    - Public API/type gates passed on 2026-06-17:
+      `pnpm run check:api-surface`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `pnpm --filter @kovojs/example-commerce test -- source-truth.test.ts`
+      after refreshing the commerce touch-graph line-number artifacts.
+    - Broad `pnpm run acceptance` attempted on 2026-06-17 and stopped in
+      `pnpm run check` because `vp check` reports repo-wide formatting issues in
+      166 files, including many unrelated untouched files; this was not mass-fixed
+      to avoid unrelated churn.
+    - Broad `pnpm run test` attempted on 2026-06-17 after fixing API-surface and
+      commerce graph drift; remaining failures are outside this plan's edited
+      surface: `tests/compiler-perf.test.ts` reports a KV223 diagnostic in
+      `perf/app/dashboard-0.tsx`, `examples/gallery/src/interactive-gallery.artifacts.test.ts`
+      reports an accordion-demo render-equivalence attribute-order mismatch, and
+      `packages/cli/src/index.kovo-export.test.ts` has four static-export
+      expectation failures.
 
 ## Risks
 
