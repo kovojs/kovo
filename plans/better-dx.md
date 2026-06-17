@@ -340,7 +340,19 @@ export const AddToCartForm = component({
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/stamps.test.ts`
       and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
       2026-06-17.
-    - Remaining gap: typed render-context failure state is not complete.
+    - `packages/core/src/index.ts` now exposes typed component mutation form
+      render context: declaring `mutations: { addToCart }` gives the third
+      render argument `forms.addToCart.failure` typed from `FormFailure`.
+    - `packages/core/src/index.test.ts` covers typed
+      `forms.addToCart.failure`, validation failures, and rejection of
+      undeclared form names.
+    - Verified with
+      `pnpm exec vitest --run packages/core/src/index.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/scan/parse.test.ts`,
+      `pnpm exec vitest --run packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-endpoint.test.ts`,
+      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
+      2026-06-17.
+    - Remaining gap: server/runtime injection of concrete failure state into
+      component render calls is not complete.
 - [x] **7. Type registry and breaking migration.**
   - Generate `FragmentTargets` facts for inferred targets so existing typed APIs
     keep working.

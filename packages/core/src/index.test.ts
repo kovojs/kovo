@@ -180,6 +180,40 @@ describe('core authoring APIs', () => {
     expect(validationFailure.fields.quantity).toBe('Expected number >= 1');
   });
 
+  it('threads typed mutation failure state into component render context', () => {
+    const addToCart = form<
+      'cart/add',
+      { productId: string; quantity: number },
+      { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } }
+    >('cart/add');
+    const AddToCartForm = component({
+      mutations: { addToCart },
+      render: (_queries, _state, { forms }) => {
+        const failure = forms.addToCart.failure;
+        if (failure?.code === 'OUT_OF_STOCK') {
+          return failure.payload.availableQuantity;
+        }
+        if (failure?.code === 'VALIDATION') {
+          return failure.fields.quantity;
+        }
+        return null;
+      },
+    });
+    const assertUnknownForm = () => {
+      type Slots = Parameters<typeof AddToCartForm.definition.render>[2];
+      const slots = {
+        forms: {
+          addToCart: { failure: null },
+        },
+      } satisfies Slots;
+      // @ts-expect-error missingForm is not declared in component mutations.
+      return slots.forms.missingForm;
+    };
+
+    expect(AddToCartForm.definition.mutations?.addToCart.key).toBe('cart/add');
+    expect(assertUnknownForm).toBeTypeOf('function');
+  });
+
   it('derives form input and failure facts from generated mutation registry values', () => {
     const addToCart = form('cart/add');
     const input = {

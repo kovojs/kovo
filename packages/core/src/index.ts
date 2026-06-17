@@ -136,24 +136,52 @@ export type JsonValue =
 /** Opaque result of a component's `render` — the compiler lowers it to HTML/IR. */
 export type ComponentRenderResult = unknown;
 
-/** Render-time composition values for `children` and named slots (SPEC §4.5). */
-export interface ComponentRenderSlots {
+type ComponentMutationDefinitions = Record<string, Form<string, Record<string, JsonValue>, unknown>>;
+type NoComponentMutations = Record<never, never>;
+
+/** Render state for one typed mutation form instance. */
+export interface ComponentMutationFormState<Failure> {
+  failure: Failure | null;
+}
+
+/** Render state keyed by a component's declared mutation handles. */
+export type ComponentMutationForms<Mutations extends ComponentMutationDefinitions> = {
+  [Name in keyof Mutations]: ComponentMutationFormState<FormFailure<Mutations[Name]>>;
+};
+
+interface ComponentRenderSlotValues {
   children?: unknown;
   [slot: string]: unknown;
 }
+
+type ComponentRenderFormsSlot<Mutations extends ComponentMutationDefinitions> =
+  keyof Mutations extends never
+    ? { forms?: ComponentMutationForms<Mutations> }
+    : { forms: ComponentMutationForms<Mutations> };
+
+/** Render-time composition values for `children`, named slots, and mutation form state (SPEC §4.5/§6.3). */
+export type ComponentRenderSlots<
+  Mutations extends ComponentMutationDefinitions = NoComponentMutations,
+> = ComponentRenderSlotValues & ComponentRenderFormsSlot<Mutations>;
 
 /** Typed body of a component: its query bindings, island state factory, and `render`. */
 export interface ComponentDefinition<
   Queries = Record<string, unknown>,
   State extends JsonValue = JsonValue,
+  Mutations extends ComponentMutationDefinitions = NoComponentMutations,
 > {
   /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
   disableServerRefresh?: boolean;
   /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
   fragmentTarget?: never;
+  mutations?: Mutations;
   queries?: Queries;
   state?: () => State;
-  render: (queries: Queries, state: State, slots: ComponentRenderSlots) => ComponentRenderResult;
+  render: (
+    queries: Queries,
+    state: State,
+    slots: ComponentRenderSlots<Mutations>,
+  ) => ComponentRenderResult;
 }
 
 /** Loosely-typed input accepted by `component()` before inference narrows it. */
@@ -162,6 +190,7 @@ export interface ComponentDefinitionInput {
   disableServerRefresh?: boolean;
   /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
   fragmentTarget?: never;
+  mutations?: Record<string, unknown>;
   queries?: unknown;
   state?: () => JsonValue;
   render: (...args: never[]) => ComponentRenderResult;
@@ -196,9 +225,13 @@ export interface Component<Definition extends ComponentDefinitionInput> {
  *     `<button>${state.count}</button>`,
  * });
  */
-export function component<const Definition extends ComponentDefinitionInput>(
-  definition: Definition,
-): Component<Definition> {
+export function component<
+  Queries = Record<string, unknown>,
+  State extends JsonValue = JsonValue,
+  Mutations extends ComponentMutationDefinitions = NoComponentMutations,
+>(definition: ComponentDefinition<Queries, State, Mutations>): Component<
+  ComponentDefinition<Queries, State, Mutations>
+> {
   return { definition };
 }
 
