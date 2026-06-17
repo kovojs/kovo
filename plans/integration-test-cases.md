@@ -611,14 +611,21 @@ tests/integration/specs/morph-nested-island-state.spec.ts`.
   - Gap: the browser fixture proves current native-host stamping on a valid table host. A
     standalone row-root component still fails current integration compilation with KV225, so
     row-root identity remains covered only by compiler-level composition tests.
-- [ ] `same-dom-leaf-disambiguation` / `same-dom-leaf-disambiguation.spec.ts`: two registry-distinct
+- [x] `same-dom-leaf-disambiguation` / `same-dom-leaf-disambiguation.spec.ts`: two registry-distinct
       components with the same DOM leaf on one page get stable disambiguated `kovo-c` values.
   - SPEC refs: §4.2 rendered output, §6.1 component registry keys.
   - Assertions: both render and update independently; explain output may be better suited for the
     disambiguation reason while browser snapshot proves emitted identity.
-  - Gap: left unchecked because current browser integration compiles fixture component modules one
-    at a time and does not run `composePageComponentArtifacts`, where duplicate DOM leaf
-    disambiguation is currently implemented and covered by `packages/compiler/src/page-composition.test.ts`.
+  - Evidence: `tests/integration/specs/same-dom-leaf-disambiguation.spec.ts` compiles two
+    registry-distinct `Root` components that both emit the `<root>` DOM leaf, runs
+    `composePageComponentArtifacts`, verifies the component graph facts report
+    `components/accordion/root` and `components/tabs/root` as stable disambiguated DOM names, renders
+    the emitted host markup and CSS artifacts in Chromium, and snapshots the resulting DOM with two
+    distinct `kovo-c` identities and independently scoped label colors. Proving commands:
+    `pnpm --filter @kovojs/integration-tests exec playwright test
+specs/same-dom-leaf-disambiguation.spec.ts --config playwright.config.ts --workers=1` and
+    `pnpm exec vp check tests/integration/specs/same-dom-leaf-disambiguation.spec.ts
+tests/integration/package.json`.
 
 ## Routes and navigation
 

@@ -12,6 +12,8 @@
     "kovo": "workspace:*"
   },
   "devDependencies": {
+    "@kovojs/compiler": "workspace:*",
+    "@playwright/test": "1.60.0",
     "@tailwindcss/node": "^4.3.0",
     "tailwindcss": "^4.3.0"
   }
