@@ -93,35 +93,10 @@ function lowerLinkClosingTagPatches(link: JsxElementModel): SourceReplacement[] 
 
 export function navigationHrefLowering(model: ComponentModuleModel): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
-  const staticHrefCalls = callExpressions(model)
-    .filter((item) => item.name === 'href')
-    .map((call) => ({ call, lowered: lowerStaticHrefCall(call.argumentStaticValues) }))
-    .filter(
-      (item): item is { call: (typeof item)['call']; lowered: string } => item.lowered !== null,
-    );
-  const wholeAttributeReplacements: SourceReplacement[] = [];
-
-  for (const attribute of jsxElements(model)
-    .flatMap((element) => [...element.attributes])
-    .filter((item) => item.name === 'href' && item.expression !== undefined)
-    .sort((left, right) => right.start - left.start)) {
-    const target =
-      staticStringValue(attribute.expressionStaticValue) ??
-      staticHrefCalls.find(
-        ({ call }) =>
-          call.start === attribute.expressionStart && call.end === attribute.expressionEnd,
-      )?.lowered;
-    if (target == null) continue;
-
-    wholeAttributeReplacements.push({
-      end: attribute.end,
-      replacement: `href="${escapeAttribute(target)}"`,
-      start: attribute.start,
-    });
-  }
+  const wholeAttributeReplacements = navigationHrefAttributeReplacements(model);
 
   replacements.push(...wholeAttributeReplacements);
-  for (const { call, lowered } of staticHrefCalls) {
+  for (const { call, lowered } of staticHrefCalls(model)) {
     if (wholeAttributeReplacements.some((replacement) => isWithinReplacement(call, replacement))) {
       continue;
     }
@@ -129,6 +104,59 @@ export function navigationHrefLowering(model: ComponentModuleModel): SourceRepla
   }
 
   return replacements;
+}
+
+export function navigationStandaloneHrefLowering(model: ComponentModuleModel): SourceReplacement[] {
+  const wholeAttributeReplacements = navigationHrefAttributeReplacements(model);
+  return staticHrefCalls(model)
+    .filter(
+      ({ call }) =>
+        !wholeAttributeReplacements.some((replacement) => isWithinReplacement(call, replacement)),
+    )
+    .map(({ call, lowered }) => ({
+      end: call.end,
+      replacement: JSON.stringify(lowered),
+      start: call.start,
+    }));
+}
+
+export function staticHrefAttributeValue(
+  model: ComponentModuleModel,
+  attribute: JsxAttributeModel,
+): string | null {
+  if (attribute.name !== 'href' || attribute.expression === undefined) return null;
+  return (
+    staticStringValue(attribute.expressionStaticValue) ??
+    staticHrefCalls(model).find(
+      ({ call }) => call.start === attribute.expressionStart && call.end === attribute.expressionEnd,
+    )?.lowered ??
+    null
+  );
+}
+
+function navigationHrefAttributeReplacements(model: ComponentModuleModel): SourceReplacement[] {
+  return jsxElements(model)
+    .flatMap((element) => [...element.attributes])
+    .filter((item) => item.name === 'href' && item.expression !== undefined)
+    .map((attribute) => ({ attribute, target: staticHrefAttributeValue(model, attribute) }))
+    .filter((item): item is { attribute: JsxAttributeModel; target: string } => item.target !== null)
+    .sort((left, right) => right.attribute.start - left.attribute.start)
+    .map(({ attribute, target }) => ({
+      end: attribute.end,
+      replacement: `href="${escapeAttribute(target)}"`,
+      start: attribute.start,
+    }));
+}
+
+function staticHrefCalls(
+  model: ComponentModuleModel,
+): { call: ReturnType<typeof callExpressions>[number]; lowered: string }[] {
+  return callExpressions(model)
+    .filter((item) => item.name === 'href')
+    .map((call) => ({ call, lowered: lowerStaticHrefCall(call.argumentStaticValues) }))
+    .filter(
+      (item): item is { call: (typeof item)['call']; lowered: string } => item.lowered !== null,
+    );
 }
 
 function isWithinReplacement(call: { end: number; start: number }, replacement: SourceReplacement) {

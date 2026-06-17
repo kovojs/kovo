@@ -19,6 +19,7 @@ describe('structural IR ownership boundary', () => {
       'lowerInlineAttributeDerives',
       'navigationHrefLowering',
       'navigationLinkLowering',
+      'navigationStandaloneHrefLowering',
       'platformBehaviorLowering',
       'lowerPrimitiveAttributeSpreads',
       'lowerStructuralJsx',
@@ -43,6 +44,13 @@ describe('structural IR ownership boundary', () => {
 
     expect(compileSource).not.toContain('platformBehaviorLowering');
     expect(compileSource).toContain('structuralLowering.platformSubstitutions');
+  });
+
+  it('keeps production href attribute lowering on the JSX IR path', () => {
+    const compileSource = readFileSync(join(compilerSrcDir, 'compile.ts'), 'utf8');
+
+    expect(compileSource).not.toContain('navigationHrefLowering');
+    expect(compileSource).toContain('navigationStandaloneHrefLowering');
   });
 });
 

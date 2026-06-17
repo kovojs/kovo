@@ -104,7 +104,7 @@ compiler-quality gaps found during the 2026-06-16 audit.
 - [ ] Move remaining overlapping structural rewrites into the JSX IR.
   - [x] Migrate platform behavior substitution attributes into the JSX IR or prove they are terminal
         and non-overlapping.
-  - [ ] Migrate `href()` call and navigation attribute replacement into the JSX IR where it rewrites
+  - [x] Migrate `href()` call and navigation attribute replacement into the JSX IR where it rewrites
         JSX attributes.
   - [ ] Migrate server-render component identity/dependency/state stamp insertion into the JSX IR or
         a typed terminal stamp phase with conflict detection.
@@ -139,6 +139,20 @@ compiler-quality gaps found during the 2026-06-16 audit.
   - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest --run
         src/platform-lowering.test.ts src/structural-jsx-ir.test.ts
         src/structural-boundary.test.ts src/compile-component.test.ts src/attribute-merge.test.ts`
+        passed; `pnpm exec tsc --noEmit --pretty false` passed.
+  - Evidence (2026-06-17): `packages/compiler/src/lower/structural-jsx.ts` now lowers static
+        JSX `href={href(...)}` and `href={...}` attribute targets through the JSX IR using the
+        shared navigation parser facts, while `packages/compiler/src/compile.ts` calls
+        `navigationStandaloneHrefLowering(...)` only for standalone `href(...)` call expressions
+        outside JSX attributes.
+  - Evidence (2026-06-17): `packages/compiler/src/lower/structural-boundary.md` classifies
+        `navigationHrefLowering` as legacy/test-only and `navigationStandaloneHrefLowering` as
+        terminal-only; `packages/compiler/src/structural-boundary.test.ts` fails if production
+        `compile.ts` reintroduces `navigationHrefLowering(...)` instead of the standalone terminal
+        path plus JSX IR attribute path.
+  - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest --run
+        src/navigation-lowering.test.ts src/structural-jsx-ir.test.ts
+        src/structural-boundary.test.ts src/platform-lowering.test.ts src/compile-component.test.ts`
         passed; `pnpm exec tsc --noEmit --pretty false` passed.
 
 - [x] Prove structural rewrite composition with one end-to-end fixture.

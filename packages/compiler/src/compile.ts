@@ -16,7 +16,7 @@ import {
   lowerEventHandlers,
   versionHandlerLowering,
 } from './lower/handlers.js';
-import { navigationHrefLowering } from './lower/navigation.js';
+import { navigationStandaloneHrefLowering } from './lower/navigation.js';
 import { lowerStructuralJsx } from './lower/structural-jsx.js';
 import {
   inferComponentName,
@@ -98,7 +98,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ...compileOptions,
     skipInlineAttributeDeriveSpans: styleExtraction.handledSpans,
   });
-  const hrefReplacements = navigationHrefLowering(originalState.model);
+  const hrefReplacements = navigationStandaloneHrefLowering(originalState.model);
   const modelPatch = applyModelPatchPass(
     originalState,
     [

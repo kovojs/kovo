@@ -54,6 +54,7 @@ import {
   platformElementSubstitution,
   type PlatformSubstitution,
 } from './platform.js';
+import { staticHrefAttributeValue } from './navigation.js';
 
 type StructuralJsxLoweringOptions = Pick<
   CompileComponentOptions,
@@ -93,6 +94,7 @@ export const structuralJsxPhaseOrder = [
   'primitive-composition',
   'link-navigation',
   'platform-behaviors',
+  'href-attributes',
   'view-transition-name',
   'inline-attribute-derives',
   'inline-text-bindings',
@@ -121,6 +123,7 @@ export function lowerStructuralJsx(
   diagnostics.push(...lowerPrimitiveComposition(tree.elements, options));
   lowerNavigationLinks(tree.elements, options);
   lowerPlatformBehaviors(model, tree.elements, options, platformSubstitutions);
+  lowerHrefAttributes(model, tree.elements, options);
   needsStylePropertyHelper = lowerViewTransitionNames(
     tree.elements,
     componentName,
@@ -352,6 +355,29 @@ function lowerPlatformBehaviors(
       markJsxIrChanged(element);
     }
     substitutions.push(match.substitution);
+  }
+}
+
+function lowerHrefAttributes(
+  model: ComponentModuleModel,
+  elements: readonly JsxIrElement[],
+  options: StructuralJsxLoweringOptions,
+): void {
+  for (const element of elements) {
+    const attribute = attributeByName(element, 'href');
+    if (!attribute?.source || !('name' in attribute.source)) continue;
+    const target = staticHrefAttributeValue(model, attribute.source);
+    if (target === null) continue;
+
+    setJsxIrAttribute(
+      element,
+      generatedJsxIrAttribute(
+        'href',
+        { kind: 'string', value: target },
+        'href navigation lowering',
+        options,
+      ),
+    );
   }
 }
 
