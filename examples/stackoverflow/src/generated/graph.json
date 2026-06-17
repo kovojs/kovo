@@ -128,13 +128,13 @@
         {
           "domain": "answer",
           "keys": null,
-          "site": "examples/stackoverflow/src/mutations.ts:39",
+          "site": "examples/stackoverflow/src/mutations.ts:49",
           "via": "answers"
         },
         {
           "domain": "question",
           "keys": "arg:questionId",
-          "site": "examples/stackoverflow/src/mutations.ts:40",
+          "site": "examples/stackoverflow/src/mutations.ts:50",
           "via": "questions"
         }
       ],
@@ -146,13 +146,13 @@
         {
           "domain": "question",
           "keys": "arg:targetId",
-          "site": "examples/stackoverflow/src/mutations.ts:54",
+          "site": "examples/stackoverflow/src/mutations.ts:64",
           "via": "questions"
         },
         {
           "domain": "vote",
           "keys": null,
-          "site": "examples/stackoverflow/src/mutations.ts:53",
+          "site": "examples/stackoverflow/src/mutations.ts:63",
           "via": "votes"
         }
       ],

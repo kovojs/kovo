@@ -21,7 +21,17 @@ export async function postQuestion(
   request: SoRequest,
 ): Promise<{ id: string }> {
   const db = request.db;
-  await db.insert(questions).values({ id, title, body, authorId, score: 0, answerCount: 0 });
+  await db.insert(questions).values({
+    answerCount: 0,
+    authorId,
+    authorName: 'Anonymous',
+    body,
+    createdAt: '',
+    id,
+    score: 0,
+    tags: '',
+    title,
+  });
   return { id };
 }
 

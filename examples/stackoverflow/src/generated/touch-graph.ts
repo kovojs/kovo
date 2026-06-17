@@ -4,8 +4,8 @@ import type { AnswerListResult, QuestionAnswersResult, QuestionDetailResult, Que
 export const soTouchGraph = {
   "postAnswer": {
     touches: [
-      { domain: "answer", via: "answers", site: "examples/stackoverflow/src/mutations.ts:39", keys: null },
-      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:40", keys: "arg:questionId" },
+      { domain: "answer", via: "answers", site: "examples/stackoverflow/src/mutations.ts:49", keys: null },
+      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:50", keys: "arg:questionId" },
     ],
     reads: [
     ],
@@ -23,8 +23,8 @@ export const soTouchGraph = {
   },
   "voteUp": {
     touches: [
-      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:54", keys: "arg:targetId" },
-      { domain: "vote", via: "votes", site: "examples/stackoverflow/src/mutations.ts:53", keys: null },
+      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:64", keys: "arg:targetId" },
+      { domain: "vote", via: "votes", site: "examples/stackoverflow/src/mutations.ts:63", keys: null },
     ],
     reads: [
     ],

@@ -33,10 +33,15 @@ export const voteUpForm = form<'voteUp', VoteUpInput>('voteUp');
 
 // Query result shapes (the §10.5 algebraic shapes the deriver patches).
 export interface QuestionListItem {
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
   id: string;
-  title: string;
+  tags: string;
   score: number;
   answerCount: number;
+  title: string;
 }
 export interface QuestionListResult {
   items: QuestionListItem[];

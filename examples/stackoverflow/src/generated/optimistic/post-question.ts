@@ -11,7 +11,7 @@ export const postQuestionDerivedOptimistic = {
     questionList: (current, $input) => {
       const next = structuredClone(current);
       {
-        const row = { id: $input.id, title: $input.title, score: 0, answerCount: 0 };
+        const row = { authorId: $input.authorId, authorName: "Anonymous", body: $input.body, createdAt: "", id: $input.id, tags: "", title: $input.title, score: 0, answerCount: 0 };
         const index = next.items.findIndex((entry) => entry.id > row.id);
         if (index < 0) next.items.push(row);
         else next.items.splice(index, 0, row);

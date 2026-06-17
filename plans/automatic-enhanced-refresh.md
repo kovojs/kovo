@@ -95,7 +95,7 @@ removes app-authored bookkeeping from the enhanced path.
     Verified with
     `rg -n "_TARGET|generated/live-targets" examples/stackoverflow/src examples/crm/src examples/commerce/src --glob '!**/generated/**'`
     and the command returns no matches.
-- [ ] **Queries and page loaders are split in some examples.**
+- [x] **Queries and page loaders are split in some examples.**
   - StackOverflow and CRM keep some presentational joins or route-param filtering
     outside the declared query model, so the server cannot yet re-run only the
     component's declared queries to reconstruct every region.
@@ -103,6 +103,18 @@ removes app-authored bookkeeping from the enhanced path.
     props and query arg bindings in StackOverflow and CRM; the remaining recorded
     gap is StackOverflow list-region presentational enrichment outside the
     declared query model.
+  - Evidence 2026-06-17: `examples/stackoverflow/src/queries.ts` now selects
+    every UI field rendered by `QuestionListRegion` (`authorId`, `authorName`,
+    `body`, `createdAt`, `id`, `tags`, `title`, `score`, `answerCount`) in the
+    declared `questionList` query. `postQuestion` writes the static
+    presentational defaults explicitly, so the derived optimistic transform can
+    construct the same richer row shape.
+  - Verified with
+    `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+    `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`,
+    `pnpm --filter @kovojs/example-stackoverflow test`,
+    `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+    `git diff --check`.
 - [x] **`createApp()` lacks a generated server-render registry.**
   - `SPEC.md` §9.1 describes mutation fragments/query JSON, and §4.1/§4.2
     describes query-backed refreshable components, but the implementation still
@@ -535,7 +547,7 @@ removes app-authored bookkeeping from the enhanced path.
     - Earlier gap now closed below: Commerce's ProductGrid request-slot and
       error-boundary adapter are generated, and Commerce app modules no longer
       import generated live-target registries.
-- [ ] **7. Migrate StackOverflow.**
+- [x] **7. Migrate StackOverflow.**
   - Move presentational enrichment and detail filtering into declared queries or
     query arg bindings.
   - Remove generated target imports and `mutationResponse` fragment routing from
@@ -607,8 +619,8 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-stackoverflow test`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gap after this checkpoint: list-region presentational enrichment
-      is still outside the declared query model.
+    - Earlier gap now closed below: list-region presentational enrichment moved
+      into the declared `questionList` query.
     - Additional progress 2026-06-17:
       `examples/stackoverflow/src/interactive-app.tsx` no longer imports
       `./generated/live-targets.js` or passes `liveTargetRenderers` to
@@ -621,9 +633,17 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gap: list-region presentational enrichment is still outside the
-      declared query model.
-- [ ] **8. Migrate CRM.**
+    - Final gap closed 2026-06-17:
+      `examples/stackoverflow/src/queries.ts` declares the full list UI row
+      shape, and `examples/stackoverflow/src/generated/optimistic/post-question.ts`
+      derives the richer push-row transform with static presentational defaults.
+    - Verified with
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `git diff --check`.
+- [x] **8. Migrate CRM.**
   - Move contact/deal/detail presentation data into declared queries or explicit
     component query args.
   - Remove generated target imports and `mutationResponse` fragment routing from
@@ -695,9 +715,11 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gap: none recorded for the explicit generated live-target
-      registry import; keep this phase open until a final no-match pass verifies
-      all CRM authoring-surface claims together.
+    - Final verification 2026-06-17: the broad app-authored example source
+      no-match pass recorded under "Example no-match checks prove the DX
+      outcome" verifies CRM has no ordinary success-routing plumbing,
+      app-authored generated registry imports, target constants, or
+      `render*Region` helpers outside generated artifacts.
 - [x] **9. Migrate commerce.**
   - Split the large commerce integration module so app-authored page/mutation
     code is separate from auth/webhook/test helpers.

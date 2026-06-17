@@ -15,33 +15,22 @@ import {
   voteButton,
 } from '../components/chrome.js';
 
-// Question list (route `/`). Reads the `questionList` rowset (id/title/score/
-// answerCount — each a column the postQuestion / postAnswer / voteUp derived
-// optimistic transforms patch) and the `questionScore` scalar (SUM over votes).
+// Question list (route `/`). Reads the full `questionList` rowset used by this
+// UI and the `questionScore` scalar (SUM over votes).
 // SPEC.md §4.8: the query-backed component root derives its `kovo-fragment-target`
 // in the generated module, so generated enhanced refresh can re-render this
 // region with server-truth scores — no hand-authored target string.
 //
 // Restyled with @kovojs/ui (SPEC.md §6.1.1): each row is a Card, tags are Badges,
 // the composer uses a Button, and authors get an Avatar byline. The presentational
-// fields (authorName / tags / createdAt / excerpt) ride alongside the proven query
-// columns — they are NOT part of the §10.5 query shape, so a fragment re-render
-// that only has the bare query columns still renders cleanly (the helpers default).
-
-// The query item plus optional presentational fields the render path enriches in.
-// The fragment re-render from server truth supplies these too (interactive-app
-// joins them on), but every field is optional so a bare query item still renders.
-interface QuestionRow extends QuestionListItem {
-  authorName?: string;
-  tags?: string;
-  createdAt?: string;
-  excerpt?: string;
-}
+// The presentational fields (authorName / tags / createdAt / body) are part of
+// the declared query shape, not a separate page loader, so generated enhanced
+// refresh can rerender the list from query data alone (SPEC.md §10.2).
 
 type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
 type QuestionScoreQueryResult = Awaited<ReturnType<typeof questionScore.load>>;
 
-function renderQuestionRow(question: QuestionRow): string {
+function renderQuestionRow(question: QuestionListItem): string {
   const tags = parseTags(question.tags);
   const body = (
     <div class="so-row">
@@ -54,12 +43,10 @@ function renderQuestionRow(question: QuestionRow): string {
         <a class="so-row-title" href={`/questions/${question.id}`}>
           {question.title}
         </a>
-        {question.excerpt ? <p class="so-row-excerpt">{question.excerpt}</p> : ''}
+        {question.body ? <p class="so-row-excerpt">{question.body}</p> : ''}
         <div class="so-row-meta">
           {renderTags(tags)}
-          {question.authorName
-            ? renderAuthor(question.authorName, question.createdAt, 'asked')
-            : ''}
+          {renderAuthor(question.authorName, question.createdAt, 'asked')}
         </div>
       </div>
     </div>
@@ -81,7 +68,7 @@ export const QuestionListRegion = component({
     questionList: QuestionListQueryResult;
     questionScore: QuestionScoreQueryResult;
   }) => {
-    const questions = questionList.items as QuestionRow[];
+    const questions = questionList.items;
     const totalVotes = questionScore.score;
     const askButton = Button.definition.render({
       children: 'Ask question',

@@ -15,7 +15,9 @@ import type { QuestionAnswersResult, QuestionDetailResult } from './types.js';
 
 type SoQueryLoadContext = QueryLoadContext<SoRequest> & { db?: SoDb };
 
-// questionList — AGG over questions, ordered by the stable primary key.
+// questionList — AGG over questions, ordered by the stable primary key. It
+// selects every field the list UI renders, so generated live-target refresh can
+// reconstruct the region from the declared query alone (SPEC.md §10.2).
 // (We deliberately order by `id`, not `score DESC`: an UPDATE of an orderBy
 // column moves the row, so voteUp×questionList would punt with `opaque-orderby`
 // per SPEC.md §10.5. Ordering by the key keeps every (mutation×query) pair
@@ -25,7 +27,12 @@ export const questionList = query('questionList', {
     const db = requireSoQueryDb(context);
     const items = await db
       .select({
+        authorId: questions.authorId,
+        authorName: questions.authorName,
+        body: questions.body,
+        createdAt: questions.createdAt,
         id: questions.id,
+        tags: questions.tags,
         title: questions.title,
         score: questions.score,
         answerCount: questions.answerCount,

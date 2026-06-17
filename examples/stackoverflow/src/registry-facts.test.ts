@@ -63,7 +63,12 @@ describe('stackoverflow §10.5 Stage 2 — query → AlgebraicQueryShape', () =>
     const items = shapeByQuery.get('questionList')?.fields.items;
     expect(items?.kind === 'agg' && items.rowset.table).toBe('questions');
     expect(items?.kind === 'agg' && items.projection).toEqual([
+      'authorId',
+      'authorName',
+      'body',
+      'createdAt',
       'id',
+      'tags',
       'title',
       'score',
       'answerCount',
