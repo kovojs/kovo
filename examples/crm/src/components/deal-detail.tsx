@@ -1,9 +1,20 @@
 /** @jsxImportSource @kovojs/server */
-import { Badge } from '@kovojs/ui/badge';
-import { Button } from '@kovojs/ui/button';
-import { Card } from '@kovojs/ui/card';
-import { Separator } from '@kovojs/ui/separator';
-import { money, renderCrmShell, stageBadge, stageBadgeVariant } from './chrome.js';
+import { component } from '@kovojs/core';
+import { mutationFormAttributes } from '@kovojs/server';
+
+import { closeDeal, moveDeal } from '../mutations.js';
+import {
+  activityListQuery,
+  contactListQuery,
+  dealListQuery,
+  type ActivityListResult,
+  type ActivityRow,
+  type ContactListResult,
+  type ContactRow,
+  type DealListResult,
+  type DealRow,
+} from '../queries.js';
+import { money, renderCrmShell, stageBadge } from '../components/chrome.js';
 
 // Deal detail (route `/deals/:id`). Joins a single deal to its contact and the
 // activity timeline. This is the page the pipeline's open-deal rows link into.
@@ -18,19 +29,12 @@ import { money, renderCrmShell, stageBadge, stageBadgeVariant } from './chrome.j
 // db.ts / schema.ts (SPEC.md §10.5: those columns are never written by a
 // mutation, so the derived optimism stays clean).
 
-export const DEAL_DETAIL_TARGET = 'crm-deal-detail';
+export const DEAL_DETAIL_TARGET = 'deal-detail-region';
 
 // The pipeline stages a deal can be moved through (mirrors the demo data + the
 // pipelineByStage buckets). 'won' is reached via the close-deal action (which
 // also applies the server commission), so it is not a plain move target.
 const MOVE_STAGES = ['lead', 'qualified', 'open', 'proposal', 'lost'] as const;
-
-export interface ActivityRow {
-  id: number;
-  dealId: string;
-  kind: string;
-  note: string;
-}
 
 /** The full persisted deal row (rowset shape + the presentational `title`). */
 export interface DetailDeal {
@@ -68,140 +72,145 @@ function initials(name: string): string {
 }
 
 // The interactive region, rendered inside the page and as the moveDeal /
-// closeDeal fragment payload (target = DEAL_DETAIL_TARGET).
-export function renderDealDetailRegion({ deal, contact, activities }: DealDetailPageData): string {
-  const closed = deal.stage === 'won' || deal.stage === 'lost';
+// closeDeal fragment payload. SPEC.md §4.8: the query-backed component root
+// derives its fragment target in the generated module.
+export const DealDetailRegion = component({
+  props: { dealId: String },
+  queries: {
+    activityList: activityListQuery,
+    contactList: contactListQuery,
+    dealList: dealListQuery,
+  },
+  render: ({
+    activityList,
+    contactList,
+    dealId,
+    dealList,
+  }: {
+    activityList: ActivityListResult;
+    contactList: ContactListResult;
+    dealId: string;
+    dealList: DealListResult;
+  }) => {
+    const deal = dealList.items.find((item) => item.id === dealId) ?? dealList.items[0];
+    const contact = contactList.items.find((item) => item.id === deal?.contactId);
+    const activities = activityList.items.filter((item) => item.dealId === dealId);
+    const closed = deal?.stage === 'won' || deal?.stage === 'lost';
 
-  const summaryCard = Card.definition.render({
-    children: (
-      <div class="grid gap-5">
-        <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <p class="text-xs font-medium uppercase tracking-wide text-slate-400">
-              Deal {deal.id.toUpperCase()}
-            </p>
-            <h1 class="mt-1 text-xl font-bold tracking-tight">{deal.title}</h1>
-            <p class="mt-1 text-sm text-slate-500">
-              {contact ? contact.name : deal.contactId} · owner {deal.ownerId}
-            </p>
-          </div>
-          <div class="shrink-0 text-right">
-            <p class="text-2xl font-semibold tabular-nums">{money(deal.amount)}</p>
-            <div class="mt-1.5 flex justify-end">{stageBadge(deal.stage)}</div>
-          </div>
-        </div>
-        {contact ? (
-          <div class="grid gap-3">
-            {Separator.definition.render({})}
-            <div class="flex items-center gap-3">
-              <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
-                {initials(contact.name)}
-              </span>
-              <div class="min-w-0">
-                <p class="truncate text-sm font-semibold text-slate-900">{contact.name}</p>
-                <p class="truncate text-sm text-slate-500">
-                  {contact.title} · {contact.company}
-                </p>
-                <p class="truncate text-sm text-slate-400">{contact.email}</p>
-              </div>
+    if (!deal) return <div class="space-y-6"></div>;
+
+    return (
+      <div class="space-y-6">
+        <a
+          class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
+          href="/"
+        >
+          &larr; Pipeline
+        </a>
+
+        <div class="rounded-lg border border-slate-200 bg-white p-6">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h1 class="text-xl font-bold tracking-tight">Deal {deal.id.toUpperCase()}</h1>
+              <p class="mt-1 text-sm text-slate-600">
+                {contact ? contact.name : deal.contactId} · owner {deal.ownerId}
+              </p>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-semibold tabular-nums">{money(deal.amount)}</p>
+              <div class="mt-1">{stageBadge(deal.stage)}</div>
             </div>
           </div>
-        ) : (
-          ''
-        )}
-      </div>
-    ),
-  });
+          {contact ? (
+            <p class="mt-4 border-t border-slate-100 pt-4 text-sm text-slate-600">
+              <span class="font-medium text-slate-900">{contact.name}</span> · {contact.email}
+            </p>
+          ) : (
+            ''
+          )}
+        </div>
 
-  // SPEC.md §6.3: no-JS "move stage" + "close deal" controls. Each button is its
-  // own enhance form posting the deal's id to a mutation endpoint; the fragment
-  // re-renders this region so the new stage/amount appear from server truth
-  // (closeDeal applies the server commission). The current stage's move button is
-  // shown active, and once won/lost the deal is closed.
-  const actionsCard = Card.definition.render({
-    children: (
-      <div class="grid gap-4">
-        <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Move stage</h2>
-        <div class="flex flex-wrap gap-2">
-          {MOVE_STAGES.map((stage) => {
-            const active = deal.stage === stage;
-            return (
-              <form method="post" action="/_m/moveDeal" enhance data-mutation="moveDeal">
+        {/* SPEC.md §6.3: no-JS "move stage" + "close deal" controls. Each button is
+          its own enhance form posting the deal's id to a mutation endpoint; the
+          fragment re-renders this region so the new stage/amount appear from
+          server truth (closeDeal applies the server commission, so the amount is
+          whatever Postgres computed). The current stage's move button is
+          disabled, and once won/lost the deal is closed. */}
+        <div class="rounded-lg border border-slate-200 bg-white p-5">
+          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Move stage
+          </h2>
+          <div class="flex flex-wrap gap-2">
+            {MOVE_STAGES.map((stage) => (
+              <form {...mutationFormAttributes(moveDeal)}>
                 <input type="hidden" name="dealId" value={deal.id} />
                 <input type="hidden" name="stage" value={stage} />
-                {active
-                  ? Badge.definition.render({
-                      variant: stageBadgeVariant(stage),
-                      children: stage,
-                    })
-                  : Button.definition.render({
-                      variant: 'secondary',
-                      size: 'sm',
-                      type: 'submit',
-                      disabled: closed,
-                      children: stage,
-                    })}
+                <button
+                  type="submit"
+                  disabled={deal.stage === stage || closed}
+                  class={`rounded-md border px-3 py-1.5 text-sm font-medium capitalize ${
+                    deal.stage === stage
+                      ? 'cursor-default border-slate-300 bg-slate-900 text-white'
+                      : 'border-slate-300 text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40'
+                  }`}
+                >
+                  {stage}
+                </button>
               </form>
-            );
-          })}
-        </div>
-        {Separator.definition.render({})}
-        {closed ? (
-          <p class="text-sm text-slate-500">
-            This deal is closed ({deal.stage}). Commission is final.
-          </p>
-        ) : (
-          <form method="post" action="/_m/closeDeal" enhance data-mutation="closeDeal">
-            <input type="hidden" name="dealId" value={deal.id} />
-            {Button.definition.render({
-              variant: 'primary',
-              size: 'sm',
-              type: 'submit',
-              children: 'Close won',
-            })}
-          </form>
-        )}
-      </div>
-    ),
-  });
-
-  const timelineCard = Card.definition.render({
-    children: (
-      <div class="grid gap-4">
-        <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Activity</h2>
-        {activities.length === 0 ? (
-          <p class="rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-            No activity logged yet.
-          </p>
-        ) : (
-          <ol class="grid gap-3">
-            {activities.map((activity) => (
-              <li class="border-l-2 border-slate-200 pl-4">
-                <p class="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {activity.kind}
-                </p>
-                <p class="mt-0.5 text-sm text-slate-700">{activity.note}</p>
-              </li>
             ))}
-          </ol>
-        )}
-      </div>
-    ),
-  });
+          </div>
+          <div class="mt-4 border-t border-slate-100 pt-4">
+            {closed ? (
+              <p class="text-sm text-slate-500">
+                This deal is closed ({deal.stage}). Commission is final.
+              </p>
+            ) : (
+              <form {...mutationFormAttributes(closeDeal)}>
+                <input type="hidden" name="dealId" value={deal.id} />
+                <button
+                  type="submit"
+                  class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                >
+                  Close won
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
 
-  return (
-    <div class="space-y-6" kovo-fragment-target={DEAL_DETAIL_TARGET}>
-      <a
-        class="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-900"
-        href="/"
-      >
-        &larr; Back to pipeline
-      </a>
-      {summaryCard}
-      {actionsCard}
-      {timelineCard}
-    </div>
-  );
+        <section>
+          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Activity
+          </h2>
+          {activities.length === 0 ? (
+            <p class="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+              No activity logged yet.
+            </p>
+          ) : (
+            <ol class="space-y-2">
+              {activities.map((activity) => (
+                <li class="rounded-lg border border-slate-200 bg-white p-4">
+                  <p class="text-xs font-medium uppercase tracking-wide text-slate-400">
+                    {activity.kind}
+                  </p>
+                  <p class="mt-1 text-sm text-slate-700">{activity.note}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      </div>
+    );
+  },
+});
+
+export function renderDealDetailRegion({ deal, contact, activities }: DealDetailPageData): string {
+  return DealDetailRegion.definition.render({
+    activityList: { items: activities },
+    contactList: { items: contact ? [contact] : [] },
+    dealId: deal.id,
+    dealList: { items: [deal] },
+  });
 }
 
 export function renderDealDetailPage(data: DealDetailPageData): string {

@@ -168,10 +168,16 @@ export const dropdownMenuStyles = style.create(
 );
 
 export const dropdownMenuClasses = [style.attrs(dropdownMenuStyles.root).class ?? ''] as const;
-export const dropdownMenuTriggerClasses = [style.attrs(dropdownMenuStyles.trigger).class ?? ''] as const;
-export const dropdownMenuContentClasses = [style.attrs(dropdownMenuStyles.content).class ?? ''] as const;
+export const dropdownMenuTriggerClasses = [
+  style.attrs(dropdownMenuStyles.trigger).class ?? '',
+] as const;
+export const dropdownMenuContentClasses = [
+  style.attrs(dropdownMenuStyles.content).class ?? '',
+] as const;
 export const dropdownMenuItemClasses = [style.attrs(dropdownMenuStyles.item).class ?? ''] as const;
-export const dropdownMenuGroupClasses = [style.attrs(dropdownMenuStyles.group).class ?? ''] as const;
+export const dropdownMenuGroupClasses = [
+  style.attrs(dropdownMenuStyles.group).class ?? '',
+] as const;
 export const dropdownMenuSeparatorClasses = [
   style.attrs(dropdownMenuStyles.separator).class ?? '',
 ] as const;
@@ -327,12 +333,6 @@ export const DropdownMenuSeparator = component({
     const attrs = dropdownMenuSeparatorAttributes(props.id === undefined ? {} : { id: props.id });
     const styleAttrs = style.attrs(dropdownMenuStyles.separator, props.styles?.separator);
 
-    return (
-      <div
-        {...styleAttrs}
-        id={attrs.id}
-        role={attrs.role}
-      />
-    );
+    return <div {...styleAttrs} id={attrs.id} role={attrs.role} />;
   },
 });

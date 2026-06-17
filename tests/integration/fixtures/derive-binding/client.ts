@@ -22,6 +22,7 @@ async function applyInventoryQuery(event: InlineQueryEvent): Promise<void> {
   if (!applied.includes('inventory')) return;
 
   window.__deriveBindingImports = (window.__deriveBindingImports ?? 0) + 1;
-  const module = await import('/derive.ts');
+  const modulePath = '/derive.ts';
+  const module = (await import(/* @vite-ignore */ modulePath)) as typeof import('./derive');
   module.applyInventoryDerives(store.get('inventory'), document);
 }

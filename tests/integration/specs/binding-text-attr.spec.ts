@@ -15,8 +15,9 @@ test('updates text and attribute bindings from current server and state surfaces
   await expect(queryButton).toHaveAttribute('data-state', 'idle');
   await expect(page.locator('script[kovo-query="card"]')).toHaveCount(1);
 
-  const mutationResponsePromise = page.waitForResponse((response) =>
-    response.url().endsWith('/_m/binding-text-attr/update') && response.status() === 200,
+  const mutationResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/_m/binding-text-attr/update') && response.status() === 200,
   );
   await page.getByRole('button', { name: 'Update server card' }).click();
   const mutationResponse = await mutationResponsePromise;

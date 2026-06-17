@@ -64,7 +64,12 @@ function isAppErrorShellOptions(value: unknown): value is KovoApp['errorShells']
 }
 
 function isVersionedClientModuleRegistry(value: unknown): value is KovoApp['clientModules'] {
-  return isRecord(value) && typeof value.put === 'function' && typeof value.resolve === 'function';
+  return (
+    isRecord(value) &&
+    typeof value.buildToken === 'function' &&
+    typeof value.put === 'function' &&
+    typeof value.resolve === 'function'
+  );
 }
 
 function isEndpointDeclarations(value: unknown): value is KovoApp['endpoints'] {

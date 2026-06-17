@@ -2,6 +2,8 @@
 import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
 
+import { voteUpMutation } from '../mutations.js';
+
 // Shared page chrome for the Stack Overflow example UI, restyled with @kovojs/ui
 // (SPEC.md §6.1.1). The app-shell wraps each page() return in the document
 // <html>/<head> (with the stylesheet), so these helpers render the <body>
@@ -95,7 +97,7 @@ export function renderAuthor(name: string, iso: string | undefined, verb: string
 // and never passed through a `.definition.render({ children })` call.
 export function voteButton(questionId: string, value: number): string {
   return (
-    <form method="post" action="/_m/voteUp" enhance data-mutation="voteUp" class="so-vote">
+    <form enhance mutation={voteUpMutation} class="so-vote">
       <input type="hidden" name="id" value={`vote-${questionId}`} />
       <input type="hidden" name="targetId" value={questionId} />
       <input type="hidden" name="userId" value="demo-viewer" />

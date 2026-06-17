@@ -1,8 +1,4 @@
-import {
-  diagnosticDefinitions,
-  type DiagnosticCode,
-  type DiagnosticSeverity,
-} from '@kovojs/core';
+import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule, deriveAppGraph, queryShapeFactDiagnostics } from './index.js';
@@ -360,7 +356,7 @@ export const NullableBad = component({
         fileName: 'fragment-children-ok.tsx',
         source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }, _state, { children }) => <tr data-row={rowId}>{children}</tr>,
 });
@@ -381,7 +377,7 @@ export const CartTable = component({
         fileName: 'fragment-children-bad.tsx',
         source: `
 export const CartRow = component({
-  fragmentTarget: true,
+  queries: { cart: cartQuery },
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
@@ -582,7 +578,7 @@ export const Cart_Badge = component({
         fileName: 'fragment-target-name-ok.tsx',
         source: `
 export const ProductGrid = component({
-  fragmentTarget: true,
+  queries: { productGrid: productGridQuery },
   render: () => <product-grid></product-grid>,
 });
 `,
@@ -592,12 +588,12 @@ export const ProductGrid = component({
         fileName: 'fragment-target-name-bad.tsx',
         source: `
 export const ProductGrid = component({
-  fragmentTarget: true,
+  queries: { productGrid: productGridQuery },
   render: () => <product-grid></product-grid>,
 });
 
 export const Product_Grid = component({
-  fragmentTarget: true,
+  queries: { productGrid: productGridQuery },
   render: () => <mini-grid></mini-grid>,
 });
 `,
@@ -671,7 +667,9 @@ export const ViewTransitionBad = component({
     positive: () =>
       compileComponentModule({
         fileName: 'component-key-stability-ok.tsx',
-        previousRegistryFacts: { components: ['component-key-stability-ok/component-key-stability-ok'] },
+        previousRegistryFacts: {
+          components: ['component-key-stability-ok/component-key-stability-ok'],
+        },
         source: `
 export const ComponentKeyStabilityOk = component({
   render: () => <component-key-stability-ok></component-key-stability-ok>,
@@ -746,7 +744,6 @@ export const BindingShapeBad = component({
         fileName: 'fragment-input-ok.tsx',
         source: `
 export const FragmentInputOk = component({
-  fragmentTarget: true,
   props: { priceList: String },
   render: ({ priceList }) => <section>{priceList}</section>,
 });
@@ -757,7 +754,6 @@ export const FragmentInputOk = component({
         fileName: 'fragment-input-bad.tsx',
         source: `
 export const FragmentInputBad = component({
-  fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart, priceList }) => <section>{renderOnce(cart.count)}{priceList.version}</section>,
 });
@@ -807,6 +803,7 @@ export const CoverageOk = component({
         source: `
 export const CoverageBad = component({
   queries: { cart: cartQuery },
+  disableServerRefresh: true,
   render: ({ cart }) => <strong className={cart.discount}>Discount</strong>,
 });
 `,
@@ -876,9 +873,9 @@ describe('compiler diagnostic coverage matrix', () => {
     expect(matrixCodes()).toEqual(
       allCompilerOwnedKv2xxKv3xxCodes().filter((code) => !outOfScopeCodeSet().has(code)),
     );
-    expect([...matrixCodes(), ...outOfScopeCompilerDiagnostics.map((row) => row.code)].sort()).toEqual(
-      allCompilerOwnedKv2xxKv3xxCodes(),
-    );
+    expect(
+      [...matrixCodes(), ...outOfScopeCompilerDiagnostics.map((row) => row.code)].sort(),
+    ).toEqual(allCompilerOwnedKv2xxKv3xxCodes());
     expect(outOfScopeCompilerDiagnostics).toMatchInlineSnapshot(`
       [
         {
@@ -891,8 +888,12 @@ describe('compiler diagnostic coverage matrix', () => {
 
   it('proves every in-scope compiler-owned diagnostic has positive and negative coverage', () => {
     const coverageFacts = compilerOwnedDiagnosticMatrix.map((row) => {
-      const positiveDiagnostics = row.positive().filter((diagnostic) => diagnostic.code === row.code);
-      const negativeDiagnostics = row.negative().filter((diagnostic) => diagnostic.code === row.code);
+      const positiveDiagnostics = row
+        .positive()
+        .filter((diagnostic) => diagnostic.code === row.code);
+      const negativeDiagnostics = row
+        .negative()
+        .filter((diagnostic) => diagnostic.code === row.code);
 
       expect(
         positiveDiagnostics,
@@ -1323,7 +1324,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "severity": "error",
           "start": {
             "column": 11,
-            "line": 15,
+            "line": 19,
           },
         },
         {
@@ -1441,7 +1442,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "fileName": "fragment-target-name-bad.tsx",
           "help": "Would lower to: one derived fragment-target registry key that maps to exactly one component render entry.
       Blocked reason: duplicate fragment-target wire names make enhanced fragment patch routing ambiguous.
-      Fixes: rename the exported component binding, move one component so its derived module path namespace differs, or remove fragmentTarget from the component that should not receive enhanced patches.
+      Fixes: rename the exported component binding, add stable authored key identity for repeated instances, move one component so its derived module path namespace differs, or set disableServerRefresh: true on the query-backed component that should not receive enhanced patches.
       SPEC §4.5, §4.8, and §6.2 make fragment-target names derived registry-visible identities; duplicate keys make enhanced fragment patches ambiguous.
       Fragment target: fragment-target-name-bad/product-grid
       First writer: ProductGrid
@@ -1552,7 +1553,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "severity": "error",
           "start": {
             "column": 20,
-            "line": 6,
+            "line": 5,
           },
         },
         {
@@ -1571,16 +1572,16 @@ describe('compiler diagnostic coverage matrix', () => {
           "fileName": "coverage-bad.tsx",
           "help": "Coverage classification: CoverageBad expression UNHANDLED
       Blocked update: query expression has no data-bind, renderOnce, fragment, or isomorphic status
-      Would lower to: a data-bind/update plan, fragment boundary, isomorphic component, or renderOnce marker for the rendered position.
-      Blocked reason: the compiler found a query/state-dependent DOM position without an update strategy.
-      Fixes: add a data-bind/query update plan, mark the expression renderOnce, move the subtree behind a fragment target, or make the component isomorphic.
+      Would lower to: a data-bind/update plan, inferred query-backed fragment target, isomorphic component, or renderOnce marker for the rendered position.
+      Blocked reason: the query/state expression is outside the current §4.8 update-plan grammar and is not inside an inferred server-refresh target.
+      Fixes: add a data-bind/query update plan, extract a derive/stamp, keep the component query-backed for inferred fragment refresh, mark it isomorphic, declare renderOnce, or set disableServerRefresh: true only when no enhanced refresh is intended.
       SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.",
           "length": 13,
           "message": "Query/state-dependent DOM position has no update status. CoverageBad cart.discount expression",
           "severity": "warn",
           "start": {
             "column": 44,
-            "line": 4,
+            "line": 5,
           },
         },
         {
@@ -1653,7 +1654,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "severity": "error",
           "start": {
             "column": 11,
-            "line": 15,
+            "line": 19,
           },
         },
       ]
@@ -1662,7 +1663,7 @@ describe('compiler diagnostic coverage matrix', () => {
 });
 
 function matrixCodes(): DiagnosticCode[] {
-  return [...compilerOwnedDiagnosticMatrix.map((row) => row.code)].sort();
+  return compilerOwnedDiagnosticMatrix.map((row) => row.code).sort();
 }
 
 function outOfScopeCodeSet(): Set<DiagnosticCode> {
@@ -1675,10 +1676,9 @@ function allCompilerOwnedKv2xxKv3xxCodes(): DiagnosticCode[] {
     .sort() as DiagnosticCode[];
 }
 
-function isCompilerOwnedKv2xxKv3xxCode(code: string): code is Extract<
-  DiagnosticCode,
-  `KV${2 | 3}${number}${number}`
-> {
+function isCompilerOwnedKv2xxKv3xxCode(
+  code: string,
+): code is Extract<DiagnosticCode, `KV${2 | 3}${number}${number}`> {
   return /^KV[23]\d{2}$/.test(code);
 }
 

@@ -57,7 +57,10 @@ export function renderContentSecurityPolicy(
 ): string {
   const directives = [
     directive('default-src', options.defaultSrc ?? ["'self'"]),
-    directive('script-src', [...(options.scriptSrc ?? ["'self'"]), ...quoteHashes(metadata.scripts)]),
+    directive('script-src', [
+      ...(options.scriptSrc ?? ["'self'"]),
+      ...quoteHashes(metadata.scripts),
+    ]),
     directive('style-src', [...(options.styleSrc ?? ["'self'"]), ...quoteHashes(metadata.styles)]),
     directive('img-src', options.imgSrc),
     directive('connect-src', options.connectSrc),

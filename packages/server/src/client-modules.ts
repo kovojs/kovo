@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import type { ServerResponseBase } from './response.js';
 
@@ -15,6 +16,14 @@ export interface VersionedClientModuleResponse extends ServerResponseBase<
 > {}
 
 export interface VersionedClientModuleRegistry {
+  /**
+   * A deterministic build-global token derived from the set of registered
+   * client module versions. Identical within one build, changes on redeploy.
+   * Used for `Kovo-Build` response header and `<meta name="kovo-build">` page
+   * stamping so the client can detect deploy skew (SPEC §5.1, §9.1.1).
+   * Returns an empty string when no modules are registered.
+   */
+  buildToken(): string;
   put(module: VersionedClientModuleInput): string;
   resolve(href: string): VersionedClientModuleResponse;
 }
@@ -46,8 +55,34 @@ export function createMemoryVersionedClientModuleRegistry(
 ): VersionedClientModuleRegistry {
   const modules = new Map<string, VersionedClientModuleInput>();
   const versionsByPath = new Map<string, string[]>();
+  // Cache: recompute whenever versionsByPath changes (tracked by a generation counter).
+  let cachedBuildToken: string | undefined;
+  let buildTokenGeneration = 0;
+  let lastTokenGeneration = -1;
 
   return {
+    buildToken() {
+      // Recompute only when the registry changed since the last call.
+      if (cachedBuildToken !== undefined && lastTokenGeneration === buildTokenGeneration) {
+        return cachedBuildToken;
+      }
+      // Derive a deterministic token: sorted "path@version" pairs hashed with SHA-256.
+      // This is stable for the same set of modules regardless of registration order.
+      const entries: string[] = [];
+      for (const [path, versions] of versionsByPath) {
+        for (const version of versions) {
+          entries.push(`${path}@${version}`);
+        }
+      }
+      entries.sort();
+      const token =
+        entries.length === 0
+          ? ''
+          : createHash('sha256').update(entries.join('\n')).digest('hex').slice(0, 16);
+      cachedBuildToken = token;
+      lastTokenGeneration = buildTokenGeneration;
+      return token;
+    },
     put(module) {
       const url = clientModuleUrl(module.path);
       const path = url.pathname;
@@ -56,6 +91,7 @@ export function createMemoryVersionedClientModuleRegistry(
 
       modules.set(key, { ...module, path });
       rememberClientModuleVersion(versionsByPath, modules, path, module.version, options);
+      buildTokenGeneration += 1;
 
       return href;
     },

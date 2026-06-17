@@ -4,7 +4,7 @@ import { defineFixture } from '@kovojs/test/integration/define';
 import { CompositionShell } from './composition-shell';
 
 const homeRoute = route('/', {
-  page: () => `<main>${CompositionShell.definition.render({}, null)}</main>`,
+  page: () => `<main>${CompositionShell.definition.render()}</main>`,
 });
 
 export default defineFixture({

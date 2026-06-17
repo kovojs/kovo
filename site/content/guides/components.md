@@ -72,7 +72,11 @@ A copied component depends only on public, versioned packages:
    });
 
    export function Toolbar() {
-     return <Button variant="primary" style={styles.danger}>Delete</Button>;
+     return (
+       <Button variant="primary" style={styles.danger}>
+         Delete
+       </Button>
+     );
    }
    ```
 
@@ -111,7 +115,9 @@ export interface ButtonProps {
 export const Button = component({
   render(props: ButtonProps) {
     return (
-      <button {...style.attrs(buttonStyles.root, buttonStyles[props.variant ?? 'primary'], props.style)}>
+      <button
+        {...style.attrs(buttonStyles.root, buttonStyles[props.variant ?? 'primary'], props.style)}
+      >
         {props.children}
       </button>
     );

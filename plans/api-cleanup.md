@@ -177,11 +177,11 @@ Mark `- [x]` only when this session verifies the cited proving command for the e
     signature; `node site/scripts/api-ref.mjs` regenerated the reference with documented exports
     339 -> 340.
   - Evidence (partial, 2026-06-17): `pnpm exec vitest --run scripts/public-packages.test.mjs
-    site/scripts/api-ref.test.mjs packages/server/src/component-render.test.tsx`,
+site/scripts/api-ref.test.mjs packages/server/src/component-render.test.tsx`,
     `pnpm run check:api-surface`, and `git diff --check` pass.
   - Evidence (partial, 2026-06-17): `pnpm --filter @kovojs/site run build` completes a fresh static
     export (`site-export/v1`, `html=92`, `diagnostics=0`), `pnpm --filter @kovojs/site run
-    check:links` passes (`pages=93`, `internal=13492`, `external=190`), `pnpm --filter @kovojs/site
-    test` passes (9 files, 44 tests), and `pnpm --filter @kovojs/site exec tsc --noEmit --pretty
-    false` passes. The remaining proof gap for closing Phase 8 is the broader root `check:build`
+check:links` passes (`pages=93`, `internal=13492`, `external=190`), `pnpm --filter @kovojs/site
+test` passes (9 files, 44 tests), and `pnpm --filter @kovojs/site exec tsc --noEmit --pretty
+false` passes. The remaining proof gap for closing Phase 8 is the broader root `check:build`
     command named above.

@@ -8,7 +8,9 @@ import { definedProps } from './defined-props.js';
 /** @internal */
 export interface EnhancedFormLike {
   action: string;
-  method?: string;
+  getAttribute?(name: string): string | null;
+  id?: string | undefined;
+  method?: string | undefined;
 }
 
 /** @internal */
@@ -54,6 +56,8 @@ export interface FetchEnhancedMutationOptions {
 
 export interface FetchedEnhancedMutation {
   body: string;
+  /** The `Kovo-Build` response header value, if present (SPEC §9.1.1). */
+  buildToken?: string | undefined;
   changes: MutationChangeRecord[];
   idem: string;
   response: EnhancedMutationResponseLike;
@@ -65,11 +69,13 @@ export async function fetchEnhancedMutation(
   idem = options.idem ?? createMutationIdem(),
 ): Promise<FetchedEnhancedMutation> {
   const targetSnapshot = readLiveTargetSnapshot(options.root);
+  const submittedFormTarget = readSubmittedFormTarget(options.form);
   const response = await options.fetch(options.form.action, {
     body: options.formData,
     headers: {
       Accept: 'text/vnd.kovo.fragment+html',
       'Kovo-Fragment': 'true',
+      ...definedProps({ 'Kovo-Form-Target': submittedFormTarget }),
       'Kovo-Idem': idem,
       'Kovo-Targets': targetSnapshot.header,
     },
@@ -78,14 +84,28 @@ export async function fetchEnhancedMutation(
     ...definedProps({ onUploadProgress: options.onUploadProgress }),
   });
   const changes = readMutationChangeHeader(response, options.onError);
+  // SPEC §9.1.1: read build token from response header for delta validation.
+  const buildToken =
+    response.headers?.get('Kovo-Build') ?? response.headers?.get('kovo-build') ?? undefined;
 
   return {
     body: await response.text(),
+    buildToken,
     changes,
     idem,
     response,
     targets: targetSnapshot.targets,
   };
+}
+
+function readSubmittedFormTarget(form: EnhancedFormLike): string | undefined {
+  const target =
+    form.getAttribute?.('kovo-fragment-target') ??
+    form.id ??
+    form.getAttribute?.('kovo-c') ??
+    undefined;
+
+  return target === '' ? undefined : target;
 }
 
 export function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {

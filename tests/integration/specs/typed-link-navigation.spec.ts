@@ -8,10 +8,7 @@ test('Link() and href() produce plain anchors with path and search params', asyn
   await page.goto('/');
 
   const product = page.locator('#product-link');
-  await expect(product).toHaveAttribute(
-    'href',
-    '/products/sku-1?ref=home&sort=price+asc',
-  );
+  await expect(product).toHaveAttribute('href', '/products/sku-1?ref=home&sort=price+asc');
   await expect(page.locator('#search-link')).toHaveAttribute('href', '/search?q=boots+%26+socks');
 
   await Promise.all([

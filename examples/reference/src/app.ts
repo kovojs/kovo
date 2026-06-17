@@ -1,6 +1,7 @@
 import {
   csrfField,
   csrfToken,
+  renderMutationFormAttributes,
   renderRoutePageResponse,
   route,
   runMutation,
@@ -272,14 +273,14 @@ export function renderReferenceLoginForm(
       ? '<output role="alert" data-error-code="INVALID_CREDENTIALS">Invalid email or password.</output>'
       : '';
 
-  return `<form method="post" action="/_m/auth/sign-in" enhance data-mutation="auth/sign-in">${csrfField(
+  return `<form ${renderMutationFormAttributes(referenceSignIn)}>${csrfField(
     request,
     referenceAuthCsrf,
   )}<input type="hidden" name="next" value="${escapeAttribute(options.next ?? '/account')}"><input name="email" type="email" autocomplete="email" required><input name="password" type="password" autocomplete="current-password" required>${error}<button type="submit">Sign in</button></form>`;
 }
 
 export function renderReferenceLogoutForm(request: ReferenceRequest): string {
-  return `<form method="post" action="/_m/auth/sign-out" enhance data-mutation="auth/sign-out">${csrfField(
+  return `<form ${renderMutationFormAttributes(referenceSignOut)}>${csrfField(
     request,
     referenceAuthCsrf,
   )}<button type="submit">Sign out</button></form>`;

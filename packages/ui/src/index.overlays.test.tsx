@@ -441,7 +441,6 @@ describe('@kovojs/ui styled package foundation', () => {
   });
 
   it('wraps the headless dialog primitive for a bounded sheet component', () => {
-
     const rendered = Sheet.definition.render({
       children: 'Sheet body',
       contentId: 'account-sheet',

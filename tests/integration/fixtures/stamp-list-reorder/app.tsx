@@ -14,6 +14,7 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration
 const boardDomain = domain('board');
 
 interface BoardItem {
+  [key: string]: unknown;
   id: string;
   label: string;
   rank: number;
@@ -26,7 +27,7 @@ interface BoardResult {
 async function readBoard(db: KovoFixtureRequest['db']): Promise<BoardResult> {
   const items = (await db.query(
     'select id, label, rank from board_item order by rank asc',
-  )) as BoardItem[];
+  )) as unknown as BoardItem[];
   return { items };
 }
 
@@ -42,6 +43,11 @@ function renderBoard(board: BoardResult): string {
     ${board.items.map(renderRow).join('')}
     <template kovo-stamp>${renderRow({ id: '', label: '', rank: 0 })}</template>
   </ol>`;
+}
+
+async function renderBoardList(db: KovoFixtureRequest['db']): Promise<string> {
+  const board = await readBoard(db);
+  return `<board-list kovo-fragment-target="board-list" kovo-deps="board">${renderBoard(board)}</board-list>`;
 }
 
 export const boardQuery = query('board', {
@@ -72,7 +78,7 @@ const homeRoute = route('/', {
     return `${renderQueryScript({ name: 'board', value: board })}
     <script type="module" src="/client.ts"></script>
     <main>
-      <board-list kovo-deps="board">${renderBoard(board)}</board-list>
+      ${await renderBoardList(request.db)}
       <form method="post" action="/_m/stamp-list-reorder/reorder" enhance data-mutation="stamp-list-reorder/reorder" kovo-deps="board">
         <button type="submit">Reorder board</button>
       </form>
@@ -84,8 +90,14 @@ const app = createApp({
   mutations: [reorderBoard],
   queries: [boardQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key }) =>
-    key === reorderBoard.key ? { fragmentRenderers: [], redirectTo: '/' } : undefined,
+  mutationResponse: ({ key, request }) => {
+    if (key !== reorderBoard.key) return undefined;
+    const db = (request as unknown as KovoFixtureRequest).db;
+    return {
+      fragmentRenderers: [{ render: () => renderBoardList(db), target: 'board-list' }],
+      redirectTo: '/',
+    };
+  },
 });
 
 export default defineFixture({

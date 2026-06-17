@@ -15,7 +15,6 @@ import { priceLabel } from './product-grid.js';
 // formatter) lives in the plain `renderOrderHistoryItems` helper so the
 // component render stays a simple keyed-list host, exactly like ProductGrid.
 export const OrderHistory = component({
-  fragmentTarget: true,
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
     <ol class="grid gap-2">{renderOrderHistoryItems(orderHistory)}</ol>

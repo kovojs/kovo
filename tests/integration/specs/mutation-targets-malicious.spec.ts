@@ -33,7 +33,10 @@ test('ignores malformed, duplicate, unknown, and unauthorized mutation targets s
     },
   });
   expect(authed.status()).toBe(200);
-  await expect(authed.text()).resolves.toBe(
+  const authedBody = await authed.text();
+  expect(authedBody).toContain(
     '<kovo-fragment target="private-panel"><output data-private-panel>private:ada:secret</output></kovo-fragment>',
   );
+  expect(authedBody).not.toContain('unknown-target');
+  expect(authedBody).not.toContain('bad-target');
 });

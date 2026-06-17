@@ -7,7 +7,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { test as base, expect as playwrightExpect, type Locator, type Page } from '@playwright/test';
+import {
+  test as base,
+  expect as playwrightExpect,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 
 import { bootFixture, type BootedFixture } from './boot-fixture.js';
 import { login as performLogin, type LoginOptions } from './login.js';

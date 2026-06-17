@@ -493,12 +493,7 @@ export const CommandEmpty = component({
     const styleAttrs = style.attrs(commandStyles.empty, props.styles?.empty);
 
     return (
-      <div
-        {...styleAttrs}
-        data-empty={attrs['data-empty']}
-        hidden={attrs.hidden}
-        id={attrs.id}
-      >
+      <div {...styleAttrs} data-empty={attrs['data-empty']} hidden={attrs.hidden} id={attrs.id}>
         {props.children ?? 'No results'}
       </div>
     );

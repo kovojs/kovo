@@ -43,6 +43,8 @@ export type StarterBetterAuth = BetterAuthLike<StarterBetterAuthSession, Starter
   BetterAuthSignInEmailLike &
   BetterAuthSignOutLike;
 
+export type StarterAuthBindings = ReturnType<typeof createStarterAuth>;
+
 export const starterSession = session(
   s.object({
     id: s.string(),
@@ -206,15 +208,9 @@ export const starterAuthStyleCss = style.emitAtomicCss(
 // SPEC.md section 6.3 and section 9.1: the auth recipe keeps credential flows
 // as ordinary mutation forms. Browsers without JS post directly to /_m/*; the
 // `enhance` attribute only upgrades the same form to the fragment wire.
-export function renderLoginForm(options: LoginFormOptions = {}): string {
+export function renderLoginForm(auth: StarterAuthBindings, options: LoginFormOptions = {}): string {
   return (
-    <form
-      method="post"
-      action="/_m/auth/sign-in"
-      enhance
-      data-mutation="auth/sign-in"
-      {...style.attrs(authStyles.form)}
-    >
+    <form enhance mutation={auth.signIn} {...style.attrs(authStyles.form)}>
       {options.request ? csrfField(options.request, starterAuthCsrf) : ''}
       <input type="hidden" name="next" value={options.next ?? '/cart'} />
       <label {...style.attrs(authStyles.field)}>
@@ -255,14 +251,9 @@ export function renderLoginForm(options: LoginFormOptions = {}): string {
   );
 }
 
-export function renderLogoutForm(request: StarterAuthRequest): string {
+export function renderLogoutForm(auth: StarterAuthBindings, request: StarterAuthRequest): string {
   return (
-    <form
-      method="post"
-      action="/_m/auth/sign-out"
-      enhance
-      data-mutation="auth/sign-out"
-    >
+    <form enhance mutation={auth.signOut}>
       {csrfField(request, starterAuthCsrf)}
       <button {...style.attrs(authStyles.secondaryAction)} type="submit">
         Sign out

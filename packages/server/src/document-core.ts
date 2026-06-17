@@ -45,6 +45,12 @@ export type DeferredDocumentTemplate = (
 ) => DeferredDocumentFrame;
 
 export interface DocumentAssemblyOptions {
+  /**
+   * Build-global render-plan version token (SPEC §5.1, §9.1.1). When present and
+   * non-empty, stamped as `<meta name="kovo-build" content="<token>">` in the
+   * document `<head>` so the client can detect deploy skew.
+   */
+  buildToken?: string;
   body: string;
   hints?: PageHintOptions;
   lang?: string;
@@ -77,8 +83,11 @@ export interface DocumentRenderResult {
   html: string;
 }
 
-export interface DeferredDocumentRenderResult
-  extends ServerResponseBase<string, Record<string, string>, 200> {
+export interface DeferredDocumentRenderResult extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  200
+> {
   csp: CspInlineMetadata;
 }
 
@@ -126,7 +135,7 @@ export function renderDeferredDocument(
 }
 
 function assembleDocumentParts(
-  options: Pick<DocumentAssemblyOptions, 'body' | 'hints' | 'lang' | 'queries'>,
+  options: Pick<DocumentAssemblyOptions, 'body' | 'buildToken' | 'hints' | 'lang' | 'queries'>,
 ): { csp: CspInlineMetadata; earlyHints: PageHints['earlyHints']; parts: DocumentParts } {
   const hints = renderPageHints(options.hints ?? {});
   const queryScripts = (options.queries ?? []).map(renderDocumentQueryScriptWithCsp);
@@ -137,12 +146,18 @@ function assembleDocumentParts(
     ...queryScripts.map((query) => query.csp),
   );
 
+  // Stamp the build-token meta tag once per document (SPEC §5.1, §9.1.1).
+  const buildMeta =
+    options.buildToken !== undefined && options.buildToken !== ''
+      ? `<meta name="kovo-build" content="${escapeAttribute(options.buildToken)}">`
+      : '';
+
   return {
     csp,
     earlyHints: hints.earlyHints,
     parts: {
       body: options.body,
-      head: `${hints.html}${loader.html}`,
+      head: `${buildMeta}${hints.html}${loader.html}`,
       lang: options.lang ?? langFromHints(options.hints) ?? 'en',
       queryScripts: queryScripts.map((query) => query.html),
     },
@@ -245,9 +260,7 @@ function enforceDocumentTemplateParts(
   parts: DocumentParts,
   templateName: string,
 ): string {
-  const missing = requiredDocumentTemplateParts(parts).filter(
-    ({ value }) => !html.includes(value),
-  );
+  const missing = requiredDocumentTemplateParts(parts).filter(({ value }) => !html.includes(value));
   if (missing.length === 0) return html;
 
   // SPEC §9.5: custom templates receive assembled parts rather than a blank
@@ -280,9 +293,10 @@ function inlineLoaderScript(): { csp: CspInlineMetadata; html: string } {
   };
 }
 
-function renderDocumentQueryScriptWithCsp(
-  options: QueryScriptRenderOptions,
-): { csp: CspInlineMetadata; html: string } {
+function renderDocumentQueryScriptWithCsp(options: QueryScriptRenderOptions): {
+  csp: CspInlineMetadata;
+  html: string;
+} {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
   const scriptText = escapeScriptJson(JSON.stringify(options.value));
   const hash = cspSha256(scriptText);

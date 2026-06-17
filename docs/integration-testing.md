@@ -75,11 +75,12 @@ fragment). Two rules:
 2. **The compiler matches the component-call token as source text** — keep that token
    out of comments/strings in non-component modules, or the plugin will claim them.
 
-The page wraps the component's `Component.definition.render(data)` output in
-`<kovo-fragment target="NAME">…</kovo-fragment>`, and an enhanced form
-(`<form method="post" action="/_m/<key>" data-mutation="<key>">`) posts the mutation.
-The always-present inline-loader runtime morphs the named host in place — no
-navigation. The app's `mutationResponse` re-renders the fragment(s) from server truth.
+The page renders a component root with `kovo-deps`; the compiler/runtime derive any
+refresh target hooks needed by the fragment wire. An enhanced form posts the compiled
+mutation action (`<form method="post" action="/_m/<key>" data-mutation="<key>">` in
+emitted HTML). The always-present inline-loader runtime applies returned query chunks
+or morphs named fragments in place — no navigation. The app's `mutationResponse`
+re-renders selected fragment(s) from server truth.
 
 ### Loader coverage split
 
@@ -105,7 +106,8 @@ Prefer, in order:
 
 1. **Web-first locator assertions** — `getByRole`, `toHaveText` (auto-waiting).
 2. **Kovo semantic anchors** — `[data-bind="cart.count"]`, `[data-error-code]`,
-   `[kovo-fragment-target="…"]` (framework-guaranteed output, stable across markup).
+   `[kovo-deps]`, and emitted `[kovo-fragment-target="…"]` hooks
+   (framework-guaranteed output, stable across markup).
 3. **`semantic(selector)` snapshots** — a canonical tree of tag + Kovo/behavioral/a11y
    attributes + bound text, with volatile bits (CSRF tokens, hashed ids/asset
    versions, class/style) stripped. The snapshot diffs only when _meaning_ changes.

@@ -14,6 +14,10 @@ describe('mutation wire headers', () => {
     ).toEqual({
       fragment: true,
       idem: 'idem_01HX',
+      liveTargets: [
+        { deps: ['cart'], target: 'cart-badge' },
+        { deps: ['product:p1'], target: 'recommendations' },
+      ],
       targets: ['cart-badge', 'recommendations'],
     });
   });
@@ -25,8 +29,9 @@ describe('mutation wire headers', () => {
       mutationWireRequestFromHeaders({
         headers: new Map([
           ['Kovo-Fragment', 'true'],
+          ['Kovo-Form-Target', 'product-form:p1'],
           ['Kovo-Idem', 'idem_01HY'],
-          ['Kovo-Targets', 'product-form:p1'],
+          ['Kovo-Targets', 'product-form:p1=product:p1'],
         ]),
         rawInput: { productId: 'p1', quantity: 99 },
         replayStore,
@@ -35,9 +40,11 @@ describe('mutation wire headers', () => {
     ).toEqual({
       fragment: true,
       idem: 'idem_01HY',
+      liveTargets: [{ deps: ['product:p1'], target: 'product-form:p1' }],
       rawInput: { productId: 'p1', quantity: 99 },
       replayStore,
       request: { sessionId: 's1' },
+      submittedFormTarget: 'product-form:p1',
       targets: ['product-form:p1'],
     });
   });

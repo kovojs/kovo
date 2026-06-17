@@ -128,7 +128,8 @@ export function staticHrefAttributeValue(
   return (
     staticStringValue(attribute.expressionStaticValue) ??
     staticHrefCalls(model).find(
-      ({ call }) => call.start === attribute.expressionStart && call.end === attribute.expressionEnd,
+      ({ call }) =>
+        call.start === attribute.expressionStart && call.end === attribute.expressionEnd,
     )?.lowered ??
     null
   );
@@ -139,7 +140,9 @@ function navigationHrefAttributeReplacements(model: ComponentModuleModel): Sourc
     .flatMap((element) => [...element.attributes])
     .filter((item) => item.name === 'href' && item.expression !== undefined)
     .map((attribute) => ({ attribute, target: staticHrefAttributeValue(model, attribute) }))
-    .filter((item): item is { attribute: JsxAttributeModel; target: string } => item.target !== null)
+    .filter(
+      (item): item is { attribute: JsxAttributeModel; target: string } => item.target !== null,
+    )
     .sort((left, right) => right.attribute.start - left.attribute.start)
     .map(({ attribute, target }) => ({
       end: attribute.end,

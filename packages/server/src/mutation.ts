@@ -1,3 +1,4 @@
+import { buildQueryDelta, queryDeltaIsSmaller, type JsonValue } from '@kovojs/core';
 import { serializeCookie, validateRawSetCookie, type CookieOptions } from './cookies.js';
 import { mutationCsrfOptions, validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
 import {
@@ -34,6 +35,7 @@ import {
   mutationWireRequestFromHeaders,
   type ErrorBoundaryRenderer,
   type FragmentRenderer,
+  type MutationLiveTarget,
   type MutationEndpointRequest,
   type MutationEndpointResponse,
   type MutationWireRequest,
@@ -170,6 +172,18 @@ export interface MutationDefinition<
   ) => Promise<Result>;
 }
 
+/** Attributes emitted for a SPEC §6.3 enhanced mutation form. */
+export interface MutationFormAttributes<Key extends string = string> {
+  /** No-JS mutation endpoint path derived from the typed mutation key. */
+  action: `/_m/${Key}`;
+  /** Stable mutation key metadata used by enhanced submit/runtime tooling. */
+  'data-mutation': Key;
+  /** Enables the SPEC §9.1 enhanced fragment submit path. */
+  enhance: true;
+  /** Mutation forms post by default. */
+  method: 'post';
+}
+
 export interface RunMutationOptions<
   Request,
   SessionValue = unknown,
@@ -227,6 +241,39 @@ export function mutation<
   >,
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key } {
   return { ...definition, key };
+}
+
+/**
+ * Render the no-JS/enhanced form attributes for a typed mutation value
+ * (SPEC §6.3). Component-authored `<form mutation={...}>` is still compiler
+ * lowered when submitted-form targets are needed; this helper keeps direct
+ * server-rendered templates from hard-coding `/_m/*` URLs.
+ */
+export function mutationFormAttributes<const Key extends string>(
+  definition: Pick<MutationDefinition<Key>, 'key'>,
+): MutationFormAttributes<Key> {
+  return {
+    action: `/_m/${definition.key}`,
+    'data-mutation': definition.key,
+    enhance: true,
+    method: 'post',
+  };
+}
+
+/**
+ * Render SPEC §6.3 no-JS/enhanced form attributes for string templates.
+ *
+ * Use this when a direct server-rendered helper returns an HTML string rather
+ * than JSX, so the mutation endpoint URL and `data-mutation` value still derive
+ * from the typed mutation definition.
+ */
+export function renderMutationFormAttributes<const Key extends string>(
+  definition: Pick<MutationDefinition<Key>, 'key'>,
+): string {
+  const attributes = mutationFormAttributes(definition);
+  return `method="${attributes.method}" action="${escapeAttribute(
+    attributes.action,
+  )}" enhance data-mutation="${escapeAttribute(attributes['data-mutation'])}"`;
 }
 
 /**
@@ -492,15 +539,22 @@ export async function renderMutationResponse<
     let queryChunks: string[];
     let fragmentChunks: string[];
     try {
+      const selection = selectMutationResponseTargets({
+        fragmentRenderers: wireRequest.fragmentRenderers ?? [],
+        liveTargets: wireRequest.liveTargets,
+        rerunQueries: result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
+        targets: wireRequest.targets ?? [],
+      });
       queryChunks = await renderQueryChunks(
         definition.registry?.queries ?? [],
-        result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
+        selection.rerunQueries,
         renderInput,
         wireRequest.request,
+        result.changes,
       );
       fragmentChunks = await renderFragmentChunks(
         wireRequest.fragmentRenderers ?? [],
-        wireRequest.targets ?? [],
+        selection.fragmentTargets,
         renderInput,
       );
     } catch (error) {
@@ -513,6 +567,13 @@ export async function renderMutationResponse<
       return mutationRenderErrorResponse(result.changes, wireRequest, result.responseHeaders);
     }
 
+    // Kovo-Build header: present on every 200 mutation response when a build token
+    // is known, so the client can detect deploy skew (SPEC §5.1, §9.1.1).
+    const buildHeaders: MutationResponseHeaders =
+      wireRequest.buildToken !== undefined && wireRequest.buildToken !== ''
+        ? { 'Kovo-Build': wireRequest.buildToken }
+        : {};
+
     return {
       body: [...queryChunks, ...fragmentChunks].join('\n'),
       headers: mergeMutationResponseHeaders(
@@ -520,6 +581,7 @@ export async function renderMutationResponse<
         {
           'Kovo-Changes': mutationWireChangeHeader(result.changes),
         },
+        buildHeaders,
         result.responseHeaders,
       ),
       status: 200,
@@ -823,8 +885,12 @@ async function renderQueryChunks(
   rerunQueries: readonly QueryRerun[],
   input: unknown,
   request: unknown,
+  changes: readonly ChangeRecord[],
 ): Promise<string[]> {
   const chunks: string[] = [];
+
+  // Build affectedKeysByDomain once for all queries in this render pass (SPEC §9.1.1).
+  const affectedKeysByDomain = buildAffectedKeysByDomain(changes);
 
   for (const queryDefinition of queries) {
     if (!rerunQueries.some((target) => queryMatchesRerun(queryDefinition, input, target))) {
@@ -836,7 +902,9 @@ async function renderQueryChunks(
       throw new Error(`Rerun query failed: ${queryDefinition.key}`, { cause: result });
     }
 
-    chunks.push(renderQueryRerunChunk(queryDefinition, result.input, result.value));
+    chunks.push(
+      renderQueryRerunChunk(queryDefinition, result.input, result.value, affectedKeysByDomain),
+    );
   }
 
   return chunks;
@@ -856,15 +924,50 @@ function renderQueryRerunChunk<const Key extends string, Value, Input, Request>(
   queryDefinition: QueryDefinition<Key, Value, Input, Request>,
   input: Input,
   value: Value,
+  affectedKeysByDomain: ReadonlyMap<string, ReadonlySet<string>>,
 ): string {
   const key = readQueryInstanceKey(queryDefinition, input);
+  const version = readQueryVersion(queryDefinition, input, value);
+
+  // Automatic full-vs-delta selection (SPEC §9.1.1): attempt a delta only when the
+  // query has delta-eligible collections, then ship whichever is smaller.
+  if (queryDefinition.delta && queryDefinition.delta.length > 0) {
+    const delta = buildQueryDelta(value as JsonValue, affectedKeysByDomain, queryDefinition.delta);
+    if (delta !== undefined && queryDeltaIsSmaller(delta, value as JsonValue)) {
+      return renderQueryWireHtml({
+        delta: true,
+        key,
+        name: queryDefinition.key,
+        value: delta,
+        version,
+      });
+    }
+  }
 
   return renderQueryWireHtml({
     key,
     name: queryDefinition.key,
     value,
-    version: readQueryVersion(queryDefinition, input, value),
+    version,
   });
+}
+
+/**
+ * Build the `affectedKeysByDomain` map consumed by `buildQueryDelta` (SPEC §9.1.1).
+ * For each change record that carries explicit `keys`, those keys are added to the
+ * set for that domain.
+ */
+function buildAffectedKeysByDomain(
+  changes: readonly ChangeRecord[],
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const change of changes) {
+    if (!change.keys || change.keys.length === 0) continue;
+    const set = map.get(change.domain) ?? new Set<string>();
+    for (const key of change.keys) set.add(key);
+    map.set(change.domain, set);
+  }
+  return map;
 }
 
 async function renderFragmentChunks(
@@ -905,11 +1008,107 @@ async function renderFragmentChunks(
   return chunks;
 }
 
+interface MutationResponseSelectionInput {
+  fragmentRenderers: readonly FragmentRenderer[];
+  liveTargets?: readonly MutationLiveTarget[] | undefined;
+  rerunQueries: readonly QueryRerun[];
+  targets: readonly string[];
+}
+
+interface MutationResponseSelection {
+  fragmentTargets: readonly string[];
+  rerunQueries: readonly QueryRerun[];
+}
+
+function selectMutationResponseTargets(
+  input: MutationResponseSelectionInput,
+): MutationResponseSelection {
+  if (input.liveTargets === undefined) {
+    return {
+      fragmentTargets: input.targets,
+      rerunQueries: input.rerunQueries,
+    };
+  }
+
+  if (input.liveTargets.length === 0) return { fragmentTargets: [], rerunQueries: [] };
+
+  if (!input.liveTargets.some((target) => target.deps.length > 0)) {
+    return {
+      fragmentTargets: input.targets,
+      rerunQueries: input.rerunQueries,
+    };
+  }
+
+  const renderersByTarget = fragmentRenderersByTarget(input.fragmentRenderers);
+  const affectedQueryTokens = new Set<string>();
+  for (const query of input.rerunQueries) {
+    const tokens = queryRerunTokens(query);
+    if (input.liveTargets.some((target) => depsMatch(target, tokens))) {
+      for (const token of tokens) affectedQueryTokens.add(token);
+    }
+  }
+
+  const rerunQueries = input.rerunQueries.filter((query) => {
+    const tokens = queryRerunTokens(query);
+    if (
+      !input.liveTargets?.some(
+        (target) =>
+          targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const fragmentTargets = input.fragmentRenderers
+    .filter((renderer) => {
+      if (renderer.updateCoverage === 'plan') return false;
+      const liveTarget = input.liveTargets?.find((target) => target.target === renderer.target);
+      return liveTarget !== undefined && depsMatch(liveTarget, affectedQueryTokens);
+    })
+    .map((renderer) => renderer.target);
+
+  return { fragmentTargets, rerunQueries };
+}
+
+function fragmentRenderersByTarget(
+  renderers: readonly FragmentRenderer[],
+): ReadonlyMap<string, FragmentRenderer> {
+  const byTarget = new Map<string, FragmentRenderer>();
+  for (const renderer of renderers) {
+    const existing = byTarget.get(renderer.target);
+    if (existing && existing.updateCoverage !== 'plan') continue;
+    byTarget.set(renderer.target, renderer);
+  }
+  return byTarget;
+}
+
+function targetIsPlanCovered(
+  target: string,
+  renderersByTarget: ReadonlyMap<string, FragmentRenderer>,
+): boolean {
+  return renderersByTarget.get(target)?.updateCoverage === 'plan' || !renderersByTarget.has(target);
+}
+
+function queryRerunTokens(query: QueryRerun): string[] {
+  return query.instanceKey === undefined ? [query.key] : [query.key, query.instanceKey];
+}
+
+function depsMatch(
+  liveTarget: MutationLiveTarget,
+  queryTokens: ReadonlySet<string> | readonly string[],
+): boolean {
+  const tokens = queryTokens instanceof Set ? queryTokens : new Set(queryTokens);
+  return liveTarget.deps.some((dep) => tokens.has(dep));
+}
+
 async function renderFailureFragment<Request>(
   failure: MutationFail,
   wireRequest: MutationWireRequest<Request>,
 ): Promise<string> {
-  const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
+  const target = mutationFailureTarget(wireRequest);
   const html = wireRequest.renderFailureFragment
     ? await wireRequest.renderFailureFragment(failure, wireRequest.rawInput)
     : renderDefaultFailureFragmentContent(failure);
@@ -924,7 +1123,7 @@ async function renderFailureFragment<Request>(
 function renderMutationRenderErrorFragment<Request>(
   wireRequest: MutationWireRequest<Request>,
 ): string {
-  const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
+  const target = mutationFailureTarget(wireRequest);
 
   return renderFragmentWireHtml({
     html: '<output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output>',
@@ -935,13 +1134,22 @@ function renderMutationRenderErrorFragment<Request>(
 function renderMutationServerErrorFragment<Request>(
   wireRequest: MutationWireRequest<Request>,
 ): string {
-  const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
+  const target = mutationFailureTarget(wireRequest);
 
   return renderFragmentWireHtml({
     html: '<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output>',
     stylesheets: wireRequest.failureStylesheets,
     target,
   });
+}
+
+function mutationFailureTarget<Request>(wireRequest: MutationWireRequest<Request>): string {
+  return (
+    wireRequest.failureTarget ??
+    wireRequest.submittedFormTarget ??
+    wireRequest.targets?.[0] ??
+    'error'
+  );
 }
 
 function renderDefaultFailureFragmentContent(failure: MutationFail): string {

@@ -9,6 +9,7 @@ import {
 } from './query-shapes.js';
 import {
   callExpressions,
+  componentHasInferredServerRefreshTarget,
   componentOptionStaticValue,
   jsxElementChildBody,
   jsxElements,
@@ -197,22 +198,6 @@ export function collectQueryUpdateCoverage(
     coveredPaths.add(coveragePathKey('state', path));
   }
 
-  if (componentOptionStaticValue(model, 'fragmentTarget') === true) {
-    for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
-      const path = expression.path;
-      if (coveredPaths.has(coveragePathKey('query', path))) continue;
-
-      facts.push({
-        componentName,
-        detail: 'declared fragment target',
-        position: 'expression',
-        query: path,
-        status: 'fragment',
-      });
-      coveredPaths.add(coveragePathKey('query', path));
-    }
-  }
-
   if (componentOptionStaticValue(model, 'isomorphic') === true) {
     for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
       const path = expression.path;
@@ -241,6 +226,22 @@ export function collectQueryUpdateCoverage(
         status: 'isomorphic',
       });
       coveredPaths.add(coveragePathKey('state', path));
+    }
+  }
+
+  if (componentHasInferredServerRefreshTarget(model)) {
+    for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
+      const path = expression.path;
+      if (coveredPaths.has(coveragePathKey('query', path))) continue;
+
+      facts.push({
+        componentName,
+        detail: 'inferred query-backed server refresh target',
+        position: 'expression',
+        query: path,
+        status: 'fragment',
+      });
+      coveredPaths.add(coveragePathKey('query', path));
     }
   }
 
@@ -327,20 +328,25 @@ function dataDeriveStamps(
       if (!derive || derive.input !== inputSegment.name || derive.input === 'state') continue;
 
       const attr = attribute.name.slice('data-bind:'.length);
-      stampFacts.push(withOutputContext({
-        attr,
-        derive: {
-          ...derive,
-          selector: `[${attribute.name}="${attribute.value}"]`,
-        },
-        selector: `[${attribute.name}="${attribute.value}"]`,
-      }, {
-        context: outputContextForAttribute(attr),
-        expression: derive.expression,
-        sink: attr,
-        source: 'client-query',
-        writer: 'query attribute binding',
-      }));
+      stampFacts.push(
+        withOutputContext(
+          {
+            attr,
+            derive: {
+              ...derive,
+              selector: `[${attribute.name}="${attribute.value}"]`,
+            },
+            selector: `[${attribute.name}="${attribute.value}"]`,
+          },
+          {
+            context: outputContextForAttribute(attr),
+            expression: derive.expression,
+            sink: attr,
+            source: 'client-query',
+            writer: 'query attribute binding',
+          },
+        ),
+      );
     }
 
     const deriveAttribute = element.attributes.find(
@@ -366,17 +372,22 @@ function dataDeriveStamps(
     };
 
     if (attr) {
-      stampFacts.push(withOutputContext({
-        attr,
-        derive: deriveFact,
-        selector: deriveFact.selector,
-      }, {
-        context: outputContextForAttribute(attr),
-        expression: derive.expression,
-        sink: attr,
-        source: 'client-query',
-        writer: 'query attribute stamp',
-      }));
+      stampFacts.push(
+        withOutputContext(
+          {
+            attr,
+            derive: deriveFact,
+            selector: deriveFact.selector,
+          },
+          {
+            context: outputContextForAttribute(attr),
+            expression: derive.expression,
+            sink: attr,
+            source: 'client-query',
+            writer: 'query attribute stamp',
+          },
+        ),
+      );
     } else {
       deriveFacts.push(deriveFact);
     }
@@ -606,21 +617,24 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
           : [];
 
       return [
-        withOutputContext({
-          itemBindingPlaceholders,
-          key,
-          list,
-          listReadPath: queryRelativePath(list),
-          listReadSegments: queryRelativeSegments(list),
-          selector: `[data-bind-list="${list}"]`,
-          template: templateBody?.source ?? '',
-        }, {
-          context: 'html-fragment',
-          expression: list,
-          sink: 'template.innerHTML',
-          source: 'template-stamp',
-          writer: 'template stamp assembly',
-        }),
+        withOutputContext(
+          {
+            itemBindingPlaceholders,
+            key,
+            list,
+            listReadPath: queryRelativePath(list),
+            listReadSegments: queryRelativeSegments(list),
+            selector: `[data-bind-list="${list}"]`,
+            template: templateBody?.source ?? '',
+          },
+          {
+            context: 'html-fragment',
+            expression: list,
+            sink: 'template.innerHTML',
+            source: 'template-stamp',
+            writer: 'template stamp assembly',
+          },
+        ),
       ];
     })
     .filter((stamp) => (stamp.itemBindingPlaceholders?.length ?? 0) > 0);
@@ -661,20 +675,23 @@ function templateItemBindingPlaceholders(
           const childBody = jsxElementChildBody(candidate);
           const templateStart = childBody ? childBody.offset - templateBody.offset : 0;
           const templateEnd = templateStart + (childBody?.source.length ?? 0);
-          return withOutputContext({
-            path: fact.path,
-            readPath: fact.relativeReadPath ?? '',
-            readSegments: parseBindingPath(fact.relativeReadPath ?? ''),
-            templateEnd,
-            templateStart,
-            value: childBody?.source ?? '',
-          }, {
-            context: 'html-fragment',
-            expression: fact.path,
-            sink: 'template item placeholder',
-            source: 'template-stamp',
-            writer: 'template stamp interpolation',
-          });
+          return withOutputContext(
+            {
+              path: fact.path,
+              readPath: fact.relativeReadPath ?? '',
+              readSegments: parseBindingPath(fact.relativeReadPath ?? ''),
+              templateEnd,
+              templateStart,
+              value: childBody?.source ?? '',
+            },
+            {
+              context: 'html-fragment',
+              expression: fact.path,
+              sink: 'template item placeholder',
+              source: 'template-stamp',
+              writer: 'template stamp interpolation',
+            },
+          );
         }),
     )
     .sort((left, right) => left.path.localeCompare(right.path));

@@ -2,6 +2,13 @@ import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
 import { renderStylesheetLinks, type StylesheetAsset } from './hints.js';
 
 export interface QueryWireRenderOptions {
+  /**
+   * When true, the `value` is a `QueryDelta` envelope rather than a full query
+   * value. Emits the boolean `delta` attribute on the wire chunk so the client
+   * applies it through the update plan instead of replacing the held value whole
+   * (SPEC §9.1.1).
+   */
+  delta?: boolean | undefined;
   key?: string | undefined;
   name: string;
   value: unknown;
@@ -28,8 +35,10 @@ export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
   const versionAttribute =
     options.version === undefined ? '' : ` version="${escapeAttribute(String(options.version))}"`;
+  // Boolean attribute: presence alone signals delta mode; no value is emitted (SPEC §9.1.1).
+  const deltaAttribute = options.delta === true ? ' delta' : '';
 
-  return `<kovo-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(options.value))}</kovo-query>`;
+  return `<kovo-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}${deltaAttribute}>${escapeHtml(JSON.stringify(options.value))}</kovo-query>`;
 }
 
 /**

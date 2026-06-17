@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule, queryShapeFactDiagnostics, queryShapesFromFacts } from './index.js';
+import {
+  compileComponentModule,
+  queryShapeFactDiagnostics,
+  queryShapesFromFacts,
+} from './index.js';
 
 describe('compiler query binding diagnostics', () => {
   it('accepts data-bind paths present in declared query shapes', () => {

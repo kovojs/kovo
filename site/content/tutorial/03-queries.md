@@ -41,9 +41,9 @@ The cart badge consumes the cart query. Your TSX says only that:
 
 {{snippet:03-queries/src/components/cart-badge.tsx#cart-badge}}
 
-The product list is keyed. You author `kovo-key` yourself, because item identity is an app-level
-fact shared by the morph layer (the runtime's DOM patcher), template stamps, and optimistic
-reordering:
+The product list is keyed. You author ordinary TSX `key` identity, and the compiler lowers it to
+`kovo-key` in the emitted IR because item identity is shared by the morph layer (the runtime's DOM
+patcher), template stamps, inferred fragment target suffixes, and optimistic reordering:
 
 {{snippet:03-queries/src/components/product-list.tsx#product-list}}
 
@@ -80,7 +80,7 @@ writes — and the form-shaped contract they ride in on.
 Domains as invalidation currency: SPEC §10.1. Derived downstream surfaces and read-set
 extraction: SPEC §10.2. Read set as the entire registration: Constitution #2 (no API requires
 global knowledge at a local site). Derived `kovo-deps`/`data-bind` stamps and binding type-check:
-SPEC §4.8; binding through a nullable segment without `?.` is **KV227**. `kovo-key` shared by morph
-and optimistic reordering: SPEC §4.8, §13.2. Data shipped once as shared truth: SPEC §4.2.
+SPEC §4.8; binding through a nullable segment without `?.` is **KV227**. Authored `key` lowering to
+runtime `kovo-key`: SPEC §4.8, §13.2. Data shipped once as shared truth: SPEC §4.2.
 
 </details>

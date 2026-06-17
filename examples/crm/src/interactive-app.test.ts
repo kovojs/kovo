@@ -1,9 +1,9 @@
 import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { CONTACT_LIST_TARGET } from './components/contacts.js';
-import { DEAL_DETAIL_TARGET } from './components/deal-detail.js';
-import { PIPELINE_TARGET } from './components/pipeline.js';
+import { CONTACT_LIST_TARGET } from './generated/contacts.js';
+import { DEAL_DETAIL_TARGET } from './generated/deal-detail.js';
+import { PIPELINE_TARGET } from './generated/pipeline.js';
 import { buildCrmInteractiveApp } from './interactive-app.js';
 import { contacts, deals } from './schema.js';
 

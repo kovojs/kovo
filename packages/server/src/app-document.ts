@@ -56,7 +56,13 @@ export async function renderAppRouteDocumentResponse({
     return renderAppErrorDocumentResponse(app, request, 500);
   }
 
+  // Stamp the build-global render-plan version token so the client can detect
+  // deploy skew and refetch full rather than applying a delta against a stale
+  // base (SPEC §5.1, §9.1.1).
+  const buildToken = app.clientModules.buildToken();
+
   return renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
+    ...(buildToken !== '' ? { buildToken } : {}),
     hints: route,
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     ...(app.document.template === undefined ? {} : { template: app.document.template }),

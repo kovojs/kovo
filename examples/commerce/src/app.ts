@@ -13,8 +13,11 @@ import {
   metaFromQuery,
   mutation,
   notFound,
+  renderComponent,
+  renderComponentMutationFailure,
   renderDeferredStream,
   renderMutationEndpointResponse,
+  renderMutationFormAttributes,
   renderPageHints,
   renderRoutePageResponse,
   respond,
@@ -422,9 +425,8 @@ export function resolveCommercePaymentWebhookSecret(
 export const commercePaymentWebhookSecret = resolveCommercePaymentWebhookSecret();
 export const commercePaymentReplayStore = createMemoryMutationReplayStore();
 
-export type AddToCartFailure = MutationFail<string, unknown>;
 export interface AddToCartFailureState {
-  failure: AddToCartFailure;
+  failure: MutationFail<string, unknown>;
   productId?: string;
 }
 
@@ -738,11 +740,13 @@ export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
 // mutation handlers' write-site line numbers in this file.
 export const {
   ProductGrid,
-  productFormTarget,
   renderAddToCartError,
   renderAddToCartForm,
+  renderAddToCartMutationFailureError,
+  renderAddToCartMutationFailureForm,
   renderProductGridItems,
 } = productGridComponent;
+export type AddToCartFailure = productGridComponent.AddToCartFailure;
 
 export function renderProductGrid(
   result: ProductGridResult,
@@ -751,19 +755,43 @@ export function renderProductGrid(
   options: { readOnly?: boolean | undefined } = {},
 ): string {
   // SPEC.md section 4.2: the markup comes from the compiled TSX component;
-  // kovo-c and kovo-deps are compiler-derived (section 4.8). SPEC.md section
-  // 10.2 keeps query data separate from request-only form failure context.
-  return ProductGrid.definition.render(
-    { productGrid: result },
-    { failure: addToCartFailure, readOnly: options.readOnly, request },
-  );
+  // kovo-c and kovo-deps are compiler-derived (section 4.8). SPEC.md §6.3/§9.2
+  // keeps mutation failures in forms.addToCart.failure, separate from query data.
+  const slots = productGridRenderSlots(request, options, addToCartFailure?.productId);
+
+  if (addToCartFailure) {
+    return renderComponentMutationFailure(
+      ProductGrid,
+      { productGrid: result },
+      addToCartFailure.failure,
+      {
+        formName: 'addToCart',
+        slots,
+      },
+    );
+  }
+
+  return renderComponent(ProductGrid, { productGrid: result }, { slots });
+}
+
+function productGridRenderSlots(
+  request?: CommerceRequest,
+  options: { readOnly?: boolean | undefined } = {},
+  productId?: string,
+): productGridComponent.ProductGridRenderSlots {
+  return {
+    forms: { addToCart: { failure: null } },
+    ...(productId === undefined ? {} : { productId }),
+    ...(options.readOnly === undefined ? {} : { readOnly: options.readOnly }),
+    ...(request === undefined ? {} : { request }),
+  };
 }
 
 export function renderProductGridAppend(
   result: ProductGridResult,
   request?: CommerceRequest,
 ): string {
-  return renderProductGridItems(result, undefined, request);
+  return renderProductGridItems(result, undefined, null, request);
 }
 
 export async function renderProductGridPageFragment(
@@ -811,7 +839,7 @@ export async function renderOrderHistory(db: CommerceDb, userId?: string): Promi
 
 export function renderReceiptUploadForm(orderId = 'order-1'): string {
   return [
-    '<form method="post" action="/_m/order/receipt" enhance data-mutation="order/receipt" enctype="multipart/form-data" kovo-deps="order" class="mt-4 grid gap-2 rounded border border-slate-200 bg-white p-4" aria-busy="false">',
+    `<form ${renderMutationFormAttributes(uploadReceipt)} enctype="multipart/form-data" kovo-deps="order" class="mt-4 grid gap-2 rounded border border-slate-200 bg-white p-4" aria-busy="false">`,
     `<input type="hidden" name="orderId" value="${escapeAttribute(orderId)}">`,
     '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Receipt</span>',
     '<input name="receipt" type="file" accept="application/pdf,image/png" class="rounded border border-slate-300 px-2 py-1">',
@@ -925,7 +953,6 @@ export function submitAddToCart(
   const submittedInput = appendCommerceCsrf(rawInput, request);
   return renderMutationEndpointResponse(addToCart, {
     csrf: commerceCsrf,
-    failureTarget: productId ? productFormTarget(productId) : 'product-form',
     failureStylesheets: commerceStylesheets,
     fragmentRenderers: [
       {
@@ -986,7 +1013,7 @@ export function renderCommerceLoginForm(
   options: { failure?: CommerceLoginFailureState; next?: string } = {},
 ): string {
   return [
-    '<form method="post" action="/_m/auth/sign-in" enhance data-mutation="auth/sign-in" class="grid gap-4 rounded border border-slate-200 bg-white p-6">',
+    `<form ${renderMutationFormAttributes(commerceSignIn)} class="grid gap-4 rounded border border-slate-200 bg-white p-6">`,
     csrfField(request, commerceAuthCsrf),
     `<input type="hidden" name="next" value="${escapeAttribute(options.next ?? '/cart')}">`,
     '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Email</span>',
@@ -1005,7 +1032,7 @@ export function renderCommerceLoginForm(
 
 export function renderCommerceLogoutForm(request: CommerceAuthRequest): string {
   return [
-    '<form method="post" action="/_m/auth/sign-out" enhance data-mutation="auth/sign-out" class="inline">',
+    `<form ${renderMutationFormAttributes(commerceSignOut)} class="inline">`,
     csrfField(request, commerceAuthCsrf),
     '<button class="text-sm font-medium text-slate-900" type="submit">Sign out</button>',
     '</form>',
@@ -1074,15 +1101,15 @@ async function loadProductGridForRequest(
 async function renderAddToCartFailureFragment(
   db: CommerceDb,
   rawInput: unknown,
-  failure: AddToCartFailure,
+  failure: MutationFail,
   request: CommerceRequest,
 ): Promise<string> {
   const productId = productIdFromRawInput(rawInput);
   const product = productId ? await loadProductForFailure(db, productId) : undefined;
 
-  if (!product) return renderAddToCartError(failure);
+  if (!product) return renderAddToCartMutationFailureError(failure);
 
-  return renderAddToCartForm(product, failure, request);
+  return renderAddToCartMutationFailureForm(product, failure, request);
 }
 
 function productIdFromRawInput(rawInput: unknown): string | undefined {

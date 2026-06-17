@@ -55,7 +55,6 @@ import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/pr
   it('records trimmed JSX child bodies with original source offsets', () => {
     const source = `
 export const ChildSlot = component({
-  fragmentTarget: true,
   render: () => (
     <ChildSlot>
       <span>{cart.count}</span>
@@ -547,6 +546,28 @@ export const CartShell = component({
     const strong = elements.find((element) => element.tag === 'strong');
 
     expect(strong?.ancestorTags).toEqual(['span', 'p', 'section']);
+  });
+
+  it('marks JSX elements inside array map callbacks as repeatable', () => {
+    const source = `
+export const ProductList = component({
+  render: ({ products }) => (
+    <section>
+      <form enhance mutation={save}>Save</form>
+      {products.items.map((item) => (
+        <form enhance mutation={save}>
+          <input name="id" value={item.id} />
+        </form>
+      ))}
+    </section>
+  ),
+});
+`;
+    const forms = jsxElements(parseComponentModule('product-list.tsx', source)).filter(
+      (element) => element.tag === 'form',
+    );
+
+    expect(forms.map((form) => form.repeatable)).toEqual([false, true]);
   });
 
   it('records JSX opening tag and child source for model-driven lowerers', () => {

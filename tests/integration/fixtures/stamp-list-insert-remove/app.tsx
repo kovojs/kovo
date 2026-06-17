@@ -14,6 +14,7 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration
 const cartDomain = domain('cart');
 
 interface CartItem {
+  [key: string]: unknown;
   id: string;
   name: string;
   qty: number;
@@ -26,7 +27,7 @@ interface CartResult {
 async function readCart(db: KovoFixtureRequest['db']): Promise<CartResult> {
   const items = (await db.query(
     'select id, name, qty from cart_item order by position asc',
-  )) as CartItem[];
+  )) as unknown as CartItem[];
   return { items };
 }
 
@@ -42,6 +43,11 @@ function renderList(cart: CartResult): string {
     ${cart.items.map(renderRow).join('')}
     <template kovo-stamp>${renderRow({ id: '', name: '', qty: 0 })}</template>
   </ul>`;
+}
+
+async function renderCartList(db: KovoFixtureRequest['db']): Promise<string> {
+  const cart = await readCart(db);
+  return `<cart-list kovo-fragment-target="cart-list" kovo-deps="cart">${renderList(cart)}</cart-list>`;
 }
 
 export const cartQuery = query('cart', {
@@ -77,7 +83,7 @@ const homeRoute = route('/', {
     return `${renderQueryScript({ name: 'cart', value: cart })}
     <script type="module" src="/client.ts"></script>
     <main>
-      <cart-list kovo-deps="cart">${renderList(cart)}</cart-list>
+      ${await renderCartList(request.db)}
       <form method="post" action="/_m/stamp-list-insert-remove/change" enhance data-mutation="stamp-list-insert-remove/change" kovo-deps="cart">
         <input type="hidden" name="mode" value="insert" />
         <button type="submit">Insert item</button>
@@ -94,8 +100,14 @@ const app = createApp({
   mutations: [changeCart],
   queries: [cartQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key }) =>
-    key === changeCart.key ? { fragmentRenderers: [], redirectTo: '/' } : undefined,
+  mutationResponse: ({ key, request }) => {
+    if (key !== changeCart.key) return undefined;
+    const db = (request as unknown as KovoFixtureRequest).db;
+    return {
+      fragmentRenderers: [{ render: () => renderCartList(db), target: 'cart-list' }],
+      redirectTo: '/',
+    };
+  },
 });
 
 export default defineFixture({

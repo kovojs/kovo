@@ -20,6 +20,7 @@ interface ProductArgs {
 }
 
 interface ProductResult {
+  [key: string]: unknown;
   id: string;
   name: string;
   stock: number;
@@ -28,7 +29,7 @@ interface ProductResult {
 async function readProduct(db: KovoFixtureRequest['db'], id: string): Promise<ProductResult> {
   const rows = (await db.query(
     `select id, name, stock from product where id = '${id.replaceAll("'", "''")}'`,
-  )) as ProductResult[];
+  )) as unknown as ProductResult[];
   return rows[0] ?? { id, name: 'Missing', stock: 0 };
 }
 
@@ -100,8 +101,7 @@ const app = createApp({
 
 export default defineFixture({
   app,
-  schema:
-    'create table product (id text primary key, name text not null, stock integer not null)',
+  schema: 'create table product (id text primary key, name text not null, stock integer not null)',
   seed: async (db) => {
     await db.exec("insert into product (id, name, stock) values ('p1', 'Pen', 2)");
     await db.exec("insert into product (id, name, stock) values ('p2', 'Notebook', 9)");

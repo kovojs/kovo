@@ -21,7 +21,7 @@ export interface DeriveDefinition<Inputs extends readonly string[], Value> {
  */
 export function derive<const Inputs extends readonly string[], Value>(
   inputs: Inputs,
-  fn: (...values: unknown[]) => Value,
+  fn: (...values: any[]) => Value,
 ): DeriveDefinition<Inputs, Value> {
   return { inputs, run: fn };
 }

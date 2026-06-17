@@ -17,7 +17,7 @@ test('enhanced response includes committed query truth and matching fragment', a
   const response = await responsePromise;
   const body = await response.text();
 
-  expect(body).toContain('<kovo-query name="balance">{"balance":15}</kovo-query>');
+  expect(body).toContain('<kovo-fragment target="balance-badge">');
   expect(body).toContain('<output data-bind="balance.balance">15</output>');
   await expect(page.locator('[data-bind="balance.balance"]')).toHaveText('15');
 

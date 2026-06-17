@@ -185,7 +185,10 @@ function formatLinkHeaderTarget(href: string): string {
   );
 }
 
-function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]): InlineHtmlWithCsp {
+function renderSpeculationRules(
+  prefetch: RoutePrefetch,
+  urls: readonly string[],
+): InlineHtmlWithCsp {
   const prerenderUrls = dedupe(urls);
   if (!prefetch || prerenderUrls.length === 0) return { html: '' };
 

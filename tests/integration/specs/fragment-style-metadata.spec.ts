@@ -10,9 +10,10 @@ test('late mutation fragments request compiler-metadata styles without duplicate
   await expect(page.locator('link[rel="stylesheet"][href="/assets/late-card.css"]')).toHaveCount(0);
 
   const [response] = await Promise.all([
-    page.waitForResponse((candidate) =>
-      candidate.url().endsWith('/_m/fragment-style-metadata/reveal') &&
-      candidate.status() === 200,
+    page.waitForResponse(
+      (candidate) =>
+        candidate.url().endsWith('/_m/fragment-style-metadata/reveal') &&
+        candidate.status() === 200,
     ),
     page.getByRole('button', { name: 'Reveal card' }).click(),
   ]);

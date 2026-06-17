@@ -7,6 +7,8 @@ import {
   callExpressions,
   componentFragmentTargetNames,
   componentOptionObjectKeys,
+  componentHasInferredServerRefreshTarget,
+  componentRenderHostElement,
   componentRenderInputModels,
   componentStateReturnObjectModel,
   jsxExpressions,
@@ -68,6 +70,56 @@ export function validateReservedQueryNames(
         },
       ]
     : [];
+}
+
+export function validateRemovedFragmentTargetOption(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
+  return model.components.flatMap((component) =>
+    component.options
+      .filter((option) => option.key === 'fragmentTarget')
+      .map((option) => ({
+        ...diagnosticFor(fileName, 'KV223', source, option.start, option.end - option.start),
+        help: [
+          'Would lower to: an inferred server-refresh target for a query-backed component.',
+          'Blocked reason: fragmentTarget is no longer an author-facing component option; query dependencies now derive refresh targets.',
+          'Fixes: remove fragmentTarget, declare queries for refreshable server data, or set disableServerRefresh: true to force the component off the enhanced server-refresh path.',
+          'SPEC §4.8 keeps runtime stamps compiler-derived and SPEC §4.9 classifies inferred query-backed refresh coverage.',
+          'Escape: emitted compiler artifacts may carry kovo-fragment-target hooks; app TSX should not force targets by option.',
+        ].join('\n'),
+        message:
+          'Redundant removed component option; query-backed components infer server refresh targets. fragmentTarget',
+      })),
+  );
+}
+
+export function validateHandAuthoredFragmentTargetStamp(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
+  if (!componentHasInferredServerRefreshTarget(model)) return [];
+
+  const host = componentRenderHostElement(model);
+  const attribute = host?.attributes.find((item) => item.name === 'kovo-fragment-target');
+  if (!attribute) return [];
+
+  return [
+    {
+      ...diagnosticFor(fileName, 'KV223', source, attribute.start, attribute.end - attribute.start),
+      help: [
+        'Would lower to: the same kovo-fragment-target hook the compiler derives for a query-backed component root.',
+        'Blocked reason: the stamp is redundant in app-authored TSX because the compiler can derive the live server-refresh target from queries and component identity.',
+        'Fixes: remove the hand-written kovo-fragment-target attribute, keep declared queries as the source of truth, or set disableServerRefresh: true if the component should not be live-refreshable.',
+        'SPEC §4.8 permits residual stamps for emitted IR fixpoint validation, but app TSX should not hand-author derivable runtime hooks.',
+        'Escape: emitted compiler artifacts may retain kovo-fragment-target for the runtime Kovo-Targets wire.',
+      ].join('\n'),
+      message:
+        'Redundant hand-written fragment target stamp in sugar; the compiler derives it. kovo-fragment-target',
+    },
+  ];
 }
 
 export function validateFragmentTargetInputs(
@@ -263,7 +315,12 @@ function kv311Diagnostic(
     help: [
       `Coverage classification: ${fact.componentName} ${fact.position} ${fact.status}`,
       `Blocked update: ${fact.detail}`,
-      diagnosticDefinitions.KV311.help ?? '',
+      [
+        'Would lower to: a data-bind/update plan, inferred query-backed fragment target, isomorphic component, or renderOnce marker for the rendered position.',
+        'Blocked reason: the query/state expression is outside the current §4.8 update-plan grammar and is not inside an inferred server-refresh target.',
+        'Fixes: add a data-bind/query update plan, extract a derive/stamp, keep the component query-backed for inferred fragment refresh, mark it isomorphic, declare renderOnce, or set disableServerRefresh: true only when no enhanced refresh is intended.',
+        'SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.',
+      ].join('\n'),
     ].join('\n'),
     message: `${diagnosticDefinitions.KV311.message} ${fact.componentName} ${fact.query} ${fact.position}`,
   };

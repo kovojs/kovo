@@ -71,34 +71,30 @@ const budgets = JSON.parse(
 ) as CompilerPerfBudgets;
 
 describe('compiler performance gates', () => {
-  it(
-    'keeps generated compiler corpora within checked-in budgets',
-    () => {
-      // SPEC.md §5.2 defines compileComponentModule as the TSX-to-lowered-IR pipeline; this gate
-      // times that public compiler path over generated app-scale TSX corpora.
-      printEnvironmentMetadata();
-      const corpora = compilerPerfCorpora();
-      const results = corpora.map(runCorpus);
-      const totals = totalResults(results);
+  it('keeps generated compiler corpora within checked-in budgets', () => {
+    // SPEC.md §5.2 defines compileComponentModule as the TSX-to-lowered-IR pipeline; this gate
+    // times that public compiler path over generated app-scale TSX corpora.
+    printEnvironmentMetadata();
+    const corpora = compilerPerfCorpora();
+    const results = corpora.map(runCorpus);
+    const totals = totalResults(results);
 
-      for (const result of results) {
-        const budget = budgets.corpora[result.name];
-        expect(budget, `missing compiler perf budget for ${result.name}`).toBeDefined();
-        if (!budget) continue;
+    for (const result of results) {
+      const budget = budgets.corpora[result.name];
+      expect(budget, `missing compiler perf budget for ${result.name}`).toBeDefined();
+      if (!budget) continue;
 
-        assertCorpusShape(result.name, result.input, budget);
-        assertElapsedBudget(result.name, 'cold', result.cold.elapsedMs, budget.coldMaxMs);
-        assertElapsedBudget(result.name, 'warm', result.warm.elapsedMs, budget.warmMaxMs);
-        printCorpusResult(result);
-      }
+      assertCorpusShape(result.name, result.input, budget);
+      assertElapsedBudget(result.name, 'cold', result.cold.elapsedMs, budget.coldMaxMs);
+      assertElapsedBudget(result.name, 'warm', result.warm.elapsedMs, budget.warmMaxMs);
+      printCorpusResult(result);
+    }
 
-      assertCorpusShape('total', totals.input, budgets.total);
-      assertElapsedBudget('total', 'cold', totals.cold.elapsedMs, budgets.total.coldMaxMs);
-      assertElapsedBudget('total', 'warm', totals.warm.elapsedMs, budgets.total.warmMaxMs);
-      printCorpusResult(totals);
-    },
-    60_000,
-  );
+    assertCorpusShape('total', totals.input, budgets.total);
+    assertElapsedBudget('total', 'cold', totals.cold.elapsedMs, budgets.total.coldMaxMs);
+    assertElapsedBudget('total', 'warm', totals.warm.elapsedMs, budgets.total.warmMaxMs);
+    printCorpusResult(totals);
+  }, 60_000);
 });
 
 function runCorpus(corpus: CompilerPerfCorpus): CompilerPerfCorpusResult {
@@ -493,7 +489,7 @@ import { component } from '@kovojs/core';
 import { Link } from '@kovojs/runtime';
 
 export const Dashboard${index} = component({
-  fragmentTarget: ${index % 2 === 0},
+  disableServerRefresh: ${index % 2 !== 0},
   queries: { account: accountQuery, report: reportQuery },
   state: () => ({ expanded: false }),
   css: \`

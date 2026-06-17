@@ -169,11 +169,7 @@ export const ToolbarItem = component({
     const styleAttrs = style.attrs(toolbarStyles.item, props.styles?.item);
 
     return (
-      <span
-        {...styleAttrs}
-        data-disabled={attrs['data-disabled']}
-        id={attrs.id}
-      >
+      <span {...styleAttrs} data-disabled={attrs['data-disabled']} id={attrs.id}>
         {props.children}
       </span>
     );

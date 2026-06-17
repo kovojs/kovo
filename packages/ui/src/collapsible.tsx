@@ -151,11 +151,7 @@ export const CollapsibleContent = component({
     const styleAttrs = style.attrs(collapsibleStyles.content, props.styles?.content);
 
     return (
-      <div
-        {...styleAttrs}
-        data-state={attrs['data-state']}
-        id={attrs.id}
-      >
+      <div {...styleAttrs} data-state={attrs['data-state']} id={attrs.id}>
         {props.children}
       </div>
     );

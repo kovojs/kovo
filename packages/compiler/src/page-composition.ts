@@ -28,11 +28,7 @@ export function composePageComponentArtifacts(results: readonly CompileResult[])
       componentName: effectiveName,
       ...(asset.criticalCss
         ? {
-            criticalCss: rewriteCssHostIdentity(
-              asset.criticalCss,
-              domName,
-              effectiveName,
-            ),
+            criticalCss: rewriteCssHostIdentity(asset.criticalCss, domName, effectiveName),
           }
         : {}),
     }));
@@ -69,7 +65,11 @@ function effectiveDomNamesForPage(facts: readonly ComponentGraphFact[]): Map<str
   return names;
 }
 
-function rewriteEmittedFile(file: EmittedFile, domName: string, effectiveName: string): EmittedFile {
+function rewriteEmittedFile(
+  file: EmittedFile,
+  domName: string,
+  effectiveName: string,
+): EmittedFile {
   if (file.kind === 'server') {
     return { ...file, source: rewriteHostIdentity(file.source, domName, effectiveName) };
   }
@@ -80,19 +80,11 @@ function rewriteEmittedFile(file: EmittedFile, domName: string, effectiveName: s
 }
 
 function rewriteHostIdentity(source: string, domName: string, effectiveName: string): string {
-  const existingStamp = new RegExp(
-    `(\\s+kovo-c=)(["'])${escapeRegExp(domName)}\\2`,
-    'g',
-  );
-  const rewritten = source.replace(
-    existingStamp,
-    `$1"${escapeAttribute(effectiveName)}"`,
-  );
+  const existingStamp = new RegExp(`(\\s+kovo-c=)(["'])${escapeRegExp(domName)}\\2`, 'g');
+  const rewritten = source.replace(existingStamp, `$1"${escapeAttribute(effectiveName)}"`);
   if (rewritten !== source) return rewritten;
 
-  const hostOpening = new RegExp(
-    `<${escapeRegExp(domName)}(?=[\\s>/])(?!(?:(?!>).)*\\skovo-c=)`,
-  );
+  const hostOpening = new RegExp(`<${escapeRegExp(domName)}(?=[\\s>/])(?!(?:(?!>).)*\\skovo-c=)`);
   return source.replace(hostOpening, `<${domName} kovo-c="${escapeAttribute(effectiveName)}"`);
 }
 
@@ -101,10 +93,7 @@ function rewriteCssHostIdentity(source: string, domName: string, effectiveName: 
   const newAttributeSelector = `[kovo-c="${escapeAttribute(effectiveName)}"]`;
   const attributeRewritten = source.replaceAll(oldAttributeSelector, newAttributeSelector);
 
-  const hostSelector = new RegExp(
-    `(^|[\\n{,(]\\s*)${escapeRegExp(domName)}(?=[\\s.#:[>),])`,
-    'g',
-  );
+  const hostSelector = new RegExp(`(^|[\\n{,(]\\s*)${escapeRegExp(domName)}(?=[\\s.#:[>),])`, 'g');
   return attributeRewritten.replace(hostSelector, `$1${newAttributeSelector}`);
 }
 

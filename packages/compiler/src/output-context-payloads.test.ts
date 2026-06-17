@@ -303,7 +303,7 @@ export const PayloadCard = component({
       export const PayloadCard = component({
         queries: { product: productQuery },
         render: ({ product }) => (
-          <article data-bind:title="product.PayloadCard$article_title_derive" data-bind:aria-label="product.PayloadCard$article_aria_label_derive" data-bind:aria-description="product.PayloadCard$article_aria_description_derive" kovo-c="payload-card" kovo-deps="product">
+          <article data-bind:title="product.PayloadCard$article_title_derive" data-bind:aria-label="product.PayloadCard$article_aria_label_derive" data-bind:aria-description="product.PayloadCard$article_aria_description_derive" kovo-c="payload-card" kovo-deps="product" kovo-fragment-target="payload-card">
             <h2 data-bind="product.name">{product.name}</h2>
           </article>
         ),
@@ -581,8 +581,9 @@ function selectorAttributeRecord(
   result: ReturnType<typeof compileComponentModule>,
   attr: string,
 ): Record<string, string> {
-  const selector = result.queryUpdatePlans[0]?.stamps?.find((stamp) => stamp.attr === attr)
-    ?.selector;
+  const selector = result.queryUpdatePlans[0]?.stamps?.find(
+    (stamp) => stamp.attr === attr,
+  )?.selector;
   if (!selector) throw new Error(`Missing selector for ${attr}`);
 
   const match = /^\[([^=\]]+)="([^"]*)"\]$/.exec(selector);
@@ -633,10 +634,7 @@ class FakeElement {
   attributes: Array<{ name: string; value: string }>;
   textContent: string | null;
 
-  constructor(
-    attributes: Record<string, string>,
-    options: { textContent?: string | null } = {},
-  ) {
+  constructor(attributes: Record<string, string>, options: { textContent?: string | null } = {}) {
     this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
     this.textContent = options.textContent ?? null;
   }

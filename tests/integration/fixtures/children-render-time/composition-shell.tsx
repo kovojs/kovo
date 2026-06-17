@@ -14,9 +14,7 @@ export const CompositionShell = component({
   render: () => (
     <composition-shell>
       <h1>Server composition</h1>
-      <Panel footer="Named slot rendered on the server">
-        Children rendered on the server
-      </Panel>
+      <Panel footer="Named slot rendered on the server">Children rendered on the server</Panel>
     </composition-shell>
   ),
 });

@@ -52,8 +52,8 @@ describe('render-equivalence production boundary', () => {
     expect(violations).toEqual([]);
 
     const compileSource = readFileSync(join(compilerSrcDir, 'compile.ts'), 'utf8');
-    expect(compileSource).toContain(
-      'semanticRenderEquivalenceCheck(fileNames.server, originalModel, serverModule.executableSource)',
+    expect(compileSource).toMatch(
+      /semanticRenderEquivalenceCheck\(\s*fileNames\.server,\s*originalModel,\s*serverModule\.executableSource,/,
     );
   });
 });

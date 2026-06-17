@@ -99,8 +99,12 @@ export const disclosureStyles = style.create(
 );
 
 export const disclosureClasses = [style.attrs(disclosureStyles.root).class ?? ''] as const;
-export const disclosureTriggerClasses = [style.attrs(disclosureStyles.trigger).class ?? ''] as const;
-export const disclosureContentClasses = [style.attrs(disclosureStyles.content).class ?? ''] as const;
+export const disclosureTriggerClasses = [
+  style.attrs(disclosureStyles.trigger).class ?? '',
+] as const;
+export const disclosureContentClasses = [
+  style.attrs(disclosureStyles.content).class ?? '',
+] as const;
 
 function disclosureState(props: DisclosureStateProps) {
   return {
@@ -161,12 +165,7 @@ export const DisclosureContent = component({
     const styleAttrs = style.attrs(disclosureStyles.content, props.styles?.content);
 
     return (
-      <div
-        {...styleAttrs}
-        data-state={attrs['data-state']}
-        hidden={attrs.hidden}
-        id={attrs.id}
-      >
+      <div {...styleAttrs} data-state={attrs['data-state']} hidden={attrs.hidden} id={attrs.id}>
         {props.children}
       </div>
     );

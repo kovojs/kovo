@@ -264,11 +264,9 @@ describe('server app shell Vite plugin', () => {
         },
       ],
       fileName: 'src/components/cart.tsx',
-      source: [
-        'export const Cart = component({',
-        '  render: () => <p><div /></p>',
-        '});',
-      ].join('\n'),
+      source: ['export const Cart = component({', '  render: () => <p><div /></p>', '});'].join(
+        '\n',
+      ),
     });
     const cartRoute = route('/cart', {
       modulepreloads: ['/c/src/components/cart.client.js?v=failed'],

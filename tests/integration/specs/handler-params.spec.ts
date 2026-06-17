@@ -22,6 +22,7 @@ test('passes element data-p params to the imported handler with coercion', async
       quantityType: 'number',
     }),
   );
-  expect(await kovoApp.semantic('main', { keepAttrs: ['on:click', 'data-p-item-id'] }))
-    .toMatchSnapshot('handler-params.semantic.txt');
+  expect(
+    await kovoApp.semantic('main', { keepAttrs: ['on:click', 'data-p-item-id'] }),
+  ).toMatchSnapshot('handler-params.semantic.txt');
 });

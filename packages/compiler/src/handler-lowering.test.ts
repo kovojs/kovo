@@ -130,7 +130,6 @@ import { component } from '@kovojs/core';
 import { removeItem } from './actions';
 
 export const CartBadge = component({
-  fragmentTarget: true,
   queries: { cart: {} },
   render: () => (
     <button onClick={() => removeItem(state, item.id)}>
@@ -148,7 +147,7 @@ export const CartBadge = component({
         length: 5,
         message: kv210.message,
         severity: kv210.severity,
-        start: { column: 13, line: 9 },
+        start: { column: 13, line: 8 },
       },
     ]);
   });

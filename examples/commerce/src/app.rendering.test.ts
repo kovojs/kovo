@@ -114,7 +114,11 @@ describe('commerce example', () => {
       generatedComponentCommittedIrFacts({
         assertFixpoint,
         assertRenderEquivalence,
-        compileComponentModule,
+        compileComponentModule: (input) =>
+          compileComponentModule({
+            ...input,
+            registryFacts: { mutations: { 'cart/add': 'typeof addToCart' } },
+          }),
         components: ['cart-badge', 'order-history', 'product-grid'],
         projectFilePrefix: 'examples/commerce/src',
         sourceRootUrl: new URL('./', import.meta.url),

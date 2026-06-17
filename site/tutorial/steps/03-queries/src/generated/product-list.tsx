@@ -16,7 +16,7 @@ import { productsQuery, type ProductsResult } from '../queries.js';
 export const ProductList = component({
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }) => (
-    <ul class="products" kovo-c="product-list" kovo-deps="products">
+    <ul class="products" kovo-c="product-list" kovo-deps="products" kovo-fragment-target="product-list">
       {products.items.map((item) => (
         <li kovo-key={item.id}>
           {escapeText(item.name)} — {formatPrice(item.unitPrice)} ({escapeText(item.stock)} in stock)
@@ -25,4 +25,5 @@ export const ProductList = component({
     </ul>
   ),
 });
+ProductList.name = "components/product-list/product-list";
 // /snippet

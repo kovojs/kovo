@@ -43,8 +43,7 @@ export interface AddToCartFailureState {
   productId?: string | undefined;
 }
 
-export const { ProductList, productFormTarget, renderAddToCartError, renderAddToCartForm } =
-  productListComponent;
+export const { ProductList, renderAddToCartError, renderAddToCartForm } = productListComponent;
 
 // snippet:add-to-cart
 export const addToCart = mutation('cart/add', {
@@ -119,7 +118,6 @@ export function submitAddToCart(
 ) {
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
-    failureTarget: productId ? productFormTarget(productId) : 'product-form',
     fragmentRenderers: [
       {
         render: () => CartBadge.definition.render({ cart: loadCart(request.db) }),

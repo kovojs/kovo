@@ -1,10 +1,14 @@
 /** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { mutationFormAttributes } from '@kovojs/server';
 import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
-import type { ContactRow } from '../queries.js';
-import { freshId, renderCrmShell } from './chrome.js';
+
+import { addContact } from '../mutations.js';
+import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
+import { freshId, renderCrmShell } from '../components/chrome.js';
 
 // Contact book (route `/contacts`). Reads the `contactList` rowset and shows
 // each contact with their owner and rolling deal count (the `contacts.dealCount`
@@ -16,7 +20,7 @@ import { freshId, renderCrmShell } from './chrome.js';
 // NOT in this rowset query (they would leak placeholder tempIds into derived
 // optimism — SPEC.md §10.5); they surface on the deal-detail page instead.
 
-export const CONTACT_LIST_TARGET = 'crm-contact-list';
+export const CONTACT_LIST_TARGET = 'contacts-region';
 
 export interface ContactsPageData {
   contacts: ContactRow[];
@@ -53,57 +57,61 @@ function renderContactCard(contact: ContactRow): string {
 }
 
 // The interactive region, rendered both inside the full page and as the
-// addContact / createDeal fragment payload (target = CONTACT_LIST_TARGET).
-export function renderContactsRegion({ contacts }: ContactsPageData): string {
-  // SPEC.md §6.3: a no-JS "add contact" form. POSTs to the addContact mutation;
-  // the fragment re-renders this whole region so the new contact appears and the
-  // composer resets (with a fresh id). The text primary key is minted at render
-  // time so each submission is unique; ownerId is the demo session user.
-  const composer = Card.definition.render({
-    children: (
-      <form method="post" action="/_m/addContact" enhance data-mutation="addContact">
-        <input type="hidden" name="id" value={freshId('c')} />
-        <input type="hidden" name="ownerId" value="u1" />
-        <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
-          <input
-            name="name"
-            required
-            placeholder="Full name"
-            class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-          <input
-            name="email"
-            required
-            type="email"
-            placeholder="name@example.com"
-            class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-          {Button.definition.render({
-            variant: 'primary',
-            type: 'submit',
-            children: 'Add contact',
-          })}
+// addContact / createDeal fragment payload. SPEC.md §4.8: the query-backed
+// component root derives its fragment target in the generated module.
+export const ContactsRegion = component({
+  queries: { contactList: contactListQuery },
+  render: ({ contactList }: { contactList: ContactListResult }) => {
+    const contacts = contactList.items;
+
+    return (
+      <div class="space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Contacts</h1>
+          <p class="mt-1 text-sm text-slate-600">{contacts.length} people in the book.</p>
         </div>
-      </form>
-    ),
-  });
 
-  return (
-    <div class="space-y-6" kovo-fragment-target={CONTACT_LIST_TARGET}>
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight">Contacts</h1>
-        <p class="mt-1 text-sm text-slate-600">{contacts.length} people in the book.</p>
+        {/* SPEC.md §6.3: a no-JS "add contact" form. POSTs to the addContact
+          mutation; the fragment re-renders this whole region so the new contact
+          appears and the composer resets (with a fresh id). The text primary key
+          is minted at render time so each submission is unique; ownerId is the
+          demo session user. */}
+        <form
+          {...mutationFormAttributes(addContact)}
+          class="rounded-lg border border-slate-200 bg-white p-4"
+        >
+          <input type="hidden" name="id" value={freshId('c')} />
+          <input type="hidden" name="ownerId" value="u1" />
+          <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
+            <input
+              name="name"
+              required
+              placeholder="Full name"
+              class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="email"
+              required
+              type="email"
+              placeholder="name@example.com"
+              class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            {Button.definition.render({ children: 'Add contact', type: 'submit', variant: 'primary' })}
+          </div>
+        </form>
+
+        <ul class="grid gap-3 sm:grid-cols-2">
+          {contacts.map((contact) => (
+            <li>{renderContactCard(contact)}</li>
+          ))}
+        </ul>
       </div>
+    );
+  },
+});
 
-      {composer}
-
-      <ul class="grid gap-3 sm:grid-cols-2">
-        {contacts.map((contact) => (
-          <li>{renderContactCard(contact)}</li>
-        ))}
-      </ul>
-    </div>
-  );
+export function renderContactsRegion({ contacts }: ContactsPageData): string {
+  return ContactsRegion.definition.render({ contactList: { items: contacts } });
 }
 
 export function renderContactsPage(data: ContactsPageData): string {

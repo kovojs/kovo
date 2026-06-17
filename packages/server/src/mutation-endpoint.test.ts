@@ -100,6 +100,7 @@ describe('server mutation endpoint routing', () => {
         fragmentRenderers: [],
         headers: {
           'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'product-card:p1=product:p1',
         },
         rawInput: { productId: 'p1' },
         redirectTo: '/products/p1',

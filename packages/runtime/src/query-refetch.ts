@@ -1,6 +1,10 @@
 import { definedProps } from './defined-props.js';
 import { reportRuntimeError } from './error-policy.js';
-import { applyQueryChunksToRuntime, type QueryApplyInterposition } from './query-apply.js';
+import {
+  applyQueryChunksToRuntime,
+  type OnDeltaMiss,
+  type QueryApplyInterposition,
+} from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 import { queryWireKey } from './query-store.js';
@@ -129,4 +133,41 @@ export async function refetchQueries(
     }))
     .filter((body) => body.decodedQueryCount === 0 || body.queries.length > 0)
     .map(({ decodedQueryCount: _decodedQueryCount, ...body }) => body);
+}
+
+/** @internal */
+export interface CreateDeltaMissRefetcherOptions extends QueryRefetchOptions {
+  applyQuery?: QueryApplyInterposition;
+  queryPlans?: CompiledQueryUpdatePlans;
+  queryStore: QueryStore;
+  root?: unknown;
+}
+
+/**
+ * Create a default `onDeltaMiss` callback that GETs `/_q/<wireKey>`, parses the
+ * full `<kovo-query>` body, and applies it to the store (SPEC §9.1.1 refetch-full
+ * path). The returned callback is fire-and-forget (async); errors are routed to
+ * `options.onError`. Injectable via `options.fetch` for tests.
+ *
+ * @internal
+ */
+export function createDeltaMissRefetcher(options: CreateDeltaMissRefetcherOptions): OnDeltaMiss {
+  // SPEC §9.1.1: on a delta miss, refetch the full value over /_q/<wireKey>.
+  // Debounce rapid repeated misses for the same query key so one response can
+  // serve multiple quick triggers during a single microtask drain.
+  const pending = new Map<string, true>();
+
+  return (name: string, key: string | undefined): void => {
+    const wireKey = queryWireKey(name, key);
+    if (pending.has(wireKey)) return;
+    pending.set(wireKey, true);
+
+    void refetchQueries({
+      ...options,
+      queries: [wireKey],
+      queryStore: options.queryStore,
+    }).finally(() => {
+      pending.delete(wireKey);
+    });
+  };
 }

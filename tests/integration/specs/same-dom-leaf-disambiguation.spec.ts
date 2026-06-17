@@ -89,7 +89,7 @@ export const Root = component({
     'rgb(255, 165, 0)',
   );
 
-  expect(await page.locator('main').evaluate((element) => element.outerHTML)).toMatchSnapshot(
-    'same-dom-leaf-disambiguation.dom.html',
+  expect(await page.locator('main').evaluate((element) => element.outerHTML)).toBe(
+    '<main><root kovo-c="components/accordion/root"><span class="label">Accordion</span></root><root kovo-c="components/tabs/root"><span class="label">Tabs</span></root></main>',
   );
 });

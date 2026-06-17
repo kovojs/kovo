@@ -5,7 +5,7 @@ export const record = mutation('methods/record', {
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
-    await request.db.exec('insert into method_events (kind) values (\'mutation\')');
+    await request.db.exec("insert into method_events (kind) values ('mutation')");
     return {};
   },
 });

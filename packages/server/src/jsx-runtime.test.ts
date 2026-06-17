@@ -20,6 +20,23 @@ describe('server jsx runtime', () => {
     );
   });
 
+  it('lowers typed mutation form values for direct server JSX forms', () => {
+    // SPEC.md §6.3: server-rendered templates can bind the importable mutation
+    // value instead of hard-coding the `/_m/*` endpoint string.
+    const addToCart = { key: 'cart/add' } as const;
+
+    expect(
+      jsx('form', {
+        enhance: true,
+        mutation: addToCart,
+        class: 'add',
+        children: '',
+      }),
+    ).toBe(
+      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" class="add"></form>',
+    );
+  });
+
   it('escapes attribute values', () => {
     expect(jsx('input', { value: 'a"b<c&d' })).toBe('<input value="a&quot;b&lt;c&amp;d">');
   });

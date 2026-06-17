@@ -22,8 +22,10 @@ import {
   applyFetchedEnhancedMutationResponseToRuntime,
   type EnhancedMutationAppliedResult,
 } from './mutation-apply.js';
+import { readPageBuildToken } from './build-token.js';
+import { createDeltaMissRefetcher, type QueryRefetchFetch } from './query-refetch.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
-import type { QueryApplyInterposition } from './query-apply.js';
+import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
@@ -141,12 +143,23 @@ function formDataForSubmit(form: EnhancedFormElementLike, event: DelegatedEvent)
 export interface EnhancedMutationSubmitOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
+  /**
+   * The page-level build token (SPEC §9.1.1). Defaults to `readPageBuildToken()`
+   * (`<meta name="kovo-build">`) when omitted; deltas apply only when it matches
+   * the response's `Kovo-Build` token.
+   */
+  expectedBuildToken?: string;
   fetch: EnhancedMutationFetch;
   form: EnhancedFormLike;
   formData: unknown;
   idem?: string;
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
+  /**
+   * Refetch-full handler for delta chunks with a missing/stale base (SPEC §9.1.1).
+   * Defaults to a `/_q/<wireKey>` refetcher over the submit `fetch` when omitted.
+   */
+  onDeltaMiss?: OnDeltaMiss;
   /**
    * Reports mutation submit/apply failures. Direct submit callers still receive
    * the thrown error; dispatchEnhancedFormSubmit decides whether a form-layer
@@ -169,13 +182,47 @@ export async function submitEnhancedMutation(
 
   try {
     const fetched = await fetchEnhancedMutation(options);
-    return applyFetchedEnhancedMutationResponseToRuntime(options, fetched);
+    // SPEC §9.1.1: default the build token (from the page meta) and the
+    // refetch-full handler so the production submit path validates delta bases
+    // and recovers on a miss/skew. Both stay injectable for tests.
+    const expectedBuildToken = options.expectedBuildToken ?? readPageBuildToken();
+    const onDeltaMiss = options.onDeltaMiss ?? defaultDeltaMissRefetcher(options);
+    return applyFetchedEnhancedMutationResponseToRuntime(
+      {
+        ...options,
+        ...definedProps({ expectedBuildToken, onDeltaMiss }),
+      },
+      fetched,
+    );
   } catch (error) {
     reportRuntimeError(options.onError, error);
     throw error;
   } finally {
     stampEnhancedMutationPending(options, false);
   }
+}
+
+function defaultDeltaMissRefetcher(options: EnhancedMutationSubmitOptions): OnDeltaMiss {
+  // SPEC §9.1.1: reuse the submit `fetch` for the /_q/<wireKey> GET so a stubbed
+  // fetch in tests serves the refetch too, and production shares one transport.
+  const refetchFetch: QueryRefetchFetch = (url, init) =>
+    options.fetch(url, {
+      body: null,
+      headers: init.headers,
+      keepalive: false,
+      method: init.method,
+    });
+
+  return createDeltaMissRefetcher({
+    fetch: refetchFetch,
+    queryStore: options.store,
+    ...definedProps({
+      applyQuery: options.applyQuery,
+      onError: options.onError,
+      queryPlans: options.queryPlans,
+      root: options.root,
+    }),
+  });
 }
 
 function stampEnhancedMutationPending(

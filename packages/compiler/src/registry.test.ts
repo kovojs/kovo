@@ -12,7 +12,6 @@ const cartBadgeSource = `
 import { component } from '@kovojs/core';
 
 export const CartBadge = component({
-  fragmentTarget: true,
   queries: { cart: {} },
   render: () => (
     <button onClick={() => removeItem(state, item.id)}>
@@ -221,6 +220,7 @@ export const ProductGrid = component({
       },
       {
         domName: 'product-grid',
+        fragments: ['components/products/product-grid/product-grid'],
         name: 'components/products/product-grid/product-grid',
         queries: ['productGrid'],
       },
@@ -232,7 +232,10 @@ export const ProductGrid = component({
         'components/products/product-grid/product-grid',
       ],
       domainKeys: ['cart', 'product'],
-      fragmentTargets: ['components/cart/cart-badge/cart-badge'],
+      fragmentTargets: [
+        'components/cart/cart-badge/cart-badge',
+        'components/products/product-grid/product-grid',
+      ],
       invalidations: {
         'cart/add': ['cart'],
       },

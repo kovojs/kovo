@@ -28,6 +28,7 @@ const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
 const componentNames = ['cart-badge', 'order-history', 'product-grid'];
+const registryFacts = { mutations: { 'cart/add': 'typeof addToCart' } };
 
 for (const name of componentNames) {
   const sourcePath = resolve(commerceRoot, `src/components/${name}.tsx`);
@@ -38,11 +39,11 @@ for (const name of componentNames) {
   // SPEC.md section 4.8: stamps are derived, never required in sugar.
   assert.doesNotMatch(
     source,
-    /(?:data-bind|kovo-deps|kovo-c|kovo-state|data-p-[\w-]+)=/,
+    /(?:data-bind|kovo-deps|kovo-c|kovo-fragment-target|kovo-state|data-p-[\w-]+)=/,
     `${fileName} hand-writes stamps`,
   );
 
-  const result = compileComponentModule({ fileName, source });
+  const result = compileComponentModule({ fileName, registryFacts, source });
 
   assert.deepEqual(
     result.diagnostics,

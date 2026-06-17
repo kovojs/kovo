@@ -19,7 +19,7 @@ export function deriveComponentNames(
 }
 
 export function componentRegistryNamespace(fileName: string): string {
-  const normalized = fileName.replaceAll('\\', '/').replace(/\.[^.\/]+$/, '');
+  const normalized = fileName.replaceAll('\\', '/').replace(/\.[^./]+$/, '');
   const parts = normalized.split('/').filter(Boolean);
   const fixtureRoot = fixtureRootIndex(parts);
   const srcRoot = nearestSrcRootIndex(parts);

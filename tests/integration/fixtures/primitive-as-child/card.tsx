@@ -1,6 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 
+declare const Primitive: {
+  Trigger: (props: Record<string, unknown>) => string;
+};
+
 export const PrimitiveAsChildCard = component({
   render: () => (
     <section data-case="primitive-as-child">

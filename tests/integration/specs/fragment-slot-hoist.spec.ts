@@ -17,9 +17,7 @@ test('rerenders hoisted fragment-target children after mutation', async ({ page,
   const response = await responsePromise;
   const body = await response.text();
 
-  expect(body).toContain(
-    '<kovo-query name="slotBalance">{"accountId":"acct-1","balance":17}</kovo-query>',
-  );
+  expect(body).toContain('<kovo-fragment target="balance-shell">');
   expect(body).toContain('Hoisted slot for acct-1: <output>17</output>');
   await expect(page.locator('[data-hoisted-slot="balance"]')).toHaveText(
     'Hoisted slot for acct-1: 17',

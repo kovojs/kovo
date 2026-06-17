@@ -12,7 +12,11 @@ test('deferred fragments reuse page stylesheet metadata without duplicate links'
   await expect(
     page.locator('link[rel="stylesheet"][href="/assets/deferred-review.css"]'),
   ).toHaveCount(0);
-  await page.waitForFunction(() => typeof window.applyDeferredCssStream === 'function');
+  await page.waitForFunction(
+    () =>
+      typeof (window as typeof window & { applyDeferredCssStream?: (body: string) => unknown })
+        .applyDeferredCssStream === 'function',
+  );
 
   const stream = await request.get('/deferred-wire');
   expect(stream.status()).toBe(200);

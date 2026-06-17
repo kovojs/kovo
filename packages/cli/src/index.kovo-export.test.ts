@@ -6,6 +6,31 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { mainAsync } from './index.js';
 
+function appModuleSource(options: {
+  readonly exportKind?: 'default' | 'named';
+  readonly prelude?: readonly string[];
+  readonly route: string;
+}): string {
+  return [
+    ...(options.prelude ?? []),
+    options.exportKind === 'named' ? 'export const app = {' : 'export default {',
+    '  clientModules: {',
+    "    buildToken() { return 'test'; },",
+    "    put() { throw new Error('unused'); },",
+    "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
+    '  },',
+    '  diagnostics: [],',
+    '  document: {},',
+    '  endpoints: [],',
+    '  errorShells: {},',
+    '  mutations: [],',
+    '  queries: [],',
+    `  routes: [${options.route}],`,
+    '};',
+    '',
+  ].join('\n');
+}
+
 describe('kovo export', () => {
   it('loads an app module and writes static HTML artifacts through the server exporter', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
@@ -17,22 +42,9 @@ describe('kovo export', () => {
     try {
       writeFileSync(
         appPath,
-        [
-          'export default {',
-          '  clientModules: {',
-          "    put() { throw new Error('unused'); },",
-          "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
-          '  },',
-          '  diagnostics: [],',
-          '  document: {},',
-          '  endpoints: [],',
-          '  errorShells: {},',
-          '  mutations: [],',
-          '  queries: [],',
-          "  routes: [{ path: '/', page: () => '<main data-export-cli>CLI export</main>' }],",
-          '};',
-          '',
-        ].join('\n'),
+        appModuleSource({
+          route: "{ path: '/', page: () => '<main data-export-cli>CLI export</main>' }",
+        }),
         'utf8',
       );
 
@@ -64,22 +76,9 @@ describe('kovo export', () => {
     try {
       writeFileSync(
         appPath,
-        [
-          'export default {',
-          '  clientModules: {',
-          "    put() { throw new Error('unused'); },",
-          "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
-          '  },',
-          '  diagnostics: [],',
-          '  document: {},',
-          '  endpoints: [],',
-          '  errorShells: {},',
-          '  mutations: [],',
-          '  queries: [],',
-          "  routes: [{ path: '/docs/intro', page: () => '<main data-pretty-export>Intro</main>' }],",
-          '};',
-          '',
-        ].join('\n'),
+        appModuleSource({
+          route: "{ path: '/docs/intro', page: () => '<main data-pretty-export>Intro</main>' }",
+        }),
         'utf8',
       );
 
@@ -107,22 +106,10 @@ describe('kovo export', () => {
     try {
       writeFileSync(
         appPath,
-        [
-          'export const app = {',
-          '  clientModules: {',
-          "    put() { throw new Error('unused'); },",
-          "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
-          '  },',
-          '  diagnostics: [],',
-          '  document: {},',
-          '  endpoints: [],',
-          '  errorShells: {},',
-          '  mutations: [],',
-          '  queries: [],',
-          "  routes: [{ path: '/products/:id', page: () => '<main>Product</main>' }],",
-          '};',
-          '',
-        ].join('\n'),
+        appModuleSource({
+          exportKind: 'named',
+          route: "{ path: '/products/:id', page: () => '<main>Product</main>' }",
+        }),
         'utf8',
       );
 
@@ -149,29 +136,19 @@ describe('kovo export', () => {
     try {
       writeFileSync(
         appPath,
-        [
-          'export const diagnostics = [{',
-          "  code: 'KV201',",
-          "  fileName: 'src/cart.tsx',",
-          "  message: 'Closure captures unserializable value.',",
-          "  help: 'Fixes: move the value into component/query state via ctx.',",
-          '  start: { line: 4, column: 12 },',
-          '}];',
-          'export const app = {',
-          '  clientModules: {',
-          "    put() { throw new Error('unused'); },",
-          "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
-          '  },',
-          '  diagnostics: [],',
-          '  document: {},',
-          '  endpoints: [],',
-          '  errorShells: {},',
-          '  mutations: [],',
-          '  queries: [],',
-          "  routes: [{ path: '/', page: () => '<main>Home</main>' }],",
-          '};',
-          '',
-        ].join('\n'),
+        appModuleSource({
+          exportKind: 'named',
+          prelude: [
+            'export const diagnostics = [{',
+            "  code: 'KV201',",
+            "  fileName: 'src/cart.tsx',",
+            "  message: 'Closure captures unserializable value.',",
+            "  help: 'Fixes: move the value into component/query state via ctx.',",
+            '  start: { line: 4, column: 12 },',
+            '}];',
+          ],
+          route: "{ path: '/', page: () => '<main>Home</main>' }",
+        }),
         'utf8',
       );
 

@@ -291,6 +291,7 @@ export const DisclosureDemo = component({
       source: `
 export const MixedState = component({
   queries: { cart: {} },
+  disableServerRefresh: true,
   state: () => ({ open: false }),
   render: (_queries, state) => (
     <mixed-state>
@@ -308,7 +309,7 @@ export const MixedState = component({
         detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
         position: 'expression',
         query: 'cart.count',
-        sourceSpan: { length: 50, start: 238 },
+        sourceSpan: { length: 50, start: 268 },
         status: 'UNHANDLED',
       },
       {
@@ -317,7 +318,7 @@ export const MixedState = component({
         position: 'expression',
         query: 'state.open',
         source: 'state',
-        sourceSpan: { length: 30, start: 172 },
+        sourceSpan: { length: 30, start: 202 },
         status: 'UNHANDLED',
       },
       {
@@ -326,7 +327,7 @@ export const MixedState = component({
         position: 'expression',
         query: 'state.open',
         source: 'state',
-        sourceSpan: { length: 50, start: 238 },
+        sourceSpan: { length: 50, start: 268 },
         status: 'UNHANDLED',
       },
     ]);
@@ -339,7 +340,7 @@ export const MixedState = component({
         message:
           'Query/state-dependent DOM position has no update status. MixedState cart.count expression',
         severity: 'warn',
-        start: { column: 22, line: 8 },
+        start: { column: 22, line: 9 },
       },
       {
         code: 'KV311',
@@ -349,7 +350,7 @@ export const MixedState = component({
         message:
           'Query/state-dependent DOM position has no update status. MixedState state.open expression',
         severity: 'warn',
-        start: { column: 24, line: 7 },
+        start: { column: 24, line: 8 },
       },
       {
         code: 'KV311',
@@ -359,7 +360,7 @@ export const MixedState = component({
         message:
           'Query/state-dependent DOM position has no update status. MixedState state.open expression',
         severity: 'warn',
-        start: { column: 22, line: 8 },
+        start: { column: 22, line: 9 },
       },
     ]);
   });

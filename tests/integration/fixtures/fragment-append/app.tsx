@@ -4,6 +4,7 @@ import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
 
 interface FeedRow {
+  [key: string]: unknown;
   id: number;
   title: string;
 }

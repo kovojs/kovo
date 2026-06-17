@@ -8,23 +8,23 @@ const axePath = require.resolve('axe-core/axe.min.js');
 
 let axeSource: Promise<string> | undefined;
 
-export async function expectAxeClean(
-  page: import('@kovojs/test/integration').Page,
-): Promise<void> {
+export async function expectAxeClean(page: import('@kovojs/test/integration').Page): Promise<void> {
   axeSource ??= readFile(axePath, 'utf8');
   await page.addScriptTag({ content: await axeSource });
   const violations = await page.evaluate(async () => {
-    const axe = (window as unknown as {
-      axe: {
-        run: (context: Document) => Promise<{
-          violations: Array<{
-            id: string;
-            impact: string | null;
-            nodes: Array<{ failureSummary?: string; target: string[] }>;
+    const axe = (
+      window as unknown as {
+        axe: {
+          run: (context: Document) => Promise<{
+            violations: Array<{
+              id: string;
+              impact: string | null;
+              nodes: Array<{ failureSummary?: string; target: string[] }>;
+            }>;
           }>;
-        }>;
-      };
-    }).axe;
+        };
+      }
+    ).axe;
     const result = await axe.run(document);
     return result.violations.map((violation) => ({
       id: violation.id,

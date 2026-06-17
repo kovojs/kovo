@@ -160,8 +160,12 @@ export const contextMenuStyles = style.create(
 );
 
 export const contextMenuClasses = [style.attrs(contextMenuStyles.root).class ?? ''] as const;
-export const contextMenuTriggerClasses = [style.attrs(contextMenuStyles.trigger).class ?? ''] as const;
-export const contextMenuContentClasses = [style.attrs(contextMenuStyles.content).class ?? ''] as const;
+export const contextMenuTriggerClasses = [
+  style.attrs(contextMenuStyles.trigger).class ?? '',
+] as const;
+export const contextMenuContentClasses = [
+  style.attrs(contextMenuStyles.content).class ?? '',
+] as const;
 export const contextMenuItemClasses = [style.attrs(contextMenuStyles.item).class ?? ''] as const;
 export const contextMenuGroupClasses = [style.attrs(contextMenuStyles.group).class ?? ''] as const;
 export const contextMenuSeparatorClasses = [
@@ -328,12 +332,6 @@ export const ContextMenuSeparator = component({
     const attrs = contextMenuSeparatorAttributes(props.id === undefined ? {} : { id: props.id });
     const styleAttrs = style.attrs(contextMenuStyles.separator, props.styles?.separator);
 
-    return (
-      <div
-        {...styleAttrs}
-        id={attrs.id}
-        role={attrs.role}
-      />
-    );
+    return <div {...styleAttrs} id={attrs.id} role={attrs.role} />;
   },
 });

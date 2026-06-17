@@ -5,6 +5,7 @@ import { csrfField } from '@kovojs/server';
 import { formatPrice, type ShopProduct } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
 import {
+  addToCart,
   shopCsrf,
   type AddToCartFailure,
   type AddToCartFailureState,
@@ -15,8 +16,7 @@ import {
 // posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS
 // fallback IS the output; `enhance` upgrades it to the section 9.1 fragment
 // wire. Failure state and the per-request CSRF token are request context,
-// not query data, so they arrive as an explicit second render argument (the
-// examples/commerce pattern).
+// not query data, so they arrive as an explicit second render argument.
 
 export interface ProductListRenderContext {
   failure?: AddToCartFailureState | undefined;
@@ -24,7 +24,6 @@ export interface ProductListRenderContext {
 }
 
 export const ProductList = component({
-  fragmentTarget: true,
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
     <ul class="products">
@@ -44,23 +43,17 @@ export const ProductList = component({
 
 // snippet:add-to-cart-form
 // SPEC.md section 6.3: the no-JS add-to-cart form posts to the mutation
-// endpoint; `enhance` upgrades it to the fragment wire. Rendered standalone
-// as the failure-rerender fragment (kovo-fragment-target). The kovo-csrf token
-// is stamped into the form whenever the request carries a session
-// (SPEC.md section 6.6).
+// endpoint; `enhance` upgrades it to the fragment wire. Authored `key` gives
+// repeated forms stable identity; the compiler derives the submitted-form
+// target. The kovo-csrf token is stamped into the form whenever the request
+// carries a session (SPEC.md section 6.6).
 export function renderAddToCartForm(
   item: Pick<ShopProduct, 'id' | 'stock'>,
   failure?: AddToCartFailure,
   request?: ShopRequest,
 ): string {
   return (
-    <form
-      method="post"
-      action="/_m/cart/add"
-      enhance
-      data-mutation="cart/add"
-      kovo-fragment-target={productFormTarget(item.id)}
-    >
+    <form enhance mutation={addToCart} key={item.id}>
       {request?.session?.id ? csrfField(request, shopCsrf) : ''}
       <input type="hidden" name="productId" value={item.id} />
       <label>
@@ -92,7 +85,3 @@ export function renderAddToCartError(failure: AddToCartFailure): string {
   );
 }
 // /snippet
-
-export function productFormTarget(productId: string): string {
-  return `product-form:${productId}`;
-}

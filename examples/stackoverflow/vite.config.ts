@@ -17,9 +17,7 @@ export const soViteConfig = defineConfig({
   // KOVO_DEMO_MULTITENANT (scripts/demo-serve.mjs) mounts its own per-session
   // request dispatch, so drop the singleton app-shell dev plugin that would
   // otherwise claim app routes against one shared PGlite (SPEC.md §9.5).
-  plugins: [
-    ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [soSharedAppShellDevPlugin()]),
-  ],
+  plugins: process.env.KOVO_DEMO_MULTITENANT ? [] : [soSharedAppShellDevPlugin()],
   // PGlite (WASM) makes the build/dev/export paths slow; give the tests room.
   test: {
     hookTimeout: 60_000,

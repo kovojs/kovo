@@ -12,9 +12,7 @@ test('renders children and named slots in the initial server HTML', async ({ pag
   expect(response?.ok()).toBeTruthy();
 
   await expect(page.getByRole('heading', { level: 1, name: 'Server composition' })).toBeVisible();
-  await expect(page.locator('[data-slot="body"]')).toHaveText(
-    'Children rendered on the server',
-  );
+  await expect(page.locator('[data-slot="body"]')).toHaveText('Children rendered on the server');
   await expect(page.locator('[data-slot="footer"]')).toHaveText(
     'Named slot rendered on the server',
   );

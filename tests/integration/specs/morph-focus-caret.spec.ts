@@ -16,8 +16,7 @@ test('preserves focus and caret while reconciling server text', async ({ page, k
 
   await Promise.all([
     page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/_m/profile/save-draft') && response.status() === 200,
+      (response) => response.url().endsWith('/_m/profile/save-draft') && response.status() === 200,
     ),
     input.press('Enter'),
   ]);

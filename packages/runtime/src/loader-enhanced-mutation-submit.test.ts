@@ -158,7 +158,10 @@ describe('loader enhanced mutation submits', () => {
       });
 
       expect(constructedArgs).toEqual([[form, submitter]]);
-      expect(fetch).toHaveBeenCalledWith('/_m/cart/add', expect.objectContaining({ body: formData }));
+      expect(fetch).toHaveBeenCalledWith(
+        '/_m/cart/add',
+        expect.objectContaining({ body: formData }),
+      );
     } finally {
       globalThis.FormData = originalFormData;
     }

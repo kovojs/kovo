@@ -4,18 +4,18 @@ import { component } from '@kovojs/core';
 
 import { cartQuery, type CartResult } from '../queries.js';
 
-// Tutorial step 06 (chapter 6), unchanged from step 05: the badge is a fragment target the
-// server re-renders standalone inside mutation responses (SPEC.md section
-// 9.1).
+// Tutorial step 06 (chapter 6), unchanged from step 05: declared queries make
+// the badge an inferred server-refreshable fragment target (SPEC.md sections
+// 4.1 and 9.1).
 
 // snippet:cart-badge
 export const CartBadge = component({
-  fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart }: { cart: CartResult }) => (
-    <cart-badge kovo-deps="cart">
+    <cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge">
       Cart: <span data-bind="cart.count">{cart.count}</span>
     </cart-badge>
   ),
 });
+CartBadge.name = "components/cart-badge/cart-badge";
 // /snippet

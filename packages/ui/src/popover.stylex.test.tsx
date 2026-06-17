@@ -29,7 +29,8 @@ describe('@kovojs/ui Popover StyleX slots', () => {
             children: 'Filters',
             contentId: 'filters',
             open: true,
-          }) + PopoverContent.definition.render({ children: 'Menu', contentId: 'filters', open: true }),
+          }) +
+          PopoverContent.definition.render({ children: 'Menu', contentId: 'filters', open: true }),
         id: 'filters-popover',
         open: true,
       }),

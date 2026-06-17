@@ -8,9 +8,10 @@ import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-sh
 import {
   createApp,
   createRequestHandler,
+  type KovoApp,
   type RequestHandler,
 } from '@kovojs/server/app-shell/core';
-import { toNodeHandler } from '@kovojs/server/app-shell/node';
+import { toNodeHandler, type NodeRequestHandler } from '@kovojs/server/app-shell/node';
 import { eq } from 'drizzle-orm';
 
 import {
@@ -30,10 +31,9 @@ import {
   orderCsvRoute,
   orderHistoryQuery,
   paymentWebhook,
-  productFormTarget,
   productGridQuery,
-  renderAddToCartError,
-  renderAddToCartForm,
+  renderAddToCartMutationFailureError,
+  renderAddToCartMutationFailureForm,
   renderCartPage,
   renderCartPageBody,
   renderCommerceLoginForm,
@@ -52,6 +52,13 @@ export type CommerceShellRequest = Request & CommerceAuthRequest;
 export interface CommerceAppShellOptions {
   db?: CommerceDb;
   onError?: ServerErrorHandler;
+}
+
+export interface CommerceAppShell {
+  app: KovoApp<CommerceSession>;
+  db: CommerceDb;
+  nodeHandler: NodeRequestHandler;
+  requestHandler: RequestHandler;
 }
 
 export interface CommerceStaticExportShellOptions {
@@ -176,9 +183,9 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
   return { app, db };
 }
 
-export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
+export function createCommerceAppShell(options: CommerceAppShellOptions = {}): CommerceAppShell {
   const db = options.db ?? createCommerceDb();
-  const app = createApp<CommerceSession>({
+  const app: KovoApp<CommerceSession> = createApp<CommerceSession>({
     clientModules,
     document: { lang: 'en-US' },
     endpoints: [paymentWebhook],
@@ -212,7 +219,6 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
       const commerceRequest = request as CommerceShellRequest;
       const productId = productIdFromRawInput(rawInput);
       return {
-        failureTarget: productId ? productFormTarget(productId) : 'product-form',
         // No per-fragment `stylesheets` (Phase R1 learning): the inline loader's
         // morph takes the fragment's first child as the new region root, and a
         // leading `<link rel=stylesheet>` would REPLACE the region with a bare
@@ -311,7 +317,7 @@ function attachCommerceRequestContext(request: Request, db: CommerceDb): Commerc
 async function renderAddToCartFailureFragment(
   db: CommerceDb,
   rawInput: unknown,
-  failure: Parameters<typeof renderAddToCartError>[0],
+  failure: Parameters<typeof renderAddToCartMutationFailureError>[0],
   request: CommerceRequest,
 ): Promise<string> {
   const productId = productIdFromRawInput(rawInput);
@@ -319,8 +325,8 @@ async function renderAddToCartFailureFragment(
     ? (await db.select().from(products).where(eq(products.id, productId)).limit(1))[0]
     : undefined;
 
-  if (!product) return renderAddToCartError(failure);
-  return renderAddToCartForm(product, failure, request);
+  if (!product) return renderAddToCartMutationFailureError(failure);
+  return renderAddToCartMutationFailureForm(product, failure, request);
 }
 
 function productIdFromRawInput(rawInput: unknown): string | undefined {

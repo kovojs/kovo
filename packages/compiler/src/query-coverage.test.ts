@@ -320,19 +320,17 @@ export const CartBadge = component({
       },
       {
         componentName: 'CartBadge',
-        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        detail: 'inferred query-backed server refresh target',
         position: 'expression',
         query: 'cart.discount',
-        sourceSpan: { length: 13, start: 300 },
-        status: 'UNHANDLED',
+        status: 'fragment',
       },
       {
         componentName: 'CartBadge',
-        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        detail: 'inferred query-backed server refresh target',
         position: 'expression',
         query: 'product.name',
-        sourceSpan: { length: 12, start: 354 },
-        status: 'UNHANDLED',
+        status: 'fragment',
       },
     ]);
     expect(result.diagnostics).toMatchObject([
@@ -345,27 +343,8 @@ export const CartBadge = component({
         severity: 'lint',
         start: { column: 13, line: 6 },
       },
-      {
-        code: 'KV311',
-        fileName: 'cart-badge.tsx',
-        help: expect.stringContaining('SPEC §4.9'),
-        length: 13,
-        message:
-          'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
-        severity: 'warn',
-        start: { column: 26, line: 9 },
-      },
-      {
-        code: 'KV311',
-        fileName: 'cart-badge.tsx',
-        help: expect.stringContaining('SPEC §4.9'),
-        length: 12,
-        message:
-          'Query/state-dependent DOM position has no update status. CartBadge product.name expression',
-        severity: 'warn',
-        start: { column: 22, line: 10 },
-      },
     ]);
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
   });
 
   it('reports KV311 positions in author coordinates after inline derive prepends exports', () => {
@@ -374,6 +353,7 @@ export const CartBadge = component({
       source: `
 export const CartBadge = component({
   queries: { cart: {} },
+  disableServerRefresh: true,
   render: () => (
     <cart-badge>
       <button title={cart.count === 0 ? 'enabled checkout' : 'disabled checkout'}>Checkout</button>
@@ -394,7 +374,7 @@ export const CartBadge = component({
       message:
         'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
       severity: 'warn',
-      start: { column: 26, line: 9 },
+      start: { column: 26, line: 10 },
     });
   });
 
@@ -404,6 +384,7 @@ export const CartBadge = component({
       source: `
 export const CartBadge = component({
   queries: { cart: {} },
+  disableServerRefresh: true,
   render: () => (
     <cart-badge>
       <strong className={cart.count > 5 ? 'full' : 'empty'}>Cart</strong>
@@ -436,7 +417,6 @@ export const CartBadge = component({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
   queries: { cart: {} },
   render: () => (
     <cart-row className={cart.count > 5 ? 'full' : 'empty'}>Cart</cart-row>
@@ -447,7 +427,7 @@ export const CartRow = component({
 
     expect(result.updateCoverage).toContainEqual({
       componentName: 'CartRow',
-      detail: 'declared fragment target',
+      detail: 'inferred query-backed server refresh target',
       position: 'expression',
       query: 'cart.count',
       status: 'fragment',
@@ -455,12 +435,48 @@ export const CartRow = component({
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
   });
 
+  it('force-disables inferred server refresh targets with disableServerRefresh', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component({
+  queries: { cart: {} },
+  disableServerRefresh: true,
+  render: () => (
+    <cart-row className={cart.count > 5 ? 'full' : 'empty'}>Cart</cart-row>
+  ),
+});
+`,
+    });
+
+    expect(result.componentGraphFacts).toEqual([
+      {
+        domName: 'cart-row',
+        name: 'cart-row/cart-row',
+        queries: ['cart'],
+      },
+    ]);
+    expect(result.files[0]?.source).not.toContain('kovo-fragment-target=');
+    expect(result.updateCoverage).toContainEqual(
+      expect.objectContaining({
+        componentName: 'CartRow',
+        query: 'cart.count',
+        status: 'UNHANDLED',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV311',
+        help: expect.stringContaining('disableServerRefresh: true'),
+      }),
+    );
+  });
+
   it('does not classify fragment-target state expressions as fragment-covered', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
 export const CartRow = component({
-  fragmentTarget: true,
   state: () => ({ open: false }),
   render: (_queries, state) => (
     <cart-row className={state.open ? 'open' : 'closed'}>Cart</cart-row>
@@ -492,6 +508,7 @@ export const CartRow = component({
       source: `
 export const CartBadge = component({
   queries: { cart: {} },
+  disableServerRefresh: true,
   routes: { cart: '/cart' },
   render: () => (
     <cart-badge>
@@ -514,7 +531,7 @@ export const CartBadge = component({
       message:
         'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
       severity: 'warn',
-      start: { column: 26, line: 11 },
+      start: { column: 26, line: 12 },
     });
   });
 

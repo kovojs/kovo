@@ -50,9 +50,7 @@ describe('runtime output-context helpers', () => {
     expect(isBrowserTrustedHtml(browserTrustedHtml)).toBe(true);
     expect(isBrowserTrustedHtml({ toString: () => '<i>not branded</i>' })).toBe(false);
     expect(kovoTrustedHtmlContent(trustedHtml('<b>safe</b>'))).toBe('<b>safe</b>');
-    expect(kovoTrustedHtmlContent(trustedHtml(browserTrustedHtml))).toBe(
-      '<i>browser trusted</i>',
-    );
+    expect(kovoTrustedHtmlContent(trustedHtml(browserTrustedHtml))).toBe('<i>browser trusted</i>');
     expect(kovoTrustedHtmlContent(browserTrustedHtml)).toBe('<i>browser trusted</i>');
     expect(kovoTrustedHtmlContent('<img src=x onerror=alert(1)>')).toBe('');
     expect(kovoTrustedHtmlContent({ toString: () => '<i>not branded</i>' })).toBe('');

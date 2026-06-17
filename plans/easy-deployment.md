@@ -46,21 +46,21 @@ at request time — shaped by the selected preset for the chosen platform.
 ## Locked decisions (owner answers, 2026-06-16)
 
 - [x] **Edge ambition: Node-first, edge-ready later.** v1 targets = VPS/Node +
-  Vercel (Node serverless) + Cloudflare (Workers `nodejs_compat` or Containers).
-  True isolate-edge deferred.
+      Vercel (Node serverless) + Cloudflare (Workers `nodejs_compat` or Containers).
+      True isolate-edge deferred.
 - [x] **Preset model (Nitro-style), not separate packages.** The config keeps the
-  value ergonomics (`preset: vercel()`), but targets are **built into the engine,
-  `@kovojs/server`**, behind a build-time subpath — *not* shipped as `@kovojs/
-  adapter-*` packages. Selection is host **auto-detection** (`VERCEL` / `CF_PAGES`
-  env) with `kovo.config` / `KOVO_PRESET` as override. (Supersedes the earlier
-  "adapter packages" answer: same authoring ergonomics, Nitro's packaging —
-  presets are thin build-time descriptors, the heavy lifting is centralized, and
-  `@kovojs/server` already houses build-time-only code like static export behind
-  subpaths.)
+      value ergonomics (`preset: vercel()`), but targets are **built into the engine,
+      `@kovojs/server`**, behind a build-time subpath — _not_ shipped as `@kovojs/
+adapter-*` packages. Selection is host **auto-detection** (`VERCEL` / `CF_PAGES`
+      env) with `kovo.config` / `KOVO_PRESET` as override. (Supersedes the earlier
+      "adapter packages" answer: same authoring ergonomics, Nitro's packaging —
+      presets are thin build-time descriptors, the heavy lifting is centralized, and
+      `@kovojs/server` already houses build-time-only code like static export behind
+      subpaths.)
 - [x] **Deploy step: build artifacts, hand off to native tooling.** No CLI
-  wrapping of `vercel`/`wrangler`.
+      wrapping of `vercel`/`wrangler`.
 - [x] **DB scope: connection convention only.** `DATABASE_URL` env + per-target
-  driver-wiring docs; nothing else owned by Kovo.
+      driver-wiring docs; nothing else owned by Kovo.
 
 ## Current state — what exists vs. the gap
 
@@ -92,18 +92,18 @@ at request time — shaped by the selected preset for the chosen platform.
 **The gap (what this plan builds):**
 
 - [ ] **No self-contained production server.** Every "serve" path today is Vite
-  `middlewareMode` from source — the Docker image even keeps dev deps on purpose.
-  Evidence: `examples/commerce/scripts/serve.mjs` (`createViteServer`),
-  `Dockerfile` ("the runtime is Vite SSR … we do NOT prune to production deps").
+      `middlewareMode` from source — the Docker image even keeps dev deps on purpose.
+      Evidence: `examples/commerce/scripts/serve.mjs` (`createViteServer`),
+      `Dockerfile` ("the runtime is Vite SSR … we do NOT prune to production deps").
 - [ ] **No app-author build command.** `kovo` CLI has `add/explain/check/audit/
-  export/mcp` but no `build`. Evidence: `packages/cli/src/index.ts:123`.
+export/mcp` but no `build`. Evidence: `packages/cli/src/index.ts:123`.
 - [ ] **No preset interface and no presets.** Nothing reads `kovo.config`
-  `preset:` / detects the host / emits Vercel/Cloudflare/Node output. `kovo.config`
-  currently only carries `packagePrefixes` / `mergeClientModules` (`SPEC.md` §5.2,
-  §6.1.1).
+      `preset:` / detects the host / emits Vercel/Cloudflare/Node output. `kovo.config`
+      currently only carries `packagePrefixes` / `mergeClientModules` (`SPEC.md` §5.2,
+      §6.1.1).
 - [ ] **Server-module bundling for serverless is unaddressed.** Client asset
-  bundling is solved; bundling the *server* entry (app-shell + user server
-  modules + deps) into one deployable function/worker is not.
+      bundling is solved; bundling the _server_ entry (app-shell + user server
+      modules + deps) into one deployable function/worker is not.
 
 ---
 
@@ -133,7 +133,7 @@ app-author-facing build, plus a **server-bundle step** (esbuild/rollup via
 vite-plus) that turns `src/app-shell.ts` into `server/handler.mjs` with no Vite
 dependency.
 
-Design rule: the neutral build's `handler.mjs` is the *only* runtime contract.
+Design rule: the neutral build's `handler.mjs` is the _only_ runtime contract.
 Every preset is "wrap this `Request → Response` handler + place these static
 files." This keeps the per-platform code tiny and the portability guarantee honest.
 
@@ -141,7 +141,7 @@ files." This keeps the per-platform code tiny and the portability guarantee hone
 
 Following Nitro: presets are **thin build-time descriptors that live in the engine**
 (`@kovojs/server`, behind a build-time subpath such as `@kovojs/server/build`),
-*not* `@kovojs/adapter-*` packages. The same package already houses build-time-only
+_not_ `@kovojs/adapter-*` packages. The same package already houses build-time-only
 code (static export, the Vite build pipeline, the node adapter) behind subpaths the
 runtime handler never imports, so presets add no weight to the production bundle.
 There is **no `@kovojs/adapters` package and no `adapter-kit`** — shared types and
@@ -150,7 +150,7 @@ helpers fold into the same subpath.
 ```ts
 // @kovojs/server/build  (build-time only)
 export interface KovoPreset {
-  name: string;                       // 'node' | 'vercel' | 'cloudflare'
+  name: string; // 'node' | 'vercel' | 'cloudflare'
   /** Validate target constraints against the neutral build before emit. */
   inspect?(build: NeutralBuild): PresetDiagnostic[];
   /** Transform dist/.kovo into platform-native output. */
@@ -158,10 +158,10 @@ export interface KovoPreset {
 }
 
 export interface PresetContext {
-  outDir: string;                     // platform-conventional location
+  outDir: string; // platform-conventional location
   log: (msg: string) => void;
-  readNeutral: () => NeutralBuild;    // server bundle, client assets, manifests
-  declaredEnv: string[];              // always includes 'DATABASE_URL' if data plane present
+  readNeutral: () => NeutralBuild; // server bundle, client assets, manifests
+  declaredEnv: string[]; // always includes 'DATABASE_URL' if data plane present
 }
 ```
 
@@ -195,98 +195,104 @@ Design decisions to lock in code review:
 ### 3. The three v1 presets
 
 - [ ] **`node`** → `dist/server/` standalone: a Node entry that
-  `toNodeHandler(handler)` behind `node:http`, serves `client/assets` + `client/c`
-  with correct cache headers, honors `PORT`/`HOST`, plus a generated `Dockerfile`
-  (prod deps only — the key improvement over today's dev-dep image) and an
-  optional `systemd` unit. Covers VPS, Fly, Railway, Render.
+      `toNodeHandler(handler)` behind `node:http`, serves `client/assets` + `client/c`
+      with correct cache headers, honors `PORT`/`HOST`, plus a generated `Dockerfile`
+      (prod deps only — the key improvement over today's dev-dep image) and an
+      optional `systemd` unit. Covers VPS, Fly, Railway, Render.
 - [ ] **`vercel`** → Vercel **Build Output API v3** (`.vercel/output/`): a Node
-  serverless function wrapping `handler.mjs`, static assets as `output/static/*`
-  with immutable cache config, `config.json` routing. `vercel deploy --prebuilt`.
-  (`runtime: 'nodejs'` only in v1; `edge` reserved.)
+      serverless function wrapping `handler.mjs`, static assets as `output/static/*`
+      with immutable cache config, `config.json` routing. `vercel deploy --prebuilt`.
+      (`runtime: 'nodejs'` only in v1; `edge` reserved.)
 - [ ] **`cloudflare`** → a Worker entry (`export default { fetch }`) delegating to
-  `handler.mjs` under `compatibility_flags = ["nodejs_compat"]`, static assets via
-  Workers Assets/`[site]`, generated `wrangler.toml`. `inspect()` warns when the
-  data plane needs TCP (recommend Hyperdrive/Containers). `wrangler deploy`.
+      `handler.mjs` under `compatibility_flags = ["nodejs_compat"]`, static assets via
+      Workers Assets/`[site]`, generated `wrangler.toml`. `inspect()` warns when the
+      data plane needs TCP (recommend Hyperdrive/Containers). `wrangler deploy`.
 
 ### 4. Cross-cutting contracts
 
 - [ ] **Static-or-dynamic auto-detection.** `routes.json` carries each route's
-  export policy (already computed for static export, `SPEC.md` §9.5/KV229). If
-  *all* routes are L0/L1-exportable, the neutral build also emits a fully static
-  tree and presets prefer static output (Vercel static, CF Pages/Assets, plain
-  Nginx) — no server function needed. Mixed apps get both: static where provable,
-  the function for the rest.
+      export policy (already computed for static export, `SPEC.md` §9.5/KV229). If
+      _all_ routes are L0/L1-exportable, the neutral build also emits a fully static
+      tree and presets prefer static output (Vercel static, CF Pages/Assets, plain
+      Nginx) — no server function needed. Mixed apps get both: static where provable,
+      the function for the rest.
 - [ ] **Immutable `/c/` retention across deploys (`SPEC.md` §6.6).** Versioned
-  client-module URLs must survive deploys until referencing documents age out.
-  Each preset documents/implements "don't overwrite, accrete": e.g. the node preset
-  serves a retained `c/` dir; Vercel/CF rely on content-hash immutability +
-  guidance to not purge old versions. This is a real correctness constraint, not a
-  nicety — surfaced in preset docs and `inspect()` warnings.
+      client-module URLs must survive deploys until referencing documents age out.
+      Each preset documents/implements "don't overwrite, accrete": e.g. the node preset
+      serves a retained `c/` dir; Vercel/CF rely on content-hash immutability +
+      guidance to not purge old versions. This is a real correctness constraint, not a
+      nicety — surfaced in preset docs and `inspect()` warnings.
 - [ ] **Env & origin.** Convention: `PORT`, `HOST`, `NODE_ENV`, and `DATABASE_URL`
-  (only env Kovo names for the data plane). Origin/proto already handled via
-  `Host`/`x-forwarded-proto` in `node.ts`; presets set `origin` appropriately for
-  proxied platforms. Secrets beyond `DATABASE_URL` are pass-through env, undocumented
-  by Kovo per the locked DB decision.
+      (only env Kovo names for the data plane). Origin/proto already handled via
+      `Host`/`x-forwarded-proto` in `node.ts`; presets set `origin` appropriately for
+      proxied platforms. Secrets beyond `DATABASE_URL` are pass-through env, undocumented
+      by Kovo per the locked DB decision.
 - [ ] **Edge-readiness audit (deferred, tracked).** Catalogue every `node:`
-  import on the request path (`node:crypto` in `csrf.ts`/`csp.ts`, `node:stream`
-  in `node.ts`) so the Phase 5 isolate-edge work has a scoped worklist. The likely
-  mechanism is **`unenv`** (Nitro's approach: swap Node built-ins for
-  runtime-appropriate implementations at build time) rather than a hand WebCrypto
-  rewrite. Audit only in this plan; no refactor.
+      import on the request path (`node:crypto` in `csrf.ts`/`csp.ts`, `node:stream`
+      in `node.ts`) so the Phase 5 isolate-edge work has a scoped worklist. The likely
+      mechanism is **`unenv`** (Nitro's approach: swap Node built-ins for
+      runtime-appropriate implementations at build time) rather than a hand WebCrypto
+      rewrite. Audit only in this plan; no refactor.
 
 ---
 
 ## Phased checklist
 
 ### Phase 0 — Neutral build + `kovo build` skeleton
+
 - [ ] Promote `createKovoAppShellViteBuild*` from `@internal` to a supported
-  build entry; define `NeutralBuild` shape and write `dist/.kovo/` layout.
+      build entry; define `NeutralBuild` shape and write `dist/.kovo/` layout.
 - [ ] Add server-bundle step: `src/app-shell.ts` → `server/handler.mjs`
-  (`Request → Response`), no Vite at runtime. Verify a bundled handler serves a
-  route + a `/_m/` mutation + a `/c/` module with **zero dev deps installed**.
+      (`Request → Response`), no Vite at runtime. Verify a bundled handler serves a
+      route + a `/_m/` mutation + a `/c/` module with **zero dev deps installed**.
 - [ ] Wire `kovo build` into `packages/cli` (a thin wrapper, exactly like
-  `kovo export` over `exportStaticApp`); it reads `kovo.config.ts` + host env,
-  runs client build → server bundle → neutral emit → preset.
+      `kovo export` over `exportStaticApp`); it reads `kovo.config.ts` + host env,
+      runs client build → server bundle → neutral emit → preset.
 - [ ] Evidence target: a test that boots `server/handler.mjs` in a clean
-  `node_modules` (prod deps only) and asserts route/mutation/asset responses.
+      `node_modules` (prod deps only) and asserts route/mutation/asset responses.
 
 ### Phase 1 — Preset interface + `node` preset (in `@kovojs/server/build`)
+
 - [ ] `KovoPreset` / `PresetContext` types + the build-time subpath export on
-  `@kovojs/server`; preset **selection** (host auto-detect → `KOVO_PRESET` →
-  `kovo.config` `preset:`). No separate package.
+      `@kovojs/server`; preset **selection** (host auto-detect → `KOVO_PRESET` →
+      `kovo.config` `preset:`). No separate package.
 - [ ] `node` preset: standalone server + asset serving + cache headers + prod-only
-  `Dockerfile`. Replace the example/demo Vite-from-source serve story with this as
-  the recommended prod path (keep Vite serve for dev only).
+      `Dockerfile`. Replace the example/demo Vite-from-source serve story with this as
+      the recommended prod path (keep Vite serve for dev only).
 - [ ] Evidence: container builds with pruned prod deps; `curl` of a route, a
-  `/assets/*` (immutable cache header), and a `/_m/` mutation succeed.
+      `/assets/*` (immutable cache header), and a `/_m/` mutation succeed.
 
 ### Phase 2 — `vercel` preset
+
 - [ ] Emit `.vercel/output/` (Build Output API v3): Node function + static.
 - [ ] Auto-detect on `VERCEL` env; static-only apps emit pure static (no function).
 - [ ] Evidence: `vercel build`/`--prebuilt` dry-run validates the output dir;
-  golden-file test on `config.json` + function manifest.
+      golden-file test on `config.json` + function manifest.
 
 ### Phase 3 — `cloudflare` preset
+
 - [ ] Worker entry + `wrangler.toml` with `nodejs_compat`; Workers Assets for
-  static; `inspect()` TCP-DB warning + Containers/Hyperdrive guidance.
+      static; `inspect()` TCP-DB warning + Containers/Hyperdrive guidance.
 - [ ] Auto-detect on `CF_PAGES` env.
 - [ ] Evidence: `wrangler deploy --dry-run` validates; `inspect()` unit tests for
-  the banned-API and DB-driver diagnostics.
+      the banned-API and DB-driver diagnostics.
 
 ### Phase 4 — Templates, docs, examples
+
 - [ ] `create-kovo` template ships a `kovo.config.ts` with a default `node` preset
-  + commented Vercel/CF alternatives (and a note that those auto-detect); rewrite
-  `templates/docs/deployment.md` around `kovo build` + native deploy.
+  - commented Vercel/CF alternatives (and a note that those auto-detect); rewrite
+    `templates/docs/deployment.md` around `kovo build` + native deploy.
 - [ ] Port one example (commerce) to `kovo build` for its real prod serve; keep
-  the per-session demo path (`SPEC.md` §9.5) as a separate concern.
+      the per-session demo path (`SPEC.md` §9.5) as a separate concern.
 - [ ] Update root `Dockerfile`/`cloudbuild.yaml` notes to point at preset output
-  where appropriate (or scope them explicitly to the multi-tenant demo).
+      where appropriate (or scope them explicitly to the multi-tenant demo).
 
 ### Phase 5 (deferred, not built here) — Isolate-edge
+
 - [ ] `unenv`-based Node-builtin abstraction (`csrf.ts`/`csp.ts`/`node.ts`) instead
-  of a hand WebCrypto rewrite; remove hard `node:` from the request path.
+      of a hand WebCrypto rewrite; remove hard `node:` from the request path.
 - [ ] HTTP DB driver abstraction (Hyperdrive/Neon/D1); `vercel` preset `edge`
-  runtime + a true-isolate Cloudflare mode.
+      runtime + a true-isolate Cloudflare mode.
 
 ---
 
@@ -300,7 +306,7 @@ Design decisions to lock in code review:
   prod apps. Driver wiring stays app-owned (locked DB decision) but the bundler
   needs sane externals defaults.
 - **`/c/` retention vs. content-hash deploys.** On Vercel/CF, immutable content
-  hashing mostly gives retention for free, but a deploy that *removes* an old hash
+  hashing mostly gives retention for free, but a deploy that _removes_ an old hash
   breaks in-flight documents. Decide whether `inspect()` should hard-fail or warn.
 - **Static auto-detection false negatives.** A route that is provably static today
   may flip to dynamic after edits; the build must re-derive policy each run and

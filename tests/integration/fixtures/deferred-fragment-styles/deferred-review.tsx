@@ -2,7 +2,6 @@
 import { component } from '@kovojs/core';
 
 export const DeferredReview = component({
-  fragmentTarget: true,
   css: `
     .review-surface {
       background-color: rgb(12, 84, 96);

@@ -18,6 +18,7 @@ test('dialog terminal open state keeps role name and focus semantics', async ({
   await expect(page.getByRole('button', { name: 'Close settings' })).toBeFocused();
   await expectAxeClean(page);
 
-  expect(await kovoApp.semantic('main', { keepAttrs: ['command', 'commandfor', 'id', 'open'] }))
-    .toMatchSnapshot('a11y-dialog-terminal.semantic.txt');
+  expect(
+    await kovoApp.semantic('main', { keepAttrs: ['command', 'commandfor', 'id', 'open'] }),
+  ).toMatchSnapshot('a11y-dialog-terminal.semantic.txt');
 });

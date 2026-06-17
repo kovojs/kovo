@@ -1,15 +1,24 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  assertFixpoint,
-  assertRenderEquivalence,
-  compileComponentModule,
-} from '../../dist/compiler/src/index.mjs';
 import { listSnippetReferences, loadTutorialSnippets } from './extract-snippets.mjs';
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const tsUrl = new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL);
+      if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+
+const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
+  await import('@kovojs/compiler');
 
 /**
  * Tutorial step gate (plan W5): every checked-in step state must
@@ -28,6 +37,7 @@ const repoRoot = path.resolve(tutorialDir, '../..');
 const stepsDir = path.join(tutorialDir, 'steps');
 const contentDir = path.resolve(tutorialDir, '../content/tutorial');
 const write = process.argv.includes('--write');
+const registryFacts = { mutations: { 'cart/add': 'typeof addToCart' } };
 
 const steps = readdirSync(stepsDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -58,7 +68,7 @@ function compileStepComponents(step) {
       `${fileName} hand-writes stamps`,
     );
 
-    const result = compileComponentModule({ fileName, source });
+    const result = compileComponentModule({ fileName, registryFacts, source });
     const errors = result.diagnostics.filter((entry) => entry.severity === 'error');
     assert.deepEqual(
       errors,

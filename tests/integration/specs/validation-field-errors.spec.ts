@@ -10,8 +10,7 @@ test('schema validation failures morph field-scoped 422 errors and skip the writ
   await page.goto('/');
 
   const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/_m/validation/reserve') && response.status() === 422,
+    (response) => response.url().endsWith('/_m/validation/reserve') && response.status() === 422,
   );
   await page.getByRole('button', { name: 'Reserve' }).click();
   const response = await responsePromise;

@@ -23,7 +23,9 @@ test('typed read endpoint coerces search args and returns the canonical instance
   );
 });
 
-test('typed read endpoint rejects invalid query args without a server error', async ({ request }) => {
+test('typed read endpoint rejects invalid query args without a server error', async ({
+  request,
+}) => {
   const invalid = await request.get('/_q/product?max=7');
   expect(invalid.status()).toBe(422);
   expect(await invalid.json()).toEqual({

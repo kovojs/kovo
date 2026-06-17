@@ -136,30 +136,79 @@ export type JsonValue =
 /** Opaque result of a component's `render` — the compiler lowers it to HTML/IR. */
 export type ComponentRenderResult = unknown;
 
-/** Render-time composition values for `children` and named slots (SPEC §4.5). */
-export interface ComponentRenderSlots {
+type ComponentMutationDefinitions = Record<
+  string,
+  Form<string, Record<string, JsonValue>, unknown>
+>;
+type NoComponentMutations = Record<never, never>;
+type ComponentDefinitionMutations<Definition> = Definition extends { mutations: infer Mutations }
+  ? Mutations extends ComponentMutationDefinitions
+    ? Mutations
+    : NoComponentMutations
+  : NoComponentMutations;
+
+/** Render state for one typed mutation form instance. */
+export interface ComponentMutationFormState<Failure> {
+  failure: Failure | null;
+}
+
+/** Render state keyed by a component's declared mutation handles. */
+export type ComponentMutationForms<Mutations extends ComponentMutationDefinitions> = {
+  [Name in keyof Mutations]: ComponentMutationFormState<FormFailure<Mutations[Name]>>;
+};
+
+interface ComponentRenderSlotValues {
   children?: unknown;
   [slot: string]: unknown;
 }
 
+type ComponentRenderFormsSlot<Mutations extends ComponentMutationDefinitions> =
+  keyof Mutations extends never
+    ? { forms?: ComponentMutationForms<Mutations> }
+    : { forms: ComponentMutationForms<Mutations> };
+
+/** Render-time composition values for `children`, named slots, and mutation form state (SPEC §4.5/§6.3). */
+export type ComponentRenderSlots<
+  Mutations extends ComponentMutationDefinitions = NoComponentMutations,
+> = ComponentRenderSlotValues & ComponentRenderFormsSlot<Mutations>;
+
 /** Typed body of a component: its query bindings, island state factory, and `render`. */
 export interface ComponentDefinition<
-  Queries = Record<string, unknown>,
+  RenderQueries = Record<string, unknown>,
   State extends JsonValue = JsonValue,
+  Mutations extends ComponentMutationDefinitions = NoComponentMutations,
+  QueryBindings = Record<string, unknown>,
 > {
-  fragmentTarget?: boolean;
-  queries?: Queries;
+  /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
+  disableServerRefresh?: boolean;
+  /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
+  fragmentTarget?: never;
+  mutations?: Mutations;
+  queries?: QueryBindings;
   state?: () => State;
-  render: (queries: Queries, state: State, slots: ComponentRenderSlots) => ComponentRenderResult;
+  render: (
+    queries: RenderQueries,
+    state: State,
+    slots: ComponentRenderSlots<Mutations>,
+  ) => ComponentRenderResult;
 }
 
 /** Loosely-typed input accepted by `component()` before inference narrows it. */
 export interface ComponentDefinitionInput {
-  fragmentTarget?: boolean;
+  /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
+  disableServerRefresh?: boolean;
+  /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
+  fragmentTarget?: never;
+  mutations?: Record<string, unknown>;
   queries?: unknown;
   state?: () => JsonValue;
   render: (...args: never[]) => ComponentRenderResult;
 }
+
+type ComponentDefinitionShape = Omit<ComponentDefinitionInput, 'mutations' | 'render'> & {
+  mutations?: ComponentMutationDefinitions;
+  render: (...args: any[]) => any;
+};
 
 /** A component descriptor returned by `component()`; the compiler injects `name` after derivation. */
 export interface Component<Definition extends ComponentDefinitionInput> {
@@ -170,13 +219,14 @@ export interface Component<Definition extends ComponentDefinitionInput> {
 /**
  * Declare a UI component with optional query bindings, optional serializable
  * island state, and a render function. The compiler derives the component's
- * load-bearing name from the exported binding and module path; queries and
- * state are passed to `render` at runtime. Authored components are plain TSX —
- * the compiler derives stamps, bindings, names, and the client module, so you
- * never write derivable `data-bind`/`kovo-*` attributes by hand (SPEC §4.1,
- * §4.8).
+ * load-bearing name and live refresh target from the exported binding, module
+ * path, queries, and authored keys; queries and state are passed to `render` at
+ * runtime. Authored components are plain TSX — the compiler derives stamps,
+ * bindings, names, and the client module, so you never write derivable
+ * `data-bind`/`kovo-*` attributes by hand (SPEC §4.1, §4.8).
  *
- * @param definition - `render` plus optional `queries`, `state`, and `fragmentTarget`.
+ * @param definition - `render` plus optional `queries`, `state`, and
+ * `disableServerRefresh`.
  * @returns A `Component` descriptor the compiler lowers and the server renders.
  * @example
  * import { component } from '@kovojs/core';
@@ -189,8 +239,14 @@ export interface Component<Definition extends ComponentDefinitionInput> {
  *     `<button>${state.count}</button>`,
  * });
  */
-export function component<const Definition extends ComponentDefinitionInput>(
-  definition: Definition,
+export function component<const Definition extends ComponentDefinitionShape>(
+  definition: Definition & {
+    render: (
+      queries: any,
+      state: any,
+      slots: ComponentRenderSlots<ComponentDefinitionMutations<Definition>>,
+    ) => any;
+  },
 ): Component<Definition> {
   return { definition };
 }

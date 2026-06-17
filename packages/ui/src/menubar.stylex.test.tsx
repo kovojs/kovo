@@ -40,28 +40,27 @@ describe('@kovojs/ui Menubar StyleX slots', () => {
             openValue: 'file',
           }) +
           MenubarSubmenu.definition.render({
-            children:
-              MenubarGroup.definition.render({
-                children:
-                  MenubarItem.definition.render({
-                    activeValue: 'new',
-                    itemLabel: 'New',
-                    itemParentValue: 'file',
-                    itemValue: 'new',
-                    items,
-                    openValue: 'file',
-                  }) +
-                  MenubarSeparator.definition.render({ id: 'file-separator' }) +
-                  MenubarItem.definition.render({
-                    itemDisabled: true,
-                    itemLabel: 'Open',
-                    itemParentValue: 'file',
-                    itemValue: 'open',
-                    items,
-                    openValue: 'file',
-                  }),
-                openValue: 'file',
-              }),
+            children: MenubarGroup.definition.render({
+              children:
+                MenubarItem.definition.render({
+                  activeValue: 'new',
+                  itemLabel: 'New',
+                  itemParentValue: 'file',
+                  itemValue: 'new',
+                  items,
+                  openValue: 'file',
+                }) +
+                MenubarSeparator.definition.render({ id: 'file-separator' }) +
+                MenubarItem.definition.render({
+                  itemDisabled: true,
+                  itemLabel: 'Open',
+                  itemParentValue: 'file',
+                  itemValue: 'open',
+                  items,
+                  openValue: 'file',
+                }),
+              openValue: 'file',
+            }),
             id: 'file-menu',
             labelledBy: 'file-trigger',
             openValue: 'file',

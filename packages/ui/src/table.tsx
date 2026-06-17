@@ -180,9 +180,7 @@ function tablePart(
   return `<${tag}${tableAttributes(attributes)}>${children ?? ''}</${tag}>`;
 }
 
-function tableAttributes(
-  attributes: TablePartAttributes,
-): string {
+function tableAttributes(attributes: TablePartAttributes): string {
   let rendered = '';
 
   for (const [name, value] of Object.entries(attributes)) {

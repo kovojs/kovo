@@ -141,11 +141,7 @@ function unwrapPrimitiveWrapper(
   authorAttributes: readonly MergeableAttribute[],
   options: { fileName: string; source: string },
 ): PrimitiveCompositionPatch {
-  const merge = mergePrimitiveAndAuthorAttributes(
-    primitiveAttributes,
-    authorAttributes,
-    options,
-  );
+  const merge = mergePrimitiveAndAuthorAttributes(primitiveAttributes, authorAttributes, options);
   const attributes = renderMergedAttributes(merge.attributes);
 
   return {

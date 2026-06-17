@@ -3,8 +3,10 @@ import ts from 'typescript';
 import type { StaticLiteralValue } from './object.js';
 
 export interface ComponentOptionEntry {
+  end: number;
   key: string;
   objectEntries?: readonly ObjectLiteralEntry[];
+  start: number;
   staticValue?: StaticLiteralValue;
   staticTemplateValue?: string;
 }
@@ -134,6 +136,7 @@ export interface JsxElementModel {
   openingEnd: number;
   openingTagNameEnd: number;
   openingTagNameStart: number;
+  repeatable: boolean;
   selfClosing: boolean;
   selfClosingSlashHasLeadingWhitespace: boolean;
   spreadAttributes: readonly JsxSpreadAttributeModel[];
@@ -482,12 +485,17 @@ export function componentStateReturnObjectKeys(model: ComponentModuleModel): str
 
 export function componentFragmentTargetNames(model: ComponentModuleModel): string[] {
   return model.components.flatMap((component) => {
-    if (component.options.find((option) => option.key === 'fragmentTarget')?.staticValue !== true) {
+    if (!componentHasInferredFragmentTarget(component)) {
       return [];
     }
 
     return component.localName === undefined ? [] : [component.localName];
   });
+}
+
+export function componentHasInferredServerRefreshTarget(model: ComponentModuleModel): boolean {
+  const component = firstComponentModel(model);
+  return component ? componentHasInferredFragmentTarget(component) : false;
 }
 
 export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {
@@ -780,15 +788,28 @@ function componentOptions(
 
     return [
       {
+        end: property.name.getEnd(),
         key,
         ...(ts.isObjectLiteralExpression(property.initializer)
           ? { objectEntries: objectLiteralEntries(sourceFile, source, property.initializer) }
           : {}),
+        start: property.name.getStart(sourceFile),
         ...componentOptionStaticValueEntry(property.initializer),
         ...componentOptionStaticTemplateValueEntry(sourceFile, source, property.initializer),
       },
     ];
   });
+}
+
+function componentHasInferredFragmentTarget(component: ComponentModel): boolean {
+  if (
+    component.options.find((option) => option.key === 'disableServerRefresh')?.staticValue === true
+  ) {
+    return false;
+  }
+
+  const queries = component.options.find((option) => option.key === 'queries')?.objectEntries ?? [];
+  return queries.length > 0;
 }
 
 function componentOptionStaticValueEntry(
@@ -1210,6 +1231,7 @@ function jsxElementModel(
     openingEnd: openingElement.getEnd(),
     openingTagNameEnd: openingElement.tagName.getEnd(),
     openingTagNameStart: openingElement.tagName.getStart(sourceFile),
+    repeatable: isInsideArrayMapCallback(node),
     selfClosing,
     selfClosingSlashHasLeadingWhitespace: selfClosingSlashHasLeadingWhitespace(
       source,
@@ -1372,6 +1394,25 @@ function jsxAncestorTags(sourceFile: ts.SourceFile, node: ts.Node): string[] {
   }
 
   return tags;
+}
+
+function isInsideArrayMapCallback(node: ts.Node): boolean {
+  let current = node.parent;
+
+  while (current) {
+    if (
+      (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
+      ts.isCallExpression(current.parent) &&
+      current.parent.arguments[0] === current &&
+      ts.isPropertyAccessExpression(current.parent.expression) &&
+      current.parent.expression.name.text === 'map'
+    ) {
+      return true;
+    }
+    current = current.parent;
+  }
+
+  return false;
 }
 
 function staticJsxAttributeValue(attribute: ts.JsxAttribute): string | undefined {

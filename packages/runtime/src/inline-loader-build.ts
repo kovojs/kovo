@@ -69,7 +69,7 @@ function installInlineKovoLoader(im) {
   let ic = 0;
   const ci = () =>
     crypto.randomUUID?.() ||
-    'i_' + Date.now().toString(36) + '_' + (ic += 1).toString(36);
+    'i' + Date.now().toString(36) + (ic += 1).toString(36);
   const rh = (el) => el.closest?.('[kovo-state]') ?? el;
   const rs = (el) => {
     try {
@@ -177,13 +177,14 @@ function installInlineKovoLoader(im) {
       .split(/[\s,]+/)
       .map((dep) => dep.trim())
       .filter(Boolean);
+  const targetIdentity = (el) =>
+    el.getAttribute('kovo-fragment-target') ?? el.id ?? el.getAttribute('kovo-c') ?? '';
   const rt = () => [
     ...new Set(
       [...doc.querySelectorAll('[kovo-deps]')]
         .map((el) => {
           const deps = rd(el.getAttribute('kovo-deps'));
-          const target =
-            el.getAttribute('kovo-fragment-target') ?? el.id ?? el.getAttribute('kovo-c');
+          const target = targetIdentity(el);
           return target && (deps.length ? target + '=' + deps.join(' ') : target);
         })
         .filter(Boolean)
@@ -250,6 +251,7 @@ function installInlineKovoLoader(im) {
       body: new FormData(form, event.submitter),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Form-Target': targetIdentity(form),
         'Kovo-Fragment': 'true',
         'Kovo-Idem': ci(),
         'Kovo-Targets': rt().join('; '),
@@ -654,6 +656,7 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     // closures); compacting them reclaims gzip headroom for the M10 selector
     // guard within the SPEC.md §4.4 4KB ceiling.
     ['dispatch', 'dp'],
+    ['targetIdentity', 't'],
     ['trigger', 'tg'],
     ['crossing', 'cr'],
     ['enterType', 'en'],

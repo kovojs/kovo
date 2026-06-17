@@ -61,10 +61,22 @@ You declare each part once, and the framework derives the rest from it:
 
 ## Render the form
 
-The rendered form is an ordinary form. This is what the commerce app serves:
+In TSX, bind the form to the mutation value and give repeated forms ordinary component identity:
+
+```tsx
+<form enhance mutation={addToCart} key={productId}>
+  <input type="hidden" name="productId" value={productId} />
+  <input name="quantity" type="number" min="1" defaultValue={1} />
+  {forms.addToCart.failure ? <output role="alert">Unable to add this item.</output> : null}
+  <button type="submit">Add</button>
+</form>
+```
+
+The compiler emits the concrete action URL, mutation metadata, CSRF field, `kovo-key`, and the
+submitted-form target. The served HTML is still an ordinary form:
 
 ```html
-<form method="post" action="/_m/cart/add" enhance>
+<form method="post" action="/_m/cart/add" enhance data-mutation="cart/add" kovo-key="p1">
   <input type="hidden" name="kovo-csrf" value="…" />
   <input type="hidden" name="productId" value="p1" />
   <input name="quantity" type="number" min="1" value="1" />
@@ -72,8 +84,8 @@ The rendered form is an ordinary form. This is what the commerce app serves:
 </form>
 ```
 
-With JavaScript disabled, this form posts. The only framework-specific part is the `enhance`
-marker, which the loader uses to intercept submission when JS is present.
+With JavaScript disabled, this form posts. The only author-facing framework-specific part is the
+`enhance` marker, which the loader uses to intercept submission when JS is present.
 
 Field names are type-checked against the mutation's input schema. A missing required field or a
 typo'd `name` is a compile error, so you find out at build time instead of in production:
@@ -81,7 +93,7 @@ typo'd `name` is a compile error, so you find out at build time instead of in pr
 ```ts
 import { form, formFields } from '@kovojs/core';
 
-const f = form('cart/add'); // key validated against MutationRegistry; input type inferred
+const f = form(addToCart); // mutation value validated; input type inferred
 formFields(f, ['productId', 'quantity']); // ✗ compile error if a required field is missing
 ```
 
@@ -138,7 +150,7 @@ Content-Type: text/vnd.kovo.fragment+html; charset=utf-8
 Kovo-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1"]}]
 
 <kovo-query name="cart">{"count": 3, "items": […]}</kovo-query>
-<kovo-fragment target="cart-badge">
+<kovo-fragment target="recommendations">
   <!-- server-rendered HTML — the SAME render function full page loads use -->
 </kovo-fragment>
 ```
@@ -146,12 +158,15 @@ Kovo-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1
 What each piece does:
 
 - **`Kovo-Targets`** is read off the live DOM's `kovo-deps` stamps at submit time. The server keeps no
-  session of what's on screen; it answers a self-contained question. This matters for
-  [deployment](/guides/deployment/).
+  session of what's on screen; it answers a self-contained question. Singleton targets look like
+  `cart-badge=cart`; repeated targets include their keyed suffix, such as
+  `product-form:p2=product:p2`. This matters for [deployment](/guides/deployment/).
 - **`<kovo-query>`** chunks replace the client's query values and run each query's update plan across
-  every dependent island.
+  every dependent island. When §4.8 bindings cover the affected output, query JSON or prod deltas
+  are preferred over a full fragment.
 - **`<kovo-fragment>`** chunks are DOM-morphed in by default, so focus, scroll, selection, and nested
-  island state survive. `mode="append"` is the explicit vocabulary for pagination and streams.
+  island state survive. They are sent for affected live targets whose output is not fully covered by
+  the query update plan. `mode="append"` is the explicit vocabulary for pagination and streams.
 - **`Kovo-Changes`** is the sanitized summary of committed writes — `{domain, keys}` only, never
   mutation input or failure detail.
 
@@ -187,16 +202,16 @@ return renderMutationEndpointResponse(addToCart, {
 ## Handle a failure: the 422 path
 
 Failures use the same one endpoint. Validation failures (schema, with field paths) and declared
-error codes return HTTP 422 with a fragment that re-renders the form with messages. The enhanced
-path morphs just the form; the no-JS path re-renders the page. Here is the commerce app's
-out-of-stock failure on the enhanced path:
+error codes return HTTP 422. The enhanced path infers the submitted form target and morphs just that
+form with typed `forms.addToCart.failure` state; the no-JS path re-renders the page with the same
+state. Here is the commerce app's out-of-stock failure on the enhanced path:
 
 ```http
 HTTP/1.1 422 Unprocessable Content
 Content-Type: text/vnd.kovo.fragment+html; charset=utf-8
 
 <kovo-fragment target="product-form:p2">
-  <form method="post" action="/_m/cart/add" enhance>…
+  <form method="post" action="/_m/cart/add" enhance data-mutation="cart/add" kovo-key="p2">…
     <output role="alert" data-error-code="OUT_OF_STOCK">Only 2 available.</output>
   </form>
 </kovo-fragment>

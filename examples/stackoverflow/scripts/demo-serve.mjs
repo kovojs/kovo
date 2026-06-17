@@ -36,6 +36,9 @@ export function createSoDemoServer(options = {}) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   await runDemoServeCli((options) =>
-    createSoDemoServer(options).then((served) => ({ ...served, label: 'stackoverflow-demo-serve' })),
+    createSoDemoServer(options).then((served) => ({
+      ...served,
+      label: 'stackoverflow-demo-serve',
+    })),
   );
 }

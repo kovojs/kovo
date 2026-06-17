@@ -30,7 +30,8 @@ export const Recommendations = component({
       },
       {
         end: insertPosition,
-        replacement: ' kovo-c="recommendations" kovo-state="{&quot;open&quot;:true}"',
+        replacement:
+          ' kovo-c="recommendations" kovo-fragment-target="recommendations" kovo-state="{&quot;open&quot;:true}"',
         start: insertPosition,
       },
     ]);
@@ -49,6 +50,13 @@ export const Recommendations = component({
           "sink": "kovo-deps",
           "source": "server-render",
           "writer": "host dependency stamp",
+        },
+        {
+          "context": "attribute",
+          "expression": "recommendations",
+          "sink": "kovo-fragment-target",
+          "source": "server-render",
+          "writer": "host fragment target stamp",
         },
         {
           "context": "attribute",
@@ -72,6 +80,12 @@ export const Recommendations = component({
           "mode": "replace",
           "value": "product:p1 cart",
           "writer": "host dependency stamp",
+        },
+        {
+          "attr": "kovo-fragment-target",
+          "mode": "insert",
+          "value": "recommendations",
+          "writer": "host fragment target stamp",
         },
         {
           "attr": "kovo-state",
@@ -101,7 +115,8 @@ export const StampConflict = component({
 `,
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231')).toMatchInlineSnapshot(`
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231'))
+      .toMatchInlineSnapshot(`
       [
         {
           "code": "KV231",
@@ -152,6 +167,119 @@ export const StampConflict = component({
     `);
   });
 
+  it('lowers typed enhanced mutation forms to submitted target stamps', () => {
+    const result = compileComponentModule({
+      fileName: 'add-to-cart-form.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: (_queries, _state, { productId }) => (
+    <form enhance mutation={addToCart} key={productId} class="add">
+      <input type="hidden" name="productId" value={productId} />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.loweredSource).toContain(
+      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${productId}`} kovo-key={productId} class="add"',
+    );
+    expect(result.loweredSource).not.toContain('mutation={addToCart}');
+    expect(result.loweredSource).not.toMatch(/\skey=\{productId\}/);
+    expect(result.outputContextFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          expression: '/_m/cart/add',
+          sink: 'action',
+          writer: 'typed mutation form lowering',
+        }),
+        expect.objectContaining({
+          expression: 'cart/add',
+          sink: 'data-mutation',
+          writer: 'typed mutation form lowering',
+        }),
+        expect.objectContaining({
+          expression: 'add-to-cart:${productId}',
+          sink: 'kovo-fragment-target',
+          writer: 'typed mutation form lowering',
+        }),
+        expect.objectContaining({
+          expression: 'productId',
+          sink: 'kovo-key',
+          writer: 'typed mutation form lowering',
+        }),
+      ]),
+    );
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('lowers imported typed enhanced mutation forms from registry facts', () => {
+    const result = compileComponentModule({
+      fileName: 'product-grid.tsx',
+      registryFacts: { mutations: { 'cart/add': 'typeof addToCart' } },
+      source: `
+import { addToCart } from '../app.js';
+
+export const ProductGrid = component({
+  render: (_queries, _state, { productId }) => (
+    <form enhance mutation={addToCart} key={productId}>
+      <input type="hidden" name="productId" value={productId} />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.loweredSource).toContain(
+      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${productId}`} kovo-key={productId}',
+    );
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('rejects repeatable typed enhanced mutation forms without authored key identity', () => {
+    const result = compileComponentModule({
+      fileName: 'product-list.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  handler() {
+    return null;
+  },
+});
+
+export const ProductList = component({
+  render: ({ products }) => (
+    <section>
+      {products.items.map((item) => (
+        <form enhance mutation={addToCart}>
+          <input type="hidden" name="productId" value={item.id} />
+        </form>
+      ))}
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238')).toEqual([
+      expect.objectContaining({
+        message:
+          'Duplicate fragment-target wire name. repeatable enhanced mutation form needs authored key identity',
+      }),
+    ]);
+    expect(result.loweredSource).toContain('mutation={addToCart}');
+    expect(result.loweredSource).not.toContain('action="/_m/cart/add"');
+  });
+
   it('stamps rendered component markup with declared query dependencies', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
@@ -168,8 +296,37 @@ export const CartBadge = component({
 `,
     });
 
-    expect(result.files[0]?.source).toContain('<cart-badge kovo-deps="cart productPage">');
+    expect(result.files[0]?.source).toContain(
+      '<cart-badge kovo-deps="cart productPage" kovo-fragment-target="cart-badge">',
+    );
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('lints hand-written fragment target hooks on inferred query roots', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <cart-badge kovo-fragment-target="cart-badge">
+      {cart.count}
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV223',
+        help: expect.stringContaining('kovo-fragment-target hook'),
+        message:
+          'Redundant hand-written fragment target stamp in sugar; the compiler derives it. kovo-fragment-target',
+        severity: 'lint',
+      }),
+    );
+    expect(result.files[0]?.source.match(/kovo-fragment-target=/g)).toHaveLength(1);
   });
 
   it('stamps kovo-c component identity on native render hosts', () => {
@@ -188,7 +345,7 @@ export const OrderHistory = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<ol kovo-c="order-history" kovo-deps="orderHistory">',
+      '<ol kovo-c="order-history" kovo-deps="orderHistory" kovo-fragment-target="order-history">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
     expect(() => assertRenderEquivalence(result)).not.toThrow();
@@ -270,7 +427,7 @@ export const CartBadge = component({
 
     const serverSource = result.files[0]?.source ?? '';
     expect(serverSource).toContain(
-      '<cart-badge kovo-deps="cart" kovo-state="{&quot;open&quot;:true}">',
+      '<cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge" kovo-state="{&quot;open&quot;:true}">',
     );
     expect(serverSource).toContain("'<not-the-host></not-the-host>'");
     expect(serverSource).not.toContain('<not-the-host kovo-deps=');
@@ -298,7 +455,7 @@ export const Recommendations = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section kovo-c="recommendations" kovo-deps="product:p1 cart">',
+      '<section kovo-c="recommendations" kovo-deps="product:p1 cart" kovo-fragment-target="recommendations">',
     );
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -320,7 +477,7 @@ export const Recommendations = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section class="card" kovo-deps="product:p1 cart" kovo-c="recommendations">',
+      '<section class="card" kovo-deps="product:p1 cart" kovo-c="recommendations" kovo-fragment-target="recommendations">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -475,16 +632,6 @@ export const CartBadge = component({
           'Hand-written binding stamp disagrees with the typed expression it wraps. data-bind="cart.count" wraps {cart.total}',
         severity: 'error',
         start: { column: 31, line: 4 },
-      },
-      {
-        code: 'KV311',
-        fileName: 'cart-badge.tsx',
-        help: expect.stringContaining('SPEC §4.9'),
-        length: 10,
-        message:
-          'Query/state-dependent DOM position has no update status. CartBadge cart.total expression',
-        severity: 'warn',
-        start: { column: 55, line: 4 },
       },
     ]);
   });

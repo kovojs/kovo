@@ -49,18 +49,17 @@ describe('server app shell document assembly', () => {
         ],
       }
     `);
-    expect(renderContentSecurityPolicy(document.csp).replaceAll(loaderHash, '<loader-hash>'))
-      .toMatchInlineSnapshot(
-        `"default-src 'self'; script-src 'self' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' '<loader-hash>' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='"`,
-      );
+    expect(
+      renderContentSecurityPolicy(document.csp).replaceAll(loaderHash, '<loader-hash>'),
+    ).toMatchInlineSnapshot(
+      `"default-src 'self'; script-src 'self' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' '<loader-hash>' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='"`,
+    );
     expect(document.html).toContain('<!doctype html><html lang="en-US"><head>');
     expect(document.html).toContain('<title>Cart</title>');
     expect(document.html).toContain(
       '<style data-kovo-critical-href="/assets/app.css" data-kovo-csp-hash="sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E=">body{color:red}</style><link rel="stylesheet" href="/assets/app.css">',
     );
-    expect(document.html).toContain(
-      `<script data-kovo-csp-hash="${loaderHash}">`,
-    );
+    expect(document.html).toContain(`<script data-kovo-csp-hash="${loaderHash}">`);
     expect(document.html).toContain('installInlineKovoLoader');
     expect(document.html.indexOf('kovo-query="cart"')).toBeLessThan(
       document.html.indexOf('<body>'),

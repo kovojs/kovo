@@ -24,7 +24,8 @@ describe('@kovojs/ui HoverCard StyleX slots', () => {
             contentId: 'profile-card',
             disabled: true,
             href: '/team/ada',
-          }) + HoverCardContent.definition.render({ children: 'Profile', contentId: 'profile-card' }),
+          }) +
+          HoverCardContent.definition.render({ children: 'Profile', contentId: 'profile-card' }),
         disabled: true,
       }),
       open: HoverCard.definition.render({

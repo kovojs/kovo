@@ -17,10 +17,9 @@ import { priceLabel } from './product-grid.js';
 // formatter) lives in the plain `renderOrderHistoryItems` helper so the
 // component render stays a simple keyed-list host, exactly like ProductGrid.
 export const OrderHistory = component({
-  fragmentTarget: true,
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
-    <ol class="grid gap-2" kovo-c="order-history" kovo-deps="orderHistory">{renderOrderHistoryItems(orderHistory)}</ol>
+    <ol class="grid gap-2" kovo-c="order-history" kovo-deps="orderHistory" kovo-fragment-target="order-history">{renderOrderHistoryItems(orderHistory)}</ol>
   ),
 });
 OrderHistory.name = "components/order-history/order-history";

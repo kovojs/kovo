@@ -68,11 +68,7 @@ export const starterAppStyleCss = style.emitAtomicCss(
 export const App = component({
   state: () => ({ clicks: 0 }),
   render: () => (
-    <main
-      {...style.attrs(appStyles.root)}
-      kovo-c="app-root"
-      kovo-state='{"clicks":0}'
-    >
+    <main {...style.attrs(appStyles.root)} kovo-c="app-root" kovo-state='{"clicks":0}'>
       <section {...style.attrs(appStyles.section)}>
         <p {...style.attrs(appStyles.eyebrow)}>Routed by the app shell</p>
         <h1 {...style.attrs(appStyles.heading)}>Hello from Kovo</h1>

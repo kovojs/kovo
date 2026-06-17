@@ -17,6 +17,7 @@ import {
 } from '../output-context-facts.js';
 import {
   componentOptionObjectKeys,
+  componentHasInferredServerRefreshTarget,
   componentRenderHost,
   componentRenderHostElement,
   componentStateReturnObjectModel,
@@ -26,11 +27,12 @@ import {
   type JsxElementModel,
   type SourceSpan,
 } from '../scan/parse.js';
-import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
+import { escapeAttribute, kebabCase, splitDepValue, type SourceReplacement } from '../shared.js';
 import {
   emitElementParamTypes,
   type HandlerLowering,
   type RenderEquivalenceCheck,
+  type RegistryFacts,
 } from '../types.js';
 
 export interface EmittedServerModule {
@@ -46,10 +48,14 @@ export interface ServerRenderLowering {
 }
 
 export interface ServerRenderStampWriteFact {
-  attr: 'kovo-c' | 'kovo-deps' | 'kovo-state';
+  attr: 'kovo-c' | 'kovo-deps' | 'kovo-fragment-target' | 'kovo-state';
   mode: 'insert' | 'preserve' | 'replace';
   value: string;
-  writer: 'host dependency stamp' | 'host identity stamp' | 'host state stamp';
+  writer:
+    | 'host dependency stamp'
+    | 'host fragment target stamp'
+    | 'host identity stamp'
+    | 'host state stamp';
 }
 
 export function emitServerModule(renderedSource: string): EmittedServerModule {
@@ -63,7 +69,7 @@ export function serverRenderLowering(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
   domComponentName: string,
-  options?: { fileName: string; source: string },
+  options?: { fileName: string; registryFacts?: RegistryFacts; source: string },
 ): ServerRenderLowering {
   return serverRenderPatches(handlers, model, domComponentName, options);
 }
@@ -72,19 +78,23 @@ export function semanticRenderEquivalenceCheck(
   artifact: string,
   expectedModel: ComponentModuleModel,
   executableSource: string,
+  options: SemanticRenderContext = {},
 ): RenderEquivalenceCheck {
-  const expected = semanticRenderModel(expectedModel);
+  const expected = semanticRenderModel(expectedModel, options);
   const actualSource = emittedServerRenderSource(executableSource);
   const actualModel = parseComponentModule(artifact, actualSource);
   const actual = semanticRenderModel(actualModel);
+  const normalizedExpected = normalizeSemanticHtmlForComparison(expected);
+  const normalizedActual = normalizeSemanticHtmlForComparison(actual);
+  const ok = normalizedActual === normalizedExpected;
 
   return {
-    actual,
+    actual: ok ? normalizedActual : actual,
     artifact,
     detail:
       'SPEC §5.2 semantic render differential: render(src) differed from render(compile(src)).',
-    expected,
-    ok: actual === expected,
+    expected: ok ? normalizedExpected : expected,
+    ok,
   };
 }
 
@@ -95,6 +105,64 @@ function emittedServerRenderSource(serverSource: string): string {
   } catch {
     return '';
   }
+}
+
+function normalizeSemanticHtmlForComparison(html: string): string {
+  return html.replace(/<[^>]*>/g, (tag) => normalizeSemanticTagForComparison(tag));
+}
+
+function normalizeSemanticTagForComparison(tag: string): string {
+  if (!tag.startsWith('<') || !tag.endsWith('>')) return tag;
+  const body = tag.slice(1, -1);
+  if (body.startsWith('/') || body.startsWith('!') || body.trim() === '') return tag;
+
+  const match = /^([^\s/>]+)([\s\S]*)$/.exec(body);
+  if (!match) return tag;
+
+  const [, name, rest = ''] = match;
+  const attributes = splitSemanticTagAttributes(rest.trim());
+  if (attributes.length <= 1) return tag;
+
+  const sorted = [...attributes].sort((left, right) => {
+    const nameOrder = semanticAttributeName(left).localeCompare(semanticAttributeName(right));
+    return nameOrder === 0 ? left.localeCompare(right) : nameOrder;
+  });
+  return `<${name} ${sorted.join(' ')}>`;
+}
+
+function splitSemanticTagAttributes(source: string): string[] {
+  if (source.length === 0) return [];
+
+  const attributes: string[] = [];
+  let start = 0;
+  let quote: '"' | "'" | null = null;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === undefined) continue;
+    if (quote) {
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      const attribute = source.slice(start, index).trim();
+      if (attribute) attributes.push(attribute);
+      start = index + 1;
+    }
+  }
+
+  const tail = source.slice(start).trim();
+  if (tail) attributes.push(tail);
+  return attributes;
+}
+
+function semanticAttributeName(attribute: string): string {
+  const equalsIndex = attribute.indexOf('=');
+  return equalsIndex === -1 ? attribute : attribute.slice(0, equalsIndex);
 }
 
 const voidElements = new Set([
@@ -113,34 +181,51 @@ const voidElements = new Set([
   'wbr',
 ]);
 
-function semanticRenderModel(model: ComponentModuleModel): string {
+interface SemanticRenderContext {
+  registryFacts?: RegistryFacts;
+}
+
+interface SemanticElementOptions extends SemanticRenderContext {
+  forcedAttributes?: string;
+}
+
+function semanticRenderModel(
+  model: ComponentModuleModel,
+  options: SemanticRenderContext = {},
+): string {
   const host = componentRenderHostElement(model);
   if (!host) return '';
 
-  return renderSemanticElement(model, host);
+  return renderSemanticElement(model, host, options);
 }
 
 function renderSemanticElement(
   model: ComponentModuleModel,
   element: JsxElementModel,
-  options: { forcedAttributes?: string } = {},
+  options: SemanticElementOptions = {},
 ): string {
   const primitiveChild = semanticPrimitiveChild(model, element);
-  if (primitiveChild) return renderSemanticElement(model, primitiveChild.child, primitiveChild);
+  if (primitiveChild) {
+    return renderSemanticElement(model, primitiveChild.child, { ...options, ...primitiveChild });
+  }
 
   const tag = semanticElementTag(element);
-  const attributes = options.forcedAttributes ?? renderSemanticAttributes(model, element);
+  const attributes = options.forcedAttributes ?? renderSemanticAttributes(model, element, options);
 
   if (voidElements.has(tag)) return `<${tag}${attributes}>`;
 
-  return `<${tag}${attributes}>${renderSemanticChildren(model, element)}</${tag}>`;
+  return `<${tag}${attributes}>${renderSemanticChildren(model, element, options)}</${tag}>`;
 }
 
 function semanticElementTag(element: JsxElementModel): string {
   return element.tag === 'Link' ? 'a' : element.tag;
 }
 
-function renderSemanticAttributes(model: ComponentModuleModel, element: JsxElementModel): string {
+function renderSemanticAttributes(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  options: SemanticRenderContext = {},
+): string {
   if (element.tag === 'Link') {
     return [
       semanticLinkHrefAttribute(element),
@@ -152,21 +237,31 @@ function renderSemanticAttributes(model: ComponentModuleModel, element: JsxEleme
       .join('');
   }
 
+  const formMutation = enhancedMutationFormLowering(model, element, options.registryFacts);
   const viewTransitionStyle = semanticViewTransitionStyle(element);
-  return element.attributes
-    .filter((attribute) => attribute.name !== 'viewTransitionName')
-    .filter((attribute) => !isQueryExpressionAttribute(model, attribute))
-    .map((attribute) =>
+  const semanticAttributes: string[] = [];
+  for (const attribute of element.attributes) {
+    if (attribute.name === 'viewTransitionName' || isQueryExpressionAttribute(model, attribute)) {
+      continue;
+    }
+    if (formMutation?.generatedAttributeNames.has(attribute.name)) {
+      if (attribute.name === 'mutation')
+        semanticAttributes.push(...formMutation.semanticAttributes);
+      continue;
+    }
+    const rendered =
       attribute.name === 'style' && viewTransitionStyle
         ? renderSemanticStyleAttribute(attribute, viewTransitionStyle)
-        : renderSemanticAttribute(attribute),
-    )
+        : renderSemanticAttribute(attribute);
+    if (rendered) semanticAttributes.push(rendered);
+  }
+
+  return semanticAttributes
     .concat(
       viewTransitionStyle && !element.attributes.some((attribute) => attribute.name === 'style')
         ? [` style="${escapeAttribute(viewTransitionStyle)}"`]
         : [],
     )
-    .filter((attribute): attribute is string => attribute !== null)
     .join('');
 }
 
@@ -187,17 +282,22 @@ function semanticPrimitiveChild(
   element: JsxElementModel,
 ): { child: JsxElementModel; forcedAttributes: string } | null {
   if (!element.attributes.some((attribute) => attribute.name === 'asChild')) return null;
-  const attrs = element.attributes.find((attribute) => attribute.name === 'attrs')
-    ?.expressionObjectEntries;
+  const attrs = element.attributes.find(
+    (attribute) => attribute.name === 'attrs',
+  )?.expressionObjectEntries;
   if (!attrs) return null;
   const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
   if (!primitiveAttributes) return null;
   const [child] = directChildElements(model, element);
   if (!child) return null;
-  const merge = mergePrimitiveAndAuthorAttributes(primitiveAttributes, authorJsxAttributes(child.attributes), {
-    fileName: 'semantic-render',
-    source: '',
-  });
+  const merge = mergePrimitiveAndAuthorAttributes(
+    primitiveAttributes,
+    authorJsxAttributes(child.attributes),
+    {
+      fileName: 'semantic-render',
+      source: '',
+    },
+  );
   const forcedAttributes = renderMergedAttributes(merge.attributes);
   return { child, forcedAttributes: forcedAttributes ? ` ${forcedAttributes}` : '' };
 }
@@ -221,8 +321,9 @@ function semanticStaticObjectAttribute(
   element: JsxElementModel,
   name: string,
 ): Record<string, string | number | boolean | null> | null {
-  const value = element.attributes.find((attribute) => attribute.name === name)
-    ?.expressionStaticValue;
+  const value = element.attributes.find(
+    (attribute) => attribute.name === name,
+  )?.expressionStaticValue;
   if (!value || typeof value !== 'object') return null;
   return Object.fromEntries(
     Object.entries(value).filter((entry): entry is [string, string | number | boolean | null] => {
@@ -284,7 +385,11 @@ function renderStaticAttributeValue(
   return ` ${name}="${escapeAttribute(JSON.stringify(value) ?? '')}"`;
 }
 
-function renderSemanticChildren(model: ComponentModuleModel, element: JsxElementModel): string {
+function renderSemanticChildren(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  options: SemanticRenderContext = {},
+): string {
   const body = element.childBody;
   if (!body) return '';
 
@@ -292,7 +397,7 @@ function renderSemanticChildren(model: ComponentModuleModel, element: JsxElement
   const tokens = [
     ...directChildElements(model, element).map((child) => ({
       end: child.end,
-      render: () => renderSemanticElement(model, child),
+      render: () => renderSemanticElement(model, child, options),
       start: child.start,
     })),
     ...element.childExpressionContainers.map((container) => ({
@@ -362,11 +467,17 @@ function isGeneratedOnlyRenderAttribute(name: string): boolean {
   return (
     name === 'kovo-c' ||
     name === 'kovo-deps' ||
+    name === 'kovo-fragment-target' ||
+    name === 'kovo-key' ||
     name === 'kovo-state' ||
     name === 'kovo-param-types' ||
     name === 'data-bind' ||
     name === 'data-derive' ||
     name === 'data-derive-attr' ||
+    name === 'command' ||
+    name === 'commandfor' ||
+    name === 'popovertarget' ||
+    name === 'popovertargetaction' ||
     name.startsWith('data-bind:') ||
     name.startsWith('data-p-') ||
     name.startsWith('on:')
@@ -377,7 +488,7 @@ function serverRenderPatches(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
   domComponentName: string,
-  options?: { fileName: string; source: string },
+  options?: { fileName: string; registryFacts?: RegistryFacts; source: string },
 ): ServerRenderLowering {
   const diagnostics: CompilerDiagnostic[] = [];
   const host = componentRenderHost(model);
@@ -389,6 +500,10 @@ function serverRenderPatches(
   patches.push(...chained.patches);
   outputContexts.push(...chained.outputContexts);
   if (options) diagnostics.push(...handlerStampConflictDiagnostics(handlers, model, options));
+  const formLowering = enhancedMutationFormRenderLowering(model, options);
+  diagnostics.push(...formLowering.diagnostics);
+  patches.push(...formLowering.replacements);
+  outputContexts.push(...formLowering.outputContexts);
   const hostHandlers = host
     ? handlers.filter(
         (handler) => handler.attributeStart >= host.start && handler.attributeEnd <= host.end,
@@ -424,15 +539,296 @@ function serverRenderPatches(
     stampWrites.push(...hostStamps.writes);
     patches.push(...renderHostStampPatches(hostElement, hostStamps.writes));
     outputContexts.push(...renderHostStampOutputContexts(hostStamps.writes));
-    if (options) diagnostics.push(...renderHostStampConflictDiagnostics(hostStamps.conflicts, options));
+    if (options)
+      diagnostics.push(...renderHostStampConflictDiagnostics(hostStamps.conflicts, options));
   }
 
   return { diagnostics, outputContexts, replacements: patches, stampWrites };
 }
 
-function handlerOutputContexts(
-  handler: HandlerLowering,
-): GeneratedOutputWriteFact[] {
+function enhancedMutationFormRenderLowering(
+  model: ComponentModuleModel,
+  options?: { fileName: string; registryFacts?: RegistryFacts; source: string },
+): {
+  diagnostics: readonly CompilerDiagnostic[];
+  outputContexts: readonly GeneratedOutputWriteFact[];
+  replacements: readonly SourceReplacement[];
+} {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const replacements: SourceReplacement[] = [];
+  const outputContexts: GeneratedOutputWriteFact[] = [];
+
+  for (const element of model.jsxElements) {
+    const repeatableDiagnostic = repeatableMutationFormDiagnostic(model, element, options);
+    if (repeatableDiagnostic) {
+      diagnostics.push(repeatableDiagnostic);
+      continue;
+    }
+
+    const lowering = enhancedMutationFormLowering(model, element, options?.registryFacts);
+    if (!lowering) continue;
+
+    replacements.push(...lowering.replacements);
+    outputContexts.push(...lowering.outputContexts);
+    if (options) {
+      diagnostics.push(
+        ...lowering.conflicts.map((conflict) =>
+          writerConflictDiagnostic(
+            options,
+            conflict.attribute,
+            conflict.attribute.name,
+            'author JSX',
+            'typed mutation form lowering',
+          ),
+        ),
+      );
+    }
+  }
+
+  return { diagnostics, outputContexts, replacements };
+}
+
+interface EnhancedMutationFormConflict {
+  attribute: JsxAttributeModel;
+}
+
+interface EnhancedMutationFormLowering {
+  conflicts: readonly EnhancedMutationFormConflict[];
+  generatedAttributeNames: ReadonlySet<string>;
+  outputContexts: readonly GeneratedOutputWriteFact[];
+  replacements: readonly SourceReplacement[];
+  semanticAttributes: readonly string[];
+}
+
+function enhancedMutationFormLowering(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  registryFacts?: RegistryFacts,
+): EnhancedMutationFormLowering | null {
+  if (element.tag !== 'form') return null;
+
+  const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
+  if (!mutationAttribute?.expressionBareIdentifierName) return null;
+
+  const mutationKey = localMutationKey(
+    model,
+    mutationAttribute.expressionBareIdentifierName,
+    registryFacts,
+  );
+  if (!mutationKey) return null;
+
+  const conflicts = enhancedMutationFormConflicts(element);
+  if (conflicts.length > 0) {
+    return {
+      conflicts,
+      generatedAttributeNames: new Set(),
+      outputContexts: [],
+      replacements: [],
+      semanticAttributes: [],
+    };
+  }
+
+  const methodAttribute = element.attributes.find((attribute) => attribute.name === 'method');
+  const keyAttribute = element.attributes.find((attribute) => attribute.name === 'key');
+  if (!keyAttribute && element.repeatable) return null;
+  const targetBase = kebabCase(mutationAttribute.expressionBareIdentifierName);
+  const generatedInMutationSlot = [
+    ...(methodAttribute ? [] : ['method="post"']),
+    `action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
+    `data-mutation="${escapeAttribute(mutationKey)}"`,
+    submittedFormTargetAttribute(targetBase, keyAttribute),
+  ];
+  const replacements = [
+    {
+      end: mutationAttribute.end,
+      replacement: generatedInMutationSlot.join(' '),
+      start: mutationAttribute.start,
+    },
+    ...(keyAttribute ? [submittedFormKeyReplacement(keyAttribute)] : []),
+  ];
+  const semanticAttributes = [
+    ...(methodAttribute ? [] : [' method="post"']),
+    ` action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
+    ` data-mutation="${escapeAttribute(mutationKey)}"`,
+  ];
+  const generatedAttributeNames = new Set([
+    'action',
+    'data-mutation',
+    'key',
+    'kovo-fragment-target',
+    'kovo-key',
+    'mutation',
+    ...(methodAttribute ? [] : ['method']),
+  ]);
+
+  return {
+    conflicts,
+    generatedAttributeNames,
+    outputContexts: [
+      ...(methodAttribute
+        ? []
+        : [formLoweringOutputContext('method', 'post', 'typed mutation form lowering')]),
+      formLoweringOutputContext('action', `/_m/${mutationKey}`, 'typed mutation form lowering'),
+      formLoweringOutputContext('data-mutation', mutationKey, 'typed mutation form lowering'),
+      formLoweringOutputContext(
+        'kovo-fragment-target',
+        submittedFormTargetExpression(targetBase, keyAttribute),
+        'typed mutation form lowering',
+      ),
+      ...(keyAttribute
+        ? [
+            formLoweringOutputContext(
+              'kovo-key',
+              attributeValueExpression(keyAttribute),
+              'typed mutation form lowering',
+            ),
+          ]
+        : []),
+    ],
+    replacements,
+    semanticAttributes,
+  };
+}
+
+function repeatableMutationFormDiagnostic(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  options: { fileName: string; registryFacts?: RegistryFacts; source: string } | undefined,
+): CompilerDiagnostic | null {
+  if (!options || element.tag !== 'form' || !element.repeatable) return null;
+  if (element.attributes.some((attribute) => attribute.name === 'key')) return null;
+
+  const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
+  if (!mutationAttribute?.expressionBareIdentifierName) return null;
+  if (
+    !localMutationKey(model, mutationAttribute.expressionBareIdentifierName, options.registryFacts)
+  ) {
+    return null;
+  }
+
+  return {
+    ...diagnosticFor(
+      options.fileName,
+      'KV238',
+      options.source,
+      mutationAttribute.start,
+      mutationAttribute.end - mutationAttribute.start,
+    ),
+    message: `${diagnosticDefinitions.KV238.message} repeatable enhanced mutation form needs authored key identity`,
+  };
+}
+
+function enhancedMutationFormConflicts(element: JsxElementModel): EnhancedMutationFormConflict[] {
+  return element.attributes
+    .filter((attribute) =>
+      ['action', 'data-mutation', 'kovo-fragment-target', 'kovo-key'].includes(attribute.name),
+    )
+    .map((attribute) => ({ attribute }));
+}
+
+function localMutationKey(
+  model: ComponentModuleModel,
+  localName: string,
+  registryFacts?: RegistryFacts,
+): string | null {
+  const call = model.calls.find(
+    (candidate) =>
+      candidate.name === 'mutation' &&
+      candidate.exportedConstName === localName &&
+      typeof candidate.argumentStaticValues[0] === 'string',
+  );
+  const key = call?.argumentStaticValues[0];
+  if (typeof key === 'string') return key;
+
+  const registryEntry = Object.entries(registryFacts?.mutations ?? {}).find(
+    ([, typeSource]) => typeSource.trim() === `typeof ${localName}`,
+  );
+  return registryEntry?.[0] ?? null;
+}
+
+function submittedFormKeyReplacement(attribute: JsxAttributeModel): SourceReplacement {
+  return {
+    end: attribute.end,
+    replacement: renderAttributeWithName('kovo-key', attribute),
+    start: attribute.start,
+  };
+}
+
+function submittedFormTargetAttribute(
+  base: string,
+  keyAttribute: JsxAttributeModel | undefined,
+): string {
+  const expression = submittedFormTargetExpression(base, keyAttribute);
+  if (!keyAttribute || keyAttribute.expression !== undefined) {
+    return keyAttribute?.expression === undefined
+      ? `kovo-fragment-target="${escapeAttribute(expression)}"`
+      : `kovo-fragment-target={\`${escapeTemplateLiteral(base)}:\${${keyAttribute.expression}}\`}`;
+  }
+
+  return `kovo-fragment-target="${escapeAttribute(expression)}"`;
+}
+
+function submittedFormTargetExpression(
+  base: string,
+  keyAttribute: JsxAttributeModel | undefined,
+): string {
+  if (!keyAttribute) return base;
+  const key = staticAttributeScalar(keyAttribute);
+  return key === null ? `${base}:\${${keyAttribute.expression ?? ''}}` : `${base}:${key}`;
+}
+
+function renderAttributeWithName(name: string, attribute: JsxAttributeModel): string {
+  if (attribute.value !== undefined) {
+    return `${name}="${escapeAttribute(attribute.value)}"`;
+  }
+  if (attribute.expression !== undefined) {
+    return `${name}={${attribute.expression}}`;
+  }
+  const staticValue = attribute.expressionStaticValue;
+  if (
+    staticValue !== undefined &&
+    staticValue !== true &&
+    staticValue !== false &&
+    staticValue !== null
+  ) {
+    return `${name}="${escapeAttribute(String(staticValue))}"`;
+  }
+  return name;
+}
+
+function attributeValueExpression(attribute: JsxAttributeModel): string {
+  const staticValue = staticAttributeScalar(attribute);
+  if (staticValue !== null) return staticValue;
+  return attribute.expression ?? '';
+}
+
+function staticAttributeScalar(attribute: JsxAttributeModel): string | null {
+  if (attribute.value !== undefined) return attribute.value;
+  const staticValue = attribute.expressionStaticValue;
+  if (typeof staticValue === 'string' || typeof staticValue === 'number')
+    return String(staticValue);
+  return null;
+}
+
+function escapeTemplateLiteral(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${');
+}
+
+function formLoweringOutputContext(
+  sink: string,
+  expression: string,
+  writer: GeneratedOutputWriteFact['writer'],
+): GeneratedOutputWriteFact {
+  return {
+    context: outputContextForAttribute(sink),
+    expression,
+    sink,
+    source: 'server-render',
+    writer,
+  };
+}
+
+function handlerOutputContexts(handler: HandlerLowering): GeneratedOutputWriteFact[] {
   return [
     {
       context: outputContextForAttribute(handler.attributeName),
@@ -607,6 +1003,7 @@ function renderHostStampWrites(
   const writes: ServerRenderStampWriteFact[] = [];
   const componentIdentity = componentIdentityStamp(hostElement, domComponentName);
   const declaredQueryDeps = declaredQueryDepsStamp(model, hostElement);
+  const fragmentTarget = inferredFragmentTargetStamp(model, hostElement, domComponentName);
   const stateJson = staticStateJson(model);
 
   if (componentIdentity) {
@@ -620,6 +1017,21 @@ function renderHostStampWrites(
   }
   if (declaredQueryDeps) {
     writes.push(declaredQueryDeps);
+  }
+  if (fragmentTarget) {
+    if (fragmentTarget.mode === 'replace') {
+      const existing = hostElement.attributes.find(
+        (attribute) => attribute.name === 'kovo-fragment-target',
+      );
+      if (existing) {
+        conflicts.push({
+          attribute: existing,
+          attr: 'kovo-fragment-target',
+          writer: 'host fragment target stamp',
+        });
+      }
+    }
+    writes.push(fragmentTarget);
   }
   if (stateJson) {
     const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-state');
@@ -644,6 +1056,33 @@ function renderHostStampWrites(
   }
 
   return { conflicts, writes };
+}
+
+function inferredFragmentTargetStamp(
+  model: ComponentModuleModel,
+  hostElement: JsxElementModel,
+  domComponentName: string,
+): ServerRenderStampWriteFact | null {
+  if (!componentHasInferredServerRefreshTarget(model)) return null;
+
+  const existing = hostElement.attributes.find(
+    (attribute) => attribute.name === 'kovo-fragment-target',
+  );
+  if (existing) {
+    return {
+      attr: 'kovo-fragment-target',
+      mode: existing.value === domComponentName ? 'preserve' : 'replace',
+      value: domComponentName,
+      writer: 'host fragment target stamp',
+    };
+  }
+
+  return {
+    attr: 'kovo-fragment-target',
+    mode: 'insert',
+    value: domComponentName,
+    writer: 'host fragment target stamp',
+  };
 }
 
 function componentIdentityStamp(
@@ -699,19 +1138,16 @@ function staticStateJson(model: ComponentModuleModel): string | null {
 }
 
 interface HostStampConflict {
-  attr: 'kovo-c' | 'kovo-state';
+  attr: 'kovo-c' | 'kovo-fragment-target' | 'kovo-state';
   attribute: JsxAttributeModel;
-  writer: 'host identity stamp' | 'host state stamp';
+  writer: 'host fragment target stamp' | 'host identity stamp' | 'host state stamp';
 }
 
 function renderHostStampAttribute(write: ServerRenderStampWriteFact): string {
   return `${write.attr}="${escapeAttribute(write.value)}"`;
 }
 
-function sameEscapedOrRawAttributeValue(
-  actual: string | undefined,
-  expectedRaw: string,
-): boolean {
+function sameEscapedOrRawAttributeValue(actual: string | undefined, expectedRaw: string): boolean {
   return actual === expectedRaw || actual === escapeAttribute(expectedRaw);
 }
 
@@ -720,7 +1156,13 @@ function renderHostStampConflictDiagnostics(
   options: { fileName: string; source: string },
 ): CompilerDiagnostic[] {
   return conflicts.map((conflict) =>
-    writerConflictDiagnostic(options, conflict.attribute, conflict.attr, 'author JSX', conflict.writer),
+    writerConflictDiagnostic(
+      options,
+      conflict.attribute,
+      conflict.attr,
+      'author JSX',
+      conflict.writer,
+    ),
   );
 }
 
@@ -746,7 +1188,13 @@ function handlerStampConflictDiagnostics(
       const existing = element.attributes.find((attribute) => attribute.name === name);
       if (!existing) continue;
       diagnostics.push(
-        writerConflictDiagnostic(options, existing, name, 'author JSX', 'event handler param lowering'),
+        writerConflictDiagnostic(
+          options,
+          existing,
+          name,
+          'author JSX',
+          'event handler param lowering',
+        ),
       );
     }
   }

@@ -48,6 +48,14 @@
         "types": "./dist/html-fragment.d.mts",
         "default": "./dist/html-fragment.mjs"
       },
+      "./integration": {
+        "types": "./dist/integration/index.d.mts",
+        "default": "./dist/integration/index.mjs"
+      },
+      "./integration/define": {
+        "types": "./dist/integration/define-fixture.d.mts",
+        "default": "./dist/integration/define-fixture.mjs"
+      },
       "./page": {
         "types": "./dist/page.d.mts",
         "default": "./dist/page.mjs"
@@ -79,7 +87,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/index.ts src/page.ts src/pglite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
+    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/index.ts src/integration/define-fixture.ts src/integration/index.ts src/page.ts src/pglite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

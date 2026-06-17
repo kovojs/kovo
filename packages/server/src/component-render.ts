@@ -4,6 +4,8 @@ import type {
   ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
+import type { MutationFail } from './mutation.js';
+import type { ValidationFailurePayload } from './schema.js';
 
 /**
  * Runtime inputs for rendering a component outside the full document pipeline.
@@ -17,6 +19,17 @@ export interface ComponentRenderOptions<State extends JsonValue = JsonValue> {
   slots?: ComponentRenderSlots;
   /** Serializable component state for stateful server component renders. */
   state?: State;
+}
+
+/**
+ * Options for rendering a component with one SPEC §6.3 mutation form failure
+ * injected into its `forms.<name>.failure` slot.
+ */
+export interface ComponentMutationFailureRenderOptions<
+  State extends JsonValue = JsonValue,
+> extends ComponentRenderOptions<State> {
+  /** Component-local key from `mutations: { ... }`, e.g. `addToCart`. */
+  formName: string;
 }
 
 /**
@@ -44,4 +57,93 @@ export function renderComponent<
   ) => unknown;
 
   return String(render(queries, state, slots));
+}
+
+/**
+ * Render a component failure target with SPEC §6.3/§9.2 mutation form state injected.
+ *
+ * Enhanced mutation failures rerender the submitted form target through the same component
+ * render function; this helper prepares the `forms.<mutation>.failure` slot value that
+ * app-authored TSX reads during that render.
+ */
+export function renderComponentMutationFailure<
+  const Definition extends ComponentDefinitionInput,
+  Queries,
+  State extends JsonValue = JsonValue,
+>(
+  component: Component<Definition>,
+  queries: Queries,
+  failure: MutationFail,
+  options: ComponentMutationFailureRenderOptions<State>,
+): string {
+  const { formName, slots, ...renderOptions } = options;
+
+  return renderComponent(component, queries, {
+    ...renderOptions,
+    slots: componentMutationFailureSlots(formName, failure, slots),
+  });
+}
+
+/**
+ * Build component render slots with one typed mutation-form failure state.
+ *
+ * This lower-level helper is useful when a component render helper needs to
+ * merge a mutation failure with existing slots before calling
+ * `renderComponent(...)` or `definition.render(...)` directly.
+ */
+export function componentMutationFailureSlots(
+  formName: string,
+  failure: MutationFail,
+  slots: ComponentRenderSlots = {},
+): ComponentRenderSlots {
+  const forms = isRecord(slots.forms) ? slots.forms : {};
+
+  return {
+    ...slots,
+    forms: {
+      ...forms,
+      [formName]: {
+        failure: componentMutationFailureValue(failure),
+      },
+    },
+  };
+}
+
+function componentMutationFailureValue(failure: MutationFail): unknown {
+  if (failure.error.code === 'VALIDATION' && isValidationFailurePayload(failure.error.payload)) {
+    return {
+      code: 'VALIDATION',
+      fields: Object.fromEntries(
+        failure.error.payload.issues.map((issue) => [issue.path.join('.'), issue.message]),
+      ),
+    };
+  }
+
+  return {
+    code: failure.error.code,
+    payload: failure.error.payload,
+  };
+}
+
+function isValidationFailurePayload(value: unknown): value is ValidationFailurePayload {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'issues' in value &&
+    Array.isArray(value.issues) &&
+    value.issues.every(
+      (issue) =>
+        typeof issue === 'object' &&
+        issue !== null &&
+        'message' in issue &&
+        typeof issue.message === 'string' &&
+        'path' in issue &&
+        Array.isArray(issue.path) &&
+        issue.path.every((part: unknown) => typeof part === 'string'),
+    )
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

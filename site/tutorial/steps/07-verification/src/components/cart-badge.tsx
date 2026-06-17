@@ -9,7 +9,6 @@ import { cartQuery, type CartResult } from '../queries.js';
 
 // snippet:cart-badge
 export const CartBadge = component({
-  fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart }: { cart: CartResult }) => (
     <cart-badge>

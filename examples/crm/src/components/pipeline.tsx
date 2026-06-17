@@ -1,4 +1,6 @@
 /** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { mutationFormAttributes } from '@kovojs/server';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 import {
@@ -9,8 +11,20 @@ import {
   TableHeaderCell,
   TableRow,
 } from '@kovojs/ui/table';
-import type { ContactRow, DealRow, PipelineStageBucket } from '../queries.js';
-import { freshId, money, renderCrmShell, stageBadge } from './chrome.js';
+
+import { createDeal } from '../mutations.js';
+import {
+  contactListQuery,
+  openDealsQuery,
+  pipelineByStageQuery,
+  type ContactListResult,
+  type ContactRow,
+  type DealRow,
+  type OpenDealsResult,
+  type PipelineByStageResult,
+  type PipelineStageBucket,
+} from '../queries.js';
+import { freshId, money, renderCrmShell, stageBadge } from '../components/chrome.js';
 
 // Pipeline dashboard (route `/`). Reads the `pipelineByStage` aggregate (SUM by
 // stage — the out-of-grammar GROUP BY query whose optimism is hand-written in
@@ -20,7 +34,7 @@ import { freshId, money, renderCrmShell, stageBadge } from './chrome.js';
 // mutationResponse can re-render the pipeline from server truth: opening a new
 // deal morphs the bucket totals and the open-deals table in place (SPEC.md §9.1).
 
-export const PIPELINE_TARGET = 'crm-pipeline';
+export const PIPELINE_TARGET = 'pipeline-region';
 
 // The stages a new deal can start in (mirrors the demo data / pipelineByStage
 // buckets). A new deal opens in one of these; 'won' is reached via closeDeal.
@@ -83,83 +97,114 @@ function renderOpenDealsTable(openDeals: DealRow[], contactsById: Map<string, Co
 }
 
 // The interactive region, rendered both inside the full page and as the
-// createDeal / moveDeal / closeDeal fragment payload (target = PIPELINE_TARGET).
-export function renderPipelineRegion({ buckets, openDeals, contacts }: PipelinePageData): string {
-  const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));
-  const total = buckets.reduce((sum, bucket) => sum + bucket.total, 0);
+// createDeal / moveDeal / closeDeal fragment payload. SPEC.md §4.8: the
+// query-backed component root derives its fragment target in generated output.
+export const PipelineRegion = component({
+  queries: {
+    contactList: contactListQuery,
+    openDeals: openDealsQuery,
+    pipelineByStage: pipelineByStageQuery,
+  },
+  render: ({
+    contactList,
+    openDeals,
+    pipelineByStage,
+  }: {
+    contactList: ContactListResult;
+    openDeals: OpenDealsResult;
+    pipelineByStage: PipelineByStageResult;
+  }) => {
+    const contacts = contactList.items;
+    const buckets = pipelineByStage.buckets;
+    const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));
+    const total = buckets.reduce((sum, bucket) => sum + bucket.total, 0);
 
-  // SPEC.md §6.3: a no-JS "new deal" form. POSTs to the createDeal mutation
-  // (INSERT deal + bump contacts.dealCount); the fragment re-renders the pipeline
-  // so the new bucket total and open-deals row appear from server truth. The text
-  // primary key is minted at render time; ownerId is the demo session user.
-  const composer = Card.definition.render({
-    children: (
-      <form method="post" action="/_m/createDeal" enhance data-mutation="createDeal">
-        <input type="hidden" name="id" value={freshId('d')} />
-        <input type="hidden" name="ownerId" value="u1" />
-        <div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-start">
-          <select
-            name="contactId"
-            required
-            class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          >
-            {contacts.map((contact) => (
-              <option value={contact.id}>{contact.name}</option>
-            ))}
-          </select>
-          <select
-            name="stage"
-            class="crm-input rounded-md border border-slate-300 px-3 py-2 text-sm capitalize"
-          >
-            {NEW_DEAL_STAGES.map((stage) => (
-              <option value={stage}>{stage}</option>
-            ))}
-          </select>
-          <input
-            name="amount"
-            type="number"
-            min="0"
-            required
-            placeholder="Amount"
-            class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-          {Button.definition.render({ variant: 'primary', type: 'submit', children: 'Create deal' })}
+    return (
+      <div class="space-y-8">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Sales pipeline</h1>
+          <p class="mt-1 text-sm text-slate-600">
+            {money(total)} across {buckets.length} stages, <span>{openDeals.items.length}</span>{' '}
+            deals open now.
+          </p>
         </div>
-      </form>
-    ),
-  });
 
-  return (
-    <div class="space-y-8" kovo-fragment-target={PIPELINE_TARGET}>
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight">Sales pipeline</h1>
-        <p class="mt-1 text-sm text-slate-600">
-          {money(total)} across {buckets.length} stages, {openDeals.length} deals open now.
-        </p>
+        <section>
+          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            By stage
+          </h2>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {buckets.map((bucket) => renderStageCard(bucket))}
+          </div>
+        </section>
+
+        {/* SPEC.md §6.3: a no-JS "new deal" form. POSTs to the createDeal mutation
+          (INSERT deal + bump contacts.dealCount); the fragment re-renders the
+          pipeline so the new bucket total and open-deals row appear from server
+          truth. The text primary key is minted at render time; ownerId is the
+          demo session user. */}
+        <section>
+          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            New deal
+          </h2>
+          <form
+            {...mutationFormAttributes(createDeal)}
+            class="rounded-lg border border-slate-200 bg-white p-4"
+          >
+            <input type="hidden" name="id" value={freshId('d')} />
+            <input type="hidden" name="ownerId" value="u1" />
+            <div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-start">
+              <select
+                name="contactId"
+                required
+                class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              >
+                {contacts.map((contact) => (
+                  <option value={contact.id}>{contact.name}</option>
+                ))}
+              </select>
+              <select
+                name="stage"
+                class="crm-input rounded-md border border-slate-300 px-3 py-2 text-sm capitalize"
+              >
+                {NEW_DEAL_STAGES.map((stage) => (
+                  <option value={stage}>{stage}</option>
+                ))}
+              </select>
+              <input
+                name="amount"
+                type="number"
+                min="0"
+                required
+                placeholder="Amount"
+                class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+              {Button.definition.render({
+                children: 'Create deal',
+                type: 'submit',
+                variant: 'primary',
+              })}
+            </div>
+          </form>
+        </section>
+
+        <section>
+          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Open deals
+          </h2>
+          {renderOpenDealsTable(openDeals.items, contactsById)}
+        </section>
       </div>
+    );
+  },
+});
 
-      <section>
-        <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">By stage</h2>
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {buckets.map((bucket) => renderStageCard(bucket))}
-        </div>
-      </section>
-
-      <section>
-        <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">New deal</h2>
-        {composer}
-      </section>
-
-      <section>
-        <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Open deals
-        </h2>
-        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          {renderOpenDealsTable(openDeals, contactsById)}
-        </div>
-      </section>
-    </div>
-  );
+export function renderPipelineRegion({ buckets, openDeals, contacts }: PipelinePageData): string {
+  return PipelineRegion.definition.render({
+    contactList: { items: contacts },
+    openDeals: { items: openDeals },
+    pipelineByStage: { buckets },
+  });
 }
 
 export function renderPipelinePage(data: PipelinePageData): string {

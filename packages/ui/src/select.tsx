@@ -160,7 +160,9 @@ export const selectTriggerClasses = [style.attrs(selectStyles.trigger).class ?? 
 export const selectContentClasses = [style.attrs(selectStyles.content).class ?? ''] as const;
 export const selectItemClasses = [style.attrs(selectStyles.item).class ?? ''] as const;
 export const selectValueClasses = [style.attrs(selectStyles.value).class ?? ''] as const;
-export const selectHiddenInputClasses = [style.attrs(selectStyles.hiddenInput).class ?? ''] as const;
+export const selectHiddenInputClasses = [
+  style.attrs(selectStyles.hiddenInput).class ?? '',
+] as const;
 
 export const Select = component({
   render(props: SelectProps) {
@@ -357,11 +359,7 @@ export const SelectValue = component({
     const styleAttrs = style.attrs(selectStyles.value, props.styles?.value);
 
     return (
-      <span
-        {...styleAttrs}
-        data-placeholder={attrs['data-placeholder']}
-        id={attrs.id}
-      >
+      <span {...styleAttrs} data-placeholder={attrs['data-placeholder']} id={attrs.id}>
         {escapeHtml(selectValueText(props))}
       </span>
     );

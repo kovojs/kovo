@@ -139,7 +139,9 @@ export function validateResidualStamps(
     ...componentQueryNames(model),
   ]);
   const knownComponents = new Set([
-    ...model.components.map((component) => deriveComponentNames(options.fileName, component).domName),
+    ...model.components.map(
+      (component) => deriveComponentNames(options.fileName, component).domName,
+    ),
     ...(options.registryFacts?.components ?? []),
   ]);
   for (const attribute of jsxAttributes(model)) {

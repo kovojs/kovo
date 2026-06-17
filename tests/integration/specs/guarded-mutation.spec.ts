@@ -21,9 +21,9 @@ test('enhanced guarded mutation blocks anonymous writes and permits signed-in wr
   expect(await deniedResponse.text()).toContain('data-error-code="UNAUTHORIZED"');
   await expect(page.getByRole('alert')).toHaveAttribute('data-error-code', 'UNAUTHORIZED');
   await expect(page.locator('[data-count]')).toHaveText('0');
-  await expect(kovoApp.db.query('select count from guarded_counter where id = 1')).resolves.toEqual([
-    { count: 0 },
-  ]);
+  await expect(kovoApp.db.query('select count from guarded_counter where id = 1')).resolves.toEqual(
+    [{ count: 0 }],
+  );
 
   await page.context().addCookies([
     {
@@ -42,7 +42,7 @@ test('enhanced guarded mutation blocks anonymous writes and permits signed-in wr
   await allowedResponsePromise;
 
   await expect(page.locator('[data-count]')).toHaveText('1');
-  await expect(kovoApp.db.query('select count from guarded_counter where id = 1')).resolves.toEqual([
-    { count: 1 },
-  ]);
+  await expect(kovoApp.db.query('select count from guarded_counter where id = 1')).resolves.toEqual(
+    [{ count: 1 }],
+  );
 });

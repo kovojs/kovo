@@ -1,19 +1,13 @@
 // @kovojs-ir — lowered from examples/commerce/src/components/product-grid.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
 import { escapeText } from '@kovojs/server';
-import { component } from '@kovojs/core';
-import { csrfField } from '@kovojs/server';
+import { component, form, type ComponentRenderSlots, type FormFailure } from '@kovojs/core';
+import { componentMutationFailureSlots, csrfField, type MutationFail } from '@kovojs/server';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
-import {
-  commerceCsrf,
-  type AddToCartFailure,
-  type AddToCartFailureState,
-  type CommerceRequest,
-  type ProductGridResult,
-} from '../app.js';
+import { addToCart, commerceCsrf, type CommerceRequest, type ProductGridResult } from '../app.js';
 import { productGridQuery } from '../queries.js';
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native
@@ -23,33 +17,50 @@ import { productGridQuery } from '../queries.js';
 // keyed per-item markup with request-scoped forms is beyond paths, derives,
 // and keyed lists), declared await-fragment in addToCartOptimistic.
 //
-// The render context (per-request CSRF fields and the no-JS add-to-cart
-// failure state) is mutation-form infrastructure, not query data; SPEC.md
-// Appendix A assigns form rendering to <f.Form>, which @kovojs/server does not
-// provide yet, so app.ts passes the context as an explicit second render
-// argument alongside the declared queries (recorded in the archived v1 roadmap).
-// The lowered IR is committed at src/generated/product-grid.tsx and is what
-// the app imports at runtime.
+// Render slots carry request-only CSRF data and SPEC.md §6.3 mutation form
+// state. The lowered IR is committed at src/generated/product-grid.tsx and is
+// what the app imports at runtime.
 
-export interface ProductGridRenderContext {
-  failure?: AddToCartFailureState | undefined;
+const addToCartForm = form<
+  'cart/add',
+  { productId: string; quantity: number },
+  { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } }
+>('cart/add');
+
+export type AddToCartFailure = FormFailure<typeof addToCartForm>;
+
+type ProductGridMutationSlots = ComponentRenderSlots<{ addToCart: typeof addToCartForm }>;
+
+export type ProductGridRenderSlots = ProductGridMutationSlots & {
+  productId?: string | undefined;
   readOnly?: boolean | undefined;
   request?: CommerceRequest | undefined;
-}
+};
+
+const defaultProductGridRenderSlots: ProductGridRenderSlots = {
+  forms: { addToCart: { failure: null } },
+};
 
 export const ProductGrid = component({
-  fragmentTarget: true,
+  mutations: { addToCart: addToCartForm },
   queries: { productGrid: productGridQuery },
   render: (
     { productGrid }: { productGrid: ProductGridResult },
-    context: ProductGridRenderContext = {},
+    _state,
+    slots: ProductGridRenderSlots = defaultProductGridRenderSlots,
   ) => {
     const { nextCursor } = productGrid;
     return (
-      <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid">
-        {renderProductGridItems(productGrid, context.failure, context.request, {
-          readOnly: context.readOnly,
-        })}
+      <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid" kovo-fragment-target="product-grid">
+        {renderProductGridItems(
+          productGrid,
+          slots.productId,
+          slots.forms.addToCart.failure,
+          slots.request,
+          {
+            readOnly: slots.readOnly,
+          },
+        )}
       </section>
     );
   },
@@ -60,17 +71,13 @@ ProductGrid.name = "components/product-grid/product-grid";
 // mode="append" pagination fragment (which morphs into the existing host).
 export function renderProductGridItems(
   result: ProductGridResult,
-  failure?: AddToCartFailureState,
+  failureProductId?: string,
+  failure?: AddToCartFailure | null,
   request?: CommerceRequest,
   options: { readOnly?: boolean | undefined } = {},
 ): string {
   const cards = result.items.map((item) =>
-    renderProductCard(
-      item,
-      failure?.productId === item.id ? failure.failure : undefined,
-      request,
-      options,
-    ),
+    renderProductCard(item, failureProductId === item.id ? failure : null, request, options),
   );
   const cursor = result.nextCursor;
   return (
@@ -112,7 +119,7 @@ function stockBadge(stock: number): string {
 
 function renderProductCard(
   item: ProductItem,
-  failure?: AddToCartFailure,
+  failure?: AddToCartFailure | null,
   request?: CommerceRequest,
   options: { readOnly?: boolean | undefined } = {},
 ): string {
@@ -146,19 +153,12 @@ function renderProductCard(
 // standalone as the failure-rerender fragment (kovo-fragment-target).
 export function renderAddToCartForm(
   item: { id: string; stock: number },
-  failure?: AddToCartFailure,
+  failure?: AddToCartFailure | null,
   request?: CommerceRequest,
 ): string {
   const soldOut = item.stock === 0;
   return (
-    <form
-      method="post"
-      action="/_m/cart/add"
-      enhance
-      data-mutation="cart/add"
-      kovo-fragment-target={productFormTarget(item.id)}
-      class="flex flex-wrap items-end gap-2"
-    >
+    <form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${item.id}`} kovo-key={item.id} class="flex flex-wrap items-end gap-2">
       {request?.session?.id ? csrfField(request, commerceCsrf) : ''}
       <input type="hidden" name="productId" value={item.id} />
       <label class="grid gap-1 text-xs font-medium text-slate-700">
@@ -183,27 +183,48 @@ export function renderAddToCartForm(
   );
 }
 
+export function renderAddToCartMutationFailureForm(
+  item: { id: string; stock: number },
+  failure: MutationFail,
+  request?: CommerceRequest,
+): string {
+  return renderAddToCartForm(item, addToCartFailureFromMutation(failure), request);
+}
+
+export function renderAddToCartMutationFailureError(failure: MutationFail): string {
+  return renderAddToCartError(addToCartFailureFromMutation(failure));
+}
+
 export function renderAddToCartError(failure: AddToCartFailure): string {
-  if (failure.error.code === 'OUT_OF_STOCK') {
-    const payload = failure.error.payload as { availableQuantity?: number };
+  if (failure.code === 'OUT_OF_STOCK') {
     return (
       <output role="alert" data-error-code="OUT_OF_STOCK" class="basis-full text-sm text-red-700">
-        Only {payload.availableQuantity ?? 0} available.
+        Only {escapeText(failure.payload.availableQuantity)} available.
       </output>
     );
   }
 
-  return (
-    <output
-      role="alert"
-      data-error-code={failure.error.code}
-      class="basis-full text-sm text-red-700"
-    >
-      Unable to add this item.
-    </output>
-  );
+  if (failure.code === 'VALIDATION') {
+    return (
+      <output role="alert" data-error-code="VALIDATION" class="basis-full text-sm text-red-700">
+        Unable to add this item.
+      </output>
+    );
+  }
+
+  return '';
 }
 
-export function productFormTarget(productId: string): string {
-  return `product-form:${productId}`;
+function addToCartFailureFromMutation(failure: MutationFail): AddToCartFailure {
+  const slots = componentMutationFailureSlots(
+    'addToCart',
+    failure,
+    defaultProductGridRenderSlots,
+  ) as unknown as ProductGridRenderSlots;
+  const formFailure = slots.forms.addToCart.failure;
+  if (!formFailure) {
+    throw new Error('Expected add-to-cart mutation failure slot');
+  }
+
+  return formFailure;
 }

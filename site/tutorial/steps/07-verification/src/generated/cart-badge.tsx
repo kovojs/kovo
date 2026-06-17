@@ -10,12 +10,12 @@ import { cartQuery, type CartResult } from '../queries.js';
 
 // snippet:cart-badge
 export const CartBadge = component({
-  fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart }: { cart: CartResult }) => (
-    <cart-badge kovo-deps="cart">
+    <cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge">
       Cart: <span data-bind="cart.count">{cart.count}</span>
     </cart-badge>
   ),
 });
+CartBadge.name = "components/cart-badge/cart-badge";
 // /snippet

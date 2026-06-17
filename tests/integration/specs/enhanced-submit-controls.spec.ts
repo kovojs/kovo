@@ -22,15 +22,14 @@ test('keeps real post markup and submits supported coerced values', async ({ pag
     'intent=confirm; quantity=2; includeGift=true; adminNote=missing',
   );
   await expect(
-    kovoApp.db.query(
-      'select quantity, include_gift from enhanced_submit_log order by id',
-    ),
-  ).resolves.toEqual([
-    { include_gift: 1, quantity: 2 },
-  ]);
+    kovoApp.db.query('select quantity, include_gift from enhanced_submit_log order by id'),
+  ).resolves.toEqual([{ include_gift: 1, quantity: 2 }]);
 });
 
-test('preserves clicked submitter button values for enhanced requests', async ({ page, kovoApp }) => {
+test('preserves clicked submitter button values for enhanced requests', async ({
+  page,
+  kovoApp,
+}) => {
   await page.goto('/');
 
   await Promise.all([

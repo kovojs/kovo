@@ -10,6 +10,7 @@ interface StorageSession {
 type StorageRequest = KovoFixtureRequest & { session?: StorageSession | null };
 
 interface FileRow {
+  [key: string]: unknown;
   filename: string;
   owner_id: string;
   storage_key: string;

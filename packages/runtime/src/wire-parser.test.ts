@@ -300,4 +300,57 @@ describe('wire parser HTML entity handling', () => {
       { html: '<span>$7</span>', target: 'cart-total' },
     ]);
   });
+
+  it('parses the delta boolean attribute into QueryChunk.delta (SPEC §9.1.1)', () => {
+    // SPEC §9.1.1: `delta` is a boolean HTML attribute (presence = true, no
+    // value). readAttribute returns '' for a valueless attribute and null when
+    // absent; the parser must treat non-null as true.
+    expect(
+      readQueryChunks('<kovo-query name="cart" delta>{"set":{"count":2}}</kovo-query>'),
+    ).toEqual([{ delta: true, name: 'cart', value: { set: { count: 2 } } }]);
+  });
+
+  it('does not set delta on full-value (non-delta) kovo-query chunks', () => {
+    // SPEC §9.1.1: absence of the delta attribute means a full value — the
+    // runtime must not add delta:false to the shape (keep it sparse).
+    const chunks = readQueryChunks('<kovo-query name="cart">{"count":1}</kovo-query>');
+    expect(chunks).toEqual([{ name: 'cart', value: { count: 1 } }]);
+    expect(Object.hasOwn(chunks[0]!, 'delta')).toBe(false);
+  });
+
+  it('parses delta chunks in a mutation response body', () => {
+    // SPEC §9.1.1: mutation responses may carry delta kovo-query chunks
+    // alongside full chunks and fragment patches.
+    expect(
+      readMutationResponseBodyChunks(
+        [
+          '<kovo-query name="cart" delta>{"set":{"count":3}}</kovo-query>',
+          '<kovo-query name="inventory">{"available":true}</kovo-query>',
+        ].join('\n'),
+      ),
+    ).toEqual({
+      fragments: [],
+      queries: [
+        { delta: true, name: 'cart', value: { set: { count: 3 } } },
+        { name: 'inventory', value: { available: true } },
+      ],
+    });
+  });
+
+  it('parses a delta chunk with key attribute', () => {
+    expect(
+      readQueryChunks('<kovo-query name="product" key="p1" delta>{"set":{"stock":5}}</kovo-query>'),
+    ).toEqual([{ delta: true, key: 'p1', name: 'product', value: { set: { stock: 5 } } }]);
+  });
+
+  it('reads a pre-split delta element chunk through readQueryElementChunk', () => {
+    // SPEC §9.1.1: inline bootstrap splits wire markup before passing raw element
+    // chunks to readQueryElementChunk; delta must survive that path.
+    expect(
+      readQueryElementChunk({
+        attrs: ' name="cart" delta',
+        content: '{"set":{"count":5}}',
+      }),
+    ).toEqual({ delta: true, name: 'cart', value: { set: { count: 5 } } });
+  });
 });

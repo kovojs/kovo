@@ -4,7 +4,10 @@ import { expect, test } from '@kovojs/test/integration';
 
 test.use({ kovoFixture: 'guarded-query-read' });
 
-test('query guard protects initial page render and typed-read endpoint', async ({ page, request }) => {
+test('query guard protects initial page render and typed-read endpoint', async ({
+  page,
+  request,
+}) => {
   const anonymousPage = await page.goto('/?view=summary');
   expect(anonymousPage?.status()).toBe(200);
   await expect(page.locator('[data-denied]')).toHaveText('UNAUTHORIZED');

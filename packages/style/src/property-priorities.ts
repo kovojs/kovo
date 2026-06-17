@@ -712,9 +712,9 @@ export const PSEUDO_CLASS_PRIORITIES: Readonly<{ [key: string]: number }> = {
 };
 
 type AtRulePriorities = {
-  '@supports': 30,
-  '@media': 200,
-  '@container': 300,
+  '@supports': 30;
+  '@media': 200;
+  '@container': 300;
 };
 
 export const AT_RULE_PRIORITIES: Readonly<AtRulePriorities> = {
@@ -777,8 +777,7 @@ export function getPseudoElementPriority(key: string): number | void {
 }
 
 export function getPseudoClassPriority(key: string): number | void {
-  const pseudoBase = (p: string): number =>
-    (PSEUDO_CLASS_PRIORITIES[p] ?? 40) / 100;
+  const pseudoBase = (p: string): number => (PSEUDO_CLASS_PRIORITIES[p] ?? 40) / 100;
 
   const ancestorMatch = RELATIONAL_SELECTORS.ANCESTOR.exec(key);
   if (ancestorMatch?.[1]) {
@@ -792,10 +791,7 @@ export function getPseudoClassPriority(key: string): number | void {
 
   const anySiblingMatch = RELATIONAL_SELECTORS.ANY_SIBLING.exec(key);
   if (anySiblingMatch?.[1] && anySiblingMatch[2])
-    return (
-      20 +
-      Math.max(pseudoBase(anySiblingMatch[1]), pseudoBase(anySiblingMatch[2]))
-    );
+    return 20 + Math.max(pseudoBase(anySiblingMatch[1]), pseudoBase(anySiblingMatch[2]));
 
   const siblingBeforeMatch = RELATIONAL_SELECTORS.SIBLING_BEFORE.exec(key);
   if (siblingBeforeMatch?.[1]) {

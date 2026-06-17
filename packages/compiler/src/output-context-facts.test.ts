@@ -157,7 +157,8 @@ export const StyleOutputContextFacts = component({
 `,
     });
 
-    expect(snapshotFacts(expectFacts(result, { context: 'style-property' }))).toMatchInlineSnapshot(`
+    expect(snapshotFacts(expectFacts(result, { context: 'style-property' })))
+      .toMatchInlineSnapshot(`
       [
         {
           "context": "style-property",
@@ -255,9 +256,10 @@ function expectGeneratedInterpolationFacts(
   expected: readonly Partial<GeneratedOutputWriteFact>[],
 ): void {
   for (const fact of expected) {
-    expect(result.outputContextFacts, `missing output-context fact ${JSON.stringify(fact)}`).toEqual(
-      expect.arrayContaining([expect.objectContaining(fact)]),
-    );
+    expect(
+      result.outputContextFacts,
+      `missing output-context fact ${JSON.stringify(fact)}`,
+    ).toEqual(expect.arrayContaining([expect.objectContaining(fact)]));
   }
 }
 
