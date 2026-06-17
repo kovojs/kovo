@@ -59,7 +59,11 @@ export function p(
     const e = f(x.target);
     if (!e) continue;
 
-    x.mode === 'append' ? e.insertAdjacentHTML('beforeend', x.html) : d(e, x.html);
+    if (x.mode === 'append') {
+      e.insertAdjacentHTML('beforeend', x.html);
+    } else {
+      d(e, x.html);
+    }
     a.push(x.target);
   }
 
@@ -78,7 +82,11 @@ function d(e: HtmlResponseFragmentApplyTarget, h: string): void {
       q.push(x);
     }
 
-  n ? m(e, n) : e.replaceChildren();
+  if (n) {
+    m(e, n);
+  } else {
+    e.replaceChildren();
+  }
   (s as HTMLElement | null)?.focus();
   for (const x of q) if (x.isConnected) x.scrollTop = (x as HTMLElement & { s: number }).s;
 }
@@ -93,7 +101,7 @@ function m(c: Element, n: Element): Element {
     return n;
   }
 
-  for (const a of [...c.attributes]) if (!n.hasAttribute(a.name)) c.removeAttribute(a.name);
+  for (const a of Array.from(c.attributes)) if (!n.hasAttribute(a.name)) c.removeAttribute(a.name);
   for (const a of n.attributes) c.setAttribute(a.name, a.value);
 
   // SPEC.md §9.1: a focused keyed input/textarea keeps its browser-owned
@@ -107,11 +115,11 @@ function m(c: Element, n: Element): Element {
 
 function u(c: Element, n: Element): void {
   const b = new Map(
-    [...c.children]
+    Array.from(c.children)
       .map((child) => [k(child), child] as const)
       .filter((entry): entry is [string, Element] => entry[0] !== null),
   );
-  const r = [...n.childNodes].map((x) => {
+  const r = Array.from(n.childNodes).map((x) => {
     if (x instanceof Element) {
       const z = k(x);
       const v = z ? b.get(z) : undefined;

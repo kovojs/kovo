@@ -408,17 +408,6 @@ function printJsxIrAttribute(attribute: JsxIrAttribute): string {
   return `${attribute.name}="${escapeAttribute(attribute.value.value)}"`;
 }
 
-function rootChanged(element: JsxIrElement): boolean {
-  return (
-    elementOwnChanged(element) ||
-    element.children.some(
-      (child) =>
-        child.kind !== 'text' &&
-        (child.kind === 'expression' ? child.replacement !== undefined : rootChanged(child)),
-    )
-  );
-}
-
 function elementOwnChanged(element: JsxIrElement): boolean {
   return (
     element.removed ||

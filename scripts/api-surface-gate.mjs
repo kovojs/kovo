@@ -136,8 +136,12 @@ export function computeSurfaceReport() {
     }
   }
   return {
-    undocumentedPublic: [...new Set(report.undocumentedPublic)].sort(),
-    boundaryViolations: [...new Set(report.boundaryViolations)].sort(),
+    undocumentedPublic: [...new Set(report.undocumentedPublic)].sort((left, right) =>
+      left.localeCompare(right),
+    ),
+    boundaryViolations: [...new Set(report.boundaryViolations)].sort((left, right) =>
+      left.localeCompare(right),
+    ),
   };
 }
 
@@ -163,10 +167,18 @@ export function runGate({ write = false } = {}) {
   if (write) {
     writeFileSync(
       baselinePath,
-      `${JSON.stringify({ $comment: 'api-surface gate ratchet baseline — known untagged/undocumented public exports. Shrinks as plans/api-cleanup.md Phases 4-8 land. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.', violations }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          $comment:
+            'api-surface gate ratchet baseline - known untagged/undocumented public exports. Shrinks as plans/api-cleanup.md Phases 4-8 land. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.',
+          violations,
+        },
+        null,
+        2,
+      )}\n`,
     );
     process.stdout.write(
-      `api-surface: wrote baseline with ${violations.length} known violations\n`,
+      `api-surface: wrote baseline with ${String(violations.length)} known violations\n`,
     );
     return { ok: true, violations, added: [], removed: [] };
   }
@@ -179,8 +191,8 @@ export function runGate({ write = false } = {}) {
 
   if (report.boundaryViolations.length > 0) {
     process.stderr.write(
-      `api-surface: ${report.boundaryViolations.length} boundary violation(s):\n` +
-        report.boundaryViolations.map((v) => `  + ${v}`).join('\n') +
+      `api-surface: ${String(report.boundaryViolations.length)} boundary violation(s):\n` +
+        report.boundaryViolations.map((v) => '  + ' + String(v)).join('\n') +
         `\nMove @internal/@generated exports behind manifest-declared non-public subpaths, or document public re-exported types. See rules/api-surface.md.\n`,
     );
     return { ok: false, violations, boundaryViolations: report.boundaryViolations, added, removed };
@@ -188,14 +200,14 @@ export function runGate({ write = false } = {}) {
 
   if (added.length > 0) {
     process.stderr.write(
-      `api-surface: ${added.length} NEW undocumented/untagged public export(s):\n` +
+      `api-surface: ${String(added.length)} NEW undocumented/untagged public export(s):\n` +
         added.map((v) => `  + ${v}`).join('\n') +
         `\nDocument them, tag @internal, or move them behind an internal subpath. See rules/api-surface.md.\n`,
     );
     return { ok: false, violations, boundaryViolations: [], added, removed };
   }
   process.stdout.write(
-    `api-surface/v1 public-exports-needing-attention=${violations.length} (baseline=${baseline.violations.length}, fixed-this-run=${removed.length})\n`,
+    `api-surface/v1 public-exports-needing-attention=${String(violations.length)} (baseline=${String(baseline.violations.length)}, fixed-this-run=${String(removed.length)})\n`,
   );
   return { ok: true, violations, boundaryViolations: [], added, removed };
 }

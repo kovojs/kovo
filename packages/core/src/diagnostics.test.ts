@@ -4,7 +4,6 @@ import {
   compilerDiagnosticTeachingSchemas,
   diagnosticDefinitions,
   diagnosticDefinitionText,
-  type DiagnosticCode,
 } from './diagnostics.js';
 
 describe('diagnostic registry', () => {

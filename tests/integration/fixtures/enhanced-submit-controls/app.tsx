@@ -26,8 +26,13 @@ async function renderInitialReport(db: KovoFixtureRequest['db']): Promise<string
 
 function renderSubmittedReport(rawInput: FormData): string {
   return `<output data-submit-report>
-    intent=${String(rawInput.get('intent') ?? 'missing')}; quantity=${String(rawInput.get('quantity') ?? 'missing')}; includeGift=${String(rawInput.get('includeGift') ?? 'missing')}; adminNote=${String(rawInput.get('adminNote') ?? 'missing')}
+    intent=${submittedValue(rawInput, 'intent')}; quantity=${submittedValue(rawInput, 'quantity')}; includeGift=${submittedValue(rawInput, 'includeGift')}; adminNote=${submittedValue(rawInput, 'adminNote')}
   </output>`;
+}
+
+function submittedValue(rawInput: FormData, name: string): string {
+  const value = rawInput.get(name);
+  return typeof value === 'string' ? value : 'missing';
 }
 
 export const submitOrder = mutation('enhanced-submit-controls/submit', {

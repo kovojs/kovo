@@ -282,11 +282,19 @@ const URL_ATTRIBUTES = new Set([
 const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
 
 function hasUnsafeUrlScheme(value: string): boolean {
-  const normalized = value.replace(/[\u0000-\u0020]+/g, '').toLowerCase();
+  const normalized = stripAsciiControlAndSpace(value).toLowerCase();
   const match = /^([a-z][a-z0-9+.-]*):/.exec(normalized);
   if (!match) return false;
 
   return !SAFE_URL_SCHEMES.has(match[1] ?? '');
+}
+
+function stripAsciiControlAndSpace(value: string): string {
+  let normalized = '';
+  for (const char of value) {
+    if (char.charCodeAt(0) > 0x20) normalized += char;
+  }
+  return normalized;
 }
 
 function isExternalHttpUrl(value: string): boolean {

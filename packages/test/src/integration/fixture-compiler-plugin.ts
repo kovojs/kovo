@@ -126,7 +126,11 @@ function fixtureComponentFileName(id: string, root: string): string {
 function cssRuntimeRegistration(assets: readonly ComponentCssAsset[]): string {
   if (assets.length === 0) return '';
 
-  const publicAssets = assets.map(({ criticalCss, ...asset }) => asset);
+  const publicAssets = assets.map((asset) => {
+    const publicAsset: Partial<ComponentCssAsset> = { ...asset };
+    delete publicAsset.criticalCss;
+    return publicAsset;
+  });
 
   return `
 {
