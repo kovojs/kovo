@@ -4,26 +4,29 @@ Make the path from a working local Kovo dev app to a deployed app on **Vercel**,
 **Cloudflare**, or a **VPS** a short, predictable sequence: `kovo build` → run the
 platform's native deploy tool. Normative behavior is governed by `SPEC.md` (esp.
 §9.5 request shell, §5.2 compiler 1:1 emit, §6.6 immutable client URLs, §9.3
-stateless server). This plan adds the build + adapter surface that does not yet
+stateless server). This plan adds the build + preset surface that does not yet
 exist; it does not change framework semantics.
 
 ## Goal
 
 A Kovo app author who has `vp dev` working locally can deploy by:
 
-```ts
-// kovo.config.ts
-import vercel from '@kovojs/adapter-vercel';
-export default { adapter: vercel() };
+```bash
+kovo build                   # auto-detects the host (Vercel/CF), or:
+vercel deploy --prebuilt     # or: wrangler deploy   |   docker build … / scp
 ```
 
-```bash
-kovo build           # adapter decides the output shape
-vercel deploy --prebuilt    # or: wrangler deploy   |   docker build … / scp
+On a VPS or to override detection, name the preset (no extra package — presets ship
+inside `@kovojs/server`):
+
+```ts
+// kovo.config.ts
+import { node } from '@kovojs/server/build';
+export default { preset: node() };
 ```
 
 `kovo build` produces a **self-contained production artifact** — no Vite-from-source
-at request time — shaped by the configured adapter for the chosen platform.
+at request time — shaped by the selected preset for the chosen platform.
 
 ## Non-goals (v1)
 
@@ -45,9 +48,15 @@ at request time — shaped by the configured adapter for the chosen platform.
 - [x] **Edge ambition: Node-first, edge-ready later.** v1 targets = VPS/Node +
   Vercel (Node serverless) + Cloudflare (Workers `nodejs_compat` or Containers).
   True isolate-edge deferred.
-- [x] **Adapter API: adapter packages (SvelteKit/Astro-style).** `kovo.config.ts`
-  names an adapter value (`adapter: vercel()`); targets ship as `@kovojs/adapter-*`
-  packages implementing a stable interface.
+- [x] **Preset model (Nitro-style), not separate packages.** The config keeps the
+  value ergonomics (`preset: vercel()`), but targets are **built into the engine,
+  `@kovojs/server`**, behind a build-time subpath — *not* shipped as `@kovojs/
+  adapter-*` packages. Selection is host **auto-detection** (`VERCEL` / `CF_PAGES`
+  env) with `kovo.config` / `KOVO_PRESET` as override. (Supersedes the earlier
+  "adapter packages" answer: same authoring ergonomics, Nitro's packaging —
+  presets are thin build-time descriptors, the heavy lifting is centralized, and
+  `@kovojs/server` already houses build-time-only code like static export behind
+  subpaths.)
 - [x] **Deploy step: build artifacts, hand off to native tooling.** No CLI
   wrapping of `vercel`/`wrangler`.
 - [x] **DB scope: connection convention only.** `DATABASE_URL` env + per-target
@@ -88,9 +97,10 @@ at request time — shaped by the configured adapter for the chosen platform.
   `Dockerfile` ("the runtime is Vite SSR … we do NOT prune to production deps").
 - [ ] **No app-author build command.** `kovo` CLI has `add/explain/check/audit/
   export/mcp` but no `build`. Evidence: `packages/cli/src/index.ts:123`.
-- [ ] **No adapter interface and no adapters.** Nothing reads `kovo.config`
-  `adapter:` or emits Vercel/Cloudflare/Node output. `kovo.config` currently only
-  carries `packagePrefixes` / `mergeClientModules` (`SPEC.md` §5.2, §6.1.1).
+- [ ] **No preset interface and no presets.** Nothing reads `kovo.config`
+  `preset:` / detects the host / emits Vercel/Cloudflare/Node output. `kovo.config`
+  currently only carries `packagePrefixes` / `mergeClientModules` (`SPEC.md` §5.2,
+  §6.1.1).
 - [ ] **Server-module bundling for serverless is unaddressed.** Client asset
   bundling is solved; bundling the *server* entry (app-shell + user server
   modules + deps) into one deployable function/worker is not.
@@ -116,102 +126,113 @@ dist/.kovo/
   meta.json          # kovo + node version, build hash, static-only flag
 ```
 
-This is the single source the adapter transforms. It is produced by promoting the
-already-existing internal pipeline (`createKovoAppShellViteBuildFromManifestFile` +
-`toNodeHandler`) into a supported, app-author-facing build, plus a **server-bundle
-step** (esbuild/rollup via vite-plus) that turns `src/app-shell.ts` into
-`server/handler.mjs` with no Vite dependency.
+This is the single source each **preset** transforms (Nitro's `.output/`, Kovo's
+`dist/.kovo/`). It is produced by promoting the already-existing internal pipeline
+(`createKovoAppShellViteBuildFromManifestFile` + `toNodeHandler`) into a supported,
+app-author-facing build, plus a **server-bundle step** (esbuild/rollup via
+vite-plus) that turns `src/app-shell.ts` into `server/handler.mjs` with no Vite
+dependency.
 
 Design rule: the neutral build's `handler.mjs` is the *only* runtime contract.
-Every adapter is "wrap this `Request → Response` handler + place these static
+Every preset is "wrap this `Request → Response` handler + place these static
 files." This keeps the per-platform code tiny and the portability guarantee honest.
 
-### 2. The adapter interface (`@kovojs/adapter-*`)
+### 2. The preset interface (built into `@kovojs/server`, not a separate package)
+
+Following Nitro: presets are **thin build-time descriptors that live in the engine**
+(`@kovojs/server`, behind a build-time subpath such as `@kovojs/server/build`),
+*not* `@kovojs/adapter-*` packages. The same package already houses build-time-only
+code (static export, the Vite build pipeline, the node adapter) behind subpaths the
+runtime handler never imports, so presets add no weight to the production bundle.
+There is **no `@kovojs/adapters` package and no `adapter-kit`** — shared types and
+helpers fold into the same subpath.
 
 ```ts
-// @kovojs/adapter-kit  (shared types)
-export interface KovoAdapter {
-  name: string;                       // 'vercel' | 'cloudflare' | 'node'
+// @kovojs/server/build  (build-time only)
+export interface KovoPreset {
+  name: string;                       // 'node' | 'vercel' | 'cloudflare'
   /** Validate target constraints against the neutral build before emit. */
-  inspect?(build: NeutralBuild): AdapterDiagnostic[];
+  inspect?(build: NeutralBuild): PresetDiagnostic[];
   /** Transform dist/.kovo into platform-native output. */
-  emit(build: NeutralBuild, ctx: AdapterContext): Promise<void>;
+  emit(build: NeutralBuild, ctx: PresetContext): Promise<void>;
 }
 
-export interface AdapterContext {
+export interface PresetContext {
   outDir: string;                     // platform-conventional location
   log: (msg: string) => void;
   readNeutral: () => NeutralBuild;    // server bundle, client assets, manifests
-  // env/secret names the adapter should surface in generated config:
   declaredEnv: string[];              // always includes 'DATABASE_URL' if data plane present
 }
 ```
 
-`kovo.config.ts` gains one field, alongside the existing `packagePrefixes` /
-`mergeClientModules`:
+**Selection — auto-detect first (Nitro's headline UX), config as override:**
+
+1. `kovo build` sniffs the host env (`VERCEL`, `CF_PAGES`, …) and picks the preset
+   with **zero config** on those platforms.
+2. `KOVO_PRESET=cloudflare` env override (CI ergonomics).
+3. `kovo.config.ts` explicit `preset:` — wins over detection, carries typed options:
 
 ```ts
 export default {
-  adapter: vercel({ runtime: 'nodejs', regions: ['iad1'] }),
+  preset: vercel({ runtime: 'nodejs', regions: ['iad1'] }),
   // packagePrefixes, mergeClientModules … unchanged (SPEC §5.2, §6.1.1)
 };
 ```
 
 Design decisions to lock in code review:
 
-- **Adapter is a value, not a string.** `vercel()` returns a configured
-  `KovoAdapter`; this is what lets options (`runtime`, `regions`, container vs
-  function) be typed per adapter without a central union in core. (Matches
-  Astro/SvelteKit; chosen in the locked decisions.)
-- **One adapter per build.** Multi-target is "run `kovo build` per config", not a
-  matrix in one invocation — keeps output dirs unambiguous.
-- **Adapters never see Vite.** They consume `dist/.kovo/`. This is what guarantees
-  a new community target can be written without touching the compiler/runtime.
-- **`inspect()` is where targets fail loudly.** e.g. the Cloudflare adapter
-  asserts `nodejs_compat` is enabled / Container mode chosen and that no banned
-  API is in the server bundle; a future edge adapter would reject TCP DB drivers
-  here rather than at deploy time.
+- **Preset is a value, not a string.** `vercel()` returns a configured `KovoPreset`;
+  options (`runtime`, `regions`, container vs function) stay typed per preset
+  without a central union. (Same authoring ergonomics as Astro/SvelteKit; Nitro's
+  in-engine packaging.)
+- **One preset per build.** Multi-target is "run `kovo build` per config" — keeps
+  output dirs unambiguous.
+- **Presets never see Vite.** They consume `dist/.kovo/` only.
+- **`inspect()` is where targets fail loudly.** e.g. the Cloudflare preset asserts
+  `nodejs_compat` / Container mode and that no banned API is in the server bundle;
+  a future edge preset rejects TCP DB drivers here, not at deploy time.
 
-### 3. The three v1 adapters
+### 3. The three v1 presets
 
-- [ ] **`@kovojs/adapter-node`** → `dist/server/` standalone: a Node entry that
+- [ ] **`node`** → `dist/server/` standalone: a Node entry that
   `toNodeHandler(handler)` behind `node:http`, serves `client/assets` + `client/c`
   with correct cache headers, honors `PORT`/`HOST`, plus a generated `Dockerfile`
   (prod deps only — the key improvement over today's dev-dep image) and an
   optional `systemd` unit. Covers VPS, Fly, Railway, Render.
-- [ ] **`@kovojs/adapter-vercel`** → Vercel **Build Output API v3**
-  (`.vercel/output/`): a Node serverless function wrapping `handler.mjs`, static
-  assets as `output/static/*` with immutable cache config, `config.json` routing.
-  `vercel deploy --prebuilt`. (`runtime: 'nodejs'` only in v1; `edge` reserved.)
-- [ ] **`@kovojs/adapter-cloudflare`** → a Worker entry (`export default { fetch }`)
-  delegating to `handler.mjs` under `compatibility_flags = ["nodejs_compat"]`,
-  static assets via Workers Assets/`[site]`, generated `wrangler.toml`. `inspect()`
-  warns when the data plane needs TCP (recommend Hyperdrive/Containers). `wrangler
-  deploy`.
+- [ ] **`vercel`** → Vercel **Build Output API v3** (`.vercel/output/`): a Node
+  serverless function wrapping `handler.mjs`, static assets as `output/static/*`
+  with immutable cache config, `config.json` routing. `vercel deploy --prebuilt`.
+  (`runtime: 'nodejs'` only in v1; `edge` reserved.)
+- [ ] **`cloudflare`** → a Worker entry (`export default { fetch }`) delegating to
+  `handler.mjs` under `compatibility_flags = ["nodejs_compat"]`, static assets via
+  Workers Assets/`[site]`, generated `wrangler.toml`. `inspect()` warns when the
+  data plane needs TCP (recommend Hyperdrive/Containers). `wrangler deploy`.
 
 ### 4. Cross-cutting contracts
 
 - [ ] **Static-or-dynamic auto-detection.** `routes.json` carries each route's
   export policy (already computed for static export, `SPEC.md` §9.5/KV229). If
   *all* routes are L0/L1-exportable, the neutral build also emits a fully static
-  tree and adapters prefer static output (Vercel static, CF Pages/Assets, plain
+  tree and presets prefer static output (Vercel static, CF Pages/Assets, plain
   Nginx) — no server function needed. Mixed apps get both: static where provable,
   the function for the rest.
 - [ ] **Immutable `/c/` retention across deploys (`SPEC.md` §6.6).** Versioned
   client-module URLs must survive deploys until referencing documents age out.
-  Each adapter documents/implements "don't overwrite, accrete": e.g. node adapter
+  Each preset documents/implements "don't overwrite, accrete": e.g. the node preset
   serves a retained `c/` dir; Vercel/CF rely on content-hash immutability +
   guidance to not purge old versions. This is a real correctness constraint, not a
-  nicety — surfaced in adapter docs and `inspect()` warnings.
+  nicety — surfaced in preset docs and `inspect()` warnings.
 - [ ] **Env & origin.** Convention: `PORT`, `HOST`, `NODE_ENV`, and `DATABASE_URL`
   (only env Kovo names for the data plane). Origin/proto already handled via
-  `Host`/`x-forwarded-proto` in `node.ts`; adapters set `origin` appropriately for
+  `Host`/`x-forwarded-proto` in `node.ts`; presets set `origin` appropriately for
   proxied platforms. Secrets beyond `DATABASE_URL` are pass-through env, undocumented
   by Kovo per the locked DB decision.
 - [ ] **Edge-readiness audit (deferred, tracked).** Catalogue every `node:`
   import on the request path (`node:crypto` in `csrf.ts`/`csp.ts`, `node:stream`
-  in `node.ts`) so a future WebCrypto refactor that unlocks isolate-edge has a
-  scoped worklist. Audit only in this plan; no refactor.
+  in `node.ts`) so the Phase 5 isolate-edge work has a scoped worklist. The likely
+  mechanism is **`unenv`** (Nitro's approach: swap Node built-ins for
+  runtime-appropriate implementations at build time) rather than a hand WebCrypto
+  rewrite. Audit only in this plan; no refactor.
 
 ---
 
@@ -223,44 +244,48 @@ Design decisions to lock in code review:
 - [ ] Add server-bundle step: `src/app-shell.ts` → `server/handler.mjs`
   (`Request → Response`), no Vite at runtime. Verify a bundled handler serves a
   route + a `/_m/` mutation + a `/c/` module with **zero dev deps installed**.
-- [ ] Wire `kovo build` into `packages/cli` (next to `export`); reads
-  `kovo.config.ts`, runs client build → server bundle → neutral emit → adapter.
+- [ ] Wire `kovo build` into `packages/cli` (a thin wrapper, exactly like
+  `kovo export` over `exportStaticApp`); it reads `kovo.config.ts` + host env,
+  runs client build → server bundle → neutral emit → preset.
 - [ ] Evidence target: a test that boots `server/handler.mjs` in a clean
   `node_modules` (prod deps only) and asserts route/mutation/asset responses.
 
-### Phase 1 — Adapter interface + `@kovojs/adapter-node`
-- [ ] `@kovojs/adapter-kit` types (`KovoAdapter`, `AdapterContext`, diagnostics)
-  and `kovo.config` `adapter:` resolution.
-- [ ] `@kovojs/adapter-node`: standalone server + asset serving + cache headers +
-  prod-only `Dockerfile`. Replace the example/demo Vite-from-source serve story
-  with this as the recommended prod path (keep Vite serve for dev only).
+### Phase 1 — Preset interface + `node` preset (in `@kovojs/server/build`)
+- [ ] `KovoPreset` / `PresetContext` types + the build-time subpath export on
+  `@kovojs/server`; preset **selection** (host auto-detect → `KOVO_PRESET` →
+  `kovo.config` `preset:`). No separate package.
+- [ ] `node` preset: standalone server + asset serving + cache headers + prod-only
+  `Dockerfile`. Replace the example/demo Vite-from-source serve story with this as
+  the recommended prod path (keep Vite serve for dev only).
 - [ ] Evidence: container builds with pruned prod deps; `curl` of a route, a
   `/assets/*` (immutable cache header), and a `/_m/` mutation succeed.
 
-### Phase 2 — `@kovojs/adapter-vercel`
+### Phase 2 — `vercel` preset
 - [ ] Emit `.vercel/output/` (Build Output API v3): Node function + static.
-- [ ] Static-only apps emit pure static output (no function).
+- [ ] Auto-detect on `VERCEL` env; static-only apps emit pure static (no function).
 - [ ] Evidence: `vercel build`/`--prebuilt` dry-run validates the output dir;
   golden-file test on `config.json` + function manifest.
 
-### Phase 3 — `@kovojs/adapter-cloudflare`
+### Phase 3 — `cloudflare` preset
 - [ ] Worker entry + `wrangler.toml` with `nodejs_compat`; Workers Assets for
   static; `inspect()` TCP-DB warning + Containers/Hyperdrive guidance.
+- [ ] Auto-detect on `CF_PAGES` env.
 - [ ] Evidence: `wrangler deploy --dry-run` validates; `inspect()` unit tests for
   the banned-API and DB-driver diagnostics.
 
 ### Phase 4 — Templates, docs, examples
-- [ ] `create-kovo` template ships a `kovo.config.ts` with a default
-  `adapter-node` + commented Vercel/CF alternatives; rewrite
+- [ ] `create-kovo` template ships a `kovo.config.ts` with a default `node` preset
+  + commented Vercel/CF alternatives (and a note that those auto-detect); rewrite
   `templates/docs/deployment.md` around `kovo build` + native deploy.
 - [ ] Port one example (commerce) to `kovo build` for its real prod serve; keep
   the per-session demo path (`SPEC.md` §9.5) as a separate concern.
-- [ ] Update root `Dockerfile`/`cloudbuild.yaml` notes to point at adapter output
+- [ ] Update root `Dockerfile`/`cloudbuild.yaml` notes to point at preset output
   where appropriate (or scope them explicitly to the multi-tenant demo).
 
 ### Phase 5 (deferred, not built here) — Isolate-edge
-- [ ] WebCrypto refactor of `csrf.ts`/`csp.ts`; remove `node:` from request path.
-- [ ] HTTP DB driver abstraction (Hyperdrive/Neon/D1); `adapter-vercel` `edge`
+- [ ] `unenv`-based Node-builtin abstraction (`csrf.ts`/`csp.ts`/`node.ts`) instead
+  of a hand WebCrypto rewrite; remove hard `node:` from the request path.
+- [ ] HTTP DB driver abstraction (Hyperdrive/Neon/D1); `vercel` preset `edge`
   runtime + a true-isolate Cloudflare mode.
 
 ---
@@ -268,10 +293,10 @@ Design decisions to lock in code review:
 ## Risks & open questions
 
 - **Server bundling correctness.** User server modules can pull in native/ESM-only
-  deps; the bundler must externalize what it can't bundle and the node adapter must
+  deps; the bundler must externalize what it can't bundle and the node preset must
   ship them. Validate against a real example, not a toy.
 - **Drizzle/PGlite in the bundle.** PGlite (WASM) is demo-only; real apps use TCP
-  Postgres. The node/vercel adapters must not accidentally bundle PGlite's WASM for
+  Postgres. The node/vercel presets must not accidentally bundle PGlite's WASM for
   prod apps. Driver wiring stays app-owned (locked DB decision) but the bundler
   needs sane externals defaults.
 - **`/c/` retention vs. content-hash deploys.** On Vercel/CF, immutable content
@@ -284,7 +309,7 @@ Design decisions to lock in code review:
 ## Proving commands (fill as phases land)
 
 - Neutral build prod-dep boot test: _(Phase 0)_
-- `kovo build` + node adapter container, pruned deps: _(Phase 1)_
+- `kovo build` + node preset container, pruned deps: _(Phase 1)_
 - `vercel build --prebuilt` dry-run + golden config: _(Phase 2)_
 - `wrangler deploy --dry-run` + `inspect()` diagnostics: _(Phase 3)_
-- Example commerce served via adapter-node (no Vite at runtime): _(Phase 4)_
+- Example commerce served via the node preset (no Vite at runtime): _(Phase 4)_
