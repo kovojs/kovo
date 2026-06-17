@@ -283,7 +283,7 @@ export const AddToCartForm = component({
     - Verified with `pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-form.test.ts packages/server/src/mutation*.test.ts packages/server/src/wire-fixtures.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
       `git diff --check` on 2026-06-17.
-- [ ] **6. Enhanced form-target inference and typed failure rerender.**
+- [x] **6. Enhanced form-target inference and typed failure rerender.**
   - Lower enhanced mutation forms to carry a derived submitted-form target without
     app-authored `kovo-fragment-target`.
   - Derive repeated form identity from authored `key` / keyed component props,
@@ -351,8 +351,21 @@ export const AddToCartForm = component({
       `pnpm exec vitest --run packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-endpoint.test.ts`,
       and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
       2026-06-17.
-    - Remaining gap: server/runtime injection of concrete failure state into
-      component render calls is not complete.
+    - `packages/server/src/component-render.ts` now provides
+      `renderComponentMutationFailure()` and `componentMutationFailureSlots()`,
+      injecting concrete SPEC §6.3/§9.2 `forms.<mutation>.failure` state into
+      the ordinary component render call.
+    - `packages/server/src/component-render.test.tsx` covers declared mutation
+      failures as `{ code, payload }` and schema validation failures as
+      `{ code: 'VALIDATION', fields }` in component render slots.
+    - `packages/server/src/mutation-response.test.ts` covers enhanced 422
+      fragment rerender through `renderComponentMutationFailure()`.
+    - `packages/server/src/mutation-no-js.test.ts` covers no-JS full-page 422
+      rerender through the same component mutation failure state helper.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/component-render.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`
+      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
+      2026-06-17.
 - [x] **7. Type registry and breaking migration.**
   - Generate `FragmentTargets` facts for inferred targets so existing typed APIs
     keep working.

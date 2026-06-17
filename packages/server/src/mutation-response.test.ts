@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { component, form } from '@kovojs/core';
 
 import {
   errorBoundary,
   renderMutationEndpointResponse,
   renderMutationResponse,
 } from './mutation.js';
+import { renderComponentMutationFailure } from './component-render.js';
 import { domain } from './domain.js';
 import { query } from './query.js';
 import { s } from './schema.js';
@@ -136,6 +138,54 @@ describe('server mutation primitives', () => {
       status: 422,
     });
     expect(successRenderer).not.toHaveBeenCalled();
+  });
+
+  it('rerenders enhanced form failures through component mutation form state', async () => {
+    const addToCartForm = form<
+      'cart/add',
+      { productId: string; quantity: number },
+      { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } }
+    >('cart/add');
+    const AddToCartForm = component({
+      mutations: { addToCart: addToCartForm },
+      render: (_queries, _state, { forms }) => (
+        `<form>` +
+        (forms.addToCart.failure?.code === 'OUT_OF_STOCK'
+          ? `<output role="alert" data-error-code="OUT_OF_STOCK">Only ${forms.addToCart.failure.payload.availableQuantity} left.</output>`
+          : '') +
+        `</form>`
+      ),
+    });
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
+      handler(_input, _request, context) {
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 1 });
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(addToCart, {
+        headers: {
+          'Kovo-Form-Target': 'product-form:p1',
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'cart-badge=cart',
+        },
+        rawInput: { productId: 'p1', quantity: 2 },
+        redirectTo: '/cart',
+        renderFailureFragment: (failure) =>
+          renderComponentMutationFailure(AddToCartForm, {}, failure, { formName: 'addToCart' }),
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<kovo-fragment target="product-form:p1"><form><output role="alert" data-error-code="OUT_OF_STOCK">Only 1 left.</output></form></kovo-fragment>',
+      headers: {
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      },
+      status: 422,
+    });
   });
 
   it('renders enhanced mutation responses as query and fragment chunks', async () => {
