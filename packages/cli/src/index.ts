@@ -46,6 +46,17 @@ import {
   vendoredUiComponents,
   type AddComponentName,
 } from './add-catalog.js';
+// Shared command manifest is the single source of truth for the bin's usage
+// strings; the docs generator imports the same manifest so the CLI page cannot
+// drift from the binary (see ./commands-manifest.ts).
+import {
+  ADD_USAGE,
+  AUDIT_USAGE,
+  CHECK_USAGE,
+  EXPLAIN_USAGE_LINE,
+  EXPORT_USAGE,
+  MCP_USAGE,
+} from './commands-manifest.js';
 
 interface TouchGraphDiagnosticFact {
   code: DiagnosticCode;
@@ -333,7 +344,7 @@ async function runMcpCommand(args: readonly string[]): Promise<0 | 1> {
 
 function mcpUsage(): string {
   return [
-    'usage: kovo mcp',
+    MCP_USAGE,
     'Reads newline-delimited JSON-RPC requests from stdin and writes newline-delimited responses.',
     '',
   ].join('\n');
@@ -775,7 +786,7 @@ function parseAddArgs(args: readonly string[]): AddArgParseResult {
 
 function addUsage(): string {
   return [
-    `usage: kovo add <component...> [--out <dir>]`,
+    ADD_USAGE,
     `available: ${availableAddComponents()}`,
     '',
   ].join('\n');
@@ -896,7 +907,7 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
 
 function exportUsage(): string {
   return [
-    'usage: kovo export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]',
+    EXPORT_USAGE,
     '',
   ].join('\n');
 }
@@ -1635,7 +1646,7 @@ function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: false }>
   const message =
     error.kind === 'unsupported-family'
       ? `kovo: unsupported check family ${stableValue(error.family)}. expected optimistic or coverage.\n`
-      : 'kovo: usage: kovo check [optimistic|coverage] [graph.json]\n';
+      : `kovo: ${CHECK_USAGE}\n`;
   process.stderr.write(message);
   return 1;
 }
@@ -1648,7 +1659,7 @@ function parseAuditArgs(args: readonly string[]): AuditArgParseResult {
   const parsed = parseFlaggedArgs(args, ['--fail-on-findings']);
   if (!parsed.ok) return parsed;
   if (parsed.positional.length > 1) {
-    return { message: 'kovo: usage: kovo audit [--fail-on-findings] [graph.json]', ok: false };
+    return { message: `kovo: ${AUDIT_USAGE}`, ok: false };
   }
 
   return {
@@ -1714,8 +1725,7 @@ function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
 
 function explainUsage(): ExplainArgParseResult {
   return {
-    message:
-      'kovo: usage: kovo explain component|mutation|query|page <target> [--optimistic] [--layouts] [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]',
+    message: `kovo: usage: ${EXPLAIN_USAGE_LINE}`,
     ok: false,
   };
 }

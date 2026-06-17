@@ -80,6 +80,30 @@ interface SiteDevPlugin {
 export function siteSharedAppShellDevPlugin(): SiteDevPlugin {
   return {
     async configureServer(server) {
+      // The ⌘K search index is part of the agent/static-host surface emitted at
+      // export time (src/aux.ts). Serve it live in dev too — from the same
+      // content pass the pages render from — so search works in `serve` exactly
+      // as it does in the static export (SPEC §9.5 dev/export parity), instead
+      // of 404ing until a build runs.
+      server.middlewares.use(async (request, response, next) => {
+        const pathname = (request.url ?? '').split('?')[0];
+        if (request.method !== 'GET' || pathname !== '/search-index.json') {
+          next();
+          return;
+        }
+        try {
+          const contentModule = await server.ssrLoadModule('/src/content.ts');
+          const loadSiteContent = contentModule.loadSiteContent as () => Promise<{
+            search: unknown;
+          }>;
+          const content = await loadSiteContent();
+          response.setHeader('content-type', 'application/json');
+          response.end(JSON.stringify(content.search));
+        } catch (error) {
+          next(error);
+        }
+      });
+
       const serverModule = await server.ssrLoadModule('@kovojs/server/app-shell/vite');
       const sharedPluginFactory = serverModule.kovoAppShellViteDevPlugin;
       if (typeof sharedPluginFactory !== 'function') {

@@ -22,6 +22,14 @@ const FONT_PRELOADS = [
 
 const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label="Search documentation"><input type="search" class="search-input" placeholder="Search docs&hellip;" on:input="${clientHrefs.search}#query" kovo-state="{}"><ul class="search-results" id="site-search-results"></ul></dialog>`;
 
+// ⌘K / Ctrl-K opens the search dialog. This must be an always-present inline
+// listener, not part of the lazy search island: the island only loads on first
+// interaction, so a keyboard shortcut that lived inside it could never fire on a
+// cold page. Opening focuses the input; the first keystroke then lazy-loads the
+// search module via the input's delegated on:input handler (the index/search
+// logic stays L1-lazy, SPEC §4.4/§7 L1). Esc is handled natively by <dialog>.
+const SEARCH_HOTKEY = `(()=>{addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&!e.altKey&&(e.key==='k'||e.key==='K')){e.preventDefault();const d=document.getElementById('site-search');if(d&&!d.open){d.showModal();const i=d.querySelector('input');if(i)i.focus();}}})})()`;
+
 export const siteDocumentTemplate: DocumentTemplate = ({ parts }) =>
   [
     '<!doctype html>',
@@ -30,6 +38,7 @@ export const siteDocumentTemplate: DocumentTemplate = ({ parts }) =>
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
     `<script>${THEME_SCRIPT}</script>`,
+    `<script>${SEARCH_HOTKEY}</script>`,
     FONT_PRELOADS,
     parts.head,
     parts.queryScripts.join(''),

@@ -2,7 +2,7 @@
 import { component } from '@kovojs/core';
 import { escapeHtml } from '@kovojs/server/internal/html';
 
-import type { Heading, NavGroup, NavLink } from '../content.js';
+import type { ApiSidebar as ApiSidebarData, Heading, NavGroup, NavLink } from '../content.js';
 
 // Site chrome as idiomatic Kovo components (SPEC §4.1) composed at render time
 // (SPEC §4.5 — layouts are render-time function composition, not a nested-layout
@@ -17,15 +17,23 @@ export interface ClientHrefs {
   theme: string;
 }
 
-const NAV: NavLink[] = [
+interface NavItem extends NavLink {
+  /** Extra path prefixes that should also mark this nav item active. Used so the
+   * unified "Reference" entry highlights for the API reference, diagnostics
+   * catalog, and the spec (their URLs stay /api/, /reference/, /spec/). */
+  match?: string[];
+}
+
+// API reference, diagnostics catalog, and the spec are unified under one
+// "Reference" nav entry (a /reference/ landing hub links to all three); their
+// URLs are unchanged.
+const NAV: NavItem[] = [
   { url: '/docs/why-kovo/', title: 'Docs' },
   { url: '/tutorial/', title: 'Tutorial' },
   { url: '/guides/', title: 'Guides' },
   { url: '/gallery/', title: 'Gallery' },
   { url: '/examples/', title: 'Examples' },
-  { url: '/api/', title: 'API' },
-  { url: '/reference/', title: 'Reference' },
-  { url: '/spec/', title: 'Spec' },
+  { url: '/reference/', title: 'Reference', match: ['/api', '/reference', '/spec'] },
 ];
 
 const SUN_ICON = `<svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2m0 14v2M5.6 5.6l1.4 1.4m9.9 9.9 1.4 1.4M3 12h2m14 0h2M5.6 18.4 7 17m9.9-9.9 1.4-1.4"/></svg>`;
@@ -45,8 +53,8 @@ export const SiteHeader = component({
         </a>
         <nav class="site-nav">
           {NAV.map((item) => {
-            const section = item.url.split('/')[1];
-            const active = activePath.startsWith(section ? `/${section}` : item.url);
+            const prefixes = item.match ?? [item.url.replace(/\/$/, '') || item.url];
+            const active = prefixes.some((prefix) => activePath.startsWith(prefix));
             return (
               <a href={item.url} class={active ? 'active' : undefined}>
                 {escapeHtml(item.title)}
@@ -147,6 +155,61 @@ export const PrevNext = component({
     <nav class="pn" aria-label="Pagination">
       {prevNextCard(prev, 'prev')}
       {prevNextCard(next, 'next')}
+    </nav>
+  ),
+});
+
+// Source-link glyph for a symbol row (links to the defining file + line).
+const SOURCE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+
+// Scroll-spy for the API rail: highlight the symbol currently under the header,
+// expand its category, and keep it scrolled into view. A single
+// IntersectionObserver over the heading ids; degrades to the plain linked list
+// with no JS. Inlined (not an island) because scroll-spy is always-on page
+// behavior, not a lazy interaction.
+const API_NAV_SCRIPT = `<script>(function(){var n=document.querySelector('.api-nav');if(!n)return;var L={};n.querySelectorAll('a[href^="#"]').forEach(function(a){L[decodeURIComponent(a.getAttribute('href').slice(1))]=a;});var H=[].slice.call(document.querySelectorAll('.prose h2[id],.prose h3[id],.prose h4[id]'));if(!H.length)return;var cur;function set(id){if(!id||id===cur)return;var p=L[cur];if(p)p.classList.remove('active');var c=L[id];if(c){c.classList.add('active');var d=c.closest('details');if(d)d.open=true;c.scrollIntoView({block:'nearest'});}cur=id;}var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)set(e.target.id);});},{rootMargin:'-72px 0px -75% 0px'});H.forEach(function(h){io.observe(h);});})();</script>`;
+
+export interface ApiSidebarProps {
+  apiSidebar: ApiSidebarData;
+}
+
+/** Right-hand rail for generated API reference pages: symbols grouped into
+ * collapsible (expanded-by-default) categories with counts, each linking to its
+ * anchor plus its defining source line. Replaces the flat heading TOC, which is
+ * unusable at 200+ symbols. */
+export const ApiSidebar = component({
+  render: ({ apiSidebar }: ApiSidebarProps) => (
+    <nav class="api-nav" aria-label="Symbols on this page">
+      <div class="api-nav-head">
+        <p>On this page</p>
+        <a class="api-nav-src-pkg" href={apiSidebar.sourceHref} rel="external">
+          source
+        </a>
+      </div>
+      {apiSidebar.categories.map((category) => (
+        <details class="api-nav-group" open>
+          <summary>
+            {escapeHtml(category.title)}{' '}
+            <span class="api-nav-count">{String(category.symbols.length)}</span>
+          </summary>
+          <ul>
+            {category.symbols.map((symbol) => (
+              <li>
+                <a href={`#${symbol.anchor}`}>{escapeHtml(symbol.name)}</a>
+                <a
+                  class="api-nav-src"
+                  href={symbol.sourceHref}
+                  rel="external"
+                  aria-label={`Source for ${escapeHtml(symbol.name)}`}
+                >
+                  {SOURCE_ICON}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ))}
+      {API_NAV_SCRIPT}
     </nav>
   ),
 });

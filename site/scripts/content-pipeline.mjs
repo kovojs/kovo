@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { generateApiReference } from './api-ref.mjs';
 import { captureAll } from './capture.mjs';
+import { generateCliReference } from './cli-ref.mjs';
 import { generateDiagnosticsReference } from './diagnostics-ref.mjs';
 
 /**
@@ -37,6 +38,7 @@ function captureValues(captures) {
 
 export async function runContentPipeline() {
   await generateApiReference();
+  await generateCliReference();
   await generateDiagnosticsReference();
   await mkdir(genDir, { recursive: true });
 

@@ -427,6 +427,148 @@ canvas {
   padding-left: 1.75rem;
 }
 
+/* API reference rail: category-grouped, collapsible, scroll-spied symbol list.
+   Scrolls within a sticky viewport so 200+ symbols stay usable. */
+.api-nav {
+  font-size: 0.8rem;
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
+  position: sticky;
+  top: 5.5rem;
+  scrollbar-width: thin;
+}
+
+.api-nav-head {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+
+.api-nav-head p {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.api-nav-src-pkg {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.api-nav-src-pkg:hover {
+  color: var(--teal);
+}
+
+.api-nav-group {
+  margin-bottom: 0.5rem;
+}
+
+.api-nav-group > summary {
+  color: var(--dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  list-style: none;
+  padding: 0.3rem 0;
+  text-transform: uppercase;
+}
+
+.api-nav-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.api-nav-group > summary::before {
+  color: var(--faint);
+  content: '▸';
+  display: inline-block;
+  font-size: 0.6rem;
+  margin-right: 0.4rem;
+  transition: transform 0.15s;
+}
+
+.api-nav-group[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.api-nav-count {
+  color: var(--faint);
+  font-weight: 400;
+}
+
+.api-nav ul {
+  border-left: 1px solid var(--edge);
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+}
+
+.api-nav li {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-left: -1px;
+}
+
+.api-nav li > a:first-child {
+  border-left: 1px solid transparent;
+  color: var(--dim);
+  display: block;
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  overflow: hidden;
+  padding: 0.2rem 0 0.2rem 0.85rem;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+  white-space: nowrap;
+}
+
+.api-nav li > a:first-child:hover {
+  border-color: var(--faint);
+  color: var(--ink);
+}
+
+.api-nav li > a.active {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.api-nav-src {
+  color: var(--edge);
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0;
+  padding: 0 0.3rem;
+  transition: opacity 0.15s;
+}
+
+.api-nav li:hover .api-nav-src {
+  opacity: 1;
+}
+
+.api-nav-src:hover {
+  color: var(--teal);
+}
+
+.api-nav-src svg {
+  height: 0.85rem;
+  width: 0.85rem;
+}
+
 .pn {
   display: flex;
   gap: 1rem;
@@ -1209,9 +1351,11 @@ dialog.search-dialog::backdrop {
 }
 
 .search-results a {
+  align-items: center;
   color: var(--ink);
-  display: block;
-  padding: 0.6rem 0.75rem;
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.55rem 0.75rem;
   text-decoration: none;
 }
 
@@ -1220,12 +1364,44 @@ dialog.search-dialog::backdrop {
   background: var(--panel);
 }
 
+.search-results .result-kind {
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  color: var(--faint);
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  padding: 0.12rem 0.4rem;
+  text-transform: uppercase;
+  width: 3.4rem;
+  text-align: center;
+}
+
+.search-results .result-kind[data-kind='function'] {
+  color: var(--teal);
+}
+
+.search-results .result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.search-results .result-title {
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .search-results .result-section {
   color: var(--faint);
   font-family: var(--font-mono);
-  font-size: 0.64rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
 }
 
 /* ── Landing page ──────────────────────────────────────────────────
