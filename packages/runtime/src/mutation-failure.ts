@@ -25,7 +25,7 @@ function parseJsonOrUnknown(raw: string): JsonValue {
 }
 
 function parseFailureOutputChunks(outputs: readonly ElementChunk[]): JsonValue | null {
-  const fields: Record<string, string> = {};
+  const fieldErrors: Record<string, string> = {};
   let declaredFailure: JsonValue | null = null;
 
   // SPEC.md §9.2: enhanced form failures are rendered as response-body HTML.
@@ -36,18 +36,18 @@ function parseFailureOutputChunks(outputs: readonly ElementChunk[]): JsonValue |
     if (code && declaredFailure === null) {
       declaredFailure = {
         code,
-        data: parseOutputPayload(output.content),
+        payload: parseOutputPayload(output.content),
       };
     }
 
     const path = readAttribute(output.attrs, 'data-error-path');
     if (!path) continue;
 
-    fields[path] = unescapeHtml(output.content).trim();
+    fieldErrors[path] = unescapeHtml(output.content).trim();
   }
 
   if (declaredFailure) return declaredFailure;
-  return Object.keys(fields).length > 0 ? { code: 'VALIDATION', fields } : null;
+  return Object.keys(fieldErrors).length > 0 ? { code: 'VALIDATION', fieldErrors } : null;
 }
 
 function parseOutputPayload(content: string): JsonValue {

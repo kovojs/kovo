@@ -505,7 +505,7 @@ export interface GetForm<
 /** The built-in validation failure shape returned when form input fails parsing. */
 export interface FormValidationFailure {
   code: 'VALIDATION';
-  fields: Record<string, string>;
+  fieldErrors: Record<string, string>;
 }
 
 interface SchemaLike<Value> {
@@ -541,7 +541,7 @@ type MutationErrorFailures<Errors> =
     ? {
         [Code in Extract<keyof Errors, string>]: {
           code: Code;
-          data: InferSchemaLike<Errors[Code]>;
+          payload: InferSchemaLike<Errors[Code]>;
         };
       }[Extract<keyof Errors, string>]
     : JsonValue;

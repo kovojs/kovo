@@ -1,4 +1,4 @@
-import { form } from '@kovojs/core';
+import { form, type FormInput } from '@kovojs/core';
 import type { OptimisticFor } from '@kovojs/runtime';
 import {
   guards,
@@ -64,12 +64,8 @@ export const shopCsrf = {
   },
 };
 
-export type AddToCartInput = {
-  productId: string;
-  quantity: number;
-};
-
-export const addToCartForm = form<'cart/add', AddToCartInput>('cart/add');
+export const addToCartForm = form('cart/add');
+export type AddToCartInput = FormInput<typeof addToCartForm>;
 
 export const addToCartTouches = [
   {

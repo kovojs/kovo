@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { createMemoryStorage, form, stripeSignature } from '@kovojs/core';
+import { createMemoryStorage, form, stripeSignature, type FormInput } from '@kovojs/core';
 import {
   createMemoryMutationReplayStore,
   componentMutationFailureSlots,
@@ -369,12 +369,8 @@ export const commerceSignOut = betterAuthSignOutMutation<
 
 export { attachment, cart, order, product, cartQuery, orderHistoryQuery, productGridQuery };
 
-export type AddToCartInput = {
-  productId: string;
-  quantity: number;
-};
-
-export const addToCartForm = form<'cart/add', AddToCartInput>('cart/add');
+export const addToCartForm = form('cart/add');
+export type AddToCartInput = FormInput<typeof addToCartForm>;
 
 export interface UploadReceiptInput {
   orderId: string;

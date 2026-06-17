@@ -1,35 +1,16 @@
-import { form } from '@kovojs/core';
+import { form, type FormInput } from '@kovojs/core';
 
-// SPEC.md §6.3 / §10.4: typed mutation input shapes + their `form(...)` handles.
-// The generated optimistic transforms are `OptimisticFor<typeof <form>>`, so the
-// form's input type drives `$input` and the InvalidationSets/QueryRegistry
-// augmentations (in generated/touch-graph.ts) drive the per-query transform shape.
+// SPEC.md §6.3 / §10.4: typed mutation input shapes come from generated
+// MutationRegistry facts, and InvalidationSets/QueryRegistry drive the per-query
+// optimistic transform shape.
 
-// Type aliases (not interfaces): an object-literal type structurally satisfies
-// `Record<string, JsonValue>`, which `form<Key, Input>` requires.
-export type PostQuestionInput = {
-  id: string;
-  title: string;
-  body: string;
-  authorId: string;
-};
+export const postQuestionForm = form('postQuestion');
+export const postAnswerForm = form('postAnswer');
+export const voteUpForm = form('voteUp');
 
-export type PostAnswerInput = {
-  id: string;
-  questionId: string;
-  body: string;
-  authorId: string;
-};
-
-export type VoteUpInput = {
-  id: string;
-  targetId: string;
-  userId: string;
-};
-
-export const postQuestionForm = form<'postQuestion', PostQuestionInput>('postQuestion');
-export const postAnswerForm = form<'postAnswer', PostAnswerInput>('postAnswer');
-export const voteUpForm = form<'voteUp', VoteUpInput>('voteUp');
+export type PostQuestionInput = FormInput<typeof postQuestionForm>;
+export type PostAnswerInput = FormInput<typeof postAnswerForm>;
+export type VoteUpInput = FormInput<typeof voteUpForm>;
 
 // Query result shapes (the §10.5 algebraic shapes the deriver patches).
 export interface QuestionListItem {

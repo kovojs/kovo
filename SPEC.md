@@ -588,9 +588,9 @@ export const AddToCartForm = component({
 ctx.submit(addToCart, {
   input: { productId: ctx.params.productId, quantity: 1 },
   onError: (err) => {
-    if (err.code === 'OUT_OF_STOCK') toast(`Only ${err.data.availableQuantity} left`);
-    // err: { code:'OUT_OF_STOCK', data:{availableQuantity:number} }
-    //    | { code:'VALIDATION', fields: Record<FieldPath,string> }   — exhaustive
+    if (err.code === 'OUT_OF_STOCK') toast(`Only ${err.payload.availableQuantity} left`);
+    // err: { code:'OUT_OF_STOCK', payload:{availableQuantity:number} }
+    //    | { code:'VALIDATION', fieldErrors: Record<FieldPath,string> }   — exhaustive
   },
 });
 ```

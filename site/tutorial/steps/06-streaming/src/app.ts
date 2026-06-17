@@ -1,4 +1,4 @@
-import { form } from '@kovojs/core';
+import { form, type FormInput } from '@kovojs/core';
 import type { OptimisticFor } from '@kovojs/runtime';
 import {
   mutation,
@@ -42,12 +42,8 @@ export const shopCsrf = {
 };
 
 // snippet:form-value
-export type AddToCartInput = {
-  productId: string;
-  quantity: number;
-};
-
-export const addToCartForm = form<'cart/add', AddToCartInput>('cart/add');
+export const addToCartForm = form('cart/add');
+export type AddToCartInput = FormInput<typeof addToCartForm>;
 // /snippet
 
 // snippet:touches

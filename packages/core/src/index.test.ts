@@ -186,13 +186,13 @@ describe('core authoring APIs', () => {
     } satisfies FormFailure<typeof addToCart>;
     const validationFailure = {
       code: 'VALIDATION',
-      fields: { quantity: 'Expected number >= 1' },
+      fieldErrors: { quantity: 'Expected number >= 1' },
     } satisfies FormFailure<typeof addToCart>;
 
     expect(addToCart.key).toBe('cart/add');
     expect(input.quantity).toBe(2);
     expect(failure.code).toBe('OUT_OF_STOCK');
-    expect(validationFailure.fields.quantity).toBe('Expected number >= 1');
+    expect(validationFailure.fieldErrors.quantity).toBe('Expected number >= 1');
   });
 
   it('threads typed mutation failure state into component render context', () => {
@@ -209,7 +209,7 @@ describe('core authoring APIs', () => {
           return failure.payload.availableQuantity;
         }
         if (failure?.code === 'VALIDATION') {
-          return failure.fields.quantity;
+          return failure.fieldErrors.quantity;
         }
         return null;
       },
@@ -237,16 +237,16 @@ describe('core authoring APIs', () => {
     } satisfies FormInput<typeof addToCart>;
     const failure = {
       code: 'OUT_OF_STOCK',
-      data: { availableQuantity: 0 },
+      payload: { availableQuantity: 0 },
     } satisfies FormFailure<typeof addToCart>;
     const validationFailure = {
       code: 'VALIDATION',
-      fields: { quantity: 'Expected number >= 1' },
+      fieldErrors: { quantity: 'Expected number >= 1' },
     } satisfies FormFailure<typeof addToCart>;
 
     expect(addToCart.key).toBe('cart/add');
     expect(input.quantity).toBe(2);
-    expect(failure.data.availableQuantity).toBe(0);
+    expect(failure.payload.availableQuantity).toBe(0);
     expect(validationFailure.code).toBe('VALIDATION');
 
     const assertMissingInput = () => {
@@ -265,7 +265,7 @@ describe('core authoring APIs', () => {
     };
     const assertUnknownFailure = () => {
       // @ts-expect-error PRICE_CHANGED is not declared by the generated mutation error schema.
-      const unknown = { code: 'PRICE_CHANGED', data: { currentPrice: 2 } } satisfies FormFailure<
+      const unknown = { code: 'PRICE_CHANGED', payload: { currentPrice: 2 } } satisfies FormFailure<
         typeof addToCart
       >;
       return unknown;
@@ -283,12 +283,12 @@ describe('core authoring APIs', () => {
     } satisfies FormInput<typeof priceUpdate>;
     const failure = {
       code: 'PRICE_CHANGED',
-      data: { currentPrice: 1299 },
+      payload: { currentPrice: 1299 },
     } satisfies FormFailure<typeof priceUpdate>;
 
     expect(priceUpdate.key).toBe('cart/price');
     expect(input.price).toBe(1499);
-    expect(failure.data.currentPrice).toBe(1299);
+    expect(failure.payload.currentPrice).toBe(1299);
 
     const assertMissingInput = () => {
       // @ts-expect-error price is required by the server mutation input schema.
@@ -299,7 +299,7 @@ describe('core authoring APIs', () => {
       const unknown = {
         // @ts-expect-error OUT_OF_STOCK is not declared by this server mutation error schema.
         code: 'OUT_OF_STOCK',
-        data: { currentPrice: 1299 },
+        payload: { currentPrice: 1299 },
       } satisfies FormFailure<typeof priceUpdate>;
       return unknown;
     };

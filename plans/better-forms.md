@@ -38,36 +38,21 @@ bound mutation's input schema — is not actually enforced anywhere, and the exa
 its absence in ways that model the wrong patterns. A read-only audit (commerce/crm/stackoverflow/
 gallery + the form type/runtime sources) found:
 
-1. **No `name=` ∈ schema check.** SPEC §6.2 (line 509) lists "Form fields | mutation input schema |
-   names ∈ schema; types match; **completeness** (missing required field = error)" as a proven
-   surface, but **no KV code is assigned and no pass implements it.** The JSX namespace is
-   `interface IntrinsicElements { [tag: string]: Record<string, unknown> }`
-   (`packages/server/src/jsx-runtime.ts`), so `<input name="prce"/>` type-checks identically to the
-   correct name; the mismatch surfaces only as a runtime 422 at submit. The only real enforcement,
-   `formFields(form, [...])` (`packages/core/src/index.ts:615-619`), is opt-in and **called by zero
-   examples**.
-2. **String-keyed `form()` inference is unbacked → examples hand-duplicate the schema.** Generated
-   artifacts augment only `QueryRegistry`/`InvalidationSets`, **never `MutationRegistry`**
-   (`examples/commerce/src/generated/touch-graph.ts:69-77`). So `RegistryMutationInput<Key>` /
-   `RegistryMutationFailure<Key>` fall back to `JsonValue`, forcing hand-written type args that
-   restate the schema and can silently drift:
-   ```ts
-   // examples/commerce/src/components/product-grid.tsx:22 — duplicate of app.ts:436 schema
-   const addToCartForm = form<
-     'cart/add',
-     { productId: string; quantity: number },
-     { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } }
-   >('cart/add');
-   ```
+1. **`name=` ∈ schema checking is partially implemented.** KV242 now exists and local mutation forms
+   are checked for unknown names and missing required fields, including hidden-field/defaulted-field
+   coverage. Cross-module/generated registry field facts, richer coercion metadata, and the full
+   fixture matrix remain open under A1-A4.
+2. **String-keyed `form()` inference was unbacked → examples hand-duplicated the schema.** Resolved
+   2026-06-17: generated example touch-graph artifacts and tutorial registries now augment
+   `MutationRegistry`, and examples/tutorials use bare `form('key')` handles with any exported
+   input aliases derived from `FormInput<typeof form>`.
 3. **CSRF disabled on real browser forms.** SPEC §6.6 (line 652) reserves `csrf: false` for non-browser
    / externally-authenticated endpoints, yet `examples/crm/src/mutations.ts` (addContact, createDeal,
    moveDeal, closeDeal) and `examples/stackoverflow/src/mutations.ts` (postQuestion, postAnswer,
    voteUp) all set `csrf: false` on ordinary browser forms. Only commerce does it correctly.
-4. **Failure shape is split across docs and code.** §6.3 render state (lines 587, 559) uses
-   `failure.payload` / `fieldErrors`; the §6.3 programmatic `ctx.submit` onError (lines 572-574) uses
-   `err.data` / `fields`. Current implementation is also split: component declared failures use
-   `.payload`, component validation failures and `FormValidationFailure` use `.fields`, and runtime
-   `ctx.submit` / `parseMutationFailure` tests use `.data` / `.fields`.
+4. **Failure shape was split across docs and code.** Resolved 2026-06-17: `FormValidationFailure`,
+   `MutationErrorFailures`, component failure slots, `parseMutationFailure`, `ctx.submit` tests, and
+   SPEC §6.3 now use the single public shape `{ code; payload; fieldErrors? }`.
 5. **Typed failure rendering demonstrated in only one app.** Only commerce reads
    `forms.<mutation>.failure` and renders error UI; crm/stackoverflow define no `errors` schema and
    render nothing on failure, so the §9.2 "no-JS fallback with typed failure state" promise is
@@ -219,7 +204,7 @@ path in more than one app — without changing the clean authoring spelling.
       that a schema rename propagates (drift turns the consumer red). Evidence: the assertion file.
       - Evidence 2026-06-17: `examples/commerce/src/form-registry.test.ts` imports the generated
         touch graph, calls bare `form('cart/add')`, and asserts the schema-backed `productId`,
-        `quantity`, `OUT_OF_STOCK.data.availableQuantity`, and validation-failure types against
+        `quantity`, `OUT_OF_STOCK.payload.availableQuantity`, and validation-failure types against
         the explicit-form shape that app code previously carried by hand.
       - Verified with `pnpm --filter @kovojs/example-commerce test -- --run src/form-registry.test.ts`,
         `sh -c 'pnpm --filter @kovojs/example-commerce exec tsc -p tsconfig.json --noEmit --pretty false --noErrorTruncation 2>&1 | rg "form-registry" >/tmp/kovo-form-registry-diagnostics.txt && exit 1 || exit 0'`,
@@ -227,12 +212,25 @@ path in more than one app — without changing the clean authoring spelling.
 
 ## Part C — Example fixes (after A+B; commerce → crm → stackoverflow)
 
-- [ ] **C1. Drop hand-written `form<...>()` type args.** Replace with bare `form('key')` (now
+- [x] **C1. Drop hand-written `form<...>()` type args.** Replace with bare `form('key')` (now
       inferring via B1) in `product-grid.tsx:22`, `app.ts:377`, `crm/src/forms.ts`, and the SO forms;
       delete the duplicated input/error type aliases. Existing suites stay green.
-- [ ] **C2. Sweep tutorials/templates or explicitly defer.** Remove duplicated
+      - Evidence 2026-06-17: Commerce, CRM, and StackOverflow form handles now use bare
+        `form('key')`; exported input aliases in Commerce/CRM/SO derive from
+        `FormInput<typeof form>` instead of restating schema object types; Commerce ProductGrid's
+        failure type now comes from the generated `MutationRegistry` payload shape.
+      - Verified with
+        `rg -n "form<" examples/commerce/src examples/crm/src examples/stackoverflow/src site/tutorial/steps --glob '!**/generated/**'`,
+        `pnpm --filter @kovojs/example-commerce test`,
+        `pnpm --filter @kovojs/example-crm test`,
+        `pnpm --filter @kovojs/example-stackoverflow test`,
+        and all three example `emit-components -- --check` + `emit-graph -- --check` commands.
+- [x] **C2. Sweep tutorials/templates or explicitly defer.** Remove duplicated
       `form<'cart/add', ...>()` type args from tutorial steps and templates that participate in the
       same generated registries, or record a deliberate out-of-scope note with the follow-up owner.
+      - Evidence 2026-06-17: tutorial steps 05, 06, and 07 use bare `form('cart/add')` and derive
+        `AddToCartInput` from `FormInput<typeof addToCartForm>`.
+      - Verified with `node site/tutorial/run-steps.mjs` and the same `rg -n "form<" ...` search.
 - [ ] **C3. CSRF on.** Remove `csrf: false` from crm + stackoverflow browser mutations; adopt the
       commerce `csrf:` + `csrfField(...)` pattern at each render site, and update comments,
       interactive apps, and fixtures/tests that posted without the token.
@@ -244,14 +242,31 @@ path in more than one app — without changing the clean authoring spelling.
 
 ## Part D — SPEC reconciliation
 
-- [ ] **D1. Migrate core/runtime/server failure types.** Change `FormValidationFailure`,
+- [x] **D1. Migrate core/runtime/server failure types.** Change `FormValidationFailure`,
       `MutationErrorFailures`, `componentMutationFailureSlots`, `parseMutationFailure`, and
       `ctx.submit` tests so all public form failure state uses `{ code; payload; fieldErrors? }`.
       Declared mutation failures carry `payload`; schema validation carries
       `{ code: 'VALIDATION'; fieldErrors }`.
-- [ ] **D2. Fix the failure-shape contradiction.** Update SPEC §6.3 lines 572-574 so the
+      - Evidence 2026-06-17: `packages/core/src/index.ts` now exposes
+        `FormValidationFailure.fieldErrors` and `MutationErrorFailures.payload`;
+        `packages/server/src/component-render.ts` normalizes validation issues into
+        `fieldErrors`; `packages/runtime/src/mutation-failure.ts` parses output failures into
+        `payload` / `fieldErrors`; tests cover component slots, parser output, and
+        `ctx.submit` onError values.
+      - Verified with
+        `pnpm exec vitest --run packages/core/src/index.test.ts packages/server/src/component-render.test.tsx packages/runtime/src/mutation-failure.test.ts packages/runtime/src/submit-context-failure.test.ts`,
+        `pnpm --filter @kovojs/example-commerce test`,
+        `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+        `node scripts/api-surface-gate.mjs`.
+- [x] **D2. Fix the failure-shape contradiction.** Update SPEC §6.3 lines 572-574 so the
       programmatic `ctx.submit` onError union uses `payload` / `fieldErrors` (matching lines 587/559
       and the migrated impl), not `data` / `fields`.
+      - Evidence 2026-06-17: `SPEC.md` §6.3 programmatic `ctx.submit` example now reads
+        `err.payload.availableQuantity` and documents the validation branch as
+        `{ code:'VALIDATION', fieldErrors: Record<FieldPath,string> }`.
+      - Verified with
+        `rg -n "failure\\.(data|fields)|err\\.(data|fields)|\\bdata:\\s*\\{[^}\\n]*(availableQuantity|currentPrice|field)|\\bfields:\\s*\\{[^}\\n]*quantity|\\\"data\\\"|\\\"fields\\\"" SPEC.md packages/core/src/index.ts packages/core/src/index.test.ts packages/server/src/component-render.ts packages/server/src/component-render.test.tsx packages/runtime/src/mutation-failure.ts packages/runtime/src/mutation-failure.test.ts packages/runtime/src/submit-context-failure.test.ts examples/commerce/src/form-registry.test.ts examples/commerce/src/components/product-grid.tsx examples/commerce/src/generated/product-grid.tsx`
+        returning no public failure-shape matches.
 - [x] **D3. Cite KV242** wherever §6.2/§6.3 currently promise the form-field check in prose.
   - Evidence 2026-06-17: `SPEC.md` §6.2's typed-surface form-field row now
     cites KV242, and the SPEC diagnostic table includes KV242 for enhanced

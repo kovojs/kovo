@@ -19,11 +19,7 @@ import { productGridQuery } from '../queries.js';
 // state. The lowered IR is committed at src/generated/product-grid.tsx and is
 // what the app imports at runtime.
 
-const addToCartForm = form<
-  'cart/add',
-  { productId: string; quantity: number },
-  { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } }
->('cart/add');
+const addToCartForm = form('cart/add');
 
 export type AddToCartFailure = FormFailure<typeof addToCartForm>;
 

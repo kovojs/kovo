@@ -113,7 +113,7 @@ function componentMutationFailureValue(failure: MutationFail): unknown {
   if (failure.error.code === 'VALIDATION' && isValidationFailurePayload(failure.error.payload)) {
     return {
       code: 'VALIDATION',
-      fields: Object.fromEntries(
+      fieldErrors: Object.fromEntries(
         failure.error.payload.issues.map((issue) => [issue.path.join('.'), issue.message]),
       ),
     };

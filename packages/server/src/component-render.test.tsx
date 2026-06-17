@@ -81,7 +81,7 @@ describe('renderComponent', () => {
       addToCart: {
         failure: {
           code: 'VALIDATION',
-          fields: { quantity: 'Expected number >= 1' },
+          fieldErrors: { quantity: 'Expected number >= 1' },
         },
       },
     });

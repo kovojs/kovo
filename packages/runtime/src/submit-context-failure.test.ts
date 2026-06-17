@@ -21,17 +21,17 @@ describe('submit context failure parsing', () => {
     const addToCart = form<
       'cart/add',
       { productId: string; quantity: number },
-      { code: 'OUT_OF_STOCK'; data: { availableQuantity: number } }
+      { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } }
     >('cart/add');
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const onError = vi.fn((failure: FormFailure<typeof addToCart>) => {
       if (failure.code === 'VALIDATION') {
-        expect(failure.fields.quantity).toBeTypeOf('string');
+        expect(failure.fieldErrors.quantity).toBeTypeOf('string');
         return;
       }
 
-      expect(failure.data.availableQuantity).toBeTypeOf('number');
+      expect(failure.payload.availableQuantity).toBeTypeOf('number');
     });
     const fetch = vi.fn(async () => ({
       status: 422,
@@ -48,7 +48,7 @@ describe('submit context failure parsing', () => {
 
     expect(onError).toHaveBeenCalledWith({
       code: 'OUT_OF_STOCK',
-      data: { availableQuantity: 0 },
+      payload: { availableQuantity: 0 },
     });
     expect(result.fragments).toEqual([
       {
@@ -62,7 +62,7 @@ describe('submit context failure parsing', () => {
     const addToCart = form<
       'cart/add',
       { productId: string; quantity: number },
-      { code: 'OUT_OF_STOCK'; data: { availableQuantity: number } }
+      { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } }
     >('cart/add');
     const store = createQueryStore();
     const root = new FakeMorphRoot();
@@ -70,7 +70,7 @@ describe('submit context failure parsing', () => {
     const fetch = vi.fn(async () => ({
       status: 422,
       async text() {
-        return '<kovo-error data-debug="quantity > stock">{"code":"OUT_OF_STOCK","data":{"availableQuantity":0}}</kovo-error>';
+        return '<kovo-error data-debug="quantity > stock">{"code":"OUT_OF_STOCK","payload":{"availableQuantity":0}}</kovo-error>';
       },
     }));
     const ctx = createSubmitContext({ fetch, root, store });
@@ -82,7 +82,7 @@ describe('submit context failure parsing', () => {
 
     expect(onError).toHaveBeenCalledWith({
       code: 'OUT_OF_STOCK',
-      data: { availableQuantity: 0 },
+      payload: { availableQuantity: 0 },
     });
   });
 
@@ -90,7 +90,7 @@ describe('submit context failure parsing', () => {
     const addToCart = form<
       'cart/add',
       { productId: string; quantity: number },
-      { code: 'OUT_OF_STOCK'; data: { availableQuantity: number } }
+      { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } }
     >('cart/add');
     const store = createQueryStore();
     const root = new FakeMorphRoot();
@@ -110,7 +110,7 @@ describe('submit context failure parsing', () => {
 
     expect(onError).toHaveBeenCalledWith({
       code: 'OUT_OF_STOCK',
-      data: { availableQuantity: 0 },
+      payload: { availableQuantity: 0 },
     });
   });
 
@@ -118,7 +118,7 @@ describe('submit context failure parsing', () => {
     const addToCart = form<
       'cart/add',
       { productId: string; quantity: number },
-      { code: 'VALIDATION'; fields: { quantity: string } }
+      { code: 'VALIDATION'; fieldErrors: { quantity: string } }
     >('cart/add');
     const store = createQueryStore();
     const root = new FakeMorphRoot();
@@ -138,7 +138,7 @@ describe('submit context failure parsing', () => {
 
     expect(onError).toHaveBeenCalledWith({
       code: 'VALIDATION',
-      fields: { quantity: 'Expected number >= 1' },
+      fieldErrors: { quantity: 'Expected number >= 1' },
     });
   });
 
@@ -146,7 +146,7 @@ describe('submit context failure parsing', () => {
     const addToCart = form<
       'cart/add',
       { productId: string; quantity: number },
-      { code: 'VALIDATION'; fields: { quantity: string } }
+      { code: 'VALIDATION'; fieldErrors: { quantity: string } }
     >('cart/add');
     const store = createQueryStore();
     const root = new FakeMorphRoot();
@@ -166,7 +166,7 @@ describe('submit context failure parsing', () => {
 
     expect(onError).toHaveBeenCalledWith({
       code: 'VALIDATION',
-      fields: { quantity: 'Expected number >= 1' },
+      fieldErrors: { quantity: 'Expected number >= 1' },
     });
   });
 });
