@@ -98,27 +98,40 @@ Pattern proven on commerce: import `@kovojs/ui` components and render them with 
 (the JSX runtime only renders functions, so `<Button>`-as-tag does not work; the gallery uses the same
 `.definition.render` pattern). The `kv-*` classes are styled by Part A's generated stylesheet.
 
-**commerce (pilot — product grid done):**
-- [x] **B1 (commerce).** Added `@kovojs/ui` + `@kovojs/style` deps (+ `@kovojs/headless-ui` devDep for
-      the token sheet); `styles.css` `@import`s `generated/kovo-ui.css`.
-- [x] **B2 (commerce products).** `products` gained `name`/`category`/`emoji` (defaulted, so cart/add
-      optimism + fixtures unaffected) + a real seed catalog; `productGridQuery` selects them; IR/graph
-      regenerated; query/source-truth/render fixtures updated. All 55 commerce tests pass.
-- [x] **B3 (commerce product grid).** Card + Badge (category + stock-aware) + Button via
-      `.definition.render`, formatted price, keyed `<article>` host + mutation form intact.
-- [ ] **B3 (commerce remainder).** cart-badge → keep reactive `cart.count` binding (can't wrap a
-      data-bind in `.definition.render`), restyle as a token pill; order-history → `Table` (updates
-      the `'order-1': 'p1 x 2 - 2998'` keyvalue fixtures).
-- [ ] **B4 (commerce).** Page-chrome polish: grid layout, spacing/elevation via token vars.
+**commerce (DONE — 55/55 tests, build clean):**
+- [x] **B1.** `@kovojs/ui` + `@kovojs/style` deps (+ `@kovojs/headless-ui` devDep); `styles.css`
+      `@import`s `generated/kovo-ui.css`.
+- [x] **B2.** `products` gained `name`/`category`/`emoji` (defaulted, optimism/fixtures unaffected) +
+      a real catalog; `productGridQuery` selects them; IR/graph regenerated; fixtures updated.
+- [x] **B3.** Product grid → Card + Badge + Button; order history → keyed rows with Badge + currency
+      via a plain helper (keeps the `<ol>` fragment host); cart badge → clean token pill.
+- [x] **B4.** Added the missing layout utilities to `styles.css`.
 
-**crm (not started):** B1 deps+theme · B2 richer contacts/deals · B3 nav→`Tabs`, buckets→`Card`,
-pipeline→`Table`+`Badge`, forms→`Field`/`Button`/`Dialog` · B4 polish.
+**crm (DONE — `agent/crm`, 20/20 tests, build clean, tsc clean):**
+- [x] B1 deps+theme · B2 `contacts.company`/`title` + `deals.title` (defaulted; **kept off derivable
+      rowset selects** so derived optimism stays untouched — verified `emit-graph --check` no-diff) ·
+      B3 chrome `Badge` stages, contacts `Card`+`Avatar`+`Button`, pipeline `Card`+`Table`+`Badge`,
+      deal-detail `Card`+`Separator`+`Badge`+`Button` · B4 polish.
+- Note: Badge has only neutral/success/warning, so 6 stages map onto 3 tones.
 
-**stackoverflow (not started):** B1 deps+theme · B2 authors/tags/timestamps · B3 list→`Card`/`Table`
-+vote `Button`+`Badge`+`Avatar`, composer→`Field`/`Button` · B4 polish.
+**stackoverflow (DONE — `agent/stackoverflow`, 25/25 tests, build clean):**
+- [x] B1 deps+theme · B2 `questions.author_name`/`tags`/`created_at` + `answers.author_name`/
+      `created_at` (defaulted; not selected by loaders, so §10.5 shapes untouched), demo data with
+      authors/tags/timestamps/excerpts · B3 question rows + answers + composers → `Card`, tags/accepted
+      → `Badge`, authors → `Avatar`, actions → `Button`; keyed `<li>` hosts + vote forms intact · B4 polish.
+- Note: Avatar inline-size `styles` override is dropped at runtime (cosmetic; avatars render 40px).
 
-> Recommended: fan out crm + stackoverflow as parallel sub-agents now that the commerce pattern
-> (dep wiring + `emit-ui-css` + `.definition.render` + fixture-update discipline) is proven.
+**Integration:** both branches merged into `agent/better-examples`; lockfile reconciled. Post-merge
+gates green — compiler 348, api-surface clean, all three example builds emit `kv-*`, suites 55/20/25.
+
+## Known follow-ups (tracked, not blocking)
+- Upstream `@kojvojs/style` emit fixes: unitless lengths + digit-leading `@layer` idents (currently
+  normalized in served text only).
+- `@kojvojs/ui` `style`/`styles` override props are dropped for runtime `style.attrs` objects
+  (commerce avoided them; crm/so hit it cosmetically) — needs a runtime override path.
+- `table.tsx` `[&_tr:last-child]` unsupported StyleX selector (dropped from served CSS).
+- Host-stamping for imported package components (`kovo-ui-` `kovo-c`) — separate SPEC §6.1.1 feature.
+- Visual QA via `pnpm run docs:serve` (not a screenshot in this session).
 
 ---
 
