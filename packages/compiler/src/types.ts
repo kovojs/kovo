@@ -311,6 +311,10 @@ export interface StateDeriveFact {
   placeholder: string;
 }
 
+/**
+ * @internal Lowered-IR fact that records where generated state derive placeholders are
+ * rewritten to versioned client imports. In-repo compiler analysis use only (SPEC.md §5.2).
+ */
 export interface StateDeriveReferenceFact {
   attr: string;
   clientHref: string;

@@ -13,6 +13,10 @@ export type OutputContext =
   | 'script-text'
   | 'trusted-html';
 
+/**
+ * @internal Lowered-IR fact recording a compiler-generated write sink and output context.
+ * In-repo diagnostics and analysis use only (SPEC.md §5.2).
+ */
 export interface GeneratedOutputWriteFact {
   context: OutputContext;
   expression?: string;
