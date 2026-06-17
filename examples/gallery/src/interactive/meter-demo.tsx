@@ -6,10 +6,10 @@ import {
   type MeterDataState,
 } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/meter.tsx)
+// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/meter.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so the classes are
-// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+// directly is KV234 (component package without a prefix), so matching class
+// strings stay in this TSX-authored gallery fixture.
 // METER_CLASS is the styled gauge; the wrapper/label/button have no @kovojs/ui
 // counterpart, so they use the @kovojs/ui button base (packages/ui/src/button.tsx)
 // and sensible layout utilities.

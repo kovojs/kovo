@@ -796,6 +796,14 @@ borrowing its concrete API/spike detail.
     `pnpm exec tsc --noEmit --pretty false`, and `git diff --check` pass. `pnpm --filter
     @kovojs/site run build` reaches `dist-css/assets/site.css` and still stops on the known commerce
     static-export `KV229 route=/deals/:id` gap.
+  - Evidence (partial, 2026-06-17): the gallery authored interactive demos, generated interactive
+    TSX artifacts, app-shell stylesheet comments, and standalone export comments no longer carry stale
+    Tailwind discovery wording. `rg -n -i
+    "tailwind|@tailwind|@source|tailwind\\.css|tailwindcss" examples/gallery` returns no matches;
+    `pnpm --filter @kovojs/example-gallery run emit:interactive-gallery -- --check`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --run src/demo-fixtures.test.ts
+    src/behavior-contracts.test.ts`, `pnpm --filter @kovojs/example-gallery exec tsc --noEmit
+    --pretty false`, and `git diff --check` pass in `agent/stylex-gallery-cleanup`.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

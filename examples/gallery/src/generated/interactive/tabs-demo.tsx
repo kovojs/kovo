@@ -64,10 +64,10 @@ import {
   tabsTriggerAttributes,
 } from '@kovojs/headless-ui/primitives';
 
-// Tailwind classes mirror the @kovojs/ui styled layer (packages/ui/src/tabs.tsx)
+// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/tabs.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so the classes are
-// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+// directly is KV234 (component package without a prefix), so matching class
+// strings stay in this TSX-authored gallery fixture.
 const ROOT_CLASS = 'w-full text-neutral-950 data-[disabled]:opacity-50';
 const LIST_CLASS =
   'inline-flex h-10 items-center gap-1 rounded-md border border-neutral-200 bg-neutral-100 p-1 data-[orientation=vertical]:h-auto data-[orientation=vertical]:flex-col data-[disabled]:opacity-50';
