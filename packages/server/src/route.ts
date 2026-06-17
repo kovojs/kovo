@@ -13,6 +13,7 @@ import {
 } from './guards.js';
 import type { PageHintOptions } from './hints.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
+import { runQuery, type QueryDefinition } from './query.js';
 import {
   htmlServerErrorResponse,
   retryAfterHeaders,
@@ -42,6 +43,46 @@ type RouteParamsFor<Path extends string, ParamsSchema extends MaybeSchema<Record
 type RouteSearchFor<SearchSchema extends MaybeSchema<Record<string, JsonValue>>> =
   SearchSchema extends Schema<infer Search> ? Search : Record<string, JsonValue>;
 
+type LayoutQueryMap<Request> = Readonly<Record<string, QueryDefinition<string, any, any, Request>>>;
+
+/** Resolved layout query values passed to a `layout().render` function (SPEC §4.5/§9.5). */
+export type LayoutQueryResults<Queries> = {
+  [Name in keyof Queries]: Queries[Name] extends QueryDefinition<string, infer Value, any, any>
+    ? Awaited<Value>
+    : unknown;
+};
+
+/** Slots passed to a `layout().render` function: child page/layout HTML plus the lifecycle request. */
+export interface LayoutRenderSlots<Request> {
+  /** The child layout or route page output this layout wraps. */
+  children: unknown;
+  /** The request after configured app lifecycle providers have run. */
+  request: Request;
+}
+
+/** The body passed to `layout()`: optional parent, guard, queries, and chrome render function. */
+export interface LayoutDefinition<
+  Request = unknown,
+  Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
+  Page = unknown,
+> extends PageHintOptions {
+  guard?: Guard<Request>;
+  parent?: LayoutDeclaration<Request, LayoutQueryMap<Request>, unknown>;
+  queries?: Queries;
+  render?: (
+    queries: LayoutQueryResults<Queries>,
+    state: undefined,
+    slots: LayoutRenderSlots<Request>,
+  ) => Page | Promise<Page>;
+}
+
+/** A first-class page-chrome segment, as returned by `layout()`. */
+export interface LayoutDeclaration<
+  Request = unknown,
+  Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
+  Page = unknown,
+> extends LayoutDefinition<Request, Queries, Page> {}
+
 /** The typed context a route `page` receives: parsed `params`, `search`, and the `path`. */
 export interface RouteRequest<
   Path extends string,
@@ -63,6 +104,7 @@ export interface RouteDefinition<
   GuardedRequest extends Request = Request,
 > extends PageHintOptions {
   guard?: Guard<Request, GuardedRequest>;
+  layout?: LayoutDeclaration<any, LayoutQueryMap<any>, unknown>;
   onUnauthenticated?: UnauthenticatedHandler<Request>;
   page?: (
     context: RouteRequest<Path, ParamsSchema, SearchSchema>,
@@ -89,6 +131,21 @@ export interface RouteDeclaration<
 export interface RouteRequestInput {
   params?: unknown;
   search?: unknown;
+}
+
+/**
+ * Declare a reusable nested layout segment. Layouts compose page chrome around a route `page`;
+ * parent layouts wrap child layouts, guards run before the route page, and layout queries load
+ * from the same request lifecycle context as route/component queries (SPEC §4.5/§9.5).
+ */
+export function layout<
+  Request = unknown,
+  const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
+  Page = unknown,
+>(
+  definition: LayoutDefinition<Request, Queries, Page>,
+): LayoutDeclaration<Request, Queries, Page> {
+  return { ...definition };
 }
 
 /** App-scoped route factory. `createApp()` uses this to contextually type route guards/pages from configured request providers (SPEC §6.4/§9.5). */
@@ -197,23 +254,87 @@ export async function runRoutePage<
   const routeRequest = parseRouteRequest(definition, input);
 
   const lifecycleRequest = await resolveLifecycleRequest(request, options);
-  const guardFailure = await runGuard(definition.guard, lifecycleRequest);
-  if (guardFailure) {
-    return {
-      ...(guardFailure.auth === undefined ? {} : { auth: guardFailure.auth }),
-      error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
-      ok: false,
-      ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
-      status: guardFailure.status,
-    };
+  const layouts = routeLayoutChain(definition.layout);
+
+  for (const layoutDeclaration of layouts) {
+    const guardFailure = await runGuard(layoutDeclaration.guard, lifecycleRequest);
+    if (guardFailure) return routeGuardFailure(guardFailure);
   }
 
-  const value = await runWithJsxRequestContext(lifecycleRequest, () =>
-    definition.page?.(routeRequest, lifecycleRequest as GuardedRequest),
-  );
+  const guardFailure = await runGuard(definition.guard, lifecycleRequest);
+  if (guardFailure) return routeGuardFailure(guardFailure);
+
+  const value = await runWithJsxRequestContext(lifecycleRequest, async () => {
+    const pageValue = await definition.page?.(routeRequest, lifecycleRequest as GuardedRequest);
+    if (isNotFound(pageValue) || isRouteResponseOutcome(pageValue)) return pageValue;
+    return renderLayoutChain(layouts, pageValue, lifecycleRequest);
+  });
   if (isNotFound(value)) return { ok: false, status: 404 };
   if (isRouteResponseOutcome(value)) return { ok: true, outcome: value };
   return { ok: true, value: value as Page };
+}
+
+function routeGuardFailure(failure: ResolvedGuardFailure): RoutePageFailure {
+  return {
+    ...(failure.auth === undefined ? {} : { auth: failure.auth }),
+    error: { code: failure.code, payload: failure.payload ?? {} },
+    ok: false,
+    ...(failure.retryAfter === undefined ? {} : { retryAfter: failure.retryAfter }),
+    status: failure.status,
+  };
+}
+
+function routeLayoutChain<Request>(
+  layoutDeclaration: LayoutDeclaration<any, LayoutQueryMap<any>, unknown> | undefined,
+): LayoutDeclaration<any, LayoutQueryMap<any>, unknown>[] {
+  const chain: LayoutDeclaration<any, LayoutQueryMap<any>, unknown>[] = [];
+  const seen = new Set<LayoutDeclaration<any, LayoutQueryMap<any>, unknown>>();
+  let current = layoutDeclaration;
+
+  while (current) {
+    if (seen.has(current)) {
+      throw new Error('Cyclic route layout parent chain.');
+    }
+    seen.add(current);
+    chain.unshift(current);
+    current = current.parent;
+  }
+
+  return chain;
+}
+
+async function renderLayoutChain<Request>(
+  layouts: readonly LayoutDeclaration<any, LayoutQueryMap<any>, unknown>[],
+  pageValue: unknown,
+  request: Request,
+): Promise<unknown> {
+  let value = pageValue;
+  for (const layoutDeclaration of [...layouts].reverse()) {
+    if (!layoutDeclaration.render) continue;
+    const queries = await loadLayoutQueries(layoutDeclaration, request);
+    value = await layoutDeclaration.render(queries, undefined, {
+      children: value,
+      request,
+    });
+  }
+  return value;
+}
+
+async function loadLayoutQueries<Request>(
+  layoutDeclaration: LayoutDeclaration<any, LayoutQueryMap<any>, unknown>,
+  request: Request,
+): Promise<LayoutQueryResults<LayoutQueryMap<any>>> {
+  const values: Record<string, unknown> = {};
+
+  for (const [name, queryDefinition] of Object.entries(layoutDeclaration.queries ?? {})) {
+    const result = await runQuery(queryDefinition, undefined, request);
+    if (!result.ok) {
+      throw new Error(`Layout query '${name}' failed with ${result.error.code}.`);
+    }
+    values[name] = result.value;
+  }
+
+  return values as LayoutQueryResults<LayoutQueryMap<any>>;
 }
 
 export type RoutePageResult<Page> = RoutePageSuccess<Page> | RoutePageFailure;

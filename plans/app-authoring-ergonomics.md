@@ -209,6 +209,19 @@ item inherits from rather than re-deciding it:
       refresh, per-segment boundary selection, and segment-guard composition.
     - A `kovo explain page <path>` (or `--layouts`) surface shows the composed
       layout chain and which queries belong to which segment.
+  - Current evidence:
+    - Server authoring now exposes `layout({ parent, guard, queries, render })`
+      and `route(..., { layout })`; `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/route.test.ts packages/server/src/app.test.ts`
+      passes with nested parent output, layout query loading from the route
+      request, and layout guard composition.
+    - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
+  - Remaining gaps:
+    - Compiler route lowering does not yet derive layout chain facts or segment
+      metadata.
+    - Layout query live-target refresh, per-segment boundaries, diagnostics for
+      cyclic/unresolvable layout chains, and `kovo explain page --layouts` are
+      not implemented yet.
 
 - [ ] **4. Replace string shell helpers with layouts + `documentTemplate`.**
   - Framework direction: convert document-level shells to

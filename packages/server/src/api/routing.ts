@@ -57,6 +57,7 @@ export type {
 } from '../response.js';
 export { respond } from '../response.js';
 export {
+  layout,
   notFound,
   parseRouteRequest,
   renderRoutePageResponse,
@@ -64,6 +65,10 @@ export {
   runRoutePage,
 } from '../route.js';
 export type {
+  LayoutDeclaration,
+  LayoutDefinition,
+  LayoutQueryResults,
+  LayoutRenderSlots,
   RouteDeclaration,
   RouteDefinition,
   RoutePageFailure,

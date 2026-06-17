@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
 import { query } from './query.js';
-import { renderRoutePageResponse, route } from './route.js';
+import { layout, renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
 
 describe('route JSX pages', () => {
@@ -92,6 +92,55 @@ describe('route JSX pages', () => {
     await expect(renderRoutePageResponse(productRoute, {}, {})).resolves.toMatchObject({
       body: '<section data-read-only="true">p1</section>',
       status: 200,
+    });
+  });
+
+  it('wraps route JSX with nested layouts and loads layout queries from the request', async () => {
+    const viewer = domain('viewer');
+    const viewerQuery = query('viewer', {
+      load(_input: unknown, { request }: { request: { userId: string } }) {
+        return { id: request.userId };
+      },
+      reads: [viewer],
+    });
+    const AppLayout = layout({
+      queries: { viewer: viewerQuery },
+      render: ({ viewer }, _state, { children }) => (
+        <main data-viewer={viewer.id}>{children}</main>
+      ),
+    });
+    const AdminLayout = layout({
+      parent: AppLayout,
+      render: (_queries, _state, { children }) => <section data-admin>{children}</section>,
+    });
+    const adminRoute = route('/admin', {
+      layout: AdminLayout,
+      page: () => <h1>Admin</h1>,
+    });
+
+    await expect(renderRoutePageResponse(adminRoute, {}, { userId: 'u1' })).resolves.toMatchObject({
+      body: '<main data-viewer="u1"><section data-admin><h1>Admin</h1></section></main>',
+      status: 200,
+    });
+  });
+
+  it('runs layout guards before rendering the route page', async () => {
+    const AdminLayout = layout<{ session?: { user?: { id: string } | null } | null }>({
+      guard: (request) => (request.session?.user ? true : { kind: 'unauthenticated' }),
+      render: (_queries, _state, { children }) => <main>{children}</main>,
+    });
+    const adminRoute = route('/admin', {
+      layout: AdminLayout,
+      page: () => <h1>Admin</h1>,
+    });
+
+    await expect(
+      renderRoutePageResponse(adminRoute, {}, { session: null }, String, {
+        currentUrl: '/admin',
+      }),
+    ).resolves.toMatchObject({
+      headers: { Location: '/login?next=%2Fadmin' },
+      status: 303,
     });
   });
 });
