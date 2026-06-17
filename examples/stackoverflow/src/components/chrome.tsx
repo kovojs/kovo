@@ -105,7 +105,7 @@ export function renderAuthor(name: string, iso: string | undefined, verb: string
 // and never passed through a `.definition.render({ children })` call.
 export function voteButton(questionId: string, value: number): string {
   return (
-    <form enhance mutation={voteUpMutation} class="so-vote">
+    <form enhance mutation={voteUpMutation} key={questionId} class="so-vote">
       <input type="hidden" name="id" value={`vote-${questionId}`} />
       <input type="hidden" name="targetId" value={questionId} />
       <input type="hidden" name="userId" value="demo-viewer" />

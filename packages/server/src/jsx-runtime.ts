@@ -59,11 +59,15 @@ export function Fragment(props: JsxProps): MaybePromise<string> {
   return renderJsxChildren(props.children);
 }
 
-export function jsx(type: JsxComponent | KovoJsxComponent | string, props: JsxProps): MaybePromise<string> {
+export function jsx(
+  type: JsxComponent | KovoJsxComponent | string,
+  props: JsxProps,
+  key?: unknown,
+): MaybePromise<string> {
   if (typeof type === 'function') return type(props);
   if (isKovoComponent(type)) return renderKovoComponent(type, props);
 
-  const attributes = renderJsxAttributes(type, props);
+  const attributes = renderJsxAttributes(type, props, key);
   if (voidElements.has(type)) return `<${type}${attributes}>`;
 
   const children = renderJsxChildren(renderJsxContent(props));
@@ -77,16 +81,22 @@ export const jsxs = jsx;
 export function jsxDEV(
   type: JsxComponent | KovoJsxComponent | string,
   props: JsxProps,
+  key?: unknown,
 ): MaybePromise<string> {
-  return jsx(type, props);
+  return jsx(type, props, key);
 }
 
-function renderJsxAttributes(type: string, props: JsxProps): string {
+function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): string {
   let rendered = '';
+  const key = props['kovo-key'] === undefined ? (props.key ?? jsxKey) : undefined;
+  if (key !== false && key !== null && key !== undefined) {
+    rendered += ` kovo-key="${escapeAttribute(attributeText('kovo-key', key))}"`;
+  }
 
   for (const [name, value] of Object.entries(props)) {
     if (
       name === 'children' ||
+      name === 'key' ||
       isRawHtmlAttribute(name) ||
       value === false ||
       value === null ||

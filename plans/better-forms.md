@@ -237,8 +237,21 @@ path in more than one app — without changing the clean authoring spelling.
 - [ ] **C4. Typed failure rendering in crm + SO.** Add at least one `errors:` schema (e.g. a
       validation/conflict code) and render `forms.<mutation>.failure` in those components, proving the
       §9.2 path beyond commerce.
-- [ ] **C5. Keyed repeated forms.** Add `key=` to the crm move/close loops and the SO per-row
+- [x] **C5. Keyed repeated forms.** Add `key=` to the crm move/close loops and the SO per-row
       `voteButton()`; verify the existing KV238 repeated-form check accepts the corrected examples.
+      - Evidence 2026-06-17: CRM `DealDetailRegion` move forms are keyed by
+        `${deal.id}:${stage}`, the close form is keyed by `${deal.id}:close`, and the SO
+        `voteButton()` form is keyed by `questionId`. `packages/server/src/jsx-runtime.ts`
+        now renders direct server JSX `key` identity as `kovo-key`, so helper-rendered forms and
+        compiler-emitted modules share the same identity path.
+      - Verified with
+        `pnpm exec vitest --run packages/server/src/jsx-runtime.test.ts packages/compiler/src/stamps.test.ts`,
+        `pnpm --filter @kovojs/example-crm test`,
+        `pnpm --filter @kovojs/example-stackoverflow test`,
+        `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+        `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+        `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+        `node scripts/api-surface-gate.mjs`.
 
 ## Part D — SPEC reconciliation
 

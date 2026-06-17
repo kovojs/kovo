@@ -123,7 +123,7 @@ export const DealDetailRegion = component({
           </h2>
           <div class="flex flex-wrap gap-2">
             {MOVE_STAGES.map((stage) => (
-              <form {...mutationFormAttributes(moveDeal)}>
+              <form key={`${deal.id}:${stage}`} {...mutationFormAttributes(moveDeal)}>
                 <input type="hidden" name="dealId" value={deal.id} />
                 <input type="hidden" name="stage" value={stage} />
                 <button
@@ -146,7 +146,7 @@ export const DealDetailRegion = component({
                 This deal is closed ({escapeText(deal.stage)}). Commission is final.
               </p>
             ) : (
-              <form {...mutationFormAttributes(closeDeal)}>
+              <form key={`${deal.id}:close`} {...mutationFormAttributes(closeDeal)}>
                 <input type="hidden" name="dealId" value={deal.id} />
                 <button
                   type="submit"

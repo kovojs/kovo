@@ -37,6 +37,27 @@ describe('server jsx runtime', () => {
     );
   });
 
+  it('renders JSX key identity as kovo-key for direct server JSX forms', () => {
+    const addToCart = { key: 'cart/add' } as const;
+
+    expect(
+      jsx(
+        'form',
+        {
+          enhance: true,
+          mutation: addToCart,
+          children: '',
+        },
+        'p1',
+      ),
+    ).toBe(
+      '<form kovo-key="p1" enhance method="post" action="/_m/cart/add" data-mutation="cart/add"></form>',
+    );
+    expect(jsx('form', { key: 'p2', enhance: true, children: '' })).toBe(
+      '<form kovo-key="p2" enhance></form>',
+    );
+  });
+
   it('escapes attribute values', () => {
     expect(jsx('input', { value: 'a"b<c&d' })).toBe('<input value="a&quot;b&lt;c&amp;d">');
   });
