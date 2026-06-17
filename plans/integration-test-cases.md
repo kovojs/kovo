@@ -79,23 +79,30 @@ integration harness uniquely proves.
     tests/integration/fixtures/optimistic-success/app.tsx
     tests/integration/fixtures/optimistic-success/client.ts
     tests/integration/specs/optimistic-success.spec.ts`.
-- [ ] `optimistic-rollback` / `optimistic-rollback.spec.ts`: an optimistic transform predicts a
+- [x] `optimistic-rollback` / `optimistic-rollback.spec.ts`: an optimistic transform predicts a
       change, the mutation returns a typed error, snapshots are restored, and the error fragment is
       rendered.
   - SPEC refs: §10.4 runtime protocol, §9.2 errors.
   - Assertions: transient predicted value; rollback to prior value; `data-error-code`; db unchanged.
-  - Partial evidence: `tests/integration/specs/optimistic-rollback.spec.ts` pins the same missing
-    end-to-end optimistic wiring in the browser fixture path. Focused command:
-    `pnpm exec playwright test tests/integration/specs/optimistic-rollback.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
-- [ ] `optimistic-rebase` / `optimistic-rebase.spec.ts`: two same-query optimistic mutations are
+  - Evidence: `tests/integration/fixtures/optimistic-rollback` wires the public optimistic runtime
+    APIs to a typed `OUT_OF_STOCK` failure; `tests/integration/specs/optimistic-rollback.spec.ts`
+    verifies the browser shows the predicted count `6`, rolls back to prior count `4`, renders
+    `data-error-code="OUT_OF_STOCK"`, clears pending state, and leaves database truth unchanged.
+    Proving commands:
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/optimistic-rollback.spec.ts specs/optimistic-rebase.spec.ts --config playwright.config.ts --workers=1`;
+    `pnpm exec vitest run packages/runtime/src/mutation-optimistic.test.ts packages/runtime/src/optimism-rebase.test.ts packages/runtime/src/mutation-optimistic-pagehide.test.ts packages/runtime/src/mutation-optimistic-failure.test.ts`;
+    `pnpm exec vp check tests/integration/fixtures/optimistic-rollback/app.tsx tests/integration/fixtures/optimistic-rollback/client.ts tests/integration/fixtures/optimistic-rebase/app.tsx tests/integration/fixtures/optimistic-rebase/client.ts tests/integration/specs/optimistic-rollback.spec.ts tests/integration/specs/optimistic-rebase.spec.ts`.
+- [x] `optimistic-rebase` / `optimistic-rebase.spec.ts`: two same-query optimistic mutations are
       pending concurrently; the first server truth arrives before the second, and the loader rebases
       the remaining transform in order.
   - SPEC refs: §10.4 concurrency.
   - Assertions: ordered visible state, final query value equals db, no stale intermediate overwrite.
-  - Partial evidence: `tests/integration/specs/optimistic-rebase.spec.ts` records that the browser
-    fixture path still cannot attach the runtime optimistic log/rebase protocol to enhanced submits.
-    Focused command:
-    `pnpm exec playwright test tests/integration/specs/optimistic-rebase.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+  - Evidence: `tests/integration/fixtures/optimistic-rebase` emits registry-backed post-commit
+    `<kovo-query>` truth for two delayed same-query optimistic submits; `tests/integration/specs/optimistic-rebase.spec.ts`
+    verifies visible state `0 -> 2 -> 7`, confirms two transforms are pending concurrently,
+    proves the UI remains `7` after the first server commit while database truth is `2`, then
+    verifies final UI/database truth `7` with pending state cleared. Proving commands: same
+    Playwright, runtime Vitest, and `vp check` commands recorded under `optimistic-rollback`.
 - [x] `enhanced-submit-controls` / `enhanced-submit-controls.spec.ts`: enhanced form submission
       preserves submitter semantics for multiple buttons, disabled controls, default values, and
       schema coercion.
