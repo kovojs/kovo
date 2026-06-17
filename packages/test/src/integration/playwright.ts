@@ -7,7 +7,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { test as base, expect, type Locator, type Page } from '@playwright/test';
+import { test as base, expect as playwrightExpect, type Locator, type Page } from '@playwright/test';
 
 import { bootFixture, type BootedFixture } from './boot-fixture.js';
 import { login as performLogin, type LoginOptions } from './login.js';
@@ -47,6 +47,7 @@ interface KovoTestFixtures {
   resetDatabase: void;
 }
 
+/** @internal Dev-only Playwright fixture for Kovo's framework-owned integration suite. */
 export const test = base.extend<KovoTestFixtures, KovoTestOptions & KovoWorkerFixtures>({
   fixturesRoot: [DEFAULT_FIXTURES_ROOT, { option: true, scope: 'worker' }],
   kovoFixture: ['', { option: true, scope: 'worker' }],
@@ -95,7 +96,8 @@ export const test = base.extend<KovoTestFixtures, KovoTestOptions & KovoWorkerFi
   },
 });
 
-export { expect };
+/** @internal Dev-only Playwright assertion helper re-export for Kovo integration specs. */
+export const expect = playwrightExpect;
 
 /** Snapshot a single locator's live `outerHTML` as a canonical semantic tree. */
 export async function snapshotLocator(
