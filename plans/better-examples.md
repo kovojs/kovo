@@ -60,26 +60,32 @@ Make `import { Button } from '@kovojs/ui/button'` render correctly-styled in a b
 host-lowering exists for any package today; SPEC §6.1.1 describes hosts nothing renders — a tracked
 SPEC tension). Host-stamping is a separate follow-up.
 
-- [ ] **A1. Declare the prefix.** `packages/ui/package.json`: `"kovo": { "vendoredSource": true }` →
-      `"kovo": { "vendoredSource": true, "prefix": "kovo-ui-" }`. Cite SPEC §6.1.1.
-- [ ] **A2. Package-CSS extraction pass.** New `packages/compiler/src/package-styles.ts` →
-      `extractPackageComponentCss(packageName, manifestDir)`: enumerate `exports` `.tsx`, run
-      `extractKovoStyles` per file, build `cssAssets` via `componentCssAssetForFile` (`css.ts`),
-      `dedupeCss`.
-- [ ] **A3. Resolution helper.** `packages/compiler/src/package-prefixes.ts`: export
-      `resolvePackageDir` / promote `findPackageManifestPath` so A2 can locate package source.
-- [ ] **A4. Link the package CSS.** Fold package `cssAssets` into `deriveAppGraph`
-      (`packages/compiler/src/graph.ts`) so existing registry→server hint linking serves them; extend
-      `CompileAppGraphResult`/options in `packages/compiler/src/types.ts`.
-- [ ] **A5. Extractor-coverage gate (RISK MITIGATION — before Part B).** The conservative extractor
-      bails to `null` on spreads/computed/non-static `style.create` → those render **silently
-      unstyled**. Add a diagnostic for unhandled `style.create` in a `kovo.prefix` package, and
-      confirm coverage for: Button, Card, Badge, Table, Field, Avatar, Separator, Alert, Dialog, Tabs,
-      Skeleton. Fix/note gaps before redesign.
-- [ ] **A6. Tests.** Compiler unit test: `extractPackageComponentCss` class names == `button.tsx`
-      runtime `style.attrs` output. Build/export test on pilot app: package CSS asset emitted + linked.
+- [x] **A1. Declare the prefix.** `packages/ui/package.json` now declares `"prefix": "kovo-ui-"`
+      alongside `vendoredSource`. Verified KV234-safe (`@kovojs/*` exempt from the reservation).
+- [x] **A2. Package-CSS extraction pass.** `packages/compiler/src/package-styles.ts` →
+      `extractPackageComponentCss`: enumerates `exports` `.tsx`, runs `extractKovoStyles`, dedupes,
+      and normalizes to browser-valid CSS (px on bare lengths, valid `@layer` idents, drops
+      nesting-`&` rules). Evidence: `package-styles.test.ts`.
+- [x] **A3. Resolution helper.** `resolvePackageManifestPath` exported from `package-prefixes.ts`.
+- [x] **A4. Link the package CSS.** Took the lower-risk route: example `emit-ui-css.mjs` writes
+      `src/generated/kovo-ui.css` (token sheet + component CSS), `@import`-ed by `styles.css` so the
+      existing `/assets/styles.css` serves it (no core `deriveAppGraph`/api-surface churn). Also
+      enhanced the shared extractor (`style.ts`) to resolve module-local const-object spreads
+      (fixes `field.tsx`); 189 style/ui snapshot tests still green. Evidence: `vp build` emits a
+      67 kB lightningcss-clean `dist/assets/styles.css` with `kv-*`.
+- [x] **A5. Extractor-coverage gate.** `extractPackageComponentCss` emits a per-file diagnostic when
+      `style.create` yields no CSS. Coverage = **43/45**; only `progress.tsx` / `skeleton.tsx`
+      (keyframes-by-identifier) remain — documented; examples must avoid animated Progress/Skeleton.
+- [x] **A6. Tests.** `package-styles.test.ts` asserts core namespaces + browser-valid output + the
+      coverage gate. Compiler suite green (348); api-surface clean.
 
-**Pilot:** validate A1–A6 end-to-end on commerce before scaling to all three.
+**Pilot:** A1–A6 validated end-to-end on commerce.
+
+> **Latent @kovojs/style gaps found (tracked upstream fixes):** the StyleX engine emits unitless
+> numeric lengths and digit-leading `@layer` sub-names — invalid CSS that never surfaced because no
+> app had served @kovojs/ui's CSS. Normalized in the served text only (class hashes unchanged); the
+> proper fix belongs in `@kovojs/style` emit (snapshot churn) — deferred. Likewise `table.tsx`'s
+> `[&_tr:last-child]` is unsupported StyleX syntax (component-authoring fix).
 
 ---
 
@@ -88,23 +94,31 @@ SPEC tension). Host-stamping is a separate follow-up.
 Keep ALL existing Kovo behavior (queries, mutations, fragment targets, derived optimism, guards, i18n)
 and existing tests green; change only data shape + presentation.
 
-- [ ] **B1. Wire deps + theme.** Add `"@kovojs/ui": "workspace:*"` (+ `@kovojs/style` where needed).
-      Replace hand-rolled `src/styles.css` with `kovoUiTokenSheetCss` (chrome tokens) + a small
-      document-CSS layer for page shell/layout only (component CSS comes from Part A).
-- [ ] **B2. Enrich data + seed.** Extend `schema.ts`, update `queries.ts` selects, refresh
-      seed/fixtures; re-run `emit-components.mjs`/`emit-graph.mjs` to regenerate `src/generated/**` +
-      `generated/optimistic/**` (artifacts, never hand-authored — SPEC §5.2). Cite SPEC §10.1/§4.8.
-      - **commerce** `products`: add `name`, `description`, `imageUrl`/emoji, `category`; format price.
-        Order history: join product name, format totals.
-      - **crm**: richer contact (name, company, email, avatar initials), deal owner; mostly presentational.
-      - **stackoverflow**: question author, tags, timestamps, body excerpt; answer author/accepted state.
-- [ ] **B3. Rebuild pages from `@kovojs/ui`** (override via `style` props):
-      - **commerce**: grid → `Card`+image+`Badge`+`Button`+`Field`(qty); cart badge → `Badge`; orders → `Table`.
-      - **crm**: nav → `NavigationMenu`/`Tabs`; buckets → `Card`; pipeline → `Table`+`Badge`; forms → `Field`/`Button`/`Dialog`.
-      - **stackoverflow**: list → `Card`/`Table`+vote `Button`+`Badge`(tags)+`Avatar`; composer → `Field`+`Button`.
-      Keep page chrome (header/sidebar/container) as document CSS.
-- [ ] **B4. Per-app polish.** Consistent spacing/elevation/type scale via token vars + light overrides;
-      real hover/focus/disabled states; a small brand accent per app.
+Pattern proven on commerce: import `@kovojs/ui` components and render them with `.definition.render(props)`
+(the JSX runtime only renders functions, so `<Button>`-as-tag does not work; the gallery uses the same
+`.definition.render` pattern). The `kv-*` classes are styled by Part A's generated stylesheet.
+
+**commerce (pilot — product grid done):**
+- [x] **B1 (commerce).** Added `@kovojs/ui` + `@kovojs/style` deps (+ `@kovojs/headless-ui` devDep for
+      the token sheet); `styles.css` `@import`s `generated/kovo-ui.css`.
+- [x] **B2 (commerce products).** `products` gained `name`/`category`/`emoji` (defaulted, so cart/add
+      optimism + fixtures unaffected) + a real seed catalog; `productGridQuery` selects them; IR/graph
+      regenerated; query/source-truth/render fixtures updated. All 55 commerce tests pass.
+- [x] **B3 (commerce product grid).** Card + Badge (category + stock-aware) + Button via
+      `.definition.render`, formatted price, keyed `<article>` host + mutation form intact.
+- [ ] **B3 (commerce remainder).** cart-badge → keep reactive `cart.count` binding (can't wrap a
+      data-bind in `.definition.render`), restyle as a token pill; order-history → `Table` (updates
+      the `'order-1': 'p1 x 2 - 2998'` keyvalue fixtures).
+- [ ] **B4 (commerce).** Page-chrome polish: grid layout, spacing/elevation via token vars.
+
+**crm (not started):** B1 deps+theme · B2 richer contacts/deals · B3 nav→`Tabs`, buckets→`Card`,
+pipeline→`Table`+`Badge`, forms→`Field`/`Button`/`Dialog` · B4 polish.
+
+**stackoverflow (not started):** B1 deps+theme · B2 authors/tags/timestamps · B3 list→`Card`/`Table`
++vote `Button`+`Badge`+`Avatar`, composer→`Field`/`Button` · B4 polish.
+
+> Recommended: fan out crm + stackoverflow as parallel sub-agents now that the commerce pattern
+> (dep wiring + `emit-ui-css` + `.definition.render` + fixture-update discipline) is proven.
 
 ---
 
