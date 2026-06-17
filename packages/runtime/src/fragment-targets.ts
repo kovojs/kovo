@@ -13,7 +13,8 @@ export function findFragmentTargetElement(
     findRootOrDescendant(root, `[kovo-c="${escapeCssString(target)}"]`) ??
     root.getElementById?.(target) ??
     findRootOrDescendant(root, `[id="${escapeCssString(target)}"]`) ??
-    findRootOrDescendant(root, `[kovo-fragment-target="${escapeCssString(target)}"]`)
+    findRootOrDescendant(root, `[kovo-fragment-target="${escapeCssString(target)}"]`) ??
+    findRootOrDescendant(root, `kovo-defer[target="${escapeCssString(target)}"]`)
   );
 }
 

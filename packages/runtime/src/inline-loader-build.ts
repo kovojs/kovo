@@ -199,7 +199,8 @@ function installInlineKovoLoader(im) {
       return (
         doc.querySelector('[kovo-c="' + target + '"]') ??
         doc.getElementById(target) ??
-        doc.querySelector('[kovo-fragment-target="' + target + '"]')
+        doc.querySelector('[kovo-fragment-target="' + target + '"]') ??
+        doc.querySelector('kovo-defer[target="' + target + '"]')
       );
     } catch {
       return;
@@ -234,6 +235,7 @@ function installInlineKovoLoader(im) {
     }
     applyInlineMutationResponseChunks(chunks, { findFragmentTarget: ft });
   };
+  globalThis.__kovo_a = ab;
   const fsb = (form) => {
     if (typeof form.submit === 'function') {
       form.submit();
@@ -621,9 +623,12 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
   // the parse-checked minifier runs.
   const replacements = new Map([
     ['readMutationResponseBodyCore', 'rb'],
+    ['readInlineMutationResponseBodyChunks', 'ri'],
     ['readMutationResponseElementChunks', 'rc'],
     ['readFragmentChunksFromElements', 'rfs'],
     ['readFragmentElementChunk', 'rf'],
+    ['applyInlineMutationResponseChunks', 'ai'],
+    ['findFragmentTarget', 'ff'],
     ['readElementChunks', 're'],
     ['matchingElementEnd', 'me'],
     ['escapeRegExp', 'er'],
