@@ -1,8 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   fieldControlAttributes,
   fieldDescriptionAttributes,
   fieldErrorAttributes,
@@ -10,8 +8,21 @@ import {
   fieldRootAttributes,
   fieldsetLegendAttributes,
   fieldsetRootAttributes,
-  type ClassValue,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface FieldStyleOverrides {
+  control?: style.StyleInput;
+  description?: style.StyleInput;
+  error?: style.StyleInput;
+  fieldset?: style.StyleInput;
+  fieldsetLegend?: style.StyleInput;
+  label?: style.StyleInput;
+  root?: style.StyleInput;
+  select?: style.StyleInput;
+  selectOption?: style.StyleInput;
+  textarea?: style.StyleInput;
+}
 
 export interface FieldStateProps {
   disabled?: boolean;
@@ -21,20 +32,19 @@ export interface FieldStateProps {
 
 export interface FieldProps extends FieldStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: FieldStyleOverrides;
 }
 
 export interface FieldLabelProps extends FieldStateProps {
   children?: string;
-  class?: ClassValue;
   controlId?: string;
   id?: string;
+  styles?: FieldStyleOverrides;
 }
 
 export interface FieldControlProps extends FieldStateProps {
   autoComplete?: string;
-  class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   form?: string;
@@ -45,6 +55,7 @@ export interface FieldControlProps extends FieldStateProps {
   name?: string;
   pattern?: string;
   placeholder?: string;
+  styles?: FieldStyleOverrides;
   type?: string;
   value?: string;
 }
@@ -52,7 +63,6 @@ export interface FieldControlProps extends FieldStateProps {
 export interface FieldTextareaProps extends FieldStateProps {
   autoComplete?: string;
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   form?: string;
@@ -63,110 +73,185 @@ export interface FieldTextareaProps extends FieldStateProps {
   name?: string;
   placeholder?: string;
   rows?: number;
+  styles?: FieldStyleOverrides;
 }
 
 export interface FieldSelectProps extends FieldStateProps {
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   form?: string;
   id?: string;
   name?: string;
+  styles?: FieldStyleOverrides;
   value?: string;
 }
 
 export interface FieldSelectOptionProps {
   children?: string;
-  class?: ClassValue;
   disabled?: boolean;
   selected?: boolean;
+  styles?: FieldStyleOverrides;
   value?: string;
 }
 
 export interface FieldMessageProps extends FieldStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: FieldStyleOverrides;
   visible?: boolean;
 }
 
 export interface FieldsetProps extends FieldStateProps {
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   form?: string;
   id?: string;
   name?: string;
+  styles?: FieldStyleOverrides;
 }
 
 export interface FieldsetLegendProps extends FieldStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: FieldStyleOverrides;
 }
 
-export const fieldClassNames = defineVariants({
-  base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950 data-[required]:font-medium',
-  variants: {},
-});
+const nativeControlStyle = {
+  backgroundColor: '#ffffff',
+  borderColor: '#d4d4d4',
+  borderRadius: 6,
+  borderStyle: 'solid',
+  borderWidth: 1,
+  boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+  color: '#0a0a0a',
+  fontSize: 14,
+  transitionProperty: 'border-color, background-color, color, box-shadow',
+  width: '100%',
+  '::placeholder': {
+    color: '#a3a3a3',
+  },
+  '[aria-invalid=true]': {
+    borderColor: '#ef4444',
+  },
+  ':disabled': {
+    backgroundColor: '#f5f5f5',
+    cursor: 'not-allowed',
+    opacity: 0.7,
+  },
+  ':focus-visible': {
+    outlineColor: '#0a0a0a',
+    outlineOffset: 2,
+    outlineStyle: 'solid',
+    outlineWidth: 2,
+  },
+  '[aria-invalid=true]:focus-visible': {
+    outlineColor: '#ef4444',
+  },
+} as const;
 
-export const fieldLabelClassNames = defineVariants({
-  base: 'text-sm font-medium leading-none text-neutral-900 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70',
-  variants: {},
-});
+export const fieldStyles = style.create(
+  {
+    control: {
+      ...nativeControlStyle,
+      height: 36,
+      paddingBlock: 4,
+      paddingInline: 12,
+    },
+    description: {
+      color: '#737373',
+      fontSize: 14,
+    },
+    error: {
+      color: '#dc2626',
+      fontSize: 14,
+      fontWeight: 500,
+    },
+    fieldset: {
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      padding: 16,
+      rowGap: 12,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-invalid]': {
+        borderColor: '#fca5a5',
+      },
+    },
+    fieldsetLegend: {
+      color: '#171717',
+      fontSize: 14,
+      fontWeight: 500,
+      paddingInline: 4,
+    },
+    label: {
+      color: '#171717',
+      fontSize: 14,
+      fontWeight: 500,
+      lineHeight: 1,
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+        opacity: 0.7,
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-invalid]': {
+        color: '#450a0a',
+      },
+      '[data-required]': {
+        fontWeight: 500,
+      },
+    },
+    select: {
+      ...nativeControlStyle,
+      height: 36,
+      paddingBlock: 4,
+      paddingInline: 12,
+    },
+    selectOption: {
+      color: '#0a0a0a',
+      ':disabled': {
+        color: '#a3a3a3',
+      },
+    },
+    textarea: {
+      ...nativeControlStyle,
+      minHeight: 96,
+      paddingBlock: 8,
+      paddingInline: 12,
+    },
+  },
+  { namespace: 'field', source: 'field.tsx' },
+);
 
-export const fieldControlClassNames = defineVariants({
-  base: 'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500',
-  variants: {},
-});
-
-export const fieldTextareaClassNames = defineVariants({
-  base: 'min-h-24 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500',
-  variants: {},
-});
-
-export const fieldSelectClassNames = defineVariants({
-  base: 'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-950 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500',
-  variants: {},
-});
-
-export const fieldSelectOptionClassNames = defineVariants({
-  base: 'text-neutral-950 disabled:text-neutral-400',
-  variants: {},
-});
-
-export const fieldDescriptionClassNames = defineVariants({
-  base: 'text-sm text-neutral-500',
-  variants: {},
-});
-
-export const fieldErrorClassNames = defineVariants({
-  base: 'text-sm font-medium text-red-600',
-  variants: {},
-});
-
-export const fieldsetClassNames = defineVariants({
-  base: 'grid gap-3 rounded-md border border-neutral-200 p-4 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:border-red-300',
-  variants: {},
-});
-
-export const fieldsetLegendClassNames = defineVariants({
-  base: 'px-1 text-sm font-medium text-neutral-900',
-  variants: {},
-});
-
-export const fieldClasses = fieldClassNames.classes;
-export const fieldLabelClasses = fieldLabelClassNames.classes;
-export const fieldControlClasses = fieldControlClassNames.classes;
-export const fieldTextareaClasses = fieldTextareaClassNames.classes;
-export const fieldSelectClasses = fieldSelectClassNames.classes;
-export const fieldSelectOptionClasses = fieldSelectOptionClassNames.classes;
-export const fieldDescriptionClasses = fieldDescriptionClassNames.classes;
-export const fieldErrorClasses = fieldErrorClassNames.classes;
-export const fieldsetClasses = fieldsetClassNames.classes;
-export const fieldsetLegendClasses = fieldsetLegendClassNames.classes;
+export const fieldClasses = [style.attrs(fieldStyles.root).class ?? ''] as const;
+export const fieldLabelClasses = [style.attrs(fieldStyles.label).class ?? ''] as const;
+export const fieldControlClasses = [style.attrs(fieldStyles.control).class ?? ''] as const;
+export const fieldTextareaClasses = [style.attrs(fieldStyles.textarea).class ?? ''] as const;
+export const fieldSelectClasses = [style.attrs(fieldStyles.select).class ?? ''] as const;
+export const fieldSelectOptionClasses = [
+  style.attrs(fieldStyles.selectOption).class ?? '',
+] as const;
+export const fieldDescriptionClasses = [style.attrs(fieldStyles.description).class ?? ''] as const;
+export const fieldErrorClasses = [style.attrs(fieldStyles.error).class ?? ''] as const;
+export const fieldsetClasses = [style.attrs(fieldStyles.fieldset).class ?? ''] as const;
+export const fieldsetLegendClasses = [
+  style.attrs(fieldStyles.fieldsetLegend).class ?? '',
+] as const;
 
 export const Field = component({
   render(props: FieldProps) {
@@ -176,10 +261,11 @@ export const Field = component({
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.required === undefined ? {} : { required: props.required }),
     });
+    const styleAttrs = style.attrs(fieldStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(fieldClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -200,10 +286,11 @@ export const FieldLabel = component({
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.required === undefined ? {} : { required: props.required }),
     });
+    const styleAttrs = style.attrs(fieldStyles.label, props.styles?.label);
 
     return (
       <label
-        class={cn(fieldLabelClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -233,13 +320,14 @@ export const FieldControl = component({
       ...(props.pattern === undefined ? {} : { pattern: props.pattern }),
       ...(props.required === undefined ? {} : { required: props.required }),
     });
+    const styleAttrs = style.attrs(fieldStyles.control, props.styles?.control);
 
     return (
       <input
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
         autoComplete={attrs.autoComplete}
-        class={cn(fieldControlClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -276,13 +364,14 @@ export const FieldTextarea = component({
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.required === undefined ? {} : { required: props.required }),
     });
+    const styleAttrs = style.attrs(fieldStyles.textarea, props.styles?.textarea);
 
     return (
       <textarea
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
         autoComplete={attrs.autoComplete}
-        class={cn(fieldTextareaClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -315,12 +404,13 @@ export const FieldSelect = component({
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.required === undefined ? {} : { required: props.required }),
     });
+    const styleAttrs = style.attrs(fieldStyles.select, props.styles?.select);
 
     return (
       <select
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
-        class={cn(fieldSelectClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -339,9 +429,11 @@ export const FieldSelect = component({
 
 export const FieldSelectOption = component({
   render(props: FieldSelectOptionProps) {
+    const styleAttrs = style.attrs(fieldStyles.selectOption, props.styles?.selectOption);
+
     return (
       <option
-        class={cn(fieldSelectOptionClassNames(), props.class)}
+        {...styleAttrs}
         disabled={props.disabled}
         selected={props.selected}
         value={props.value}
@@ -361,10 +453,11 @@ export const FieldDescription = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.visible === undefined ? {} : { visible: props.visible }),
     });
+    const styleAttrs = style.attrs(fieldStyles.description, props.styles?.description);
 
     return (
       <p
-        class={cn(fieldDescriptionClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -386,10 +479,11 @@ export const FieldError = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.visible === undefined ? {} : { visible: props.visible }),
     });
+    const styleAttrs = style.attrs(fieldStyles.error, props.styles?.error);
 
     return (
       <p
-        class={cn(fieldErrorClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -415,12 +509,13 @@ export const Fieldset = component({
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.required === undefined ? {} : { required: props.required }),
     });
+    const styleAttrs = style.attrs(fieldStyles.fieldset, props.styles?.fieldset);
 
     return (
       <fieldset
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
-        class={cn(fieldsetClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -443,10 +538,11 @@ export const FieldsetLegend = component({
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.required === undefined ? {} : { required: props.required }),
     });
+    const styleAttrs = style.attrs(fieldStyles.fieldsetLegend, props.styles?.fieldsetLegend);
 
     return (
       <legend
-        class={cn(fieldsetLegendClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}

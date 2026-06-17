@@ -1,0 +1,88 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Field StyleX styles > exports StyleX style groups 1`] = `
+{
+  "keys": [
+    "control",
+    "description",
+    "error",
+    "fieldset",
+    "fieldsetLegend",
+    "label",
+    "root",
+    "select",
+    "selectOption",
+    "textarea",
+  ],
+  "markers": {
+    "control": true,
+    "description": true,
+    "error": true,
+    "fieldset": true,
+    "fieldsetLegend": true,
+    "label": true,
+    "root": true,
+    "select": true,
+    "selectOption": true,
+    "textarea": true,
+  },
+}
+`;
+
+exports[`@kovojs/ui Field StyleX styles > matches author-last slot override output 1`] = `
+{
+  "control": "<input class="kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q kv-app-field-bg-10xzrp" data-style-src="field.tsx#control; app-field.tsx#control" type="text">",
+  "description": "<p class="kv-field-font-1ditt9 kv-app-field-fg-1ez0zw" data-style-src="field.tsx#description; app-field.tsx#description">Custom description</p>",
+  "error": "<p class="kv-field-font-1ditt9 kv-field-font-oqvzpu kv-app-field-fg-4qut1d" data-style-src="field.tsx#error; app-field.tsx#error" data-invalid="" role="alert">Custom error</p>",
+  "fieldset": "<fieldset class="kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-fg-8bc8sj kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-pad-g8j5fv kv-field-row-zmgosv kv-field-opacity-r0fqdm kv-field-bd-remj3z kv-app-field-bd-1pwlo1" data-style-src="field.tsx#fieldset; app-field.tsx#fieldset"><legend class="kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-pad-135yro kv-app-field-fg-madc53" data-style-src="field.tsx#fieldsetLegend; app-field.tsx#fieldsetLegend">Legend</legend></fieldset>",
+  "label": "<label class="kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-line-md0e74 kv-field-cursor-1uohhp kv-field-opacity-1cqgy8 kv-app-field-fg-1ez0zw" data-style-src="field.tsx#label; app-field.tsx#label">Custom label</label>",
+  "root": "<div class="kv-field-fg-8bc8sj kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-opacity-r0fqdm kv-field-fg-84gjdm kv-field-font-tcmj2u kv-app-field-row-zuedtz" data-style-src="field.tsx#root; app-field.tsx#root">Custom field</div>",
+  "select": "<select class="kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q kv-app-field-bg-10xzrp" data-style-src="field.tsx#select; app-field.tsx#select"></select>",
+  "selectOption": "<option class="kv-field-fg-1hf8s9 kv-app-field-fg-1ez0zw" data-style-src="field.tsx#selectOption; app-field.tsx#selectOption">Custom option</option>",
+  "textarea": "<textarea class="kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-min-1pjmnv kv-field-pad-kmxu12 kv-field-pad-7oar2q kv-app-field-bg-10xzrp" data-style-src="field.tsx#textarea; app-field.tsx#textarea"></textarea>",
+}
+`;
+
+exports[`@kovojs/ui Field StyleX styles > matches semantic field markup with StyleX output 1`] = `
+{
+  "classes": [
+    "kv-field-fg-8bc8sj kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-row-1m16zq kv-field-opacity-r0fqdm kv-field-fg-84gjdm kv-field-font-tcmj2u",
+  ],
+  "control": "<input class="kv-field-bg-twio9x kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q" data-style-src="field.tsx#control" aria-describedby="email-description email-error" aria-invalid="true" autoComplete="email" data-invalid="" data-required="" form="profile-form" id="email" inputMode="email" maxLength="80" minLength="3" name="email" pattern=".+@example\\.com" placeholder="ada@example.com" required type="email" value="ada@example.com">",
+  "controlClasses": [
+    "kv-field-bg-twio9x kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
+  ],
+  "description": "<p class="kv-field-fg-xo5wnt kv-field-font-1ditt9" data-style-src="field.tsx#description" id="email-description">Used for notifications.</p>",
+  "descriptionClasses": [
+    "kv-field-fg-xo5wnt kv-field-font-1ditt9",
+  ],
+  "error": "<p class="kv-field-fg-1ljwu3 kv-field-font-1ditt9 kv-field-font-oqvzpu" data-style-src="field.tsx#error" data-invalid="" id="email-error" role="alert">Email required.</p>",
+  "errorClasses": [
+    "kv-field-fg-1ljwu3 kv-field-font-1ditt9 kv-field-font-oqvzpu",
+  ],
+  "fieldset": "<fieldset class="kv-field-bd-mxevf0 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-fg-8bc8sj kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-pad-g8j5fv kv-field-row-zmgosv kv-field-opacity-r0fqdm kv-field-bd-remj3z" data-style-src="field.tsx#fieldset" aria-describedby="plan-description" aria-invalid="true" data-disabled="" data-invalid="" disabled form="profile-form" id="plan-fieldset" name="plan-options"><legend class="kv-field-fg-1mudui kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-pad-135yro" data-style-src="field.tsx#fieldsetLegend" id="plan-legend">Plan</legend></fieldset>",
+  "fieldsetClasses": [
+    "kv-field-bd-mxevf0 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-fg-8bc8sj kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-pad-g8j5fv kv-field-row-zmgosv kv-field-opacity-r0fqdm kv-field-bd-remj3z",
+  ],
+  "fieldsetLegendClasses": [
+    "kv-field-fg-1mudui kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-pad-135yro",
+  ],
+  "label": "<label class="kv-field-fg-1mudui kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-line-md0e74 kv-field-cursor-1uohhp kv-field-opacity-1cqgy8" data-style-src="field.tsx#label" data-invalid="" data-required="" for="email" id="email-label">Email</label>",
+  "labelClasses": [
+    "kv-field-fg-1mudui kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-line-md0e74 kv-field-cursor-1uohhp kv-field-opacity-1cqgy8",
+  ],
+  "root": "<div class="kv-field-fg-8bc8sj kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-row-1m16zq kv-field-opacity-r0fqdm kv-field-fg-84gjdm kv-field-font-tcmj2u" data-style-src="field.tsx#root" data-invalid="" data-required="" id="email-field">email field</div>",
+  "select": "<select class="kv-field-bg-twio9x kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q" data-style-src="field.tsx#select" aria-describedby="plan-description" data-required="" form="profile-form" id="plan" name="plan" required value="team"><option value="starter">Starter</option><option value="team" selected>Team</option></select>",
+  "selectClasses": [
+    "kv-field-bg-twio9x kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
+  ],
+  "selectOption": "<option class="kv-field-fg-8bc8sj kv-field-fg-1hf8s9" data-style-src="field.tsx#selectOption" disabled selected value="enterprise">Enterprise</option>",
+  "selectOptionClasses": [
+    "kv-field-fg-8bc8sj kv-field-fg-1hf8s9",
+  ],
+  "textarea": "<textarea class="kv-field-bg-twio9x kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-min-1pjmnv kv-field-pad-kmxu12 kv-field-pad-7oar2q" data-style-src="field.tsx#textarea" aria-describedby="bio-description" autoComplete="off" form="profile-form" id="bio" maxLength="240" name="bio" placeholder="Short bio" rows="4"></textarea>",
+  "textareaClasses": [
+    "kv-field-bg-twio9x kv-field-bd-53mqd3 kv-field-bd-gres8v kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-8bc8sj kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1tly56 kv-field-bd-1ugg0g kv-field-bg-10lwwh kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-9crfjn kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-g2pw7 kv-field-min-1pjmnv kv-field-pad-kmxu12 kv-field-pad-7oar2q",
+  ],
+}
+`;

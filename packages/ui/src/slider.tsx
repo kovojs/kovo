@@ -1,16 +1,22 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   sliderInputAttributes,
   sliderRangeAttributes,
   sliderRootAttributes,
   sliderThumbAttributes,
   sliderTrackAttributes,
-  type ClassValue,
   type SliderOrientation,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface SliderStyleOverrides {
+  input?: style.StyleInput;
+  range?: style.StyleInput;
+  root?: style.StyleInput;
+  thumb?: style.StyleInput;
+  track?: style.StyleInput;
+}
 
 export interface SliderStateProps {
   disabled?: boolean;
@@ -26,25 +32,25 @@ export interface SliderStateProps {
 
 export interface SliderProps extends SliderStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: SliderStyleOverrides;
 }
 
 export interface SliderInputProps extends SliderStateProps {
-  class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   form?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
+  styles?: SliderStyleOverrides;
   valueText?: string;
 }
 
 export interface SliderPartProps extends SliderStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: SliderStyleOverrides;
 }
 
 export interface SliderThumbProps extends SliderPartProps {
@@ -55,36 +61,80 @@ export interface SliderThumbProps extends SliderPartProps {
   valueText?: string;
 }
 
-export const sliderClassNames = defineVariants({
-  base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950 data-[orientation=vertical]:inline-grid',
-  variants: {},
-});
+export const sliderStyles = style.create(
+  {
+    input: {
+      accentColor: '#0a0a0a',
+      height: 8,
+      width: '100%',
+      '[data-orientation=vertical]': {
+        height: 160,
+        width: 8,
+      },
+      ':disabled': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+    },
+    range: {
+      backgroundColor: '#0a0a0a',
+      borderRadius: 9999,
+      display: 'block',
+      height: '100%',
+      '[data-orientation=vertical]': {
+        width: '100%',
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-invalid]': {
+        color: '#450a0a',
+      },
+      '[data-orientation=vertical]': {
+        display: 'inline-grid',
+      },
+    },
+    thumb: {
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 9999,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      display: 'block',
+      height: 16,
+      width: 16,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    track: {
+      backgroundColor: '#e5e5e5',
+      borderRadius: 9999,
+      height: 8,
+      overflow: 'hidden',
+      position: 'relative',
+      width: '100%',
+      '[data-orientation=vertical]': {
+        height: 160,
+        width: 8,
+      },
+    },
+  },
+  { namespace: 'slider', source: 'slider.tsx' },
+);
 
-export const sliderInputClassNames = defineVariants({
-  base: 'h-2 w-full accent-neutral-950 disabled:cursor-not-allowed disabled:opacity-50 data-[orientation=vertical]:h-40 data-[orientation=vertical]:w-2',
-  variants: {},
-});
-
-export const sliderTrackClassNames = defineVariants({
-  base: 'relative h-2 w-full overflow-hidden rounded-full bg-neutral-200 data-[orientation=vertical]:h-40 data-[orientation=vertical]:w-2',
-  variants: {},
-});
-
-export const sliderRangeClassNames = defineVariants({
-  base: 'block h-full rounded-full bg-neutral-950 data-[orientation=vertical]:w-full',
-  variants: {},
-});
-
-export const sliderThumbClassNames = defineVariants({
-  base: 'block h-4 w-4 rounded-full border border-neutral-300 bg-white shadow-sm data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const sliderClasses = sliderClassNames.classes;
-export const sliderInputClasses = sliderInputClassNames.classes;
-export const sliderTrackClasses = sliderTrackClassNames.classes;
-export const sliderRangeClasses = sliderRangeClassNames.classes;
-export const sliderThumbClasses = sliderThumbClassNames.classes;
+export const sliderClasses = [style.attrs(sliderStyles.root).class ?? ''] as const;
+export const sliderInputClasses = [style.attrs(sliderStyles.input).class ?? ''] as const;
+export const sliderTrackClasses = [style.attrs(sliderStyles.track).class ?? ''] as const;
+export const sliderRangeClasses = [style.attrs(sliderStyles.range).class ?? ''] as const;
+export const sliderThumbClasses = [style.attrs(sliderStyles.thumb).class ?? ''] as const;
 
 export const Slider = component({
   render(props: SliderProps) {
@@ -100,10 +150,11 @@ export const Slider = component({
       ...(props.step === undefined ? {} : { step: props.step }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(sliderStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(sliderClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-max={attrs['data-max']}
@@ -139,16 +190,17 @@ export const SliderInput = component({
       ...(props.value === undefined ? {} : { value: props.value }),
       ...(props.valueText === undefined ? {} : { valueText: props.valueText }),
     });
+    const styleAttrs = style.attrs(sliderStyles.input, props.styles?.input);
 
     return (
       <input
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
         aria-label={attrs['aria-label']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-orientation={attrs['aria-orientation']}
         aria-valuetext={attrs['aria-valuetext']}
-        class={cn(sliderInputClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-max={attrs['data-max']}
@@ -185,11 +237,12 @@ export const SliderTrack = component({
       ...(props.step === undefined ? {} : { step: props.step }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(sliderStyles.track, props.styles?.track);
 
     return (
       <div
+        {...styleAttrs}
         aria-hidden={attrs['aria-hidden']}
-        class={cn(sliderTrackClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-max={attrs['data-max']}
@@ -221,11 +274,12 @@ export const SliderRange = component({
       ...(props.step === undefined ? {} : { step: props.step }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(sliderStyles.range, props.styles?.range);
 
     return (
       <span
+        {...styleAttrs}
         aria-hidden={attrs['aria-hidden']}
-        class={cn(sliderRangeClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-max={attrs['data-max']}
@@ -262,9 +316,11 @@ export const SliderThumb = component({
       ...(props.value === undefined ? {} : { value: props.value }),
       ...(props.valueText === undefined ? {} : { valueText: props.valueText }),
     });
+    const styleAttrs = style.attrs(sliderStyles.thumb, props.styles?.thumb);
 
     return (
       <span
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-invalid={attrs['aria-invalid']}
@@ -275,7 +331,6 @@ export const SliderThumb = component({
         aria-valuemin={attrs['aria-valuemin']}
         aria-valuenow={attrs['aria-valuenow']}
         aria-valuetext={attrs['aria-valuetext']}
-        class={cn(sliderThumbClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-max={attrs['data-max']}

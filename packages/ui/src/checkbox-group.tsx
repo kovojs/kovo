@@ -5,13 +5,18 @@ import {
   checkboxGroupItemAttributes,
   checkboxGroupLabelAttributes,
   checkboxGroupRootAttributes,
-  cn,
-  defineVariants,
   type CheckboxGroupItem as HeadlessCheckboxGroupItem,
-  type ClassValue,
   type CollectionOrientation,
   type TextDirection,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface CheckboxGroupStyleOverrides {
+  control?: style.StyleInput;
+  item?: style.StyleInput;
+  label?: style.StyleInput;
+  root?: style.StyleInput;
+}
 
 export interface CheckboxGroupStateProps {
   activeValue?: string;
@@ -31,59 +36,102 @@ export interface CheckboxGroupStateProps {
 
 export interface CheckboxGroupProps extends CheckboxGroupStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   labelledBy?: string;
+  styles?: CheckboxGroupStyleOverrides;
 }
 
 export interface CheckboxGroupItemProps extends CheckboxGroupStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: CheckboxGroupStyleOverrides;
 }
 
 export interface CheckboxGroupControlProps extends CheckboxGroupStateProps {
-  class?: ClassValue;
   controlId?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: CheckboxGroupStyleOverrides;
 }
 
 export interface CheckboxGroupLabelProps extends CheckboxGroupStateProps {
   children?: string;
-  class?: ClassValue;
   controlId?: string;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: CheckboxGroupStyleOverrides;
 }
 
-export const checkboxGroupClassNames = defineVariants({
-  base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[orientation=horizontal]:flex data-[orientation=horizontal]:flex-wrap data-[orientation=horizontal]:items-center data-[invalid]:text-red-950',
-  variants: {},
-});
+export const checkboxGroupStyles = style.create(
+  {
+    control: {
+      accentColor: '#0a0a0a',
+      borderColor: '#d4d4d4',
+      borderRadius: 4,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      height: 16,
+      width: 16,
+      ':disabled': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+    item: {
+      alignItems: 'center',
+      columnGap: 8,
+      display: 'inline-flex',
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+    },
+    label: {
+      lineHeight: 1,
+      userSelect: 'none',
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-invalid]': {
+        color: '#450a0a',
+      },
+      '[data-orientation=horizontal]': {
+        alignItems: 'center',
+        display: 'flex',
+        flexWrap: 'wrap',
+      },
+    },
+  },
+  { namespace: 'checkboxGroup', source: 'checkbox-group.tsx' },
+);
 
-export const checkboxGroupItemClassNames = defineVariants({
-  base: 'inline-flex items-center gap-2 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const checkboxGroupControlClassNames = defineVariants({
-  base: 'h-4 w-4 rounded border border-neutral-300 text-neutral-950 accent-neutral-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50',
-  variants: {},
-});
-
-export const checkboxGroupLabelClassNames = defineVariants({
-  base: 'select-none leading-none data-[disabled]:cursor-not-allowed',
-  variants: {},
-});
-
-export const checkboxGroupClasses = checkboxGroupClassNames.classes;
-export const checkboxGroupItemClasses = checkboxGroupItemClassNames.classes;
-export const checkboxGroupControlClasses = checkboxGroupControlClassNames.classes;
-export const checkboxGroupLabelClasses = checkboxGroupLabelClassNames.classes;
+export const checkboxGroupClasses = [style.attrs(checkboxGroupStyles.root).class ?? ''] as const;
+export const checkboxGroupItemClasses = [style.attrs(checkboxGroupStyles.item).class ?? ''] as const;
+export const checkboxGroupControlClasses = [
+  style.attrs(checkboxGroupStyles.control).class ?? '',
+] as const;
+export const checkboxGroupLabelClasses = [
+  style.attrs(checkboxGroupStyles.label).class ?? '',
+] as const;
 
 export const CheckboxGroup = component({
   render(props: CheckboxGroupProps) {
@@ -104,15 +152,16 @@ export const CheckboxGroup = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(checkboxGroupStyles.root, props.styles?.root);
 
     return (
       <div
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-invalid={attrs['aria-invalid']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-required={attrs['aria-required']}
-        class={cn(checkboxGroupClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-orientation={attrs['data-orientation']}
@@ -144,10 +193,11 @@ export const CheckboxGroupItem = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(checkboxGroupStyles.item, props.styles?.item);
 
     return (
       <div
-        class={cn(checkboxGroupItemClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -176,12 +226,13 @@ export const CheckboxGroupControl = component({
       ...(props.value === undefined ? {} : { value: props.value }),
       ...(props.controlId === undefined ? {} : { controlId: props.controlId }),
     });
+    const styleAttrs = style.attrs(checkboxGroupStyles.control, props.styles?.control);
 
     return (
       <input
+        {...styleAttrs}
         aria-checked={attrs['aria-checked']}
         checked={attrs.checked}
-        class={cn(checkboxGroupControlClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
@@ -216,10 +267,11 @@ export const CheckboxGroupLabel = component({
       ...(props.value === undefined ? {} : { value: props.value }),
       ...(props.controlId === undefined ? {} : { controlId: props.controlId }),
     });
+    const styleAttrs = style.attrs(checkboxGroupStyles.label, props.styles?.label);
 
     return (
       <label
-        class={cn(checkboxGroupLabelClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         for={attrs.for}

@@ -1,0 +1,50 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui OtpField StyleX styles > exports StyleX style groups 1`] = `
+{
+  "keys": [
+    "group",
+    "hiddenInput",
+    "input",
+    "root",
+  ],
+  "markers": {
+    "group": true,
+    "hiddenInput": true,
+    "input": true,
+    "root": true,
+  },
+}
+`;
+
+exports[`@kovojs/ui OtpField StyleX styles > matches author-last slot override output 1`] = `
+{
+  "group": "<div class="kv-otp-field-align-1ktise kv-otp-field-d-1ou0cj kv-app-otp-field-column-glmn6q" data-style-src="otp-field.tsx#group; app-otp-field.tsx#group">custom slots</div>",
+  "hidden": "<input class="kv-otp-field-bd-dhbxdy kv-otp-field-clip-is8nbc kv-otp-field-h-2s8kot kv-otp-field-m-1inywp kv-otp-field-overflow-1j7625 kv-otp-field-pad-1x3ys8 kv-otp-field-position-fb4emz kv-otp-field-white-ex7o48 kv-app-otp-field-w-14zbq9" data-style-src="otp-field.tsx#hiddenInput; app-otp-field.tsx#hiddenInput" aria-hidden="true" autoComplete="one-time-code" data-slot="hidden-input" inputMode="numeric" maxLength="6" minLength="6" tabIndex="-1" type="text" value="">",
+  "input": "<input class="kv-otp-field-bg-1r5soy kv-otp-field-bd-1dgij3 kv-otp-field-bd-1qf6xu kv-otp-field-bd-1wna9r kv-otp-field-box-1ti0zz kv-otp-field-font-1h5jqe kv-otp-field-font-10t3pk kv-otp-field-h-14pom0 kv-otp-field-text-1riyps kv-otp-field-transition-afk2ej kv-otp-field-w-2bzhgg kv-otp-field-bd-17coee kv-otp-field-bd-tvejbx kv-otp-field-bg-1nj58e kv-otp-field-fg-1k3no8 kv-otp-field-cursor-1puzf0 kv-otp-field-outline-nj20g6 kv-otp-field-outline-1ag1xs kv-otp-field-outline-piwjfh kv-otp-field-outline-1y03xn kv-otp-field-outline-15voy1 kv-app-otp-field-bd-5z7pi1 kv-app-otp-field-fg-7nf2yr" data-style-src="otp-field.tsx#input; app-otp-field.tsx#input" aria-label="One-time code character 1" autoComplete="one-time-code" data-filled="" data-slot="0" inputMode="numeric" maxLength="1" type="text" value="1">",
+  "root": "<div class="kv-otp-field-fg-1qpiwv kv-otp-field-d-1mghfj kv-otp-field-font-ms8kpd kv-otp-field-opacity-1wmp2v kv-otp-field-fg-84gjdm kv-app-otp-field-row-zuedtz" data-style-src="otp-field.tsx#root; app-otp-field.tsx#root" role="group">Custom OTP</div>",
+}
+`;
+
+exports[`@kovojs/ui OtpField StyleX styles > matches semantic OTP field markup with StyleX output 1`] = `
+{
+  "classes": [
+    "kv-otp-field-fg-1qpiwv kv-otp-field-d-1mghfj kv-otp-field-font-ms8kpd kv-otp-field-row-1m16zq kv-otp-field-opacity-1wmp2v kv-otp-field-fg-84gjdm",
+  ],
+  "completeDisabled": "<div class="kv-otp-field-fg-1qpiwv kv-otp-field-d-1mghfj kv-otp-field-font-ms8kpd kv-otp-field-row-1m16zq kv-otp-field-opacity-1wmp2v kv-otp-field-fg-84gjdm" data-style-src="otp-field.tsx#root" aria-disabled="true" data-complete="" data-disabled="" role="group"></div>",
+  "emptySlot": "<input class="kv-otp-field-bg-1r5soy kv-otp-field-bd-1q3pu6 kv-otp-field-bd-1dgij3 kv-otp-field-bd-1qf6xu kv-otp-field-bd-1wna9r kv-otp-field-box-1ti0zz kv-otp-field-fg-1qpiwv kv-otp-field-font-1h5jqe kv-otp-field-font-10t3pk kv-otp-field-h-14pom0 kv-otp-field-text-1riyps kv-otp-field-transition-afk2ej kv-otp-field-w-2bzhgg kv-otp-field-bd-17coee kv-otp-field-bd-tvejbx kv-otp-field-bg-1nj58e kv-otp-field-fg-1k3no8 kv-otp-field-cursor-1puzf0 kv-otp-field-outline-nj20g6 kv-otp-field-outline-1ag1xs kv-otp-field-outline-piwjfh kv-otp-field-outline-1y03xn kv-otp-field-outline-15voy1" data-style-src="otp-field.tsx#input" aria-invalid="true" aria-label="One-time code character 6" aria-labelledby="otp-label" autoComplete="off" data-invalid="" data-required="" data-slot="5" id="otp-slot-6" inputMode="numeric" maxLength="1" pattern="[0-9]*" required type="text" value="">",
+  "firstSlot": "<input class="kv-otp-field-bg-1r5soy kv-otp-field-bd-1q3pu6 kv-otp-field-bd-1dgij3 kv-otp-field-bd-1qf6xu kv-otp-field-bd-1wna9r kv-otp-field-box-1ti0zz kv-otp-field-fg-1qpiwv kv-otp-field-font-1h5jqe kv-otp-field-font-10t3pk kv-otp-field-h-14pom0 kv-otp-field-text-1riyps kv-otp-field-transition-afk2ej kv-otp-field-w-2bzhgg kv-otp-field-bd-17coee kv-otp-field-bd-tvejbx kv-otp-field-bg-1nj58e kv-otp-field-fg-1k3no8 kv-otp-field-cursor-1puzf0 kv-otp-field-outline-nj20g6 kv-otp-field-outline-1ag1xs kv-otp-field-outline-piwjfh kv-otp-field-outline-1y03xn kv-otp-field-outline-15voy1" data-style-src="otp-field.tsx#input" aria-invalid="true" aria-label="One-time code digit 1" aria-labelledby="otp-label" autoComplete="one-time-code" data-filled="" data-invalid="" data-required="" data-slot="0" id="otp-slot-1" inputMode="numeric" maxLength="1" pattern="[0-9]*" required type="text" value="1">",
+  "group": "<div class="kv-otp-field-align-1ktise kv-otp-field-column-16aop2 kv-otp-field-d-1ou0cj" data-style-src="otp-field.tsx#group">slots</div>",
+  "groupClasses": [
+    "kv-otp-field-align-1ktise kv-otp-field-column-16aop2 kv-otp-field-d-1ou0cj",
+  ],
+  "hidden": "<input class="kv-otp-field-bd-dhbxdy kv-otp-field-clip-is8nbc kv-otp-field-h-2s8kot kv-otp-field-m-1inywp kv-otp-field-overflow-1j7625 kv-otp-field-pad-1x3ys8 kv-otp-field-position-fb4emz kv-otp-field-white-ex7o48 kv-otp-field-w-1muffd" data-style-src="otp-field.tsx#hiddenInput" aria-hidden="true" autoComplete="one-time-code" data-invalid="" data-required="" data-slot="hidden-input" form="otp-form" id="otp-code" inputMode="numeric" maxLength="6" minLength="6" name="otp-code" pattern="[0-9]*" required tabIndex="-1" type="text" value="1234">",
+  "hiddenInputClasses": [
+    "kv-otp-field-bd-dhbxdy kv-otp-field-clip-is8nbc kv-otp-field-h-2s8kot kv-otp-field-m-1inywp kv-otp-field-overflow-1j7625 kv-otp-field-pad-1x3ys8 kv-otp-field-position-fb4emz kv-otp-field-white-ex7o48 kv-otp-field-w-1muffd",
+  ],
+  "inputClasses": [
+    "kv-otp-field-bg-1r5soy kv-otp-field-bd-1q3pu6 kv-otp-field-bd-1dgij3 kv-otp-field-bd-1qf6xu kv-otp-field-bd-1wna9r kv-otp-field-box-1ti0zz kv-otp-field-fg-1qpiwv kv-otp-field-font-1h5jqe kv-otp-field-font-10t3pk kv-otp-field-h-14pom0 kv-otp-field-text-1riyps kv-otp-field-transition-afk2ej kv-otp-field-w-2bzhgg kv-otp-field-bd-17coee kv-otp-field-bd-tvejbx kv-otp-field-bg-1nj58e kv-otp-field-fg-1k3no8 kv-otp-field-cursor-1puzf0 kv-otp-field-outline-nj20g6 kv-otp-field-outline-1ag1xs kv-otp-field-outline-piwjfh kv-otp-field-outline-1y03xn kv-otp-field-outline-15voy1",
+  ],
+  "root": "<div class="kv-otp-field-fg-1qpiwv kv-otp-field-d-1mghfj kv-otp-field-font-ms8kpd kv-otp-field-row-1m16zq kv-otp-field-opacity-1wmp2v kv-otp-field-fg-84gjdm" data-style-src="otp-field.tsx#root" aria-describedby="otp-description otp-error" aria-invalid="true" aria-labelledby="otp-label" data-invalid="" data-required="" id="otp-field" role="group">otp controls</div>",
+}
+`;

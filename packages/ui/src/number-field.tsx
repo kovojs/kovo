@@ -1,15 +1,20 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   numberFieldDecrementAttributes,
   numberFieldIncrementAttributes,
   numberFieldInputAttributes,
   numberFieldRootAttributes,
-  type ClassValue,
   type NumberFieldValue,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface NumberFieldStyleOverrides {
+  button?: style.StyleInput;
+  control?: style.StyleInput;
+  input?: style.StyleInput;
+  root?: style.StyleInput;
+}
 
 export interface NumberFieldStateProps {
   disabled?: boolean;
@@ -24,52 +29,132 @@ export interface NumberFieldStateProps {
 
 export interface NumberFieldProps extends NumberFieldStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: NumberFieldStyleOverrides;
 }
 
 export interface NumberFieldInputProps extends NumberFieldStateProps {
-  class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   form?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
+  styles?: NumberFieldStyleOverrides;
 }
 
 export interface NumberFieldButtonProps extends NumberFieldStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   inputId?: string;
   label?: string;
+  styles?: NumberFieldStyleOverrides;
 }
 
-export const numberFieldClassNames = defineVariants({
-  base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950',
-  variants: {},
-});
+export const numberFieldStyles = style.create(
+  {
+    button: {
+      alignItems: 'center',
+      backgroundColor: '#fafafa',
+      borderColor: '#e5e5e5',
+      borderStyle: 'solid',
+      color: '#404040',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 36,
+      justifyContent: 'center',
+      transitionProperty: 'background-color, color',
+      width: 36,
+      '[data-action=decrement]': {
+        borderRightWidth: 1,
+      },
+      '[data-action=increment]': {
+        borderLeftWidth: 1,
+      },
+      '[data-disabled]': {
+        opacity: 0.7,
+      },
+      ':disabled': {
+        backgroundColor: '#f5f5f5',
+        color: '#a3a3a3',
+        cursor: 'not-allowed',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: -2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#f5f5f5',
+      },
+    },
+    control: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      display: 'inline-flex',
+      height: 36,
+      overflow: 'hidden',
+      width: 'fit-content',
+      '[data-disabled]': {
+        opacity: 0.6,
+      },
+      '[data-invalid]': {
+        borderColor: '#f87171',
+      },
+    },
+    input: {
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      color: '#0a0a0a',
+      fontSize: 14,
+      height: 36,
+      outlineStyle: 'none',
+      paddingInline: 12,
+      textAlign: 'center',
+      width: 80,
+      '[aria-invalid=true]': {
+        color: '#450a0a',
+      },
+      ':disabled': {
+        backgroundColor: '#f5f5f5',
+        color: '#737373',
+        cursor: 'not-allowed',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-invalid]': {
+        color: '#450a0a',
+      },
+    },
+  },
+  { namespace: 'numberField', source: 'number-field.tsx' },
+);
 
-export const numberFieldControlClassNames = defineVariants({
-  base: 'inline-flex h-9 w-fit items-center overflow-hidden rounded-md border border-neutral-300 bg-white shadow-sm data-[disabled]:opacity-60 data-[invalid]:border-red-400',
-  variants: {},
-});
-
-export const numberFieldInputClassNames = defineVariants({
-  base: 'h-9 w-20 border-0 bg-transparent px-3 text-center text-sm text-neutral-950 outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:text-red-950',
-  variants: {},
-});
-
-export const numberFieldButtonClassNames = defineVariants({
-  base: 'inline-flex h-9 w-9 items-center justify-center border-neutral-200 bg-neutral-50 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 data-[action=decrement]:border-r data-[action=increment]:border-l data-[disabled]:opacity-70',
-  variants: {},
-});
-
-export const numberFieldClasses = numberFieldClassNames.classes;
-export const numberFieldControlClasses = numberFieldControlClassNames.classes;
-export const numberFieldInputClasses = numberFieldInputClassNames.classes;
-export const numberFieldButtonClasses = numberFieldButtonClassNames.classes;
+export const numberFieldClasses = [style.attrs(numberFieldStyles.root).class ?? ''] as const;
+export const numberFieldControlClasses = [
+  style.attrs(numberFieldStyles.control).class ?? '',
+] as const;
+export const numberFieldInputClasses = [style.attrs(numberFieldStyles.input).class ?? ''] as const;
+export const numberFieldButtonClasses = [style.attrs(numberFieldStyles.button).class ?? ''] as const;
 
 export const NumberField = component({
   render(props: NumberFieldProps) {
@@ -84,10 +169,11 @@ export const NumberField = component({
       ...(props.step === undefined ? {} : { step: props.step }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(numberFieldStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(numberFieldClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -112,10 +198,11 @@ export const NumberFieldControl = component({
       ...(props.step === undefined ? {} : { step: props.step }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(numberFieldStyles.control, props.styles?.control);
 
     return (
       <div
-        class={cn(numberFieldControlClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -145,14 +232,15 @@ export const NumberFieldInput = component({
       ...(props.step === undefined ? {} : { step: props.step }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(numberFieldStyles.input, props.styles?.input);
 
     return (
       <input
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
         aria-label={attrs['aria-label']}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(numberFieldInputClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -186,12 +274,13 @@ export const NumberFieldDecrement = component({
       ...(props.step === undefined ? {} : { step: props.step }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(numberFieldStyles.button, props.styles?.button);
 
     return (
       <button
+        {...styleAttrs}
         aria-controls={attrs['aria-controls']}
         aria-label={attrs['aria-label']}
-        class={cn(numberFieldButtonClassNames(), props.class)}
         data-action={attrs['data-action']}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
@@ -221,12 +310,13 @@ export const NumberFieldIncrement = component({
       ...(props.step === undefined ? {} : { step: props.step }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(numberFieldStyles.button, props.styles?.button);
 
     return (
       <button
+        {...styleAttrs}
         aria-controls={attrs['aria-controls']}
         aria-label={attrs['aria-label']}
-        class={cn(numberFieldButtonClassNames(), props.class)}
         data-action={attrs['data-action']}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}

@@ -1,14 +1,19 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   otpFieldHiddenInputAttributes,
   otpFieldInputAttributes,
   otpFieldRootAttributes,
-  type ClassValue,
   type OtpFieldInputMode,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface OtpFieldStyleOverrides {
+  group?: style.StyleInput;
+  hiddenInput?: style.StyleInput;
+  input?: style.StyleInput;
+  root?: style.StyleInput;
+}
 
 export interface OtpFieldStateProps {
   disabled?: boolean;
@@ -24,50 +29,101 @@ export interface OtpFieldStateProps {
 
 export interface OtpFieldProps extends OtpFieldStateProps {
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   id?: string;
   labelledBy?: string;
+  styles?: OtpFieldStyleOverrides;
 }
 
 export interface OtpFieldHiddenInputProps extends OtpFieldStateProps {
-  class?: ClassValue;
   id?: string;
+  styles?: OtpFieldStyleOverrides;
 }
 
 export interface OtpFieldInputProps extends OtpFieldStateProps {
-  class?: ClassValue;
   id?: string;
   label?: string;
   labelledBy?: string;
   slotIndex: number;
+  styles?: OtpFieldStyleOverrides;
 }
 
-export const otpFieldClassNames = defineVariants({
-  base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950',
-  variants: {},
-});
+export const otpFieldStyles = style.create(
+  {
+    group: {
+      alignItems: 'center',
+      columnGap: 8,
+      display: 'flex',
+    },
+    hiddenInput: {
+      borderWidth: 0,
+      clip: 'rect(0, 0, 0, 0)',
+      height: 1,
+      margin: -1,
+      overflow: 'hidden',
+      padding: 0,
+      position: 'absolute',
+      whiteSpace: 'nowrap',
+      width: 1,
+    },
+    input: {
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      fontSize: 16,
+      fontWeight: 500,
+      height: 40,
+      textAlign: 'center',
+      transitionProperty: 'border-color, color, box-shadow',
+      width: 36,
+      '[data-filled]': {
+        borderColor: '#737373',
+      },
+      '[data-invalid]': {
+        borderColor: '#ef4444',
+      },
+      ':disabled': {
+        backgroundColor: '#f5f5f5',
+        color: '#737373',
+        cursor: 'not-allowed',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      '[data-invalid]:focus-visible': {
+        outlineColor: '#ef4444',
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-invalid]': {
+        color: '#450a0a',
+      },
+    },
+  },
+  { namespace: 'otpField', source: 'otp-field.tsx' },
+);
 
-export const otpFieldGroupClassNames = defineVariants({
-  base: 'flex items-center gap-2',
-  variants: {},
-});
-
-export const otpFieldHiddenInputClassNames = defineVariants({
-  base: 'sr-only',
-  variants: {},
-});
-
-export const otpFieldInputClassNames = defineVariants({
-  base: 'h-10 w-9 rounded-md border border-neutral-300 bg-white text-center text-base font-medium text-neutral-950 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 data-[filled]:border-neutral-500 data-[invalid]:border-red-500 data-[invalid]:focus-visible:outline-red-500',
-  variants: {},
-});
-
-export const otpFieldClasses = otpFieldClassNames.classes;
-export const otpFieldGroupClasses = otpFieldGroupClassNames.classes;
-export const otpFieldHiddenInputClasses = otpFieldHiddenInputClassNames.classes;
-export const otpFieldInputClasses = otpFieldInputClassNames.classes;
+export const otpFieldClasses = [style.attrs(otpFieldStyles.root).class ?? ''] as const;
+export const otpFieldGroupClasses = [style.attrs(otpFieldStyles.group).class ?? ''] as const;
+export const otpFieldHiddenInputClasses = [
+  style.attrs(otpFieldStyles.hiddenInput).class ?? '',
+] as const;
+export const otpFieldInputClasses = [style.attrs(otpFieldStyles.input).class ?? ''] as const;
 
 export const OtpField = component({
   render(props: OtpFieldProps) {
@@ -85,15 +141,16 @@ export const OtpField = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(otpFieldStyles.root, props.styles?.root);
 
     return (
       <div
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-invalid={attrs['aria-invalid']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-required={attrs['aria-required']}
-        class={cn(otpFieldClassNames(), props.class)}
         data-complete={attrs['data-complete']}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
@@ -108,8 +165,9 @@ export const OtpField = component({
 });
 
 export const OtpFieldGroup = component({
-  render(props: { children?: string; class?: ClassValue }) {
-    return <div class={cn(otpFieldGroupClassNames(), props.class)}>{props.children}</div>;
+  render(props: { children?: string; styles?: OtpFieldStyleOverrides }) {
+    const styleAttrs = style.attrs(otpFieldStyles.group, props.styles?.group);
+    return <div {...styleAttrs}>{props.children}</div>;
   },
 });
 
@@ -127,12 +185,13 @@ export const OtpFieldHiddenInput = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(otpFieldStyles.hiddenInput, props.styles?.hiddenInput);
 
     return (
       <input
+        {...styleAttrs}
         aria-hidden={attrs['aria-hidden']}
         autoComplete={attrs.autoComplete}
-        class={cn(otpFieldHiddenInputClassNames(), props.class)}
         data-complete={attrs['data-complete']}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
@@ -171,14 +230,15 @@ export const OtpFieldInput = component({
       slotIndex: props.slotIndex,
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const styleAttrs = style.attrs(otpFieldStyles.input, props.styles?.input);
 
     return (
       <input
+        {...styleAttrs}
         aria-invalid={attrs['aria-invalid']}
         aria-label={attrs['aria-label']}
         aria-labelledby={attrs['aria-labelledby']}
         autoComplete={attrs.autoComplete}
-        class={cn(otpFieldInputClassNames(), props.class)}
         data-complete={attrs['data-complete']}
         data-disabled={attrs['data-disabled']}
         data-filled={attrs['data-filled']}
