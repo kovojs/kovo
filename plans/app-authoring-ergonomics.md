@@ -255,7 +255,7 @@ item inherits from rather than re-deciding it:
     - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
 
-- [ ] **4. Replace string shell helpers with layouts + `documentTemplate`.**
+- [x] **4. Replace string shell helpers with layouts + `documentTemplate`.**
   - Framework direction: convert document-level shells to
     `createApp({ documentTemplate })` (§9.5) and page chrome to layout/`<Shell>`
     components (item 3). Ensure the JSX runtime handles children + generated
@@ -264,6 +264,22 @@ item inherits from rather than re-deciding it:
     - `rg -n "renderSoShell|renderCrmShell|renderCommerceCartShell|renderCartPageBody" examples/{stackoverflow,crm,commerce}/src` has no hits.
     - Route document tests prove layout output, component stamps, stylesheets, and
       metadata still compose correctly.
+  - Evidence:
+    - StackOverflow, CRM, and Commerce route pages now return the authored page
+      region/components directly and attach `layout()` chrome (`SoLayout`,
+      `PipelineLayout`/`ContactsLayout`, `CommerceCartLayout`) instead of calling
+      string shell helpers.
+    - Generated route artifacts were refreshed; `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`, and
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`
+      pass.
+    - `rg -n "renderSoShell|renderCrmShell|renderCommerceCartShell|renderCartPageBody" examples/stackoverflow/src examples/crm/src examples/commerce/src`
+      exits 1 with no hits.
+    - Focused example tests pass: `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`,
+      `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`, and
+      `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.rendering.test.ts`.
+    - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
 
 - [ ] **5. Field-bound mutation failure UI (replaces the broad failure switch).**
   - Decision 2026-06-17 (resolves the original `formFailure`/`<Failure>` proposal,
@@ -375,8 +391,8 @@ item inherits from rather than re-deciding it:
   - Evidence: item 1 compiler fixture and no-match route/layout import check above; generated imports that remain in tests/loaders, touch graph, optimistic helpers, and legacy non-route modules are owned by later items.
 - [x] **No app-authored `Request` mutation for `db`/`session`; providers inferred end to end.**
   - Evidence: item 2 no-match, app-scoped declaration type-test, server lifecycle test, example tests, root `tsc`, API gate, and `git diff --check` above.
-- [ ] **Nested layouts compose, refresh layout queries, and scope boundaries/guards per segment.** Evidence pending.
-- [ ] **No string shell helpers; document via `documentTemplate`, chrome via layouts.** Evidence pending.
+- [x] **Nested layouts compose, refresh layout queries, and scope boundaries/guards per segment.** Evidence: item 3 current evidence.
+- [x] **No string shell helpers; document via `documentTemplate`, chrome via layouts.** Evidence: item 4 evidence.
 - [ ] **Expected failures render via `<FieldError>/<FormError>` (KV242-checked); unexpected via error boundaries; no `formFailure({ message })`.** Evidence pending.
 - [ ] **No manual query-registry duplication across shells, mutation registries, generated files, or `graph.ts`.** Evidence pending.
 - [ ] **No static-export surface in interactive examples; capability covered by a standalone fixture.** Evidence pending.

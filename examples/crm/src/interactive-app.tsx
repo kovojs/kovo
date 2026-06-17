@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { renderComponentMutationFailure, route, s } from '@kovojs/server';
+import { layout, renderComponentMutationFailure, route, s } from '@kovojs/server';
 import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
 import type { RequestHandler } from '@kovojs/server/app-shell/core';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
@@ -7,7 +7,7 @@ import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-sh
 import { ContactsRegion } from './components/contacts.js';
 import { DealDetailRegion } from './components/deal-detail.js';
 import { PipelineRegion } from './components/pipeline.js';
-import { renderCrmShell } from './components/chrome.js';
+import { CrmShell } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
 import { addContact, closeDeal, createDeal, moveDeal, type CrmRequest } from './mutations.js';
@@ -39,6 +39,14 @@ const crmStaticDealPaths = [
 // guard (SPEC.md §6.5) passes. This is a no-auth public demo; the session is a
 // fixed stand-in for a logged-in sales rep (owner `u1`, the demo seed owner).
 const demoSession = { id: 'demo-session', user: { id: 'u1', roles: ['sales'] as const } };
+
+const PipelineLayout = layout({
+  render: (_queries, _state, { children }) => <CrmShell active="pipeline">{children}</CrmShell>,
+});
+
+const ContactsLayout = layout({
+  render: (_queries, _state, { children }) => <CrmShell active="contacts">{children}</CrmShell>,
+});
 
 export interface CrmInteractiveApp {
   app: ReturnType<typeof createApp>;
@@ -75,8 +83,9 @@ export async function buildCrmInteractiveApp(
     params: s.object({ id: s.string() }),
     staticPaths: crmStaticDealPaths,
     page({ params }: { params: { id: string } }) {
-      return renderCrmShell('pipeline', <DealDetailRegion dealId={params.id} />);
+      return <DealDetailRegion dealId={params.id} />;
     },
+    layout: PipelineLayout,
     stylesheets: crmStylesheets,
   });
 
@@ -112,15 +121,17 @@ export async function buildCrmInteractiveApp(
           title: 'Pipeline · Atlas CRM',
         },
         page() {
-          return renderCrmShell('pipeline', <PipelineRegion />);
+          return <PipelineRegion />;
         },
+        layout: PipelineLayout,
         stylesheets: crmStylesheets,
       }),
       route('/contacts', {
         meta: { description: 'The CRM contact book.', title: 'Contacts · Atlas CRM' },
         page() {
-          return renderCrmShell('contacts', <ContactsRegion />);
+          return <ContactsRegion />;
         },
+        layout: ContactsLayout,
         stylesheets: crmStylesheets,
       }),
       dealDetailRoute,

@@ -52,7 +52,13 @@ export function stageBadge(stage: string): string {
   );
 }
 
-export function renderCrmShell(active: CrmSection, body: string): string {
+export function CrmShell({
+  active,
+  children,
+}: {
+  active: CrmSection;
+  children?: unknown;
+}): string {
   return (
     <div class="crm-app min-h-screen bg-slate-50 text-slate-900">
       <header class="border-b border-slate-200 bg-white">
@@ -79,7 +85,7 @@ export function renderCrmShell(active: CrmSection, body: string): string {
           </nav>
         </div>
       </header>
-      <main class="mx-auto max-w-5xl px-6 py-8">{body}</main>
+      <main class="mx-auto max-w-5xl px-6 py-8">{children}</main>
     </div>
   );
 }

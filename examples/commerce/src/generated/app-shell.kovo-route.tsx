@@ -2,6 +2,7 @@
 /** @jsxImportSource @kovojs/server */
 import { defineCompiledRoutePage as __kovoDefineCompiledRoutePage } from '@kovojs/server/internal/route';
 import {
+  layout,
   route,
   type CsrfValidationOptions,
   type ServerErrorHandler,
@@ -87,14 +88,27 @@ export const commerceClientModuleHref = clientModules.put({
   version: 'commerce-r7',
 });
 
+function CommerceCartShell({ children }: { children?: unknown }): string {
+  return (
+    <div data-commerce-shell="cart">
+      <main class="mx-auto max-w-4xl">{children}</main>
+    </div>
+  );
+}
+
+const CommerceCartLayout = layout({
+  render: (_queries, _state, { children }) => <CommerceCartShell>{children}</CommerceCartShell>,
+});
+
 export const commerceHomeRoute = route('/', {
   i18n: commerceMessages,
   meta: {
     description: 'Browse products and checkout with verifiable cart state.',
     title: 'Kovo Commerce',
   },
-  page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CartBadge","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"ProductGrid","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"OrderHistory","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"examples/commerce/src/app-shell.tsx","route":"/"}, function page(_context, request: CommerceShellRequest) {
-    return renderCommerceCartShell(
+  layout: CommerceCartLayout,
+  page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CartBadge","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"ProductGrid","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"OrderHistory","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"examples/commerce/src/app-shell.tsx","layouts":[{"localName":"CommerceCartLayout","queries":[]}],"navigationSegments":[{"id":"layout:CommerceCartLayout","kind":"layout","localName":"CommerceCartLayout","queries":[]},{"components":["CartBadge","ProductGrid","OrderHistory"],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, function page(_context, request: CommerceShellRequest) {
+    return (
       <>
         <CartBadge />
         <ProductGrid />
@@ -104,7 +118,7 @@ export const commerceHomeRoute = route('/', {
           OrderHistory.definition.render({ orderHistory: { items: [] } })
         )}
         {renderReceiptUploadForm()}
-      </>,
+      </>
     );
   }),
   stylesheets: commerceStylesheets,
@@ -116,8 +130,9 @@ export const commerceCartRoute = route('/cart', {
     description: 'Browse products and checkout with verifiable cart state.',
     title: 'Kovo Commerce',
   },
-  page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CartBadge","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"ProductGrid","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"OrderHistory","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"examples/commerce/src/app-shell.tsx","route":"/cart"}, function page(_context, request: CommerceShellRequest) {
-    return renderCommerceCartShell(
+  layout: CommerceCartLayout,
+  page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CartBadge","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"ProductGrid","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"OrderHistory","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"examples/commerce/src/app-shell.tsx","layouts":[{"localName":"CommerceCartLayout","queries":[]}],"navigationSegments":[{"id":"layout:CommerceCartLayout","kind":"layout","localName":"CommerceCartLayout","queries":[]},{"components":["CartBadge","ProductGrid","OrderHistory"],"id":"page:/cart","kind":"page","localName":"page"}],"route":"/cart"}, function page(_context, request: CommerceShellRequest) {
+    return (
       <>
         <CartBadge />
         <ProductGrid />
@@ -127,15 +142,11 @@ export const commerceCartRoute = route('/cart', {
           OrderHistory.definition.render({ orderHistory: { items: [] } })
         )}
         {renderReceiptUploadForm()}
-      </>,
+      </>
     );
   }),
   stylesheets: commerceStylesheets,
 });
-
-async function renderCommerceCartShell(children: unknown): Promise<string> {
-  return `<div data-commerce-shell="cart"><main class="mx-auto max-w-4xl">${await children}</main></div>`;
-}
 
 export const commerceLoginRoute = route('/login', {
   meta: {
@@ -163,13 +174,14 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           title: 'Kovo Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
-        page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CartBadge","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"ProductGrid","props":[{"expression":"true","name":"readOnly","staticValue":true}],"propsExpression":"{ readOnly: true }","serializedPropsExpression":"JSON.stringify({ readOnly: true })"}],"fileName":"examples/commerce/src/app-shell.tsx","route":"/"}, function page() {
-          return renderCommerceCartShell(
+        layout: CommerceCartLayout,
+        page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CartBadge","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"ProductGrid","props":[{"expression":"true","name":"readOnly","staticValue":true}],"propsExpression":"{ readOnly: true }","serializedPropsExpression":"JSON.stringify({ readOnly: true })"}],"fileName":"examples/commerce/src/app-shell.tsx","layouts":[{"localName":"CommerceCartLayout","queries":[]}],"navigationSegments":[{"id":"layout:CommerceCartLayout","kind":"layout","localName":"CommerceCartLayout","queries":[]},{"components":["CartBadge","ProductGrid"],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, function page() {
+          return (
             <>
               <CartBadge />
               <ProductGrid readOnly />
               {OrderHistory.definition.render({ orderHistory: { items: [] } })}
-            </>,
+            </>
           );
         }),
         stylesheets: commerceStylesheets,
@@ -181,13 +193,14 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           title: 'Kovo Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
-        page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CartBadge","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"ProductGrid","props":[{"expression":"true","name":"readOnly","staticValue":true}],"propsExpression":"{ readOnly: true }","serializedPropsExpression":"JSON.stringify({ readOnly: true })"}],"fileName":"examples/commerce/src/app-shell.tsx","route":"/cart"}, function page() {
-          return renderCommerceCartShell(
+        layout: CommerceCartLayout,
+        page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CartBadge","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"ProductGrid","props":[{"expression":"true","name":"readOnly","staticValue":true}],"propsExpression":"{ readOnly: true }","serializedPropsExpression":"JSON.stringify({ readOnly: true })"}],"fileName":"examples/commerce/src/app-shell.tsx","layouts":[{"localName":"CommerceCartLayout","queries":[]}],"navigationSegments":[{"id":"layout:CommerceCartLayout","kind":"layout","localName":"CommerceCartLayout","queries":[]},{"components":["CartBadge","ProductGrid"],"id":"page:/cart","kind":"page","localName":"page"}],"route":"/cart"}, function page() {
+          return (
             <>
               <CartBadge />
               <ProductGrid readOnly />
               {OrderHistory.definition.render({ orderHistory: { items: [] } })}
-            </>,
+            </>
           );
         }),
         stylesheets: commerceStylesheets,

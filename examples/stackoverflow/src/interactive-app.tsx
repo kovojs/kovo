@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { renderComponentMutationFailure, route, s } from '@kovojs/server';
+import { layout, renderComponentMutationFailure, route, s } from '@kovojs/server';
 import {
   createApp,
   createRequestHandler,
@@ -9,7 +9,7 @@ import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-sh
 
 import { QuestionDetailRegion } from './components/question-detail.js';
 import { QuestionListRegion } from './components/question-list.js';
-import { renderSoShell } from './components/chrome.js';
+import { SoShell } from './components/chrome.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';
@@ -33,6 +33,10 @@ const soStaticQuestionPaths = [
   '/questions/q6',
   '/questions/q7',
 ] as const;
+
+const SoLayout = layout({
+  render: (_queries, _state, { children }) => <SoShell>{children}</SoShell>,
+});
 
 export interface SoInteractiveApp {
   app: ReturnType<typeof createApp>;
@@ -69,8 +73,9 @@ export async function buildSoInteractiveApp(
     params: s.object({ id: s.string() }),
     staticPaths: soStaticQuestionPaths,
     page({ params }: { params: { id: string } }) {
-      return renderSoShell(<QuestionDetailRegion questionId={params.id} />);
+      return <QuestionDetailRegion questionId={params.id} />;
     },
+    layout: SoLayout,
     stylesheets: soStylesheets,
   });
 
@@ -109,8 +114,9 @@ export async function buildSoInteractiveApp(
           title: 'Questions · DevOverflow',
         },
         page() {
-          return renderSoShell(<QuestionListRegion />);
+          return <QuestionListRegion />;
         },
+        layout: SoLayout,
         stylesheets: soStylesheets,
       }),
       questionDetailRoute,

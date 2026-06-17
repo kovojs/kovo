@@ -121,7 +121,7 @@ export function voteButton(questionId: string, value: number, request?: SoReques
   );
 }
 
-export function renderSoShell(body: string): string {
+export function SoShell({ children }: { children?: unknown }): string {
   return (
     <div class="so-app">
       <header class="so-header">
@@ -143,7 +143,7 @@ export function renderSoShell(body: string): string {
           </nav>
         </div>
       </header>
-      <main class="so-main">{body}</main>
+      <main class="so-main">{children}</main>
     </div>
   );
 }

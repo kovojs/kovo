@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import {
+  layout,
   route,
   type CsrfValidationOptions,
   type ServerErrorHandler,
@@ -85,14 +86,27 @@ export const commerceClientModuleHref = clientModules.put({
   version: 'commerce-r7',
 });
 
+function CommerceCartShell({ children }: { children?: unknown }): string {
+  return (
+    <div data-commerce-shell="cart">
+      <main class="mx-auto max-w-4xl">{children}</main>
+    </div>
+  );
+}
+
+const CommerceCartLayout = layout({
+  render: (_queries, _state, { children }) => <CommerceCartShell>{children}</CommerceCartShell>,
+});
+
 export const commerceHomeRoute = route('/', {
   i18n: commerceMessages,
   meta: {
     description: 'Browse products and checkout with verifiable cart state.',
     title: 'Kovo Commerce',
   },
+  layout: CommerceCartLayout,
   page(_context, request: CommerceShellRequest) {
-    return renderCommerceCartShell(
+    return (
       <>
         <CartBadge />
         <ProductGrid />
@@ -102,7 +116,7 @@ export const commerceHomeRoute = route('/', {
           OrderHistory.definition.render({ orderHistory: { items: [] } })
         )}
         {renderReceiptUploadForm()}
-      </>,
+      </>
     );
   },
   stylesheets: commerceStylesheets,
@@ -114,8 +128,9 @@ export const commerceCartRoute = route('/cart', {
     description: 'Browse products and checkout with verifiable cart state.',
     title: 'Kovo Commerce',
   },
+  layout: CommerceCartLayout,
   page(_context, request: CommerceShellRequest) {
-    return renderCommerceCartShell(
+    return (
       <>
         <CartBadge />
         <ProductGrid />
@@ -125,15 +140,11 @@ export const commerceCartRoute = route('/cart', {
           OrderHistory.definition.render({ orderHistory: { items: [] } })
         )}
         {renderReceiptUploadForm()}
-      </>,
+      </>
     );
   },
   stylesheets: commerceStylesheets,
 });
-
-async function renderCommerceCartShell(children: unknown): Promise<string> {
-  return `<div data-commerce-shell="cart"><main class="mx-auto max-w-4xl">${await children}</main></div>`;
-}
 
 export const commerceLoginRoute = route('/login', {
   meta: {
@@ -161,13 +172,14 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           title: 'Kovo Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
+        layout: CommerceCartLayout,
         page() {
-          return renderCommerceCartShell(
+          return (
             <>
               <CartBadge />
               <ProductGrid readOnly />
               {OrderHistory.definition.render({ orderHistory: { items: [] } })}
-            </>,
+            </>
           );
         },
         stylesheets: commerceStylesheets,
@@ -179,13 +191,14 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           title: 'Kovo Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
+        layout: CommerceCartLayout,
         page() {
-          return renderCommerceCartShell(
+          return (
             <>
               <CartBadge />
               <ProductGrid readOnly />
               {OrderHistory.definition.render({ orderHistory: { items: [] } })}
-            </>,
+            </>
           );
         },
         stylesheets: commerceStylesheets,
