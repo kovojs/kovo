@@ -48,7 +48,7 @@ export function Fragment(props: JsxProps): string {
 export function jsx(type: JsxComponent | string, props: JsxProps): string {
   if (typeof type === 'function') return type(props);
 
-  const attributes = renderJsxAttributes(props);
+  const attributes = renderJsxAttributes(type, props);
   if (voidElements.has(type)) return `<${type}${attributes}>`;
 
   return `<${type}${attributes}>${renderJsxChildren(renderJsxContent(props))}</${type}>`;
@@ -60,7 +60,7 @@ export function jsxDEV(type: JsxComponent | string, props: JsxProps): string {
   return jsx(type, props);
 }
 
-function renderJsxAttributes(props: JsxProps): string {
+function renderJsxAttributes(type: string, props: JsxProps): string {
   let rendered = '';
 
   for (const [name, value] of Object.entries(props)) {
@@ -73,6 +73,10 @@ function renderJsxAttributes(props: JsxProps): string {
     ) {
       continue;
     }
+    if (type === 'form' && name === 'mutation' && isMutationDefinitionLike(value)) {
+      rendered += renderMutationFormAttributes(value.key, props);
+      continue;
+    }
     rendered +=
       value === true
         ? ` ${name}`
@@ -80,6 +84,22 @@ function renderJsxAttributes(props: JsxProps): string {
   }
 
   return rendered;
+}
+
+function renderMutationFormAttributes(key: string, props: JsxProps): string {
+  return [
+    props.method === undefined ? ' method="post"' : '',
+    props.action === undefined ? ` action="${escapeAttribute(`/_m/${key}`)}"` : '',
+    props['data-mutation'] === undefined ? ` data-mutation="${escapeAttribute(key)}"` : '',
+  ].join('');
+}
+
+function isMutationDefinitionLike(value: unknown): value is { key: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { key?: unknown }).key === 'string'
+  );
 }
 
 function renderJsxContent(props: JsxProps): JsxNode {

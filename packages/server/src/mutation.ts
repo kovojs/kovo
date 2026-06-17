@@ -172,6 +172,13 @@ export interface MutationDefinition<
   ) => Promise<Result>;
 }
 
+export interface MutationFormAttributes<Key extends string = string> {
+  action: `/_m/${Key}`;
+  'data-mutation': Key;
+  enhance: true;
+  method: 'post';
+}
+
 export interface RunMutationOptions<
   Request,
   SessionValue = unknown,
@@ -229,6 +236,32 @@ export function mutation<
   >,
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key } {
   return { ...definition, key };
+}
+
+/**
+ * Render the no-JS/enhanced form attributes for a typed mutation value
+ * (SPEC §6.3). Component-authored `<form mutation={...}>` is still compiler
+ * lowered when submitted-form targets are needed; this helper keeps direct
+ * server-rendered templates from hard-coding `/_m/*` URLs.
+ */
+export function mutationFormAttributes<const Key extends string>(
+  definition: Pick<MutationDefinition<Key>, 'key'>,
+): MutationFormAttributes<Key> {
+  return {
+    action: `/_m/${definition.key}`,
+    'data-mutation': definition.key,
+    enhance: true,
+    method: 'post',
+  };
+}
+
+export function renderMutationFormAttributes<const Key extends string>(
+  definition: Pick<MutationDefinition<Key>, 'key'>,
+): string {
+  const attributes = mutationFormAttributes(definition);
+  return `method="${attributes.method}" action="${escapeAttribute(
+    attributes.action,
+  )}" enhance data-mutation="${escapeAttribute(attributes['data-mutation'])}"`;
 }
 
 /**

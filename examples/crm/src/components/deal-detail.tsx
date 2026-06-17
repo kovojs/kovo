@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { closeDeal, moveDeal } from '../mutations.js';
 import type { ContactRow, DealRow } from '../queries.js';
 import { money, renderCrmShell, stageBadge } from './chrome.js';
 
@@ -76,7 +77,7 @@ export function renderDealDetailRegion({ deal, contact, activities }: DealDetail
         </h2>
         <div class="flex flex-wrap gap-2">
           {MOVE_STAGES.map((stage) => (
-            <form method="post" action="/_m/moveDeal" enhance data-mutation="moveDeal">
+            <form enhance mutation={moveDeal}>
               <input type="hidden" name="dealId" value={deal.id} />
               <input type="hidden" name="stage" value={stage} />
               <button
@@ -99,7 +100,7 @@ export function renderDealDetailRegion({ deal, contact, activities }: DealDetail
               This deal is closed ({deal.stage}). Commission is final.
             </p>
           ) : (
-            <form method="post" action="/_m/closeDeal" enhance data-mutation="closeDeal">
+            <form enhance mutation={closeDeal}>
               <input type="hidden" name="dealId" value={deal.id} />
               <button
                 type="submit"

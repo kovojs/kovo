@@ -17,6 +17,7 @@ import {
   renderComponentMutationFailure,
   renderDeferredStream,
   renderMutationEndpointResponse,
+  renderMutationFormAttributes,
   renderPageHints,
   renderRoutePageResponse,
   respond,
@@ -838,7 +839,7 @@ export async function renderOrderHistory(db: CommerceDb, userId?: string): Promi
 
 export function renderReceiptUploadForm(orderId = 'order-1'): string {
   return [
-    '<form method="post" action="/_m/order/receipt" enhance data-mutation="order/receipt" enctype="multipart/form-data" kovo-deps="order" class="mt-4 grid gap-2 rounded border border-slate-200 bg-white p-4" aria-busy="false">',
+    `<form ${renderMutationFormAttributes(uploadReceipt)} enctype="multipart/form-data" kovo-deps="order" class="mt-4 grid gap-2 rounded border border-slate-200 bg-white p-4" aria-busy="false">`,
     `<input type="hidden" name="orderId" value="${escapeAttribute(orderId)}">`,
     '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Receipt</span>',
     '<input name="receipt" type="file" accept="application/pdf,image/png" class="rounded border border-slate-300 px-2 py-1">',
@@ -1012,7 +1013,7 @@ export function renderCommerceLoginForm(
   options: { failure?: CommerceLoginFailureState; next?: string } = {},
 ): string {
   return [
-    '<form method="post" action="/_m/auth/sign-in" enhance data-mutation="auth/sign-in" class="grid gap-4 rounded border border-slate-200 bg-white p-6">',
+    `<form ${renderMutationFormAttributes(commerceSignIn)} class="grid gap-4 rounded border border-slate-200 bg-white p-6">`,
     csrfField(request, commerceAuthCsrf),
     `<input type="hidden" name="next" value="${escapeAttribute(options.next ?? '/cart')}">`,
     '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Email</span>',
@@ -1031,7 +1032,7 @@ export function renderCommerceLoginForm(
 
 export function renderCommerceLogoutForm(request: CommerceAuthRequest): string {
   return [
-    '<form method="post" action="/_m/auth/sign-out" enhance data-mutation="auth/sign-out" class="inline">',
+    `<form ${renderMutationFormAttributes(commerceSignOut)} class="inline">`,
     csrfField(request, commerceAuthCsrf),
     '<button class="text-sm font-medium text-slate-900" type="submit">Sign out</button>',
     '</form>',

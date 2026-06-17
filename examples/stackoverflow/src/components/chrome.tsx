@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { voteUpMutation } from '../mutations.js';
 
 // Shared page chrome for the Stack Overflow example UI. The app-shell wraps each
 // page() return in the document <html>/<head> (with the stylesheet), so these
@@ -19,7 +20,7 @@ export function freshId(prefix: string): string {
 // a serial key, so the handler ignores it); `userId` is the demo viewer.
 export function voteButton(questionId: string, value: number): string {
   return (
-    <form method="post" action="/_m/voteUp" enhance data-mutation="voteUp" class="w-12 shrink-0">
+    <form enhance mutation={voteUpMutation} class="w-12 shrink-0">
       <input type="hidden" name="id" value={`vote-${questionId}`} />
       <input type="hidden" name="targetId" value={questionId} />
       <input type="hidden" name="userId" value="demo-viewer" />

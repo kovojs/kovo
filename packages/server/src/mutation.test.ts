@@ -3,12 +3,37 @@ import { describe, expect, it } from 'vitest';
 import { invalidate } from './change-record.js';
 import { domain, tag } from './domain.js';
 import { guards } from './guards.js';
-import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
+import {
+  mutationFormAttributes,
+  renderMutationFormAttributes,
+  renderMutationResponse,
+  renderNoJsMutationResponse,
+  runMutation,
+} from './mutation.js';
 import { query } from './query.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server mutation lifecycle', () => {
+  it('derives direct-render form attributes from typed mutation values', () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    expect(mutationFormAttributes(addToCart)).toEqual({
+      action: '/_m/cart/add',
+      'data-mutation': 'cart/add',
+      enhance: true,
+      method: 'post',
+    });
+    expect(renderMutationFormAttributes(addToCart)).toBe(
+      'method="post" action="/_m/cart/add" enhance data-mutation="cart/add"',
+    );
+  });
+
   it('returns typed validation failures from ctx.fail', async () => {
     const addToCart = mutation('cart/add', {
       errors: {

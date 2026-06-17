@@ -504,9 +504,36 @@ export const AddToCartForm = component({
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
       `rg -n 'failureTarget|productFormTarget|action="/_m/cart/add"|data-mutation="cart/add"|kovo-fragment-target=\\{productFormTarget|fragmentTarget: true' site/tutorial/steps/{04-mutations,05-optimistic,06-streaming,07-verification}/src/components site/tutorial/steps/{04-mutations,05-optimistic,06-streaming,07-verification}/src/app.ts`
       on 2026-06-17.
-    - Remaining gap: StackOverflow, CRM, starter/reference auth forms, and
-      remaining commerce auth/upload forms still need migration after typed
-      failure-state support lands.
+    - Direct server-rendered forms can now derive SPEC §6.3 mutation form
+      attributes from typed mutation values through `mutation={...}` in
+      `packages/server/src/jsx-runtime.ts` or
+      `renderMutationFormAttributes()` in `packages/server/src/mutation.ts`.
+    - StackOverflow and CRM form sources now bind real mutation definitions:
+      `examples/stackoverflow/src/components/{chrome,question-detail,question-list}.tsx`
+      and
+      `examples/crm/src/components/{contacts,deal-detail,pipeline}.tsx`
+      use `mutation={...}` instead of hard-coded `action="/_m/*"` and
+      `data-mutation` strings.
+    - Reference auth and commerce auth/upload string renderers now use
+      `renderMutationFormAttributes()` with real mutation definitions in
+      `examples/reference/src/app.ts` and `examples/commerce/src/app.ts`.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/jsx-runtime.test.ts packages/server/src/mutation.test.ts packages/server/src/api/app.test.ts`,
+      `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`,
+      `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`,
+      `pnpm --filter @kovojs/example-commerce test -- app.auth.test.ts app.uploads-webhooks.test.ts`,
+      `pnpm exec vitest --run examples/reference/src/app.test.ts examples/reference/src/app-shell.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and no-match
+      `rg -n 'action="/_m/|data-mutation=' examples/stackoverflow/src/components examples/crm/src/components examples/reference/src/app.ts examples/commerce/src/app.ts`
+      on 2026-06-17.
+    - Audit result: StackOverflow and CRM still hand-author region-level
+      `kovo-fragment-target` hosts in plain route render helpers; inference does
+      not cover those wrappers until the regions become compiler-managed
+      query-backed `component()` roots.
+    - Remaining gap: starter auth forms still need a concrete generated/auth
+      mutation value at render time, and StackOverflow/CRM region targets still
+      need a component-boundary migration before the `kovo-fragment-target`
+      attributes can be removed.
 - [ ] **10. Final gates.**
   - Run focused compiler/runtime/server/example tests for inferred targets,
     form-target inference, mutation responses, query coverage, and commerce.

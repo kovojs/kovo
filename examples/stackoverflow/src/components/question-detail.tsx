@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { postAnswerMutation } from '../mutations.js';
 import type { AnswerListItem } from '../types.js';
 import { freshId, renderSoShell, voteButton } from './chrome.js';
 
@@ -88,10 +89,8 @@ export function renderQuestionDetailRegion({ question, answers }: QuestionDetail
             mutation; the fragment re-renders this whole region so the new answer
             and bumped count appear and the composer resets (fresh id). */}
         <form
-          method="post"
-          action="/_m/postAnswer"
           enhance
-          data-mutation="postAnswer"
+          mutation={postAnswerMutation}
           class="mt-4 rounded-lg border border-slate-200 bg-white p-4"
         >
           <input type="hidden" name="id" value={freshId('a')} />

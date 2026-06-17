@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { addContact } from '../mutations.js';
 import type { ContactRow } from '../queries.js';
 import { freshId, renderCrmShell } from './chrome.js';
 
@@ -40,10 +41,8 @@ export function renderContactsRegion({ contacts }: ContactsPageData): string {
           is minted at render time so each submission is unique; ownerId is the
           demo session user. */}
       <form
-        method="post"
-        action="/_m/addContact"
         enhance
-        data-mutation="addContact"
+        mutation={addContact}
         class="rounded-lg border border-slate-200 bg-white p-4"
       >
         <input type="hidden" name="id" value={freshId('c')} />

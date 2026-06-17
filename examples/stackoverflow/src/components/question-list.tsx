@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { postQuestionMutation } from '../mutations.js';
 import type { QuestionListItem } from '../types.js';
 import { freshId, renderSoShell, voteButton } from './chrome.js';
 
@@ -37,10 +38,8 @@ export function renderQuestionListRegion({ questions, totalVotes }: QuestionList
           appears and the composer resets (with a fresh id). The text primary key
           is minted at render time so each submission is unique. */}
       <form
-        method="post"
-        action="/_m/postQuestion"
         enhance
-        data-mutation="postQuestion"
+        mutation={postQuestionMutation}
         class="rounded-lg border border-slate-200 bg-white p-4"
       >
         <input type="hidden" name="id" value={freshId('q')} />

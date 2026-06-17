@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { createDeal } from '../mutations.js';
 import type { ContactRow, DealRow, PipelineStageBucket } from '../queries.js';
 import { freshId, money, renderCrmShell, stageBadge } from './chrome.js';
 
@@ -57,10 +58,8 @@ export function renderPipelineRegion({ buckets, openDeals, contacts }: PipelineP
       <section>
         <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">New deal</h2>
         <form
-          method="post"
-          action="/_m/createDeal"
           enhance
-          data-mutation="createDeal"
+          mutation={createDeal}
           class="rounded-lg border border-slate-200 bg-white p-4"
         >
           <input type="hidden" name="id" value={freshId('d')} />
