@@ -264,6 +264,168 @@ export const PayloadCard = component({
     `);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
+
+  it('snapshots literal URL attributes across internal, external, and unsafe schemes', () => {
+    const result = compileComponentModule({
+      fileName: 'literal-url-payloads.tsx',
+      registryFacts: {
+        routes: ['/products/:id'],
+      },
+      source: `
+export const LiteralUrlPayloads = component({
+  render: () => (
+    <nav>
+      <a href="/products/p1?ref=%3Ctag%3E">Internal</a>
+      <a href="https://example.com/docs?q=%3Ctag%3E" external>External</a>
+      <a href="https://example.com/missing-external">Missing external marker</a>
+      <a href="javascript:alert(1)">Unsafe</a>
+    </nav>
+  ),
+});
+`,
+    });
+
+    expect({
+      diagnostics: result.diagnostics,
+      serverSource: normalizeArtifact(fileByKind(result, 'server').source),
+    }).toMatchInlineSnapshot(`
+      {
+        "diagnostics": [
+          {
+            "code": "KV220",
+            "fileName": "literal-url-payloads.tsx",
+            "help": "Would lower to: a route-checked href/action that participates in the typed route registry.
+      Blocked reason: the literal target does not match any declared canonical route path.
+      Fixes: use a typed route helper, declare the route, correct the literal path, or mark an intentional full-origin/external navigation with the external escape hatch.
+      SPEC §6.4 and §9.5 require navigation targets to stay type-checked against the route table.
+      Escape: external/full-origin URLs opt out because they are outside the app route graph.",
+            "length": 26,
+            "message": "Literal href or form action matches no declared route. javascript:alert(1)",
+            "severity": "error",
+            "start": {
+              "column": 10,
+              "line": 8,
+            },
+          },
+          {
+            "code": "KV236",
+            "fileName": "literal-url-payloads.tsx",
+            "help": "Blocked reason: the output context can execute script, navigate unexpectedly, inject unsafe CSS, or bypass normal JSX escaping.
+      Fixes: route URLs through typed route helpers; mark intentional external links with external; keep dynamic styling to compiler-generated safe properties; or pass raw HTML only as a Kovo TrustedHtml value.
+      SPEC §1 and §5.2 require compiler output to be auditable; unsafe output contexts cannot depend on implicit browser or runtime sanitization.",
+            "length": 43,
+            "message": "Unsafe output context requires an explicit trusted Kovo escape hatch. href="https://example.com/missing-external" is an external literal URL without external",
+            "severity": "error",
+            "start": {
+              "column": 10,
+              "line": 7,
+            },
+          },
+          {
+            "code": "KV236",
+            "fileName": "literal-url-payloads.tsx",
+            "help": "Blocked reason: the output context can execute script, navigate unexpectedly, inject unsafe CSS, or bypass normal JSX escaping.
+      Fixes: route URLs through typed route helpers; mark intentional external links with external; keep dynamic styling to compiler-generated safe properties; or pass raw HTML only as a Kovo TrustedHtml value.
+      SPEC §1 and §5.2 require compiler output to be auditable; unsafe output contexts cannot depend on implicit browser or runtime sanitization.",
+            "length": 26,
+            "message": "Unsafe output context requires an explicit trusted Kovo escape hatch. href="javascript:alert(1)" uses an unsafe URL scheme",
+            "severity": "error",
+            "start": {
+              "column": 10,
+              "line": 8,
+            },
+          },
+        ],
+        "serverSource": "// @kovojs-ir
+      export function renderSource() {
+        return \`
+      export const LiteralUrlPayloads = component({
+        render: () => (
+          <nav kovo-c="literal-url-payloads">
+            <a href="/products/p1?ref=%3Ctag%3E">Internal</a>
+            <a href="https://example.com/docs?q=%3Ctag%3E" external>External</a>
+            <a href="https://example.com/missing-external">Missing external marker</a>
+            <a href="javascript:alert(1)">Unsafe</a>
+          </nav>
+        ),
+      });
+      LiteralUrlPayloads.name = "literal-url-payloads/literal-url-payloads";
+      \`;
+      }",
+      }
+    `);
+  });
+
+  it('snapshots dynamic URL attribute updates through URL-bound sanitizers', () => {
+    const result = compileComponentModule({
+      fileName: 'dynamic-url-payloads.tsx',
+      source: `
+export const DynamicUrlPayloads = component({
+  queries: { product: productQuery },
+  render: ({ product }) => (
+    <article>
+      <a href={product.href}>Product</a>
+      <img src={product.image} />
+    </article>
+  ),
+});
+`,
+    });
+    const clientModule = executeClientModule(fileByKind(result, 'client').source);
+    const updatePlans = clientModule.DynamicUrlPayloads$queryUpdatePlans as QueryUpdatePlanExports;
+    const anchor = new FakeElement(selectorAttributeRecord(result, 'href'));
+    const image = new FakeElement(selectorAttributeRecord(result, 'src'));
+    const root = new FakeRoot([], [anchor, image]);
+    const applied = runQueryPlan(updatePlans, 'product', root, {
+      href: 'javascript:alert(1)',
+      image: '/images/p1.png?caption=%3Ctag%3E',
+    });
+
+    expect({
+      applied,
+      clientSource: normalizeArtifact(fileByKind(result, 'client').source),
+      diagnostics: result.diagnostics,
+      updatedAttributes: {
+        anchor: anchor.attributeRecord(),
+        image: image.attributeRecord(),
+      },
+    }).toMatchInlineSnapshot(`
+      {
+        "applied": {
+          "bindings": [],
+          "derives": [],
+          "stamps": [
+            "href",
+            "src",
+          ],
+          "templateStamps": [],
+        },
+        "clientSource": "// @kovojs-ir
+      import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime';
+
+      export const DynamicUrlPayloads$a_href_derive = derive(["product"], (product) => product.href);
+      export const DynamicUrlPayloads$img_src_derive = derive(["product"], (product) => product.image);
+
+      export const DynamicUrlPayloads$queryUpdatePlans = {
+        "product"(root, value) {
+          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "href", selector: "[data-derive=\\"product.DynamicUrlPayloads$a_href_derive\\"]", select(value) { return DynamicUrlPayloads$a_href_derive.run(value); } }, { attr: "src", selector: "[data-derive=\\"product.DynamicUrlPayloads$img_src_derive\\"]", select(value) { return DynamicUrlPayloads$img_src_derive.run(value); } }], templateStamps: [] });
+        },
+      };",
+        "diagnostics": [],
+        "updatedAttributes": {
+          "anchor": {
+            "data-derive": "product.DynamicUrlPayloads$a_href_derive",
+            "href": "#",
+          },
+          "image": {
+            "data-derive": "product.DynamicUrlPayloads$img_src_derive",
+            "src": "/images/p1.png?caption=%3Ctag%3E",
+          },
+        },
+      }
+    `);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
 });
 
 type QueryUpdatePlanExports = Record<string, (root: FakeRoot, value: unknown) => unknown>;
@@ -282,6 +444,19 @@ function runQueryPlan(
 function selectorAttributeValue(selector: string): string {
   const match = /^\[[^=\]]+="([^"]*)"\]$/.exec(selector);
   return match?.[1] ?? '';
+}
+
+function selectorAttributeRecord(
+  result: ReturnType<typeof compileComponentModule>,
+  attr: string,
+): Record<string, string> {
+  const selector = result.queryUpdatePlans[0]?.stamps?.find((stamp) => stamp.attr === attr)
+    ?.selector;
+  if (!selector) throw new Error(`Missing selector for ${attr}`);
+
+  const match = /^\[([^=\]]+)="([^"]*)"\]$/.exec(selector);
+  if (!match) throw new Error(`Unsupported selector: ${selector}`);
+  return { [(match[1] ?? '').replaceAll('\\:', ':')]: match[2] ?? '' };
 }
 
 function fileByKind(

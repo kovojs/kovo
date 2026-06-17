@@ -149,15 +149,37 @@ compiler-quality gaps found during the 2026-06-16 audit.
       `<`, `>`, `&`, double quotes, and single quotes.
     - Evidence (2026-06-16): `pnpm exec vitest --run
       packages/compiler/src/output-context-payloads.test.ts` passes.
-  - [ ] Add literal `href` tests for internal routes, explicit external URLs, and unsafe schemes.
-  - [ ] Add dynamic URL update tests for safe routes and unsafe schemes.
+  - [x] Add literal `href` tests for internal routes, explicit external URLs, and unsafe schemes.
+    - Evidence (2026-06-16): `packages/compiler/src/output-context-payloads.test.ts`
+      snapshots an internal route literal, an explicit `external` full-origin URL, a missing
+      `external` marker diagnostic, and an unsafe `javascript:` literal diagnostic.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run
+      src/output-context-payloads.test.ts` passes.
+  - [x] Add dynamic URL update tests for safe routes and unsafe schemes.
+    - Evidence (2026-06-16): `packages/compiler/src/output-context-payloads.test.ts`
+      snapshots query-plan updates for dynamic `href` and `src`; the live runtime update preserves a
+      safe `/images/...` URL and neutralizes `javascript:alert(1)` to `#`.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run
+      src/output-context-payloads.test.ts` passes.
   - [ ] Add style-property tests for allowed generated properties and rejected arbitrary dynamic CSS.
   - [ ] Add component CSS block tests for unsafe `url()` values.
   - [ ] Add template stamp tests where list item values attempt HTML injection.
   - [ ] Add fragment-target tests where refreshed fragment values attempt HTML injection.
-  - [ ] Add raw HTML rejection tests for plain strings at every supported raw HTML sink.
-  - [ ] Add trusted HTML acceptance tests for the explicit Kovo trusted wrapper and browser
+  - [x] Add raw HTML rejection tests for plain strings at every supported raw HTML sink.
+    - Evidence (2026-06-16): `packages/compiler/src/output-context-raw-html.test.ts`
+      snapshots KV236 diagnostics for statically visible plain strings at
+      `dangerouslySetInnerHTML`, `innerHTML`, `rawHtml`, and `html`.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run
+      src/output-context-raw-html.test.ts src/output-context-security.test.ts
+      src/output-context-payloads.test.ts` passes.
+  - [x] Add trusted HTML acceptance tests for the explicit Kovo trusted wrapper and browser
         TrustedHTML-compatible values.
+    - Evidence (2026-06-16): `packages/compiler/src/output-context-raw-html.test.ts`
+      snapshots zero KV236 diagnostics plus emitted server IR for `trustedHtml("<b>...")` and
+      `trustedHtml({ toString() { ... } })`/compatible values across the supported raw HTML sinks.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run
+      src/output-context-raw-html.test.ts src/output-context-security.test.ts
+      src/output-context-payloads.test.ts` passes.
 
 - [ ] Implement the CSP/nonce or hash metadata contract promised by the D4 decision.
   - [ ] Decide and document whether Kovo emits nonces, hashes, or both for generated inline scripts
