@@ -10,27 +10,45 @@ compiler-quality gaps found during the 2026-06-16 audit.
 
 ## Semantic Equivalence
 
-- [ ] Make SPEC §5.2 render equivalence compare authored TSX semantics against compiled server IR.
-  - [ ] Change the compile pipeline so the authored-side reference is derived from `originalModel`
+- [x] Make SPEC §5.2 render equivalence compare authored TSX semantics against compiled server IR.
+  - [x] Change the compile pipeline so the authored-side reference is derived from `originalModel`
         or an equivalent authored semantic render fact, not the post-lowering `model`.
-  - [ ] Add an explicit test proving the compile pipeline calls the semantic gate with authored
+  - [x] Add an explicit test proving the compile pipeline calls the semantic gate with authored
         semantics before structural JSX lowering.
-  - [ ] Add a visible-drift fixture for primitive `asChild` composition where the lowered element's
+  - [x] Add a visible-drift fixture for primitive `asChild` composition where the lowered element's
         visible tag/text/attribute differs from the authored reference and the semantic check fails.
-  - [ ] Add a visible-drift fixture for `Link` lowering where an incorrect generated `href` fails the
+  - [x] Add a visible-drift fixture for `Link` lowering where an incorrect generated `href` fails the
         semantic check.
-  - [ ] Add a visible-drift fixture for `viewTransitionName`/style lowering where an incorrect
+  - [x] Add a visible-drift fixture for `viewTransitionName`/style lowering where an incorrect
         visible style value fails the semantic check.
-  - [ ] Add a visible-drift fixture for inline query text binding and mixed text span insertion where
+  - [x] Add a visible-drift fixture for inline query text binding and mixed text span insertion where
         generated-only `data-bind` passes but visible text drift fails.
-  - [ ] Add a visible-drift fixture for handler/server-render stamping where generated `on:*`,
+  - [x] Add a visible-drift fixture for handler/server-render stamping where generated `on:*`,
         `data-p-*`, `kovo-c`, `kovo-deps`, and `kovo-state` are ignored only through the explicit
         allowlist.
-  - [ ] Preserve `detail`, `expected`, and `actual` on failing render-equivalence checks through the
+  - [x] Preserve `detail`, `expected`, and `actual` on failing render-equivalence checks through the
         CLI `kovo check` surface.
-  - [ ] Preserve `detail`, `expected`, and `actual` on failing render-equivalence checks through the
+  - [x] Preserve `detail`, `expected`, and `actual` on failing render-equivalence checks through the
         compile/MCP JSON-RPC surface.
-  - [ ] Record verification commands under this item after implementation.
+  - [x] Record verification commands under this item after implementation.
+  - Evidence (2026-06-17): `packages/compiler/src/compile.ts` calls
+        `semanticRenderEquivalenceCheck(fileNames.server, originalModel, ...)`, so the authored
+        reference is captured before structural JSX lowering.
+  - Evidence (2026-06-17): `packages/compiler/src/emit/server.ts` renders authored `Link`,
+        static `viewTransitionName`, and primitive `asChild` semantics before comparing with the
+        lowered server artifact.
+  - Evidence (2026-06-17): `packages/compiler/src/compile-component.test.ts` covers the authored
+        `Link` pipeline check plus explicit visible-drift failures for `Link`, `viewTransitionName`,
+        mixed text/data-bind spans, handler/server stamps, and primitive `asChild` composition.
+  - Evidence (2026-06-17): `packages/cli/src/index.kovo-check.test.ts` asserts failing
+        render-equivalence checks print `detail`, `expected`, and `actual`; `packages/cli/src/index.ts`
+        maps failed compile/v1 render-equivalence checks into MCP structured content with the same
+        fields.
+  - Evidence (2026-06-17): `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts
+        packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.compile-mcp.test.ts
+        packages/compiler/src/stamps.test.ts packages/compiler/src/view-transitions.test.ts
+        packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/handler-lowering.test.ts`
+        passed; `pnpm exec tsc --noEmit --pretty false` passed.
 
 - [ ] Retire or clearly quarantine the old source-normalization render-equivalence path.
   - [ ] Audit every import and call site of `renderEquivalenceCheck`,
@@ -119,18 +137,37 @@ compiler-quality gaps found during the 2026-06-16 audit.
     coverage that previously hit KV236.
 
 - [ ] Represent generated output contexts as typed compiler facts.
-  - [ ] Add a shared compiler type for generated output writes with at least these contexts: text,
+  - [x] Add a shared compiler type for generated output writes with at least these contexts: text,
         attribute, boolean attribute, URL attribute, style property, CSS text, HTML fragment, script
         text, and trusted/raw HTML.
-  - [ ] Thread output-context facts through server render emission for generated text and attributes.
-  - [ ] Thread output-context facts through client query-plan emission for text bindings and derived
+  - [x] Thread output-context facts through server render emission for generated text and attributes.
+  - [x] Thread output-context facts through client query-plan emission for text bindings and derived
         attribute stamps.
-  - [ ] Thread output-context facts through template stamp emission before HTML-fragment assembly.
-  - [ ] Thread output-context facts through state derive emission and runtime state binding updates.
-  - [ ] Thread output-context facts through URL-bearing attributes and dynamic URL updates.
+  - [x] Thread output-context facts through template stamp emission before HTML-fragment assembly.
+  - [x] Thread output-context facts through state derive emission and runtime state binding updates.
+  - [x] Thread output-context facts through URL-bearing attributes and dynamic URL updates.
   - [ ] Thread output-context facts through generated style properties and CSS text.
   - [ ] Add a static test that fails if a generated interpolation is emitted without an output-context
         fact.
+  - Evidence (2026-06-17): `packages/compiler/src/output-context-facts.ts` defines
+        `GeneratedOutputWriteFact` and `OutputContext` with text, attribute, boolean-attribute,
+        url-attribute, style-property, css-text, html-fragment, script-text, and trusted-html
+        contexts.
+  - Evidence (2026-06-17): `packages/compiler/src/compile.ts` aggregates output-context facts from
+        structural lowering, server render lowering, query update plans, and state derives into
+        `CompileResult.outputContextFacts`.
+  - Evidence (2026-06-17): `packages/compiler/src/emit/server.ts`,
+        `packages/compiler/src/analyze/query-updates.ts`,
+        `packages/compiler/src/lower/inline-derives.ts`,
+        `packages/compiler/src/lower/structural-jsx.ts`, and `packages/compiler/src/style.ts`
+        attach output-context facts to generated server stamps/handlers, query text/attribute
+        stamps, template stamps, state derives, URL-bearing attributes, and style/class updates.
+  - Evidence (2026-06-17): `packages/compiler/src/stamps.test.ts` snapshots server host stamp
+        output-context facts; `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts
+        packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.compile-mcp.test.ts
+        packages/compiler/src/stamps.test.ts packages/compiler/src/view-transitions.test.ts
+        packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/handler-lowering.test.ts`
+        passed; `pnpm exec tsc --noEmit --pretty false` passed.
 
 - [x] Complete the security payload matrix.
   - [x] Add server-render and client-update agreement tests for text payloads containing `<`, `>`,

@@ -5,6 +5,10 @@ import {
 } from '../analyze/query-shapes.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import {
+  outputContextForAttribute,
+  type GeneratedOutputWriteFact,
+} from '../output-context-facts.js';
+import {
   createJsxIrTree,
   generatedJsxIrAttribute,
   jsxIrAttributeValue,
@@ -67,6 +71,7 @@ interface InlineStateTextDerive {
 
 export interface StructuralJsxLowering {
   diagnostics: readonly CompilerDiagnostic[];
+  outputContexts: readonly GeneratedOutputWriteFact[];
   replacements: readonly SourceReplacement[];
   stateDerives: readonly StateDeriveFact[];
   viewTransitionStamps: readonly ViewTransitionStamp[];
@@ -79,6 +84,7 @@ export function lowerStructuralJsx(
 ): StructuralJsxLowering {
   const tree = createJsxIrTree(model, options);
   const diagnostics: CompilerDiagnostic[] = [];
+  const outputContexts: GeneratedOutputWriteFact[] = [];
   const viewTransitionStamps: ViewTransitionStamp[] = [];
   const deriveExports: string[] = [];
   const stateDerives: StateDeriveFact[] = [];
@@ -98,6 +104,7 @@ export function lowerStructuralJsx(
     viewTransitionStamps,
     deriveExports,
     stateDerives,
+    outputContexts,
     nameCounts,
   );
   needsStylePropertyHelper =
@@ -108,6 +115,7 @@ export function lowerStructuralJsx(
       options,
       deriveExports,
       stateDerives,
+      outputContexts,
       nameCounts,
     ) || needsStylePropertyHelper;
   lowerInlineTextBindings(
@@ -118,10 +126,15 @@ export function lowerStructuralJsx(
     options,
     deriveExports,
     stateDerives,
+    outputContexts,
     nameCounts,
     boundElementStarts,
   );
-  const escapeApplied = escapeStaticTextInterpolations(tree.elements, boundElementStarts);
+  const escapeApplied = escapeStaticTextInterpolations(
+    tree.elements,
+    boundElementStarts,
+    outputContexts,
+  );
 
   const alreadyImportsEscapeText = model.namedImports.some(
     (entry) => entry.importedName === 'escapeText' && entry.moduleSpecifier === '@kovojs/server',
@@ -145,7 +158,7 @@ export function lowerStructuralJsx(
     replacements.push({ end: start, replacement: prefix, start });
   }
 
-  return { diagnostics, replacements, stateDerives, viewTransitionStamps };
+  return { diagnostics, outputContexts, replacements, stateDerives, viewTransitionStamps };
 }
 
 function lowerPrimitiveSpreads(elements: readonly JsxIrElement[]): void {
@@ -299,6 +312,7 @@ function lowerViewTransitionNames(
   stamps: ViewTransitionStamp[],
   deriveExports: string[],
   stateDerives: StateDeriveFact[],
+  outputContexts: GeneratedOutputWriteFact[],
   nameCounts: Map<string, number>,
 ): boolean {
   let needsStylePropertyHelper = false;
@@ -324,7 +338,7 @@ function lowerViewTransitionNames(
       knownQueries,
     );
     if (!derive) continue;
-    lowerAttributeDerive(derive, options, deriveExports, stateDerives, nameCounts);
+    lowerAttributeDerive(derive, options, deriveExports, stateDerives, outputContexts, nameCounts);
     needsStylePropertyHelper = true;
   }
   return needsStylePropertyHelper;
@@ -337,6 +351,7 @@ function lowerInlineAttributeDerivesInIr(
   options: StructuralJsxLoweringOptions,
   deriveExports: string[],
   stateDerives: StateDeriveFact[],
+  outputContexts: GeneratedOutputWriteFact[],
   nameCounts: Map<string, number>,
 ): boolean {
   let needsStylePropertyHelper = false;
@@ -363,6 +378,7 @@ function lowerInlineAttributeDerivesInIr(
         options,
         deriveExports,
         stateDerives,
+        outputContexts,
         nameCounts,
         forceQueryBindings,
       );
@@ -376,6 +392,7 @@ function lowerAttributeDerive(
   options: StructuralJsxLoweringOptions,
   deriveExports: string[],
   stateDerives: StateDeriveFact[],
+  outputContexts: GeneratedOutputWriteFact[],
   nameCounts: Map<string, number>,
   forceQueryBinding = false,
 ): void {
@@ -396,10 +413,29 @@ function lowerAttributeDerive(
       exportName,
       input: 'state',
       name: exportName,
+      outputContext: outputWriteFact({
+        context: outputContextForAttribute(candidate.targetAttr),
+        expression,
+        sink: candidate.targetAttr,
+        source: 'client-state',
+        writer: 'inline state attribute derive',
+      }),
       param: 'state',
       placeholder: stampName,
     });
   }
+  outputContexts.push(
+    outputWriteFact({
+      context: outputContextForAttribute(candidate.targetAttr),
+      expression,
+      sink: candidate.targetAttr,
+      source: candidate.source === 'state' ? 'client-state' : 'client-query',
+      writer:
+        candidate.source === 'state'
+          ? 'inline state attribute derive'
+          : 'inline query attribute derive',
+    }),
+  );
 
   removeJsxIrAttribute(candidate.element, candidate.attribute.name);
   if (candidate.source === 'state') {
@@ -462,6 +498,7 @@ function lowerInlineTextBindings(
   options: StructuralJsxLoweringOptions,
   deriveExports: string[],
   stateDerives: StateDeriveFact[],
+  outputContexts: GeneratedOutputWriteFact[],
   nameCounts: Map<string, number>,
   boundElementStarts: Set<number>,
 ): void {
@@ -479,6 +516,15 @@ function lowerInlineTextBindings(
           options,
         ),
       );
+      outputContexts.push(
+        outputWriteFact({
+          context: 'text',
+          expression: binding,
+          sink: 'textContent',
+          source: binding.startsWith('state.') ? 'client-state' : 'client-query',
+          writer: 'inline text binding',
+        }),
+      );
       continue;
     }
     const derive = inlineTextDerive(element, expression, componentName);
@@ -486,7 +532,7 @@ function lowerInlineTextBindings(
     boundElementStarts.add(element.element.start);
     const exportName = nextExportName(derive.baseName, nameCounts);
     const stampName = `state.${exportName}`;
-    recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives);
+    recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives, outputContexts);
     setJsxIrAttribute(
       element,
       generatedJsxIrAttribute(
@@ -502,13 +548,22 @@ function lowerInlineTextBindings(
     const binding = inlineMixedTextBinding(expression, model, knownQueries);
     if (binding) {
       expression.replacement = `<span data-bind="${escapeAttribute(binding)}">{${binding}}</span>`;
+      outputContexts.push(
+        outputWriteFact({
+          context: 'text',
+          expression: binding,
+          sink: 'textContent',
+          source: binding.startsWith('state.') ? 'client-state' : 'client-query',
+          writer: 'inline mixed text binding',
+        }),
+      );
       continue;
     }
     const derive = inlineMixedTextDerive(expression, model, componentName);
     if (!derive) continue;
     const exportName = nextExportName(derive.baseName, nameCounts);
     const stampName = `state.${exportName}`;
-    recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives);
+    recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives, outputContexts);
     expression.replacement = `<span data-bind="${escapeAttribute(stampName)}">{${derive.expression}}</span>`;
   }
 }
@@ -516,6 +571,7 @@ function lowerInlineTextBindings(
 function escapeStaticTextInterpolations(
   elements: readonly JsxIrElement[],
   boundElementStarts: ReadonlySet<number>,
+  outputContexts: GeneratedOutputWriteFact[],
 ): boolean {
   let applied = false;
   for (const element of elements) {
@@ -534,6 +590,15 @@ function escapeStaticTextInterpolations(
     for (const child of directExpressionChildren(element)) {
       if (child.expression.solePropertyAccessPath === undefined || child.replacement) continue;
       child.replacement = `{escapeText(${child.expression.expression})}`;
+      outputContexts.push(
+        outputWriteFact({
+          context: 'text',
+          expression: child.expression.expression,
+          sink: 'text child',
+          source: 'server-render',
+          writer: 'static text interpolation escape',
+        }),
+      );
       applied = true;
     }
   }
@@ -745,6 +810,7 @@ function recordStateDerive(
   stampName: string,
   deriveExports: string[],
   stateDerives: StateDeriveFact[],
+  outputContexts: GeneratedOutputWriteFact[],
 ): void {
   const expression = derive.expression.trim();
   deriveExports.push(
@@ -755,9 +821,29 @@ function recordStateDerive(
     exportName,
     input: 'state',
     name: exportName,
+    outputContext: outputWriteFact({
+      context: 'text',
+      expression,
+      sink: 'textContent',
+      source: 'client-state',
+      writer: 'inline state text derive',
+    }),
     param: 'state',
     placeholder: stampName,
   });
+  outputContexts.push(
+    outputWriteFact({
+      context: 'text',
+      expression,
+      sink: 'textContent',
+      source: 'client-state',
+      writer: 'inline state text derive',
+    }),
+  );
+}
+
+function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutputWriteFact {
+  return fact;
 }
 
 function expressionChildren(elements: readonly JsxIrElement[]): JsxIrExpression[] {

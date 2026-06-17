@@ -11,6 +11,7 @@ import ts from 'typescript';
 
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import type { StyleRuleUsage } from './css.js';
+import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import type { ComponentModuleModel, JsxAttributeModel } from './scan/parse.js';
 import { knownQueryNames, queryNameFromPath } from './analyze/query-shapes.js';
 import type {
@@ -378,6 +379,13 @@ function dynamicStyleAttributeLowering(
             exportName,
             input: 'state',
             name: exportName,
+            outputContext: outputWriteFact({
+              context: 'attribute',
+              expression: classExpression,
+              sink: 'class',
+              source: 'client-state',
+              writer: 'style-object class toggle',
+            }),
             param: 'state',
             placeholder: `state.${exportName}`,
           },
@@ -398,6 +406,13 @@ function dynamicStyleAttributeLowering(
                   param: query,
                   selector: `[data-derive="${query}.${exportName}"]`,
                 },
+                outputContext: outputWriteFact({
+                  context: 'attribute',
+                  expression: classExpression,
+                  sink: 'class',
+                  source: 'client-query',
+                  writer: 'style-object class toggle',
+                }),
                 selector: `[data-derive="${query}.${exportName}"]`,
               },
             ],
@@ -542,6 +557,10 @@ function nextExportName(baseName: string, nameCounts: Map<string, number>): stri
 function sanitizeIdentifier(value: string): string {
   const sanitized = value.replace(/[^A-Za-z0-9_$]/g, '_');
   return /^[A-Za-z_$]/.test(sanitized) ? sanitized : `_${sanitized}`;
+}
+
+function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutputWriteFact {
+  return fact;
 }
 
 function propertyNameText(name: ts.PropertyName): string | null {

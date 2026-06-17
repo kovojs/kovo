@@ -186,7 +186,7 @@ function staticStringValue(value: StaticLiteralValue | undefined): string | null
   return typeof value === 'string' ? value : null;
 }
 
-function buildStaticHref(
+export function buildStaticHref(
   path: string,
   params: Record<string, string | number | boolean | null>,
   searchValues: Record<string, string | number | boolean | null>,

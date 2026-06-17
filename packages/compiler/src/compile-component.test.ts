@@ -264,6 +264,204 @@ export const CartBadge = component({
     expect(check.expected).toBe(check.actual);
   });
 
+  it('compares lowered server output against authored Link semantics', () => {
+    const result = compileComponentModule({
+      fileName: 'components/product-link.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+export const ProductLink = component({
+  render: () => (
+    <Link to="/products/:id" params={{ id: 'p1' }} search={{ tab: 'details' }}>Product</Link>
+  ),
+});
+`,
+    });
+
+    expect(result.renderEquivalenceChecks[0]).toMatchObject({
+      actual: '<a href="/products/p1?tab=details">Product</a>',
+      expected: '<a href="/products/p1?tab=details">Product</a>',
+      ok: true,
+    });
+  });
+
+  it('fails the semantic render differential when Link href lowering drifts', () => {
+    const expectedSource = `
+import { component } from '@kovojs/core';
+
+export const ProductLink = component({
+  render: () => <Link to="/products/:id" params={{ id: 'p1' }}>Product</Link>,
+});
+`;
+    const actualSource = `
+import { component } from '@kovojs/core';
+
+export const ProductLink = component({
+  render: () => <a href="/products/p2">Product</a>,
+});
+`;
+
+    const check = semanticRenderEquivalenceCheck(
+      'components/product-link.server.js',
+      parseComponentModule('components/product-link.tsx', expectedSource),
+      emitServerModule(actualSource).executableSource,
+    );
+
+    expect(check).toMatchObject({
+      actual: '<a href="/products/p2">Product</a>',
+      expected: '<a href="/products/p1">Product</a>',
+      ok: false,
+    });
+  });
+
+  it('fails the semantic render differential when viewTransitionName style lowering drifts', () => {
+    const expectedSource = `
+import { component } from '@kovojs/core';
+
+export const ProductImage = component({
+  render: () => <img style="opacity: .8" viewTransitionName="product-p1" src="/p1.png" />,
+});
+`;
+    const actualSource = `
+import { component } from '@kovojs/core';
+
+export const ProductImage = component({
+  render: () => <img style="opacity: .8; view-transition-name: product-p2" src="/p1.png" />,
+});
+`;
+
+    const check = semanticRenderEquivalenceCheck(
+      'components/product-image.server.js',
+      parseComponentModule('components/product-image.tsx', expectedSource),
+      emitServerModule(actualSource).executableSource,
+    );
+
+    expect(check).toMatchObject({
+      actual: '<img style="opacity: .8; view-transition-name: product-p2" src="/p1.png">',
+      expected: '<img style="opacity: .8; view-transition-name: product-p1" src="/p1.png">',
+      ok: false,
+    });
+  });
+
+  it('fails visible mixed text drift while allowing generated data-bind spans', () => {
+    const expectedSource = `
+import { component } from '@kovojs/core';
+
+export const CartLine = component({
+  queries: { cart: {} },
+  render: ({ cart }) => <p>Hello {cart.name}<strong>!</strong></p>,
+});
+`;
+    const actualSource = `
+import { component } from '@kovojs/core';
+
+export const CartLine = component({
+  queries: { cart: {} },
+  render: ({ cart }) => <p>Hello <span data-bind="cart.name">{cart.name}</span><strong>?</strong></p>,
+});
+`;
+
+    const check = semanticRenderEquivalenceCheck(
+      'components/cart-line.server.js',
+      parseComponentModule('components/cart-line.tsx', expectedSource),
+      emitServerModule(actualSource).executableSource,
+    );
+
+    expect(check).toMatchObject({
+      actual: '<p>Hello <span>{cart.name}</span><strong>?</strong></p>',
+      expected: '<p>Hello {cart.name}<strong>!</strong></p>',
+      ok: false,
+    });
+  });
+
+  it('allows only generated handler/server stamps while preserving visible attributes', () => {
+    const expectedSource = `
+import { component } from '@kovojs/core';
+
+export const SaveButton = component({
+  render: () => <button type="button">Save</button>,
+});
+`;
+    const generatedOnlySource = `
+import { component } from '@kovojs/core';
+
+export const SaveButton = component({
+  render: () => <button type="button" on:click="/c/save.client.js#save" data-p-id="p1" kovo-c="save-button" kovo-deps="cart" kovo-state="{&quot;open&quot;:true}">Save</button>,
+});
+`;
+    const visibleDriftSource = `
+import { component } from '@kovojs/core';
+
+export const SaveButton = component({
+  render: () => <button type="submit" on:click="/c/save.client.js#save" data-p-id="p1" kovo-c="save-button">Save</button>,
+});
+`;
+
+    const generatedOnly = semanticRenderEquivalenceCheck(
+      'components/save-button.server.js',
+      parseComponentModule('components/save-button.tsx', expectedSource),
+      emitServerModule(generatedOnlySource).executableSource,
+    );
+    const visibleDrift = semanticRenderEquivalenceCheck(
+      'components/save-button.server.js',
+      parseComponentModule('components/save-button.tsx', expectedSource),
+      emitServerModule(visibleDriftSource).executableSource,
+    );
+
+    expect(generatedOnly.ok).toBe(true);
+    expect(visibleDrift).toMatchObject({
+      actual: '<button type="submit">Save</button>',
+      expected: '<button type="button">Save</button>',
+      ok: false,
+    });
+  });
+
+  it('compares primitive asChild authored semantics against the merged child element', () => {
+    const expectedSource = `
+import { component } from '@kovojs/core';
+
+export const Trigger = component({
+  render: () => (
+    <TooltipTrigger attrs={{ class: 'primitive', role: 'button' }} asChild>
+      <a class="author" href="/cart">Cart</a>
+    </TooltipTrigger>
+  ),
+});
+`;
+    const actualSource = `
+import { component } from '@kovojs/core';
+
+export const Trigger = component({
+  render: () => <a class="primitive author" role="button" href="/cart">Cart</a>,
+});
+`;
+    const driftSource = `
+import { component } from '@kovojs/core';
+
+export const Trigger = component({
+  render: () => <button class="primitive author" role="button">Cart</button>,
+});
+`;
+
+    const merged = semanticRenderEquivalenceCheck(
+      'components/trigger.server.js',
+      parseComponentModule('components/trigger.tsx', expectedSource),
+      emitServerModule(actualSource).executableSource,
+    );
+    const drift = semanticRenderEquivalenceCheck(
+      'components/trigger.server.js',
+      parseComponentModule('components/trigger.tsx', expectedSource),
+      emitServerModule(driftSource).executableSource,
+    );
+
+    expect(merged.ok).toBe(true);
+    expect(drift).toMatchObject({
+      actual: '<button class="primitive author" role="button">Cart</button>',
+      expected: '<a class="primitive author" role="button" href="/cart">Cart</a>',
+      ok: false,
+    });
+  });
+
   it('scopes native-host component CSS to the kovo-c identity stamp', () => {
     const result = compileFixture({
       fileName: 'components/cart/cart-row.tsx',

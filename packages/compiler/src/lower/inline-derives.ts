@@ -12,6 +12,10 @@ import {
   queryNameFromPath,
   queryPathUsesKnownQuery,
 } from '../analyze/query-shapes.js';
+import {
+  outputContextForAttribute,
+  type GeneratedOutputWriteFact,
+} from '../output-context-facts.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import type { CompileComponentOptions, StateDeriveFact } from '../types.js';
@@ -89,6 +93,13 @@ export function lowerInlineAttributeDerives(
           exportName,
           input: 'state',
           name: exportName,
+          outputContext: outputWriteFact({
+            context: outputContextForAttribute(candidate.targetAttr),
+            expression,
+            sink: candidate.targetAttr,
+            source: 'client-state',
+            writer: 'inline state attribute derive',
+          }),
           param: 'state',
           placeholder: stampName,
         });
@@ -357,9 +368,20 @@ function recordStateDerive(
     exportName,
     input: 'state',
     name: exportName,
+    outputContext: outputWriteFact({
+      context: 'text',
+      expression,
+      sink: 'textContent',
+      source: 'client-state',
+      writer: 'inline state text derive',
+    }),
     param: 'state',
     placeholder: stampName,
   });
+}
+
+function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutputWriteFact {
+  return fact;
 }
 
 function nextExportName(baseName: string, nameCounts: Map<string, number>): string {

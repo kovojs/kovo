@@ -40,6 +40,7 @@ import { validatePackageComponentPrefixes } from './validate/package-prefixes.js
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { extractKovoStyles } from './style.js';
+import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import type {
   CompileComponentOptions,
   CompileResult,
@@ -182,8 +183,9 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
         },
       ]
     : [];
+  const serverRender = serverRenderLowering(versionedHandlers, model, componentNames.domName);
   const serverRenderReplacements = [
-    ...serverRenderLowering(versionedHandlers, model, componentNames.domName),
+    ...serverRender.replacements,
     ...componentDescriptorNameAssignments(model, componentNames.registryKey),
     ...versionStateDeriveReferences(model, stateDerives, clientHref),
   ];
@@ -225,12 +227,18 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     handlerExports: versionedHandlers.map((handler) => handler.exportName),
     loweredSource: serverRenderedSource,
     cssAssets,
+    outputContextFacts: dedupeOutputContextFacts([
+      ...structuralLowering.outputContexts,
+      ...serverRender.outputContexts,
+      ...queryUpdatePlans.flatMap((plan) => [...(plan.outputContexts ?? [])]),
+      ...stateDerives.map((derive) => derive.outputContext),
+    ]),
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
     // SPEC §5.2 rule 3: render the authored Kovo JSX model and the lowered server artifact
     // independently, then ignore only generated runtime stamps with an explicit allowlist.
     renderEquivalenceChecks: [
-      semanticRenderEquivalenceCheck(fileNames.server, model, serverModule.executableSource),
+      semanticRenderEquivalenceCheck(fileNames.server, originalModel, serverModule.executableSource),
     ],
     updateCoverage,
     viewTransitions: structuralLowering.viewTransitionStamps,
@@ -300,6 +308,13 @@ function mergeQueryUpdatePlans(
       componentName: queryPlans[0]?.componentName ?? 'Component',
       query,
       paths: [...new Set(queryPlans.flatMap((plan) => plan.paths))].sort(),
+      ...(queryPlans.some((plan) => (plan.outputContexts?.length ?? 0) > 0)
+        ? {
+            outputContexts: dedupeOutputContextFacts(
+              queryPlans.flatMap((plan) => [...(plan.outputContexts ?? [])]),
+            ),
+          }
+        : {}),
       ...(queryPlans.some((plan) => (plan.derives?.length ?? 0) > 0)
         ? {
             derives: dedupeByKey(
@@ -325,6 +340,12 @@ function mergeQueryUpdatePlans(
           }
         : {}),
     }));
+}
+
+function dedupeOutputContextFacts(
+  facts: readonly GeneratedOutputWriteFact[],
+): GeneratedOutputWriteFact[] {
+  return dedupeByKey(facts, (fact) => JSON.stringify(fact));
 }
 
 function mergeStyleUpdateCoverage(

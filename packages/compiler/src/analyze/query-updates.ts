@@ -17,6 +17,10 @@ import {
   type JsxElementChildBody,
   type JsxElementModel,
 } from '../scan/parse.js';
+import {
+  outputContextForAttribute,
+  type GeneratedOutputWriteFact,
+} from '../output-context-facts.js';
 import type {
   BindingPathSegmentFact,
   CompileComponentOptions,
@@ -308,12 +312,20 @@ function dataDeriveStamps(
 
       const derive = derives.get(nameSegment.name);
       if (!derive || derive.input !== inputSegment.name || derive.input === 'state') continue;
+      const attr = attribute.name.slice('data-bind:'.length);
 
       stampFacts.push({
-        attr: attribute.name.slice('data-bind:'.length),
+        attr,
         derive: {
           ...derive,
           selector: `[${attribute.name}="${attribute.value}"]`,
+        },
+        outputContext: {
+          context: outputContextForAttribute(attr),
+          expression: derive.expression,
+          sink: attr,
+          source: 'client-query',
+          writer: 'query attribute binding',
         },
         selector: `[${attribute.name}="${attribute.value}"]`,
       });
@@ -345,6 +357,13 @@ function dataDeriveStamps(
       stampFacts.push({
         attr,
         derive: deriveFact,
+        outputContext: {
+          context: outputContextForAttribute(attr),
+          expression: derive.expression,
+          sink: attr,
+          source: 'client-query',
+          writer: 'query attribute stamp',
+        },
         selector: deriveFact.selector,
       });
     } else {
@@ -553,6 +572,13 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
           list,
           listReadPath: queryRelativePath(list),
           listReadSegments: queryRelativeSegments(list),
+          outputContext: {
+            context: 'html-fragment',
+            expression: list,
+            sink: 'template.innerHTML',
+            source: 'template-stamp',
+            writer: 'template stamp assembly',
+          } satisfies GeneratedOutputWriteFact,
           selector: `[data-bind-list="${list}"]`,
           template: templateBody?.source ?? '',
         },
@@ -597,6 +623,13 @@ function templateItemBindingPlaceholders(
           const templateStart = childBody ? childBody.offset - templateBody.offset : 0;
           const templateEnd = templateStart + (childBody?.source.length ?? 0);
           return {
+            outputContext: {
+              context: 'html-fragment',
+              expression: fact.path,
+              sink: 'template item placeholder',
+              source: 'template-stamp',
+              writer: 'template stamp interpolation',
+            } satisfies GeneratedOutputWriteFact,
             path: fact.path,
             readPath: fact.relativeReadPath ?? '',
             readSegments: parseBindingPath(fact.relativeReadPath ?? ''),

@@ -2,6 +2,17 @@ import { runInNewContext } from 'node:vm';
 
 import { compilerIrHeader } from '../ir.js';
 import {
+  authorJsxAttributes,
+  mergePrimitiveAndAuthorAttributes,
+  primitiveObjectEntryAttributes,
+  renderMergedAttributes,
+} from '../lower/attribute-merge.js';
+import { buildStaticHref } from '../lower/navigation.js';
+import {
+  outputContextForAttribute,
+  type GeneratedOutputWriteFact,
+} from '../output-context-facts.js';
+import {
   componentOptionObjectKeys,
   componentRenderHost,
   componentRenderHostElement,
@@ -24,6 +35,11 @@ export interface EmittedServerModule {
   source: string;
 }
 
+export interface ServerRenderLowering {
+  outputContexts: readonly GeneratedOutputWriteFact[];
+  replacements: readonly SourceReplacement[];
+}
+
 export function emitServerModule(renderedSource: string): EmittedServerModule {
   return {
     executableSource: renderSourceModule(renderedSource, ''),
@@ -35,7 +51,7 @@ export function serverRenderLowering(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
   domComponentName: string,
-): SourceReplacement[] {
+): ServerRenderLowering {
   return serverRenderPatches(handlers, model, domComponentName);
 }
 
@@ -152,15 +168,123 @@ function semanticRenderModel(model: ComponentModuleModel): string {
   return renderSemanticElement(model, host);
 }
 
-function renderSemanticElement(model: ComponentModuleModel, element: JsxElementModel): string {
-  const attributes = element.attributes
-    .map(renderSemanticAttribute)
+function renderSemanticElement(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  options: { forcedAttributes?: string } = {},
+): string {
+  const primitiveChild = semanticPrimitiveChild(model, element);
+  if (primitiveChild) return renderSemanticElement(model, primitiveChild.child, primitiveChild);
+
+  const tag = semanticElementTag(element);
+  const attributes = options.forcedAttributes ?? renderSemanticAttributes(model, element);
+
+  if (voidElements.has(tag)) return `<${tag}${attributes}>`;
+
+  return `<${tag}${attributes}>${renderSemanticChildren(model, element)}</${tag}>`;
+}
+
+function semanticElementTag(element: JsxElementModel): string {
+  return element.tag === 'Link' ? 'a' : element.tag;
+}
+
+function renderSemanticAttributes(model: ComponentModuleModel, element: JsxElementModel): string {
+  if (element.tag === 'Link') {
+    return [
+      semanticLinkHrefAttribute(element),
+      ...element.attributes
+        .filter((attribute) => !['params', 'search', 'to'].includes(attribute.name))
+        .map(renderSemanticAttribute),
+    ]
+      .filter((attribute): attribute is string => attribute !== null)
+      .join('');
+  }
+
+  const viewTransitionStyle = semanticViewTransitionStyle(element);
+  return element.attributes
+    .filter((attribute) => attribute.name !== 'viewTransitionName')
+    .map((attribute) =>
+      attribute.name === 'style' && viewTransitionStyle
+        ? renderSemanticStyleAttribute(attribute, viewTransitionStyle)
+        : renderSemanticAttribute(attribute),
+    )
+    .concat(
+      viewTransitionStyle && !element.attributes.some((attribute) => attribute.name === 'style')
+        ? [` style="${escapeAttribute(viewTransitionStyle)}"`]
+        : [],
+    )
     .filter((attribute): attribute is string => attribute !== null)
     .join('');
+}
 
-  if (voidElements.has(element.tag)) return `<${element.tag}${attributes}>`;
+function semanticPrimitiveChild(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): { child: JsxElementModel; forcedAttributes: string } | null {
+  if (!element.attributes.some((attribute) => attribute.name === 'asChild')) return null;
+  const attrs = element.attributes.find((attribute) => attribute.name === 'attrs')
+    ?.expressionObjectEntries;
+  if (!attrs) return null;
+  const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
+  if (!primitiveAttributes) return null;
+  const [child] = directChildElements(model, element);
+  if (!child) return null;
+  const merge = mergePrimitiveAndAuthorAttributes(primitiveAttributes, authorJsxAttributes(child.attributes), {
+    fileName: 'semantic-render',
+    source: '',
+  });
+  const forcedAttributes = renderMergedAttributes(merge.attributes);
+  return { child, forcedAttributes: forcedAttributes ? ` ${forcedAttributes}` : '' };
+}
 
-  return `<${element.tag}${attributes}>${renderSemanticChildren(model, element)}</${element.tag}>`;
+function semanticLinkHrefAttribute(element: JsxElementModel): string | null {
+  const to = element.attributes.find((attribute) => attribute.name === 'to');
+  if (!to) return null;
+  const target =
+    to.value ??
+    (typeof to.expressionStaticValue === 'string' ? to.expressionStaticValue : undefined);
+  if (target) {
+    const params = semanticStaticObjectAttribute(element, 'params') ?? {};
+    const search = semanticStaticObjectAttribute(element, 'search') ?? {};
+    return ` href="${escapeAttribute(buildStaticHref(target, params, search))}"`;
+  }
+  if (to.expression !== undefined) return ` href="${escapeAttribute(`{${to.expression}}`)}"`;
+  return null;
+}
+
+function semanticStaticObjectAttribute(
+  element: JsxElementModel,
+  name: string,
+): Record<string, string | number | boolean | null> | null {
+  const value = element.attributes.find((attribute) => attribute.name === name)
+    ?.expressionStaticValue;
+  if (!value || typeof value !== 'object') return null;
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string | number | boolean | null] => {
+      const entryValue = entry[1];
+      return entryValue === null || ['boolean', 'number', 'string'].includes(typeof entryValue);
+    }),
+  );
+}
+
+function semanticViewTransitionStyle(element: JsxElementModel): string | null {
+  const transition = element.attributes.find(
+    (attribute) => attribute.name === 'viewTransitionName' && attribute.value !== undefined,
+  )?.value;
+  return transition ? `view-transition-name: ${transition}` : null;
+}
+
+function renderSemanticStyleAttribute(
+  attribute: JsxAttributeModel,
+  extraStyle: string,
+): string | null {
+  const rendered = renderSemanticAttribute(attribute);
+  if (!rendered) return null;
+  if (attribute.value === undefined) return rendered;
+  const existing = attribute.value.trim();
+  const separator = existing === '' || existing.endsWith(';') ? '' : ';';
+  const value = existing === '' ? extraStyle : `${existing}${separator} ${extraStyle}`;
+  return ` style="${escapeAttribute(value)}"`;
 }
 
 function renderSemanticAttribute(attribute: JsxAttributeModel): string | null {
@@ -284,9 +408,10 @@ function serverRenderPatches(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
   domComponentName: string,
-): SourceReplacement[] {
+): ServerRenderLowering {
   const host = componentRenderHost(model);
   const patches: SourceReplacement[] = [];
+  const outputContexts: GeneratedOutputWriteFact[] = [...handlerOutputContexts(handlers)];
   const chained = chainedPrimitiveHandlerPatches(handlers, model);
   const chainedHandlers = new Set(chained.handlers);
   patches.push(...chained.patches);
@@ -308,7 +433,7 @@ function serverRenderPatches(
 
   if (host) {
     const hostElement = componentRenderHostElement(model);
-    if (!hostElement) return patches;
+    if (!hostElement) return { outputContexts, replacements: patches };
 
     patches.push(
       ...hostHandlers
@@ -316,9 +441,31 @@ function serverRenderPatches(
         .map(handlerSourceReplacement),
     );
     patches.push(...renderHostStampPatches(model, hostElement, domComponentName));
+    outputContexts.push(...renderHostStampOutputContexts(model, hostElement, domComponentName));
   }
 
-  return patches;
+  return { outputContexts, replacements: patches };
+}
+
+function handlerOutputContexts(
+  handlers: readonly HandlerLowering[],
+): GeneratedOutputWriteFact[] {
+  return handlers.flatMap((handler) => [
+    {
+      context: outputContextForAttribute(handler.attributeName),
+      expression: handler.attributeValue,
+      sink: handler.attributeName,
+      source: 'server-render',
+      writer: 'event handler lowering',
+    },
+    ...handler.params.map((param) => ({
+      context: outputContextForAttribute(param.attributeName),
+      expression: param.value,
+      sink: param.attributeName,
+      source: 'server-render' as const,
+      writer: 'event handler param lowering',
+    })),
+  ]);
 }
 
 function chainedPrimitiveHandlerPatches(
@@ -440,6 +587,47 @@ function renderHostStampPatches(
   }
 
   return patches;
+}
+
+function renderHostStampOutputContexts(
+  model: ComponentModuleModel,
+  hostElement: JsxElementModel,
+  domComponentName: string,
+): GeneratedOutputWriteFact[] {
+  const facts: GeneratedOutputWriteFact[] = [];
+  const componentIdentity = componentIdentityStamp(hostElement, domComponentName);
+  const declaredQueryDeps = declaredQueryDepsStamp(model, hostElement);
+  const stateJson = staticStateJson(model);
+
+  if (componentIdentity) {
+    facts.push({
+      context: 'attribute',
+      expression: domComponentName,
+      sink: 'kovo-c',
+      source: 'server-render',
+      writer: 'host identity stamp',
+    });
+  }
+  if (declaredQueryDeps) {
+    facts.push({
+      context: 'attribute',
+      expression: declaredQueryDeps,
+      sink: 'kovo-deps',
+      source: 'server-render',
+      writer: 'host dependency stamp',
+    });
+  }
+  if (stateJson) {
+    facts.push({
+      context: 'attribute',
+      expression: stateJson,
+      sink: 'kovo-state',
+      source: 'server-render',
+      writer: 'host state stamp',
+    });
+  }
+
+  return facts;
 }
 
 // SPEC.md §4.2: component identity is the kovo-c stamp. The compiler omits it

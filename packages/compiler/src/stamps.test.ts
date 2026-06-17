@@ -22,7 +22,7 @@ export const Recommendations = component({
     const kovoDepsStart = source.indexOf("kovo-deps='product:p1'");
     const insertPosition = source.indexOf('>', kovoDepsStart);
 
-    expect(lowering).toEqual([
+    expect(lowering.replacements).toEqual([
       {
         end: kovoDepsStart + "kovo-deps='product:p1'".length,
         replacement: 'kovo-deps="product:p1 cart"',
@@ -34,6 +34,31 @@ export const Recommendations = component({
         start: insertPosition,
       },
     ]);
+    expect(lowering.outputContexts).toMatchInlineSnapshot(`
+      [
+        {
+          "context": "attribute",
+          "expression": "recommendations",
+          "sink": "kovo-c",
+          "source": "server-render",
+          "writer": "host identity stamp",
+        },
+        {
+          "context": "attribute",
+          "expression": "kovo-deps="product:p1 cart"",
+          "sink": "kovo-deps",
+          "source": "server-render",
+          "writer": "host dependency stamp",
+        },
+        {
+          "context": "attribute",
+          "expression": "{"open":true}",
+          "sink": "kovo-state",
+          "source": "server-render",
+          "writer": "host state stamp",
+        },
+      ]
+    `);
   });
 
   it('stamps rendered component markup with declared query dependencies', () => {

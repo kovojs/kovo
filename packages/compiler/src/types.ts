@@ -4,6 +4,7 @@ import { diagnosticDefinitions } from '@kovojs/core';
 import type { ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
+import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import { replaceExtension } from './shared.js';
 
 /**
@@ -125,6 +126,7 @@ export interface CompileResult {
   files: readonly EmittedFile[];
   handlerExports: readonly string[];
   loweredSource: string | null;
+  outputContextFacts: readonly GeneratedOutputWriteFact[];
   platformSubstitutions: readonly PlatformSubstitution[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
@@ -228,6 +230,7 @@ export function createEmptyCompileResult(): CompileResult {
     files: [],
     handlerExports: [],
     loweredSource: null,
+    outputContextFacts: [],
     platformSubstitutions: [],
     queryUpdatePlans: [],
     renderEquivalenceChecks: [],
@@ -277,6 +280,7 @@ export interface PackageComponentPrefixFact {
 export interface QueryUpdatePlanFact {
   componentName: string;
   derives?: readonly QueryDeriveFact[];
+  outputContexts?: readonly GeneratedOutputWriteFact[];
   paths: readonly string[];
   query: string;
   stamps?: readonly QueryStampFact[];
@@ -302,6 +306,7 @@ export interface StateDeriveFact {
   exportName: string;
   input: 'state';
   name: string;
+  outputContext: GeneratedOutputWriteFact;
   param: 'state';
   placeholder: string;
 }
@@ -313,6 +318,7 @@ export interface StateDeriveFact {
 export interface QueryStampFact {
   attr: string;
   derive: QueryDeriveFact;
+  outputContext: GeneratedOutputWriteFact;
   selector: string;
 }
 
@@ -327,11 +333,13 @@ export interface QueryTemplateStampFact {
   list: string;
   listReadPath: string;
   listReadSegments: readonly BindingPathSegmentFact[];
+  outputContext: GeneratedOutputWriteFact;
   selector: string;
   template: string;
 }
 
 export interface QueryTemplateStampBindingPlaceholder {
+  outputContext: GeneratedOutputWriteFact;
   path: string;
   readPath: string;
   readSegments: readonly BindingPathSegmentFact[];
