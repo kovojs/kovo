@@ -907,20 +907,22 @@ integration harness uniquely proves.
 
 ## CSS and assets
 
-- [ ] `tailwind-fragment-css` / `tailwind-fragment-css.spec.ts`: utility classes used only in mutation
+- [x] `tailwind-fragment-css` / `tailwind-fragment-css.spec.ts`: utility classes used only in mutation
       fragments/deferred fragments are present in built CSS through the declared source/safelist
       contract.
   - SPEC refs: §13.1 CSS.
   - Assertions: fragment renders with expected computed style; stylesheet asset included once.
-  - Partial evidence: `tests/integration/fixtures/tailwind-fragment-css` and
-    `tests/integration/specs/tailwind-fragment-css.spec.ts` verify an enhanced mutation fragment can
-    carry a deduped late stylesheet link, the linked `/assets/fragment.css` asset is served, and the
-    browser applies the fragment-only class styles after morph. Proving command:
-    `pnpm exec playwright test specs/tailwind-fragment-css.spec.ts --config
-    tests/integration/playwright.config.ts --workers=1`.
-  - Gap: left unchecked because this fixture uses a prebuilt CSS asset; it does not prove Tailwind
-    source scanning or safelist generation for classes that exist only in mutation/deferred
-    fragments.
+  - Evidence: `tests/integration/fixtures/tailwind-fragment-css/src/fragment.css` declares the
+    fragment-only utility classes with Tailwind's `@source inline(...)` safelist contract, the
+    served `dist/assets/fragment.css` is generated from that source, and
+    `tests/integration/specs/tailwind-fragment-css.spec.ts` verifies the checked-in asset exactly
+    matches Tailwind output before asserting the enhanced mutation fragment dedupes the late
+    stylesheet link and applies the expected computed background style. Proving commands:
+    `pnpm --filter @kovojs/integration-tests exec playwright test
+    specs/tailwind-fragment-css.spec.ts --config playwright.config.ts --workers=1` and
+    `pnpm exec vp check tests/integration/fixtures/tailwind-fragment-css/app.tsx
+    tests/integration/fixtures/tailwind-fragment-css/src/fragment.css
+    tests/integration/specs/tailwind-fragment-css.spec.ts tests/integration/package.json`.
 - [x] `scoped-component-css` / `scoped-component-css.spec.ts`: co-located component CSS is scoped to the
       derived host leaf, donut-scopes nested islands out, and dedupes in page order.
   - SPEC refs: §4.2 rendered output, §13.1 CSS.

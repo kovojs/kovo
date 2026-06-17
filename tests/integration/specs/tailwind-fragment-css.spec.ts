@@ -1,17 +1,44 @@
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { compile } from '@tailwindcss/node';
 import { expect, test } from '@kovojs/test/integration';
 
 test.use({ kovoFixture: 'tailwind-fragment-css' });
 
-test('enhanced mutation fragments deliver and apply late stylesheet links once', async ({
+const fixtureDir = fileURLToPath(new URL('../fixtures/tailwind-fragment-css/', import.meta.url));
+const fragmentCssSourcePath = join(fixtureDir, 'src/fragment.css');
+const fragmentCssAssetPath = join(fixtureDir, 'dist/assets/fragment.css');
+
+async function buildTailwindFragmentCss() {
+  const source = await readFile(fragmentCssSourcePath, 'utf8');
+  const result = await compile(source, {
+    base: dirname(fragmentCssSourcePath),
+    onDependency() {},
+  });
+  return result.build([]);
+}
+
+test('enhanced mutation fragments deliver Tailwind-generated late stylesheet links once', async ({
   page,
   kovoApp,
 }) => {
+  const [expectedCss, assetCss] = await Promise.all([
+    buildTailwindFragmentCss(),
+    readFile(fragmentCssAssetPath, 'utf8'),
+  ]);
+  expect(assetCss).toBe(expectedCss);
+  expect(assetCss).toContain('.bg-\\[\\#0c5460\\]');
+  expect(assetCss).toContain('.border-\\[\\#08424c\\]');
+
   await page.goto('/');
   await expect(page.locator('link[href="/assets/fragment.css"]')).toHaveCount(0);
 
   const [response] = await Promise.all([
-    page.waitForResponse((candidate) =>
-      candidate.url().endsWith('/_m/tailwind-fragment-css/reveal') && candidate.status() === 200,
+    page.waitForResponse(
+      (candidate) =>
+        candidate.url().endsWith('/_m/tailwind-fragment-css/reveal') && candidate.status() === 200,
     ),
     page.getByRole('button', { name: 'Show recommendation' }).click(),
   ]);

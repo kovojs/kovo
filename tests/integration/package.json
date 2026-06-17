@@ -10,5 +10,9 @@
     "@kovojs/test": "workspace:*",
     "axe-core": "4.12.1",
     "kovo": "workspace:*"
+  },
+  "devDependencies": {
+    "@tailwindcss/node": "^4.3.0",
+    "tailwindcss": "^4.3.0"
   }
 }

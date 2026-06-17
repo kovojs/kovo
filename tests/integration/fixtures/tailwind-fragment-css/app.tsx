@@ -30,7 +30,7 @@ export default defineFixture({
           {
             mode: 'append',
             render: () =>
-              '<article class="fragment-only late-card" data-recommendation>Styled recommendation</article>',
+              '<article class="bg-[#0c5460] text-white p-2 border-2 border-[#08424c]" data-recommendation>Styled recommendation</article>',
             stylesheets: ['/assets/fragment.css', '/assets/fragment.css'],
             target: 'recommendations',
           },
