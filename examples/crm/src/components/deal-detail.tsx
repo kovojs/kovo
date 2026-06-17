@@ -82,12 +82,29 @@ export const DealDetailRegion = component({
     dealId: string;
     dealList: DealListResult;
   }) => {
-    const deal = dealList.items.find((item) => item.id === dealId) ?? dealList.items[0];
+    const deal = dealList.items.find((item) => item.id === dealId);
     const contact = contactList.items.find((item) => item.id === deal?.contactId);
     const activities = activityList.items.filter((item) => item.dealId === dealId);
     const closed = deal?.stage === 'won' || deal?.stage === 'lost';
 
-    if (!deal) return <div class="space-y-6"></div>;
+    if (!deal) {
+      return (
+        <div class="space-y-6">
+          <a
+            class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
+            href="/"
+          >
+            &larr; Pipeline
+          </a>
+          <div class="rounded-lg border border-slate-200 bg-white p-6">
+            <h1 class="text-xl font-bold tracking-tight">Unknown deal</h1>
+            <p class="mt-1 text-sm text-slate-600">
+              Deal {dealId.toUpperCase()} does not exist in this demo database.
+            </p>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div class="space-y-6">

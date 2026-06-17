@@ -1,21 +1,18 @@
+/** @jsxImportSource @kovojs/server */
 import { route, s } from '@kovojs/server';
 import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
 import type { RequestHandler } from '@kovojs/server/app-shell/core';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
-import { asc, eq } from 'drizzle-orm';
 
-import { renderContactsPage } from './generated/contacts.js';
-import { renderDealDetailPage } from './generated/deal-detail.js';
-// Types only — the persisted-row shapes the detail page loads carry the
-// presentational title/company columns the rowset queries omit (SPEC.md §10.5).
-import type { DetailContact } from './components/deal-detail.js';
+import { ContactsRegion } from './generated/contacts.js';
+import { DealDetailRegion } from './generated/deal-detail.js';
 import { liveTargetRenderers } from './generated/live-targets.js';
-import { renderPipelinePage } from './generated/pipeline.js';
+import { PipelineRegion } from './generated/pipeline.js';
+import { renderCrmShell } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
 import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';
-import { contactListQuery, crmQueries, openDealsQuery, pipelineByStageQuery } from './queries.js';
-import { activities, contacts, deals } from './schema.js';
+import { crmQueries } from './queries.js';
 
 // SPEC.md §9.1/§9.5: the CRM example as a FULLY INTERACTIVE Kovo app. It
 // registers the addContact / createDeal / moveDeal / closeDeal mutations and
@@ -44,22 +41,6 @@ const crmStaticDealPaths = [
 // fixed stand-in for a logged-in sales rep (owner `u1`, the demo seed owner).
 const demoSession = { id: 'demo-session', user: { id: 'u1', roles: ['sales'] as const } };
 
-async function loadContact(db: CrmDb, id: string): Promise<DetailContact | undefined> {
-  const rows = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
-  const row = rows[0];
-  return row
-    ? {
-        id: row.id,
-        name: row.name,
-        email: row.email,
-        ownerId: row.ownerId,
-        dealCount: row.dealCount,
-        company: row.company,
-        title: row.title,
-      }
-    : undefined;
-}
-
 export interface CrmInteractiveApp {
   app: ReturnType<typeof createApp>;
   db: CrmDb;
@@ -87,46 +68,15 @@ export async function buildCrmInteractiveApp(
   const database = db;
 
   // SPEC.md §5.1: one parameterized detail route (not a route per seeded deal), so
-  // deals created at runtime are immediately viewable. The page loads the deal +
-  // contact + timeline from PGlite by `params.id`.
+  // deals created at runtime are immediately viewable. SPEC.md §9.5 route JSX
+  // composition lets the component query declarations load the deal, contact,
+  // and timeline from PGlite by `params.id`.
   const dealDetailRoute = route('/deals/:id', {
     meta: { description: 'CRM deal detail.', title: 'Deal · Atlas CRM' },
     params: s.object({ id: s.string() }),
     staticPaths: crmStaticDealPaths,
-    async page({ params }: { params: { id: string } }) {
-      const [row] = await database.select().from(deals).where(eq(deals.id, params.id)).limit(1);
-      if (!row) {
-        return renderDealDetailPage({
-          activities: [],
-          contact: undefined,
-          deal: {
-            id: params.id,
-            contactId: 'unknown',
-            stage: 'lost',
-            amount: 0,
-            ownerId: 'system',
-            title: 'Unknown deal',
-          },
-        });
-      }
-      const contact = await loadContact(database, row.contactId);
-      const timeline = await database
-        .select()
-        .from(activities)
-        .where(eq(activities.dealId, row.id))
-        .orderBy(asc(activities.id));
-      return renderDealDetailPage({
-        activities: timeline,
-        contact,
-        deal: {
-          id: row.id,
-          contactId: row.contactId,
-          stage: row.stage,
-          amount: row.amount,
-          ownerId: row.ownerId,
-          title: row.title,
-        },
-      });
+    page({ params }: { params: { id: string } }) {
+      return renderCrmShell('pipeline', <DealDetailRegion dealId={params.id} />);
     },
     stylesheets: crmStylesheets,
   });
@@ -143,21 +93,15 @@ export async function buildCrmInteractiveApp(
           description: 'Sales pipeline by stage with open deals.',
           title: 'Pipeline · Atlas CRM',
         },
-        async page() {
-          const [{ buckets }, openDeals, { items: contactItems }] = await Promise.all([
-            pipelineByStageQuery.load(undefined, database),
-            openDealsQuery.load(undefined, database).then((result) => result.items),
-            contactListQuery.load(undefined, database),
-          ]);
-          return renderPipelinePage({ buckets, contacts: contactItems, openDeals });
+        page() {
+          return renderCrmShell('pipeline', <PipelineRegion />);
         },
         stylesheets: crmStylesheets,
       }),
       route('/contacts', {
         meta: { description: 'The CRM contact book.', title: 'Contacts · Atlas CRM' },
-        async page() {
-          const { items } = await contactListQuery.load(undefined, database);
-          return renderContactsPage({ contacts: items });
+        page() {
+          return renderCrmShell('contacts', <ContactsRegion />);
         },
         stylesheets: crmStylesheets,
       }),

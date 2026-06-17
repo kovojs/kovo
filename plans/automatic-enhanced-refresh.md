@@ -570,8 +570,26 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-crm test`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gaps: route-page wrapper helpers and the transitional generated
-      live-target registry import are still present.
+    - Additional progress 2026-06-17:
+      `examples/crm/src/interactive-app.tsx` is now a TSX-authored route module
+      whose pages compose `<PipelineRegion />`, `<ContactsRegion />`, and
+      `<DealDetailRegion dealId={params.id} />` directly through server JSX.
+      The route module no longer calls `renderPipelinePage`,
+      `renderContactsPage`, `renderDealDetailPage`, or direct page-level
+      `*.load(...)`/Drizzle loaders. `examples/crm/tsconfig.json` includes TSX
+      app modules and the demo server loads `/src/interactive-app.tsx`.
+    - `examples/crm/src/components/deal-detail.tsx` now renders an explicit
+      missing-deal state for unmatched route params instead of falling back to
+      the first deal row.
+    - Verified with
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/component-render.test.tsx`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gap: the transitional generated live-target registry import is
+      still present.
 - [ ] **9. Migrate commerce.**
   - Split the large commerce integration module so app-authored page/mutation
     code is separate from auth/webhook/test helpers.
