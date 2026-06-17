@@ -1,16 +1,26 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, safeUrl, separatorRootAttributes, type ClassValue } from '@kovojs/headless-ui';
+import { safeUrl, separatorRootAttributes } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface BreadcrumbStyleOverrides {
+  current?: style.StyleInput;
+  item?: style.StyleInput;
+  link?: style.StyleInput;
+  list?: style.StyleInput;
+  root?: style.StyleInput;
+  separator?: style.StyleInput;
+}
 
 export interface BreadcrumbProps {
   children?: string;
-  class?: ClassValue;
   label?: string;
+  styles?: BreadcrumbStyleOverrides;
 }
 
 export interface BreadcrumbPartProps {
   children?: string;
-  class?: ClassValue;
+  styles?: BreadcrumbStyleOverrides;
 }
 
 export interface BreadcrumbLinkProps extends BreadcrumbPartProps {
@@ -18,27 +28,63 @@ export interface BreadcrumbLinkProps extends BreadcrumbPartProps {
   href?: string;
 }
 
-export const breadcrumbClassNames = 'flex flex-wrap items-center gap-1.5 text-sm text-neutral-500';
-export const breadcrumbListClassNames = 'flex flex-wrap items-center gap-1.5';
-export const breadcrumbItemClassNames = 'inline-flex items-center gap-1.5';
-export const breadcrumbLinkClassNames =
-  'font-medium text-neutral-600 transition-colors hover:text-neutral-950';
-export const breadcrumbCurrentClassNames = 'font-medium text-neutral-950';
-export const breadcrumbSeparatorClassNames = 'text-neutral-400';
+export const breadcrumbStyles = style.create(
+  {
+    current: {
+      color: '#0a0a0a',
+      fontWeight: 500,
+    },
+    item: {
+      alignItems: 'center',
+      columnGap: 6,
+      display: 'inline-flex',
+    },
+    link: {
+      color: '#525252',
+      fontWeight: 500,
+      transitionProperty: 'color',
+      ':hover': {
+        color: '#0a0a0a',
+      },
+    },
+    list: {
+      alignItems: 'center',
+      columnGap: 6,
+      display: 'flex',
+      flexWrap: 'wrap',
+    },
+    root: {
+      alignItems: 'center',
+      color: '#737373',
+      columnGap: 6,
+      display: 'flex',
+      flexWrap: 'wrap',
+      fontSize: 14,
+    },
+    separator: {
+      color: '#a3a3a3',
+    },
+  },
+  { namespace: 'breadcrumb', source: 'breadcrumb.tsx' },
+);
+
 export const breadcrumbClasses = [
-  breadcrumbClassNames,
-  breadcrumbListClassNames,
-  breadcrumbItemClassNames,
-  breadcrumbLinkClassNames,
-  breadcrumbCurrentClassNames,
-  breadcrumbSeparatorClassNames,
+  style.attrs(breadcrumbStyles.root).class ?? '',
+  style.attrs(breadcrumbStyles.list).class ?? '',
+  style.attrs(breadcrumbStyles.item).class ?? '',
+  style.attrs(breadcrumbStyles.link).class ?? '',
+  style.attrs(breadcrumbStyles.current).class ?? '',
+  style.attrs(breadcrumbStyles.separator).class ?? '',
 ] as const;
 
 export const Breadcrumb = component({
   render(props: BreadcrumbProps) {
+    const rootAttrs = style.attrs(breadcrumbStyles.root, props.styles?.root);
+    const listAttrs = style.attrs(breadcrumbStyles.list, props.styles?.list);
+
     return (
-      <nav aria-label={props.label ?? 'Breadcrumb'} class={cn(breadcrumbClassNames, props.class)}>
-        <ol class={breadcrumbListClassNames}>{props.children}</ol>
+      <nav {...rootAttrs} aria-label={props.label ?? 'Breadcrumb'}>
+        <ol {...listAttrs}>{props.children}</ol>
       </nav>
     );
   },
@@ -46,18 +92,24 @@ export const Breadcrumb = component({
 
 export const BreadcrumbItem = component({
   render(props: BreadcrumbPartProps) {
-    return <li class={cn(breadcrumbItemClassNames, props.class)}>{props.children}</li>;
+    const attrs = style.attrs(breadcrumbStyles.item, props.styles?.item);
+
+    return <li {...attrs}>{props.children}</li>;
   },
 });
 
 export const BreadcrumbLink = component({
   render(props: BreadcrumbLinkProps) {
     const current = props.current === true;
+    const attrs = style.attrs(
+      current ? breadcrumbStyles.current : breadcrumbStyles.link,
+      current ? props.styles?.current : props.styles?.link,
+    );
 
     return (
       <a
+        {...attrs}
         aria-current={current ? 'page' : undefined}
-        class={cn(current ? breadcrumbCurrentClassNames : breadcrumbLinkClassNames, props.class)}
         // SECURITY_FINDINGS.md H3: route the caller href through safeUrl so a
         // `javascript:`/`data:` scheme is neutralized; keep the existing
         // undefined semantics (omit href entirely when there is none / current).
@@ -72,11 +124,12 @@ export const BreadcrumbLink = component({
 export const BreadcrumbSeparator = component({
   render(props: BreadcrumbPartProps) {
     const attrs = separatorRootAttributes();
+    const styleAttrs = style.attrs(breadcrumbStyles.separator, props.styles?.separator);
 
     return (
       <li
+        {...styleAttrs}
         aria-hidden="true"
-        class={cn(breadcrumbSeparatorClassNames, props.class)}
         data-orientation={attrs['data-orientation']}
         role={attrs.role}
       >

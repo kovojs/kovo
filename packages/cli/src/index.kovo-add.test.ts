@@ -257,7 +257,9 @@ describe('kovo add', () => {
       expect(badge).toContain('export const badgeStyles =');
       expect(badge).toContain('style?: style.StyleInput');
       expect(breadcrumb).toContain('export const Breadcrumb = component({');
-      expect(breadcrumb).toContain('export const breadcrumbClasses =');
+      expect(breadcrumb).toContain("import * as style from '@kovojs/style';");
+      expect(breadcrumb).toContain('export const breadcrumbStyles = style.create');
+      expect(breadcrumb).toContain('styles?: BreadcrumbStyleOverrides');
       expect(button).toContain("import { component } from '@kovojs/core';");
       expect(button).toContain("import * as style from '@kovojs/style';");
       expect(button).toContain('export const Button = component({');

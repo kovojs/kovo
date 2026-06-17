@@ -137,7 +137,8 @@
       "files": ["src/breadcrumb.tsx"],
       "exports": ["Breadcrumb", "BreadcrumbItem", "BreadcrumbLink", "BreadcrumbSeparator"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn", "safeUrl", "separatorRootAttributes"],
+        "@kovojs/headless-ui": ["safeUrl", "separatorRootAttributes"],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

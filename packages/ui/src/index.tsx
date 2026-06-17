@@ -5,15 +5,15 @@ export {
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbSeparator,
-  breadcrumbClassNames,
   breadcrumbClasses,
-  breadcrumbCurrentClassNames,
-  breadcrumbItemClassNames,
-  breadcrumbLinkClassNames,
-  breadcrumbListClassNames,
-  breadcrumbSeparatorClassNames,
+  breadcrumbStyles,
 } from './breadcrumb.js';
-export type { BreadcrumbLinkProps, BreadcrumbPartProps, BreadcrumbProps } from './breadcrumb.js';
+export type {
+  BreadcrumbLinkProps,
+  BreadcrumbPartProps,
+  BreadcrumbProps,
+  BreadcrumbStyleOverrides,
+} from './breadcrumb.js';
 export { Button, buttonClasses, buttonStyles } from './button.js';
 export type { ButtonProps, ButtonSize, ButtonVariant } from './button.js';
 export { Card, cardClasses, cardStyles } from './card.js';
