@@ -71,7 +71,10 @@ export const RawHtml${sink.replaceAll(/[^A-Za-z0-9_$]/g, '')} = component({
       source: `
 import { trustedHtml } from '@kovojs/runtime';
 
-const browserTrustedHtml = { toString: () => "<i>browser trusted</i>" };
+const browserTrustedHtml = {
+  [Symbol.toStringTag]: "TrustedHTML",
+  toString: () => "<i>browser trusted</i>",
+};
 
 export const TrustedRawHtml = component({
   render: () => (
@@ -79,7 +82,10 @@ export const TrustedRawHtml = component({
       <article dangerouslySetInnerHTML={trustedHtml("<b>kovo trusted</b>")} />
       <article innerHTML={trustedHtml(browserTrustedHtml)} />
       <article rawHtml={trustedHtml("<em>raw helper</em>")} />
-      <article html={trustedHtml({ toString: () => "<strong>compatible</strong>" })} />
+      <article html={trustedHtml({
+        [Symbol.toStringTag]: "TrustedHTML",
+        toString: () => "<strong>compatible</strong>",
+      })} />
     </section>
   ),
 });
@@ -100,7 +106,10 @@ export const TrustedRawHtml = component({
         return \`
       import { trustedHtml } from '@kovojs/runtime';
 
-      const browserTrustedHtml = { toString: () => "<i>browser trusted</i>" };
+      const browserTrustedHtml = {
+        [Symbol.toStringTag]: "TrustedHTML",
+        toString: () => "<i>browser trusted</i>",
+      };
 
       export const TrustedRawHtml = component({
         render: () => (
@@ -108,7 +117,10 @@ export const TrustedRawHtml = component({
             <article dangerouslySetInnerHTML={trustedHtml("<b>kovo trusted</b>")} />
             <article innerHTML={trustedHtml(browserTrustedHtml)} />
             <article rawHtml={trustedHtml("<em>raw helper</em>")} />
-            <article html={trustedHtml({ toString: () => "<strong>compatible</strong>" })} />
+            <article html={trustedHtml({
+              [Symbol.toStringTag]: "TrustedHTML",
+              toString: () => "<strong>compatible</strong>",
+            })} />
           </section>
         ),
       });

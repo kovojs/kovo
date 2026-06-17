@@ -1,5 +1,14 @@
-export type BrowserTrustedHTML = { toString(): string };
+/**
+ * Browser Trusted Types `TrustedHTML` values accepted by Kovo raw HTML sinks.
+ */
+export interface BrowserTrustedHTML {
+  readonly [Symbol.toStringTag]: 'TrustedHTML';
+  toString(): string;
+}
 
+/**
+ * Output contexts understood by Kovo generated rendering helpers.
+ */
 export type KovoOutputContext =
   | 'text'
   | 'attribute'
@@ -11,15 +20,57 @@ export type KovoOutputContext =
   | 'script-text'
   | 'trusted-html';
 
+/**
+ * Kovo's explicit raw HTML escape-hatch wrapper.
+ */
 export interface TrustedHtml {
   readonly __kovoTrustedHtml: true;
   readonly value: string | BrowserTrustedHTML;
 }
 
+/**
+ * Marks intentional raw HTML for Kovo sinks that require an explicit escape hatch.
+ */
 export function trustedHtml(value: string | BrowserTrustedHTML): TrustedHtml {
   return { __kovoTrustedHtml: true, value };
 }
 
+/**
+ * Returns whether a value uses Kovo's explicit raw HTML wrapper.
+ */
+export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { __kovoTrustedHtml?: unknown }).__kovoTrustedHtml === true
+  );
+}
+
+/**
+ * Returns whether a value matches the browser TrustedHTML brand accepted by Kovo.
+ */
+export function isBrowserTrustedHtml(value: unknown): value is BrowserTrustedHTML {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { [Symbol.toStringTag]?: unknown })[Symbol.toStringTag] === 'TrustedHTML' &&
+    typeof (value as { toString?: unknown }).toString === 'function'
+  );
+}
+
+/**
+ * Unwraps trusted raw HTML values and safely no-ops untrusted dynamic values.
+ */
+export function kovoTrustedHtmlContent(value: unknown): string {
+  if (isKovoTrustedHtml(value)) return trustedHtmlValueContent(value.value);
+  if (isBrowserTrustedHtml(value)) return value.toString();
+
+  return '';
+}
+
+/**
+ * Escapes text for generated HTML-fragment interpolation.
+ */
 export function kovoEscapeHtml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -28,16 +79,25 @@ export function kovoEscapeHtml(value: unknown): string {
     .replace(/"/g, '&quot;');
 }
 
+/**
+ * Neutralizes unsafe URL schemes for generated URL-bearing attributes.
+ */
 export function kovoSafeUrl(value: unknown): string {
   const rendered = String(value ?? '');
   return hasUnsafeUrlScheme(rendered) ? '#' : rendered;
 }
 
+/**
+ * Formats a generated bound attribute value with URL attributes sanitized.
+ */
 export function kovoBoundAttributeValue(name: string, value: unknown): string {
   const rendered = formatOutputValue(value);
   return isUrlAttributeName(name) ? kovoSafeUrl(rendered) : rendered;
 }
 
+/**
+ * Sanitizes one compiler-generated CSS property declaration.
+ */
 export function kovoStyleProperty(name: string, value: unknown): string {
   if (value === undefined || value === null || value === '') return '';
 
@@ -74,6 +134,10 @@ function formatOutputValue(value: unknown): string {
   }
   if (typeof value === 'object') return JSON.stringify(value);
   return '';
+}
+
+function trustedHtmlValueContent(value: string | BrowserTrustedHTML): string {
+  return typeof value === 'string' ? value : value.toString();
 }
 
 const URL_BOUND_ATTRIBUTES = new Set([

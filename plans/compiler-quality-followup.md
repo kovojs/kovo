@@ -248,10 +248,31 @@ compiler-quality gaps found during the 2026-06-16 audit.
       packages/server/src/wire-html.test.ts` passes.
 
 - [ ] Tighten Trusted HTML to an actual escape-hatch contract.
-  - [ ] Define the runtime/browser-compatible TrustedHTML shape Kovo accepts.
-  - [ ] Make raw HTML sinks reject plain strings at compile time when statically visible.
-  - [ ] Make raw HTML sinks reject or safely no-op plain strings at runtime when the value is dynamic.
-  - [ ] Make raw HTML sinks unwrap only Kovo `TrustedHtml` or browser TrustedHTML-compatible values.
+  - [x] Define the runtime/browser-compatible TrustedHTML shape Kovo accepts.
+    - Evidence (2026-06-16): `packages/runtime/src/security-output.ts` defines
+      `BrowserTrustedHTML` as a `Symbol.toStringTag === "TrustedHTML"` object with `toString()`,
+      plus `isBrowserTrustedHtml(...)` and `isKovoTrustedHtml(...)` guards.
+    - Evidence (2026-06-16): `pnpm exec vitest --run packages/runtime/src/security-output.test.ts
+      packages/server/src/jsx-runtime.test.ts` passes.
+  - [x] Make raw HTML sinks reject plain strings at compile time when statically visible.
+    - Evidence (2026-06-16): `packages/compiler/src/output-context-raw-html.test.ts` snapshots
+      KV236 diagnostics for statically visible plain strings at `dangerouslySetInnerHTML`,
+      `innerHTML`, `rawHtml`, and `html`.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run
+      src/output-context-raw-html.test.ts src/output-context-security.test.ts` passes.
+  - [x] Make raw HTML sinks reject or safely no-op plain strings at runtime when the value is dynamic.
+    - Evidence (2026-06-16): `packages/server/src/jsx-runtime.test.ts` asserts dynamic plain
+      strings and unbranded objects at raw HTML sinks render empty element content instead of HTML.
+    - Evidence (2026-06-16): `pnpm exec vitest --run packages/runtime/src/security-output.test.ts
+      packages/server/src/jsx-runtime.test.ts` passes.
+  - [x] Make raw HTML sinks unwrap only Kovo `TrustedHtml` or browser TrustedHTML-compatible values.
+    - Evidence (2026-06-16): `packages/runtime/src/security-output.test.ts` covers
+      `kovoTrustedHtmlContent(...)` unwrapping Kovo `TrustedHtml`, wrapped browser TrustedHTML, and
+      direct browser TrustedHTML while returning `""` for strings and unbranded objects.
+    - Evidence (2026-06-16): `packages/server/src/jsx-runtime.test.ts` covers all four raw HTML sink
+      spellings rendering only trusted raw content.
+    - Evidence (2026-06-16): `pnpm exec vitest --run packages/runtime/src/security-output.test.ts
+      packages/server/src/jsx-runtime.test.ts` passes.
   - [ ] Preserve trusted/raw HTML context through generated server and client artifacts.
 
 ## Conformance Bar

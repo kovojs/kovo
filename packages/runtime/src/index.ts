@@ -163,6 +163,9 @@ export {
   kovoEscapeHtml,
   kovoSafeUrl,
   kovoStyleProperty,
+  kovoTrustedHtmlContent,
+  isBrowserTrustedHtml,
+  isKovoTrustedHtml,
   trustedHtml,
 } from './security-output.js';
 export type { BrowserTrustedHTML, KovoOutputContext, TrustedHtml } from './security-output.js';

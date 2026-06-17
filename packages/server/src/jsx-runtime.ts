@@ -1,4 +1,4 @@
-import { kovoStyleProperty } from '@kovojs/runtime';
+import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/runtime';
 
 import { escapeAttribute } from './html.js';
 
@@ -51,7 +51,7 @@ export function jsx(type: JsxComponent | string, props: JsxProps): string {
   const attributes = renderJsxAttributes(props);
   if (voidElements.has(type)) return `<${type}${attributes}>`;
 
-  return `<${type}${attributes}>${renderJsxChildren(props.children)}</${type}>`;
+  return `<${type}${attributes}>${renderJsxChildren(renderJsxContent(props))}</${type}>`;
 }
 
 export const jsxs = jsx;
@@ -64,7 +64,15 @@ function renderJsxAttributes(props: JsxProps): string {
   let rendered = '';
 
   for (const [name, value] of Object.entries(props)) {
-    if (name === 'children' || value === false || value === null || value === undefined) continue;
+    if (
+      name === 'children' ||
+      isRawHtmlAttribute(name) ||
+      value === false ||
+      value === null ||
+      value === undefined
+    ) {
+      continue;
+    }
     rendered +=
       value === true
         ? ` ${name}`
@@ -72,6 +80,11 @@ function renderJsxAttributes(props: JsxProps): string {
   }
 
   return rendered;
+}
+
+function renderJsxContent(props: JsxProps): JsxNode {
+  const rawHtml = rawHtmlContent(props);
+  return rawHtml === undefined ? props.children : rawHtml;
 }
 
 function attributeText(name: string, value: unknown): string {
@@ -91,6 +104,27 @@ function renderStyleProperties(properties: Record<string, unknown>): string {
     .map(([propertyName, propertyValue]) => kovoStyleProperty(propertyName, propertyValue))
     .filter(Boolean)
     .join('; ');
+}
+
+function rawHtmlContent(props: JsxProps): string | undefined {
+  for (const [name, value] of Object.entries(props)) {
+    if (!isRawHtmlAttribute(name)) continue;
+
+    // SPEC.md §1/§5.2: raw HTML is an explicit escape hatch, so dynamic values
+    // that are not Kovo TrustedHtml or browser TrustedHTML-compatible no-op.
+    return kovoTrustedHtmlContent(value);
+  }
+
+  return undefined;
+}
+
+function isRawHtmlAttribute(name: string): boolean {
+  return (
+    name === 'dangerouslySetInnerHTML' ||
+    name === 'innerHTML' ||
+    name === 'rawHtml' ||
+    name === 'html'
+  );
 }
 
 function renderJsxChildren(children: JsxNode): string {

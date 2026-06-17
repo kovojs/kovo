@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { trustedHtml } from '@kovojs/runtime';
+
 import { Fragment, jsx, jsxDEV, jsxs } from './jsx-runtime.js';
 
 describe('server jsx runtime', () => {
@@ -32,6 +34,42 @@ describe('server jsx runtime', () => {
         },
       }),
     ).toBe('<span style="left: 25%; transform: translate(-50%, -50%)"></span>');
+  });
+
+  it('renders raw HTML sinks only from trusted values', () => {
+    const browserTrustedHtml = {
+      [Symbol.toStringTag]: 'TrustedHTML',
+      toString: () => '<i>browser trusted</i>',
+    } as const;
+
+    expect(
+      jsx('section', {
+        dangerouslySetInnerHTML: trustedHtml('<b>kovo trusted</b>'),
+        children: 'ignored',
+      }),
+    ).toBe('<section><b>kovo trusted</b></section>');
+    expect(jsx('section', { innerHTML: browserTrustedHtml })).toBe(
+      '<section><i>browser trusted</i></section>',
+    );
+    expect(jsx('section', { rawHtml: trustedHtml(browserTrustedHtml) })).toBe(
+      '<section><i>browser trusted</i></section>',
+    );
+    expect(jsx('section', { html: trustedHtml('<em>html helper</em>') })).toBe(
+      '<section><em>html helper</em></section>',
+    );
+  });
+
+  it('safely no-ops dynamic plain strings and unbranded objects in raw HTML sinks', () => {
+    expect(jsx('section', { dangerouslySetInnerHTML: '<img src=x onerror=alert(1)>' })).toBe(
+      '<section></section>',
+    );
+    expect(jsx('section', { innerHTML: { toString: () => '<i>not trusted</i>' } })).toBe(
+      '<section></section>',
+    );
+    expect(jsx('section', { rawHtml: '<b>not trusted</b>', title: 'copy' })).toBe(
+      '<section title="copy"></section>',
+    );
+    expect(jsx('section', { html: '<b>not trusted</b>' })).toBe('<section></section>');
   });
 
   it('renders void elements without closing tags', () => {
