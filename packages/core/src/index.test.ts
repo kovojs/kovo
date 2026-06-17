@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   component,
   event,
+  FieldError,
   form,
   formFields,
+  FormError,
   fragmentTarget,
   href,
   Link,
@@ -18,6 +20,7 @@ import {
   type FormFailure,
   type FormFieldName,
   type FormInput,
+  type FormValidationFailure,
   type JsonValue,
 } from './index.js';
 import * as coreRoot from './index.js';
@@ -193,6 +196,37 @@ describe('core authoring APIs', () => {
     expect(input.quantity).toBe(2);
     expect(failure.code).toBe('OUT_OF_STOCK');
     expect(validationFailure.fieldErrors.quantity).toBe('Expected number >= 1');
+  });
+
+  it('renders compiler-bound field and form errors from typed mutation failure state', () => {
+    const validation = {
+      code: 'VALIDATION',
+      fieldErrors: { quantity: 'Expected number >= 1' },
+    } satisfies FormValidationFailure;
+    const coded = {
+      code: 'OUT_OF_STOCK',
+      payload: { availableQuantity: 2 },
+    } satisfies { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } };
+
+    expect(
+      FieldError({
+        class: 'error',
+        failure: validation,
+        id: 'quantity-error',
+        name: 'quantity',
+      }),
+    ).toBe(
+      '<output role="alert" id="quantity-error" class="error" data-error-code="VALIDATION">Expected number >= 1</output>',
+    );
+    expect(FieldError({ failure: validation, name: 'productId' })).toBe('');
+    expect(FormError({ failure: validation })).toBe('');
+    expect(
+      FormError({
+        code: 'OUT_OF_STOCK',
+        failure: coded,
+        message: (failure: typeof coded) => `Only ${failure.payload.availableQuantity} left.`,
+      }),
+    ).toBe('<output role="alert" data-error-code="OUT_OF_STOCK">Only 2 left.</output>');
   });
 
   it('threads typed mutation failure state into component render context', () => {

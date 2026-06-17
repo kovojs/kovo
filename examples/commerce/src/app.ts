@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { createMemoryStorage, form, stripeSignature, type FormInput } from '@kovojs/core';
+import { createMemoryStorage, form, FormError, stripeSignature, type FormInput } from '@kovojs/core';
 import {
   createMemoryMutationReplayStore,
   componentMutationFailureSlots,
@@ -736,7 +736,6 @@ export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
 // mutation handlers' write-site line numbers in this file.
 export const {
   ProductGrid,
-  renderAddToCartError,
   renderAddToCartForm,
   renderAddToCartMutationFailureError,
   renderAddToCartMutationFailureForm,
@@ -787,7 +786,7 @@ export function renderProductGridAppend(
   result: ProductGridResult,
   request?: CommerceRequest,
 ): string {
-  return renderProductGridItems(result, undefined, null, request);
+  return renderProductGridItems(result, productGridRenderSlots(request), request);
 }
 
 export async function renderProductGridPageFragment(
@@ -1017,9 +1016,12 @@ export function renderCommerceLoginForm(
     '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Password</span>',
     '<input class="rounded border border-slate-300 px-3 py-2" name="password" type="password" autocomplete="current-password" required>',
     '</label>',
-    options.failure?.code === 'INVALID_CREDENTIALS'
-      ? '<output role="alert" data-error-code="INVALID_CREDENTIALS" class="text-sm text-red-700">Invalid email or password.</output>'
-      : '',
+    FormError({
+      class: 'text-sm text-red-700',
+      code: 'INVALID_CREDENTIALS',
+      failure: options.failure ?? null,
+      message: 'Invalid email or password.',
+    }),
     '<button class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white" type="submit">Sign in</button>',
     '</form>',
   ].join('');

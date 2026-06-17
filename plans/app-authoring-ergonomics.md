@@ -281,7 +281,7 @@ item inherits from rather than re-deciding it:
     - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
 
-- [ ] **5. Field-bound mutation failure UI (replaces the broad failure switch).**
+- [x] **5. Field-bound mutation failure UI (replaces the broad failure switch).**
   - Decision 2026-06-17 (resolves the original `formFailure`/`<Failure>` proposal,
     which conflicted with §9.2 and the archived Better forms ledger):
     - **Adopt the single failure shape `{ code; payload; fieldErrors? }`** from
@@ -324,6 +324,34 @@ item inherits from rather than re-deciding it:
       a CRM or SO form gains a declared `errors:` schema and renders it (proving the
       §9.2 typed path beyond commerce — closes the archived Better forms C4 gap).
     - Existing auth redirect, CSRF, no-JS, and enhanced failure tests still pass.
+  - Evidence:
+    - Core exports `FieldError` and `FormError`; `pnpm exec vitest --run
+      packages/core/src/index.test.ts` covers validation `fieldErrors`, coded
+      failures, `role="alert"`, `data-error-code`, and callback messages.
+    - Compiler lowering binds `<FieldError>/<FormError>` to the enclosing typed
+      mutation form's `slots.forms.<name>.failure`, derives field error IDs, and
+      injects `aria-describedby`; `pnpm exec vitest --run
+      packages/compiler/src/stamps.test.ts packages/compiler/src/scan/parse.test.ts`
+      covers successful lowering plus KV242 for unknown fields and helpers outside
+      enhanced mutation forms.
+    - Commerce add-to-cart renders validation/coded failures through generated
+      `FieldError`/`FormError`; sign-in renders through `FormError`. CRM contacts
+      uses `FormError` for `DUPLICATE_EMAIL`; StackOverflow question list uses
+      `FormError` for `DUPLICATE_TITLE`. Generated artifacts were refreshed.
+    - No app-authored example source keeps the old display branches:
+      `rg -n "renderAddToCartError|failure\?\.code|data-error-code=\"(DUPLICATE_TITLE|DUPLICATE_EMAIL|OUT_OF_STOCK|INVALID_CREDENTIALS)" examples/commerce/src examples/crm/src examples/stackoverflow/src --glob '!**/generated/**'`
+      reports only test assertions.
+    - Example emit checks pass:
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`;
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`;
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`.
+    - Existing focused failure/auth paths pass:
+      `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app-shell.test.ts app.rendering.test.ts app.auth.test.ts`;
+      `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
+      `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`;
+      `pnpm exec vitest --run packages/server/src/component-render.test.tsx`.
+    - Root gates pass: `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `node scripts/api-surface-gate.mjs`; `git diff --check`.
 
 - [ ] **6. Derive the app query registry from routes/components/layouts.**
   - Framework direction: the build emits the query registry from queries reachable
@@ -393,7 +421,7 @@ item inherits from rather than re-deciding it:
   - Evidence: item 2 no-match, app-scoped declaration type-test, server lifecycle test, example tests, root `tsc`, API gate, and `git diff --check` above.
 - [x] **Nested layouts compose, refresh layout queries, and scope boundaries/guards per segment.** Evidence: item 3 current evidence.
 - [x] **No string shell helpers; document via `documentTemplate`, chrome via layouts.** Evidence: item 4 evidence.
-- [ ] **Expected failures render via `<FieldError>/<FormError>` (KV242-checked); unexpected via error boundaries; no `formFailure({ message })`.** Evidence pending.
+- [x] **Expected failures render via `<FieldError>/<FormError>` (KV242-checked); unexpected via error boundaries; no `formFailure({ message })`.** Evidence: item 5 evidence.
 - [ ] **No manual query-registry duplication across shells, mutation registries, generated files, or `graph.ts`.** Evidence pending.
 - [ ] **No static-export surface in interactive examples; capability covered by a standalone fixture.** Evidence pending.
 - [ ] **Starter template teaches the model; `kovo explain` covers the new seams; inference type-tests pass.** Evidence pending.

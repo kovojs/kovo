@@ -347,6 +347,83 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('lowers field and form error helpers to the enclosing mutation failure slot', () => {
+    const result = compileComponentModule({
+      fileName: 'product-grid.tsx',
+      registryFacts: {
+        mutationInputs: { 'cart/add': cartAddMutationInputs },
+        mutations: { 'cart/add': 'typeof addToCart' },
+      },
+      source: `
+import { component, FieldError, form, FormError } from '@kovojs/core';
+
+const addToCart = form('cart/add');
+
+export const ProductGrid = component({
+  mutations: { addToCart },
+  render: (_queries, _state, slots) => (
+    <form enhance mutation={addToCart} key="p1">
+      <input type="hidden" name="productId" value="p1" />
+      <input name="quantity" />
+      <FieldError name="quantity" class="error" />
+      <FormError code="OUT_OF_STOCK">Unable to add this item.</FormError>
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([]);
+    expect(result.loweredSource).toContain(
+      '<input name="quantity"  aria-describedby="add-to-cart-quantity-error-p1"/>',
+    );
+    expect(result.loweredSource).toContain(
+      '{FieldError({ "failure": slots.forms.addToCart.failure, "name": "quantity", "class": "error", "id": "add-to-cart-quantity-error-p1" })}',
+    );
+    expect(result.loweredSource).toContain(
+      '{FormError({ "failure": slots.forms.addToCart.failure, "code": "OUT_OF_STOCK", "children": "Unable to add this item." })}',
+    );
+  });
+
+  it('reports KV242 for field error helpers outside a typed mutation form or outside the schema', () => {
+    const result = compileComponentModule({
+      fileName: 'product-grid.tsx',
+      registryFacts: {
+        mutationInputs: { 'cart/add': cartAddMutationInputs },
+        mutations: { 'cart/add': 'typeof addToCart' },
+      },
+      source: `
+import { component, FieldError, form } from '@kovojs/core';
+
+const addToCart = form('cart/add');
+
+export const ProductGrid = component({
+  mutations: { addToCart },
+  render: (_queries, _state, slots) => (
+    <section>
+      <FieldError name="quantity" />
+      <form enhance mutation={addToCart}>
+        <input name="productId" />
+        <FieldError name="sku" />
+      </form>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('<FieldError> must be rendered inside an enhanced mutation form'),
+      }),
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'unknown field "sku" for mutation "cart/add". Expected fields: productId, quantity',
+        ),
+      }),
+    ]);
+  });
+
   it('rejects repeatable typed enhanced mutation forms without authored key identity', () => {
     const result = compileComponentModule({
       fileName: 'product-list.tsx',

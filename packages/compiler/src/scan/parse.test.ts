@@ -4,6 +4,7 @@ import {
   callExpressions,
   componentOptionObjectEntries,
   componentRenderHostElement,
+  componentRenderSlotsParam,
   jsxElementChildBody,
   jsxElements,
   jsxExpressions,
@@ -590,6 +591,22 @@ export const ProductList = component({
         expressionCallName: 'mutationFormAttributes',
       }),
     ]);
+  });
+
+  it('records the render slots parameter for compiler-bound form helpers', () => {
+    const source = `
+export const ProductList = component({
+  render: (_queries, _state, slots = {}) => (
+    <form enhance mutation={save}>
+      <FieldError name="quantity" />
+    </form>
+  ),
+});
+`;
+
+    expect(componentRenderSlotsParam(parseComponentModule('product-list.tsx', source))).toEqual(
+      expect.objectContaining({ name: 'slots' }),
+    );
   });
 
   it('records JSX opening tag and child source for model-driven lowerers', () => {

@@ -186,6 +186,7 @@ export interface ComponentModel {
   options: readonly ComponentOptionEntry[];
   renderHost?: RenderHostModel;
   renderInputs: readonly RenderInputModel[];
+  renderSlotsParam?: RenderInputModel;
   stateReturnObject?: StateReturnObjectModel;
   stringRenderReturns?: readonly StringRenderModel[];
 }
@@ -470,6 +471,10 @@ export function componentRenderInputs(model: ComponentModuleModel): string[] {
 
 export function componentRenderInputModels(model: ComponentModuleModel): RenderInputModel[] {
   return [...(firstComponentModel(model)?.renderInputs ?? [])];
+}
+
+export function componentRenderSlotsParam(model: ComponentModuleModel): RenderInputModel | null {
+  return firstComponentModel(model)?.renderSlotsParam ?? null;
 }
 
 export function componentRenderHost(model: ComponentModuleModel): RenderHostModel | null {
@@ -770,6 +775,7 @@ function componentModelFromInitializer(
     options,
     ...(render ? renderHostModel(sourceFile, render) : {}),
     renderInputs: render ? arrowObjectPatternKeys(sourceFile, render) : [],
+    ...(render ? renderSlotsParam(sourceFile, render) : {}),
     ...(stateReturnObject === null ? {} : { stateReturnObject }),
     ...(render ? { stringRenderReturns: stringRenderReturns(sourceFile, source, render) } : {}),
   };
@@ -1791,6 +1797,24 @@ function arrowObjectPatternKeys(
         ]
       : [],
   );
+}
+
+function renderSlotsParam(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): { renderSlotsParam: RenderInputModel } | {} {
+  if (!ts.isArrowFunction(expression)) return {};
+
+  const thirdParam = expression.parameters[2];
+  if (!thirdParam || !ts.isIdentifier(thirdParam.name)) return {};
+
+  return {
+    renderSlotsParam: {
+      end: thirdParam.name.getEnd(),
+      name: thirdParam.name.text,
+      start: thirdParam.name.getStart(sourceFile),
+    },
+  };
 }
 
 function renderHostModel(

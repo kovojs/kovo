@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component, type ComponentRenderSlots } from '@kovojs/core';
+import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
 import { csrfField } from '@kovojs/server';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
@@ -34,6 +34,10 @@ type QuestionScoreQueryResult = Awaited<ReturnType<typeof questionScore.load>>;
 type QuestionListRenderSlots = ComponentRenderSlots<{ postQuestion: typeof postQuestionForm }> & {
   request?: SoRequest | undefined;
 };
+type DuplicateTitleFailure = Extract<
+  NonNullable<QuestionListRenderSlots['forms']['postQuestion']['failure']>,
+  { code: 'DUPLICATE_TITLE' }
+>;
 
 const defaultQuestionListRenderSlots: QuestionListRenderSlots = {
   forms: { postQuestion: { failure: null } },
@@ -80,7 +84,6 @@ export const QuestionListRegion = component({
   }, _state, slots: QuestionListRenderSlots = defaultQuestionListRenderSlots) => {
     const questions = questionList.items;
     const totalVotes = questionScore.score;
-    const failure = slots.forms.postQuestion.failure;
     const askButton = Button.definition.render({
       children: 'Ask question',
       type: 'submit',
@@ -125,13 +128,13 @@ export const QuestionListRegion = component({
             class="so-input so-textarea"
           />
           <div class="so-composer-actions">{askButton}</div>
-          {failure?.code === 'DUPLICATE_TITLE' ? (
-            <output role="alert" data-error-code="DUPLICATE_TITLE" class="so-form-error">
-              A question titled "{failure.payload.title}" already exists.
-            </output>
-          ) : (
-            ''
-          )}
+          <FormError
+            code="DUPLICATE_TITLE"
+            class="so-form-error"
+            message={(failure: DuplicateTitleFailure) =>
+              `A question titled "${failure.payload.title}" already exists.`
+            }
+          />
         </form>
 
         <ul class="so-list">

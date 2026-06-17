@@ -20,10 +20,12 @@ import {
   type LocalMutationInputFact,
 } from '../mutation-inputs.js';
 import {
+  componentOptionObjectEntries,
   componentOptionObjectKeys,
   componentHasInferredServerRefreshTarget,
   componentRenderHost,
   componentRenderHostElement,
+  componentRenderSlotsParam,
   componentStateReturnObjectModel,
   parseComponentModule,
   type ComponentModuleModel,
@@ -222,6 +224,9 @@ function renderSemanticElement(
   element: JsxElementModel,
   options: SemanticElementOptions = {},
 ): string {
+  const formError = semanticMutationFormErrorExpression(model, element);
+  if (formError) return formError;
+
   const primitiveChild = semanticPrimitiveChild(model, element);
   if (primitiveChild) {
     return renderSemanticElement(model, primitiveChild.child, { ...options, ...primitiveChild });
@@ -257,6 +262,7 @@ function renderSemanticAttributes(
 
   const formMutation = enhancedMutationFormLowering(model, element, options.registryFacts);
   const viewTransitionStyle = semanticViewTransitionStyle(element);
+  const fieldErrorDescribedBy = semanticFieldErrorDescribedByAttribute(model, element);
   const semanticAttributes: string[] = [];
   for (const attribute of element.attributes) {
     if (attribute.name === 'viewTransitionName' || isQueryExpressionAttribute(model, attribute)) {
@@ -279,8 +285,71 @@ function renderSemanticAttributes(
       viewTransitionStyle && !element.attributes.some((attribute) => attribute.name === 'style')
         ? [` style="${escapeAttribute(viewTransitionStyle)}"`]
         : [],
+      fieldErrorDescribedBy && !element.attributes.some((attribute) => attribute.name === 'aria-describedby')
+        ? [fieldErrorDescribedBy]
+        : [],
     )
     .join('');
+}
+
+function semanticMutationFormErrorExpression(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): string | null {
+  if (element.tag !== 'FieldError' && element.tag !== 'FormError') return null;
+
+  const form = enclosingEnhancedMutationForm(model, element);
+  const binding = form ? enhancedMutationFormBinding(form) : null;
+  const slotsParam = componentRenderSlotsParam(model);
+  const slotName = binding ? componentMutationSlotName(model, binding.localName) : null;
+  if (!form || !binding || !slotsParam || !slotName) return '';
+
+  return `{${element.tag}(${mutationFormErrorProps(element, form, slotName, slotsParam.name)})}`;
+}
+
+function semanticFieldErrorDescribedByAttribute(
+  model: ComponentModuleModel,
+  control: JsxElementModel,
+): string | null {
+  if (!['input', 'select', 'textarea'].includes(control.tag)) return null;
+  const name = staticStringAttributeValue(
+    control.attributes.find((attribute) => attribute.name === 'name'),
+  );
+  if (!name) return null;
+
+  const form = model.jsxElements
+    .filter(
+      (element) =>
+        element.tag === 'form' &&
+        control.start >= element.openingEnd &&
+        control.end <= element.closingStart,
+    )
+    .sort((left, right) => right.start - left.start)[0];
+  if (!form) return null;
+
+  const fieldError = model.jsxElements.find(
+    (element) =>
+      element.tag === 'FieldError' &&
+      element.start >= form.openingEnd &&
+      element.end <= form.closingStart &&
+      staticStringAttributeValue(element.attributes.find((attribute) => attribute.name === 'name')) ===
+        name,
+  );
+  if (!fieldError) return null;
+
+  const explicitId = staticStringAttributeValue(
+    fieldError.attributes.find((attribute) => attribute.name === 'id'),
+  );
+  const binding = enhancedMutationFormBinding(form);
+  const slotName = binding ? componentMutationSlotName(model, binding.localName) : null;
+  const id = explicitId
+    ? { expression: JSON.stringify(explicitId), source: JSON.stringify(explicitId) }
+    : slotName
+      ? mutationFormErrorIdExpression(form, slotName, name)
+      : null;
+  if (!id) return null;
+
+  return ` aria-describedby="${escapeAttribute(`{${id.expression}}`)}"`;
 }
 
 function isQueryExpressionAttribute(
@@ -529,6 +598,9 @@ function serverRenderPatches(
   diagnostics.push(...formLowering.diagnostics);
   patches.push(...formLowering.replacements);
   outputContexts.push(...formLowering.outputContexts);
+  const formErrorLowering = mutationFormErrorRenderLowering(model, options);
+  diagnostics.push(...formErrorLowering.diagnostics);
+  patches.push(...formErrorLowering.replacements);
   const hostHandlers = host
     ? handlers.filter(
         (handler) => handler.attributeStart >= host.start && handler.attributeEnd <= host.end,
@@ -574,6 +646,308 @@ function serverRenderPatches(
   }
 
   return { diagnostics, outputContexts, replacements: patches, stampWrites };
+}
+
+function mutationFormErrorRenderLowering(
+  model: ComponentModuleModel,
+  options?: { fileName: string; registryFacts?: RegistryFacts; source: string },
+): {
+  diagnostics: readonly CompilerDiagnostic[];
+  replacements: readonly SourceReplacement[];
+} {
+  if (!options) return { diagnostics: [], replacements: [] };
+
+  const diagnostics: CompilerDiagnostic[] = [];
+  const replacements: SourceReplacement[] = [];
+
+  for (const element of model.jsxElements) {
+    if (element.tag !== 'FieldError' && element.tag !== 'FormError') continue;
+
+    const form = enclosingEnhancedMutationForm(model, element);
+    if (!form) {
+      diagnostics.push(
+        formFieldDiagnostic(
+          options,
+          element.openingTagNameStart,
+          element.openingTagNameEnd - element.openingTagNameStart,
+          `<${element.tag}> must be rendered inside an enhanced mutation form`,
+        ),
+      );
+      continue;
+    }
+
+    const binding = enhancedMutationFormBinding(form);
+    if (!binding) {
+      diagnostics.push(
+        formFieldDiagnostic(
+          options,
+          element.openingTagNameStart,
+          element.openingTagNameEnd - element.openingTagNameStart,
+          `<${element.tag}> must be rendered inside a form with mutation={...} or mutationFormAttributes(...)`,
+        ),
+      );
+      continue;
+    }
+
+    const slotsParam = componentRenderSlotsParam(model);
+    const slotName = componentMutationSlotName(model, binding.localName);
+    if (!slotsParam) {
+      diagnostics.push(
+        formFieldDiagnostic(
+          options,
+          element.openingTagNameStart,
+          element.openingTagNameEnd - element.openingTagNameStart,
+          `<${element.tag}> requires the component render slots parameter so the compiler can bind forms.${binding.localName}.failure`,
+        ),
+      );
+      continue;
+    }
+    if (!slotName) {
+      diagnostics.push(
+        formFieldDiagnostic(
+          options,
+          element.openingTagNameStart,
+          element.openingTagNameEnd - element.openingTagNameStart,
+          `<${element.tag}> could not resolve the component-local mutation slot for ${binding.localName}`,
+        ),
+      );
+      continue;
+    }
+
+    if (element.tag === 'FieldError') {
+      diagnostics.push(...fieldErrorDiagnostics(model, element, binding.localName, options));
+    }
+
+    const lowered = lowerMutationFormErrorElement(
+      model,
+      element,
+      form,
+      slotName,
+      slotsParam.name,
+    );
+    replacements.push(...lowered.replacements);
+  }
+
+  return { diagnostics, replacements };
+}
+
+function componentMutationSlotName(
+  model: ComponentModuleModel,
+  mutationLocalName: string,
+): string | null {
+  const entries = componentOptionObjectEntries(model, 'mutations');
+  const exact = entries.find((entry) => entry.key === mutationLocalName);
+  if (exact) return exact.key;
+
+  const valueMatch = entries.find((entry) => entry.value === mutationLocalName);
+  if (valueMatch) return valueMatch.key;
+
+  if (entries.length === 1) return entries[0]?.key ?? null;
+  return mutationLocalName;
+}
+
+function enclosingEnhancedMutationForm(
+  model: ComponentModuleModel,
+  child: JsxElementModel,
+): JsxElementModel | null {
+  const forms = model.jsxElements
+    .filter(
+      (element) =>
+        element.tag === 'form' &&
+        child.start >= element.openingEnd &&
+        child.end <= element.closingStart &&
+        enhancedMutationFormBinding(element),
+    )
+    .sort((left, right) => right.start - left.start);
+
+  return forms[0] ?? null;
+}
+
+function fieldErrorDiagnostics(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  localName: string,
+  options: { fileName: string; registryFacts?: RegistryFacts; source: string },
+): CompilerDiagnostic[] {
+  const nameAttribute = element.attributes.find((attribute) => attribute.name === 'name');
+  if (!nameAttribute) {
+    return [
+      formFieldDiagnostic(
+        options,
+        element.openingTagNameStart,
+        element.openingTagNameEnd - element.openingTagNameStart,
+        '<FieldError> requires a literal name from the enclosing mutation input schema',
+      ),
+    ];
+  }
+
+  const name = staticStringAttributeValue(nameAttribute);
+  if (!name) {
+    return [
+      formFieldDiagnostic(
+        options,
+        nameAttribute.start,
+        nameAttribute.end - nameAttribute.start,
+        'dynamic field error names are not supported; use a literal name from the mutation input schema',
+      ),
+    ];
+  }
+
+  const mutation = mutationInputFactForForm(model, localName, options);
+  if (!mutation) return [];
+
+  const fieldNames = new Set(mutation.fields.map((field) => field.name));
+  if (fieldNames.has(name)) return [];
+
+  return [
+    formFieldDiagnostic(
+      options,
+      nameAttribute.start,
+      nameAttribute.end - nameAttribute.start,
+      `unknown field "${name}" for mutation "${mutation.key}". Expected fields: ${[
+        ...fieldNames,
+      ].join(', ')}`,
+    ),
+  ];
+}
+
+function lowerMutationFormErrorElement(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  form: JsxElementModel,
+  localName: string,
+  slotsParamName: string,
+): { replacements: readonly SourceReplacement[] } {
+  const props = mutationFormErrorProps(element, form, localName, slotsParamName);
+  const replacements: SourceReplacement[] = [
+    {
+      end: element.end,
+      replacement: `{${element.tag}(${props})}`,
+      start: element.start,
+    },
+  ];
+
+  if (element.tag === 'FieldError') {
+    const name = staticStringAttributeValue(
+      element.attributes.find((attribute) => attribute.name === 'name'),
+    );
+    const id = staticStringAttributeValue(
+      element.attributes.find((attribute) => attribute.name === 'id'),
+    );
+    if (name) {
+      const errorId = id
+        ? { expression: JSON.stringify(id), source: JSON.stringify(id) }
+        : mutationFormErrorIdExpression(form, localName, name);
+      replacements.push(...fieldControlDescribedByReplacements(model, form, name, errorId));
+    }
+  }
+
+  return { replacements };
+}
+
+function mutationFormErrorProps(
+  element: JsxElementModel,
+  form: JsxElementModel,
+  localName: string,
+  slotsParamName: string,
+): string {
+  const entries = [
+    `"failure": ${slotsParamName}.forms.${localName}.failure`,
+    ...element.attributes.map((attribute) => jsxAttributeObjectEntry(attribute)),
+  ];
+  if (!element.attributes.some((attribute) => attribute.name === 'id')) {
+    const name = staticStringAttributeValue(
+      element.attributes.find((attribute) => attribute.name === 'name'),
+    );
+    if (name) entries.push(`"id": ${mutationFormErrorIdExpression(form, localName, name).expression}`);
+  }
+  const children = jsxElementChildrenExpression(element);
+  if (children) entries.push(`"children": ${children}`);
+  return `{ ${entries.filter(Boolean).join(', ')} }`;
+}
+
+function jsxAttributeObjectEntry(attribute: JsxAttributeModel): string {
+  const key = JSON.stringify(attribute.name);
+  if (attribute.value !== undefined) return `${key}: ${JSON.stringify(attribute.value)}`;
+  if (attribute.expression !== undefined) return `${key}: ${attribute.expression}`;
+  const staticValue = attribute.expressionStaticValue;
+  if (staticValue !== undefined) return `${key}: ${JSON.stringify(staticValue)}`;
+  return `${key}: true`;
+}
+
+function jsxElementChildrenExpression(element: JsxElementModel): string | null {
+  if (element.selfClosing || !element.childBody) return null;
+  const childSource = element.childBody.source.trim();
+  if (!childSource) return null;
+  if (!/[<{]/.test(childSource)) return JSON.stringify(childSource);
+  return `<>${element.childBody.source}</>`;
+}
+
+function fieldControlDescribedByReplacements(
+  model: ComponentModuleModel,
+  form: JsxElementModel,
+  name: string,
+  errorId: { expression: string; source: string },
+): SourceReplacement[] {
+  return formControlElements(model, form, name).flatMap((control) => {
+    if (control.attributes.some((attribute) => attribute.name === 'aria-describedby')) return [];
+    const position = openingTagAttributePosition(control);
+    return [
+      {
+        end: position,
+        replacement: ` aria-describedby=${errorId.source}`,
+        start: position,
+      },
+    ];
+  });
+}
+
+function formControlElements(
+  model: ComponentModuleModel,
+  form: JsxElementModel,
+  name: string,
+): JsxElementModel[] {
+  const formEnd = form.selfClosing ? form.end : form.closingStart;
+  return model.jsxElements.filter((element) => {
+    if (!['input', 'select', 'textarea'].includes(element.tag)) return false;
+    if (element.start < form.openingEnd || element.end > formEnd) return false;
+    if (element.attributes.some((attribute) => attribute.name === 'disabled')) return false;
+    const type = staticStringAttributeValue(
+      element.attributes.find((attribute) => attribute.name === 'type'),
+    )?.toLowerCase();
+    if (element.tag === 'input' && type === 'hidden') return false;
+    return (
+      staticStringAttributeValue(element.attributes.find((attribute) => attribute.name === 'name')) ===
+      name
+    );
+  });
+}
+
+function openingTagAttributePosition(element: JsxElementModel): number {
+  if (!element.selfClosing) return element.openingEnd - 1;
+  return element.openingEnd - (element.selfClosingSlashHasLeadingWhitespace ? 2 : 1);
+}
+
+function mutationFormErrorIdExpression(
+  form: JsxElementModel,
+  localName: string,
+  fieldName: string,
+): { expression: string; source: string } {
+  const base = `${kebabCase(localName)}-${fieldName}-error`;
+  const keyAttribute = form.attributes.find((attribute) => attribute.name === 'key');
+  if (!keyAttribute) {
+    const literal = JSON.stringify(base);
+    return { expression: literal, source: literal };
+  }
+
+  const key = staticAttributeScalar(keyAttribute);
+  if (key !== null) {
+    const literal = JSON.stringify(`${base}-${key}`);
+    return { expression: literal, source: literal };
+  }
+
+  const expression = `\`${escapeTemplateLiteral(base)}-\${${keyAttribute.expression ?? ''}}\``;
+  return { expression, source: `{${expression}}` };
 }
 
 function enhancedMutationFormRenderLowering(

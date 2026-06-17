@@ -1,7 +1,7 @@
 // @kovojs-ir — lowered from examples/crm/src/components/contacts.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
 import { escapeText } from '@kovojs/server/internal/html';
-import { component, type ComponentRenderSlots } from '@kovojs/core';
+import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
 import { csrfField, mutationFormAttributes } from '@kovojs/server';
 import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
@@ -58,6 +58,10 @@ function renderContactCard(contact: ContactRow): string {
 type ContactsRenderSlots = ComponentRenderSlots<{ addContact: typeof addContactForm }> & {
   request?: CrmRequest | undefined;
 };
+type DuplicateEmailFailure = Extract<
+  NonNullable<ContactsRenderSlots['forms']['addContact']['failure']>,
+  { code: 'DUPLICATE_EMAIL' }
+>;
 
 const defaultContactsRenderSlots: ContactsRenderSlots = {
   forms: { addContact: { failure: null } },
@@ -75,7 +79,6 @@ export const ContactsRegion = component({
     slots: ContactsRenderSlots = defaultContactsRenderSlots,
   ) => {
     const contacts = contactList.items;
-    const failure = slots.forms.addContact.failure;
 
     return (
       <div class="space-y-6" kovo-c="contacts-region" kovo-deps="contactList" kovo-fragment-target="contacts-region" kovo-live-component="components/contacts/contacts-region">
@@ -116,17 +119,8 @@ export const ContactsRegion = component({
               variant: 'primary',
             })}
           </div>
-          {failure?.code === 'DUPLICATE_EMAIL' ? (
-            <output
-              role="alert"
-              data-error-code="DUPLICATE_EMAIL"
-              class="mt-2 block text-sm text-red-700"
-            >
-              {escapeText(failure.payload.email)} is already in the contact book.
-            </output>
-          ) : (
-            ''
-          )}
+          {FormError({ "failure": slots.forms.addContact.failure, "code": "DUPLICATE_EMAIL", "class": "mt-2 block text-sm text-red-700", "message": (failure: DuplicateEmailFailure) =>
+              `${failure.payload.email} is already in the contact book.` })}
         </form>
 
         <ul class="grid gap-3 sm:grid-cols-2">

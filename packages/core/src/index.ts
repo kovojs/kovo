@@ -508,6 +508,31 @@ export interface FormValidationFailure {
   fieldErrors: Record<string, string>;
 }
 
+/** Props accepted by the compiler-bound `<FieldError />` mutation failure helper. */
+export interface FieldErrorProps<Failure = unknown> {
+  children?: unknown;
+  class?: string;
+  code?: string | readonly string[];
+  failure?: Failure | null;
+  id?: string;
+  message?: unknown | ((failure: Failure) => unknown);
+  name: string;
+  role?: string;
+  [attribute: string]: unknown;
+}
+
+/** Props accepted by the compiler-bound `<FormError />` mutation failure helper. */
+export interface FormErrorProps<Failure = unknown> {
+  children?: unknown;
+  class?: string;
+  code?: string | readonly string[];
+  failure?: Failure | null;
+  id?: string;
+  message?: unknown | ((failure: Failure) => unknown);
+  role?: string;
+  [attribute: string]: unknown;
+}
+
 interface SchemaLike<Value> {
   parse(input: unknown): Value;
 }
@@ -635,6 +660,99 @@ export function formFields<
   const Fields extends readonly FormFieldName<Definition>[],
 >(_form: Definition, fields: CompleteFormFields<Definition, Fields>): Fields {
   return fields as Fields;
+}
+
+/**
+ * Render a field-scoped mutation failure message. The compiler injects the
+ * enclosing typed form's `failure` slot and validates `name` against the
+ * mutation input schema (SPEC §6.3 / §9.2).
+ */
+export function FieldError<Failure = unknown>(props: FieldErrorProps<Failure>): string {
+  const failure = props.failure;
+  if (!isRecord(failure)) return '';
+
+  const message = fieldErrorMessage(failure, props);
+  if (message === undefined || message === null || message === false) return '';
+
+  return renderFailureOutput(props, failure, message);
+}
+
+/**
+ * Render a form-scoped mutation failure message. Validation failures stay
+ * field-scoped; declared coded failures render here by default (SPEC §9.2).
+ */
+export function FormError<Failure = unknown>(props: FormErrorProps<Failure>): string {
+  const failure = props.failure;
+  if (!isRecord(failure)) return '';
+  if (failure.code === 'VALIDATION') return '';
+  if (!failureCodeMatches(failure, props.code)) return '';
+
+  const message = failureMessage(failure, props);
+  if (message === undefined || message === null || message === false) return '';
+
+  return renderFailureOutput(props, failure, message);
+}
+
+function fieldErrorMessage<Failure>(failure: Record<string, unknown>, props: FieldErrorProps<Failure>): unknown {
+  if (!failureCodeMatches(failure, props.code)) return undefined;
+  if (props.message !== undefined || props.children !== undefined) {
+    return failureMessage(failure, props);
+  }
+  if (failure.code !== 'VALIDATION') return undefined;
+
+  const fieldErrors = failure.fieldErrors;
+  if (!isRecord(fieldErrors)) return undefined;
+  return fieldErrors[props.name];
+}
+
+function failureMessage<Failure>(
+  failure: Record<string, unknown>,
+  props: Pick<FieldErrorProps<Failure>, 'children' | 'message'>,
+): unknown {
+  const message = props.message ?? props.children;
+  if (typeof message === 'function') return (message as (failure: Failure) => unknown)(failure as Failure);
+  if (message !== undefined) return message;
+  if (failure.code === 'VALIDATION') return undefined;
+  return typeof failure.code === 'string' ? failure.code : 'Form submission failed.';
+}
+
+function failureCodeMatches(failure: Record<string, unknown>, code: string | readonly string[] | undefined): boolean {
+  if (code === undefined) return true;
+  if (typeof failure.code !== 'string') return false;
+  return Array.isArray(code) ? code.includes(failure.code) : failure.code === code;
+}
+
+function renderFailureOutput<Failure>(
+  props: FieldErrorProps<Failure> | FormErrorProps<Failure>,
+  failure: Record<string, unknown>,
+  message: unknown,
+): string {
+  const attrs = failureOutputAttributes(props, failure);
+  return `<output${attrs}>${String(message)}</output>`;
+}
+
+function failureOutputAttributes<Failure>(
+  props: FieldErrorProps<Failure> | FormErrorProps<Failure>,
+  failure: Record<string, unknown>,
+): string {
+  const attrs: string[] = [`role="${escapeHtmlAttribute(String(props.role ?? 'alert'))}"`];
+  if (props.id !== undefined) attrs.push(`id="${escapeHtmlAttribute(props.id)}"`);
+  if (props.class !== undefined) attrs.push(`class="${escapeHtmlAttribute(props.class)}"`);
+  if (typeof failure.code === 'string')
+    attrs.push(`data-error-code="${escapeHtmlAttribute(failure.code)}"`);
+  return attrs.length === 0 ? '' : ` ${attrs.join(' ')}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }
 
 /** A fragment-target patch: the target name plus the props to re-render it with. */

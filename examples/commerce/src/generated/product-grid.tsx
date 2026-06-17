@@ -1,7 +1,14 @@
 // @kovojs-ir — lowered from examples/commerce/src/components/product-grid.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
 import { escapeText } from '@kovojs/server/internal/html';
-import { component, form, type ComponentRenderSlots, type FormFailure } from '@kovojs/core';
+import {
+  component,
+  FieldError,
+  form,
+  FormError,
+  type ComponentRenderSlots,
+  type FormFailure,
+} from '@kovojs/core';
 import { componentMutationFailureSlots, csrfField, type MutationFail } from '@kovojs/server';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
@@ -52,8 +59,7 @@ export const ProductGrid = component({
       <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid" kovo-fragment-target="product-grid" kovo-live-component="components/product-grid/product-grid">
         {renderProductGridItems(
           productGrid,
-          slots.productId,
-          slots.forms.addToCart.failure,
+          slots,
           slots.request,
           {
             readOnly: slots.readOnly,
@@ -69,13 +75,12 @@ ProductGrid.name = "components/product-grid/product-grid";
 // mode="append" pagination fragment (which morphs into the existing host).
 export function renderProductGridItems(
   result: ProductGridResult,
-  failureProductId?: string,
-  failure?: AddToCartFailure | null,
+  slots: ProductGridRenderSlots = defaultProductGridRenderSlots,
   request?: CommerceRequest,
   options: { readOnly?: boolean | undefined } = {},
 ): string {
   const cards = result.items.map((item) =>
-    renderProductCard(item, failureProductId === item.id ? failure : null, request, options),
+    renderProductCard(item, productGridItemSlots(slots, item.id), request, options),
   );
   const cursor = result.nextCursor;
   return (
@@ -117,7 +122,7 @@ function stockBadge(stock: number): string {
 
 function renderProductCard(
   item: ProductItem,
-  failure?: AddToCartFailure | null,
+  slots: ProductGridRenderSlots,
   request?: CommerceRequest,
   options: { readOnly?: boolean | undefined } = {},
 ): string {
@@ -136,7 +141,7 @@ function renderProductCard(
         <span class="text-lg font-semibold tabular-nums">{priceLabel(item.unitPrice)}</span>
         {stockBadge(item.stock)}
       </div>
-      {options.readOnly ? '' : renderAddToCartForm(item, failure, request)}
+      {options.readOnly ? '' : renderAddToCartForm(item, slots, request)}
     </div>
   );
   // `kovo-key` stays on the keyed child of the grid fragment host (§9.1 morph);
@@ -149,7 +154,7 @@ function renderProductCard(
 // standalone as the failure-rerender fragment (kovo-fragment-target).
 export function renderAddToCartForm(
   item: { id: string; stock: number },
-  failure?: AddToCartFailure | null,
+  slots: ProductGridRenderSlots = defaultProductGridRenderSlots,
   request?: CommerceRequest,
 ): string {
   const soldOut = item.stock === 0;
@@ -166,7 +171,8 @@ export function renderAddToCartForm(
           min="1"
           max={item.stock}
           value="1"
-        />
+         aria-describedby={`add-to-cart-quantity-error-${item.id}`}/>
+        {FieldError({ "failure": slots.forms.addToCart.failure, "name": "quantity", "class": "basis-full text-sm text-red-700", "id": `add-to-cart-quantity-error-${item.id}` })}
       </label>
       {Button.definition.render({
         children: soldOut ? 'Sold out' : 'Add to cart',
@@ -174,7 +180,8 @@ export function renderAddToCartForm(
         type: 'submit',
         variant: 'primary',
       })}
-      {failure ? renderAddToCartError(failure) : ''}
+      {FormError({ "failure": slots.forms.addToCart.failure, "code": "OUT_OF_STOCK", "class": "basis-full text-sm text-red-700", "message": (failure: Extract<AddToCartFailure, { code: 'OUT_OF_STOCK' }>) =>
+          `Only ${failure.payload.availableQuantity} available.` })}
     </form>
   );
 }
@@ -184,45 +191,61 @@ export function renderAddToCartMutationFailureForm(
   failure: MutationFail,
   request?: CommerceRequest,
 ): string {
-  return renderAddToCartForm(item, addToCartFailureFromMutation(failure), request);
+  return renderAddToCartForm(
+    item,
+    productGridItemSlots(addToCartFailureSlots(failure, item.id), item.id),
+    request,
+  );
 }
 
 export function renderAddToCartMutationFailureError(failure: MutationFail): string {
-  return renderAddToCartError(addToCartFailureFromMutation(failure));
-}
-
-export function renderAddToCartError(failure: AddToCartFailure): string {
-  if (failure.code === 'OUT_OF_STOCK') {
-    return (
-      <output role="alert" data-error-code="OUT_OF_STOCK" class="basis-full text-sm text-red-700">
-        Only {escapeText(failure.payload.availableQuantity)} available.
-      </output>
-    );
-  }
-
-  if (failure.code === 'VALIDATION') {
-    return (
-      <output role="alert" data-error-code="VALIDATION" class="basis-full text-sm text-red-700">
-        Unable to add this item.
-      </output>
-    );
-  }
-
-  return '';
+  return FormError({
+    class: 'basis-full text-sm text-red-700',
+    code: 'OUT_OF_STOCK',
+    failure: addToCartFailureFromMutation(failure),
+    message: (formFailure: Extract<AddToCartFailure, { code: 'OUT_OF_STOCK' }>) =>
+      `Only ${formFailure.payload.availableQuantity} available.`,
+  });
 }
 
 function addToCartFailureFromMutation(failure: MutationFail): AddToCartFailure {
-  const slots = componentMutationFailureSlots(
-    'addToCart',
-    failure,
-    defaultProductGridRenderSlots,
-  ) as unknown as ProductGridRenderSlots;
+  const slots = addToCartFailureSlots(failure);
   const formFailure = slots.forms.addToCart.failure;
   if (!formFailure) {
     throw new Error('Expected add-to-cart mutation failure slot');
   }
 
   return formFailure;
+}
+
+function addToCartFailureSlots(
+  failure: MutationFail,
+  productId?: string,
+): ProductGridRenderSlots {
+  const slots = componentMutationFailureSlots(
+    'addToCart',
+    failure,
+    productGridItemSlots(defaultProductGridRenderSlots, productId),
+  ) as unknown as ProductGridRenderSlots;
+
+  return slots;
+}
+
+function productGridItemSlots(
+  slots: ProductGridRenderSlots,
+  productId?: string,
+): ProductGridRenderSlots {
+  if (!productId) return slots;
+  const failure = slots.productId === productId ? slots.forms.addToCart.failure : null;
+
+  return {
+    ...slots,
+    forms: {
+      ...slots.forms,
+      addToCart: { failure },
+    },
+    productId,
+  };
 }
 
 export const ProductGrid$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
