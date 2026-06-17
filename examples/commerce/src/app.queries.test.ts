@@ -127,7 +127,16 @@ describe('commerce example', () => {
 
     await expect(Promise.resolve(cartQuery.load({}, context))).resolves.toEqual({ count: 2 });
     await expect(Promise.resolve(productGridQuery.load({ limit: 1 }, context))).resolves.toEqual({
-      items: [{ id: 'p1', stock: 3, unitPrice: 1499 }],
+      items: [
+        {
+          id: 'p1',
+          name: 'Aero Wireless Keyboard',
+          category: 'Peripherals',
+          emoji: '⌨️',
+          stock: 3,
+          unitPrice: 1499,
+        },
+      ],
       nextCursor: 'p1',
     });
     await expect(Promise.resolve(orderHistoryQuery.load({}, context))).resolves.toEqual({
@@ -168,7 +177,16 @@ describe('commerce example', () => {
 
     await expect(Promise.resolve(cartQuery.load({}, context))).resolves.toEqual({ count: 10 });
     await expect(Promise.resolve(productGridQuery.load({}, context))).resolves.toEqual({
-      items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
+      items: [
+        {
+          id: 'custom',
+          name: 'Sample Product',
+          category: 'General',
+          emoji: '📦',
+          stock: 42,
+          unitPrice: 777,
+        },
+      ],
       nextCursor: null,
     });
     // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session
@@ -254,7 +272,16 @@ describe('commerce example', () => {
       productGrid: {
         diagnostics: [],
         result: {
-          items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
+          items: [
+            {
+              id: 'custom',
+              name: 'Sample Product',
+              category: 'General',
+              emoji: '📦',
+              stock: 42,
+              unitPrice: 777,
+            },
+          ],
           nextCursor: null,
         },
       },
@@ -405,10 +432,8 @@ describe('commerce example', () => {
     expect(
       responseFact.fragments.filter((fragment) => fragment.target === 'product-grid'),
     ).toMatchObject([{ stylesheetHrefs: ['/assets/styles.css'] }]);
-    expect(
-      htmlElementFacts(response.body, {
-        attrs: { class: 'rounded border border-slate-200 bg-white p-4' },
-      }).length,
-    ).toBeGreaterThan(0);
+    // The streamed grid renders @kovojs/ui Card-based product cards, each a
+    // keyed <article> the §9.1 morph targets.
+    expect(htmlKeyValues(response.body)).toContain('p1');
   });
 });

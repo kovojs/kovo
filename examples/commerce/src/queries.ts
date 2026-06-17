@@ -21,7 +21,14 @@ export interface ProductGridInput {
 }
 
 export interface ProductGridResult {
-  items: { id: string; stock: number; unitPrice: number }[];
+  items: {
+    id: string;
+    name: string;
+    category: string;
+    emoji: string;
+    stock: number;
+    unitPrice: number;
+  }[];
   nextCursor: string | null;
 }
 
@@ -57,7 +64,14 @@ export const productGridQuery = query('productGrid', {
     const { after, limit } = (input ?? {}) as ProductGridInput;
     const pageSize = limit ?? 2;
     const items = await db
-      .select({ id: products.id, stock: products.stock, unitPrice: products.unitPrice })
+      .select({
+        id: products.id,
+        name: products.name,
+        category: products.category,
+        emoji: products.emoji,
+        stock: products.stock,
+        unitPrice: products.unitPrice,
+      })
       .from(products)
       .where(after ? gt(products.id, after) : undefined)
       .orderBy(products.id)

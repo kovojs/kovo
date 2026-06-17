@@ -11,6 +11,13 @@ export const products = pgTable(
   'products',
   {
     id: text('id').primaryKey(),
+    // Presentational catalog columns (name/category/emoji) the UI renders. They
+    // are never written by a mutation, so the derived cart/add optimism
+    // (generated/optimistic/cart-add.ts, which only touches stock) is unaffected.
+    // Defaults keep presentation-agnostic inserts (test fixtures) valid.
+    name: text('name').notNull().default('Sample Product'),
+    category: text('category').notNull().default('General'),
+    emoji: text('emoji').notNull().default('📦'),
     stock: integer('stock').notNull(),
     unitPrice: integer('unit_price').notNull(),
   },

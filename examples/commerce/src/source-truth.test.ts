@@ -356,8 +356,22 @@ describe('commerce source-truth graph acceptance', () => {
       input: { after: 'custom-a', limit: 2 },
       result: {
         items: [
-          { id: 'custom-b', stock: 4, unitPrice: 200 },
-          { id: 'custom-c', stock: 5, unitPrice: 300 },
+          {
+            id: 'custom-b',
+            name: 'Sample Product',
+            category: 'General',
+            emoji: '📦',
+            stock: 4,
+            unitPrice: 200,
+          },
+          {
+            id: 'custom-c',
+            name: 'Sample Product',
+            category: 'General',
+            emoji: '📦',
+            stock: 5,
+            unitPrice: 300,
+          },
         ],
         nextCursor: null,
       },
