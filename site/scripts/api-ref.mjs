@@ -5,10 +5,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
 
-import { documentedPackages } from '../../scripts/public-packages.mjs';
+import { loadPublicPackages } from '../../scripts/public-packages.mjs';
 
 /**
- * Generated API reference (plan W6): one markdown page per app-facing package,
+ * Generated API reference (plan W6): one markdown page per public docs entry,
  * emitted from the real TypeScript sources so the docs cannot drift silently.
  * Undocumented exports are flagged, never omitted (plan exit criterion 4).
  * Output is deterministic: no timestamps, no absolute paths.
@@ -21,8 +21,8 @@ import { documentedPackages } from '../../scripts/public-packages.mjs';
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 
-// Documented packages come from the public-packages.json manifest (sorted by order).
-const PACKAGES = documentedPackages();
+// Documented entries come from the public-packages.json manifest (sorted by order).
+const PACKAGES = documentedApiEntries();
 
 const UNDOCUMENTED = '*Undocumented.*';
 const MAX_SIGNATURE_LINES = 40;
@@ -240,15 +240,22 @@ function resolveAlias(symbol, checker) {
   return symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
 }
 
-/** True if a declaration carries an `@internal` JSDoc tag (variable decls carry
- * tags on the enclosing statement). `@internal` exports are framework internals —
- * reachable for in-repo/emitted consumers but excluded from the public reference. */
-function isInternalDeclaration(decl) {
+/** Test a declaration JSDoc tag, accounting for variable docs that live on the
+ * enclosing statement. */
+function hasJsDocTag(decl, tagName) {
   let node = decl;
   if (ts.isVariableDeclaration(node) && ts.isVariableDeclarationList(node.parent)) {
     node = node.parent.parent;
   }
-  return ts.getJSDocTags(node).some((tag) => tag.tagName.getText() === 'internal');
+  return ts.getJSDocTags(node).some((tag) => tag.tagName.getText() === tagName);
+}
+
+/** True if a declaration carries an `@internal` or `@generated` JSDoc tag
+ * (variable decls carry tags on the enclosing statement). Non-public tags are
+ * framework internals/generated-code ABI and must never appear in the public
+ * reference. */
+function isNonPublicDeclaration(decl) {
+  return hasJsDocTag(decl, 'internal') || hasJsDocTag(decl, 'generated');
 }
 
 function entryFromSymbol(name, symbol, checker, packageName) {
@@ -260,7 +267,7 @@ function entryFromSymbol(name, symbol, checker, packageName) {
     );
   }
 
-  const internal = declarations.some(isInternalDeclaration);
+  const nonPublic = declarations.some(isNonPublicDeclaration);
 
   // Function overloads: show the signature declarations, not the implementation.
   const overloads = declarations.filter((decl) => ts.isFunctionDeclaration(decl) && !decl.body);
@@ -273,7 +280,7 @@ function entryFromSymbol(name, symbol, checker, packageName) {
   );
   const doc = declarations.map((decl) => docCommentOf(decl)).find((text) => text !== '') ?? '';
 
-  return { doc, internal, kind, name, signature };
+  return { doc, kind, name, nonPublic, signature };
 }
 
 function hasExportModifier(statement) {
@@ -295,7 +302,9 @@ function collectExports(sourceFile, checker, packageName) {
   const entries = [];
   const seen = new Set();
   const push = (entry) => {
-    if (entry.internal) return; // @internal exports are excluded from the public reference
+    // @internal/@generated exports are excluded from the public reference; the
+    // API surface gate owns failing public roots that still leak them.
+    if (entry.nonPublic) return;
     if (seen.has(entry.name)) return;
     seen.add(entry.name);
     entries.push(entry);
@@ -419,12 +428,108 @@ function renderPage(pkg, entries, entryRel) {
 }
 
 /**
- * Resolve a package's documented entry from its real `package.json` `exports["."]`
- * target — never a hard-coded `src/index.ts`, which silently misdocuments packages
- * whose published `.` entry is a different file (e.g. `@kovojs/drizzle` ships
- * `src/runtime.ts`). api-ref reads TypeScript source, so when conditional exports
- * are introduced (plan Phase 3) the `source`/`development` condition is preferred
- * over the built `dist` target.
+ * Future manifests can declare public docs as either strings (`"."`,
+ * `"./build"`) or small objects (`{ "path": ".", "slug": "core" }`). Keep this
+ * tolerant so Phase 2 can land before the manifest expansion.
+ */
+function normalizeEntrySpec(spec, fallback = {}) {
+  const raw =
+    typeof spec === 'string'
+      ? spec
+      : spec && typeof spec === 'object'
+        ? (spec.path ?? spec.subpath ?? spec.exportPath ?? spec.entry ?? fallback.path ?? '.')
+        : (fallback.path ?? '.');
+  return {
+    description:
+      typeof spec === 'object' ? (spec.description ?? fallback.description) : fallback.description,
+    order: typeof spec === 'object' ? (spec.order ?? fallback.order) : fallback.order,
+    path: normalizeExportPath(raw),
+    slug: typeof spec === 'object' ? (spec.slug ?? fallback.slug) : fallback.slug,
+  };
+}
+
+function normalizeEntryList(value) {
+  if (value === undefined) return [];
+  return Array.isArray(value)
+    ? value.map((entry) => normalizeEntrySpec(entry))
+    : [normalizeEntrySpec(value)];
+}
+
+function normalizeExportPath(entryPath) {
+  if (entryPath === '.' || entryPath === './') return '.';
+  if (typeof entryPath !== 'string' || entryPath.trim() === '') {
+    throw new Error(`api-ref: invalid manifest entry path ${JSON.stringify(entryPath)}`);
+  }
+  return entryPath.startsWith('./') ? entryPath : `./${entryPath}`;
+}
+
+function pageSlug(packageSlug, entryPath) {
+  if (entryPath === '.') return packageSlug;
+  return `${packageSlug}-${entryPath.replace(/^\.\//, '').replace(/[^\w]+/g, '-')}`;
+}
+
+function publicEntrySpecs(pkg) {
+  const apiRef = pkg.apiRef ?? {};
+  const entries = apiRef.entries ?? apiRef.publicEntries ?? pkg.publicEntries;
+  if (entries !== undefined) return normalizeEntryList(entries);
+  return [normalizeEntrySpec('.', apiRef)];
+}
+
+function nonPublicEntryPaths(pkg) {
+  const apiRef = pkg.apiRef ?? {};
+  return new Set(
+    [
+      ...normalizeEntryList(apiRef.generatedEntries),
+      ...normalizeEntryList(apiRef.internalEntries),
+      ...normalizeEntryList(pkg.generatedEntries),
+      ...normalizeEntryList(pkg.internalEntries),
+    ].map((entry) => entry.path),
+  );
+}
+
+function isGeneratedOrInternalPath(entryPath) {
+  return /(^|\/)(generated|internal)(\/|$)/.test(entryPath.replace(/^\.\//, ''));
+}
+
+/**
+ * Flatten manifest-declared public docs entries. Old manifests that only have
+ * `apiRef` still produce one root page per documented package; future manifests
+ * may add explicit public entries while generated/internal entries stay out of
+ * the public docs even when package.json publishes them.
+ */
+export function documentedApiEntries(packages = loadPublicPackages()) {
+  return packages
+    .filter((pkg) => pkg.visibility === 'public' && pkg.apiRef)
+    .flatMap((pkg) => {
+      const apiRef = pkg.apiRef;
+      const blocked = nonPublicEntryPaths(pkg);
+      return publicEntrySpecs(pkg).map((entry, index) => {
+        if (blocked.has(entry.path) || isGeneratedOrInternalPath(entry.path)) {
+          throw new Error(
+            `api-ref: ${pkg.name} public docs entry ${entry.path} overlaps a generated/internal subpath`,
+          );
+        }
+        return {
+          description: entry.description ?? apiRef.description,
+          dir: pkg.dir,
+          entryPath: entry.path,
+          name: entry.path === '.' ? pkg.name : `${pkg.name}/${entry.path.replace(/^\.\//, '')}`,
+          order: entry.order ?? apiRef.order + index / 100,
+          packageName: pkg.name,
+          slug: entry.slug ?? pageSlug(apiRef.slug, entry.path),
+        };
+      });
+    })
+    .sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug));
+}
+
+/**
+ * Resolve a documented entry from its real `package.json` export target — never a
+ * hard-coded `src/index.ts`, which silently misdocuments packages whose published
+ * `.` entry is a different file (e.g. `@kovojs/drizzle` ships `src/runtime.ts`).
+ * api-ref reads TypeScript source, so when conditional exports are introduced
+ * (plan Phase 3) the `source`/`development` condition is preferred over the built
+ * `dist` target.
  */
 function resolvePackageEntry(pkg) {
   const pkgJsonPath = path.join(repoRoot, 'packages', pkg.dir, 'package.json');
@@ -434,15 +539,20 @@ function resolvePackageEntry(pkg) {
     );
   }
   const pkgJson = JSON.parse(ts.sys.readFile(pkgJsonPath) ?? '{}');
-  const dot = pkgJson.exports?.['.'];
+  const exportedEntry = pkgJson.exports?.[pkg.entryPath];
   const target =
-    typeof dot === 'string'
-      ? dot
-      : dot && typeof dot === 'object'
-        ? (dot.source ?? dot.development ?? dot.import ?? dot.default)
+    typeof exportedEntry === 'string'
+      ? exportedEntry
+      : exportedEntry && typeof exportedEntry === 'object'
+        ? (exportedEntry.source ??
+          exportedEntry.development ??
+          exportedEntry.import ??
+          exportedEntry.default)
         : undefined;
   if (typeof target !== 'string') {
-    throw new Error(`api-ref: ${pkg.name} has no resolvable "." export in package.json`);
+    throw new Error(
+      `api-ref: ${pkg.name} has no resolvable "${pkg.entryPath}" export in package.json`,
+    );
   }
   const absPath = path.join(repoRoot, 'packages', pkg.dir, target);
   return { absPath, repoRelative: path.relative(repoRoot, absPath) };

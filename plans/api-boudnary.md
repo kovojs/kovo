@@ -96,20 +96,30 @@ already excludes `@internal`, but the root barrels can still export those names.
 
 ## Phase 2 — Docs Enforcement
 
-- [ ] **Make `site/scripts/api-ref.mjs` consume only public doc entries.**
+- [x] **Make `site/scripts/api-ref.mjs` consume only public doc entries.**
   - Done = API docs are generated from manifest-declared public entries; generated
     and internal subpaths are ignored even when published.
   - Prove: `pnpm --filter @kovojs/site run api:ref` and confirm generated
     `site/gen/api/*.md` contains no `@internal` or `@generated` entries.
-- [ ] **Add a docs regression test for internal leakage.**
+  - Evidence: `pnpm --filter @kovojs/site run api:check` (2026-06-17) regenerated
+    public API pages from manifest entries and typechecked 51 examples; the
+    generator now rejects generated/internal doc entries and filters non-public
+    declaration tags.
+- [x] **Add a docs regression test for internal leakage.**
   - Done = the site API tests fail if any generated API page includes a symbol
     whose declaration is tagged `@internal` or `@generated`, or if a generated or
     internal subpath receives a public docs page.
   - Prove: `pnpm exec vitest --run site/scripts/api-ref.test.mjs`.
-- [ ] **Keep API examples public-only.**
+  - Evidence: `pnpm exec vitest --run site/scripts/api-ref.test.mjs` (2026-06-17)
+    passed 10 tests, including manifest subpath rejection and generated page
+    assertions for `@internal`, `@generated`, and generated/internal page slugs.
+- [x] **Keep API examples public-only.**
   - Done = `site/scripts/api-examples-check.mjs` extracts examples only from
     public API pages and therefore never teaches imports from `/internal`.
   - Prove: `pnpm --filter @kovojs/site run api:check`.
+  - Evidence: `pnpm exec vitest --run site/scripts/api-examples-check.test.mjs`
+    (2026-06-17) passed 4 tests, including a stale `core-internal.md` page with a
+    `kovo/internal` import that the extractor ignores; site `api:check` passed.
 
 ## Phase 3 — Package Migrations
 

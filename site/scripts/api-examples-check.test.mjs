@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -63,6 +63,30 @@ describe('api-examples extractor', () => {
       // The `component` export's example is present and imports the real export.
       const component = examples.find((example) => example.id.startsWith('core__component__'));
       expect(component?.code).toContain("from '@kovojs/core'");
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('collects examples only from public API pages', async () => {
+    const outDir = await mkdtemp(path.join(tmpdir(), 'kovo-api-examples-'));
+
+    try {
+      await writeFile(path.join(outDir, 'core.md'), SAMPLE, 'utf8');
+      await writeFile(
+        path.join(outDir, 'core-internal.md'),
+        SAMPLE.replace(
+          "import { component } from '@kovojs/core';",
+          "import { main } from 'kovo/internal';",
+        ),
+        'utf8',
+      );
+
+      const examples = collectApiExamples(outDir);
+      expect(examples).toHaveLength(1);
+      expect(examples[0].id).toBe('core__component__1');
+      expect(examples[0].code).not.toContain('/internal');
+      expect(examples[0].code).not.toContain('kovo/internal');
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }

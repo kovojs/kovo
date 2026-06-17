@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { generateApiReference } from './api-ref.mjs';
+import { documentedApiEntries, generateApiReference } from './api-ref.mjs';
 
 /**
  * W6 exit criteria: the API reference is generated from the real package
@@ -28,9 +28,10 @@ function coreExportNames() {
   const checker = program.getTypeChecker();
   const sourceFile = program.getSourceFile(entry);
   const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
-  // Mirror the generator: @internal exports are framework internals, excluded from
-  // the public reference, so they are not expected on the page either.
-  const isInternal = (symbol) => {
+  // Mirror the generator: @internal/@generated exports are non-public framework
+  // contracts, excluded from the public reference, so they are not expected on
+  // the page either.
+  const isNonPublic = (symbol) => {
     const resolved =
       symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
     return (resolved.declarations ?? []).some((decl) => {
@@ -38,13 +39,30 @@ function coreExportNames() {
       if (ts.isVariableDeclaration(node) && ts.isVariableDeclarationList(node.parent)) {
         node = node.parent.parent;
       }
-      return ts.getJSDocTags(node).some((tag) => tag.tagName.getText() === 'internal');
+      return ts
+        .getJSDocTags(node)
+        .some((tag) => ['internal', 'generated'].includes(tag.tagName.getText()));
     });
   };
   return checker
     .getExportsOfModule(moduleSymbol)
-    .filter((symbol) => !isInternal(symbol))
+    .filter((symbol) => !isNonPublic(symbol))
     .map((symbol) => symbol.name);
+}
+
+function packageManifest(overrides = {}) {
+  return {
+    apiRef: {
+      description: 'A fixture package.',
+      order: 1,
+      slug: 'fixture',
+    },
+    dir: 'core',
+    kind: 'library',
+    name: '@kovojs/fixture',
+    visibility: 'public',
+    ...overrides,
+  };
 }
 
 describe('api-ref generator', () => {
@@ -77,6 +95,52 @@ describe('api-ref generator', () => {
     for (const pkg of result.packages) expect(pkg.exports).toBeGreaterThan(0);
   });
 
+  it('normalizes manifest-declared public doc entries and rejects non-public docs pages', () => {
+    expect(
+      documentedApiEntries([
+        packageManifest({
+          apiRef: {
+            description: 'A fixture package.',
+            entries: ['.', { path: './build', slug: 'fixture-build' }],
+            generatedEntries: ['./generated'],
+            order: 1,
+            slug: 'fixture',
+          },
+        }),
+      ]).map((entry) => [entry.name, entry.entryPath, entry.slug]),
+    ).toEqual([
+      ['@kovojs/fixture', '.', 'fixture'],
+      ['@kovojs/fixture/build', './build', 'fixture-build'],
+    ]);
+
+    expect(() =>
+      documentedApiEntries([
+        packageManifest({
+          apiRef: {
+            description: 'A fixture package.',
+            entries: ['./internal'],
+            internalEntries: ['./internal'],
+            order: 1,
+            slug: 'fixture',
+          },
+        }),
+      ]),
+    ).toThrow(/overlaps a generated\/internal subpath/);
+
+    expect(() =>
+      documentedApiEntries([
+        packageManifest({
+          apiRef: {
+            description: 'A fixture package.',
+            entries: ['./generated'],
+            order: 1,
+            slug: 'fixture',
+          },
+        }),
+      ]),
+    ).toThrow(/overlaps a generated\/internal subpath/);
+  });
+
   it('includes every public export of @kovojs/core in the core page', () => {
     const names = coreExportNames();
     expect(names.length).toBeGreaterThan(0);
@@ -93,6 +157,17 @@ describe('api-ref generator', () => {
     const markers = corePage.match(/^\*Undocumented\.\*$/gm) ?? [];
     expect(headings.length).toBe(core.exports);
     expect(markers.length).toBe(core.exports - core.documented);
+  });
+
+  it('does not emit non-public API tags or pages for generated/internal subpaths', async () => {
+    for (const pkg of result.packages) {
+      const page = await readFile(path.join(outDir, pkg.file), 'utf8');
+      expect(page, `${pkg.file} leaked @internal`).not.toContain('@internal');
+      expect(page, `${pkg.file} leaked @generated`).not.toContain('@generated');
+      expect(pkg.file, 'generated/internal subpaths must not receive public docs pages').not.toMatch(
+        /(?:^|-)(?:generated|internal)(?:-|\.md$)/,
+      );
+    }
   });
 
   it('uses the site frontmatter convention', () => {
