@@ -61,31 +61,57 @@ removes app-authored bookkeeping from the enhanced path.
 
 ## Current Problems
 
-- [ ] **Examples still teach app-authored refresh routing.**
+- [x] **Examples still teach app-authored refresh routing.**
   - `examples/stackoverflow/src/interactive-app.ts` and
     `examples/crm/src/interactive-app.ts` manually import generated target
     constants and choose `fragmentRenderers` by mutation key.
   - `examples/commerce/src/app.ts` / `app-shell.ts` do the same plus lower-level
     no-JS and auth response wiring, making the normal app authoring model hard to
     see.
-- [ ] **Examples wrap components in app-authored region functions.**
+  - Evidence 2026-06-17: phases 7-9 migrated StackOverflow, CRM, and Commerce
+    app entry paths to generated live-target registration and component-composed
+    route pages. Verified with
+    `rg -n "mutationResponse\\(|fragmentRenderers|liveTargetRenderers|generated/live-targets|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`
+    and the command returns no matches.
+- [x] **Examples wrap components in app-authored region functions.**
   - StackOverflow and CRM expose `renderQuestionListRegion`,
     `renderPipelineRegion`, and similar helpers so app shells can manually
     re-render fragments. Those helpers should become generated artifacts or
     disappear behind route/component lowering; app source should compose
     components directly in `route().page`.
-- [ ] **Generated target constants leak into app source.**
+  - Evidence 2026-06-17: StackOverflow, CRM, and Commerce route modules now
+    compose `<QuestionListRegion />`, `<QuestionDetailRegion />`,
+    `<PipelineRegion />`, `<ContactsRegion />`, `<DealDetailRegion />`,
+    `<CartBadge />`, `<ProductGrid />`, and `<OrderHistory />` directly through
+    server JSX. Verified with
+    `rg -n "render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb" examples/stackoverflow/src examples/crm/src examples/commerce/src --glob '!**/generated/**'`
+    and the command returns no matches.
+- [x] **Generated target constants leak into app source.**
   - Query-backed component roots already derive `kovo-fragment-target` per
     `SPEC.md` §4.1/§4.2, but app shells still import generated `*_TARGET`
     constants to build response fragments.
+  - Evidence 2026-06-17: app-authored example source no longer references
+    generated target constants or generated live-target registry modules.
+    Verified with
+    `rg -n "_TARGET|generated/live-targets" examples/stackoverflow/src examples/crm/src examples/commerce/src --glob '!**/generated/**'`
+    and the command returns no matches.
 - [ ] **Queries and page loaders are split in some examples.**
   - StackOverflow and CRM keep some presentational joins or route-param filtering
     outside the declared query model, so the server cannot yet re-run only the
     component's declared queries to reconstruct every region.
-- [ ] **`createApp()` lacks a generated server-render registry.**
+  - Progress 2026-06-17: route-param filtering is now declared with component
+    props and query arg bindings in StackOverflow and CRM; the remaining recorded
+    gap is StackOverflow list-region presentational enrichment outside the
+    declared query model.
+- [x] **`createApp()` lacks a generated server-render registry.**
   - `SPEC.md` §9.1 describes mutation fragments/query JSON, and §4.1/§4.2
     describes query-backed refreshable components, but the implementation still
     requires app code to connect live targets to component render functions.
+  - Evidence 2026-06-17: generated component modules self-register
+    `*$liveTargetRenderer` exports, and `createApp()` defaults ordinary enhanced
+    mutation refresh to the registered generated registry. Verified with
+    `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts`
+    plus the no-match checks in phases 7-9.
 
 ## Design Direction
 
