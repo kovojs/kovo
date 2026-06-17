@@ -11,7 +11,7 @@ import { guards } from './guards.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { registerGeneratedLiveTargetRenderer } from './live-target-registry.js';
-import { route } from './route.js';
+import { layout, route } from './route.js';
 import { s } from './schema.js';
 
 describe('server createApp request shell', () => {
@@ -447,6 +447,66 @@ describe('server createApp request shell', () => {
     expect(endpointResponse.status).toBe(200);
     await expect(endpointResponse.text()).resolves.toBe('endpoint:3');
     expect(db.writes).toEqual(['u1', 'endpoint']);
+  });
+
+  it('reruns layout query chunks from generated layout live-target stamps', async () => {
+    const cart = domain('cart');
+    const db = { count: 1 };
+    const cartQuery = query('cart', {
+      load: () => ({ count: db.count }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({}),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler() {
+        db.count += 1;
+        return { count: db.count };
+      },
+    });
+    const CartLayout = layout({
+      queries: { cart: cartQuery },
+      render: ({ cart }, _state, { children }) =>
+        `<main><output data-bind="cart.count">${cart.count}</output>${children}</main>`,
+    });
+    const handler = createRequestHandler(
+      createApp({
+        mutations: [addToCart],
+        queries: [cartQuery],
+        routes: [
+          route('/cart', {
+            layout: CartLayout,
+            page: () => '<section>Cart</section>',
+          }),
+        ],
+      }),
+    );
+
+    const routeResponse = await handler(new Request('https://example.test/cart'));
+    const routeHtml = await routeResponse.text();
+    const layoutTarget = /<main[^>]*kovo-fragment-target="([^"]+)"/.exec(routeHtml)?.[1];
+    expect(layoutTarget).toMatch(/^kovo-layout-/);
+    expect(routeHtml).toContain('kovo-deps="cart"');
+
+    const mutationResponse = await handler(
+      new Request('https://example.test/_m/cart/add', {
+        body: new FormData(),
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': `${layoutTarget}=cart`,
+        },
+        method: 'POST',
+      }),
+    );
+
+    expect(mutationResponse.status).toBe(200);
+    await expect(mutationResponse.text()).resolves.toBe(
+      '<kovo-query name="cart">{"count":2}</kovo-query>',
+    );
   });
 
   it('dispatches stored query and client-module registries through web Responses', async () => {

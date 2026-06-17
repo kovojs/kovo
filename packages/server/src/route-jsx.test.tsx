@@ -118,10 +118,13 @@ describe('route JSX pages', () => {
       page: () => <h1>Admin</h1>,
     });
 
-    await expect(renderRoutePageResponse(adminRoute, {}, { userId: 'u1' })).resolves.toMatchObject({
-      body: '<main data-viewer="u1"><section data-admin><h1>Admin</h1></section></main>',
-      status: 200,
-    });
+    const response = await renderRoutePageResponse(adminRoute, {}, { userId: 'u1' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain('data-viewer="u1"');
+    expect(response.body).toContain('kovo-deps="viewer"');
+    expect(response.body).toContain('kovo-fragment-target="kovo-layout-');
+    expect(response.body).toContain('<section data-admin><h1>Admin</h1></section>');
   });
 
   it('runs layout guards before rendering the route page', async () => {

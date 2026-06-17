@@ -185,6 +185,7 @@ function isRouteDeclarations(value: unknown): value is KovoApp['routes'] {
         typeof route.path === 'string' &&
         (route.boundaries === undefined || isRouteBoundaries(route.boundaries)) &&
         isOptionalFunction(route.guard) &&
+        (route.layout === undefined || isRecord(route.layout)) &&
         isOptionalFunction(route.onUnauthenticated) &&
         isOptionalFunction(route.page) &&
         (route.params === undefined || isSchemaLike(route.params)) &&

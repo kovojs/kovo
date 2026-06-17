@@ -239,11 +239,17 @@ item inherits from rather than re-deciding it:
       packages/server/src/route.test.ts packages/server/src/route-query-guards.test.ts
       packages/server/src/app.test.ts` passes with fixtures proving nearest
       segment boundary selection and override of app-level 404/403 shells.
+    - Query-backed layouts now stamp generated `kovo-deps`/target metadata so
+      enhanced mutations rerun affected layout query chunks without app-authored
+      fragment renderers; `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx
+      packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts
+      packages/runtime/src/mutation-targets.test.ts` passes with an app-shell
+      fixture where `Kovo-Targets: <generated-layout-target>=cart` returns the
+      refreshed `cart` query chunk.
     - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
   - Remaining gaps:
     - Compiler route lowering does not yet derive navigation segment metadata.
-    - Layout query live-target refresh is not implemented yet.
 
 - [ ] **4. Replace string shell helpers with layouts + `documentTemplate`.**
   - Framework direction: convert document-level shells to

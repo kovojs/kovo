@@ -23,6 +23,7 @@ import {
   type RouteResponseOutcome,
 } from './response.js';
 import type { Schema } from './schema.js';
+import { escapeAttribute } from './html.js';
 
 type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}`
   ? Rest extends `${infer Param}/${infer Tail}`
@@ -44,6 +45,14 @@ type RouteSearchFor<SearchSchema extends MaybeSchema<Record<string, JsonValue>>>
   SearchSchema extends Schema<infer Search> ? Search : Record<string, JsonValue>;
 
 type LayoutQueryMap<Request> = Readonly<Record<string, QueryDefinition<string, any, any, Request>>>;
+
+interface LayoutLiveTargetMetadata {
+  deps: readonly string[];
+  target: string;
+}
+
+const layoutLiveTargetMetadata = new WeakMap<object, LayoutLiveTargetMetadata>();
+let nextLayoutLiveTargetId = 0;
 
 /** Resolved layout query values passed to a `layout().render` function (SPEC §4.5/§9.5). */
 export type LayoutQueryResults<Queries> = {
@@ -87,7 +96,7 @@ export interface LayoutDefinition<
 > extends PageHintOptions {
   boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request>;
-  parent?: LayoutDeclaration<Request, LayoutQueryMap<Request>, unknown>;
+  parent?: LayoutDeclaration<Request, any, unknown>;
   queries?: Queries;
   render?: (
     queries: LayoutQueryResults<Queries>,
@@ -135,7 +144,7 @@ export interface RouteDefinition<
 > extends PageHintOptions {
   boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request, GuardedRequest>;
-  layout?: LayoutDeclaration<any, LayoutQueryMap<any>, unknown>;
+  layout?: LayoutDeclaration<any, any, any>;
   onUnauthenticated?: UnauthenticatedHandler<Request>;
   page?: (
     context: RouteRequest<Path, ParamsSchema, SearchSchema>,
@@ -176,7 +185,16 @@ export function layout<
 >(
   definition: LayoutDefinition<Request, Queries, Page>,
 ): LayoutDeclaration<Request, Queries, Page> {
-  return { ...definition };
+  const declaration = { ...definition };
+  const deps = Object.values(definition.queries ?? {}).map((queryDefinition) => queryDefinition.key);
+  if (deps.length > 0) {
+    nextLayoutLiveTargetId += 1;
+    layoutLiveTargetMetadata.set(declaration, {
+      deps,
+      target: `kovo-layout-${nextLayoutLiveTargetId}`,
+    });
+  }
+  return declaration;
 }
 
 /** App-scoped route factory. `createApp()` uses this to contextually type route guards/pages from configured request providers (SPEC §6.4/§9.5). */
@@ -371,10 +389,10 @@ function routeGuardFailure(failure: ResolvedGuardFailure): RoutePageFailure {
 }
 
 function routeLayoutChain<Request>(
-  layoutDeclaration: LayoutDeclaration<any, LayoutQueryMap<any>, unknown> | undefined,
-): LayoutDeclaration<any, LayoutQueryMap<any>, unknown>[] {
-  const chain: LayoutDeclaration<any, LayoutQueryMap<any>, unknown>[] = [];
-  const seen = new Set<LayoutDeclaration<any, LayoutQueryMap<any>, unknown>>();
+  layoutDeclaration: LayoutDeclaration<any, any, any> | undefined,
+): LayoutDeclaration<any, any, any>[] {
+  const chain: LayoutDeclaration<any, any, any>[] = [];
+  const seen = new Set<LayoutDeclaration<any, any, any>>();
   let current = layoutDeclaration;
 
   while (current) {
@@ -390,7 +408,7 @@ function routeLayoutChain<Request>(
 }
 
 async function renderLayoutChain<Request>(
-  layouts: readonly LayoutDeclaration<any, LayoutQueryMap<any>, unknown>[],
+  layouts: readonly LayoutDeclaration<any, any, any>[],
   pageValue: unknown,
   request: Request,
 ): Promise<unknown> {
@@ -405,6 +423,7 @@ async function renderLayoutChain<Request>(
         children: value,
         request,
       });
+      value = stampLayoutLiveTarget(layoutDeclaration, value);
     } catch (error) {
       throw new RouteBoundaryRenderError(
         error,
@@ -416,13 +435,17 @@ async function renderLayoutChain<Request>(
 }
 
 async function loadLayoutQueries<Request>(
-  layoutDeclaration: LayoutDeclaration<any, LayoutQueryMap<any>, unknown>,
+  layoutDeclaration: LayoutDeclaration<any, any, any>,
   request: Request,
 ): Promise<LayoutQueryResults<LayoutQueryMap<any>>> {
   const values: Record<string, unknown> = {};
 
   for (const [name, queryDefinition] of Object.entries(layoutDeclaration.queries ?? {})) {
-    const result = await runQuery(queryDefinition, undefined, request);
+    const result = await runQuery(
+      queryDefinition as QueryDefinition<string, unknown, unknown, Request>,
+      undefined,
+      request,
+    );
     if (!result.ok) {
       throw new Error(`Layout query '${name}' failed with ${result.error.code}.`);
     }
@@ -430,6 +453,91 @@ async function loadLayoutQueries<Request>(
   }
 
   return values as LayoutQueryResults<LayoutQueryMap<any>>;
+}
+
+function stampLayoutLiveTarget(
+  layoutDeclaration: LayoutDeclaration<any, any, any>,
+  value: unknown,
+): unknown {
+  if (typeof value !== 'string') return value;
+  const metadata = layoutLiveTargetMetadata.get(layoutDeclaration);
+  if (!metadata || metadata.deps.length === 0) return value;
+
+  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(value);
+  if (!opening) return value;
+
+  const tagName = opening[1];
+  const attrs = opening[2] ?? '';
+  const stampedAttrs = stampLayoutAttributes(attrs, metadata);
+  const stampedOpening = `<${tagName}${stampedAttrs}>`;
+  return `${stampedOpening}${value.slice(opening[0].length)}`;
+}
+
+function stampLayoutAttributes(attrs: string, metadata: LayoutLiveTargetMetadata): string {
+  const mergedDeps = mergeAttributeTokens(attributeValue(attrs, 'kovo-deps'), metadata.deps);
+  let nextAttrs = setOrAppendAttribute(attrs, 'kovo-deps', mergedDeps.join(' '));
+
+  if (
+    attributeValue(nextAttrs, 'kovo-fragment-target') === undefined &&
+    attributeValue(nextAttrs, 'id') === undefined &&
+    attributeValue(nextAttrs, 'kovo-c') === undefined
+  ) {
+    nextAttrs = setOrAppendAttribute(nextAttrs, 'kovo-fragment-target', metadata.target);
+  }
+
+  return nextAttrs;
+}
+
+function mergeAttributeTokens(
+  existing: string | undefined,
+  additions: readonly string[],
+): string[] {
+  return [
+    ...new Set([
+      ...(existing ?? '')
+        .split(/[\s,]+/)
+        .map((token) => token.trim())
+        .filter(Boolean),
+      ...additions,
+    ]),
+  ];
+}
+
+function attributeValue(attrs: string, name: string): string | undefined {
+  const match = attributePattern(name).exec(attrs);
+  return match ? unescapeAttribute(match[1] ?? match[2] ?? match[3] ?? '') : undefined;
+}
+
+function setOrAppendAttribute(attrs: string, name: string, value: string): string {
+  const rendered = `${name}="${escapeAttribute(value)}"`;
+  const pattern = attributePattern(name);
+  if (pattern.test(attrs)) {
+    return attrs.replace(pattern, (match) => `${match.startsWith(' ') ? ' ' : ''}${rendered}`);
+  }
+  return `${attrs} ${rendered}`;
+}
+
+function attributePattern(name: string): RegExp {
+  return new RegExp(
+    `(?:^|\\s)${escapeRegExp(name)}(?:\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=<>` +
+      '`' +
+      `]+)))?(?=\\s|$|/|>)`,
+    'i',
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function unescapeAttribute(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&apos;', "'")
+    .replaceAll('&gt;', '>')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&amp;', '&');
 }
 
 export type RoutePageResult<Page> = RoutePageSuccess<Page> | RoutePageFailure;
@@ -500,7 +608,7 @@ function routeBoundaryFor<Request, Page>(
   routeDefinition:
     | RouteDeclaration<any, any, any, Request, Page, any>
     | undefined,
-  layouts: readonly LayoutDeclaration<any, LayoutQueryMap<any>, unknown>[],
+  layouts: readonly LayoutDeclaration<any, any, any>[],
 ): ResolvedRouteBoundary | undefined {
   const routeBoundary = routeDefinition?.boundaries?.[kind];
   if (routeBoundary) return { kind, render: routeBoundary };
