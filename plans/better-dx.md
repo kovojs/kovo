@@ -342,7 +342,20 @@ export const AddToCartForm = component({
   - Update commerce tests that assert `Kovo-Targets`, fragment facts, and generated
     graph output.
   - Evidence:
-    - Pending.
+    - Partial component cleanup complete: `examples/commerce/src/components/cart-badge.tsx`,
+      `order-history.tsx`, and `product-grid.tsx` no longer use
+      `fragmentTarget: true`; `cart-badge.tsx` no longer hand-authors its root
+      `kovo-fragment-target`.
+    - Regenerated `examples/commerce/src/generated/{cart-badge,order-history,product-grid}.tsx`;
+      generated IR now carries compiler-derived `kovo-fragment-target` hooks for
+      the query-backed roots.
+    - Verified with `pnpm --filter @kovojs/example-commerce run emit-components`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      and `pnpm --filter @kovojs/example-commerce test` on 2026-06-17.
+    - Remaining gap: the add-to-cart form still hand-authors
+      `kovo-fragment-target`, still posts through string `action="/_m/cart/add"`,
+      and app mutation response wiring still passes `failureTarget`; migrate this
+      after typed form lowering / inline-loader `Kovo-Form-Target` support lands.
 - [ ] **9. Broader example/docs migration.**
   - Audit StackOverflow and CRM components that currently hand-author
     `kovo-fragment-target` and remove attributes where inference covers them.

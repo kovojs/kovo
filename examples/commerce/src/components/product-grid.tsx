@@ -33,7 +33,6 @@ export interface ProductGridRenderContext {
 }
 
 export const ProductGrid = component({
-  fragmentTarget: true,
   queries: { productGrid: productGridQuery },
   render: (
     { productGrid }: { productGrid: ProductGridResult },

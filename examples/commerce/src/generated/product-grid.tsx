@@ -35,7 +35,6 @@ export interface ProductGridRenderContext {
 }
 
 export const ProductGrid = component({
-  fragmentTarget: true,
   queries: { productGrid: productGridQuery },
   render: (
     { productGrid }: { productGrid: ProductGridResult },
@@ -43,7 +42,7 @@ export const ProductGrid = component({
   ) => {
     const { nextCursor } = productGrid;
     return (
-      <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid">
+      <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid" kovo-fragment-target="product-grid">
         {renderProductGridItems(productGrid, context.failure, context.request, {
           readOnly: context.readOnly,
         })}

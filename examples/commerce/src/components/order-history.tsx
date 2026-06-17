@@ -11,7 +11,6 @@ import { orderHistoryQuery } from '../queries.js';
 // The lowered IR is committed at src/generated/order-history.tsx and is what
 // the app imports at runtime.
 export const OrderHistory = component({
-  fragmentTarget: true,
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
     <ol>
