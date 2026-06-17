@@ -1,4 +1,6 @@
 export { renderDeferredStream } from '../deferred-stream.js';
+export { renderComponent } from '../component-render.js';
+export type { ComponentRenderOptions } from '../component-render.js';
 export type {
   DeferredFragmentChunk,
   DeferredPriority,
