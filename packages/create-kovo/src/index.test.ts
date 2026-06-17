@@ -994,26 +994,47 @@ function resolveDependencyRoot(packageName: string): string {
     }
   }
 
-  const pnpmStore = join(dependencyRoot, '.pnpm');
-  for (const entry of readdirSync(pnpmStore)) {
-    const packageJson = join(pnpmStore, entry, 'node_modules', packageName, 'package.json');
-    if (existsSync(packageJson)) {
-      return realpathSync(dirname(packageJson));
+  const pnpmStore = findPnpmStore(dependencyRoot);
+  if (pnpmStore) {
+    for (const entry of readdirSync(pnpmStore)) {
+      const packageJson = join(pnpmStore, entry, 'node_modules', packageName, 'package.json');
+      if (existsSync(packageJson)) {
+        return realpathSync(dirname(packageJson));
+      }
     }
   }
 
   throw new Error(`Unable to resolve generated starter dependency: ${packageName}`);
 }
 
-function resolveBin(name: string): string {
-  const linkedBin = join(process.cwd(), 'node_modules', '.bin', name);
-  if (existsSync(linkedBin)) {
-    return realpathSync(linkedBin);
-  }
+function findPnpmStore(start: string): string | undefined {
+  let current = start;
+  while (true) {
+    for (const candidate of [join(current, '.pnpm'), join(current, 'node_modules/.pnpm')]) {
+      if (existsSync(candidate)) return candidate;
+    }
 
-  const pnpmBin = join(process.cwd(), 'node_modules', '.pnpm', 'node_modules', '.bin', name);
-  if (existsSync(pnpmBin)) {
-    return realpathSync(pnpmBin);
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+function resolveBin(name: string): string {
+  let current = process.cwd();
+  while (true) {
+    for (const candidate of [
+      join(current, 'node_modules/.bin', name),
+      join(current, 'node_modules/.pnpm/node_modules/.bin', name),
+    ]) {
+      if (existsSync(candidate)) {
+        return realpathSync(candidate);
+      }
+    }
+
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
   }
 
   throw new Error(`Unable to resolve binary: ${name}`);

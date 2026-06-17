@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   assertStaticExportManifestUsesDirectoryIndexDocuments,
@@ -17,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import app, { starterClientModuleHref, starterRequestHandler } from './app-shell.js';
 
 const legacyCssTool = ['tail', 'windcss'].join('');
+const templateRoot = fileURLToPath(new URL('..', import.meta.url));
 
 describe('starter app shell', () => {
   it('exports a closed app aggregate for dynamic export tasks', () => {
@@ -83,6 +85,7 @@ describe('starter app shell', () => {
     const vite = await createViteServer({
       appType: 'custom',
       logLevel: 'error',
+      root: templateRoot,
       server: { middlewareMode: true },
     });
     let devServerError: unknown;

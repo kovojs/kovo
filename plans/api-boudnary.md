@@ -201,7 +201,7 @@ already excludes `@internal`, but the root barrels can still export those names.
   - Prove: `pnpm --filter @kovojs/runtime exec vitest run`,
     `pnpm --filter @kovojs/compiler exec vitest run`, generated fixture tests,
     and `pnpm run check:inline-loader`.
-- [ ] **Migrate `@kovojs/compiler` internal structures to compiler internal subpaths.**
+- [x] **Migrate `@kovojs/compiler` internal structures to compiler internal subpaths.**
   - Keep build-template APIs public; move lowered IR, fact shapes, fixture-only
     utilities, and verifier plumbing to `@kovojs/compiler/internal` or narrower
     subpaths.
@@ -218,9 +218,9 @@ already excludes `@internal`, but the root barrels can still export those names.
     (`pnpm --filter @kovojs/example-stackoverflow exec vitest run src/kovo-graph.test.ts`),
     and Reference
     (`pnpm --filter @kovojs/example-reference exec vitest run src/app.test.ts`).
-    Remaining proof gap: `pnpm --filter create-kovo exec vitest run` still fails
-    on starter-template environment assumptions (`node_modules/.pnpm` absent in
-    the package workspace) and one Vite cwd resolution case for `/src/app-shell.ts`.
+    `pnpm --filter create-kovo exec vitest run` passed with 3 files / 21 tests
+    after the template test declared its workspace dependencies and the starter
+    dependency/bin lookup learned to resolve the workspace root install layout.
 - [ ] **Audit `@kovojs/drizzle`, `@kovojs/better-auth`, `@kovojs/test`, `@kovojs/headless-ui`, `@kovojs/style`, and CLI packages.**
   - For each package, root exports must be documented public API; `@internal`
     declarations move behind internal subpaths or become package-private.
@@ -320,7 +320,7 @@ already excludes `@internal`, but the root barrels can still export those names.
     and `pnpm run check:publish` passed on 2026-06-17. `pnpm run check` is still
     blocked by repo-wide formatting issues across unrelated tracked and untracked
     files; touched files pass
-    `pnpm exec vp check package.json packages/create-kovo/package.json packages/compiler/src/validate/authoring-surface.ts scripts/import-boundary.mjs scripts/import-boundary.test.mjs packages/compiler/src/compile-component.test.ts packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts`.
+    `pnpm exec vp check package.json packages/create-kovo/package.json packages/create-kovo/src/index.test.ts packages/create-kovo/templates/src/app-shell.test.ts packages/compiler/src/validate/authoring-surface.ts scripts/import-boundary.mjs scripts/import-boundary.test.mjs packages/compiler/src/compile-component.test.ts packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts`.
 - [ ] **Archive or merge this ledger once all packages comply.**
   - Done = `plans/archive.md` records the completed boundary work and any
     remaining policy exceptions with evidence.
