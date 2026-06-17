@@ -93,7 +93,7 @@ prefetch: false
 meta: title=Kovo Commerce (1) description=Browse products and checkout with 1 verifiable cart item. image=-
 i18n: en-US:cartLabel,productStock
 modulepreloads: -
-stylesheets: /assets/tailwind.css
+stylesheets: /assets/site.css
 queries: cart,productGrid,orderHistory
 view-transitions: -
 ```

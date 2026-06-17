@@ -1,24 +1,3 @@
-@import 'tailwindcss';
-
-@source './**/*.{ts,tsx}';
-@source '../scripts/**/*.mjs';
-@source '../public/**/*.js';
-@source '../../examples/gallery/src/**/*.tsx';
-@source '../../packages/ui/src/**/*.tsx';
-
-/* Class-based dark mode: the head script sets .dark on <html> from
-   localStorage('theme') ?? prefers-color-scheme, so dark: variants follow the
-   user's explicit choice and fall back to the system theme. */
-@custom-variant dark (&:where(.dark, .dark *));
-
-@theme {
-  --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
-    sans-serif;
-  --font-mono:
-    'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
-}
-
 @font-face {
   font-family: 'Inter';
   font-style: normal;
@@ -40,6 +19,11 @@
    tokens: dark is the landing palette verbatim; light is its paper
    counterpart. Code terminals stay black in both themes. */
 :root {
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    sans-serif;
+  --font-mono:
+    'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
   --bg: #fafaf7;
   --panel: #f1f1ec;
   --edge: #e0e0d8;
@@ -71,23 +55,49 @@
   --purple: #c792ea;
 }
 
-@layer base {
-  html {
-    color-scheme: light;
-  }
+* {
+  box-sizing: border-box;
+}
 
-  html.dark {
-    color-scheme: dark;
-  }
+html {
+  color-scheme: light;
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -moz-tab-size: 2;
+  tab-size: 2;
+  text-size-adjust: 100%;
+}
 
-  body {
-    background: var(--bg);
-    color: var(--ink);
-  }
+html.dark {
+  color-scheme: dark;
+}
 
-  ::selection {
-    background: color-mix(in srgb, var(--teal) 25%, transparent);
-  }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--teal) 25%, transparent);
 }
 
 /* ── Site chrome ──────────────────────────────────────────────── */
@@ -206,6 +216,18 @@
   width: 1.1rem;
 }
 
+.theme-icon-moon {
+  display: none;
+}
+
+.dark .theme-icon-sun {
+  display: none;
+}
+
+.dark .theme-icon-moon {
+  display: block;
+}
+
 .site-footer {
   border-top: 1px solid var(--edge);
   color: var(--faint);
@@ -244,6 +266,44 @@
 }
 
 /* ── Docs layout ──────────────────────────────────────────────── */
+.docs-shell {
+  display: flex;
+  gap: 3rem;
+  margin: 0 auto;
+  max-width: 80rem;
+  padding: 3rem 1.5rem;
+}
+
+.docs-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.docs-sidebar-rail {
+  display: block;
+}
+
+.docs-toc-rail {
+  flex-shrink: 0;
+  width: 14rem;
+}
+
+@media (max-width: 79.999rem) {
+  .docs-toc-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 63.999rem) {
+  .docs-shell {
+    padding: 3rem 1rem;
+  }
+
+  .docs-sidebar-rail {
+    display: none;
+  }
+}
+
 .eyebrow {
   color: var(--teal);
   font-family: var(--font-mono);
@@ -303,9 +363,16 @@
 
 .doc-mobile {
   border: 1px solid var(--edge);
+  display: none;
   font-size: 0.84rem;
   margin-bottom: 2rem;
   padding: 0.8rem 1rem;
+}
+
+@media (max-width: 63.999rem) {
+  .doc-mobile {
+    display: block;
+  }
 }
 
 .doc-mobile summary {

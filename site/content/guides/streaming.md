@@ -24,7 +24,7 @@ export function renderProductGridDeferredStream(db: CommerceDb) {
 
   return renderDeferredStream({
     shell:
-      '<!doctype html><html><body><main class="min-h-dvh bg-slate-50 p-6"><kovo-defer target="product-grid" state="pending"></kovo-defer>',
+      '<!doctype html><html><body><main class="product-page"><kovo-defer target="product-grid" state="pending"></kovo-defer>',
     chunks: [
       {
         queries: [{ name: 'productGrid', value: productGrid }],
@@ -48,12 +48,12 @@ The response is one chunked HTML document. On the wire, in order:
 <!doctype html>
 <html>
   <body>
-    <main class="min-h-dvh bg-slate-50 p-6">
+    <main class="product-page">
       <kovo-defer target="product-grid" state="pending"></kovo-defer>
       --kovo-boundary
       <kovo-query name="productGrid">{"items":[…],"nextCursor":"p2"}</kovo-query>
       <kovo-fragment target="product-grid"
-        ><link rel="stylesheet" href="/assets/tailwind.css" />
+        ><link rel="stylesheet" href="/assets/site.css" />
         <section kovo-c="product-grid" kovo-deps="product">…</section>
       </kovo-fragment>
       --kovo-boundary--
@@ -93,23 +93,23 @@ design areas. The before-or-with guarantee is the contract you can depend on.
 
 ## Stylesheets for late fragments
 
-A deferred fragment may use classes the shell never referenced. So fragment chunks declare their
-stylesheets, and the links ride inside the fragment — present before the content paints, deduped by
-`href` within the response:
+A deferred fragment may use StyleX atoms or document CSS the shell never referenced. Fragment chunks
+declare their stylesheets, and the links ride inside the fragment — present before the content
+paints, deduped by `href` within the response:
 
 ```ts
 fragments: [
   {
     target: 'product-grid',
     html: renderProductGrid(productGrid),
-    stylesheets: ['/assets/tailwind.css'],
+    stylesheets: ['/assets/site.css'],
   },
 ];
 ```
 
-The same Tailwind rule applies as everywhere: classes in deferred HTML must be statically
-discoverable or safelisted, because they have to already exist in the generated CSS. See
-[styling with Tailwind](/guides/styling/).
+The same Kovo stylesheet contract applies as everywhere: StyleX rules are extracted from source at
+build time, document CSS is shipped as a declared asset, and the fragment lists the stylesheet it
+needs. See [styling with StyleX](/guides/styling/).
 
 ## The client side
 
@@ -170,7 +170,7 @@ the same reason the no-JS form path stays a real form.
 
 ## Next
 
-- [Styling with Tailwind](/guides/styling/) — the stylesheet contract these chunks use.
+- [Styling with StyleX](/guides/styling/) — the stylesheet contract these chunks use.
 - [Queries & invalidation](/guides/queries/) — the query values deferred chunks deliver.
 
 <details>

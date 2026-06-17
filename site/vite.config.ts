@@ -1,9 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite-plus';
 
-// The docs site is a real Kovo app (src/app.ts). Vite builds the Tailwind CSS
+// The docs site is a real Kovo app (src/app.ts). Vite builds the document CSS
 // (with a manifest) into dist-css/; the app-shell export bridge replays the
 // declared route documents into dist/. The dev plugin serves the same app live
 // through its node handler so `serve` matches export byte-for-byte (SPEC §9.5).
@@ -20,7 +19,7 @@ export default defineConfig({
       },
     },
   },
-  plugins: [tailwindcss(), siteSharedAppShellDevPlugin()],
+  plugins: [siteSharedAppShellDevPlugin()],
   run: {
     tasks: {
       export: {

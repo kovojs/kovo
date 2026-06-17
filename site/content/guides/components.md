@@ -6,90 +6,110 @@ order: 11
 
 # Components & copy-in UI
 
-Kovo gives you two layers for building UI, and they sit on opposite sides of the public API line.
+Kovo gives you two layers for building UI, with behavior and styling kept deliberately separate.
 
 - **`@kovojs/headless-ui`** is a public, versioned package. It ships the behavior: the accessible
-  attribute builders (`selectTriggerAttributes`, `dialogContentAttributes`, …), the small styling
-  helpers (`cn`, `defineVariants`, `safeUrl`, the `ClassValue` type), and the headless types that
-  describe a component's render inputs (`SelectItem`, `ComboboxItem`, …). You install it and import
-  from it like any dependency.
-- **`@kovojs/ui`** is a styled starter — a set of Tailwind-styled server components built on top of
-  `@kovojs/headless-ui`. It is **private**: you do not install it. Instead you copy the component
-  source you want into your own app and own it from then on (shadcn-style).
+  attribute builders (`selectTriggerAttributes`, `dialogContentAttributes`, …), URL helpers, and the
+  headless types that describe a component's render inputs (`SelectItem`, `ComboboxItem`, …). You
+  install it and import from it like any dependency.
+- **`@kovojs/ui`** is the styled component package. Its components are authored with
+  `@kovojs/style` and expose typed `style` / `styles` override objects. For heavy customization,
+  `kovo add --eject` copies the same StyleX-authored source into your app so you own it from then on.
 
-This guide covers the copy-in flow and how a copied component stays self-contained.
+This guide covers the package flow, typed StyleX overrides, and the eject path for source ownership.
 
-## Copy-in components (`@kovojs/ui`)
+## Styled components (`@kovojs/ui`)
 
-`@kovojs/ui` is a starter, not a dependency. The package is `private: true` and is never published,
-so there is nothing to `npm install`. To use a styled component, you copy its `.tsx` source into
-your app — conventionally under `src/components/ui/` — and edit it freely. This is the same model as
-shadcn/ui: **you own the code.** When you need the button to look different, you change your copy;
-there is no upstream version to fight.
+Install `@kovojs/ui` when the default styled components are close to what you need. Customize them
+with typed StyleX objects instead of string class overrides:
 
-A copied component depends only on the **public, versioned** packages it imports:
+```tsx
+import * as style from '@kovojs/style';
+import { Button } from '@kovojs/ui/button';
 
-- **`@kovojs/headless-ui`** — the behavior and styling helpers (`cn`, `defineVariants`, the
-  `*Attributes` builders, headless render-input types). This is the real dependency the copied code
-  pulls in.
+const toolbarStyles = style.create({
+  saveButton: { minWidth: 112 },
+});
+
+export function Toolbar() {
+  return <Button style={toolbarStyles.saveButton}>Save</Button>;
+}
+```
+
+A styled component depends only on public, versioned packages:
+
+- **`@kovojs/style`** — typed StyleX objects, property-level merge, tokens, themes, and readable atomic CSS.
+- **`@kovojs/headless-ui`** — the `*Attributes` builders and headless render-input types.
 - **`@kovojs/core`** — `component()`, the server component constructor.
 - **`@kovojs/server`** — `escapeHtml` / `escapeAttribute`, used by components that interpolate text
   into markup.
 
-A copied component never imports `@kovojs/ui` itself. That is the whole point: once the source is in
-your repo, it stands on the public packages alone.
-
 ### The flow
 
-1. Install the public dependencies your copied components will import:
+1. Install the public dependencies:
 
    ```sh
-   npm install @kovojs/headless-ui @kovojs/core @kovojs/server
+   npm install @kovojs/ui @kovojs/style @kovojs/headless-ui @kovojs/core @kovojs/server
    ```
 
-2. Copy the component source into your app. For example, the button:
-
-   ```sh
-   mkdir -p src/components/ui
-   cp node_modules/.../button.tsx src/components/ui/button.tsx
-   # or paste the source from the Gallery / repository
-   ```
-
-3. Import it from your own tree and use it like any server component:
+2. Import the component and pass typed style overrides when needed:
 
    ```tsx
    /** @jsxImportSource @kovojs/server */
-   import { Button } from '@/components/ui/button';
+   import * as style from '@kovojs/style';
+   import { Button } from '@kovojs/ui/button';
+
+   const styles = style.create({
+     danger: { backgroundColor: 'var(--danger)', color: 'white' },
+   });
 
    export function Toolbar() {
-     return <Button variant="primary">Save</Button>;
+     return <Button variant="primary" style={styles.danger}>Delete</Button>;
    }
    ```
 
-The copied source is plain TSX. It uses the `@kovojs/server` JSX runtime
+3. When you need source ownership, eject it into your app and edit the copy:
+
+   ```sh
+   kovo add button --eject
+   ```
+
+The ejected source is plain TSX. It uses the `@kovojs/server` JSX runtime
 (`/** @jsxImportSource @kovojs/server */` at the top of each file) and renders to attributes the
 headless layer defines, so it works in SSR pages, mutation fragments, and deferred streams the same
 way your own components do.
 
-### What a copied component looks like
+### What a styled component looks like
 
-A static component imports only the styling helpers and `component()`:
+A static component imports `@kovojs/style` and `component()`:
 
 ```tsx
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, defineVariants, type ClassValue } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export const buttonStyles = style.create({
+  root: {
+    alignItems: 'center',
+    borderRadius: 6,
+    display: 'inline-flex',
+    fontSize: 14,
+    justifyContent: 'center',
+  },
+  primary: { backgroundColor: 'var(--accent)', color: 'var(--on-accent)' },
+  ghost: { backgroundColor: 'transparent', color: 'var(--text)' },
+});
 
 export interface ButtonProps {
   children?: string;
-  class?: ClassValue;
+  style?: style.StyleInput;
   variant?: 'primary' | 'secondary' | 'ghost';
 }
 
 export const Button = component({
   render(props: ButtonProps) {
     return (
-      <button class={cn(buttonClassNames({ variant: props.variant }), props.class)}>
+      <button {...style.attrs(buttonStyles.root, buttonStyles[props.variant ?? 'primary'], props.style)}>
         {props.children}
       </button>
     );
@@ -105,12 +125,13 @@ state machine by hand:
 ```tsx
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, selectTriggerAttributes, type ClassValue } from '@kovojs/headless-ui';
+import { selectTriggerAttributes } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
 import { escapeHtml } from '@kovojs/server';
 ```
 
 Because the behavior lives in `@kovojs/headless-ui`, your copy stays small: it owns markup and
-classes, the public package owns correctness.
+StyleX objects, the public package owns correctness.
 
 > **Server render inputs, not client state.** Kovo's styled components are server components: they
 > render once on the server and emit attributes. The `*StateProps` interfaces you'll see on
@@ -120,25 +141,23 @@ classes, the public package owns correctness.
 
 ### The registry
 
-The starter ships a machine-readable manifest, `packages/ui/registry.json`, listing every component:
-its source file(s), the symbols it exports, and the exact `@kovojs/headless-ui` / `@kovojs/core` /
-`@kovojs/server` symbols it imports (plus any sibling components to copy alongside it). This is the
-data a future `kovo add <component>` would consume to copy a component and its dependencies into your
-app. It is also enforced: a copy-in smoke test typechecks a representative component against the
-public packages alone, so a component can never start depending on a non-public symbol without the
-build catching it.
+The package ships a machine-readable manifest, `packages/ui/registry.json`, listing every component:
+its source file(s), the symbols it exports, and the exact `@kovojs/style` /
+`@kovojs/headless-ui` / `@kovojs/core` / `@kovojs/server` symbols it imports (plus any sibling
+components to copy alongside it). This is the data `kovo add --eject <component>` consumes to copy a
+component and its dependencies into your app. It is also enforced: a copy-in smoke test typechecks a
+representative component against the public packages alone, so a component can never start depending
+on a non-public symbol without the build catching it.
 
 ## In-repo apps
 
-The examples and the docs site in this monorepo don't copy components — they import `@kovojs/ui`
-directly via the workspace (`@kovojs/ui/button`, etc.) as a convenience, the same way they import any
-workspace package. That path exists only inside the repo. External apps always use the copy-in flow
-above; `@kovojs/ui` is never a versioned dependency you install.
+The examples and the docs site in this monorepo import `@kovojs/ui` directly via the workspace
+(`@kovojs/ui/button`, etc.), the same way published apps import the package.
 
 ## Next
 
-- [Styling with Tailwind](/guides/styling/) — keep the classes your copied components emit
-  statically discoverable.
+- [Styling with StyleX](/guides/styling/) — typed component styles, plain document CSS, and the
+  stylesheet contract.
 - [Accessibility](/guides/accessibility/) — the behavior `@kovojs/headless-ui` bakes into every
   primitive.
 

@@ -50,10 +50,10 @@ export function renderDocsBody(options: PageOptions): string {
   return (
     <>
       {SiteHeader.definition.render({ activePath, clients })}
-      <div class="mx-auto flex max-w-[80rem] gap-12 px-4 py-12 sm:px-6">
-        <aside class="hidden lg:block">{sidebar}</aside>
-        <main class="min-w-0 flex-1">
-          <details class="doc-mobile lg:hidden">
+      <div class="docs-shell">
+        <aside class="docs-sidebar-rail">{sidebar}</aside>
+        <main class="docs-main">
+          <details class="doc-mobile">
             <summary>Menu</summary>
             <div>{sidebar}</div>
           </details>
@@ -61,7 +61,7 @@ export function renderDocsBody(options: PageOptions): string {
           {prose ? <article class="prose">{contentHtml}</article> : contentHtml}
           {prev || next ? PrevNext.definition.render({ prev, next }) : ''}
         </main>
-        <aside class="hidden w-56 shrink-0 xl:block">{toc}</aside>
+        <aside class="docs-toc-rail">{toc}</aside>
       </div>
       {SiteFooter.definition.render()}
     </>

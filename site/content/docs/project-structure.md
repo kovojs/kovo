@@ -14,7 +14,7 @@ my-app/
 ├── src/
 │   ├── app.tsx             # components (JSX → compiled IR)
 │   ├── client.ts           # loader installation
-│   └── styles.css          # Tailwind entry (+ @source rules)
+│   └── styles.css          # document CSS: fonts, tokens, page chrome
 ├── scripts/
 │   ├── emit-graph.mjs      # emits graph.json from app facts
 │   └── graph-assertions.mjs# your behavior assertions, as graph queries
@@ -46,10 +46,9 @@ guide](/guides/kovo-explain/) walks through the recipes. SPEC §11.4
 
 ## Styling
 
-Tailwind is the default styling path. The one rule that matters: **class names must be
-statically discoverable**. Keep them as literal strings in your templates, and safelist anything
-dynamic with `@source inline("...")` in `styles.css` — server-rendered pages, mutation fragments,
-and deferred streams all need their CSS present in the single generated stylesheet. SPEC §13.1
+StyleX is the default component styling path. Author typed `@kovojs/style` objects in TSX, use
+plain document CSS for fonts, page chrome, and theme tokens, and declare stylesheet hints for every
+page, mutation fragment, and deferred stream so late HTML arrives styled. SPEC §13.1
 
 ## Deployment shape
 

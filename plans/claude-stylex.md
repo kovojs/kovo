@@ -777,6 +777,20 @@ borrowing its concrete API/spike detail.
     style-object lowering; `examples/gallery/src/interactive/scroll-area-demo.tsx` and
     `examples/gallery/src/interactive/slider-demo.tsx` use typed object-valued style props instead
     of dynamic raw CSS text, and their generated client derives call `kovoStyleProperty(...)`.
+  - Evidence (partial, 2026-06-17): the docs site no longer depends on Tailwind:
+    `site/package.json` and `pnpm-lock.yaml` drop `@tailwindcss/vite`/`tailwindcss`,
+    `site/vite.config.ts` removes the Tailwind plugin, `site/src/styles.css` is plain document CSS,
+    and `site/src/components/{chrome,docs-layout}.tsx` no longer use Tailwind utility classes.
+  - Evidence (partial, 2026-06-17): docs content under `site/content/{docs,guides}` now teaches
+    StyleX-first component styling, typed `style`/`styles` overrides, plain document CSS, and the
+    `/assets/site.css` stylesheet contract for pages/fragments/defer; `rg -n -i
+    "tailwind|@tailwind|@source|@theme|dark:|tailwind.css|defineVariants|ClassValue| cn\\(" site`
+    returns no matches.
+  - Evidence (partial, 2026-06-17): `pnpm exec tsc --noEmit --pretty false`, `git diff --check`,
+    and `pnpm exec vp run build` pass in the `agent/stylex-site` worktree. `pnpm --filter
+    @kovojs/site run build` reaches Vite CSS output (`dist-css/assets/site.css`) but stops on the
+    existing static-export diagnostic `KV229 route=/deals/:id`; `pnpm --filter @kovojs/site test`
+    stops in the existing API-ref expectation drift for the newly public `style.md` page.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

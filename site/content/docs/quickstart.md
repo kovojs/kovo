@@ -22,8 +22,9 @@ cd my-app
 pnpm install
 ```
 
-You get a deliberately small project: one component, one route's worth of HTML, Tailwind wired
-through Vite, and the graph-check scripts that make Kovo's verification part of your CI from day one.
+You get a deliberately small project: one component, one route's worth of HTML, StyleX component
+styles plus plain document CSS, and the graph-check scripts that make Kovo's verification part of
+your CI from day one.
 
 ## 2. Run it
 

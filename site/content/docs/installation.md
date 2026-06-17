@@ -31,9 +31,9 @@ pnpm install
 > [Kovo repository](https://github.com/kovojs/kovo) as workspace packages — clone the repo and work
 > in a workspace member, as the [Tutorial](/tutorial/) does.
 
-The starter is deliberately small: one component, one route's worth of HTML, Tailwind wired
-through Vite+, and the graph-verification scripts that make the framework's checks part of your
-CI from day one.
+The starter is deliberately small: one component, one route's worth of HTML, StyleX component
+styles plus plain document CSS, and the graph-verification scripts that make the framework's checks
+part of your CI from day one.
 
 ## The everyday commands
 

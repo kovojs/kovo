@@ -34,7 +34,7 @@ export const siteDocumentTemplate: DocumentTemplate = ({ parts }) =>
     parts.head,
     parts.queryScripts.join(''),
     '</head>',
-    '<body class="font-sans antialiased">',
+    '<body>',
     parts.body,
     SEARCH_DIALOG,
     '</body>',

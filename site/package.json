@@ -22,11 +22,9 @@
   "devDependencies": {
     "@kovojs/compiler": "workspace:*",
     "@kovojs/test": "workspace:*",
-    "@tailwindcss/vite": "^4.3.0",
     "kovo": "workspace:*",
     "marked": "^16.0.0",
     "shiki": "^3.0.0",
-    "tailwindcss": "^4.3.0",
     "vite-plus": "^0.1.24",
     "vitest": "4.1.8"
   }
