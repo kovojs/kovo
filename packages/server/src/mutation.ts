@@ -1110,14 +1110,6 @@ function selectMutationResponseTargets(
     return { fragmentTargets: [], liveTargetDescriptors: [], rerunQueries: [] };
   }
 
-  if (!input.liveTargets.some((target) => target.deps.length > 0)) {
-    return {
-      fragmentTargets: input.targets,
-      liveTargetDescriptors: [],
-      rerunQueries: input.rerunQueries,
-    };
-  }
-
   const renderersByTarget = fragmentRenderersByTarget(input.fragmentRenderers);
   const liveRenderersByComponent = liveTargetRenderersByComponent(input.liveTargetRenderers);
   const affectedQueryTokens = new Set<string>();

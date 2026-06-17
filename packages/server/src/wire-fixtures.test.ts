@@ -13,8 +13,7 @@ import { query, renderQueryEndpointResponse } from './query.js';
 import type { MutationResponseHeaderValue } from './response.js';
 import { s } from './schema.js';
 import {
-  cartMutationFragmentRenderers,
-  cartMutationTargets,
+  cartBadgeFragmentHtml,
   createCartMutationFixture,
   createCartQueryFixture,
   testMutation as mutation,
@@ -84,11 +83,25 @@ describe('server wire fixture contracts', () => {
     });
 
     const response = await renderMutationResponse(addToCart, {
-      fragmentRenderers: cartMutationFragmentRenderers(),
       idem: 'idem_01HX',
+      liveTargetDescriptors: [
+        {
+          component: 'components/cart/badge',
+          props: {},
+          target: 'cart-badge',
+        },
+      ],
+      liveTargetRenderers: [
+        {
+          component: 'components/cart/badge',
+          queries: ['cart'],
+          render: () => cartBadgeFragmentHtml,
+        },
+      ],
+      liveTargets: [{ deps: ['cart'], target: 'cart-badge' }],
       rawInput: { productId: 'p1', quantity: 1 },
       request: {},
-      targets: [...cartMutationTargets],
+      targets: ['cart-badge'],
     });
     const fixture = await readFile(
       new URL('../../../fixtures/wire/enhanced-mutation.http', import.meta.url),
@@ -132,8 +145,14 @@ describe('server wire fixture contracts', () => {
           enhancedAddToCart: async (headers, rawInput) =>
             renderMutationEndpointResponse(addToCart, {
               failureTarget: 'product-form:p1',
-              fragmentRenderers: cartMutationFragmentRenderers(),
               headers,
+              liveTargetRenderers: [
+                {
+                  component: 'components/cart/badge',
+                  queries: ['cart'],
+                  render: () => cartBadgeFragmentHtml,
+                },
+              ],
               rawInput,
               renderFailureFragment: (failure, failedRawInput) => {
                 const input = Object.fromEntries((failedRawInput as FormData).entries()) as Record<

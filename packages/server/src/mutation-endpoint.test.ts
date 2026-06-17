@@ -4,7 +4,7 @@ import { domain } from './domain.js';
 import { renderMutationEndpointResponse } from './mutation.js';
 import { query } from './query.js';
 import { s, type Schema } from './schema.js';
-import { testMutation as mutation } from './test-fixtures.js';
+import { cartBadgeFragmentHtml, testMutation as mutation } from './test-fixtures.js';
 
 describe('server mutation endpoint routing', () => {
   it('routes mutation endpoints without Kovo-Fragment through the no-JS POST redirect', async () => {
@@ -51,11 +51,18 @@ describe('server mutation endpoint routing', () => {
 
     await expect(
       renderMutationEndpointResponse(addToCart, {
-        fragmentRenderers: [{ render: () => '<cart-badge>1</cart-badge>', target: 'cart-badge' }],
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Targets': 'cart-badge',
+          'Kovo-Live-Targets': 'cart-badge#components/cart/badge:{}',
+          'Kovo-Targets': 'cart-badge=cart',
         },
+        liveTargetRenderers: [
+          {
+            component: 'components/cart/badge',
+            queries: ['cart'],
+            render: () => cartBadgeFragmentHtml,
+          },
+        ],
         rawInput: { productId: 'p1' },
         redirectTo: '/cart',
         request: {},
@@ -63,7 +70,7 @@ describe('server mutation endpoint routing', () => {
     ).resolves.toMatchObject({
       body: [
         '<kovo-query name="cart">{"count":1}</kovo-query>',
-        '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
+        `<kovo-fragment target="cart-badge">${cartBadgeFragmentHtml}</kovo-fragment>`,
       ].join('\n'),
       headers: {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',

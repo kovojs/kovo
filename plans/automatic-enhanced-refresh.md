@@ -375,7 +375,7 @@ removes app-authored bookkeeping from the enhanced path.
     - Remaining gap: compiler-generated executable route IR and build/app-shell
       integration are still open; runtime JSX proves the authoring model but
       does not yet remove transitional generated registry imports.
-- [ ] **5. Runtime: send complete live target descriptors.**
+- [x] **5. Runtime: send complete live target descriptors.**
   - Extend `Kovo-Targets` collection so enhanced mutation POSTs carry enough
     structured target data for the server to find the generated registry entry and
     reconstruct props/query instances.
@@ -419,8 +419,21 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/runtime run check:inline-loader`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gap: legacy target-only compatibility remains until examples and
-      app-shell integration finish migrating to generated live-target registries.
+    - Additional evidence 2026-06-17:
+      `packages/server/src/mutation.ts` no longer keeps the legacy target-only
+      success shortcut for requests whose live targets have no dependency tokens.
+      `packages/server/src/mutation-endpoint.test.ts`,
+      `packages/server/src/wire-fixtures.test.ts`, and
+      `fixtures/wire/enhanced-mutation.http` now exercise the generated
+      `Kovo-Live-Targets` + `LiveTargetRenderer` path for successful enhanced
+      mutation fragments instead of app-authored `fragmentRenderers`.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/mutation-response.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/replay.test.ts packages/server/src/wire-fixtures.test.ts packages/server/src/app.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`,
+      `rg -n "Kovo-Targets: [^\\n=]*(,|$)|'Kovo-Targets': '[^=']*'" packages/server/src/mutation-endpoint.test.ts fixtures/wire/enhanced-mutation.http packages/server/src/wire-fixtures.test.ts`,
+      and
+      `git diff --check -- packages/server/src/mutation.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/wire-fixtures.test.ts fixtures/wire/enhanced-mutation.http`.
 - [x] **6. Server: auto-render affected targets.**
   - Add a generated-registry-aware response selector to `createApp()` /
     mutation response handling.
