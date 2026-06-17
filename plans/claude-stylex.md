@@ -176,7 +176,7 @@ borrowing its concrete API/spike detail.
 - [x] **Phase 0 — API decision pass (no code).** Done 2026-06-16 — see "Resolved Decisions — Phase 0."
       Two items remain (package prefix, package CSS delivery) and are confirmed before Phase 4 freezes
       public surface.
-- [ ] **Phase 1 — Fork the core into `@kovojs/style`.** Port `@stylexjs/shared` + runtime Flow→TS;
+- [x] **Phase 1 — Fork the core into `@kovojs/style`.** Port `@stylexjs/shared` + runtime Flow→TS;
       stand up `create`/`attrs`/`defineVars`/`createTheme`; unit-test the styleq last-wins merge and
       atomic-class generation against ported upstream fixtures. **Emit cascade priority via
       `@layer`/priority buckets, not single-file source order** (splitting invariant (b) — hard to
@@ -211,7 +211,21 @@ borrowing its concrete API/spike detail.
   - Evidence (partial, 2026-06-16): `pnpm --filter @kovojs/style test`,
     `pnpm --filter @kovojs/style run build:dist`, and `pnpm exec tsc --noEmit --pretty false` pass
     for the missing-input runtime fixture port.
-  - [ ] Port the broader upstream StyleX shared/runtime fixture set before checking Phase 1 complete.
+  - [x] Port the broader upstream StyleX shared/runtime fixture set before checking Phase 1 complete.
+    - Evidence (2026-06-17): audited `../stylex/packages/@stylexjs/stylex/__tests__/stylex-test.js`,
+      `inject-test.js`, `createSheet-test.js`, and `createOrderedCSSStyleSheet-test.js`. Kovo ports the
+      supported `stylex-test.js` runtime contract in `packages/style/src/index.test.ts`: missing-input
+      errors for supported APIs, `props`/`attrs` basic resolution, array merge order, same-property
+      override, nested pseudo override, pseudo-only merge, complicated nested merge-order stress case,
+      source-map metadata, and dynamic inline fixtures through Kovo's explicit `raw(...)` escape hatch.
+      The remaining upstream runtime files exercise StyleX's browser injector/ordered stylesheet
+      mutation surface (`inject`, `createSheet`, `createOrderedCSSStyleSheet`), which Kovo deliberately
+      did not fork because SPEC §13.1 extraction emits deterministic stylesheet assets instead of
+      runtime CSS injection.
+    - Evidence (2026-06-17): `find ../stylex/packages/@stylexjs/stylex/__tests__ -type f` lists only
+      `stylex-test.js`, `inject-test.js`, `createSheet-test.js`, and `createOrderedCSSStyleSheet-test.js`;
+      `packages/style/src/index.test.ts` contains the supported `stylex-test.js` ports and Kovo-specific
+      priority-layer/atomic/token/theme fixtures.
   - [x] Replace the current curated priority-property subset with the full forked
     `property-priorities` table before checking Phase 1 complete.
     - Evidence (2026-06-16): `packages/style/src/property-priorities.ts` is ported from
