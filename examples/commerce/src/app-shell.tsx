@@ -33,7 +33,6 @@ import {
   renderAddToCartMutationFailureError,
   renderAddToCartMutationFailureForm,
   renderCartPage,
-  renderCartPageBody,
   renderCommerceLoginForm,
   renderReceiptUploadForm,
   type CommerceAuthRequest,
@@ -161,15 +160,15 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           title: 'Kovo Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
-        async page() {
-          return `<div data-commerce-shell="cart">${await renderCartPageBody(
-            db,
-            undefined,
-            {
-              db,
-            },
-            { readOnly: true },
-          )}</div>`;
+        page(_context, request: Request) {
+          attachCommerceRequestContext(request, db);
+          return renderCommerceCartShell(
+            <>
+              <CartBadge />
+              <ProductGrid readOnly />
+              {OrderHistory.definition.render({ orderHistory: { items: [] } })}
+            </>,
+          );
         },
         stylesheets: commerceStylesheets,
       }),
@@ -180,15 +179,15 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           title: 'Kovo Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
-        async page() {
-          return `<div data-commerce-shell="cart">${await renderCartPageBody(
-            db,
-            undefined,
-            {
-              db,
-            },
-            { readOnly: true },
-          )}</div>`;
+        page(_context, request: Request) {
+          attachCommerceRequestContext(request, db);
+          return renderCommerceCartShell(
+            <>
+              <CartBadge />
+              <ProductGrid readOnly />
+              {OrderHistory.definition.render({ orderHistory: { items: [] } })}
+            </>,
+          );
         },
         stylesheets: commerceStylesheets,
       }),

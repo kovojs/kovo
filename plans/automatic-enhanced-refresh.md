@@ -770,8 +770,20 @@ removes app-authored bookkeeping from the enhanced path.
       `node scripts/api-surface-gate.mjs`,
       `rg -n "mutationResponse\\(|fragmentRenderers|liveTargetRenderers|generated/live-targets|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`,
       and `git diff --check`.
-    - Remaining gap: static export and the legacy `renderCartPage()` failure
-      page path still use `renderCartPageBody`; the legacy broad
+    - Additional progress 2026-06-17:
+      Commerce static export `/` and `/cart` route pages now attach the export
+      DB to the route request and compose `<CartBadge />`,
+      `<ProductGrid readOnly />`, and the empty generated `OrderHistory` host
+      through server JSX instead of calling `renderCartPageBody`.
+    - Verified with
+      `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.rendering.test.ts`,
+      `pnpm --filter @kovojs/example-commerce test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`,
+      `rg -n "renderCartPageBody|render[A-Za-z]+Region|mutationResponse\\(|fragmentRenderers|liveTargetRenderers|generated/live-targets|_TARGET" examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx`,
+      and `git diff --check`.
+    - Remaining gap: the legacy `renderCartPage()` failure page path still uses
+      `renderCartPageBody`; the legacy broad
       `mutationResponse` compatibility API still exists in the framework and
       tests until follow-up cleanup removes or retires it.
 - [ ] **10. Docs/tutorial update.**
