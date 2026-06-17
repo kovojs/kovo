@@ -938,10 +938,20 @@ integration harness uniquely proves.
     packages/server/src/vite-diagnostics.test.ts`; `pnpm exec playwright test
     tests/integration/specs/diagnostic-warning-nonblocking.spec.ts --config
     tests/integration/playwright.config.ts --workers=1`.
-- [ ] `fixpoint-render-equivalence-fixture` / `fixpoint-render-equivalence-fixture.spec.ts`: a fixture
+- [x] `fixpoint-render-equivalence-fixture` / `fixpoint-render-equivalence-fixture.spec.ts`: a fixture
       that imports emitted/lowered IR renders byte/semantic-equivalent HTML to source TSX.
   - SPEC refs: §5.2 fixpoint + render-equivalence, §4.8 hand-written stamps.
   - Assertions: semantic snapshots match; compiler-only byte equality can remain in unit tests.
+  - Evidence: `tests/integration/fixtures/fixpoint-render-equivalence-fixture` renders a state-bound
+    TSX component through the browser fixture while
+    `tests/integration/specs/fixpoint-render-equivalence-fixture.spec.ts` recompiles the authored
+    module, asserts the compiler's SPEC §5.2 render-equivalence check passes, transpiles the
+    emitted lowered TSX in-process, and verifies the lowered render HTML produces the same semantic
+    snapshot captured in
+    `tests/integration/specs/__snapshots__/fixpoint-render-equivalence-fixture.spec.ts/fixpoint-render-equivalence-fixture-semantic.txt`.
+    Proving command: `pnpm exec playwright test
+    tests/integration/specs/fixpoint-render-equivalence-fixture.spec.ts --config
+    tests/integration/playwright.config.ts --workers=1`.
 - [x] `explain-artifact-smoke` / `explain-artifact-smoke.spec.ts`: a browser-driven behavior has a
       matching stable `kovo explain` graph for component/mutation/query intent.
   - SPEC refs: §5.3 explain, §11.4 verification surface.
