@@ -14,7 +14,7 @@ registerHooks({
   },
 });
 
-const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
+const { assertFixpoint, assertRenderEquivalence, compileComponentModule, compileRouteModule } =
   await import('@kovojs/compiler');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -90,4 +90,32 @@ if (process.argv.includes('--check')) {
   );
 } else {
   writeFileSync(liveTargetsPath, liveTargetsSource);
+}
+
+const routeSourcePath = resolve(crmRoot, 'src/interactive-app.tsx');
+const routeGeneratedPath = resolve(crmRoot, 'src/generated/interactive-app.kovo-route.tsx');
+const routeFileName = 'examples/crm/src/interactive-app.tsx';
+const routeArtifactFileName = 'examples/crm/src/generated/interactive-app.kovo-route.tsx';
+const routeResult = compileRouteModule({
+  artifactFileName: routeArtifactFileName,
+  fileName: routeFileName,
+  source: readFileSync(routeSourcePath, 'utf8'),
+});
+
+assert.deepEqual(
+  routeResult.diagnostics,
+  [],
+  `${routeFileName} has compiler diagnostics: ${JSON.stringify(routeResult.diagnostics, null, 2)}`,
+);
+assert.equal(routeResult.files.length, 1, `${routeFileName} produced no generated route IR`);
+const routeGenerated = routeResult.files[0].source;
+
+if (process.argv.includes('--check')) {
+  assert.equal(
+    readFileSync(routeGeneratedPath, 'utf8'),
+    routeGenerated,
+    'generated interactive-app.kovo-route.tsx is stale; run `pnpm --filter @kovojs/example-crm run emit-components`',
+  );
+} else {
+  writeFileSync(routeGeneratedPath, routeGenerated);
 }

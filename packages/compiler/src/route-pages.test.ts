@@ -73,6 +73,30 @@ export const detail = route('/questions/:id', {
     ]);
   });
 
+  it('rebases relative imports when emitting route IR into generated artifacts', () => {
+    const result = compileRouteModule({
+      artifactFileName: 'examples/app/src/generated/routes.kovo-route.tsx',
+      fileName: 'examples/app/src/routes.tsx',
+      source: `/** @jsxImportSource @kovojs/server */
+import { route } from '@kovojs/server';
+import { Shell } from './components/shell.js';
+import { QuestionListRegion } from './generated/question-list.js';
+export { shared } from './shared.js';
+
+export const home = route('/', {
+  page: () => <Shell><QuestionListRegion /></Shell>,
+});
+`,
+    });
+
+    expect(result.files[0]?.fileName).toBe('examples/app/src/generated/routes.kovo-route.tsx');
+    expect(result.files[0]?.source).toContain('import { Shell } from "../components/shell.js";');
+    expect(result.files[0]?.source).toContain(
+      'import { QuestionListRegion } from "./question-list.js";',
+    );
+    expect(result.files[0]?.source).toContain('export { shared } from "../shared.js";');
+  });
+
   it('records route param props passed to parameterized component pages', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',
@@ -200,6 +224,70 @@ export const home = route('/', {
         route: '/',
       },
     ]);
+  });
+
+  it('extracts component composition passed through shell helper calls', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+
+export const home = route('/', {
+  page: () => renderShell(<QuestionListRegion />),
+});
+`,
+    });
+
+    expect(result.routePageFacts).toEqual([
+      {
+        components: [
+          {
+            localName: 'QuestionListRegion',
+            props: [],
+            propsExpression: '{}',
+            serializedPropsExpression: 'JSON.stringify({})',
+          },
+        ],
+        fileName: 'src/routes.tsx',
+        route: '/',
+      },
+    ]);
+    expect(result.files[0]?.source).toContain(
+      'page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionListRegion","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"src/routes.tsx","route":"/"}, () => renderShell(<QuestionListRegion />))',
+    );
+  });
+
+  it('lowers method-shorthand page handlers into compiled page properties', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+
+export const detail = route('/questions/:id', {
+  page({ params }: { params: { id: string } }) {
+    return renderShell(<QuestionDetail questionId={params.id} />);
+  },
+});
+`,
+    });
+
+    expect(result.routePageFacts[0]?.components).toEqual([
+      {
+        localName: 'QuestionDetail',
+        props: [
+          {
+            expression: 'params.id',
+            name: 'questionId',
+            propertyAccesses: ['params.id'],
+          },
+        ],
+        propsExpression: '{ questionId: params.id }',
+        serializedPropsExpression: 'JSON.stringify({ questionId: params.id })',
+      },
+    ]);
+    expect(result.files[0]?.source).toContain(
+      'page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionDetail","props":[{"expression":"params.id","name":"questionId","propertyAccesses":["params.id"]}],"propsExpression":"{ questionId: params.id }","serializedPropsExpression":"JSON.stringify({ questionId: params.id })"}],"fileName":"src/routes.tsx","route":"/questions/:id"}, function page({ params }: { params: { id: string } }) {',
+    );
   });
 
   it('ignores routes whose pages return non-JSX strings', () => {

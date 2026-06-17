@@ -129,6 +129,7 @@ export interface CompileAppGraphResult {
  * generated live-target registry will consume (SPEC.md §4.5/§9.1).
  */
 export interface CompileRouteModuleOptions {
+  artifactFileName?: string;
   fileName: string;
   source: string;
 }

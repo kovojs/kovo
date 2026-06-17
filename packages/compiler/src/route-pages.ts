@@ -1,3 +1,4 @@
+import { dirname, relative, resolve } from 'node:path';
 import ts from 'typescript';
 
 import type {
@@ -12,7 +13,15 @@ import { applySourceReplacements, replaceExtension, type SourceReplacement } fro
 
 interface CompiledRoutePage {
   fact: RoutePageFact;
-  pageInitializer: ts.Expression;
+  pageReplacement: SourceReplacement;
+}
+
+interface RoutePageHandler {
+  node: ts.Node;
+  replacementEnd: number;
+  replacementPrefix: string;
+  replacementStart: number;
+  sourceExpression: string;
 }
 
 /** Compile route-page JSX composition facts (SPEC.md §4.5/§9.1). */
@@ -35,6 +44,8 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
   visit(sourceFile);
   const routePageFacts = routePages.map((routePage) => routePage.fact);
 
+  const artifactFileName = options.artifactFileName ?? routeArtifactFileName(options.fileName);
+
   return {
     diagnostics: [],
     files:
@@ -42,9 +53,14 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
         ? []
         : [
             {
-              fileName: routeArtifactFileName(options.fileName),
+              fileName: artifactFileName,
               kind: 'route',
-              source: emitCompiledRouteModule(options.source, routePages, sourceFile),
+              source: emitCompiledRouteModule({
+                artifactFileName,
+                routePages,
+                source: options.source,
+                sourceFile,
+              }),
             },
           ],
     routePageFacts,
@@ -63,60 +79,77 @@ function routePageFromCall(
   if (!pathArg || !ts.isStringLiteralLike(pathArg)) return null;
   if (!definitionArg || !ts.isObjectLiteralExpression(definitionArg)) return null;
 
-  const pageInitializer = objectPropertyInitializer(definitionArg, 'page');
-  if (!pageInitializer) return null;
+  const pageHandler = objectPageHandler(definitionArg, 'page', sourceFile);
+  if (!pageHandler) return null;
 
-  const pageJsx = pageJsxExpression(pageInitializer);
-  if (!pageJsx) return null;
+  const components = routePageComponentFacts(sourceFile, pageHandler.node);
+  if (components.length === 0) return null;
+  const fact = {
+    components,
+    fileName,
+    route: pathArg.text,
+  };
 
   return {
-    fact: {
-      components: routePageComponentFacts(sourceFile, pageJsx),
-      fileName,
-      route: pathArg.text,
+    fact,
+    pageReplacement: {
+      end: pageHandler.replacementEnd,
+      replacement: `${pageHandler.replacementPrefix}__kovoDefineCompiledRoutePage(${JSON.stringify(fact)}, ${pageHandler.sourceExpression})`,
+      start: pageHandler.replacementStart,
     },
-    pageInitializer,
   };
 }
 
-function objectPropertyInitializer(
+function objectPageHandler(
   object: ts.ObjectLiteralExpression,
   name: string,
-): ts.Expression | null {
+  sourceFile: ts.SourceFile,
+): RoutePageHandler | null {
   for (const property of object.properties) {
-    if (!ts.isPropertyAssignment(property)) continue;
-    if (propertyNameText(property.name) === name) return property.initializer;
-  }
-  return null;
-}
-
-function pageJsxExpression(expression: ts.Expression): ts.JsxElement | ts.JsxSelfClosingElement | null {
-  const unwrapped = unwrapExpression(expression);
-  if (ts.isArrowFunction(unwrapped) || ts.isFunctionExpression(unwrapped)) {
-    if (ts.isBlock(unwrapped.body)) {
-      return returnJsxExpression(unwrapped.body);
+    if (ts.isPropertyAssignment(property) && propertyNameText(property.name) === name) {
+      const start = property.initializer.getStart(sourceFile);
+      return {
+        node: property.initializer,
+        replacementEnd: property.initializer.getEnd(),
+        replacementPrefix: '',
+        replacementStart: start,
+        sourceExpression: sourceFile.text.slice(start, property.initializer.getEnd()),
+      };
     }
-    return jsxExpression(unwrapped.body);
+
+    if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === name) {
+      return {
+        node: property,
+        replacementEnd: property.getEnd(),
+        replacementPrefix: `${name}: `,
+        replacementStart: property.getStart(sourceFile),
+        sourceExpression: methodDeclarationFunctionExpression(property, sourceFile),
+      };
+    }
   }
   return null;
 }
 
-function returnJsxExpression(block: ts.Block): ts.JsxElement | ts.JsxSelfClosingElement | null {
-  const returns = block.statements.filter(ts.isReturnStatement);
-  if (returns.length !== 1) return null;
-  const expression = returns[0]?.expression;
-  return expression ? jsxExpression(expression) : null;
-}
-
-function jsxExpression(expression: ts.Expression): ts.JsxElement | ts.JsxSelfClosingElement | null {
-  const unwrapped = unwrapExpression(expression);
-  if (ts.isJsxElement(unwrapped) || ts.isJsxSelfClosingElement(unwrapped)) return unwrapped;
-  return null;
+function methodDeclarationFunctionExpression(
+  method: ts.MethodDeclaration,
+  sourceFile: ts.SourceFile,
+): string {
+  const asyncKeyword = method.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)
+    ? 'async '
+    : '';
+  const typeParameters =
+    method.typeParameters && method.typeParameters.length > 0
+      ? `<${method.typeParameters.map((parameter) => parameter.getText(sourceFile)).join(', ')}>`
+      : '';
+  const parameters = method.parameters.map((parameter) => parameter.getText(sourceFile)).join(', ');
+  const returnType = method.type ? `: ${method.type.getText(sourceFile)}` : '';
+  const body = method.body?.getText(sourceFile) ?? '{}';
+  return `${asyncKeyword}function ${propertyNameText(method.name) ?? 'page'}${typeParameters}(${parameters})${returnType} ${body}`;
 }
 
 function routePageComponentFacts(
   sourceFile: ts.SourceFile,
-  root: ts.JsxElement | ts.JsxSelfClosingElement,
+  root: ts.Node,
 ): RoutePageComponentFact[] {
   const facts: RoutePageComponentFact[] = [];
 
@@ -269,21 +302,19 @@ function propertyAccessReceiverSegments(expression: ts.Expression): string[] | n
   return path ? path.split('.') : null;
 }
 
-function emitCompiledRouteModule(
-  source: string,
-  routePages: readonly CompiledRoutePage[],
-  sourceFile: ts.SourceFile,
-): string {
-  const replacements: SourceReplacement[] = routePages.map((routePage) => {
-    const start = routePage.pageInitializer.getStart(sourceFile);
-    const end = routePage.pageInitializer.getEnd();
-    return {
-      end,
-      replacement: `__kovoDefineCompiledRoutePage(${JSON.stringify(routePage.fact)}, ${source.slice(start, end)})`,
-      start,
-    };
-  });
-  const lowered = applySourceReplacements(source, replacements);
+function emitCompiledRouteModule(options: {
+  artifactFileName: string;
+  routePages: readonly CompiledRoutePage[];
+  source: string;
+  sourceFile: ts.SourceFile;
+}): string {
+  const replacements: SourceReplacement[] = options.routePages.map(
+    (routePage) => routePage.pageReplacement,
+  );
+  const lowered = applySourceReplacements(options.source, [
+    ...rebaseRelativeImportReplacements(options.sourceFile, options.artifactFileName),
+    ...replacements,
+  ]);
   const importSource =
     "import { defineCompiledRoutePage as __kovoDefineCompiledRoutePage } from '@kovojs/server/internal/route';\n";
   const insertAt = routeModuleImportInsertionIndex(lowered);
@@ -306,4 +337,54 @@ function routeModuleImportInsertionIndex(source: string): number {
 
 function routeArtifactFileName(fileName: string): string {
   return replaceExtension(fileName, '.kovo-route.tsx');
+}
+
+function rebaseRelativeImportReplacements(
+  sourceFile: ts.SourceFile,
+  artifactFileName: string,
+): SourceReplacement[] {
+  if (sameDirectory(sourceFile.fileName, artifactFileName)) return [];
+
+  const replacements: SourceReplacement[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      const specifier = node.moduleSpecifier.text;
+      const rebased = rebaseRelativeSpecifier(specifier, sourceFile.fileName, artifactFileName);
+      if (rebased && rebased !== specifier) {
+        replacements.push({
+          end: node.moduleSpecifier.getEnd(),
+          replacement: JSON.stringify(rebased),
+          start: node.moduleSpecifier.getStart(sourceFile),
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return replacements;
+}
+
+function sameDirectory(leftFileName: string, rightFileName: string): boolean {
+  return normalizePath(dirname(leftFileName)) === normalizePath(dirname(rightFileName));
+}
+
+function rebaseRelativeSpecifier(
+  specifier: string,
+  sourceFileName: string,
+  artifactFileName: string,
+): string | null {
+  if (!specifier.startsWith('.')) return null;
+
+  const absoluteTarget = resolve(dirname(sourceFileName), specifier);
+  const relativeTarget = normalizePath(relative(dirname(artifactFileName), absoluteTarget));
+  return relativeTarget.startsWith('.') ? relativeTarget : `./${relativeTarget}`;
+}
+
+function normalizePath(value: string): string {
+  return value.replace(/\\/g, '/');
 }

@@ -127,7 +127,7 @@ removes app-authored bookkeeping from the enhanced path.
 
 ## Design Direction
 
-- [ ] **Lock route pages as compiler-processed TSX source.**
+- [x] **Lock route pages as compiler-processed TSX source.**
   - Decision: `route().page` authoring may return JSX, but that JSX is scanned
     and lowered by the Kovo compiler into generated server IR. It is not merely
     opaque runtime JSX execution.
@@ -136,51 +136,81 @@ removes app-authored bookkeeping from the enhanced path.
     diagnostic rather than falling back to app-authored refresh wiring.
   - This is a pre-release breaking direction: do not preserve APIs that require
     app authors to hand-route enhanced mutation fragments.
-- [ ] **Make "refresh" generated IR, not an app API.**
+  - Evidence 2026-06-17: implementation items 1 and 4 lock route JSX as
+    compiler-processed source and generate checked-in `*.kovo-route.tsx` route IR
+    for StackOverflow, CRM, and Commerce.
+- [x] **Make "refresh" generated IR, not an app API.**
   - App source should not mention `refresh`, `fragmentRenderers`, target
     constants, or mutation-key routing for ordinary enhanced mutation success.
   - If an internal name is needed, prefer "server render registry" or "live target
     registry" over an author-facing "refresh" concept.
-- [ ] **Make route pages compose components directly.**
+  - Evidence 2026-06-17: implementation items 5-10 plus the verification
+    no-match checks remove ordinary app-authored `fragmentRenderers`,
+    `mutationResponse(`, target constants, and generated live-target wiring from
+    app-authored examples.
+- [x] **Make route pages compose components directly.**
   - The target authoring shape is `route('/', { page: () => <QuestionListRegion /> })`,
     not `page: () => renderQuestionListPage(loadData())`.
   - Route pages may pass route params/search values as props, but should not
     select fragment targets or call hand-authored region render helpers.
-- [ ] **Generate a live target registry for query-backed components.**
+  - Evidence 2026-06-17: current-problem checks and implementation items 4,
+    7, 8, and 9 prove StackOverflow, CRM, and Commerce compose generated
+    component regions directly in route pages without app-authored region helpers.
+- [x] **Generate a live target registry for query-backed components.**
   - For each inferred server-refreshable component, emit registry metadata:
     derived target identity, component binding, declared queries, query arg
     expressions, serializable props, and the server render function.
   - The generated metadata is an artifact like lowered IR: inspectable for
     verification, but not app-authored source.
-- [ ] **Let the build own generated registry wiring.**
+  - Evidence 2026-06-17: implementation item 2 emits `LiveTargetRegistry`
+    metadata and generated `*$liveTargetRenderer` exports with component id,
+    target identity, declared queries, query arg bindings, props, and coverage.
+- [x] **Let the build own generated registry wiring.**
   - Decision: app authors do not pass a `generated` or `refresh` option to
     `createApp()`. The compiler/build integration wires generated route IR and
     live target registry artifacts into the server entry.
   - Transitional explicit registry imports are allowed only inside generated
     artifacts and tests that inspect generated output.
-- [ ] **Stamp enough reconstructability data into dev HTML.**
+  - Evidence 2026-06-17: implementation items 5, 7, 8, and 9 prove generated
+    modules self-register live-target renderers, `createApp()` consumes the
+    generated registry by default, and example emit scripts now own route IR
+    artifact freshness.
+- [x] **Stamp enough reconstructability data into dev HTML.**
   - A live target must carry or reference the data needed to reconstruct the
     component instance on the server: component identity, target identity,
     serializable props / keys, and query instance dependencies.
   - Dev output should stay legible and auditable. Production may compress or
     version this state if `kovo explain` can reconstruct it.
-- [ ] **Use component query declarations as the only ordinary data source.**
+  - Evidence 2026-06-17: implementation item 5 stamps `kovo-live-component`,
+    `kovo-props`, and dependency tokens, and server wire tests prove
+    `Kovo-Live-Targets` descriptors reconstruct generated live-target fragments.
+- [x] **Use component query declarations as the only ordinary data source.**
   - Region re-rendering should run the component's declared queries with derived
     args, then call the component render function.
   - Extra page/region loaders should be treated as a migration smell unless they
     are declared as query composition or an explicit non-refreshable escape hatch.
-- [ ] **Support route/prop-derived query args as first-class authoring.**
+  - Evidence 2026-06-17: current-problem "Queries and page loaders" plus
+    implementation items 3, 7, and 8 move UI data into declared queries and
+    verify StackOverflow/CRM/Commerce server refresh through declared query
+    bindings.
+- [x] **Support route/prop-derived query args as first-class authoring.**
   - Finish the local-args model described by `SPEC.md` §8 so a component can bind
     query inputs from its own props, including route params passed as props.
   - Repeated component instances must derive stable target identity from authored
     `key` or serializable keyed props.
-- [ ] **Require explicit stable identity for repeated or parameterized targets.**
+  - Evidence 2026-06-17: implementation item 3 covers typed `.args((props) => ...)`
+    query bindings and item 4 emits route-param prop metadata in generated route
+    IR for parameterized pages.
+- [x] **Require explicit stable identity for repeated or parameterized targets.**
   - Decision: singleton query-backed components use the derived component leaf.
     Repeated or parameterized targets must have stable identity from authored
     `key` or a declared identity prop that is serializable and visible in route
     composition.
   - Ambiguous target identity is a compile error, not a runtime best effort.
-- [ ] **Auto-select enhanced mutation responses on the server.**
+  - Evidence 2026-06-17: compiler registry tests cover keyed repeated and
+    route-param-backed renderer facts, and implementation item 2 emits
+    `identityProps`, `targetBase`, and coverage metadata.
+- [x] **Auto-select enhanced mutation responses on the server.**
   - After a mutation commits, intersect the committed changes with live
     `Kovo-Targets`.
   - Decision for the first complete design: reload all declared queries for each
@@ -188,7 +218,10 @@ removes app-authored bookkeeping from the enhanced path.
     registry. Query JSON/delta selection is a later optimization layered on the
     same registry, not a prerequisite for removing app-authored routing.
   - Failure responses remain submitted-form rerenders per `SPEC.md` §6.3/§9.2.
-- [ ] **Keep explicit escape hatches narrow and auditable.**
+  - Evidence 2026-06-17: implementation items 5 and 6 prove mutation response
+    selection intersects committed changes with `Kovo-Targets` /
+    `Kovo-Live-Targets` and renders affected generated live-target descriptors.
+- [x] **Keep explicit escape hatches narrow and auditable.**
   - Components that cannot be reconstructed should use
     `disableServerRefresh: true` or receive a compiler diagnostic explaining the
     missing serializable props/query args.
@@ -196,12 +229,19 @@ removes app-authored bookkeeping from the enhanced path.
     endpoints/webhooks, downloads, auth redirects, and non-component responses
     use separate declared framework surfaces rather than a general mutation
     response switch.
-- [ ] **Put UI data in queries, with derivation metadata per field/query.**
+  - Evidence 2026-06-17: implementation item 6 removes the broad
+    `createApp({ mutationResponse })` success switch, keeps only keyed policies
+    for redirects/failures, and no-match checks prove ordinary app-authored
+    success routing is gone from examples.
+- [x] **Put UI data in queries, with derivation metadata per field/query.**
   - Decision: queries should represent the actual data needed to render the
     component. "Skinny derivation queries plus separate presentation loaders" are
     rejected for ordinary app code.
   - The compiler may derive optimistic/delta behavior for the fields and query
     shapes it can prove and mark the rest as full-fragment/server-truth only.
+  - Evidence 2026-06-17: the query/page-loader current-problem item is complete;
+    StackOverflow list UI fields now come from the declared `questionList` query,
+    and generated optimistic output is verified by StackOverflow emit/test gates.
 
 ## Implementation Plan
 
@@ -232,7 +272,7 @@ removes app-authored bookkeeping from the enhanced path.
       app code.
     - Verified with `rg -n 'compiler-processed Kovo source|Kovo-Live-Targets|ordinary app-authored `mutationResponse`|Queries are the UI data contract|Generated route IR and live-target registry' SPEC.md`
       and `git diff --check -- SPEC.md plans/automatic-enhanced-refresh.md`.
-- [ ] **2. Compiler: emit live target registry metadata.**
+- [x] **2. Compiler: emit live target registry metadata.**
   - Extend the component scan/emit pipeline to produce metadata for inferred
     server-refreshable targets: component id, target identity expression, declared
     queries, query arg bindings, required props, render export, and coverage facts.
@@ -278,9 +318,23 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/route-pages.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
       `git diff --check -- packages/compiler/src/types.ts packages/compiler/src/internal-graph.ts packages/compiler/src/compile.ts packages/compiler/src/emit/registry.ts packages/compiler/src/registry.test.ts packages/compiler/src/compile-component.test.ts`.
-    - Remaining gap: compiler-generated executable route IR and build/app-shell
-      integration still need to consume these facts.
-- [ ] **3. Compiler/core: make query args from props/routes usable.**
+    - Final evidence 2026-06-17:
+      `compileRouteModule()` now consumes route-page component facts when it
+      emits executable `*.kovo-route.tsx` route IR, and the StackOverflow, CRM,
+      and Commerce emit scripts write checked-in generated route artifacts under
+      `src/generated/`. Component-symbol import hiding remains intentionally
+      tracked by `plans/app-authoring-ergonomics.md`.
+    - Verified with
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm --filter @kovojs/example-commerce test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and
+      `git diff --check -- packages/compiler/src/route-pages.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/types.ts packages/server/src/route-ir.ts examples/stackoverflow/scripts/emit-components.mjs examples/crm/scripts/emit-components.mjs examples/commerce/scripts/emit-components.mjs examples/stackoverflow/src/generated/interactive-app.kovo-route.tsx examples/crm/src/generated/interactive-app.kovo-route.tsx examples/commerce/src/generated/app-shell.kovo-route.tsx`.
+- [x] **3. Compiler/core: make query args from props/routes usable.**
   - Ensure `query.args((props) => ...)` style authoring is typed, scanned, emitted,
     and available to generated server renderers.
   - Route params/search values should reach components as ordinary serializable
@@ -317,10 +371,18 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/component-render.test.tsx`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gap: compiler-generated route IR still needs to stamp serialized
-      component props for route pages, and build/app-shell wiring still needs to
-      collect generated renderer exports automatically.
-- [ ] **4. Server/compiler: lower route JSX pages.**
+    - Final evidence 2026-06-17:
+      generated route IR artifacts now wrap route-param-backed JSX pages with
+      metadata that includes `propsExpression` and `serializedPropsExpression`
+      for route-derived props, and checked-in example route artifacts prove the
+      path for StackOverflow, CRM, and Commerce.
+    - Verified with
+      `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts packages/server/src/route-ir.test.ts packages/server/src/route-jsx.test.tsx`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
+- [x] **4. Server/compiler: lower route JSX pages.**
   - Support route pages that return TSX component invocations, for example
     `page: () => <QuestionListRegion />` and
     `page: ({ params }) => <QuestionDetail questionId={params.id} />`.
@@ -384,9 +446,23 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/component-render.test.tsx packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gap: compiler-generated executable route IR and build/app-shell
-      integration are still open; runtime JSX proves the authoring model but
-      does not yet remove transitional generated registry imports.
+    - Final evidence 2026-06-17:
+      `compileRouteModule()` supports `page: () => <Region />`, route-param
+      props, repeated keyed children, nested shells, shell-helper calls, and
+      method-shorthand `page() { return ... }` handlers. The generated route IR
+      wrapper preserves server JSX execution for initial page query loads while
+      attaching compiler-derived live-target metadata, and the three interactive
+      examples now generate checked-in `*.kovo-route.tsx` artifacts.
+    - Verified with
+      `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts packages/server/src/route-ir.test.ts packages/server/src/route-jsx.test.tsx`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm --filter @kovojs/example-commerce test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+      `node scripts/api-surface-gate.mjs`.
 - [x] **5. Runtime: send complete live target descriptors.**
   - Extend `Kovo-Targets` collection so enhanced mutation POSTs carry enough
     structured target data for the server to find the generated registry entry and

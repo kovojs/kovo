@@ -23,12 +23,12 @@ export interface CompiledRoutePageMetadata {
 }
 
 /** @internal Route page handler shape after compiler metadata is attached. */
-export type CompiledRoutePageFunction = ((...args: never[]) => unknown) & {
+export type CompiledRoutePageFunction = ((...args: any[]) => unknown) & {
   readonly kovoRoutePage?: CompiledRoutePageMetadata;
 };
 
 /** @internal Attach compiler-derived route metadata to a generated route page handler. */
-export function defineCompiledRoutePage<Page extends (...args: never[]) => unknown>(
+export function defineCompiledRoutePage<Page extends (...args: any[]) => unknown>(
   metadata: CompiledRoutePageMetadata,
   page: Page,
 ): Page & { readonly kovoRoutePage: CompiledRoutePageMetadata } {
