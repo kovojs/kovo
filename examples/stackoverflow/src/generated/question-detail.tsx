@@ -16,7 +16,6 @@ import {
   freshId,
   parseTags,
   renderAuthor,
-  renderSoShell,
   renderTags,
   voteButton,
 } from '../components/chrome.js';
@@ -32,13 +31,6 @@ import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
 // Restyled with @kovojs/ui (SPEC.md §6.1.1): the question and each answer are
 // Cards, tags + the accepted state are Badges, and the composer uses a Button.
 // The accepted answer gets an accent left border via a token-driven class.
-
-export const QUESTION_DETAIL_TARGET = 'question-detail-region';
-
-export interface QuestionDetailPageData {
-  question: QuestionDetailResult;
-  answers: QuestionAnswersResult;
-}
 
 function renderQuestionCard(question: QuestionDetailResult): string {
   const tags = parseTags(question.tags);
@@ -176,14 +168,6 @@ export const QuestionDetailRegion = component({
   },
 });
 QuestionDetailRegion.name = "components/question-detail/question-detail-region";
-
-export function renderQuestionDetailRegion(data: QuestionDetailPageData): string {
-  return QuestionDetailRegion.definition.render(data);
-}
-
-export function renderQuestionDetailPage(data: QuestionDetailPageData): string {
-  return renderSoShell(renderQuestionDetailRegion(data));
-}
 
 export const QuestionDetailRegion$liveTargetRenderer = componentLiveTargetRenderer({
   component: QuestionDetailRegion,

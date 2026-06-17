@@ -10,7 +10,7 @@ import { Card } from '@kovojs/ui/card';
 
 import { addContact } from '../mutations.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
-import { freshId, renderCrmShell } from '../components/chrome.js';
+import { freshId } from '../components/chrome.js';
 import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
@@ -23,12 +23,6 @@ import { componentLiveTargetRenderer } from '@kovojs/server/internal/wire';
 // (SPEC.md §9.1). The presentational company / job-title columns are intentionally
 // NOT in this rowset query (they would leak placeholder tempIds into derived
 // optimism — SPEC.md §10.5); they surface on the deal-detail page instead.
-
-export const CONTACT_LIST_TARGET = 'contacts-region';
-
-export interface ContactsPageData {
-  contacts: ContactRow[];
-}
 
 function initials(name: string): string {
   return name
@@ -118,14 +112,6 @@ export const ContactsRegion = component({
   },
 });
 ContactsRegion.name = "components/contacts/contacts-region";
-
-export function renderContactsRegion({ contacts }: ContactsPageData): string {
-  return ContactsRegion.definition.render({ contactList: { items: contacts } });
-}
-
-export function renderContactsPage(data: ContactsPageData): string {
-  return renderCrmShell('contacts', renderContactsRegion(data));
-}
 
 export const ContactsRegion$liveTargetRenderer = componentLiveTargetRenderer({
   component: ContactsRegion,

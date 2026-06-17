@@ -8,11 +8,10 @@ import {
   contactListQuery,
   dealListQuery,
   type ActivityListResult,
-  type ActivityRow,
   type ContactListResult,
   type DealListResult,
 } from '../queries.js';
-import { money, renderCrmShell, stageBadge } from '../components/chrome.js';
+import { money, stageBadge } from '../components/chrome.js';
 
 // Deal detail (route `/deals/:id`). Joins a single deal to its contact and the
 // activity timeline. This is the page the pipeline's open-deal rows link into.
@@ -27,39 +26,10 @@ import { money, renderCrmShell, stageBadge } from '../components/chrome.js';
 // db.ts / schema.ts (SPEC.md §10.5: those columns are never written by a
 // mutation, so the derived optimism stays clean).
 
-export const DEAL_DETAIL_TARGET = 'deal-detail-region';
-
 // The pipeline stages a deal can be moved through (mirrors the demo data + the
 // pipelineByStage buckets). 'won' is reached via the close-deal action (which
 // also applies the server commission), so it is not a plain move target.
 const MOVE_STAGES = ['lead', 'qualified', 'open', 'proposal', 'lost'] as const;
-
-/** The full persisted deal row (rowset shape + the presentational `title`). */
-export interface DetailDeal {
-  id: string;
-  contactId: string;
-  stage: string;
-  amount: number;
-  ownerId: string;
-  title: string;
-}
-
-/** The full persisted contact row (rowset shape + presentational company/title). */
-export interface DetailContact {
-  id: string;
-  name: string;
-  email: string;
-  ownerId: string;
-  dealCount: number;
-  company: string;
-  title: string;
-}
-
-export interface DealDetailPageData {
-  deal: DetailDeal;
-  contact: DetailContact | undefined;
-  activities: ActivityRow[];
-}
 
 // The interactive region, rendered inside the page and as the moveDeal /
 // closeDeal fragment payload. SPEC.md §4.8: the query-backed component root
@@ -210,16 +180,3 @@ export const DealDetailRegion = component({
     );
   },
 });
-
-export function renderDealDetailRegion({ deal, contact, activities }: DealDetailPageData): string {
-  return DealDetailRegion.definition.render({
-    activityList: { items: activities },
-    contactList: { items: contact ? [contact] : [] },
-    dealId: deal.id,
-    dealList: { items: [deal] },
-  });
-}
-
-export function renderDealDetailPage(data: DealDetailPageData): string {
-  return renderCrmShell('pipeline', renderDealDetailRegion(data));
-}

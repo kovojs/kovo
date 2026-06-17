@@ -11,7 +11,6 @@ import {
   freshId,
   parseTags,
   renderAuthor,
-  renderSoShell,
   renderTags,
   voteButton,
 } from '../components/chrome.js';
@@ -29,21 +28,14 @@ import {
 // columns — they are NOT part of the §10.5 query shape, so a fragment re-render
 // that only has the bare query columns still renders cleanly (the helpers default).
 
-export const QUESTION_LIST_TARGET = 'question-list-region';
-
 // The query item plus optional presentational fields the render path enriches in.
 // The fragment re-render from server truth supplies these too (interactive-app
 // joins them on), but every field is optional so a bare query item still renders.
-export interface QuestionRow extends QuestionListItem {
+interface QuestionRow extends QuestionListItem {
   authorName?: string;
   tags?: string;
   createdAt?: string;
   excerpt?: string;
-}
-
-export interface QuestionListPageData {
-  questions: QuestionRow[];
-  totalVotes: number;
 }
 
 type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
@@ -141,14 +133,3 @@ export const QuestionListRegion = component({
     );
   },
 });
-
-export function renderQuestionListRegion({ questions, totalVotes }: QuestionListPageData): string {
-  return QuestionListRegion.definition.render({
-    questionList: { items: questions },
-    questionScore: { score: totalVotes },
-  });
-}
-
-export function renderQuestionListPage(data: QuestionListPageData): string {
-  return renderSoShell(renderQuestionListRegion(data));
-}

@@ -536,6 +536,18 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-stackoverflow test`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Additional progress 2026-06-17:
+      `examples/stackoverflow/src/components/{question-list,question-detail}.tsx`
+      and regenerated counterparts no longer export `QUESTION_*_TARGET`,
+      `renderQuestion*Region`, `renderQuestion*Page`, or page-data wrapper
+      types.
+    - Verified with
+      `rg -n "QUESTION_LIST_TARGET|QUESTION_DETAIL_TARGET|renderQuestionListRegion|renderQuestionListPage|renderQuestionDetailRegion|renderQuestionDetailPage|QuestionListPageData|QuestionDetailPageData" examples/stackoverflow/src/components examples/stackoverflow/src/generated`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
     - Remaining gaps: list-region presentational enrichment is still outside the
       declared query model, and the transitional generated live-target registry
       import is still present.
@@ -586,6 +598,17 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
       `pnpm --filter @kovojs/example-crm test`,
       `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/component-render.test.tsx`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Additional progress 2026-06-17:
+      `examples/crm/src/components/{contacts,pipeline,deal-detail}.tsx` and
+      regenerated counterparts no longer export `*_TARGET`, `render*Region`,
+      `render*Page`, or page-data wrapper types.
+    - Verified with
+      `rg -n "CONTACT_LIST_TARGET|PIPELINE_TARGET|DEAL_DETAIL_TARGET|renderContactsRegion|renderContactsPage|renderPipelineRegion|renderPipelinePage|renderDealDetailRegion|renderDealDetailPage|ContactsPageData|PipelinePageData|DealDetailPageData|DetailDeal|DetailContact" examples/crm/src/components examples/crm/src/generated`,
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-crm test`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
     - Remaining gap: the transitional generated live-target registry import is

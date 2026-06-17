@@ -24,7 +24,7 @@ import {
   type PipelineByStageResult,
   type PipelineStageBucket,
 } from '../queries.js';
-import { freshId, money, renderCrmShell, stageBadge } from '../components/chrome.js';
+import { freshId, money, stageBadge } from '../components/chrome.js';
 
 // Pipeline dashboard (route `/`). Reads the `pipelineByStage` aggregate (SUM by
 // stage — the out-of-grammar GROUP BY query whose optimism is hand-written in
@@ -34,17 +34,9 @@ import { freshId, money, renderCrmShell, stageBadge } from '../components/chrome
 // mutationResponse can re-render the pipeline from server truth: opening a new
 // deal morphs the bucket totals and the open-deals table in place (SPEC.md §9.1).
 
-export const PIPELINE_TARGET = 'pipeline-region';
-
 // The stages a new deal can start in (mirrors the demo data / pipelineByStage
 // buckets). A new deal opens in one of these; 'won' is reached via closeDeal.
 const NEW_DEAL_STAGES = ['lead', 'qualified', 'open', 'proposal'] as const;
-
-export interface PipelinePageData {
-  buckets: PipelineStageBucket[];
-  openDeals: DealRow[];
-  contacts: ContactRow[];
-}
 
 function renderStageCard(bucket: PipelineStageBucket): string {
   return Card.definition.render({
@@ -198,15 +190,3 @@ export const PipelineRegion = component({
     );
   },
 });
-
-export function renderPipelineRegion({ buckets, openDeals, contacts }: PipelinePageData): string {
-  return PipelineRegion.definition.render({
-    contactList: { items: contacts },
-    openDeals: { items: openDeals },
-    pipelineByStage: { buckets },
-  });
-}
-
-export function renderPipelinePage(data: PipelinePageData): string {
-  return renderCrmShell('pipeline', renderPipelineRegion(data));
-}
