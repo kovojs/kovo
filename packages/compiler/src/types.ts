@@ -85,6 +85,7 @@ export interface RegistryFacts {
   fragmentTargets?: readonly string[];
   invalidations?: Readonly<Record<string, readonly string[]>>;
   liveTargets?: readonly LiveTargetFact[];
+  mutationInputs?: RegistryMutationInputFacts;
   mutations?: RegistryTypeFacts;
   queries?: RegistryTypeFacts;
   routes?: readonly string[];
@@ -93,6 +94,27 @@ export interface RegistryFacts {
 
 /** @internal Map of registry entry name to its emitted TypeScript type source. In-repo use only. */
 export type RegistryTypeFacts = Readonly<Record<string, string>>;
+
+/** @internal Field-level facts for one mutation input schema. In-repo use only. */
+export interface MutationInputFieldFact {
+  coercion: MutationInputFieldCoercion;
+  defaulted: boolean;
+  name: string;
+  optional: boolean;
+  provenance: 'local-mutation' | 'registry';
+  required: boolean;
+  source?: {
+    fileName: string;
+    length?: number;
+    start?: number;
+  };
+}
+
+/** @internal Declared FormData coercion family for a mutation input field. */
+export type MutationInputFieldCoercion = 'boolean' | 'number' | 'string' | 'unknown';
+
+/** @internal Registry-level field facts keyed by mutation key. */
+export type RegistryMutationInputFacts = Readonly<Record<string, readonly MutationInputFieldFact[]>>;
 
 /**
  * @internal The graph slice {@link deriveRegistryFactsFromGraph} reads from a Kovo explain

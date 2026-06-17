@@ -16,11 +16,17 @@ registerHooks({
 
 const { assertFixpoint, assertRenderEquivalence, compileComponentModule, compileRouteModule } =
   await import('@kovojs/compiler');
+const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const crmRoot = resolve(scriptDir, '..');
 const componentNames = ['contacts', 'deal-detail', 'pipeline'];
+const mutationSourcePath = resolve(crmRoot, 'src/mutations.ts');
 const registryFacts = {
+  mutationInputs: registryMutationInputs(
+    'examples/crm/src/mutations.ts',
+    readFileSync(mutationSourcePath, 'utf8'),
+  ),
   mutations: {
     addContact: 'typeof addContact',
     closeDeal: 'typeof closeDeal',
@@ -28,6 +34,15 @@ const registryFacts = {
     moveDeal: 'typeof moveDeal',
   },
 };
+
+function registryMutationInputs(fileName, source) {
+  return Object.fromEntries(
+    [...mutationInputFactsFromSource(fileName, source).values()].map((fact) => [
+      fact.key,
+      fact.fields.map((field) => ({ ...field, provenance: 'registry' })),
+    ]),
+  );
+}
 
 for (const name of componentNames) {
   const sourcePath = resolve(crmRoot, `src/components/${name}.tsx`);

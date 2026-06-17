@@ -1,7 +1,6 @@
 import { runInNewContext } from 'node:vm';
 
 import { diagnosticDefinitions } from '@kovojs/core';
-import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { compilerIrHeader } from '../ir.js';
@@ -16,6 +15,10 @@ import {
   outputContextForAttribute,
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
+import {
+  mutationInputFactsFromSource,
+  type LocalMutationInputFact,
+} from '../mutation-inputs.js';
 import {
   componentOptionObjectKeys,
   componentHasInferredServerRefreshTarget,
@@ -592,6 +595,8 @@ function enhancedMutationFormRenderLowering(
       continue;
     }
 
+    if (options) diagnostics.push(...mutationFormFieldDiagnostics(model, element, options));
+
     const lowering = enhancedMutationFormLowering(model, element, options?.registryFacts);
     if (!lowering) continue;
 
@@ -599,7 +604,6 @@ function enhancedMutationFormRenderLowering(
     outputContexts.push(...lowering.outputContexts);
     if (options) {
       diagnostics.push(
-        ...mutationFormFieldDiagnostics(model, element, options),
         ...lowering.conflicts.map((conflict) =>
           writerConflictDiagnostic(
             options,
@@ -628,16 +632,7 @@ interface EnhancedMutationFormLowering {
   semanticAttributes: readonly string[];
 }
 
-interface MutationInputFieldFact {
-  name: string;
-  required: boolean;
-}
-
-interface MutationInputFact {
-  fields: readonly MutationInputFieldFact[];
-  key: string;
-  localName: string;
-}
+type MutationInputFact = LocalMutationInputFact;
 
 function enhancedMutationFormLowering(
   model: ComponentModuleModel,
@@ -737,10 +732,10 @@ function repeatableMutationFormDiagnostic(
   if (!options || element.tag !== 'form' || !element.repeatable) return null;
   if (element.attributes.some((attribute) => attribute.name === 'key')) return null;
 
-  const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
-  if (!mutationAttribute?.expressionBareIdentifierName) return null;
+  const binding = enhancedMutationFormBinding(element);
+  if (!binding) return null;
   if (
-    !localMutationKey(model, mutationAttribute.expressionBareIdentifierName, options.registryFacts)
+    !localMutationKey(model, binding.localName, options.registryFacts)
   ) {
     return null;
   }
@@ -750,8 +745,8 @@ function repeatableMutationFormDiagnostic(
       options.fileName,
       'KV238',
       options.source,
-      mutationAttribute.start,
-      mutationAttribute.end - mutationAttribute.start,
+      binding.start,
+      binding.end - binding.start,
     ),
     message: `${diagnosticDefinitions.KV238.message} repeatable enhanced mutation form needs authored key identity`,
   };
@@ -792,19 +787,19 @@ function mutationFormFieldDiagnostics(
 ): CompilerDiagnostic[] {
   if (element.tag !== 'form') return [];
 
-  const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
-  const localName = mutationAttribute?.expressionBareIdentifierName;
-  if (!localName) return [];
+  const binding = enhancedMutationFormBinding(element);
+  if (!binding) return [];
 
-  const mutation = localMutationInputFacts(options.fileName, options.source).get(localName);
+  const mutation = mutationInputFactForForm(model, binding.localName, options);
   if (!mutation) return [];
 
-  const controls = successfulFormControls(model, element);
+  const controls = successfulFormControls(model, element, options);
   const fieldNames = new Set(mutation.fields.map((field) => field.name));
   const controlNames = new Set(controls.map((control) => control.name));
-  const diagnostics: CompilerDiagnostic[] = [];
+  const diagnostics: CompilerDiagnostic[] = [...controls.flatMap((control) => control.diagnostics)];
 
   for (const control of controls) {
+    if (!control.name) continue;
     if (fieldNames.has(control.name)) continue;
     diagnostics.push(
       formFieldDiagnostic(
@@ -823,8 +818,8 @@ function mutationFormFieldDiagnostics(
     diagnostics.push(
       formFieldDiagnostic(
         options,
-        mutationAttribute.start,
-        mutationAttribute.end - mutationAttribute.start,
+        binding.start,
+        binding.end - binding.start,
         `missing required field "${field.name}" for mutation "${mutation.key}". Expected fields: ${[
           ...fieldNames,
         ].join(', ')}`,
@@ -833,6 +828,51 @@ function mutationFormFieldDiagnostics(
   }
 
   return diagnostics;
+}
+
+function enhancedMutationFormBinding(
+  element: JsxElementModel,
+): { end: number; localName: string; start: number } | null {
+  const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
+  if (mutationAttribute?.expressionBareIdentifierName) {
+    return {
+      end: mutationAttribute.end,
+      localName: mutationAttribute.expressionBareIdentifierName,
+      start: mutationAttribute.start,
+    };
+  }
+
+  const spread = element.spreadAttributes.find(
+    (attribute) =>
+      attribute.expressionCallName === 'mutationFormAttributes' &&
+      attribute.expressionCallArgumentBareIdentifierName,
+  );
+  if (!spread?.expressionCallArgumentBareIdentifierName) return null;
+
+  return {
+    end: spread.end,
+    localName: spread.expressionCallArgumentBareIdentifierName,
+    start: spread.start,
+  };
+}
+
+function mutationInputFactForForm(
+  model: ComponentModuleModel,
+  localName: string,
+  options: { fileName: string; registryFacts?: RegistryFacts; source: string },
+): MutationInputFact | null {
+  const localMutation = mutationInputFactsFromSource(options.fileName, options.source).get(localName);
+  if (localMutation) return localMutation;
+
+  const mutationKey = localMutationKey(model, localName, options.registryFacts);
+  const registryFields = mutationKey ? options.registryFacts?.mutationInputs?.[mutationKey] : undefined;
+  if (!mutationKey || !registryFields) return null;
+
+  return {
+    fields: registryFields,
+    key: mutationKey,
+    localName,
+  };
 }
 
 function formFieldDiagnostic(
@@ -850,27 +890,154 @@ function formFieldDiagnostic(
 function successfulFormControls(
   model: ComponentModuleModel,
   form: JsxElementModel,
-): { length: number; name: string; start: number }[] {
+  options: { fileName: string; source: string },
+): { diagnostics: readonly CompilerDiagnostic[]; length: number; name: string; start: number }[] {
   const formEnd = form.selfClosing ? form.end : form.closingStart;
+  const formId = staticStringAttributeValue(
+    form.attributes.find((attribute) => attribute.name === 'id'),
+  );
+  const controls: {
+    diagnostics: readonly CompilerDiagnostic[];
+    length: number;
+    name: string;
+    start: number;
+  }[] = [];
 
-  return model.jsxElements.flatMap((element) => {
-    if (element === form) return [];
-    if (element.start < form.openingEnd || element.end > formEnd) return [];
-    if (!['button', 'input', 'select', 'textarea'].includes(element.tag)) return [];
-    if (element.attributes.some((attribute) => attribute.name === 'disabled')) return [];
+  for (const element of model.jsxElements) {
+    if (element === form) continue;
+    if (!['button', 'input', 'select', 'textarea'].includes(element.tag)) continue;
+    if (element.attributes.some((attribute) => attribute.name === 'disabled')) continue;
+
+    const descendant = element.start >= form.openingEnd && element.end <= formEnd;
+    const externalFormAttribute = element.attributes.find((attribute) => attribute.name === 'form');
+    const externalForm = staticStringAttributeValue(externalFormAttribute);
+    if (!descendant && (!formId || externalForm !== formId)) continue;
 
     const nameAttribute = element.attributes.find((attribute) => attribute.name === 'name');
-    const name = staticStringAttributeValue(nameAttribute);
-    if (!name) return [];
+    const diagnostics: CompilerDiagnostic[] = [];
+    if (!descendant || externalFormAttribute) {
+      diagnostics.push(
+        formFieldDiagnostic(
+          options,
+          (externalFormAttribute ?? element).start,
+          (externalFormAttribute ?? element).end - (externalFormAttribute ?? element).start,
+          'external form-associated controls are not supported for enhanced mutation field validation; keep controls inside the submitted form',
+        ),
+      );
+    }
 
-    return [
-      {
-        length: nameAttribute?.end ? nameAttribute.end - nameAttribute.start : element.end - element.start,
-        name,
-        start: nameAttribute?.start ?? element.start,
-      },
-    ];
+    const name = staticStringAttributeValue(nameAttribute);
+    if (!nameAttribute) continue;
+    if (!name) {
+      diagnostics.push(
+        formFieldDiagnostic(
+          options,
+          nameAttribute.start,
+          nameAttribute.end - nameAttribute.start,
+          'dynamic field names are not supported for enhanced mutation field validation; use a literal name from the mutation input schema',
+        ),
+      );
+      controls.push({
+        diagnostics,
+        length: nameAttribute.end - nameAttribute.start,
+        name: '',
+        start: nameAttribute.start,
+      });
+      continue;
+    }
+
+    diagnostics.push(...unsupportedControlDiagnostics(element, name, nameAttribute, options));
+
+    controls.push({
+      diagnostics,
+      length: nameAttribute.end - nameAttribute.start,
+      name,
+      start: nameAttribute.start,
+    });
+  }
+
+  const counts = new Map<string, number>();
+  for (const control of controls) {
+    if (!control.name) continue;
+    counts.set(control.name, (counts.get(control.name) ?? 0) + 1);
+  }
+
+  return controls.map((control) => {
+    if (!control.name || (counts.get(control.name) ?? 0) <= 1) return control;
+    return {
+      ...control,
+      diagnostics: [
+        ...control.diagnostics,
+        formFieldDiagnostic(
+          options,
+          control.start,
+          control.length,
+          `repeated field "${control.name}" is not supported for enhanced mutation field validation; declare one control per mutation input field`,
+        ),
+      ],
+    };
   });
+}
+
+function unsupportedControlDiagnostics(
+  element: JsxElementModel,
+  name: string,
+  nameAttribute: JsxAttributeModel,
+  options: { fileName: string; source: string },
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const type = staticStringAttributeValue(
+    element.attributes.find((attribute) => attribute.name === 'type'),
+  )?.toLowerCase();
+
+  if (/[.[\]]/.test(name)) {
+    diagnostics.push(
+      formFieldDiagnostic(
+        options,
+        nameAttribute.start,
+        nameAttribute.end - nameAttribute.start,
+        `nested field path "${name}" is not supported for enhanced mutation field validation; use a flat mutation input field name`,
+      ),
+    );
+  }
+
+  if (element.tag === 'input' && type === 'file') {
+    diagnostics.push(
+      formFieldDiagnostic(
+        options,
+        nameAttribute.start,
+        nameAttribute.end - nameAttribute.start,
+        `file input field "${name}" is not supported for enhanced mutation field validation`,
+      ),
+    );
+  }
+
+  if (element.tag === 'input' && (type === 'checkbox' || type === 'radio')) {
+    diagnostics.push(
+      formFieldDiagnostic(
+        options,
+        nameAttribute.start,
+        nameAttribute.end - nameAttribute.start,
+        `${type} field "${name}" is not supported for enhanced mutation field validation; use a single scalar input or a later multivalue form primitive`,
+      ),
+    );
+  }
+
+  if (
+    element.tag === 'select' &&
+    element.attributes.some((attribute) => attribute.name === 'multiple')
+  ) {
+    diagnostics.push(
+      formFieldDiagnostic(
+        options,
+        nameAttribute.start,
+        nameAttribute.end - nameAttribute.start,
+        `multiple select field "${name}" is not supported for enhanced mutation field validation; use a single-value select or a later multivalue form primitive`,
+      ),
+    );
+  }
+
+  return diagnostics;
 }
 
 function staticStringAttributeValue(attribute: JsxAttributeModel | undefined): string | null {
@@ -878,116 +1045,6 @@ function staticStringAttributeValue(attribute: JsxAttributeModel | undefined): s
   if (attribute.value !== undefined) return attribute.value;
   if (typeof attribute.expressionStaticValue === 'string') return attribute.expressionStaticValue;
   return null;
-}
-
-function localMutationInputFacts(fileName: string, source: string): ReadonlyMap<string, MutationInputFact> {
-  const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const facts = new Map<string, MutationInputFact>();
-
-  const visit = (node: ts.Node): void => {
-    const fact = mutationInputFactFromVariable(sourceFile, node);
-    if (fact) facts.set(fact.localName, fact);
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-  return facts;
-}
-
-function mutationInputFactFromVariable(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
-): MutationInputFact | null {
-  if (!ts.isVariableDeclaration(node)) return null;
-  if (!ts.isIdentifier(node.name)) return null;
-  const initializer = unwrapTsExpression(node.initializer);
-  if (!initializer || !ts.isCallExpression(initializer)) return null;
-  if (!ts.isIdentifier(initializer.expression) || initializer.expression.text !== 'mutation') {
-    return null;
-  }
-
-  const [keyArg, optionsArg] = initializer.arguments;
-  if (!keyArg || !ts.isStringLiteralLike(keyArg)) return null;
-  if (!optionsArg || !ts.isObjectLiteralExpression(optionsArg)) return null;
-
-  const input = objectPropertyExpression(optionsArg, 'input');
-  const fields = input ? mutationInputFields(input) : [];
-  if (fields.length === 0) return null;
-
-  return {
-    fields,
-    key: keyArg.text,
-    localName: node.name.text,
-  };
-}
-
-function mutationInputFields(expression: ts.Expression): MutationInputFieldFact[] {
-  const input = unwrapTsExpression(expression);
-  if (!input || !ts.isCallExpression(input)) return [];
-  if (!isPropertyCall(input.expression, 'object')) return [];
-
-  const [shapeArg] = input.arguments;
-  if (!shapeArg || !ts.isObjectLiteralExpression(shapeArg)) return [];
-
-  return shapeArg.properties.flatMap((property) => {
-    if (!ts.isPropertyAssignment(property)) return [];
-    const name = propertyNameText(property.name);
-    if (!name) return [];
-    return [{ name, required: !schemaExpressionHasCall(property.initializer, 'default') }];
-  });
-}
-
-function objectPropertyExpression(
-  object: ts.ObjectLiteralExpression,
-  propertyName: string,
-): ts.Expression | null {
-  for (const property of object.properties) {
-    if (!ts.isPropertyAssignment(property)) continue;
-    if (propertyNameText(property.name) === propertyName) return property.initializer;
-  }
-  return null;
-}
-
-function propertyNameText(name: ts.PropertyName): string | null {
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-    return name.text;
-  }
-  return null;
-}
-
-function schemaExpressionHasCall(expression: ts.Expression, methodName: string): boolean {
-  let found = false;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === methodName
-    ) {
-      found = true;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(expression);
-  return found;
-}
-
-function isPropertyCall(expression: ts.Expression, propertyName: string): boolean {
-  return ts.isPropertyAccessExpression(expression) && expression.name.text === propertyName;
-}
-
-function unwrapTsExpression(expression: ts.Expression | undefined): ts.Expression | null {
-  let current = expression;
-  while (
-    current &&
-    (ts.isParenthesizedExpression(current) ||
-      ts.isAsExpression(current) ||
-      ts.isSatisfiesExpression(current) ||
-      ts.isNonNullExpression(current))
-  ) {
-    current = current.expression;
-  }
-  return current ?? null;
 }
 
 function submittedFormKeyReplacement(attribute: JsxAttributeModel): SourceReplacement {

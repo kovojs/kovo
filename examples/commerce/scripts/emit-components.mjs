@@ -16,6 +16,7 @@ registerHooks({
 
 const { assertFixpoint, assertRenderEquivalence, compileComponentModule, compileRouteModule } =
   await import('@kovojs/compiler');
+const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
 
 // Compiles the authored TSX components (src/components/*.tsx) through
 // @kovojs/compiler and commits the lowered IR modules to src/generated/ — the
@@ -28,7 +29,23 @@ const { assertFixpoint, assertRenderEquivalence, compileComponentModule, compile
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
 const componentNames = ['cart-badge', 'order-history', 'product-grid'];
-const registryFacts = { mutations: { 'cart/add': 'typeof addToCart' } };
+const mutationSourcePath = resolve(commerceRoot, 'src/app.ts');
+const registryFacts = {
+  mutationInputs: registryMutationInputs(
+    'examples/commerce/src/app.ts',
+    readFileSync(mutationSourcePath, 'utf8'),
+  ),
+  mutations: { 'cart/add': 'typeof addToCart' },
+};
+
+function registryMutationInputs(fileName, source) {
+  return Object.fromEntries(
+    [...mutationInputFactsFromSource(fileName, source).values()].map((fact) => [
+      fact.key,
+      fact.fields.map((field) => ({ ...field, provenance: 'registry' })),
+    ]),
+  );
+}
 
 for (const name of componentNames) {
   const sourcePath = resolve(commerceRoot, `src/components/${name}.tsx`);

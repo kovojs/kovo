@@ -570,6 +570,28 @@ export const ProductList = component({
     expect(forms.map((form) => form.repeatable)).toEqual([false, true]);
   });
 
+  it('records JSX spread call facts for model-driven diagnostics', () => {
+    const source = `
+export const ProductList = component({
+  render: () => (
+    <form enhance {...mutationFormAttributes(addToCart)}>
+      <input name="id" value="p1" />
+    </form>
+  ),
+});
+`;
+    const [form] = jsxElements(parseComponentModule('product-list.tsx', source)).filter(
+      (element) => element.tag === 'form',
+    );
+
+    expect(form?.spreadAttributes).toEqual([
+      expect.objectContaining({
+        expressionCallArgumentBareIdentifierName: 'addToCart',
+        expressionCallName: 'mutationFormAttributes',
+      }),
+    ]);
+  });
+
   it('records JSX opening tag and child source for model-driven lowerers', () => {
     const source = `
 export const ProductCard = component({

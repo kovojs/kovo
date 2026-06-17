@@ -35,6 +35,8 @@ export type {
   ComponentGraphFact,
   EmittedFile,
   FragmentTargetFact,
+  MutationInputFieldCoercion,
+  MutationInputFieldFact,
   PackageComponentPrefixFact,
   QueryDeriveFact,
   RegistryFacts,
@@ -48,10 +50,13 @@ export type {
   QueryTemplateStampFact,
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
+  RegistryMutationInputFacts,
   RenderEquivalenceCheck,
   StateDeriveReferenceFact,
   ViewTransitionStamp,
 } from './types.js';
+export type { LocalMutationInputFact } from './mutation-inputs.js';
+export { mutationInputFactsFromSource } from './mutation-inputs.js';
 export {
   createEmptyCompileResult,
   queryShapeFactDiagnostics,

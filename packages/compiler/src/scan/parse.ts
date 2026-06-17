@@ -119,6 +119,8 @@ export interface JsxAttributeModel {
 export interface JsxSpreadAttributeModel {
   end: number;
   expression: string;
+  expressionCallArgumentBareIdentifierName?: string;
+  expressionCallName?: string;
   expressionBareIdentifierName?: string;
   expressionIsBareIdentifier?: boolean;
   objectEntries?: readonly ObjectLiteralEntry[];
@@ -1256,10 +1258,23 @@ function jsxElementModel(
       const expression = property.expression;
       const unwrapped = unwrapExpression(expression);
       const bareIdentifierName = ts.isIdentifier(unwrapped) ? unwrapped.text : undefined;
+      const callExpression = ts.isCallExpression(unwrapped) ? unwrapped : undefined;
+      const callName =
+        callExpression && ts.isIdentifier(callExpression.expression)
+          ? callExpression.expression.text
+          : undefined;
+      const [firstCallArgument] = callExpression?.arguments ?? [];
+      const callArgument = firstCallArgument ? unwrapExpression(firstCallArgument) : undefined;
+      const callArgumentBareIdentifierName =
+        callArgument && ts.isIdentifier(callArgument) ? callArgument.text : undefined;
       return [
         {
           end: property.getEnd(),
           expression: source.slice(expression.getStart(sourceFile), expression.getEnd()).trim(),
+          ...(callName === undefined ? {} : { expressionCallName: callName }),
+          ...(callArgumentBareIdentifierName === undefined
+            ? {}
+            : { expressionCallArgumentBareIdentifierName: callArgumentBareIdentifierName }),
           ...(bareIdentifierName === undefined
             ? {}
             : {

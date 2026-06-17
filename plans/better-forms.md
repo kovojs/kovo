@@ -125,23 +125,34 @@ path in more than one app — without changing the clean authoring spelling.
         `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/core/src/diagnostics.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/spec-coverage-map.test.ts`,
         `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
         `node scripts/api-surface-gate.mjs`, and focused `git diff --check`.
-- [ ] **A1. Emit/collect mutation input field facts.** Add a typed fact surface for mutation input
+- [x] **A1. Emit/collect mutation input field facts.** Add a typed fact surface for mutation input
       fields: name, required/optional/defaulted, declared coercion kind, and source span/provenance.
       Populate it from `mutation()` definitions and generated registry facts, not source strings.
-      - Progress 2026-06-17: local `mutation()` definitions now produce
-        compiler-owned field facts from the TypeScript AST for `input:
-        s.object({ ... })`, including field name and defaulted-vs-required
-        status. Cross-module/generated registry field facts, coercion kind, and
-        source-span/provenance remain open.
-- [ ] **A2. Resolve the bound mutation's input schema at a `<form>`.** From `mutation={value}`
+      - Evidence 2026-06-17: `packages/compiler/src/mutation-inputs.ts` extracts
+        `mutation()` input fields into typed facts with required/optional/defaulted,
+        coercion (`string`/`number`/`boolean`, including enum→string), source span,
+        and provenance. `RegistryFacts.mutationInputs` carries the same fact shape
+        for imported forms, and example/tutorial component generators derive those
+        registry facts from their mutation source through
+        `mutationInputFactsFromSource(...)`.
+      - Verified with
+        `pnpm exec vitest --run packages/compiler/src/mutation-inputs.test.ts packages/compiler/src/stamps.test.ts`,
+        all three example `emit-components -- --check` commands, and
+        `node site/tutorial/run-steps.mjs`.
+- [x] **A2. Resolve the bound mutation's input schema at a `<form>`.** From `mutation={value}`
       (importable) resolve the `s.object` field set + required/optional + declared coercions; from the
       string-keyed `form('key')`/`mutationFormAttributes` path resolve via the registry (Part B).
       Decide from typed model facts, not source strings (SPEC §5 line 386).
-      - Progress 2026-06-17: local `mutation={value}` forms resolve to local
-        `s.object` field facts. Imported mutation values still lower for action
-        stamps through existing registry facts, but field validation waits for
-        Part B's generated `MutationRegistry`/field facts.
-- [ ] **A3. Emit KV242.** For each enhanced `<form>` in v1 scope, collect literal descendant
+      - Evidence 2026-06-17: KV242 resolution uses local mutation facts for
+        `mutation={value}`, `RegistryFacts.mutationInputs` for imported
+        `mutation={value}`, and parser-owned JSX spread call facts for
+        `mutationFormAttributes(value)` forms. The parser records spread call
+        name/argument facts so emit does not inspect source strings.
+      - Verified with
+        `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/stamps.test.ts`,
+        `pnpm --filter @kovojs/example-crm run emit-components -- --check`, and
+        `pnpm --filter @kovojs/example-commerce run emit-components -- --check`.
+- [x] **A3. Emit KV242.** For each enhanced `<form>` in v1 scope, collect literal descendant
       successful controls (`input`, `select`, `textarea`, including `type="hidden"` and submitter
       controls with `name`). Error on name ∉ schema, missing required field (completeness), and
       undeclared coercion for a non-string field. Define unsupported/dynamic cases explicitly:
@@ -149,21 +160,29 @@ path in more than one app — without changing the clean authoring spelling.
       checkbox/radio/multiple-select, and dotted/bracket paths either need a deliberate v1 rule,
       diagnostic, or documented escape. Teaching message shows the schema field set and the
       offending/missing name — mirror KV227's fix-menu tone.
-      - Progress 2026-06-17: KV242 emits for literal descendant
-        `input`/`select`/`textarea`/`button` controls with static `name` values,
-        including hidden inputs and submitter-capable controls, and skips
-        disabled controls. It reports name-not-in-schema and missing required
-        local mutation fields with the expected field set in the message.
-        Dynamic/external/repeated/file/dotted/bracket/coercion-specific cases
-        remain open.
-- [ ] **A4. Tests (red→green).** Compiler unit fixtures: wrong name, missing required field, extra
+      - Evidence 2026-06-17: `packages/compiler/src/emit/server.ts` emits KV242
+        for unknown fields, missing required fields, dynamic names, external
+        `form="id"` controls, repeated names, file inputs, checkbox/radio,
+        multiple selects, and dotted/bracket paths; disabled controls are skipped
+        and submitter `name` controls are included.
+      - Verified with
+        `pnpm exec vitest --run packages/compiler/src/stamps.test.ts`,
+        `pnpm exec vitest --run packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/spec-coverage-map.test.ts packages/core/src/diagnostics.test.ts`,
+        and the three example `emit-components -- --check` commands.
+- [x] **A4. Tests (red→green).** Compiler unit fixtures: wrong name, missing required field, extra
       field, hidden-field name match, coercion-declared-once, disabled/control-scope behavior, dynamic
       name escape/diagnostic, submitter `name`, and a green fixture for the corrected commerce form.
       Evidence: new `*.test.ts` in the compiler suite.
-      - Progress 2026-06-17: `packages/compiler/src/stamps.test.ts` covers
-        wrong names, missing required fields, hidden-field matching, and a green
-        defaulted-field case for local mutation forms. The broader A4 fixture
-        matrix remains open.
+      - Evidence 2026-06-17: `packages/compiler/src/mutation-inputs.test.ts`
+        covers field fact completeness/coercions/provenance, and
+        `packages/compiler/src/stamps.test.ts` covers local and imported forms,
+        `mutationFormAttributes(...)`, wrong/missing/extra fields, hidden field
+        matching, defaulted fields, disabled controls, dynamic names,
+        submitter `name`, unsupported multivalue controls, and external controls.
+      - Verified with
+        `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/mutation-inputs.test.ts packages/compiler/src/stamps.test.ts`,
+        `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+        `node scripts/api-surface-gate.mjs`, and `git diff --check`.
 - [x] **A5. SPEC + diagnostics catalog.** Add KV242 to SPEC §6.2/§6.3 (assign the code the prose
       already promises) and to every diagnostic surface: `DiagnosticCode`, `diagnosticDefinitions`,
       `compilerDiagnosticTeachingSchemas`, diagnostic coverage matrix, SPEC diagnostic table,

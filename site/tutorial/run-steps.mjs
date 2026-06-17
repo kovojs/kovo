@@ -19,6 +19,7 @@ registerHooks({
 
 const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
   await import('@kovojs/compiler');
+const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
 
 /**
  * Tutorial step gate (plan W5): every checked-in step state must
@@ -37,7 +38,6 @@ const repoRoot = path.resolve(tutorialDir, '../..');
 const stepsDir = path.join(tutorialDir, 'steps');
 const contentDir = path.resolve(tutorialDir, '../content/tutorial');
 const write = process.argv.includes('--write');
-const registryFacts = { mutations: { 'cart/add': 'typeof addToCart' } };
 
 const steps = readdirSync(stepsDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -53,6 +53,7 @@ function compileStepComponents(step) {
   if (!existsSync(componentsDir)) return 0;
 
   const generatedDir = path.join(stepsDir, step, 'src/generated');
+  const registryFacts = registryFactsForStep(step);
   let compiled = 0;
 
   for (const file of readdirSync(componentsDir).sort()) {
@@ -110,6 +111,26 @@ function compileStepComponents(step) {
   }
 
   return compiled;
+}
+
+function registryFactsForStep(step) {
+  const appPath = path.join(stepsDir, step, 'src/app.ts');
+  const mutationInputs = existsSync(appPath)
+    ? registryMutationInputs(`site/tutorial/steps/${step}/src/app.ts`, readFileSync(appPath, 'utf8'))
+    : {};
+  return {
+    ...(Object.keys(mutationInputs).length > 0 ? { mutationInputs } : {}),
+    mutations: { 'cart/add': 'typeof addToCart' },
+  };
+}
+
+function registryMutationInputs(fileName, source) {
+  return Object.fromEntries(
+    [...mutationInputFactsFromSource(fileName, source).values()].map((fact) => [
+      fact.key,
+      fact.fields.map((field) => ({ ...field, provenance: 'registry' })),
+    ]),
+  );
 }
 
 let components = 0;

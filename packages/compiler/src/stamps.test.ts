@@ -4,6 +4,25 @@ import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from 
 import { serverRenderLowering } from './emit/server.js';
 import { parseComponentModule } from './scan/parse.js';
 
+const cartAddMutationInputs = [
+  {
+    coercion: 'string',
+    defaulted: false,
+    name: 'productId',
+    optional: false,
+    provenance: 'registry',
+    required: true,
+  },
+  {
+    coercion: 'number',
+    defaulted: true,
+    name: 'quantity',
+    optional: false,
+    provenance: 'registry',
+    required: false,
+  },
+] as const;
+
 describe('compiler stamps', () => {
   it('exposes server host stamps as parsed source patches', () => {
     const source = `
@@ -237,7 +256,10 @@ export const AddToCartForm = component({
   it('lowers imported typed enhanced mutation forms from registry facts', () => {
     const result = compileComponentModule({
       fileName: 'product-grid.tsx',
-      registryFacts: { mutations: { 'cart/add': 'typeof addToCart' } },
+      registryFacts: {
+        mutationInputs: { 'cart/add': cartAddMutationInputs },
+        mutations: { 'cart/add': 'typeof addToCart' },
+      },
       source: `
 import { addToCart } from '../app.js';
 
@@ -257,6 +279,72 @@ export const ProductGrid = component({
     );
     expect(() => assertRenderEquivalence(result)).not.toThrow();
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('reports KV242 for imported enhanced mutation form fields from registry facts', () => {
+    const result = compileComponentModule({
+      fileName: 'product-grid.tsx',
+      registryFacts: {
+        mutationInputs: { 'cart/add': cartAddMutationInputs },
+        mutations: { 'cart/add': 'typeof addToCart' },
+      },
+      source: `
+import { addToCart } from '../app.js';
+
+export const ProductGrid = component({
+  render: () => (
+    <form enhance mutation={addToCart}>
+      <input type="hidden" name="product" value="p1" />
+      <input name="quantity" value="1" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
+      expect.objectContaining({
+        message:
+          'Enhanced mutation form fields do not match mutation input schema. unknown field "product" for mutation "cart/add". Expected fields: productId, quantity',
+      }),
+      expect.objectContaining({
+        message:
+          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "cart/add". Expected fields: productId, quantity',
+      }),
+    ]);
+  });
+
+  it('reports KV242 for mutationFormAttributes spread forms from registry facts', () => {
+    const result = compileComponentModule({
+      fileName: 'product-grid.tsx',
+      registryFacts: {
+        mutationInputs: { 'cart/add': cartAddMutationInputs },
+        mutations: { 'cart/add': 'typeof addToCart' },
+      },
+      source: `
+import { mutationFormAttributes } from '@kovojs/server';
+import { addToCart } from '../app.js';
+
+export const ProductGrid = component({
+  render: () => (
+    <form enhance {...mutationFormAttributes(addToCart)}>
+      <input type="hidden" name="product" value="p1" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
+      expect.objectContaining({
+        message:
+          'Enhanced mutation form fields do not match mutation input schema. unknown field "product" for mutation "cart/add". Expected fields: productId, quantity',
+      }),
+      expect.objectContaining({
+        message:
+          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "cart/add". Expected fields: productId, quantity',
+      }),
+    ]);
   });
 
   it('rejects repeatable typed enhanced mutation forms without authored key identity', () => {
@@ -387,6 +475,136 @@ export const AddToCartForm = component({
     });
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([]);
+  });
+
+  it('reports KV242 for dynamic and unsupported enhanced mutation controls', () => {
+    const result = compileComponentModule({
+      fileName: 'add-to-cart-form.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: s.object({
+    productId: s.string(),
+    quantity: s.number().int().min(1).default(1),
+    action: s.string().optional(),
+  }),
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: ({ fieldName }) => (
+    <form enhance mutation={addToCart}>
+      <input type="hidden" name="productId" value="p1" />
+      <input name={fieldName} value="dynamic" />
+      <input type="hidden" name="productId" value="p2" />
+      <input type="file" name="upload" />
+      <input type="checkbox" name="agree" />
+      <input type="radio" name="choice" />
+      <select name="tags" multiple />
+      <input name="metadata.slug" />
+      <button name="action" value="save">Save</button>
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining('dynamic field names are not supported'),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining('repeated field "productId" is not supported'),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining('file input field "upload" is not supported'),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining('checkbox field "agree" is not supported'),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining('radio field "choice" is not supported'),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining('multiple select field "tags" is not supported'),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining('nested field path "metadata.slug" is not supported'),
+        }),
+      ]),
+    );
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({
+        code: 'KV242',
+        message: expect.stringContaining('unknown field "action"'),
+      }),
+    );
+  });
+
+  it('reports KV242 for external form-associated mutation controls', () => {
+    const result = compileComponentModule({
+      fileName: 'add-to-cart-form.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: s.object({
+    productId: s.string(),
+  }),
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: () => (
+    <section>
+      <form id="cart" enhance mutation={addToCart}></form>
+      <input form="cart" name="productId" value="p1" />
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining('external form-associated controls are not supported'),
+        }),
+      ]),
+    );
+  });
+
+  it('ignores disabled mutation controls when checking completeness', () => {
+    const result = compileComponentModule({
+      fileName: 'add-to-cart-form.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: s.object({
+    productId: s.string(),
+  }),
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: () => (
+    <form enhance mutation={addToCart}>
+      <input disabled name="productId" value="p1" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
+      expect.objectContaining({
+        message:
+          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "cart/add". Expected fields: productId',
+      }),
+    ]);
   });
 
   it('stamps rendered component markup with declared query dependencies', () => {
