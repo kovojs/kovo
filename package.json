@@ -25,7 +25,8 @@
     "test:compiler-perf": "vp run compiler-perf",
     "test:conformance": "vp run conformance",
     "test:integration": "vp run integration",
-    "test:p10-perf": "vp run p10-perf"
+    "test:p10-perf": "vp run p10-perf",
+    "symbols": "node scripts/exported-symbols.mjs"
   },
   "devDependencies": {
     "@kovojs/test": "workspace:*",
