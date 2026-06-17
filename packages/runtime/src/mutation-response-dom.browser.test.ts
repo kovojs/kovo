@@ -50,7 +50,7 @@ describe('browser mutation response DOM apply', () => {
     expect(textarea.selectionEnd).toBe(3);
     expect(textarea.selectionDirection).toBe('forward');
     expect(root.querySelector<HTMLDivElement>('[kovo-key="panel"]')).toBe(panel);
-    expect(panel.scrollTop).toBe(4);
+    expect(panel.scrollTop).toBeCloseTo(4, 0);
     expect(root.querySelector('label')?.textContent).toBe('Updated quantity');
   });
 

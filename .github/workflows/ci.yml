@@ -16,7 +16,7 @@ jobs:
           node-version: 24
       - run: vp install
       - run: vp check
-      - run: vp exec playwright install --with-deps chromium
+      - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp test
       - run: vp run browser
       - run: vp run integration

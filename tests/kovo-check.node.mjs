@@ -3969,7 +3969,7 @@ export const CartTotal = component({
 void test('framework-owned browser suite is wired into acceptance', async () => {
   assert.deepEqual(await browserSuiteAcceptanceProjectFact({ rootPath: projectRootPath }), {
     acceptance: {
-      browser: 'chromium',
+      browsers: ['chromium', 'firefox', 'webkit'],
       headless: true,
       include: ['packages/runtime/src/**/*.browser.test.ts'],
       providerPackage: '@vitest/browser-playwright',

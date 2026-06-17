@@ -69,6 +69,7 @@ export interface VitePlusAcceptanceTaskFacts {
 
 export interface BrowserSuiteAcceptanceShape {
   browser?: unknown;
+  browsers?: unknown;
   headless?: unknown;
   include?: unknown;
   providerPackage?: unknown;
@@ -76,7 +77,7 @@ export interface BrowserSuiteAcceptanceShape {
 
 export interface BrowserSuiteAcceptanceGateFact {
   acceptance: {
-    browser: unknown;
+    browsers: unknown;
     headless: unknown;
     include: unknown;
     providerPackage: unknown;
@@ -303,7 +304,7 @@ export function browserSuiteAcceptanceGateFact(options: {
 
   return {
     acceptance: {
-      browser: options.acceptance.browser,
+      browsers: options.acceptance.browsers ?? options.acceptance.browser,
       headless: options.acceptance.headless,
       include: options.acceptance.include,
       providerPackage: options.acceptance.providerPackage,

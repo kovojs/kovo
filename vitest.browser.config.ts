@@ -8,7 +8,9 @@ export default defineConfig({
     browser: {
       enabled: true,
       headless: browserSuiteAcceptance.headless,
-      instances: [{ browser: browserSuiteAcceptance.browser as 'chromium' }],
+      instances: browserSuiteAcceptance.browsers.map((browser) => ({
+        browser: browser as 'chromium' | 'firefox' | 'webkit',
+      })),
       provider: playwright(),
     },
     include: browserSuiteAcceptance.include,

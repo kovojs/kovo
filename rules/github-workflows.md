@@ -25,4 +25,5 @@ package version.
 
 For Chromium-only smoke checks in this repository, run
 `vp exec playwright install --with-deps chromium` before invoking the browser
-gate.
+gate. For the root browser matrix gate, install every configured engine with
+`vp exec playwright install --with-deps chromium firefox webkit`.

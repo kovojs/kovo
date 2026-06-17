@@ -62,6 +62,6 @@ describe('browser inline loader response apply', () => {
     expect(textarea.selectionEnd).toBe(3);
     expect(textarea.selectionDirection).toBe('forward');
     expect(root.querySelector('[kovo-key="panel"]')).toBe(panel);
-    expect(panel.scrollTop).toBe(4);
+    expect(panel.scrollTop).toBeCloseTo(4, 0);
   });
 });

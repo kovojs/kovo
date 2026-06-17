@@ -259,7 +259,7 @@ describe('@kovojs/test command fixtures', () => {
   it('projects browser suite acceptance wiring as a reusable gate fact', () => {
     const fact = browserSuiteAcceptanceGateFact({
       acceptance: {
-        browser: 'chromium',
+        browsers: ['chromium', 'firefox', 'webkit'],
         headless: true,
         include: ['packages/runtime/src/**/*.browser.test.ts'],
         providerPackage: '@vitest/browser-playwright',
@@ -294,7 +294,7 @@ describe('@kovojs/test command fixtures', () => {
 
     expect(fact).toEqual({
       acceptance: {
-        browser: 'chromium',
+        browsers: ['chromium', 'firefox', 'webkit'],
         headless: true,
         include: ['packages/runtime/src/**/*.browser.test.ts'],
         providerPackage: '@vitest/browser-playwright',
@@ -374,7 +374,7 @@ describe('@kovojs/test command fixtures', () => {
         join(rootPath, 'tests/browser-acceptance.mjs'),
         [
           'export const browserSuiteAcceptance = {',
-          "  browser: 'chromium',",
+          "  browsers: ['chromium', 'firefox', 'webkit'],",
           '  headless: true,',
           "  include: ['packages/runtime/src/**/*.browser.test.ts'],",
           "  providerPackage: '@vitest/browser-playwright',",
@@ -384,7 +384,7 @@ describe('@kovojs/test command fixtures', () => {
 
       await expect(browserSuiteAcceptanceProjectFact({ rootPath })).resolves.toEqual({
         acceptance: {
-          browser: 'chromium',
+          browsers: ['chromium', 'firefox', 'webkit'],
           headless: true,
           include: ['packages/runtime/src/**/*.browser.test.ts'],
           providerPackage: '@vitest/browser-playwright',

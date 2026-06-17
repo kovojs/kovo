@@ -432,13 +432,38 @@ compiler-quality gaps found during the 2026-06-16 audit.
   - [x] Ensure the map cites fixtures from the reference app, commerce app, and focused generated
         fixtures, not only helper/unit tests.
 
-- [ ] Add the browser matrix promised by the conformance bar.
-  - [ ] Classify which compiler-quality behaviors genuinely require a browser rather than
+- [x] Add the browser matrix promised by the conformance bar.
+  - [x] Classify which compiler-quality behaviors genuinely require a browser rather than
         browser-free DOM fixtures.
-  - [ ] Add or update Playwright/Vitest browser configuration for Chromium, Firefox, and WebKit.
-  - [ ] Add CI workflow coverage for the three-engine browser matrix.
-  - [ ] Keep bulky screenshots/traces generated as CI artifacts rather than checked-in fixtures.
-  - [ ] Record local command evidence naming all three engines.
+  - [x] Add or update Playwright/Vitest browser configuration for Chromium, Firefox, and WebKit.
+  - [x] Add CI workflow coverage for the three-engine browser matrix.
+  - [x] Keep bulky screenshots/traces generated as CI artifacts rather than checked-in fixtures.
+  - [x] Record local command evidence naming all three engines.
+  - Evidence (2026-06-17): `tests/browser-acceptance.mjs` declares
+        `browsers: ['chromium', 'firefox', 'webkit']`, and `vitest.browser.config.ts` maps that
+        list to Vitest browser instances while keeping the suite scoped to
+        `packages/runtime/src/**/*.browser.test.ts`.
+  - Evidence (2026-06-17): `.github/workflows/ci.yml` installs matching Playwright binaries for
+        `chromium firefox webkit` before `vp run browser`; `rules/github-workflows.md` documents
+        the three-engine install rule for root browser matrix workflow edits.
+  - Evidence (2026-06-17): `packages/conformance-fixtures/src/command-fixtures.ts`,
+        `packages/conformance-fixtures/src/command-fixtures.test.ts`, and
+        `tests/kovo-check.node.mjs` project the browser acceptance fact as a three-engine
+        `browsers` list. Browser-required coverage remains the runtime DOM/loader/morph/query
+        behavior under `packages/runtime/src/**/*.browser.test.ts`; compiler-quality diagnostics,
+        coverage maps, and generated-output shape remain browser-free Vitest fixtures.
+  - Evidence (2026-06-17): `pnpm run test:browser` passed with `chromium`, `firefox`, and `webkit`
+        instances: 21 browser test files and 63 browser tests. The first Firefox run exposed
+        subpixel `scrollTop` preservation (`3.7333333492279053` versus `4`), so
+        `packages/runtime/src/mutation-response-dom.browser.test.ts` and
+        `packages/runtime/src/inline-loader-response-apply.browser.test.ts` now assert preserved
+        scroll position with `toBeCloseTo(4, 0)`.
+  - Evidence (2026-06-17): `pnpm exec vitest --run
+        packages/conformance-fixtures/src/command-fixtures.test.ts
+        packages/conformance-fixtures/src/package-exports.test.ts`, `node --test
+        --test-name-pattern "framework-owned browser suite is wired into acceptance"
+        tests/kovo-check.node.mjs`, and `pnpm exec tsc --noEmit --pretty false` passed.
+        No new screenshot or trace artifacts were added by the passing three-engine matrix run.
 
 ## Performance Gates
 
