@@ -1,18 +1,25 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
   contextMenuContentAttributes,
   contextMenuGroupAttributes,
   contextMenuItemAttributes,
   contextMenuRootAttributes,
   contextMenuSeparatorAttributes,
   contextMenuTriggerAttributes,
-  defineVariants,
-  type ClassValue,
   type ContextMenuItem as HeadlessContextMenuItem,
   type ContextMenuPoint,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface ContextMenuStyleOverrides {
+  content?: style.StyleInput;
+  group?: style.StyleInput;
+  item?: style.StyleInput;
+  root?: style.StyleInput;
+  separator?: style.StyleInput;
+  trigger?: style.StyleInput;
+}
 
 export interface ContextMenuStateProps {
   disabled?: boolean;
@@ -24,82 +31,142 @@ export interface ContextMenuStateProps {
 
 export interface ContextMenuProps extends ContextMenuStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: ContextMenuStyleOverrides;
 }
 
 export interface ContextMenuTriggerProps extends ContextMenuStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   id?: string;
   labelledBy?: string;
+  styles?: ContextMenuStyleOverrides;
 }
 
 export interface ContextMenuContentProps extends ContextMenuStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   labelledBy?: string;
+  styles?: ContextMenuStyleOverrides;
 }
 
 export interface ContextMenuItemProps extends ContextMenuStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;
   itemValue: string;
+  styles?: ContextMenuStyleOverrides;
 }
 
 export interface ContextMenuGroupProps extends ContextMenuStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   labelledBy?: string;
+  styles?: ContextMenuStyleOverrides;
 }
 
 export interface ContextMenuSeparatorProps {
-  class?: ClassValue;
   id?: string;
+  styles?: ContextMenuStyleOverrides;
 }
 
-export const contextMenuClassNames = defineVariants({
-  base: 'text-sm text-neutral-950 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const contextMenuStyles = style.create(
+  {
+    content: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+      color: '#0a0a0a',
+      fontSize: 14,
+      minWidth: 160,
+      outlineStyle: 'none',
+      padding: 4,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+    },
+    group: {
+      display: 'grid',
+      gap: 4,
+      paddingBlock: 4,
+      paddingInline: 4,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    item: {
+      alignItems: 'center',
+      borderRadius: 4,
+      color: '#404040',
+      display: 'flex',
+      fontSize: 14,
+      outlineStyle: 'none',
+      paddingBlock: 6,
+      paddingInline: 8,
+      textAlign: 'left',
+      width: '100%',
+      '[data-disabled]': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      '[data-highlighted]': {
+        backgroundColor: '#f5f5f5',
+        color: '#0a0a0a',
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      fontSize: 14,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    separator: {
+      backgroundColor: '#e5e5e5',
+      height: 1,
+      marginBlock: 4,
+    },
+    trigger: {
+      backgroundColor: '#fafafa',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'dashed',
+      borderWidth: 1,
+      color: '#404040',
+      fontSize: 14,
+      outlineStyle: 'none',
+      paddingBlock: 12,
+      paddingInline: 16,
+      '[data-disabled]': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      '[data-state=open]': {
+        borderColor: '#0a0a0a',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+  },
+  { namespace: 'contextMenu', source: 'context-menu.tsx' },
+);
 
-export const contextMenuTriggerClassNames = defineVariants({
-  base: 'rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-3 text-sm text-neutral-700 outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 data-[state=open]:border-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const contextMenuContentClassNames = defineVariants({
-  base: 'min-w-40 rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-md outline-none data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const contextMenuItemClassNames = defineVariants({
-  base: 'flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-neutral-700 outline-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const contextMenuGroupClassNames = defineVariants({
-  base: 'grid gap-1 px-1 py-1 data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const contextMenuSeparatorClassNames = defineVariants({
-  base: 'my-1 h-px bg-neutral-200',
-  variants: {},
-});
-
-export const contextMenuClasses = contextMenuClassNames.classes;
-export const contextMenuTriggerClasses = contextMenuTriggerClassNames.classes;
-export const contextMenuContentClasses = contextMenuContentClassNames.classes;
-export const contextMenuItemClasses = contextMenuItemClassNames.classes;
-export const contextMenuGroupClasses = contextMenuGroupClassNames.classes;
-export const contextMenuSeparatorClasses = contextMenuSeparatorClassNames.classes;
+export const contextMenuClasses = [style.attrs(contextMenuStyles.root).class ?? ''] as const;
+export const contextMenuTriggerClasses = [style.attrs(contextMenuStyles.trigger).class ?? ''] as const;
+export const contextMenuContentClasses = [style.attrs(contextMenuStyles.content).class ?? ''] as const;
+export const contextMenuItemClasses = [style.attrs(contextMenuStyles.item).class ?? ''] as const;
+export const contextMenuGroupClasses = [style.attrs(contextMenuStyles.group).class ?? ''] as const;
+export const contextMenuSeparatorClasses = [
+  style.attrs(contextMenuStyles.separator).class ?? '',
+] as const;
 
 export const ContextMenu = component({
   render(props: ContextMenuProps) {
@@ -111,10 +178,11 @@ export const ContextMenu = component({
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.point === undefined ? {} : { point: props.point }),
     });
+    const styleAttrs = style.attrs(contextMenuStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(contextMenuClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -137,6 +205,7 @@ export const ContextMenuTrigger = component({
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.point === undefined ? {} : { point: props.point }),
     });
+    const styleAttrs = style.attrs(contextMenuStyles.trigger, props.styles?.trigger);
 
     return (
       <div
@@ -145,7 +214,7 @@ export const ContextMenuTrigger = component({
         aria-expanded={attrs['aria-expanded']}
         aria-haspopup={attrs['aria-haspopup']}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(contextMenuTriggerClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -170,11 +239,12 @@ export const ContextMenuContent = component({
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.point === undefined ? {} : { point: props.point }),
     });
+    const styleAttrs = style.attrs(contextMenuStyles.content, props.styles?.content);
 
     return (
       <div
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(contextMenuContentClassNames(), props.class)}
+        {...styleAttrs}
         data-anchor-x={attrs['data-anchor-x']}
         data-anchor-y={attrs['data-anchor-y']}
         data-disabled={attrs['data-disabled']}
@@ -203,11 +273,12 @@ export const ContextMenuItem = component({
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.point === undefined ? {} : { point: props.point }),
     });
+    const styleAttrs = style.attrs(contextMenuStyles.item, props.styles?.item);
 
     return (
       <button
         aria-disabled={attrs['aria-disabled']}
-        class={cn(contextMenuItemClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -235,11 +306,12 @@ export const ContextMenuGroup = component({
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.point === undefined ? {} : { point: props.point }),
     });
+    const styleAttrs = style.attrs(contextMenuStyles.group, props.styles?.group);
 
     return (
       <div
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(contextMenuGroupClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -254,10 +326,11 @@ export const ContextMenuGroup = component({
 export const ContextMenuSeparator = component({
   render(props: ContextMenuSeparatorProps) {
     const attrs = contextMenuSeparatorAttributes(props.id === undefined ? {} : { id: props.id });
+    const styleAttrs = style.attrs(contextMenuStyles.separator, props.styles?.separator);
 
     return (
       <div
-        class={cn(contextMenuSeparatorClassNames(), props.class)}
+        {...styleAttrs}
         id={attrs.id}
         role={attrs.role}
       />

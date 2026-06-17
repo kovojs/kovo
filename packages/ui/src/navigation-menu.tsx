@@ -2,8 +2,6 @@
 import { component } from '@kovojs/core';
 import { escapeHtml } from '@kovojs/server';
 import {
-  cn,
-  defineVariants,
   navigationMenuContentAttributes,
   navigationMenuIndicatorAttributes,
   navigationMenuItemAttributes,
@@ -12,11 +10,22 @@ import {
   navigationMenuRootAttributes,
   navigationMenuTriggerAttributes,
   navigationMenuViewportAttributes,
-  type ClassValue,
   type CollectionOrientation,
   type NavigationMenuItem as HeadlessNavigationMenuItem,
   type TextDirection,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface NavigationMenuStyleOverrides {
+  content?: style.StyleInput;
+  indicator?: style.StyleInput;
+  item?: style.StyleInput;
+  link?: style.StyleInput;
+  list?: style.StyleInput;
+  root?: style.StyleInput;
+  trigger?: style.StyleInput;
+  viewport?: style.StyleInput;
+}
 
 export interface NavigationMenuStateProps {
   activeValue?: string;
@@ -30,26 +39,26 @@ export interface NavigationMenuStateProps {
 
 export interface NavigationMenuProps extends NavigationMenuStateProps {
   children?: string;
-  class?: ClassValue;
   descriptionId?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
+  styles?: NavigationMenuStyleOverrides;
 }
 
 export interface NavigationMenuListProps extends NavigationMenuStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   labelledBy?: string;
+  styles?: NavigationMenuStyleOverrides;
 }
 
 export interface NavigationMenuItemProps extends NavigationMenuStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: NavigationMenuStyleOverrides;
 }
 
 export interface NavigationMenuTriggerProps extends NavigationMenuItemProps {
@@ -59,9 +68,9 @@ export interface NavigationMenuTriggerProps extends NavigationMenuItemProps {
 
 export interface NavigationMenuContentProps extends NavigationMenuStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
   labelledBy?: string;
+  styles?: NavigationMenuStyleOverrides;
   value: string;
 }
 
@@ -72,58 +81,162 @@ export interface NavigationMenuLinkProps extends NavigationMenuItemProps {
 
 export interface NavigationMenuPartProps extends NavigationMenuStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: NavigationMenuStyleOverrides;
 }
 
-export const navigationMenuClassNames = defineVariants({
-  base: 'relative text-sm text-neutral-950 data-[orientation=vertical]:w-full data-[disabled]:opacity-50',
-  variants: {},
-});
+export const navigationMenuStyles = style.create(
+  {
+    content: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+      color: '#404040',
+      fontSize: 14,
+      marginTop: 8,
+      outlineStyle: 'none',
+      padding: 12,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+    },
+    indicator: {
+      backgroundColor: '#0a0a0a',
+      borderRadius: 9999,
+      height: 4,
+      width: 32,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+    },
+    item: {
+      position: 'relative',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    link: {
+      alignItems: 'center',
+      borderRadius: 4,
+      color: '#404040',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 36,
+      outlineStyle: 'none',
+      paddingInline: 12,
+      transitionProperty: 'background-color, color',
+      '[data-disabled]': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      '[data-highlighted]': {
+        backgroundColor: '#f5f5f5',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#f5f5f5',
+      },
+    },
+    list: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      display: 'flex',
+      gap: 4,
+      listStyle: 'none',
+      padding: 4,
+      '[data-orientation=vertical]': {
+        alignItems: 'stretch',
+        flexDirection: 'column',
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      fontSize: 14,
+      position: 'relative',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-orientation=vertical]': {
+        width: '100%',
+      },
+    },
+    trigger: {
+      alignItems: 'center',
+      borderRadius: 4,
+      color: '#404040',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 36,
+      outlineStyle: 'none',
+      paddingInline: 12,
+      transitionProperty: 'background-color, color',
+      '[data-disabled]': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      '[data-highlighted]': {
+        backgroundColor: '#f5f5f5',
+      },
+      '[data-state=open]': {
+        backgroundColor: '#f5f5f5',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#f5f5f5',
+      },
+    },
+    viewport: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+      marginTop: 8,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+    },
+  },
+  { namespace: 'navigationMenu', source: 'navigation-menu.tsx' },
+);
 
-export const navigationMenuListClassNames = defineVariants({
-  base: 'flex list-none items-center gap-1 rounded-md border border-neutral-200 bg-white p-1 shadow-sm data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch',
-  variants: {},
-});
-
-export const navigationMenuItemClassNames = defineVariants({
-  base: 'relative data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const navigationMenuTriggerClassNames = defineVariants({
-  base: 'inline-flex h-9 items-center rounded px-3 text-sm font-medium text-neutral-700 outline-none transition-colors hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-neutral-950 data-[state=open]:bg-neutral-100 data-[highlighted]:bg-neutral-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const navigationMenuContentClassNames = defineVariants({
-  base: 'mt-2 rounded-md border border-neutral-200 bg-white p-3 text-sm text-neutral-700 shadow-md outline-none data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const navigationMenuLinkClassNames = defineVariants({
-  base: 'inline-flex h-9 items-center rounded px-3 text-sm font-medium text-neutral-700 outline-none transition-colors hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-neutral-950 data-[highlighted]:bg-neutral-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const navigationMenuViewportClassNames = defineVariants({
-  base: 'mt-2 rounded-md border border-neutral-200 bg-white shadow-md data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const navigationMenuIndicatorClassNames = defineVariants({
-  base: 'h-1 w-8 rounded-full bg-neutral-950 data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const navigationMenuClasses = navigationMenuClassNames.classes;
-export const navigationMenuListClasses = navigationMenuListClassNames.classes;
-export const navigationMenuItemClasses = navigationMenuItemClassNames.classes;
-export const navigationMenuTriggerClasses = navigationMenuTriggerClassNames.classes;
-export const navigationMenuContentClasses = navigationMenuContentClassNames.classes;
-export const navigationMenuLinkClasses = navigationMenuLinkClassNames.classes;
-export const navigationMenuViewportClasses = navigationMenuViewportClassNames.classes;
-export const navigationMenuIndicatorClasses = navigationMenuIndicatorClassNames.classes;
+export const navigationMenuClasses = [style.attrs(navigationMenuStyles.root).class ?? ''] as const;
+export const navigationMenuListClasses = [style.attrs(navigationMenuStyles.list).class ?? ''] as const;
+export const navigationMenuItemClasses = [style.attrs(navigationMenuStyles.item).class ?? ''] as const;
+export const navigationMenuTriggerClasses = [
+  style.attrs(navigationMenuStyles.trigger).class ?? '',
+] as const;
+export const navigationMenuContentClasses = [
+  style.attrs(navigationMenuStyles.content).class ?? '',
+] as const;
+export const navigationMenuLinkClasses = [style.attrs(navigationMenuStyles.link).class ?? ''] as const;
+export const navigationMenuViewportClasses = [
+  style.attrs(navigationMenuStyles.viewport).class ?? '',
+] as const;
+export const navigationMenuIndicatorClasses = [
+  style.attrs(navigationMenuStyles.indicator).class ?? '',
+] as const;
 
 export const NavigationMenu = component({
   render(props: NavigationMenuProps) {
@@ -133,6 +246,7 @@ export const NavigationMenu = component({
       ...(props.label === undefined ? {} : { label: props.label }),
       ...(props.labelledBy === undefined ? {} : { labelledBy: props.labelledBy }),
     });
+    const styleAttrs = style.attrs(navigationMenuStyles.root, props.styles?.root);
 
     return (
       <nav
@@ -141,7 +255,7 @@ export const NavigationMenu = component({
         aria-label={attrs['aria-label']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-orientation={attrs['aria-orientation']}
-        class={cn(navigationMenuClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         data-state={attrs['data-state']}
@@ -160,11 +274,12 @@ export const NavigationMenuList = component({
       ...toNavigationState(props),
       ...(props.labelledBy === undefined ? {} : { labelledBy: props.labelledBy }),
     });
+    const styleAttrs = style.attrs(navigationMenuStyles.list, props.styles?.list);
 
     return (
       <div
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(navigationMenuListClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         data-state={attrs['data-state']}
@@ -185,10 +300,11 @@ export const NavigationMenuItem = component({
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),
       itemValue: props.itemValue,
     });
+    const styleAttrs = style.attrs(navigationMenuStyles.item, props.styles?.item);
 
     return (
       <div
-        class={cn(navigationMenuItemClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -211,13 +327,14 @@ export const NavigationMenuTrigger = component({
       ...(props.itemLabel === undefined ? {} : { itemLabel: props.itemLabel }),
       itemValue: props.itemValue,
     });
+    const styleAttrs = style.attrs(navigationMenuStyles.trigger, props.styles?.trigger);
 
     return (
       <button
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         aria-haspopup={attrs['aria-haspopup']}
-        class={cn(navigationMenuTriggerClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -245,11 +362,12 @@ export const NavigationMenuContent = component({
       ...(props.labelledBy === undefined ? {} : { labelledBy: props.labelledBy }),
       value: props.value,
     });
+    const styleAttrs = style.attrs(navigationMenuStyles.content, props.styles?.content);
 
     return (
       <div
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(navigationMenuContentClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
@@ -273,11 +391,12 @@ export const NavigationMenuLink = component({
       ...(props.itemLabel === undefined ? {} : { itemLabel: props.itemLabel }),
       itemValue: props.itemValue,
     });
+    const styleAttrs = style.attrs(navigationMenuStyles.link, props.styles?.link);
 
     return (
       <a
         aria-disabled={attrs['aria-disabled']}
-        class={cn(navigationMenuLinkClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -300,10 +419,11 @@ export const NavigationMenuLink = component({
 export const NavigationMenuViewport = component({
   render(props: NavigationMenuPartProps) {
     const attrs = navigationMenuViewportAttributes(toNavigationState(props));
+    const styleAttrs = style.attrs(navigationMenuStyles.viewport, props.styles?.viewport);
 
     return (
       <div
-        class={cn(navigationMenuViewportClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
@@ -318,10 +438,11 @@ export const NavigationMenuViewport = component({
 export const NavigationMenuIndicator = component({
   render(props: NavigationMenuPartProps) {
     const attrs = navigationMenuIndicatorAttributes(toNavigationState(props));
+    const styleAttrs = style.attrs(navigationMenuStyles.indicator, props.styles?.indicator);
 
     return (
       <div
-        class={cn(navigationMenuIndicatorClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
