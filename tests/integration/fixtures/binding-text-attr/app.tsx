@@ -1,12 +1,11 @@
 import {
   createApp,
-  escapeAttribute,
-  escapeHtml,
   mutation,
   renderQueryScript,
   route,
   s,
 } from '@kovojs/server';
+import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { cardDomain, cardQuery, readCard, type CardResult } from './shared';

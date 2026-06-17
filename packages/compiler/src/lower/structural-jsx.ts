@@ -165,11 +165,13 @@ export function lowerStructuralJsx(
   );
 
   const alreadyImportsEscapeText = model.namedImports.some(
-    (entry) => entry.importedName === 'escapeText' && entry.moduleSpecifier === '@kovojs/server',
+    (entry) =>
+      entry.importedName === 'escapeText' &&
+      entry.moduleSpecifier === '@kovojs/server/internal/html',
   );
   const escapeImport =
     escapeApplied && !alreadyImportsEscapeText
-      ? `import { escapeText } from '@kovojs/server';\n`
+      ? `import { escapeText } from '@kovojs/server/internal/html';\n`
       : '';
   const runtimeImports = [
     ...(deriveExports.length > 0 ? ['derive'] : []),

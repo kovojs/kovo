@@ -28,11 +28,6 @@ export type {
   StaticExportResult,
 } from '../../static-export-types.js';
 export type {
-  StaticExportOutputPlanItem,
-  StaticExportOutputPlanItemKind,
-  StaticExportOutputPlanOptions,
-} from '../../static-export-output.js';
-export type {
   StaticExportCompileDiagnostic,
   StaticExportDiagnostic,
   StaticExportDiagnosticSeverity,

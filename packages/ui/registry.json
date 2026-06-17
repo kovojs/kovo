@@ -94,7 +94,7 @@
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"],
-        "@kovojs/server": ["escapeHtml"]
+        "@kovojs/server/internal/html": ["escapeHtml"]
       },
       "uiComponents": []
     },
@@ -239,7 +239,7 @@
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"],
-        "@kovojs/server": ["escapeHtml"]
+        "@kovojs/server/internal/html": ["escapeHtml"]
       },
       "uiComponents": []
     },
@@ -273,7 +273,7 @@
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"],
-        "@kovojs/server": ["escapeHtml"]
+        "@kovojs/server/internal/html": ["escapeHtml"]
       },
       "uiComponents": []
     },
@@ -352,7 +352,7 @@
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"],
-        "@kovojs/server": ["escapeHtml"]
+        "@kovojs/server/internal/html": ["escapeHtml"]
       },
       "uiComponents": []
     },
@@ -461,7 +461,7 @@
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"],
-        "@kovojs/server": ["escapeHtml"]
+        "@kovojs/server/internal/html": ["escapeHtml"]
       },
       "uiComponents": []
     },
@@ -507,7 +507,7 @@
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"],
-        "@kovojs/server": ["escapeHtml"]
+        "@kovojs/server/internal/html": ["escapeHtml"]
       },
       "uiComponents": []
     },
@@ -653,7 +653,7 @@
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"],
-        "@kovojs/server": ["escapeHtml"]
+        "@kovojs/server/internal/html": ["escapeHtml"]
       },
       "uiComponents": []
     },
@@ -683,7 +683,7 @@
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"],
-        "@kovojs/server": ["escapeHtml"]
+        "@kovojs/server/internal/html": ["escapeHtml"]
       },
       "uiComponents": []
     },
@@ -739,7 +739,7 @@
         "@kovojs/headless-ui": [],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"],
-        "@kovojs/server": ["escapeAttribute", "escapeHtml"]
+        "@kovojs/server/internal/html": ["escapeAttribute", "escapeHtml"]
       },
       "uiComponents": []
     },

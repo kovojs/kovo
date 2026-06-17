@@ -8,8 +8,8 @@ import { route } from './route.js';
 import {
   createKovoAppShellViteBuildFromBundle,
   kovoAppShellViteManifestStylesheetHrefFromFile,
-  kovoAppShellVitePlugin,
 } from './api/app-shell/vite.js';
+import { kovoAppShellVitePlugin } from './internal/app-shell-vite.js';
 import {
   kovoAppShellViteManifestAssets,
   kovoAppShellViteManifestAssetsFromFile,

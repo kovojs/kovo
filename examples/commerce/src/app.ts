@@ -6,8 +6,6 @@ import {
   errorBoundary,
   csrfField,
   csrfToken,
-  escapeAttribute,
-  escapeHtml,
   guards,
   i18n,
   metaFromQuery,
@@ -28,9 +26,10 @@ import {
   webhook,
   type GuardResult,
   type MutationFail,
-  type MutationWireHeaderSource,
   type StoredFileUpload,
 } from '@kovojs/server';
+import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
+import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 import {
   authed as betterAuthAuthed,
   betterAuthSession,

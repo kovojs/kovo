@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { escapeHtml } from '@kovojs/server';
+import { escapeHtml } from '@kovojs/server/internal/html';
 
 // Two-pane example page (ported from scripts/examples.mjs renderExampleSplit): a
 // sandboxed <iframe> running the example's static export on the left, and a

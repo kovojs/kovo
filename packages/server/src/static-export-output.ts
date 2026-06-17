@@ -28,10 +28,18 @@ import {
   type StaticExportClientModuleArtifact,
 } from './static-export-types.js';
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Synthetic root used
+ * when export callers need a dry-run plan but no filesystem write.
+ */
 export const STATIC_EXPORT_DRY_RUN_ROOT = '/__kovo_static_export_plan__';
 
 export type { StaticExportOutputPlanItem, StaticExportOutputPlanItemKind };
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Filesystem root
+ * options for dry-run and write-output planning.
+ */
 export interface StaticExportOutputPlanOptions {
   outDir: string | URL;
 }
@@ -42,6 +50,10 @@ interface StaticExportOutputArtifacts {
   clientModules: readonly StaticExportClientModuleArtifact[];
 }
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Complete resolved
+ * write plan consumed by the atomic output writer.
+ */
 export interface StaticExportOutputPlan extends StaticExportOutputArtifacts {
   outDir: string | URL;
   root: string;
@@ -70,6 +82,10 @@ export function staticExportOutputPlan(
   }));
 }
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Creates the exact
+ * target list used by static export dry-run and write modes.
+ */
 export function createStaticExportOutputPlan(
   plan: StaticExportOutputPlanInput,
 ): StaticExportOutputPlan {
@@ -79,6 +95,10 @@ export function createStaticExportOutputPlan(
   return { ...plan, root, writes };
 }
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Resolves and validates
+ * the filesystem root for a static export write.
+ */
 export function staticExportOutputRoot(outDir: string | URL): string {
   if (outDir instanceof URL) {
     if (outDir.protocol === 'file:') return path.resolve(fileURLToPath(outDir));
@@ -94,6 +114,10 @@ export function staticExportOutputRoot(outDir: string | URL): string {
   return path.resolve(outDir);
 }
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Atomically writes a
+ * resolved static export output plan.
+ */
 export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<void> {
   for (const artifact of plan.assets) {
     await assertReadableStaticExportAssetSource(artifact);
@@ -115,6 +139,10 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
   }
 }
 
+/**
+ * @internal Static export output planner internal (SPEC.md §9.5). Converts user-declared
+ * static assets into replay artifacts before target planning.
+ */
 export function staticExportAssetArtifacts(
   assets: readonly StaticExportAssetInput[],
 ): StaticExportAssetArtifact[] {

@@ -75,8 +75,6 @@ export type {
   RouteRequestInput,
 } from '../route.js';
 export type { CookieOptions } from '../cookies.js';
-export { findRouteAmbiguities, matchRoute, normalizePathname } from '../match.js';
-export type { PathnameNormalization, RouteAmbiguity, RouteLike, RouteMatch } from '../match.js';
 export { runWebhook, webhook } from '../webhook.js';
 export type {
   WebhookChangeOptions,

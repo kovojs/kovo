@@ -1,6 +1,6 @@
 // @kovojs-ir — lowered from examples/commerce/src/components/product-grid.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
-import { escapeText } from '@kovojs/server';
+import { escapeText } from '@kovojs/server/internal/html';
 import { component, form, type ComponentRenderSlots, type FormFailure } from '@kovojs/core';
 import { componentMutationFailureSlots, csrfField, type MutationFail } from '@kovojs/server';
 import { Badge } from '@kovojs/ui/badge';

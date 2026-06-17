@@ -6,8 +6,8 @@ import {
   route,
   s,
   type MutationFail,
-  type MutationWireHeaderSource,
 } from '@kovojs/server';
+import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 
 import { createShopDb, type ShopDb } from './db.js';
 import { CartBadge } from './generated/cart-badge.js';

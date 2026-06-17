@@ -12,6 +12,10 @@ import {
 } from './vite-build-output.js';
 import type { KovoAppShellViteOutputBundle } from './vite-manifest.js';
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Raw writeBundle
+ * context passed from the combined Vite plugin to the output writer.
+ */
 export interface KovoAppShellVitePluginBuildContext {
   app: KovoApp;
   buildOptions: KovoAppShellVitePluginBuildOptions;
@@ -19,11 +23,19 @@ export interface KovoAppShellVitePluginBuildContext {
   outputOptions: KovoAppShellViteOutputOptions;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Build and output
+ * result returned to plugin hook tests and in-repo tooling.
+ */
 export interface KovoAppShellVitePluginBuildResult {
   build: KovoAppShellBuild;
   output: KovoAppShellViteBuildOutput;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Writes the plugin
+ * build output and optional static export from a Rollup/Vite bundle.
+ */
 export async function writeKovoAppShellVitePluginBuild(
   context: KovoAppShellVitePluginBuildContext,
 ): Promise<KovoAppShellVitePluginBuildResult> {

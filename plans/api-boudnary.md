@@ -152,6 +152,15 @@ already excludes `@internal`, but the root barrels can still export those names.
     smaller than a package-wide barrel.
   - Prove: `pnpm --filter @kovojs/server exec vitest run`, example build checks,
     `node scripts/api-surface-gate.mjs`, and site API checks.
+  - Evidence: server internals slice added `@kovojs/server/internal/html`,
+    `@kovojs/server/internal/wire`, `@kovojs/server/internal/route`,
+    `@kovojs/server/internal/static-export`, and
+    `@kovojs/server/internal/app-shell-vite`; moved root/app-shell consumers for
+    escape helpers, mutation-wire types, route/shell dispatch, and raw Vite
+    plugin diagnostics to those subpaths; verified with
+    `pnpm --filter @kovojs/server exec vitest run` (62 files, 404 tests) and
+    `node scripts/api-surface-gate.mjs`
+    (`public-exports-needing-attention=2904`, `baseline=2907`).
 - [ ] **Migrate `@kovojs/runtime` emit-target surface to `@kovojs/runtime/generated`.**
   - Emitted modules import from `@kovojs/runtime/generated` rather than the public
     root or an internal path; update compiler emitters, gallery replacements, and

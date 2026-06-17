@@ -11,8 +11,8 @@ import {
   s,
   session,
   type MutationFail,
-  type MutationWireHeaderSource,
 } from '@kovojs/server';
+import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';

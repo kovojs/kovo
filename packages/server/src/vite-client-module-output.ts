@@ -4,6 +4,10 @@ import * as path from 'node:path';
 import type { KovoAppShellBuiltClientModule } from './vite-build.js';
 import { viteDistSourcePath } from './vite-build-assets.js';
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Planned immutable
+ * /c/ module output target.
+ */
 export interface KovoAppShellViteClientModuleOutputPlanItem {
   path: string;
   targetPath: string;
@@ -13,6 +17,10 @@ interface KovoAppShellViteClientModuleWrite extends KovoAppShellViteClientModule
   source: string;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Atomically writes
+ * built client modules into the Vite output directory.
+ */
 export async function writeKovoAppShellViteClientModuleOutput(
   root: string,
   modules: readonly KovoAppShellBuiltClientModule[],
@@ -46,6 +54,10 @@ export async function writeKovoAppShellViteClientModuleOutput(
   }
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Validates client
+ * module output targets before static export writes begin.
+ */
 export async function assertWritableKovoAppShellViteClientModuleOutput(
   root: string,
   modules: readonly KovoAppShellBuiltClientModule[],
@@ -58,6 +70,10 @@ export async function assertWritableKovoAppShellViteClientModuleOutput(
   await assertWritableKovoAppShellViteClientModuleTargets(root, writes);
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Returns the dry-run
+ * client module output plan for build/export evidence.
+ */
 export function kovoAppShellViteClientModuleOutputPlan(
   root: string,
   modules: readonly KovoAppShellBuiltClientModule[],

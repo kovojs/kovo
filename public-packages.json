@@ -35,12 +35,18 @@
           "./app-shell/core",
           "./app-shell/node",
           "./app-shell/static-export",
-          "./app-shell/vite",
           "./jsx-runtime",
           "./jsx-dev-runtime"
         ],
         "generated": [],
-        "internal": []
+        "internal": [
+          "./app-shell/vite",
+          "./internal/app-shell-vite",
+          "./internal/html",
+          "./internal/route",
+          "./internal/static-export",
+          "./internal/wire"
+        ]
       },
       "apiRef": {
         "order": 2,
