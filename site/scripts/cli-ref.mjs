@@ -1,8 +1,15 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { COMMANDS_MANIFEST } from '../../packages/cli/src/commands-manifest.ts';
+
+import { slugify } from './md.mjs';
+
+// Source link for command rows in the API sidebar: the bin's dispatch file. A
+// fixed ref keeps the generated manifest deterministic.
+const CLI_SOURCE_HREF = 'https://github.com/kovojs/kovo/blob/main/packages/cli/src/index.ts';
 
 /**
  * Command-first `/api/cli/` generator.
@@ -109,7 +116,7 @@ function transform(source) {
     '',
     'Command-line interface for the Kovo toolchain. Generated from the shared',
     '`@kovojs/cli` command manifest (`packages/cli/src/commands-manifest.ts`) and the',
-    'package\'s public TypeScript source. Do not edit by hand.',
+    "package's public TypeScript source. Do not edit by hand.",
     '',
     'Run `kovo` with no arguments to list the available commands:',
     '',
@@ -132,11 +139,46 @@ function transform(source) {
   return `${frontmatter}\n\n${body}\n`.replace(/\n{3,}/g, '\n\n');
 }
 
+/**
+ * Rewrite the api-ref-generated `cli.sidebar.json` to match the command-first
+ * page: a "Commands" group on top (one row per `kovo <command>`, anchored to its
+ * `### kovo <command>` heading), with the programmatic `Functions`/`Types`
+ * groups kept after it (their anchors still resolve — the symbols are only
+ * demoted to `####`, the ids are unchanged). Without this, the API rail would
+ * advertise only the two programmatic functions and omit every command.
+ */
+function transformSidebar(manifest) {
+  const commands = {
+    title: 'Commands',
+    anchor: 'commands',
+    symbols: COMMANDS_MANIFEST.map((entry) => ({
+      name: `kovo ${entry.name}`,
+      anchor: slugify(`kovo ${entry.name}`),
+      kind: 'command',
+      documented: true,
+      sourceHref: CLI_SOURCE_HREF,
+    })),
+  };
+  return { ...manifest, categories: [commands, ...manifest.categories] };
+}
+
 export async function generateCliReference({ outDir = path.join(siteRoot, 'gen/api') } = {}) {
   const cliPath = path.join(outDir, 'cli.md');
   const source = await readFile(cliPath, 'utf8');
   const transformed = transform(source);
   await writeFile(cliPath, transformed, 'utf8');
+
+  // Keep the API navigation in step with the command-first page.
+  const sidebarPath = path.join(outDir, 'cli.sidebar.json');
+  if (existsSync(sidebarPath)) {
+    const manifest = JSON.parse(await readFile(sidebarPath, 'utf8'));
+    await writeFile(
+      sidebarPath,
+      `${JSON.stringify(transformSidebar(manifest), null, 2)}\n`,
+      'utf8',
+    );
+  }
+
   return { commands: COMMANDS_MANIFEST.map((entry) => entry.name) };
 }
 
