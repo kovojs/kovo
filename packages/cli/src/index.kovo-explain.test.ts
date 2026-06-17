@@ -843,6 +843,87 @@ describe('kovo explain', () => {
     });
   });
 
+  it('explains route layout chains and per-layout queries on request', () => {
+    expect(
+      kovoExplain(
+        {
+          pages: [
+            {
+              layouts: [
+                { name: 'AppLayout', queries: ['viewer', 'cart'] },
+                { name: 'AdminLayout', queries: ['permissions'] },
+              ],
+              queries: ['adminUsers'],
+              route: '/admin',
+            },
+          ],
+        },
+        { kind: 'page', layouts: true, target: '/admin' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'PAGE /admin',
+        'prefetch: false',
+        'modulepreloads: -',
+        'stylesheets: -',
+        'queries: adminUsers',
+        'layouts: AppLayout,AdminLayout',
+        'layout: AppLayout queries=viewer,cart',
+        'layout: AdminLayout queries=permissions',
+        'view-transitions: -',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('parses page --layouts for the CLI command', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-explain-layouts-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          pages: [
+            {
+              layouts: [{ name: 'AppLayout', queries: ['viewer'] }],
+              route: '/admin',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', 'page', '/admin', '--layouts', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      [
+        'kovo-explain/v1',
+        'PAGE /admin',
+        'prefetch: false',
+        'modulepreloads: -',
+        'stylesheets: -',
+        'queries: -',
+        'layouts: AppLayout',
+        'layout: AppLayout queries=viewer',
+        'view-transitions: -',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('returns a stable not-found diagnostic for missing explain targets', () => {
     expect(kovoExplain({}, { kind: 'component', target: 'Missing' })).toEqual({
       exitCode: 1,

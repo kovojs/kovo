@@ -1156,6 +1156,7 @@ export interface KovoEndpointExplainOptions {
  */
 export interface KovoTargetExplainOptions {
   kind: ExplainKind;
+  layouts?: boolean;
   optimistic?: boolean;
   target: string;
 }
@@ -1396,6 +1397,12 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
   lines.push(`modulepreloads: ${list(page.modulepreloads)}`);
   lines.push(`stylesheets: ${list(page.stylesheets)}`);
   lines.push(`queries: ${list(page.queries)}`);
+  if (options.layouts) {
+    lines.push(`layouts: ${list(page.layouts?.map((layout) => layout.name))}`);
+    for (const layout of page.layouts ?? []) {
+      lines.push(`layout: ${layout.name} queries=${list(layout.queries)}`);
+    }
+  }
   lines.push(`view-transitions: ${list(page.viewTransitions)}`);
   return ok(lines);
 }
@@ -1647,6 +1654,7 @@ function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
   const parsed = parseFlaggedArgs(args, [
     '--endpoints',
     '--fail-on-findings',
+    '--layouts',
     '--optimistic',
     '--unguarded',
     '--unscoped',
@@ -1658,14 +1666,21 @@ function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
   if (modeFlags.length > 1) return explainUsage();
 
   if (flags.has('--endpoints')) {
-    if (flags.has('--fail-on-findings') || flags.has('--optimistic') || positional.length > 1) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
       return explainUsage();
     }
     return { inputPath: positional[0], ok: true, options: { endpoints: true } };
   }
 
   if (flags.has('--unguarded') || flags.has('--unscoped')) {
-    if (flags.has('--optimistic') || positional.length > 1) return explainUsage();
+    if (flags.has('--layouts') || flags.has('--optimistic') || positional.length > 1) {
+      return explainUsage();
+    }
     const options = flags.has('--unguarded')
       ? ({ failOnFindings: flags.has('--fail-on-findings'), unguarded: true } as const)
       : ({ failOnFindings: flags.has('--fail-on-findings'), unscoped: true } as const);
@@ -1676,18 +1691,19 @@ function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
 
   const [kind, target, inputPath, extra] = positional;
   if (!isExplainKind(kind) || !target || extra) return explainUsage();
+  if (flags.has('--layouts') && kind !== 'page') return explainUsage();
 
   return {
     inputPath,
     ok: true,
-    options: { kind, optimistic: flags.has('--optimistic'), target },
+    options: { kind, layouts: flags.has('--layouts'), optimistic: flags.has('--optimistic'), target },
   };
 }
 
 function explainUsage(): ExplainArgParseResult {
   return {
     message:
-      'kovo: usage: kovo explain component|mutation|query|page <target> [--optimistic] [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]',
+      'kovo: usage: kovo explain component|mutation|query|page <target> [--optimistic] [--layouts] [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]',
     ok: false,
   };
 }

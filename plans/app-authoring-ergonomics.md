@@ -222,12 +222,18 @@ item inherits from rather than re-deciding it:
       passes negative fixtures proving unresolved and cyclic local layout chains
       produce KV303 teaching diagnostics instead of silently dropping layout
       facts.
+    - `kovo explain page --layouts` now surfaces compiler-derived route layout
+      chains and each layout segment's query keys through graph page facts;
+      `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts
+      packages/compiler/src/registry.test.ts packages/core/src/graph.test.ts`
+      passes with fixtures for graph-threaded layout facts, in-process page
+      explain output, and CLI `page --layouts` parsing.
     - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
   - Remaining gaps:
     - Compiler route lowering does not yet derive navigation segment metadata.
-    - Layout query live-target refresh, per-segment boundaries, and `kovo explain
-      page --layouts` are not implemented yet.
+    - Layout query live-target refresh and per-segment boundaries are not
+      implemented yet.
 
 - [ ] **4. Replace string shell helpers with layouts + `documentTemplate`.**
   - Framework direction: convert document-level shells to

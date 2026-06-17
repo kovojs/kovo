@@ -46,7 +46,22 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...options.graph,
     components,
     ...(routePages.length > 0
-      ? { pages: [...(options.graph?.pages ?? []), ...routePages.map((page) => ({ route: page.route }))] }
+      ? {
+          pages: [
+            ...(options.graph?.pages ?? []),
+            ...routePages.map((page) => ({
+              ...(page.layouts && page.layouts.length > 0
+                ? {
+                    layouts: page.layouts.map((layout) => ({
+                      name: layout.localName,
+                      queries: layout.queries,
+                    })),
+                  }
+                : {}),
+              route: page.route,
+            })),
+          ],
+        }
       : {}),
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
   };

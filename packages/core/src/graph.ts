@@ -168,9 +168,16 @@ export interface PageMetaExplain {
 }
 
 /** @internal */
+export interface PageLayoutExplain {
+  name: string;
+  queries?: readonly string[];
+}
+
+/** @internal */
 export interface PageExplain {
   guards?: readonly string[];
   i18n?: readonly string[];
+  layouts?: readonly PageLayoutExplain[];
   meta?: PageMetaExplain;
   modulepreloads?: readonly string[];
   prefetch?: 'conservative' | 'moderate' | false;

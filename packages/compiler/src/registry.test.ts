@@ -351,6 +351,44 @@ export const detail = route('/questions/:id', {
     expect(registryFacts.routes).toEqual(['/', '/questions/:id']);
   });
 
+  it('threads compiler-derived route layout facts into graph pages', () => {
+    const routes = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { layout, route } from '@kovojs/server';
+
+const AppLayout = layout({
+  queries: { viewer: viewerQuery, cart: cartQuery },
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+
+const AdminLayout = layout({
+  parent: AppLayout,
+  queries: { permissions: permissionsQuery },
+  render: (_queries, _state, { children }) => <section>{children}</section>,
+});
+
+export const admin = route('/admin', {
+  layout: AdminLayout,
+  page: () => <AdminDashboard />,
+});
+`,
+    });
+
+    const { graph, registryFacts } = deriveAppGraph({ routePages: [routes] });
+
+    expect(graph.pages).toEqual([
+      {
+        layouts: [
+          { name: 'AppLayout', queries: ['viewer', 'cart'] },
+          { name: 'AdminLayout', queries: ['permissions'] },
+        ],
+        route: '/admin',
+      },
+    ]);
+    expect(registryFacts.routes).toEqual(['/admin']);
+  });
+
   it('derives app graph component facts from compiled component results', () => {
     const cartBadge = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',
