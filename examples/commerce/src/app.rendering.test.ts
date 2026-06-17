@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from '@kovojs/compiler';
 import { generatedComponentCommittedIrFacts } from '@kovojs/conformance-fixtures/generated-module-fixtures';
@@ -16,8 +18,10 @@ import {
 } from './app.js';
 import { seedCartItems } from './app-test-helpers.js';
 
+const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
+
 describe('commerce example', () => {
-  it('renders Tailwind-first stylesheet hints and static utility classes', async () => {
+  it('renders StyleX-first stylesheet hints and static utility classes', async () => {
     const cartPage = await renderCartPage();
     const pageHints = htmlDocumentFacts(commercePageHints.html);
     const cartDocument = htmlDocumentFacts(cartPage);
@@ -27,7 +31,7 @@ describe('commerce example', () => {
       productStock: '{count} in stock',
     });
     expect(commercePageHints.earlyHints).toEqual({
-      Link: '</assets/tailwind.css>; rel=preload; as=style',
+      Link: '</assets/styles.css>; rel=preload; as=style',
     });
     expect(pageHints.title).toBe('Kovo Commerce (0)');
     expect(pageHints.metas).toEqual(
@@ -48,7 +52,7 @@ describe('commerce example', () => {
     );
     expect(pageHints.jsonScripts.map((script) => script.json)).toEqual([commerceMessageCatalog]);
     expect(pageHints.links).toMatchObject([
-      { attrs: { href: '/assets/tailwind.css', rel: 'stylesheet' }, tag: 'link' },
+      { attrs: { href: '/assets/styles.css', rel: 'stylesheet' }, tag: 'link' },
     ]);
     expect(cartDocument.bodyAttrs.class).toBe('min-h-dvh bg-slate-50 p-6');
     expect(
@@ -82,14 +86,15 @@ describe('commerce example', () => {
     );
   });
 
-  it('builds the linked Tailwind stylesheet for commerce utility classes', () => {
-    rmSync('examples/commerce/dist', { force: true, recursive: true });
+  it('builds the linked app stylesheet for commerce utility classes', () => {
+    rmSync(path.join(commerceRoot, 'dist'), { force: true, recursive: true });
 
     execFileSync('corepack', ['pnpm', '--filter', '@kovojs/example-commerce', 'run', 'build'], {
+      cwd: path.join(commerceRoot, '..', '..'),
       stdio: 'pipe',
     });
 
-    const css = readFileSync('examples/commerce/dist/assets/tailwind.css', 'utf8');
+    const css = readFileSync(path.join(commerceRoot, 'dist', 'assets', 'styles.css'), 'utf8');
 
     expect(css).toContain('.bg-slate-50');
     expect(css).toContain('.rounded');

@@ -298,7 +298,7 @@ describe('commerce app shell HTTP entry', () => {
       const sourceAsset = await fetch(`${origin}/src/styles.css`);
       const sourceAssetBody = await sourceAsset.text();
       expect(sourceAsset.status, formatDevServerFailure(sourceAssetBody, devServerError)).toBe(200);
-      expect(sourceAssetBody).toContain('tailwindcss v');
+      expectCommerceStylesheet(sourceAssetBody);
 
       const missing = await fetch(`${origin}/not-a-commerce-shell-route`);
       const missingBody = await missing.text();
@@ -340,7 +340,7 @@ describe('commerce app shell HTTP entry', () => {
         expect(kovoQueryJsonValues(queryBody, 'cart')).toEqual([{ count: 0 }]);
 
         const stylesheetBody = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
-        expect(stylesheetBody).toContain('tailwindcss v');
+        expectCommerceStylesheet(stylesheetBody);
 
         const missing = await fetch(`${origin}/not-a-commerce-shell-route`);
         const missingBody = await missing.text();
@@ -369,7 +369,7 @@ describe('commerce app shell HTTP entry', () => {
     expect(errors).toEqual([]);
     expect(document.status, html).toBe(200);
     expect(document.headers.get('content-type')).toBe('text/html; charset=utf-8');
-    expect(document.headers.get('link')).toContain('</assets/tailwind.css>; rel=preload; as=style');
+    expect(document.headers.get('link')).toContain('</assets/styles.css>; rel=preload; as=style');
     expect(html).toContain('<!doctype html>');
     expectCommerceShellDocument(html);
     expect(kovoFragmentFacts(html, 'cart-badge')).toHaveLength(1);
@@ -626,7 +626,7 @@ describe('commerce app shell HTTP entry', () => {
 
       const cartHtml = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
       expectCommerceShellDocument(cartHtml, { staticExport: true });
-      expect(htmlLinkHrefs(cartHtml, { rel: 'stylesheet' })).toContain('/assets/tailwind.css');
+      expect(htmlLinkHrefs(cartHtml, { rel: 'stylesheet' })).toContain('/assets/styles.css');
       expect(htmlLinkHrefs(cartHtml, { rel: 'modulepreload' })).toEqual([commerceClientModuleHref]);
       expect(htmlFormFields(cartHtml, 'csrf')).toEqual([]);
 
@@ -672,7 +672,7 @@ describe('commerce app shell HTTP entry', () => {
             'route-document:/cart/index.html',
             'route-document:/login/index.html',
             'client-module:/c/commerce.client.js',
-            'static-asset:/assets/tailwind.css',
+            'static-asset:/assets/styles.css',
           ].join(','),
         );
         expect(output).toContain('diagnostics=0');
@@ -685,7 +685,7 @@ describe('commerce app shell HTTP entry', () => {
 
         const cartHtml = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
         expectCommerceShellDocument(cartHtml, { staticExport: true });
-        expect(htmlLinkHrefs(cartHtml, { rel: 'stylesheet' })).toContain('/assets/tailwind.css');
+        expect(htmlLinkHrefs(cartHtml, { rel: 'stylesheet' })).toContain('/assets/styles.css');
         expect(htmlLinkHrefs(cartHtml, { rel: 'modulepreload' })).toEqual([
           commerceClientModuleHref,
         ]);
@@ -702,9 +702,9 @@ describe('commerce app shell HTTP entry', () => {
         const clientModule = await readFile(path.join(outDir, 'c', 'commerce.client.js'), 'utf8');
         expect(clientModule).toContain('Commerce$markReady');
 
-        const stylesheet = await readFile(path.join(outDir, 'assets', 'tailwind.css'), 'utf8');
-        expect(stylesheet).toContain('tailwindcss v');
-        await expect(access(path.join(outDir, 'assets', 'tailwind.css'))).resolves.toBeUndefined();
+        const stylesheet = await readFile(path.join(outDir, 'assets', 'styles.css'), 'utf8');
+        expectCommerceStylesheet(stylesheet);
+        await expect(access(path.join(outDir, 'assets', 'styles.css'))).resolves.toBeUndefined();
         await expect(access(path.join(outDir, 'c', 'commerce.client.js'))).resolves.toBeUndefined();
 
         server = createStaticExportServer(outDir);
@@ -728,11 +728,11 @@ describe('commerce app shell HTTP entry', () => {
         expect(moduleResponse.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
         expect(moduleBody).toContain('Commerce$markReady');
 
-        const assetResponse = await fetch(`${origin}/assets/tailwind.css`);
+        const assetResponse = await fetch(`${origin}/assets/styles.css`);
         const assetBody = await assetResponse.text();
         expect(assetResponse.status, assetBody).toBe(200);
         expect(assetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
-        expect(assetBody).toContain('tailwindcss v');
+        expectCommerceStylesheet(assetBody);
 
         const mutation = await fetch(`${origin}/_m/cart/add`, { method: 'POST' });
         expect(mutation.status).toBe(404);
@@ -754,6 +754,14 @@ function expectCommerceShellDocument(html: string, options: { staticExport?: boo
   } else {
     expect(htmlFormActions(html)).toContain('/_m/cart/add');
   }
+}
+
+function expectCommerceStylesheet(css: string): void {
+  expect(css).toContain('.bg-slate-50');
+  expect(css).toContain('.rounded');
+  expect(css).toContain('.text-red-700');
+  expect(css).toContain('.bg-teal-600');
+  expect(css).toContain('.border-slate-200');
 }
 
 async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db']): Promise<string> {

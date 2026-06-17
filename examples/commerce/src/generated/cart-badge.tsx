@@ -35,3 +35,4 @@ export const CartBadge = component({
     </cart-badge>
   ),
 });
+CartBadge.name = "components/cart-badge/cart-badge";

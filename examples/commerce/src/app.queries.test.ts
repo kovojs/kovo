@@ -379,7 +379,7 @@ describe('commerce example', () => {
     });
   });
 
-  it('streams deferred product grid fragments with Tailwind stylesheet hints', async () => {
+  it('streams deferred product grid fragments with app stylesheet hints', async () => {
     const response = await renderProductGridDeferredStream(createCommerceDb());
 
     expect(response).toMatchObject({
@@ -404,7 +404,7 @@ describe('commerce example', () => {
     expect(responseFact.queryNames).toEqual(['productGrid']);
     expect(
       responseFact.fragments.filter((fragment) => fragment.target === 'product-grid'),
-    ).toMatchObject([{ stylesheetHrefs: ['/assets/tailwind.css'] }]);
+    ).toMatchObject([{ stylesheetHrefs: ['/assets/styles.css'] }]);
     expect(
       htmlElementFacts(response.body, {
         attrs: { class: 'rounded border border-slate-200 bg-white p-4' },

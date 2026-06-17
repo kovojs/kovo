@@ -20,7 +20,7 @@ const STATIC_MIME = {
 };
 
 // SPEC.md §9.5: the served app references built client assets at `/assets/*`
-// (the Vite build output, e.g. `<link href=/assets/tailwind.css>`). Serve those
+// (the Vite build output, e.g. `<link href=/assets/styles.css>`). Serve those
 // from `dist/` (run `vp build` first) BEFORE the SSR middleware, so the app is
 // fully styled — the production-serve path (`vp build && node scripts/serve.mjs`),
 // not Vite's dev CSS-as-JS where the stylesheet `<link>` 404s.

@@ -392,6 +392,15 @@ borrowing its concrete API/spike detail.
     scripts still fail before completing on existing KV229 param-route metadata gaps for `/deals/:id` and
     `/questions/:id`; the broad `vp run export` task graph is additionally blocked by the out-of-scope
     commerce Tailwind config/dependency state.
+  - Evidence (partial, 2026-06-17): `examples/commerce/package.json` and `pnpm-lock.yaml` drop
+    `@tailwindcss/vite`/`tailwindcss`, `examples/commerce/vite.config.ts` removes the Tailwind plugin
+    and renames the CSS entry to `styles`, `commerceStylesheets` and generated graph facts point at
+    `/assets/styles.css`, and `examples/commerce/src/styles.css` is checked-in plain document CSS for the
+    current commerce static rendering surface (SPEC.md §13.1).
+  - Evidence (partial, 2026-06-17): `pnpm --filter @kovojs/example-commerce test`,
+    `pnpm --filter @kovojs/example-commerce run build`, `pnpm --filter @kovojs/example-commerce exec tsc
+    --noEmit --pretty false`, `rg -n -i "tailwind|assets/tailwind\\.css|@tailwindcss|tailwindcss|@source"
+    examples/commerce`, and `git diff --check` pass. The build emits `dist/assets/styles.css`.
   - Evidence (partial, 2026-06-16): `packages/ui/src/alert.tsx` now uses `@kovojs/style`, exports
     `alertStyles`, accepts `style?: style.StyleInput`, and drops `defineVariants`/`cn` plus the `class`
     escape hatch. `packages/ui/src/alert.stylex.test.tsx` snapshots default/variant StyleX output,

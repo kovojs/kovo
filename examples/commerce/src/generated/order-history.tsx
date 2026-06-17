@@ -25,3 +25,4 @@ export const OrderHistory = component({
     </ol>
   ),
 });
+OrderHistory.name = "components/order-history/order-history";

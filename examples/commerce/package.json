@@ -26,9 +26,7 @@
   "devDependencies": {
     "@kovojs/compiler": "workspace:*",
     "@kovojs/conformance-fixtures": "workspace:*",
-    "@tailwindcss/vite": "^4.3.0",
     "kovo": "workspace:*",
-    "tailwindcss": "^4.3.0",
     "vite": "8.0.16",
     "vite-plus": "^0.1.24",
     "vitest": "4.1.8"

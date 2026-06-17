@@ -212,7 +212,7 @@ describe('commerce source-truth graph acceptance', () => {
       modulepreloads: [],
       prefetch: 'false',
       queries: ['cart', 'productGrid', 'orderHistory'],
-      stylesheets: ['/assets/tailwind.css'],
+      stylesheets: ['/assets/styles.css'],
       subject: 'PAGE /cart',
       version: 'kovo-explain/v1',
       viewTransitions: [],

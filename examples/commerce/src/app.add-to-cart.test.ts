@@ -137,9 +137,9 @@ describe('commerce example', () => {
     expect(responseFact.queryNames).toEqual(['cart', 'productGrid', 'orderHistory']);
     expect(responseFact.fragmentTargets).toEqual(['cart-badge', 'product-grid', 'order-history']);
     expect(responseFact.fragments.flatMap((fragment) => fragment.stylesheetHrefs)).toEqual([
-      '/assets/tailwind.css',
-      '/assets/tailwind.css',
-      '/assets/tailwind.css',
+      '/assets/styles.css',
+      '/assets/styles.css',
+      '/assets/styles.css',
     ]);
     expect(responseFact.keyValues).toContain('order-2');
     expect(transactions).toBe(2);
@@ -175,7 +175,7 @@ describe('commerce example', () => {
     ).toMatchObject([
       {
         attrs: { 'error-boundary': 'product-grid', target: 'product-grid' },
-        stylesheetHrefs: ['/assets/tailwind.css'],
+        stylesheetHrefs: ['/assets/styles.css'],
       },
     ]);
     expect(
@@ -240,7 +240,7 @@ describe('commerce example', () => {
     });
     const [formFragment] = kovoFragmentFacts(response.body, 'product-form:p2');
     expect(formFragment).toMatchObject({
-      stylesheetHrefs: ['/assets/tailwind.css'],
+      stylesheetHrefs: ['/assets/styles.css'],
       target: 'product-form:p2',
     });
     expect(htmlFormFacts(formFragment?.innerHtml ?? '')).toMatchObject([
