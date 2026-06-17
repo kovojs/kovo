@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
-import { kovoVitePlugin, type KovoViteMiddleware } from './index.js';
+import type { KovoViteMiddleware } from './internal.js';
+import { kovoVitePlugin } from './index.js';
 import { createKovoVitePlugin } from './vite.js';
 
 const cartBadgeSource = `

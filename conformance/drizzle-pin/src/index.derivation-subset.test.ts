@@ -6,12 +6,14 @@ import { count, eq, gt, sql, sum } from 'drizzle-orm';
 import { integer, pgTable, text } from 'drizzle-orm/pg-core';
 
 import { deriveOptimistic } from '../../../packages/drizzle/src/derive.js';
+import type {
+  AlgebraicQueryShape,
+  DerivationResult,
+  SymbolicEffect,
+} from '../../../packages/core/src/internal/derivation.js';
 import {
   extractAlgebraicShapesFromProject,
   extractSymbolicEffectsFromProject,
-  type AlgebraicQueryShape,
-  type DerivationResult,
-  type SymbolicEffect,
   type SymbolicEffectFact,
 } from '../../../packages/drizzle/src/static.js';
 

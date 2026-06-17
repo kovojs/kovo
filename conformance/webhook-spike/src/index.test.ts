@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { stripeSignature } from '@kovojs/core';
-import {
-  createMemoryMutationReplayStore,
-  type MutationReplayStore,
-  type MutationWireResponse,
-} from '@kovojs/server';
+import { createMemoryMutationReplayStore, type MutationReplayStore } from '@kovojs/server';
+import type { MutationWireResponse } from '@kovojs/server/internal/wire';
 
 const stripePayload =
   '{"id":"evt_payment_succeeded_001","object":"event","type":"payment_intent.succeeded","data":{"object":{"id":"pi_123","metadata":{"orderId":"order_123"}}},"livemode":false,"pending_webhooks":1}';

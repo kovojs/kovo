@@ -1,10 +1,9 @@
 import { deriveOptimistic } from '@kovojs/drizzle/derive';
+import type { AlgebraicQueryShape, SymbolicEffect } from '@kovojs/core/internal/derivation';
 import {
   extractAlgebraicShapesFromProject,
   extractSymbolicEffectsFromProject,
   extractTouchGraphFromProject,
-  type AlgebraicQueryShape,
-  type SymbolicEffect,
 } from '@kovojs/drizzle/static';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';

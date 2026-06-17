@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from './index.js';
-import type { CompileResult, GeneratedOutputWriteFact } from './index.js';
+import type { GeneratedOutputWriteFact } from './internal.js';
+import type { CompileResult } from './index.js';
 
 describe('compiler output-context facts', () => {
   it('records facts for generated server text, query attributes, state text, and templates', () => {

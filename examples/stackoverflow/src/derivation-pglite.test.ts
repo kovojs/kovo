@@ -1,11 +1,13 @@
 import type { JsonValue } from '@kovojs/core';
-import { applyPatchProgram } from '@kovojs/core/internal/derivation';
+import {
+  applyPatchProgram,
+  type AlgebraicQueryShape,
+  type SymbolicEffect,
+} from '@kovojs/core/internal/derivation';
 import { deriveOptimistic } from '@kovojs/drizzle/derive';
 import {
   extractAlgebraicShapesFromProject,
   extractSymbolicEffectsFromProject,
-  type AlgebraicQueryShape,
-  type SymbolicEffect,
 } from '@kovojs/drizzle/static';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
