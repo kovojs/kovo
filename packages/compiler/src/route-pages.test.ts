@@ -83,6 +83,64 @@ export const home = route('/', {
     );
   });
 
+  it('reports KV303 when a route layout cannot resolve to a local layout declaration', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+import { QuestionListRegion } from './components/question-list.js';
+
+export const home = route('/', {
+  layout: MissingLayout,
+  page: () => <QuestionListRegion />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV303',
+        message: expect.stringContaining(
+          "Route layout 'MissingLayout' does not resolve to a local layout() declaration.",
+        ),
+      }),
+    ]);
+    expect(result.routePageFacts[0]?.layouts).toBeUndefined();
+  });
+
+  it('reports KV303 when local layout parent chains are cyclic', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { layout, route } from '@kovojs/server';
+import { QuestionListRegion } from './components/question-list.js';
+
+const AppLayout = layout({
+  parent: AdminLayout,
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+
+const AdminLayout = layout({
+  parent: AppLayout,
+  render: (_queries, _state, { children }) => <section>{children}</section>,
+});
+
+export const home = route('/', {
+  layout: AdminLayout,
+  page: () => <QuestionListRegion />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV303',
+        message: expect.stringContaining("Cyclic layout parent chain at 'AdminLayout'."),
+      }),
+    ]);
+    expect(result.routePageFacts[0]?.layouts).toBeUndefined();
+  });
+
   it('emits executable route IR after jsx import-source pragmas', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',

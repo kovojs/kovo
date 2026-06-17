@@ -218,13 +218,16 @@ item inherits from rather than re-deciding it:
       `layout({ parent, queries })` declarations; `pnpm exec vitest --run
       packages/compiler/src/route-pages.test.ts` passes with a fixture asserting
       layout names and query keys in the emitted route IR fact.
+    - `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts` also
+      passes negative fixtures proving unresolved and cyclic local layout chains
+      produce KV303 teaching diagnostics instead of silently dropping layout
+      facts.
     - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
   - Remaining gaps:
     - Compiler route lowering does not yet derive navigation segment metadata.
-    - Layout query live-target refresh, per-segment boundaries, diagnostics for
-      cyclic/unresolvable layout chains, and `kovo explain page --layouts` are
-      not implemented yet.
+    - Layout query live-target refresh, per-segment boundaries, and `kovo explain
+      page --layouts` are not implemented yet.
 
 - [ ] **4. Replace string shell helpers with layouts + `documentTemplate`.**
   - Framework direction: convert document-level shells to

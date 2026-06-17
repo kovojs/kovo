@@ -30,7 +30,10 @@ interface RoutePageHandler {
 interface RouteLayoutModel {
   localName: string;
   parent?: string;
+  parentLength?: number;
+  parentStart?: number;
   queries: readonly string[];
+  start: number;
 }
 
 /** Compile route-page JSX composition facts (SPEC.md §4.5/§9.1). */
@@ -44,16 +47,24 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
   );
   const routePages: CompiledRoutePage[] = [];
   const layouts = routeLayoutModels(sourceFile);
+  const diagnostics: CompilerDiagnostic[] = [];
 
   const visit = (node: ts.Node): void => {
-    const routePage = routePageFromCall(options.fileName, sourceFile, node, layouts);
+    const routePage = routePageFromCall(
+      options.fileName,
+      options.source,
+      sourceFile,
+      node,
+      layouts,
+      diagnostics,
+    );
     if (routePage) routePages.push(routePage);
     ts.forEachChild(node, visit);
   };
 
   visit(sourceFile);
   const routePageFacts = routePages.map((routePage) => routePage.fact);
-  const diagnostics = routeAuthoringSurfaceDiagnostics(options.fileName, options.source, sourceFile);
+  diagnostics.push(...routeAuthoringSurfaceDiagnostics(options.fileName, options.source, sourceFile));
 
   const artifactFileName = options.artifactFileName ?? routeArtifactFileName(options.fileName);
 
@@ -81,9 +92,11 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
 
 function routePageFromCall(
   fileName: string,
+  source: string,
   sourceFile: ts.SourceFile,
   node: ts.Node,
   layouts: ReadonlyMap<string, RouteLayoutModel>,
+  diagnostics: CompilerDiagnostic[],
 ): CompiledRoutePage | null {
   if (!ts.isCallExpression(node)) return null;
   if (!ts.isIdentifier(node.expression) || node.expression.text !== 'route') return null;
@@ -97,7 +110,7 @@ function routePageFromCall(
 
   const components = routePageComponentFacts(sourceFile, pageHandler.node);
   if (components.length === 0) return null;
-  const routeLayouts = routeLayoutFacts(definitionArg, layouts);
+  const routeLayouts = routeLayoutFacts(fileName, source, sourceFile, definitionArg, layouts, diagnostics);
   const fact = {
     components,
     fileName,
@@ -132,8 +145,9 @@ function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, Route
         const parent = layoutParentName(definition);
         layouts.set(node.name.text, {
           localName: node.name.text,
-          ...(parent === undefined ? {} : { parent }),
+          ...(parent === null ? {} : { parent: parent.name, parentLength: parent.length, parentStart: parent.start }),
           queries: layoutQueryNames(definition),
+          start: node.name.getStart(sourceFile),
         });
       }
     }
@@ -146,36 +160,95 @@ function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, Route
 }
 
 function routeLayoutFacts(
+  fileName: string,
+  source: string,
+  sourceFile: ts.SourceFile,
   routeDefinition: ts.ObjectLiteralExpression,
   layouts: ReadonlyMap<string, RouteLayoutModel>,
+  diagnostics: CompilerDiagnostic[],
 ): RoutePageLayoutFact[] {
-  const layoutName = routeLayoutName(routeDefinition);
+  const layoutName = routeLayoutName(routeDefinition, sourceFile);
   if (!layoutName) return [];
 
   const chain: RoutePageLayoutFact[] = [];
   const seen = new Set<string>();
-  let current: string | undefined = layoutName;
+  let current: { length: number; name: string; start: number } | undefined = layoutName;
 
   while (current) {
-    if (seen.has(current)) return [];
-    seen.add(current);
-    const layoutModel = layouts.get(current);
-    if (!layoutModel) return [];
+    if (seen.has(current.name)) {
+      diagnostics.push(
+        layoutChainDiagnostic(
+          fileName,
+          source,
+          current.start,
+          current.length,
+          `Cyclic layout parent chain at '${current.name}'.`,
+        ),
+      );
+      return [];
+    }
+    seen.add(current.name);
+    const layoutModel = layouts.get(current.name);
+    if (!layoutModel) {
+      diagnostics.push(
+        layoutChainDiagnostic(
+          fileName,
+          source,
+          current.start,
+          current.length,
+          `Route layout '${current.name}' does not resolve to a local layout() declaration.`,
+        ),
+      );
+      return [];
+    }
     chain.unshift({ localName: layoutModel.localName, queries: layoutModel.queries });
-    current = layoutModel.parent;
+    current =
+      layoutModel.parent === undefined
+        ? undefined
+        : {
+            length: layoutModel.parentLength ?? layoutModel.parent.length,
+            name: layoutModel.parent,
+            start: layoutModel.parentStart ?? layoutModel.start,
+          };
   }
 
   return chain;
 }
 
-function routeLayoutName(routeDefinition: ts.ObjectLiteralExpression): string | null {
+function routeLayoutName(
+  routeDefinition: ts.ObjectLiteralExpression,
+  sourceFile: ts.SourceFile,
+): { length: number; name: string; start: number } | null {
   const value = objectPropertyInitializer(routeDefinition, 'layout');
-  return value && ts.isIdentifier(value) ? value.text : null;
+  return value && ts.isIdentifier(value)
+    ? { length: value.getWidth(sourceFile), name: value.text, start: value.getStart(sourceFile) }
+    : null;
 }
 
-function layoutParentName(layoutDefinition: ts.ObjectLiteralExpression): string | undefined {
+function layoutParentName(
+  layoutDefinition: ts.ObjectLiteralExpression,
+): { length: number; name: string; start: number } | null {
   const value = objectPropertyInitializer(layoutDefinition, 'parent');
-  return value && ts.isIdentifier(value) ? value.text : undefined;
+  return value && ts.isIdentifier(value)
+    ? { length: value.getWidth(), name: value.text, start: value.getStart() }
+    : null;
+}
+
+function layoutChainDiagnostic(
+  fileName: string,
+  source: string,
+  start: number,
+  length: number,
+  detail: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'KV303', source, start, length),
+    help: [
+      diagnosticDefinitions.KV303.help,
+      'Route layouts must be statically reconstructible from local layout() declarations so layout queries, boundaries, and navigation segment metadata can be derived.',
+    ].join('\n'),
+    message: `${diagnosticDefinitions.KV303.message} ${detail}`,
+  };
 }
 
 function layoutQueryNames(layoutDefinition: ts.ObjectLiteralExpression): string[] {
