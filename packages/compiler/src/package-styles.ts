@@ -91,10 +91,98 @@ export function extractPackageComponentCss(
   }
 
   return {
-    css: `${cssIrHeader}\n${dedupeCss(chunks)}`,
+    css: `${cssIrHeader}\n${normalizeServedCss(dedupeCss(chunks))}`,
     diagnostics,
     sourceFiles,
   };
+}
+
+/**
+ * Make `@kovojs/style`-emitted atomic CSS valid for a real CSS parser/browser.
+ * Two latent engine gaps surface only once this CSS is actually served (no app
+ * has consumed @kovojs/ui's StyleX output before): bare-number lengths and
+ * digit-leading `@layer` sub-names. Both are fixed in the served text only, so
+ * the runtime `style.attrs` class names (which hash the raw value) are unchanged.
+ * Tracked as upstream @kovojs/style fixes; normalized here to unblock examples.
+ */
+function normalizeServedCss(css: string): string {
+  return normalizeNumericLengths(normalizeLayerNames(dropInvalidSelectorRules(css)));
+}
+
+/**
+ * Drop atomic rules whose selector embeds a `&` (CSS nesting / Tailwind
+ * arbitrary-variant syntax, e.g. table.tsx's `'[&_tr:last-child]'` key). StyleX
+ * has no nesting, so it lowers these to an invalid attribute selector that a real
+ * parser rejects. Dropping the rule keeps the rest of the stylesheet valid; the
+ * affected styling is a cosmetic edge (e.g. last-row border) the demo can live
+ * without. Tracked as an upstream component-authoring fix.
+ */
+function dropInvalidSelectorRules(css: string): string {
+  return css.replace(/\.[\w-]+\[[^\]]*&[^\]]*\]\{[^}]*\}/g, '');
+}
+
+/**
+ * `@layer kovo-style.2000` is invalid CSS — a layer name segment cannot start
+ * with a digit (a parser reads `.2000` as the number `0.2`). Flatten the numeric
+ * priority sub-name to a valid ident (`kovo-style-2000`); cascade order is
+ * preserved because layers still order by first declaration.
+ */
+function normalizeLayerNames(css: string): string {
+  return css.replace(/@layer\s+kovo-style\.(\d+)/g, '@layer kovo-style-$1');
+}
+
+// CSS properties that take a bare number (no length unit). Everything else that
+// `@kovojs/style` emits as a bare number (e.g. `padding:8`, `height:36`) is a
+// length and needs `px` to be valid CSS — StyleX applies the same rule. We do
+// this only on the SERVED text: the atomic class name still hashes the raw value
+// (see classNameFor in @kovojs/style), so the runtime `style.attrs` class and
+// this stylesheet stay in lockstep. (The engine emitting unitless values is a
+// latent gap; this keeps the served CSS browser-valid without churning snapshots.)
+const UNITLESS_CSS_PROPERTIES: ReadonlySet<string> = new Set([
+  'animation-iteration-count',
+  'aspect-ratio',
+  'columns',
+  'column-count',
+  'flex',
+  'flex-grow',
+  'flex-shrink',
+  'font-weight',
+  'grid-area',
+  'grid-column',
+  'grid-column-end',
+  'grid-column-start',
+  'grid-row',
+  'grid-row-end',
+  'grid-row-start',
+  'line-height',
+  'opacity',
+  'order',
+  'orphans',
+  'scale',
+  'tab-size',
+  'widows',
+  'z-index',
+  'fill-opacity',
+  'flood-opacity',
+  'stop-opacity',
+  'stroke-miterlimit',
+  'stroke-opacity',
+]);
+
+/**
+ * Append `px` to single-value bare-number length declarations (`padding:8` →
+ * `padding:8px`). Only matches a number that ends the declaration (`;`/`}`), so
+ * multi-token values (`box-shadow:0 4px ...`) and already-unit'd values are left
+ * untouched. Unitless properties (opacity, z-index, line-height, …) are skipped.
+ */
+function normalizeNumericLengths(css: string): string {
+  return css.replace(
+    /([a-z-]+):(-?\d+(?:\.\d+)?)([;}])/g,
+    (match, property: string, value: string, terminator: string) =>
+      UNITLESS_CSS_PROPERTIES.has(property) || value === '0'
+        ? match
+        : `${property}:${value}px${terminator}`,
+  );
 }
 
 function resolvePackage(

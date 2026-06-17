@@ -7,7 +7,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./graph": "./src/graph.ts"
+    "./graph": "./src/graph.ts",
+    "./package-styles": "./src/package-styles.ts"
   },
   "publishConfig": {
     "exports": {
@@ -18,11 +19,15 @@
       "./graph": {
         "types": "./dist/graph.d.mts",
         "default": "./dist/graph.mjs"
+      },
+      "./package-styles": {
+        "types": "./dist/package-styles.d.mts",
+        "default": "./dist/package-styles.mjs"
       }
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/graph.ts src/index.ts --dts",
+    "build:dist": "vp pack src/graph.ts src/index.ts src/package-styles.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

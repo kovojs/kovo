@@ -28,6 +28,7 @@
   "devDependencies": {
     "@kovojs/compiler": "workspace:*",
     "@kovojs/conformance-fixtures": "workspace:*",
+    "@kovojs/headless-ui": "workspace:*",
     "kovo": "workspace:*",
     "vite": "8.0.16",
     "vite-plus": "^0.1.24",

@@ -1,3 +1,7 @@
+/* @kovojs/ui design tokens + component StyleX CSS (generated; see
+   scripts/emit-ui-css.mjs). Must precede other rules per the CSS @import rule. */
+@import './generated/kovo-ui.css';
+
 :root {
   color-scheme: light;
   font-family:

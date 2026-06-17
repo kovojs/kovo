@@ -47,6 +47,19 @@ describe('extractPackageComponentCss over @kovojs/ui', () => {
     expect(css).toContain('@layer kovo-style');
   });
 
+  it('emits browser-valid CSS (units, layer idents, no nesting `&`)', () => {
+    const css = uiExtraction().css ?? '';
+    // Bare-number lengths get px; unitless properties stay bare.
+    expect(css).toMatch(/font-size:\d+px/);
+    expect(css).toMatch(/border-radius:\d+px/);
+    expect(css).toMatch(/font-weight:\d+(?:[;}])/);
+    // Layer sub-names must be valid idents (no digit-leading `.2000`).
+    expect(css).not.toMatch(/@layer\s+kovo-style\.\d/);
+    expect(css).toMatch(/@layer kovo-style-\d/);
+    // No CSS-nesting `&` leaked into a flat atomic selector.
+    expect(css).not.toContain('&');
+  });
+
   it('reports coverage so unstyled components are never silent (A5 gate)', () => {
     const result = uiExtraction();
     // The gate must SCAN a broad surface; if this drops to a handful something
