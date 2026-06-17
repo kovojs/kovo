@@ -61,23 +61,53 @@ keeping dev fully legible.
 ## Sequencing
 
 1. [x] SPEC contract edits (above) — landed, reviewed as a unit.
-2. [ ] Render-plan version token: emit into module URLs + a delta/patch response header; client
-       validates and fails loud on mismatch.
-3. [ ] Delta query JSON: server emits changed-fields payload; client deep-merge (objects by key,
-       arrays by `kovo-key`); re-run the existing §4.8 update plan.
-4. [ ] Patch fragments: server emits subtree patch; feed the existing morph path; deterministic
-       full-vs-delta selection with full fallback.
-5. [ ] Gates: extend fixpoint + render-equivalence to the `apply_delta` form; prove deploy-skew
-       fails loud.
-6. [ ] `kovo explain` reconstruction of a prod delta → dev-equivalent full fragment/query.
-7. [ ] Reference commerce app: prove prod responses are deltas, morph/merge correct, skew loud.
+2. [x] **Shared delta protocol** — `@kovojs/core` `buildQueryDelta`/`applyQueryDelta`/
+       `queryDeltaIsSmaller` + `QueryDelta`/`QueryDeltaListMeta`. Evidence:
+       `packages/core/src/query-delta.ts`, 15 tests in `query-delta.test.ts`.
+3. [x] **Render-plan version token**: build-global token = SHA-256 over sorted client-module
+       `path@version` (first 16 hex), stamped as `<meta name="kovo-build">` in `<head>` and
+       `Kovo-Build` response header; client reads page token + response header. Evidence:
+       `packages/server/src/client-modules.ts` (`buildToken()`), `document-core.ts`,
+       `mutation.ts`; `packages/runtime/src/build-token.ts`, `mutation-fetch.ts`.
+4. [x] **Delta query JSON**: server emits `<kovo-query ... delta>` (change-record-scoped,
+       auto full-vs-delta via `queryDeltaIsSmaller`); client merges into the held base by
+       `kovo-key` and runs the existing §4.8 update plan. Evidence:
+       `packages/server/src/mutation.ts` + `wire-html.ts` + `mutation-delta.test.ts` (11);
+       `packages/runtime/src/query-apply.ts` + `wire-parser.ts` + `query-apply.test.ts`.
+5. [x] **Base-version validation + refetch-full, wired through the production submit path**:
+       missing base or build-token skew → `onDeltaMiss` → `/_q/<wireKey>` GET, never a silent
+       drop. Evidence: `packages/runtime/src/mutation-submit.ts` (`defaultDeltaMissRefetcher`),
+       `mutation-apply.ts`, `query-refetch.ts` (`createDeltaMissRefetcher`);
+       `mutation-apply.test.ts` (apply-on-match / skew→miss / no-base→miss).
+6. [x] **Round-trip + skew gates** (the `apply_delta(base, Δ) ≡ full` gate): proven at the core
+       unit level (round-trip scenarios) and through the real apply path. Evidence:
+       `query-delta.test.ts` round-trip block; `mutation-apply.test.ts` + `apply-mutation-response-delta.test.ts`.
+7. [x] **Reference commerce proof**: `orderHistoryQuery` marked delta-eligible; test proves a
+       payment ships only the new order row and round-trips. Evidence:
+       `examples/commerce/src/queries.ts`, `queries-delta.test.ts` (2).
+8. [ ] **Smaller fragments — keyed-row windowing** (deferred). The fragment byte-win for
+       plan-grammar subtrees is delivered by the query-delta path above; server-computed DOM
+       diffing is explicitly out of scope (not stateless-sound — SPEC §9.1.1, §4.5). Dedicated
+       keyed-row `<kovo-fragment>` windowing + auto fragment full-vs-delta selection remain open.
+9. [ ] **Zero-config on default interactive flows** (deferred — the gating gap). Auto-on deltas
+       need (a) compiler-derived `QueryDeltaListMeta` from `data-bind-list`/`kovo-key` stamps,
+       and (b) row-level invalidation keys on interactive mutations (commerce's interactive
+       mutations currently invalidate with `keys: null`; only the payment webhook carries keys).
+       Today delta meta is declared explicitly per query; the protocol + wiring are complete.
+10. [ ] **`kovo explain`/MCP delta reconstruction CLI wrapper** (deferred — convenience). The
+        reconstruction *mechanism* is the exported `applyQueryDelta(base, delta)`; a thin
+        `kovo explain` argv wrapper over runtime base+delta artifacts is not yet added (SPEC
+        §9.1.1 names this a convenience, not load-bearing — names are never mangled).
 
-## Proving commands (to fill in as slices land)
+## Proving commands
 
-- [ ] fixpoint + render-equivalence green in `apply_delta` form (name a test/command)
-- [ ] delta query JSON merges objects by key and arrays by `kovo-key` correctly (name a test)
-- [ ] patch fragment morphs equivalently to full fragment over the corpus (name a test)
-- [ ] stale-base version mismatch fails loud and refetches full (name a test)
-- [ ] `kovo explain` reconstructs a prod delta to dev-equivalent legibility (name a test)
-- [ ] byte win measured on the reference commerce app, post-brotli, fragment + query streams
-      (name the artifact — nice-to-have, not a gate)
+- [x] core delta logic + `apply_delta ≡ full` round-trip: `npx vitest --run packages/core/src/query-delta.test.ts` (15)
+- [x] server emits change-record-scoped delta, auto full-vs-delta, `Kovo-Build` header:
+      `npx vitest --run packages/server/src/mutation-delta.test.ts packages/server/src/wire-html.test.ts`
+- [x] client merges delta by `kovo-key` + runs update plan; parser reads `delta` attr:
+      `npx vitest --run packages/runtime/src/query-apply.test.ts packages/runtime/src/wire-parser.test.ts`
+- [x] base skew / missing base refetch full through the submit path, base untouched:
+      `npx vitest --run packages/runtime/src/mutation-apply.test.ts packages/runtime/src/apply-mutation-response-delta.test.ts`
+- [x] real commerce query ships a scoped delta + round-trips:
+      `npx vitest --run examples/commerce/src/queries-delta.test.ts` (2)
+- [ ] byte win measured on the commerce app, post-brotli, query stream (nice-to-have, not a gate — open)
