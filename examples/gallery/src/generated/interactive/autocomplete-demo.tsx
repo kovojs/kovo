@@ -77,14 +77,10 @@ export const GalleryAutocompleteDemo$output_text_derive = derive(['state'], (sta
 
 import { component } from '@kovojs/core';
 import {
-  autocompleteInput as _autocompleteInput,
   autocompleteInputAttributes,
-  autocompleteKeyDown as _autocompleteKeyDown,
   autocompleteListAttributes,
   autocompleteOptionAttributes,
-  autocompleteOptionClick as _autocompleteOptionClick,
   autocompleteRootAttributes,
-  autocompleteSuggestions as _autocompleteSuggestions,
   autocompleteValueAttributes,
   type AutocompleteItem,
 } from '@kovojs/headless-ui/primitives';

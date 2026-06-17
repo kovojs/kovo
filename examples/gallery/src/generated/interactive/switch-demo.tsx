@@ -16,7 +16,6 @@ export const GallerySwitchDemo$output_text_derive = derive(['state'], (state: an
 );
 
 import { component } from '@kovojs/core';
-import { switchTriggerClick as _switchTriggerClick } from '@kovojs/headless-ui/primitives';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/switch.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

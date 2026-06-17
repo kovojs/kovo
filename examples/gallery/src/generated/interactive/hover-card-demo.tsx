@@ -21,15 +21,8 @@ export const GalleryHoverCardDemo$output_text_derive = derive(['state'], (state:
 import { component } from '@kovojs/core';
 import {
   hoverCardContentAttributes,
-  hoverCardContentPointerEnter as _hoverCardContentPointerEnter,
-  hoverCardContentPointerLeave as _hoverCardContentPointerLeave,
-  hoverCardEscapeKeyDown as _hoverCardEscapeKeyDown,
   hoverCardRootAttributes,
-  hoverCardTriggerBlur as _hoverCardTriggerBlur,
-  hoverCardTriggerFocus as _hoverCardTriggerFocus,
   hoverCardTriggerAttributes,
-  hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
-  hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
 } from '@kovojs/headless-ui/primitives';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/hover-card.tsx)

@@ -30,13 +30,9 @@ export const GalleryAlertDialogDemo$output_text_derive = derive(['state'], (stat
 import { component } from '@kovojs/core';
 import {
   alertDialogActionAttributes,
-  alertDialogActionClick as _alertDialogActionClick,
   alertDialogCancelAttributes,
-  alertDialogCancel as _alertDialogCancel,
-  alertDialogCancelClick as _alertDialogCancelClick,
   alertDialogContentAttributes,
   alertDialogRootAttributes,
-  alertDialogTriggerClick as _alertDialogTriggerClick,
   alertDialogTriggerAttributes,
 } from '@kovojs/headless-ui/primitives';
 

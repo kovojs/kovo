@@ -26,12 +26,9 @@ export const GalleryDrawerDemo$output_text_derive = derive(['state'], (state: an
 
 import { component } from '@kovojs/core';
 import {
-  dialogCancel as _dialogCancel,
   dialogCloseAttributes,
-  dialogCloseClick as _dialogCloseClick,
   dialogContentAttributes,
   dialogRootAttributes,
-  dialogTriggerClick as _dialogTriggerClick,
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui/primitives';
 

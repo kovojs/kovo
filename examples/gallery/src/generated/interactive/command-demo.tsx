@@ -131,19 +131,13 @@ export const GalleryCommandDemo$output_text_derive_2 = derive(['state'], (state:
 import { component } from '@kovojs/core';
 import {
   commandCloseAttributes,
-  commandCloseClick as _commandCloseClick,
   commandDialogAttributes,
   commandEmptyAttributes,
-  commandFilteredItems as _commandFilteredItems,
-  commandInput as _commandInput,
   commandInputAttributes,
   commandItemAttributes,
-  commandItemClick as _commandItemClick,
-  commandKeyDown as _commandKeyDown,
   commandListboxAttributes,
   commandRootAttributes,
   commandTriggerAttributes,
-  commandTriggerClick as _commandTriggerClick,
   type CommandItem,
 } from '@kovojs/headless-ui/primitives';
 

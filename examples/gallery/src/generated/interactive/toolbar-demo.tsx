@@ -29,7 +29,6 @@ import { component } from '@kovojs/core';
 import {
   toolbarButtonAttributes,
   toolbarItemAttributes,
-  toolbarKeyDown as _toolbarKeyDown,
   toolbarRootAttributes,
 } from '@kovojs/headless-ui/primitives';
 

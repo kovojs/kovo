@@ -320,8 +320,8 @@ function removeUnreferencedNamedImports(source: string): string {
       continue;
     }
 
-    for (const element of unused) {
-      replacements.push(removeNamedImportReplacement(element, namedBindings.elements, sourceFile));
+    for (const run of contiguousImportSpecifierRuns(unused, namedBindings.elements)) {
+      replacements.push(removeNamedImportRunReplacement(run, namedBindings.elements, sourceFile));
     }
   }
 
@@ -377,27 +377,52 @@ function removeNamedBindingsReplacement(
   };
 }
 
-function removeNamedImportReplacement(
-  element: ts.ImportSpecifier,
+function contiguousImportSpecifierRuns(
+  elements: readonly ts.ImportSpecifier[],
+  allElements: ts.NodeArray<ts.ImportSpecifier>,
+): ts.ImportSpecifier[][] {
+  const runs: ts.ImportSpecifier[][] = [];
+  let current: ts.ImportSpecifier[] = [];
+  let previousIndex = -2;
+
+  for (const element of elements) {
+    const index = allElements.indexOf(element);
+    if (current.length > 0 && index !== previousIndex + 1) {
+      runs.push(current);
+      current = [];
+    }
+    current.push(element);
+    previousIndex = index;
+  }
+
+  if (current.length > 0) runs.push(current);
+
+  return runs;
+}
+
+function removeNamedImportRunReplacement(
+  run: readonly ts.ImportSpecifier[],
   elements: ts.NodeArray<ts.ImportSpecifier>,
   sourceFile: ts.SourceFile,
 ): SourceReplacement {
-  const index = elements.indexOf(element);
-  const start = element.getStart(sourceFile);
-  const end = element.getEnd();
+  const first = run[0]!;
+  const last = run[run.length - 1]!;
+  const firstIndex = elements.indexOf(first);
+  const lastIndex = elements.indexOf(last);
+  const start = first.getStart(sourceFile);
 
-  if (index < elements.length - 1) {
+  if (lastIndex < elements.length - 1) {
     return {
-      end: elements[index + 1]!.getStart(sourceFile),
+      end: elements[lastIndex + 1]!.getStart(sourceFile),
       replacement: '',
       start,
     };
   }
 
   return {
-    end,
+    end: last.getEnd(),
     replacement: '',
-    start: elements[index - 1]!.getEnd(),
+    start: elements[firstIndex - 1]!.getEnd(),
   };
 }
 

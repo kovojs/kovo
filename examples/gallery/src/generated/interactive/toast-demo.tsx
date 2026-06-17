@@ -36,16 +36,11 @@ import { component } from '@kovojs/core';
 import {
   normalizeToastDuration,
   toastActionAttributes,
-  toastActionClick as _toastActionClick,
-  toastAnimationEnd as _toastAnimationEnd,
   toastCloseAttributes,
-  toastCloseClick as _toastCloseClick,
   toastDescriptionAttributes,
-  toastEscapeKeyDown as _toastEscapeKeyDown,
   toastRootAttributes,
   toastTitleAttributes,
   toastViewportAttributes,
-  toastViewportKeyDown as _toastViewportKeyDown,
 } from '@kovojs/headless-ui/primitives';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/toast.tsx)

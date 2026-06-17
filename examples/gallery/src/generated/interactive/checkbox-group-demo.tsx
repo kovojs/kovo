@@ -52,12 +52,10 @@ export const GalleryCheckboxGroupDemo$output_text_derive = derive(
 
 import { component } from '@kovojs/core';
 import {
-  checkboxGroupItemClick as _checkboxGroupItemClick,
   checkboxGroupControlAttributes,
   checkboxGroupItemAttributes,
   checkboxGroupLabelAttributes,
   checkboxGroupRootAttributes,
-  checkboxTriggerClick as _checkboxTriggerClick,
 } from '@kovojs/headless-ui/primitives';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/checkbox-group.tsx)

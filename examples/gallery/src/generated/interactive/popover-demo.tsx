@@ -20,7 +20,6 @@ export const GalleryPopoverDemo$output_text_derive = derive(['state'], (state: a
 
 import { component } from '@kovojs/core';
 import {
-  popoverBeforeToggle as _popoverBeforeToggle,
   popoverContentAttributes,
   popoverRootAttributes,
   popoverTriggerAttributes,

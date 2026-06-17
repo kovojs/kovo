@@ -53,12 +53,8 @@ import { component } from '@kovojs/core';
 import {
   selectContentAttributes,
   selectHiddenInputAttributes,
-  selectItemClick as _selectItemClick,
   selectItemAttributes,
-  selectKeyDown as _selectKeyDown,
-  selectMove as _selectMove,
   selectRootAttributes,
-  selectTriggerClick as _selectTriggerClick,
   selectTriggerAttributes,
   selectValueAttributes,
   type SelectItem,

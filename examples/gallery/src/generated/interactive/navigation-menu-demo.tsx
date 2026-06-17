@@ -63,19 +63,11 @@ export const GalleryNavigationMenuDemo$output_text_derive = derive(
 import { component } from '@kovojs/core';
 import {
   navigationMenuContentAttributes,
-  navigationMenuFocusElement as _navigationMenuFocusElement,
   navigationMenuItemAttributes,
-  navigationMenuKeyDown as _navigationMenuKeyDown,
   navigationMenuLinkAttributes,
-  navigationMenuLinkClick as _navigationMenuLinkClick,
   navigationMenuListAttributes,
-  navigationMenuMove as _navigationMenuMove,
   navigationMenuRootAttributes,
   navigationMenuTriggerAttributes,
-  navigationMenuTriggerClick as _navigationMenuTriggerClick,
-  navigationMenuTriggerFocus as _navigationMenuTriggerFocus,
-  navigationMenuTriggerPointerEnter as _navigationMenuTriggerPointerEnter,
-  navigationMenuTypeahead as _navigationMenuTypeahead,
   navigationMenuViewportAttributes,
   type NavigationMenuItem,
 } from '@kovojs/headless-ui/primitives';

@@ -48,10 +48,8 @@ import {
   accordionContentAttributes,
   accordionHeaderAttributes,
   accordionItemAttributes,
-  accordionKeyDown as _accordionKeyDown,
   accordionRootAttributes,
   accordionTriggerAttributes,
-  accordionTriggerClick as _accordionTriggerClick,
 } from '@kovojs/headless-ui/primitives';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/accordion.tsx)

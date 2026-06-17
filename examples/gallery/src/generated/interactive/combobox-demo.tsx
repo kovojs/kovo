@@ -91,13 +91,9 @@ export const GalleryComboboxDemo$output_text_derive = derive(['state'], (state: 
 
 import { component } from '@kovojs/core';
 import {
-  comboboxFilteredItems as _comboboxFilteredItems,
-  comboboxInput as _comboboxInput,
   comboboxInputAttributes,
-  comboboxKeyDown as _comboboxKeyDown,
   comboboxListboxAttributes,
   comboboxOptionAttributes,
-  comboboxOptionClick as _comboboxOptionClick,
   comboboxRootAttributes,
   comboboxValueAttributes,
   type ComboboxItem,

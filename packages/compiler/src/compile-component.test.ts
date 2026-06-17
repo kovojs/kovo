@@ -79,6 +79,53 @@ describe('compileComponentModule', () => {
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
 
+  it('removes adjacent client-only named imports without overlapping server cleanup edits', () => {
+    const result = compileComponentModule({
+      fileName: 'components/gallery/meter-demo.tsx',
+      source: `
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import {
+  meterRootAttributes,
+  meterValueState as _meterValueState,
+  type MeterDataState,
+} from '@kovojs/headless-ui/primitives';
+
+export interface GalleryMeterDemoState {
+  dataState: MeterDataState;
+  value: number;
+}
+
+export const GalleryMeterDemo = component({
+  state: () => ({ dataState: 'suboptimum' as MeterDataState, value: 72 }),
+  render: (_queries: Record<string, never>, state: GalleryMeterDemoState) => (
+    <section>
+      <meter
+        data-state={state.dataState}
+        value={state.value}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          state.dataState = _meterValueState({ value: state.value }).state;
+        }}
+      >
+        Optimize capacity
+      </button>
+    </section>
+  ),
+});
+`,
+    });
+
+    const server = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.every((diagnostic) => diagnostic.code === 'KV210')).toBe(true);
+    expect(server).not.toContain('meterRootAttributes');
+    expect(server).not.toContain('meterValueState as _meterValueState');
+    expect(server).toContain('type MeterDataState');
+  });
+
   it('emits scoped CSS artifacts for static co-located component CSS', () => {
     const result = compileFixture({
       fileName: 'components/cart/cart-badge.tsx',

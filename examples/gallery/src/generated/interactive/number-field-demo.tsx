@@ -26,12 +26,8 @@ export const GalleryNumberFieldDemo$output_text_derive = derive(['state'], (stat
 import { component } from '@kovojs/core';
 import {
   numberFieldDecrementAttributes,
-  numberFieldDecrementClick as _numberFieldDecrementClick,
   numberFieldIncrementAttributes,
-  numberFieldIncrementClick as _numberFieldIncrementClick,
-  numberFieldInput as _numberFieldInput,
   numberFieldInputAttributes,
-  numberFieldKeyDown as _numberFieldKeyDown,
   numberFieldRootAttributes,
 } from '@kovojs/headless-ui/primitives';
 

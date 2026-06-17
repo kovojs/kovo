@@ -68,10 +68,7 @@ export const GalleryOtpFieldDemo$input_value_derive_5 = derive(
 import { component } from '@kovojs/core';
 import {
   otpFieldHiddenInputAttributes,
-  otpFieldInput as _otpFieldInput,
   otpFieldInputAttributes,
-  otpFieldKeyDown as _otpFieldKeyDown,
-  otpFieldPaste as _otpFieldPaste,
   otpFieldRootAttributes,
 } from '@kovojs/headless-ui/primitives';
 

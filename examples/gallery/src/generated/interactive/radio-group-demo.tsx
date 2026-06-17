@@ -57,9 +57,7 @@ export const GalleryRadioGroupDemo$label_data_state_derive_3 = derive(['state'],
 import { component } from '@kovojs/core';
 import {
   radioGroupItemAttributes,
-  radioGroupItemClick as _radioGroupItemClick,
   radioGroupLabelAttributes,
-  radioGroupKeyDown as _radioGroupKeyDown,
   radioGroupRadioAttributes,
   radioGroupRootAttributes,
 } from '@kovojs/headless-ui/primitives';

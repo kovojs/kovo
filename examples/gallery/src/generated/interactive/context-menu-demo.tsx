@@ -50,17 +50,9 @@ export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (stat
 import { component } from '@kovojs/core';
 import {
   contextMenuContentAttributes,
-  contextMenuFocusElement as _contextMenuFocusElement,
   contextMenuItemAttributes,
-  contextMenuItemClick as _contextMenuItemClick,
-  contextMenuItemKeyDown as _contextMenuItemKeyDown,
-  contextMenuKeyDown as _contextMenuKeyDown,
-  contextMenuMove as _contextMenuMove,
   contextMenuRootAttributes,
   contextMenuTriggerAttributes,
-  contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu,
-  contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown,
-  contextMenuTypeahead as _contextMenuTypeahead,
   type ContextMenuItem,
   type ContextMenuPoint,
 } from '@kovojs/headless-ui/primitives';

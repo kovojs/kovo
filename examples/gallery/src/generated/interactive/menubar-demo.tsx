@@ -49,16 +49,9 @@ export const GalleryMenubarDemo$output_text_derive = derive(
 
 import { component } from '@kovojs/core';
 import {
-  menubarFocusElement as _menubarFocusElement,
   menubarItemAttributes,
-  menubarItemClick as _menubarItemClick,
-  menubarItemKeyDown as _menubarItemKeyDown,
-  menubarKeyDown as _menubarKeyDown,
-  menubarMove as _menubarMove,
   menubarRootAttributes,
   menubarSubmenuAttributes,
-  menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick,
-  menubarTypeahead as _menubarTypeahead,
   type MenubarItem,
 } from '@kovojs/headless-ui/primitives';
 

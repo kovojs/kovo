@@ -21,13 +21,8 @@ export const GalleryTooltipDemo$output_text_derive = derive(['state'], (state: a
 import { component } from '@kovojs/core';
 import {
   tooltipContentAttributes,
-  tooltipEscapeKeyDown as _tooltipEscapeKeyDown,
   tooltipRootAttributes,
   tooltipTriggerAttributes,
-  tooltipTriggerBlur as _tooltipTriggerBlur,
-  tooltipTriggerFocus as _tooltipTriggerFocus,
-  tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter,
-  tooltipTriggerPointerLeave as _tooltipTriggerPointerLeave,
 } from '@kovojs/headless-ui/primitives';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/tooltip.tsx)

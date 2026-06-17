@@ -54,13 +54,9 @@ export const GallerySliderDemo$output_text_derive = derive(['state'], (state: an
 import { component } from '@kovojs/core';
 import {
   sliderHiddenInputAttributes,
-  sliderKeyDown as _sliderKeyDown,
   sliderRangeAttributes,
   sliderRootAttributes,
-  sliderThumbDrag as _sliderThumbDrag,
-  sliderThumbDragStart as _sliderThumbDragStart,
   sliderThumbAttributes,
-  sliderTrackPointerDown as _sliderTrackPointerDown,
   sliderTrackAttributes,
 } from '@kovojs/headless-ui/primitives';
 

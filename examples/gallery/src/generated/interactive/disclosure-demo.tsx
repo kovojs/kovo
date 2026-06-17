@@ -16,7 +16,6 @@ export const GalleryDisclosureDemo$div_hidden_derive = derive(['state'], (state:
 );
 
 import { component } from '@kovojs/core';
-import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/headless-ui/primitives';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/disclosure.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

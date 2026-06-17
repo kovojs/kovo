@@ -56,11 +56,9 @@ export const GalleryTabsDemo$section_tabIndex_derive_3 = derive(['state'], (stat
 
 import { component } from '@kovojs/core';
 import {
-  tabsKeyDown as _tabsKeyDown,
   tabsListAttributes,
   tabsPanelAttributes,
   tabsRootAttributes,
-  tabsTriggerClick as _tabsTriggerClick,
   tabsTriggerAttributes,
 } from '@kovojs/headless-ui/primitives';
 

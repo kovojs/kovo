@@ -94,12 +94,7 @@ import {
   scrollAreaRootAttributes,
   scrollAreaScrollbarAttributes,
   scrollAreaThumbAttributes,
-  scrollAreaThumbDrag as _scrollAreaThumbDrag,
-  scrollAreaThumbDragStart as _scrollAreaThumbDragStart,
-  scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
-  scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown,
   scrollAreaViewportAttributes,
-  scrollAreaViewportScroll as _scrollAreaViewportScroll,
 } from '@kovojs/headless-ui/primitives';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/scroll-area.tsx)

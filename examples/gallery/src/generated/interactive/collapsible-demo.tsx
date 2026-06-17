@@ -22,7 +22,6 @@ import { component } from '@kovojs/core';
 import {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
-  collapsibleTriggerClick as _collapsibleTriggerClick,
   collapsibleTriggerAttributes,
 } from '@kovojs/headless-ui/primitives';
 

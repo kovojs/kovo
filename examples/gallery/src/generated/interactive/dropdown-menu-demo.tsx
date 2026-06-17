@@ -44,17 +44,9 @@ export const GalleryDropdownMenuDemo$output_text_derive = derive(['state'], (sta
 import { component } from '@kovojs/core';
 import {
   dropdownMenuContentAttributes,
-  dropdownMenuFocusElement as _dropdownMenuFocusElement,
   dropdownMenuItemAttributes,
-  dropdownMenuItemClick as _dropdownMenuItemClick,
-  dropdownMenuItemKeyDown as _dropdownMenuItemKeyDown,
-  dropdownMenuKeyDown as _dropdownMenuKeyDown,
-  dropdownMenuMove as _dropdownMenuMove,
   dropdownMenuRootAttributes,
   dropdownMenuTriggerAttributes,
-  dropdownMenuTriggerClick as _dropdownMenuTriggerClick,
-  dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown,
-  dropdownMenuTypeahead as _dropdownMenuTypeahead,
   type DropdownMenuItem,
 } from '@kovojs/headless-ui/primitives';
 

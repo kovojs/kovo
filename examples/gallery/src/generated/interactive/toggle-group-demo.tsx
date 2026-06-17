@@ -29,8 +29,6 @@ import { component } from '@kovojs/core';
 import {
   toggleGroupButtonAttributes,
   toggleGroupItemAttributes,
-  toggleGroupItemClick as _toggleGroupItemClick,
-  toggleGroupKeyDown as _toggleGroupKeyDown,
   toggleGroupRootAttributes,
 } from '@kovojs/headless-ui/primitives';
 

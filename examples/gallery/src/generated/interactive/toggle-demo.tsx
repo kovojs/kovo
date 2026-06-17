@@ -13,7 +13,6 @@ export const GalleryToggleDemo$output_text_derive = derive(['state'], (state: an
 );
 
 import { component } from '@kovojs/core';
-import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/headless-ui/primitives';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/toggle.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui
