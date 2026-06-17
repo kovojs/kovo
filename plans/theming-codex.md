@@ -96,14 +96,14 @@ helpers. It is Apache-2.0 and published as `@material/material-color-utilities`.
       hex/ARGB input, light/dark output, `variant`, `contrast`, and custom colors with optional
       harmonization. Keep the Kovo return shape independent from upstream class shapes.
 - [ ] **A5. Add the ergonomic single-theme API.** Implement `defineTheme({ seed, shape,
-      colors, variant?, contrast? })` as the common app-facing entry point. It should return the
+colors, variant?, contrast? })` as the common app-facing entry point. It should return the
       theme object/assets Kovo needs without requiring authors to manually call a separate
       CSS-emission function in the common path.
 - [ ] **A6. Implement CSS emission behind the ergonomic API.** Add deterministic internal/lower-level
       emission such that `defineTheme(...)` can emit `:root`, dark selector/class blocks,
       and optional reference-palette variables. Output must be stable enough for snapshots.
 - [ ] **A7. Add the `base` composition form.** Support `defineTheme({ base, sys?,
-      component?, shape?, colors? })` so app authors can derive one final theme from seed-generated
+component?, shape?, colors? })` so app authors can derive one final theme from seed-generated
       values without an override callback. Evidence should include a test where border color/radius
       derive from a generated base theme.
 - [ ] **A8. Decide current token-sheet alias compatibility.** Inspect
@@ -166,7 +166,7 @@ helpers. It is Apache-2.0 and published as `@material/material-color-utilities`.
       regenerates or emits theme CSS for all UI components.
 - [ ] **D5. Document derived themes with `base`.** Show the pattern:
       `const base = defineTheme({ seed }); export const theme = defineTheme({
-      base, sys: { color: { outline: base.sys.color.primary } } });` for apps that want precise
+base, sys: { color: { outline: base.sys.color.primary } } });` for apps that want precise
       token changes without a callback.
 
 ## Part E — SPEC, docs, and plan closure
