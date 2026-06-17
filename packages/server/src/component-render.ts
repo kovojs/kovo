@@ -21,6 +21,10 @@ export interface ComponentRenderOptions<State extends JsonValue = JsonValue> {
   state?: State;
 }
 
+/**
+ * Options for rendering a component with one SPEC §6.3 mutation form failure
+ * injected into its `forms.<name>.failure` slot.
+ */
 export interface ComponentMutationFailureRenderOptions<State extends JsonValue = JsonValue>
   extends ComponentRenderOptions<State> {
   /** Component-local key from `mutations: { ... }`, e.g. `addToCart`. */
@@ -79,6 +83,13 @@ export function renderComponentMutationFailure<
   });
 }
 
+/**
+ * Build component render slots with one typed mutation-form failure state.
+ *
+ * This lower-level helper is useful when a component render helper needs to
+ * merge a mutation failure with existing slots before calling
+ * `renderComponent(...)` or `definition.render(...)` directly.
+ */
 export function componentMutationFailureSlots(
   formName: string,
   failure: MutationFail,

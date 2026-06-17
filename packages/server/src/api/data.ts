@@ -6,14 +6,16 @@ export {
   errorBoundary,
   invalidate,
   mutation,
-  mutationFormAttributes,
   renderMutationEndpointResponse,
-  renderMutationFormAttributes,
   renderMutationResponse,
   renderNoJsMutationResponse,
   runMutation,
   write,
 } from '../mutation.js';
+/** Build JSX-spread attributes for a SPEC §6.3 enhanced mutation form. */
+export { mutationFormAttributes } from '../mutation.js';
+/** Render string-template attributes for a SPEC §6.3 enhanced mutation form. */
+export { renderMutationFormAttributes } from '../mutation.js';
 export { renderQueryScript } from '../wire-html.js';
 export type {
   ChangeRecord,
@@ -21,7 +23,6 @@ export type {
   MutationContext,
   MutationDefinition,
   MutationFail,
-  MutationFormAttributes,
   MutationRegistry,
   MutationResult,
   MutationSuccess,
@@ -30,6 +31,8 @@ export type {
   RunMutationOptions,
   WriteDefinition,
 } from '../mutation.js';
+/** Attribute object returned by `mutationFormAttributes(...)`. */
+export type { MutationFormAttributes } from '../mutation.js';
 export type {
   QueryDefinition,
   QueryEndpointFailure,

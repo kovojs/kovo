@@ -172,10 +172,15 @@ export interface MutationDefinition<
   ) => Promise<Result>;
 }
 
+/** Attributes emitted for a SPEC §6.3 enhanced mutation form. */
 export interface MutationFormAttributes<Key extends string = string> {
+  /** No-JS mutation endpoint path derived from the typed mutation key. */
   action: `/_m/${Key}`;
+  /** Stable mutation key metadata used by enhanced submit/runtime tooling. */
   'data-mutation': Key;
+  /** Enables the SPEC §9.1 enhanced fragment submit path. */
   enhance: true;
+  /** Mutation forms post by default. */
   method: 'post';
 }
 
@@ -255,6 +260,13 @@ export function mutationFormAttributes<const Key extends string>(
   };
 }
 
+/**
+ * Render SPEC §6.3 no-JS/enhanced form attributes for string templates.
+ *
+ * Use this when a direct server-rendered helper returns an HTML string rather
+ * than JSX, so the mutation endpoint URL and `data-mutation` value still derive
+ * from the typed mutation definition.
+ */
 export function renderMutationFormAttributes<const Key extends string>(
   definition: Pick<MutationDefinition<Key>, 'key'>,
 ): string {
