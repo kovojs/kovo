@@ -174,6 +174,65 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'reuses inline ctx.signal for the same island through %s',
+    async (_name, installSource) => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        importModule: globalRecord.__kovoInlineImport,
+      };
+      const listeners = new Map<string, (event: unknown) => Promise<void>>();
+      const element = new FakeElement({
+        'kovo-c': 'abortable-widget',
+        'kovo-key': 'primary',
+        'on:click': '/c/abortable.js#start',
+      });
+      const signals: AbortSignal[] = [];
+      const importModule = vi.fn(async () => ({
+        start(_event: unknown, ctx: { signal: AbortSignal }) {
+          signals.push(ctx.signal);
+        },
+      }));
+
+      try {
+        globalRecord.addEventListener = (
+          type: string,
+          listener: (event: unknown) => Promise<void>,
+        ) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          createElement() {
+            return { content: { querySelectorAll: () => [] }, innerHTML: '' };
+          },
+          querySelectorAll() {
+            return [];
+          },
+        };
+
+        installSource(importModule, globalRecord);
+        await listeners.get('click')?.({ target: element, type: 'click' });
+        await listeners.get('click')?.({ target: element, type: 'click' });
+      } finally {
+        Object.assign(globalRecord, {
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+
+      expect(signals).toHaveLength(2);
+      expect(signals[0]).toBe(signals[1]);
+      expect(signals[0]?.aborted).toBe(false);
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'keeps inline indeterminate checkbox properties in parity through %s',
     async (_name, installSource) => {
       const host = new FakeStatefulBindingElement({

@@ -73,7 +73,7 @@ describe('inline loader minified artifact', () => {
       "dq('kovo:query',{detail:{['quer'+'ies']:chunks.qs,},});",
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'applyInlineMutationResponseChunks(chunks,{findFragmentTarget:ft,});',
+      "for(const x of chunks.fragments){if(x.mode==='append')continue;const e=ft(x.target);if(e)for(const y of qa(e,'[kovo-c]')){if(x.html.includes(y.getAttribute('kovo-c')))continue;y.a?.abort();}}applyInlineMutationResponseChunks(chunks,{findFragmentTarget:ft});",
     );
     expect(inlineKovoLoaderInstallerSource).toContain('function m(c,n)');
     expect(inlineKovoLoaderInstallerSource).toContain(
@@ -83,8 +83,6 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-key')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('innerHTML=html');
     expect(inlineKovoLoaderInstallerSource).not.toContain('applyResponseChunks');
-    expect(inlineKovoLoaderInstallerSource).toContain(
-      "detail:{['quer'+'ies']:chunks.qs,}",
-    );
+    expect(inlineKovoLoaderInstallerSource).toContain("detail:{['quer'+'ies']:chunks.qs,}");
   });
 });

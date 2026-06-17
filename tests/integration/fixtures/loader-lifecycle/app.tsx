@@ -58,7 +58,7 @@ const app = createApp({
   routes: [homeRoute],
   mutationResponse: ({ key, request }) => {
     if (key !== swapIsland.key) return undefined;
-    const db = (request as KovoFixtureRequest).db;
+    const db = (request as unknown as KovoFixtureRequest).db;
     return {
       fragmentRenderers: [{ render: () => renderShell(db), target: 'lifecycle-shell' }],
     };
@@ -67,6 +67,7 @@ const app = createApp({
 
 export default defineFixture({
   app,
-  schema: "create table lifecycle_state (id integer primary key, stage text not null default 'active')",
+  schema:
+    "create table lifecycle_state (id integer primary key, stage text not null default 'active')",
   seed: (db) => db.exec("insert into lifecycle_state (id, stage) values (1, 'active')"),
 });
