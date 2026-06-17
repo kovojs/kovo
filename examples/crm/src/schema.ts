@@ -18,6 +18,12 @@ export const contacts = pgTable(
     email: text('email').notNull(),
     ownerId: text('owner_id').notNull(),
     dealCount: integer('deal_count').notNull(),
+    // Presentational-only columns: read by the UI (company chip, job title) but
+    // NEVER written by a mutation, so they carry DB DEFAULTs and the derived
+    // optimism / commuting tests stay valid even for fixture inserts that omit
+    // them (SPEC.md §10.5).
+    company: text('company').notNull().default('Independent'),
+    title: text('title').notNull().default('Contact'),
   },
   kovo({ domain: 'contact', key: 'id' }),
 );
@@ -30,6 +36,9 @@ export const deals = pgTable(
     stage: text('stage').notNull(),
     amount: integer('amount').notNull(),
     ownerId: text('owner_id').notNull(),
+    // Presentational-only column: the human deal name shown in the pipeline. Never
+    // written by a mutation, so it carries a DB DEFAULT (see contacts above).
+    title: text('title').notNull().default('New opportunity'),
   },
   kovo({ domain: 'deal', key: 'id' }),
 );

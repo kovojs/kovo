@@ -12,8 +12,11 @@ import * as schema from './schema.js';
 export type CrmDb = PgliteDatabase<typeof schema>;
 
 const SCHEMA_DDL = [
-  'CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, owner_id text NOT NULL, deal_count integer NOT NULL);',
-  'CREATE TABLE deals (id text PRIMARY KEY, contact_id text NOT NULL, stage text NOT NULL, amount integer NOT NULL, owner_id text NOT NULL);',
+  // `company` / `title` (contacts) and `title` (deals) are presentational-only and
+  // carry DEFAULTs so inserts that omit them (mutation handlers, fixture inserts)
+  // stay valid — the mutations never write these columns (SPEC.md §10.5).
+  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, owner_id text NOT NULL, deal_count integer NOT NULL, company text NOT NULL DEFAULT 'Independent', title text NOT NULL DEFAULT 'Contact');",
+  "CREATE TABLE deals (id text PRIMARY KEY, contact_id text NOT NULL, stage text NOT NULL, amount integer NOT NULL, owner_id text NOT NULL, title text NOT NULL DEFAULT 'New opportunity');",
   'CREATE TABLE activities (id serial PRIMARY KEY, deal_id text NOT NULL, kind text NOT NULL, note text NOT NULL);',
   // SPEC.md §10.5: closeDeal's `amount = compute_commission(amount)` is a raw sql
   // server compute the extractor classifies Opaque (the commission stays server
@@ -23,14 +26,14 @@ const SCHEMA_DDL = [
 ].join('\n');
 
 const SEED_CONTACTS =
-  'INSERT INTO contacts (id, name, email, owner_id, deal_count) VALUES ' +
-  "('c1', 'Ada Lovelace', 'ada@example.com', 'u1', 1), " +
-  "('c2', 'Grace Hopper', 'grace@example.com', 'u1', 1);";
+  'INSERT INTO contacts (id, name, email, owner_id, deal_count, company, title) VALUES ' +
+  "('c1', 'Ada Lovelace', 'ada@example.com', 'u1', 1, 'Analytical Engines', 'Head of Engineering'), " +
+  "('c2', 'Grace Hopper', 'grace@example.com', 'u1', 1, 'Naval Systems', 'VP Operations');";
 
 const SEED_DEALS =
-  'INSERT INTO deals (id, contact_id, stage, amount, owner_id) VALUES ' +
-  "('d1', 'c1', 'open', 5000, 'u1'), " +
-  "('d2', 'c2', 'won', 12000, 'u1');";
+  'INSERT INTO deals (id, contact_id, stage, amount, owner_id, title) VALUES ' +
+  "('d1', 'c1', 'open', 5000, 'u1', 'Analytical Engines — Platform license'), " +
+  "('d2', 'c2', 'won', 12000, 'u1', 'Naval Systems — Annual renewal');";
 
 /** Create a fresh, seeded CRM database (DDL + a starter contact/deal book). */
 export async function createCrmDb(): Promise<CrmDb> {
