@@ -431,6 +431,17 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-stackoverflow test`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Additional progress 2026-06-17:
+      `packages/server/src/live-target-registry.ts` adds the internal
+      `collectGeneratedLiveTargetRenderers()` primitive that extracts only
+      compiler-emitted `*$liveTargetRenderer` exports from generated module
+      namespaces, dedupes identical renderers, and rejects conflicting duplicate
+      component ids. This is the framework-owned collection step needed before
+      app-shell/build code can import generated modules without app-authored
+      registry wiring.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/live-target-registry.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts`
+      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
     - Remaining gaps: build/app-shell integration still needs to collect the
       generated renderer exports without app-authored `createApp()` wiring; the
       broad app-authored `mutationResponse` success-routing escape hatch is
