@@ -1,6 +1,6 @@
 // @kovojs-ir - lowered from examples/gallery/src/interactive/collapsible-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @kovojs/server */
-import { derive } from '@kovojs/runtime';
+import { derive } from '@kovojs/runtime/generated';
 
 export const GalleryCollapsibleDemo$details_data_state_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
@@ -53,20 +53,20 @@ export const GalleryCollapsibleDemo = component({
         data-gallery-interactive="collapsible"
         {...collapsibleRootAttributes({ open: state.open })}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$details_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$details_data_state_derive"
         open={state.open}
-        data-bind:open="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$details_open_derive"
+        data-bind:open="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$details_open_derive"
         kovo-c="gallery-collapsible-demo"
         kovo-state='{"open":false}'
       >
         <summary
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$summary_click"
+          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$summary_click"
           {...collapsibleTriggerAttributes({ contentId, open: state.open })}
           aria-expanded={String(state.open)}
-          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$summary_aria_expanded_derive"
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$summary_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$summary_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$summary_data_state_derive"
         >
           Release notes
         </summary>
@@ -74,7 +74,7 @@ export const GalleryCollapsibleDemo = component({
           class={CONTENT_CLASS}
           {...collapsibleContentAttributes({ contentId, open: state.open })}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$div_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$div_data_state_derive"
         >
           Added browser-backed compiled coverage.
         </div>

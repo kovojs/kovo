@@ -1,5 +1,5 @@
 // @kovojs-ir
-import { derive, handler } from '@kovojs/runtime';
+import { derive, handler } from '@kovojs/runtime/generated';
 
 import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/headless-ui/primitives';
 

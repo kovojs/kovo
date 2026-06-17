@@ -1,6 +1,6 @@
 // @kovojs-ir - lowered from examples/gallery/src/interactive/progress-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @kovojs/server */
-import { derive } from '@kovojs/runtime';
+import { derive } from '@kovojs/runtime/generated';
 
 export const GalleryProgressDemo$progress_aria_valuetext_derive = derive(['state'], (state: any) =>
   state.value === null ? 'Upload pending' : `${state.value} percent uploaded`,
@@ -60,35 +60,35 @@ export const GalleryProgressDemo = component({
           aria-valuetext={
             state.value === null ? 'Upload pending' : `${state.value} percent uploaded`
           }
-          data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_aria_valuetext_derive"
+          data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$progress_aria_valuetext_derive"
           data-state={
             state.value === null ? 'indeterminate' : state.value === 100 ? 'complete' : 'loading'
           }
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$progress_data_state_derive"
           data-value={state.value === null ? undefined : String(state.value)}
-          data-bind:data-value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_data_value_derive"
+          data-bind:data-value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$progress_data_value_derive"
           value={state.value === null ? undefined : state.value}
-          data-bind:value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_value_derive"
+          data-bind:value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$progress_value_derive"
         />
         <div class="inline-flex gap-2">
           <button
             type="button"
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$button_click"
           >
             Complete upload
           </button>
           <button
             type="button"
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$button_click_2"
           >
             Mark pending
           </button>
         </div>
         <output
           data-demo-state="progress-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$output_text_derive"
         >
           {state.value === null ? 'pending' : `${state.value}%`}
         </output>

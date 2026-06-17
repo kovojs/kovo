@@ -6,13 +6,18 @@
   ],
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./generated": "./src/generated.ts"
   },
   "publishConfig": {
     "exports": {
       ".": {
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
+      },
+      "./generated": {
+        "types": "./dist/generated.d.mts",
+        "default": "./dist/generated.mjs"
       }
     }
   },
@@ -21,7 +26,7 @@
     "build:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts",
     "check": "pnpm run check:inline-loader",
     "check:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts --check",
-    "build:dist": "vp pack src/index.ts --dts",
+    "build:dist": "vp pack src/generated.ts src/index.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

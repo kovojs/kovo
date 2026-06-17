@@ -1,6 +1,6 @@
 // @kovojs-ir - lowered from examples/gallery/src/interactive/toggle-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @kovojs/server */
-import { derive } from '@kovojs/runtime';
+import { derive } from '@kovojs/runtime/generated';
 
 export const GalleryToggleDemo$button_aria_pressed_derive = derive(['state'], (state: any) =>
   String(state.pressed),
@@ -41,19 +41,19 @@ export const GalleryToggleDemo = component({
       <button
         aria-label="Toggle gallery density"
         class={BUTTON_CLASS}
-        on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_click"
+        on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=604ec897#GalleryToggleDemo$button_click"
         type="button"
         aria-pressed={String(state.pressed)}
-        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_aria_pressed_derive"
+        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=604ec897#GalleryToggleDemo$button_aria_pressed_derive"
         data-state={state.pressed ? 'pressed' : 'off'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=604ec897#GalleryToggleDemo$button_data_state_derive"
       >
         Dense rows
       </button>
       <output
         class="text-xs text-neutral-500"
         data-demo-state="pressed"
-        data-bind="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$output_text_derive"
+        data-bind="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=604ec897#GalleryToggleDemo$output_text_derive"
       >
         {state.pressed ? 'pressed' : 'off'}
       </output>

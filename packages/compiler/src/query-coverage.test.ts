@@ -60,7 +60,7 @@ export const CartBadge = component({
       ]
     `);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime';",
+      "import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime/generated';",
     );
     expect(clientSource).toContain(
       'export const CartBadge$button_disabled_derive = derive(["cart"], (cart) => cart.count === 0);',
@@ -706,7 +706,7 @@ export const CartBadge = component({
 
     expect(bootstrap.fileName).toBe('generated/app.client.js');
     expect(bootstrap.source).toContain(
-      "import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';",
+      "import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime/generated';",
     );
     expect(bootstrap.source).toContain(
       'import { CartBadge$queryUpdatePlans } from "../components/cart/cart-badge.client.js";',

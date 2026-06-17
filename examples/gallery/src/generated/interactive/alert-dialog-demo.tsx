@@ -1,6 +1,6 @@
 // @kovojs-ir - lowered from examples/gallery/src/interactive/alert-dialog-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @kovojs/server */
-import { derive } from '@kovojs/runtime';
+import { derive } from '@kovojs/runtime/generated';
 
 export const GalleryAlertDialogDemo$section_data_state_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
@@ -74,24 +74,24 @@ export const GalleryAlertDialogDemo = component({
         data-gallery-interactive="alert-dialog"
         {...alertDialogRootAttributes({ open: state.open })}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$section_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$section_data_state_derive"
         kovo-c="gallery-alert-dialog-demo"
         kovo-state='{"open":false}'
       >
         <button
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$button_click"
           {...alertDialogTriggerAttributes({ contentId, open: state.open })}
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$button_aria_expanded_derive"
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$button_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$button_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$button_data_state_derive"
         >
           Delete workspace
         </button>
         <dialog
           class={CONTENT_CLASS}
-          on:cancel="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$dialog_cancel"
+          on:cancel="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$dialog_cancel"
           {...alertDialogContentAttributes({
             contentId,
             descriptionId,
@@ -99,9 +99,9 @@ export const GalleryAlertDialogDemo = component({
             titleId,
           })}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$dialog_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$dialog_data_state_derive"
           open={state.open}
-          data-bind:open="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$dialog_open_derive"
+          data-bind:open="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$dialog_open_derive"
         >
           <h2 class={TITLE_CLASS} id={titleId}>
             Delete workspace?
@@ -111,30 +111,30 @@ export const GalleryAlertDialogDemo = component({
           </p>
           <button
             class={CANCEL_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$button_click_2"
             {...alertDialogCancelAttributes({ autoFocus: true, contentId, open: state.open })}
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$button_data_state_derive_2"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$button_data_state_derive_2"
           >
             Keep workspace
           </button>
           <button
             class={ACTION_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$button_click_3"
+            on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$button_click_3"
             {...alertDialogActionAttributes({
               contentId,
               intent: 'destructive',
               open: state.open,
             })}
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$button_data_state_derive_3"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$button_data_state_derive_3"
           >
             Delete
           </button>
         </dialog>
         <output
           data-demo-state="alert-dialog-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=8635994f#GalleryAlertDialogDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=23dbfd65#GalleryAlertDialogDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

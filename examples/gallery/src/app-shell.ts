@@ -17,13 +17,14 @@ const headlessUiSourceRoot = fileURLToPath(
 const galleryInteractiveClientModules = createMemoryVersionedClientModuleRegistry();
 
 // SPEC.md §4.4: load-bearing import maps are a non-goal — "the compiler and server emit full module
-// URLs". Generated client modules import tiny declaration helpers from `@kovojs/runtime`, a bare
-// specifier the browser cannot resolve. Serve a minimal runtime module at a resolvable /c/ URL and
-// rewrite the bare import to it so the static export is interactive without an import map.
+// URLs". Generated client modules import tiny declaration helpers from `@kovojs/runtime/generated`,
+// a bare specifier the browser cannot resolve. Serve a minimal runtime module at a resolvable /c/
+// URL and rewrite the bare import to it so the static export is interactive without an import map.
 const galleryRuntimeModulePath = '/c/examples/gallery/src/generated/kovo-runtime.client.js';
 const galleryRuntimeModuleSource = [
   'export const derive = (inputs, run) => ({ inputs, run });',
   'export const handler = (fn) => fn;',
+  'export const kovoStyleProperty = (name, value) => value == null || value === false ? "" : `${name}: ${value}`;',
   '',
 ].join('\n');
 const galleryRuntimeModuleHref = galleryInteractiveClientModules.put({
@@ -156,6 +157,7 @@ function readGeneratedInteractiveArtifact(fileName: string): string {
 // generated client module graph without an import map.
 function rewriteGalleryClientImports(source: string): string {
   return source
+    .replaceAll("from '@kovojs/runtime/generated';", `from '${galleryRuntimeModuleHref}';`)
     .replaceAll("from '@kovojs/runtime';", `from '${galleryRuntimeModuleHref}';`)
     .replaceAll(
       'from "@kovojs/headless-ui/primitives";',

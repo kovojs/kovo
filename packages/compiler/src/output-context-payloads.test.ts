@@ -5,7 +5,7 @@ import {
   derive,
   kovoEscapeHtml,
   kovoStyleProperty,
-} from '@kovojs/runtime';
+} from '@kovojs/runtime/generated';
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
@@ -73,7 +73,7 @@ export const ClientPayloadCard = component({
         },
         "clientDiagnostics": [],
         "clientSource": "// @kovojs-ir
-      import { applyCompiledQueryUpdatePlan } from '@kovojs/runtime';
+      import { applyCompiledQueryUpdatePlan } from '@kovojs/runtime/generated';
 
       export const ClientPayloadCard$queryUpdatePlans = {
         "product"(root, value) {
@@ -177,7 +177,7 @@ export const PayloadCard = component({
           "title": "<img src=x onerror=alert(1)> & "quoted"",
         },
         "clientSource": "// @kovojs-ir
-      import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime';
+      import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime/generated';
 
       export const PayloadCard$article_aria_description_derive = derive(["product"], (product) => product.summary);
       export const PayloadCard$article_aria_label_derive = derive(["product"], (product) => product.label);
@@ -293,7 +293,7 @@ export const PayloadCard = component({
         ],
         "serverSource": "// @kovojs-ir
       export function renderSource() {
-        return \`import { derive } from '@kovojs/runtime';
+        return \`import { derive } from '@kovojs/runtime/generated';
 
       export const PayloadCard$article_title_derive = derive(["product"], (product) => product.name);
       export const PayloadCard$article_aria_label_derive = derive(["product"], (product) => product.label);
@@ -452,7 +452,7 @@ export const DynamicUrlPayloads = component({
           "templateStamps": [],
         },
         "clientSource": "// @kovojs-ir
-      import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime';
+      import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/runtime/generated';
 
       export const DynamicUrlPayloads$a_href_derive = derive(["product"], (product) => product.href);
       export const DynamicUrlPayloads$img_src_derive = derive(["product"], (product) => product.image);
@@ -528,7 +528,7 @@ export const TemplatePayloads = component({
           ],
         },
         "clientSource": "// @kovojs-ir
-      import { applyCompiledQueryUpdatePlan, kovoEscapeHtml } from '@kovojs/runtime';
+      import { applyCompiledQueryUpdatePlan, kovoEscapeHtml } from '@kovojs/runtime/generated';
 
       export const TemplatePayloads$queryUpdatePlans = {
         "cart"(root, value) {
@@ -604,7 +604,7 @@ function executeClientModule(source: string): Record<string, unknown> {
   const exports: Record<string, unknown> = {};
   const moduleSource = source
     .replace(
-      /import\s+\{([^}]+)\}\s+from\s+['"]@kovojs\/runtime['"];\n?/g,
+      /import\s+\{([^}]+)\}\s+from\s+['"]@kovojs\/runtime(?:\/generated)?['"];\n?/g,
       (_match, names: string) => `const { ${names.trim()} } = runtime;\n`,
     )
     .replace(/export const ([A-Za-z_$][\w$]*)/g, 'const $1 = exports.$1');

@@ -1,6 +1,6 @@
 // @kovojs-ir - lowered from examples/gallery/src/interactive/field-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @kovojs/server */
-import { derive } from '@kovojs/runtime';
+import { derive } from '@kovojs/runtime/generated';
 
 export const GalleryFieldDemo$div_data_invalid_derive = derive(['state'], (state: any) =>
   state.invalid ? '' : null,
@@ -108,7 +108,7 @@ export const GalleryFieldDemo = component({
           class={FIELD_CLASS}
           {...fieldRootAttributes({ ...emailFieldState, id: 'gallery-interactive-field-email' })}
           data-invalid={state.invalid ? '' : null}
-          data-bind:data-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$div_data_invalid_derive"
+          data-bind:data-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$div_data_invalid_derive"
         >
           <label
             class={LABEL_CLASS}
@@ -123,7 +123,7 @@ export const GalleryFieldDemo = component({
           <input
             type="email"
             class={CONTROL_CLASS}
-            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_input"
+            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$input_input"
             {...fieldControlAttributes({
               ...emailFieldState,
               descriptionId: 'gallery-interactive-field-email-description',
@@ -138,13 +138,13 @@ export const GalleryFieldDemo = component({
                 ? 'gallery-interactive-field-email-description gallery-interactive-field-email-error'
                 : 'gallery-interactive-field-email-description'
             }
-            data-bind:aria-describedby="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_aria_describedby_derive"
+            data-bind:aria-describedby="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$input_aria_describedby_derive"
             aria-invalid={state.invalid ? 'true' : null}
-            data-bind:aria-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_aria_invalid_derive"
+            data-bind:aria-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$input_aria_invalid_derive"
             data-invalid={state.invalid ? '' : null}
-            data-bind:data-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_data_invalid_derive"
+            data-bind:data-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$input_data_invalid_derive"
             value={state.email}
-            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_value_derive"
+            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$input_value_derive"
           />
           <p
             class={DESCRIPTION_CLASS}
@@ -162,7 +162,7 @@ export const GalleryFieldDemo = component({
               visible: state.invalid,
             })}
             hidden={!state.invalid}
-            data-bind:hidden="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$p_hidden_derive"
+            data-bind:hidden="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$p_hidden_derive"
           >
             Enter a complete email address.
           </p>
@@ -216,7 +216,7 @@ export const GalleryFieldDemo = component({
           </label>
           <select
             class={SELECT_CLASS}
-            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$select_change"
+            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$select_change"
             {...fieldControlAttributes({
               descriptionId: 'gallery-interactive-field-plan-description',
               form: 'gallery-interactive-field-form',
@@ -225,13 +225,13 @@ export const GalleryFieldDemo = component({
               required: true,
             })}
             value={state.plan}
-            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$select_value_derive"
+            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$select_value_derive"
           >
             <option
               value="team"
               class={SELECT_OPTION_CLASS}
               selected={state.plan === 'team'}
-              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$option_selected_derive"
+              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$option_selected_derive"
             >
               Team
             </option>
@@ -239,7 +239,7 @@ export const GalleryFieldDemo = component({
               value="enterprise"
               class={SELECT_OPTION_CLASS}
               selected={state.plan === 'enterprise'}
-              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$option_selected_derive_2"
+              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$option_selected_derive_2"
             >
               Enterprise
             </option>
@@ -265,9 +265,9 @@ export const GalleryFieldDemo = component({
             name: 'gallery-shipping',
           })}
           data-disabled={state.shippingDisabled ? '' : null}
-          data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$fieldset_data_disabled_derive"
+          data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$fieldset_data_disabled_derive"
           disabled={state.shippingDisabled}
-          data-bind:disabled="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$fieldset_disabled_derive"
+          data-bind:disabled="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$fieldset_disabled_derive"
         >
           <legend
             class={LEGEND_CLASS}
@@ -281,9 +281,9 @@ export const GalleryFieldDemo = component({
               <input
                 name="gallery-shipping-disabled"
                 type="checkbox"
-                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_click"
+                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$input_click"
                 checked={state.shippingDisabled}
-                data-bind:checked="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_checked_derive"
+                data-bind:checked="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=af463500#GalleryFieldDemo$input_checked_derive"
               />
               Disable shipping group
             </label>

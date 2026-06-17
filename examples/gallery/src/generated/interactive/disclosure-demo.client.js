@@ -1,5 +1,5 @@
 // @kovojs-ir
-import { derive, handler } from '@kovojs/runtime';
+import { derive, handler } from '@kovojs/runtime/generated';
 
 import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/headless-ui/primitives';
 

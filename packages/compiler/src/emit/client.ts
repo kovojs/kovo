@@ -18,6 +18,8 @@ import type {
   StateDeriveFact,
 } from '../types.js';
 
+const RUNTIME_GENERATED_IMPORT = '@kovojs/runtime/generated';
+
 export function emitClientModule(
   handlers: HandlerLowering[],
   queryUpdatePlans: readonly QueryUpdatePlanFact[],
@@ -39,7 +41,9 @@ export function emitClientModule(
     ...(handlers.length > 0 ? ['handler'] : []),
   ].sort();
   const importLine =
-    imports.length > 0 ? `import { ${imports.join(', ')} } from '@kovojs/runtime';\n\n` : '';
+    imports.length > 0
+      ? `import { ${imports.join(', ')} } from '${RUNTIME_GENERATED_IMPORT}';\n\n`
+      : '';
   const dependencyImportLines = emitClientImportDependencies(
     handlers.flatMap((handler) => [...(handler.clientImports ?? [])]),
   );

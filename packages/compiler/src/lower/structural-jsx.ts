@@ -38,6 +38,8 @@ import { literalStringValue } from '../scan/object.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
 import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
+
+const RUNTIME_GENERATED_IMPORT = '@kovojs/runtime/generated';
 import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,
@@ -175,7 +177,7 @@ export function lowerStructuralJsx(
   ].sort();
   const derivePrefix =
     runtimeImports.length > 0
-      ? `import { ${runtimeImports.join(', ')} } from '@kovojs/runtime';\n\n${deriveExports.join('\n')}\n\n`
+      ? `import { ${runtimeImports.join(', ')} } from '${RUNTIME_GENERATED_IMPORT}';\n\n${deriveExports.join('\n')}\n\n`
       : '';
   const prefix = `${escapeImport}${derivePrefix}`;
   const replacements = [...jsxIrReplacements(tree)];
