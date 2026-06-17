@@ -60,12 +60,19 @@ already excludes `@internal`, but the root barrels can still export those names.
     public roots, allowed only on configured non-public subpaths, and omitted from
     public API docs.
   - Prove: `pnpm exec vp check rules/api-surface.md plans/api-boudnary.md`.
-- [ ] **Extend `public-packages.json` with API-boundary metadata.**
+  - Evidence: `rules/api-surface.md` now defines public, generated, internal, and
+    private tiers; `pnpm exec vp check rules/api-surface.md plans/api-boudnary.md`
+    on 2026-06-17 reported both files formatted but failed to start linting with
+    "No files found to lint", so this remains open pending the exact proving gate.
+- [x] **Extend `public-packages.json` with API-boundary metadata.**
   - Done = each public package can declare public doc entries, generated ABI
     subpaths, and internal subpaths. Private packages remain classified as private
     and do not participate in public docs.
   - Prove: `pnpm exec vitest --run scripts/public-packages.test.mjs`.
-- [ ] **Change `scripts/api-surface-gate.mjs` from classification-only to boundary enforcement.**
+  - Evidence: `pnpm exec vitest --run scripts/public-packages.test.mjs scripts/api-surface-gate.test.mjs`
+    passed on 2026-06-17 with 13 tests; manifest tests assert exact public,
+    generated, and internal tier coverage against package exports.
+- [x] **Change `scripts/api-surface-gate.mjs` from classification-only to boundary enforcement.**
   - Done = public subpaths fail when any exported declaration is tagged
     `@internal` or `@generated`; generated subpaths allow `@generated`
     declarations plus re-exported public types; internal subpaths allow
@@ -77,6 +84,10 @@ already excludes `@internal`, but the root barrels can still export those names.
   - Prove: focused gate unit tests cover public-root `@internal` leaks, internal
     subpath untagged leaks, generated-subpath rules, undocumented public exports,
     and baseline ratcheting: `pnpm exec vitest --run scripts/api-surface-gate.test.mjs`.
+  - Evidence: `pnpm exec vitest --run scripts/public-packages.test.mjs scripts/api-surface-gate.test.mjs`
+    passed on 2026-06-17 with 13 tests. `node scripts/api-surface-gate.mjs`
+    now fails on existing package migration debt, reporting 343 boundary
+    violations after the compiler slice, which proves hard enforcement is active.
 - [ ] **Keep publish generation aware of generated/internal subpaths.**
   - Done = `scripts/build-publish.mjs` includes generated/internal subpaths in
     `publishConfig` when they are in top-level `exports`, and verifies their dist
@@ -139,6 +150,12 @@ already excludes `@internal`, but the root barrels can still export those names.
   - Prove: `pnpm --filter @kovojs/compiler exec vitest run`,
     `pnpm --filter create-kovo exec vitest run`, examples' graph-emission checks,
     and the API surface gate.
+  - Evidence: local compiler split introduced `@kovojs/compiler/internal` and
+    `@kovojs/compiler/internal/graph`; `pnpm --filter @kovojs/compiler exec vitest run`
+    passed on 2026-06-17 with 42 files / 356 tests. `node scripts/api-surface-gate.mjs | rg '@kovojs/compiler|api-surface:'`
+    reported 343 non-compiler boundary violations and no compiler-specific
+    violations. Remaining proof gaps: create-kovo vitest and example graph-emission
+    checks have not run in this session.
 - [ ] **Audit `@kovojs/drizzle`, `@kovojs/better-auth`, `@kovojs/test`, `@kovojs/headless-ui`, `@kovojs/style`, and CLI packages.**
   - For each package, root exports must be documented public API; `@internal`
     declarations move behind internal subpaths or become package-private.

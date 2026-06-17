@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import type { CompileComponentOptions, QueryShape, QueryShapeFact } from '@kovojs/compiler';
+import type { CompileComponentOptions } from '@kovojs/compiler';
+import type { QueryShape, QueryShapeFact } from '@kovojs/compiler/internal';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import {

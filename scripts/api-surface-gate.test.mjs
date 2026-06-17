@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { compareViolations, computeViolations } from './api-surface-gate.mjs';
+import { classifyExport, compareViolations, computeViolations } from './api-surface-gate.mjs';
 import { repoRoot } from './public-packages.mjs';
 
 /**
@@ -37,5 +37,44 @@ describe('api-surface gate', () => {
     const { added, removed } = compareViolations(baseline, current);
     expect(added).toEqual([]);
     expect(removed).toEqual(['@kovojs/core#fixedThing']);
+  });
+
+  it('rejects @internal and @generated symbols on public entrypoints', () => {
+    expect(
+      classifyExport({ tier: 'public', documented: true, internal: true, generated: false }),
+    ).toBe('internal-on-public');
+    expect(
+      classifyExport({ tier: 'public', documented: true, internal: false, generated: true }),
+    ).toBe('generated-on-public');
+  });
+
+  it('allows generated ABI symbols only on generated entrypoints', () => {
+    expect(
+      classifyExport({ tier: 'generated', documented: false, internal: false, generated: true }),
+    ).toBeNull();
+    expect(
+      classifyExport({ tier: 'generated', documented: true, internal: false, generated: false }),
+    ).toBeNull();
+    expect(
+      classifyExport({ tier: 'generated', documented: false, internal: false, generated: false }),
+    ).toBe('untagged-on-generated');
+    expect(
+      classifyExport({ tier: 'generated', documented: false, internal: true, generated: false }),
+    ).toBe('internal-on-generated');
+  });
+
+  it('allows internal symbols only on internal entrypoints', () => {
+    expect(
+      classifyExport({ tier: 'internal', documented: false, internal: true, generated: false }),
+    ).toBeNull();
+    expect(
+      classifyExport({ tier: 'internal', documented: true, internal: false, generated: false }),
+    ).toBeNull();
+    expect(
+      classifyExport({ tier: 'internal', documented: false, internal: false, generated: false }),
+    ).toBe('untagged-on-internal');
+    expect(
+      classifyExport({ tier: 'internal', documented: false, internal: false, generated: true }),
+    ).toBe('generated-on-internal');
   });
 });

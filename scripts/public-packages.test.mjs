@@ -4,9 +4,12 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  generatedEntrySubpaths,
+  internalEntrySubpaths,
   documentedPackages,
   loadPublicPackages,
   privatePackages,
+  publicEntrySubpaths,
   publicPackages,
   repoRoot,
 } from './public-packages.mjs';
@@ -73,6 +76,41 @@ describe('public-packages manifest', () => {
       expect(pkg.description.length).toBeGreaterThan(0);
       // Documented packages are, by definition, public.
       expect(publicPackages().some((p) => p.name === pkg.name)).toBe(true);
+      expect(pkg.publicEntries.length, `${pkg.name} public API docs entries`).toBeGreaterThan(0);
+    }
+  });
+
+  it('declares each public package export subpath in exactly one boundary tier', () => {
+    for (const pkg of publicPackages()) {
+      const pkgJson = packageJson(pkg.dir);
+      const exportedSubpaths = Object.keys(pkgJson.exports ?? {}).sort();
+      const publicSubpaths = publicEntrySubpaths(pkg);
+      const generatedSubpaths = generatedEntrySubpaths(pkg);
+      const internalSubpaths = internalEntrySubpaths(pkg);
+      const declaredSubpaths = [...publicSubpaths, ...generatedSubpaths, ...internalSubpaths].sort();
+
+      expect(pkg.apiBoundary, `${pkg.name} must declare apiBoundary metadata`).toBeDefined();
+      expect(new Set(declaredSubpaths).size, `${pkg.name} boundary subpaths are unique`).toBe(
+        declaredSubpaths.length,
+      );
+      expect(declaredSubpaths, `${pkg.name} apiBoundary must match package.json exports`).toEqual(
+        exportedSubpaths,
+      );
+    }
+  });
+
+  it('keeps generated and internal subpaths out of the public API reference manifest', () => {
+    for (const pkg of documentedPackages()) {
+      const source = manifest.find((entry) => entry.name === pkg.name);
+      const nonPublicSubpaths = [
+        ...generatedEntrySubpaths(source),
+        ...internalEntrySubpaths(source),
+      ];
+      for (const subpath of nonPublicSubpaths) {
+        expect(pkg.publicEntries, `${pkg.name} docs must not include ${subpath}`).not.toContain(
+          subpath,
+        );
+      }
     }
   });
 });

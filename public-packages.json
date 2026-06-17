@@ -1,11 +1,18 @@
 {
-  "$comment": "Single source of truth for which Kovo packages are PUBLIC (safe for outside consumers to depend on) vs PRIVATE (repo-internal, no external consumer should import them). Consumed by site/scripts/api-ref.mjs and the api-surface CI gate (scripts/api-surface-gate). See rules/api-surface.md and plans/api-cleanup.md. `kind`: library = importable package; build-tool = consumed by an app's build/codegen step; cli = run as a bin; starter = shadcn-style copy-in (not a versioned dep). `apiRef` (order/slug/description) marks packages whose public surface is rendered into the generated API reference.",
+  "$comment": "Single source of truth for which Kovo packages are PUBLIC (safe for outside consumers to depend on) vs PRIVATE (repo-internal, no external consumer should import them). Consumed by site/scripts/api-ref.mjs and the api-surface CI gate (scripts/api-surface-gate). See rules/api-surface.md and plans/api-boudnary.md. `kind`: library = importable package; build-tool = consumed by an app's build/codegen step; cli = run as a bin; starter = shadcn-style copy-in (not a versioned dep). `apiBoundary.public` lists app-facing export subpaths, `apiBoundary.generated` lists compiler-emitted ABI subpaths, and `apiBoundary.internal` lists repo-internal import subpaths. `apiRef` (order/slug/description) marks packages whose public surface is rendered into the generated API reference.",
   "packages": [
     {
       "name": "@kovojs/core",
       "dir": "core",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          "."
+        ],
+        "generated": [],
+        "internal": []
+      },
       "apiRef": {
         "order": 1,
         "slug": "core",
@@ -17,6 +24,20 @@
       "dir": "server",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          ".",
+          "./app-shell/client-modules",
+          "./app-shell/core",
+          "./app-shell/node",
+          "./app-shell/static-export",
+          "./app-shell/vite",
+          "./jsx-runtime",
+          "./jsx-dev-runtime"
+        ],
+        "generated": [],
+        "internal": []
+      },
       "apiRef": {
         "order": 2,
         "slug": "server",
@@ -28,6 +49,13 @@
       "dir": "runtime",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          "."
+        ],
+        "generated": [],
+        "internal": []
+      },
       "apiRef": {
         "order": 3,
         "slug": "runtime",
@@ -39,6 +67,27 @@
       "dir": "test",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          ".",
+          "./integration",
+          "./integration/define",
+          "./assertions",
+          "./headers",
+          "./harness-operations",
+          "./harness",
+          "./html-fragment",
+          "./page",
+          "./pglite",
+          "./sql-observer",
+          "./test-case",
+          "./verifier-diagnostics",
+          "./verifier-sql",
+          "./verifier"
+        ],
+        "generated": [],
+        "internal": []
+      },
       "apiRef": {
         "order": 4,
         "slug": "test",
@@ -50,6 +99,15 @@
       "dir": "drizzle",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          ".",
+          "./derive",
+          "./static"
+        ],
+        "generated": [],
+        "internal": []
+      },
       "apiRef": {
         "order": 5,
         "slug": "drizzle",
@@ -60,13 +118,62 @@
       "name": "@kovojs/headless-ui",
       "dir": "headless-ui",
       "visibility": "public",
-      "kind": "library"
+      "kind": "library",
+      "apiBoundary": {
+        "public": [
+          ".",
+          "./primitives",
+          "./primitives/accordion",
+          "./primitives/alert-dialog",
+          "./primitives/autocomplete",
+          "./primitives/avatar",
+          "./primitives/checkbox",
+          "./primitives/checkbox-group",
+          "./primitives/combobox",
+          "./primitives/command",
+          "./primitives/collapsible",
+          "./primitives/context-menu",
+          "./primitives/dialog",
+          "./primitives/disclosure",
+          "./primitives/dropdown-menu",
+          "./primitives/field",
+          "./primitives/hover-card",
+          "./primitives/menubar",
+          "./primitives/meter",
+          "./primitives/navigation-menu",
+          "./primitives/number-field",
+          "./primitives/otp-field",
+          "./primitives/popover",
+          "./primitives/progress",
+          "./primitives/radio-group",
+          "./primitives/scroll-area",
+          "./primitives/select",
+          "./primitives/separator",
+          "./primitives/slider",
+          "./primitives/switch",
+          "./primitives/tabs",
+          "./primitives/tooltip",
+          "./primitives/toolbar",
+          "./primitives/toast",
+          "./primitives/toggle",
+          "./primitives/toggle-group"
+        ],
+        "generated": [],
+        "internal": []
+      }
     },
     {
       "name": "@kovojs/style",
       "dir": "style",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          "."
+        ],
+        "generated": [],
+        "internal": []
+      },
       "apiRef": {
         "order": 6,
         "slug": "style",
@@ -78,6 +185,13 @@
       "dir": "better-auth",
       "visibility": "public",
       "kind": "library",
+      "apiBoundary": {
+        "public": [
+          "."
+        ],
+        "generated": [],
+        "internal": []
+      },
       "apiRef": {
         "order": 7,
         "slug": "better-auth",
@@ -89,6 +203,18 @@
       "dir": "compiler",
       "visibility": "public",
       "kind": "build-tool",
+      "apiBoundary": {
+        "public": [
+          ".",
+          "./graph",
+          "./package-styles"
+        ],
+        "generated": [],
+        "internal": [
+          "./internal",
+          "./internal/graph"
+        ]
+      },
       "apiRef": {
         "order": 8,
         "slug": "compiler",
@@ -100,6 +226,15 @@
       "dir": "cli",
       "visibility": "public",
       "kind": "cli",
+      "apiBoundary": {
+        "public": [
+          "."
+        ],
+        "generated": [],
+        "internal": [
+          "./internal"
+        ]
+      },
       "apiRef": {
         "order": 9,
         "slug": "cli",
@@ -110,7 +245,12 @@
       "name": "create-kovo",
       "dir": "create-kovo",
       "visibility": "public",
-      "kind": "cli"
+      "kind": "cli",
+      "apiBoundary": {
+        "public": [],
+        "generated": [],
+        "internal": []
+      }
     },
     {
       "name": "@kovojs/ui",

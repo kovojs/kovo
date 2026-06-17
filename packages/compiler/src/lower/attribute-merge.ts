@@ -32,9 +32,9 @@ export type MergeableAttributeValue =
   | { kind: 'string'; value: string };
 
 /**
- * @internal Result of {@link mergePrimitiveAndAuthorAttributes}: the merged attribute list
- * plus any KV231–KV233 conflict diagnostics. Exported for in-repo callers/tests; lowered-IR
- * detail, not app-author surface (SPEC.md §5.2).
+ * Result of {@link mergePrimitiveAndAuthorAttributes}: the merged attribute list plus any
+ * KV231-KV233 conflict diagnostics. Public output shape for primitive/author merge tooling
+ * (SPEC.md §5.2).
  */
 export interface AttributeMergeResult {
   attributes: readonly MergeableAttribute[];

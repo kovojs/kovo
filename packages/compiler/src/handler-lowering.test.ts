@@ -1,7 +1,8 @@
 import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
-import { collectMinifierReservedNames, compileComponentModule } from './index.js';
+import { compileComponentModule } from './index.js';
+import { collectMinifierReservedNames } from './internal.js';
 import { capturesUnserializableReferences, lowerEventHandlers } from './lower/handlers.js';
 import { parseComponentModule } from './scan/parse.js';
 

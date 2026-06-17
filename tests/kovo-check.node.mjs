@@ -24,14 +24,16 @@ import {
 import {
   assertFixpoint,
   assertRenderEquivalence,
-  collectCssAssetManifest,
-  collectMinifierReservedNames,
   compileComponentModule,
   deriveAppGraph,
   emitQueryPlanBootstrapModule,
   kovoVitePlugin,
-  queryShapesFromFacts,
 } from '../dist/compiler/src/index.mjs';
+import {
+  collectCssAssetManifest,
+  collectMinifierReservedNames,
+  queryShapesFromFacts,
+} from '../dist/compiler/src/internal.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
 import {
   applyCompiledQueryUpdatePlan,

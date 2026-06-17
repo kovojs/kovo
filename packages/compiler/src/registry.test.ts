@@ -5,8 +5,8 @@ import {
   assertFixpoint,
   compileComponentModule,
   deriveAppGraph,
-  deriveRegistryFactsFromGraph,
 } from './index.js';
+import { deriveRegistryFactsFromGraph } from './internal-graph.js';
 
 const cartBadgeSource = `
 import { component } from '@kovojs/core';

@@ -8,9 +8,9 @@ import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import { replaceExtension } from './shared.js';
 
 /**
- * @internal Input to {@link compileComponentModule}: the source file name and contents plus
- * optional graph context (query shapes, registry facts, package prefixes) and provenance.
- * Lowered-IR pipeline shape; in-repo callers only (SPEC.md §5.2).
+ * Input to {@link compileComponentModule}: the source file name and contents plus optional
+ * graph context (query shapes, registry facts, package prefixes) and provenance. Public
+ * build/codegen contract for compiler entrypoints (SPEC.md §5.2).
  */
 export interface CompileComponentOptions {
   fileName: string;
@@ -112,11 +112,11 @@ export interface CompileArtifactFileNames {
 }
 
 /**
- * @internal The full result of {@link compileComponentModule}: emitted artifacts, graph
- * facts, diagnostics, lowered source, CSS assets, platform substitutions, query update
- * plans/coverage, render-equivalence checks, and view-transition stamps. App authors call
- * `compileComponentModule` but consume its result through the public assertion helpers;
- * this shape itself is lowered-IR detail (SPEC.md §5.2).
+ * The full result of {@link compileComponentModule}: emitted artifacts, graph facts,
+ * diagnostics, lowered source, CSS assets, platform substitutions, query update plans/
+ * coverage, render-equivalence checks, and view-transition stamps. Public build/codegen
+ * contract for compiler entrypoints; app-authored source still stays TSX/JSX and must not
+ * hand-write these lowered artifacts (SPEC.md §5.2).
  */
 export interface CompileResult {
   clientExports: readonly string[];

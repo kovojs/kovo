@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * Loader + helpers for `public-packages.json`, the single source of truth for the
- * public/internal package boundary (plan `plans/api-cleanup.md` Phase 2; see
+ * public/internal package boundary (plan `plans/api-boudnary.md` Phase 1; see
  * `rules/api-surface.md`). Both the API-reference generator and the api-surface CI
  * gate read the boundary from here so it can never drift between docs and enforcement.
  */
@@ -30,6 +30,37 @@ export function privatePackages() {
   return loadPublicPackages().filter((pkg) => pkg.visibility === 'private');
 }
 
+function boundaryList(pkg, key) {
+  const value = pkg.apiBoundary?.[key];
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new Error(`public-packages.json: ${pkg.name}.apiBoundary.${key} must be an array`);
+  }
+  return value;
+}
+
+/** App-facing public export subpaths for one public package. */
+export function publicEntrySubpaths(pkg) {
+  return boundaryList(pkg, 'public');
+}
+
+/** Compiler-emitted generated ABI export subpaths for one public package. */
+export function generatedEntrySubpaths(pkg) {
+  return boundaryList(pkg, 'generated');
+}
+
+/** Repo-internal export subpaths for one public package. */
+export function internalEntrySubpaths(pkg) {
+  return boundaryList(pkg, 'internal');
+}
+
+/** Boundary tier for a package export subpath. Unknown subpaths stay public by default. */
+export function apiBoundaryTier(pkg, subpath) {
+  if (generatedEntrySubpaths(pkg).includes(subpath)) return 'generated';
+  if (internalEntrySubpaths(pkg).includes(subpath)) return 'internal';
+  return 'public';
+}
+
 /**
  * Packages whose public surface is rendered into the generated API reference,
  * flattened to the shape api-ref.mjs consumes and sorted by display order.
@@ -37,6 +68,11 @@ export function privatePackages() {
 export function documentedPackages() {
   return loadPublicPackages()
     .filter((pkg) => pkg.apiRef)
-    .map((pkg) => ({ name: pkg.name, dir: pkg.dir, ...pkg.apiRef }))
+    .map((pkg) => ({
+      name: pkg.name,
+      dir: pkg.dir,
+      publicEntries: publicEntrySubpaths(pkg),
+      ...pkg.apiRef,
+    }))
     .sort((a, b) => a.order - b.order);
 }

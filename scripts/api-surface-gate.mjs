@@ -4,15 +4,15 @@ import { pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
 
-import { publicPackages, repoRoot } from './public-packages.mjs';
+import { apiBoundaryTier, publicPackages, repoRoot } from './public-packages.mjs';
 
 /**
- * api-surface gate (plan api-cleanup Phase 3). Makes the public/internal boundary
- * BINDING rather than conventional: every symbol reachable from a public package's
- * published `exports` map must be either documented (a real JSDoc summary — it is
- * part of the supported surface) or tagged `@internal` (exported only for in-repo
- * consumers / compiler-emitted code). An untagged, undocumented public export is a
- * violation.
+ * api-surface gate (plan api-boudnary Phase 1). Makes the public/internal/generated
+ * boundary BINDING rather than conventional: app-facing public roots may not expose
+ * `@internal` or `@generated` symbols, generated ABI subpaths may expose generated
+ * symbols and documented public types, and internal subpaths may expose internal
+ * symbols and documented public types. Untagged, undocumented public exports remain
+ * ratcheted separately.
  *
  * The repo starts with a large pre-existing violation set (the audit found 70+
  * undocumented exports on @kovojs/core alone), so the gate runs as a RATCHET: a
@@ -41,7 +41,7 @@ function publicEntryFiles() {
       if (!/\.tsx?$/.test(resolved)) continue; // only source entries participate
       const absPath = path.join(repoRoot, 'packages', pkg.dir, resolved);
       if (!existsSync(absPath)) continue;
-      entries.push({ pkg: pkg.name, subpath, absPath });
+      entries.push({ pkg: pkg.name, subpath, absPath, tier: apiBoundaryTier(pkg, subpath) });
     }
   }
   return entries;
@@ -58,6 +58,7 @@ function symbolDocState(symbol, checker) {
   const decls = resolved.declarations ?? [];
   let documented = false;
   let internal = false;
+  let generated = false;
   for (const decl of decls) {
     let node = decl;
     if (ts.isVariableDeclaration(node) && ts.isVariableDeclarationList(node.parent)) {
@@ -65,6 +66,7 @@ function symbolDocState(symbol, checker) {
     }
     const tags = ts.getJSDocTags(node);
     if (tags.some((tag) => tag.tagName.getText() === 'internal')) internal = true;
+    if (tags.some((tag) => tag.tagName.getText() === 'generated')) generated = true;
     const jsDoc = ts.getJSDocCommentsAndTags(node).filter(ts.isJSDoc);
     // `doc.comment` is a string OR a NodeArray<JSDocComment> when the summary
     // contains inline tags like `{@link …}`; getTextOfJSDocComment flattens both.
@@ -74,15 +76,47 @@ function symbolDocState(symbol, checker) {
       .trim();
     if (summary.length > 0) documented = true;
   }
-  return { documented, internal };
+  return { documented, internal, generated };
 }
 
 /** Every (package, subpath, symbol) whose export is neither documented nor @internal. */
 export function computeViolations() {
+  return computeSurfaceReport().undocumentedPublic;
+}
+
+function exportId(entry, symbolName) {
+  return `${entry.pkg}${entry.subpath === '.' ? '' : entry.subpath}#${symbolName}`;
+}
+
+export function classifyExport({ tier, documented, internal, generated }) {
+  if (tier === 'public') {
+    if (internal) return 'internal-on-public';
+    if (generated) return 'generated-on-public';
+    if (!documented) return 'undocumented-public';
+    return null;
+  }
+  if (tier === 'generated') {
+    if (internal) return 'internal-on-generated';
+    if (!generated && !documented) return 'untagged-on-generated';
+    return null;
+  }
+  if (tier === 'internal') {
+    if (generated) return 'generated-on-internal';
+    if (!internal && !documented) return 'untagged-on-internal';
+    return null;
+  }
+  return `unknown-tier:${tier}`;
+}
+
+/** Boundary report split into hard failures and ratcheted public-documentation debt. */
+export function computeSurfaceReport() {
   const entries = publicEntryFiles();
   const program = createProgram(entries.map((entry) => entry.absPath));
   const checker = program.getTypeChecker();
-  const violations = [];
+  const report = {
+    undocumentedPublic: [],
+    boundaryViolations: [],
+  };
 
   for (const entry of entries) {
     const sourceFile = program.getSourceFile(entry.absPath);
@@ -90,12 +124,21 @@ export function computeViolations() {
     const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
     if (!moduleSymbol) continue;
     for (const symbol of checker.getExportsOfModule(moduleSymbol)) {
-      const { documented, internal } = symbolDocState(symbol, checker);
-      if (documented || internal) continue;
-      violations.push(`${entry.pkg}${entry.subpath === '.' ? '' : entry.subpath}#${symbol.name}`);
+      const state = symbolDocState(symbol, checker);
+      const violation = classifyExport({ tier: entry.tier, ...state });
+      if (violation === null) continue;
+      const id = exportId(entry, symbol.name);
+      if (violation === 'undocumented-public') {
+        report.undocumentedPublic.push(id);
+      } else {
+        report.boundaryViolations.push(`${id} (${violation})`);
+      }
     }
   }
-  return [...new Set(violations)].sort();
+  return {
+    undocumentedPublic: [...new Set(report.undocumentedPublic)].sort(),
+    boundaryViolations: [...new Set(report.boundaryViolations)].sort(),
+  };
 }
 
 function loadBaseline() {
@@ -114,7 +157,8 @@ export function compareViolations(baselineList, currentList) {
 }
 
 export function runGate({ write = false } = {}) {
-  const violations = computeViolations();
+  const report = computeSurfaceReport();
+  const violations = report.undocumentedPublic;
 
   if (write) {
     writeFileSync(
@@ -133,18 +177,27 @@ export function runGate({ write = false } = {}) {
   }
   const { added, removed } = compareViolations(baseline.violations, violations);
 
+  if (report.boundaryViolations.length > 0) {
+    process.stderr.write(
+      `api-surface: ${report.boundaryViolations.length} boundary violation(s):\n` +
+        report.boundaryViolations.map((v) => `  + ${v}`).join('\n') +
+        `\nMove @internal/@generated exports behind manifest-declared non-public subpaths, or document public re-exported types. See rules/api-surface.md.\n`,
+    );
+    return { ok: false, violations, boundaryViolations: report.boundaryViolations, added, removed };
+  }
+
   if (added.length > 0) {
     process.stderr.write(
       `api-surface: ${added.length} NEW undocumented/untagged public export(s):\n` +
         added.map((v) => `  + ${v}`).join('\n') +
         `\nDocument them, tag @internal, or move them behind an internal subpath. See rules/api-surface.md.\n`,
     );
-    return { ok: false, violations, added, removed };
+    return { ok: false, violations, boundaryViolations: [], added, removed };
   }
   process.stdout.write(
     `api-surface/v1 public-exports-needing-attention=${violations.length} (baseline=${baseline.violations.length}, fixed-this-run=${removed.length})\n`,
   );
-  return { ok: true, violations, added, removed };
+  return { ok: true, violations, boundaryViolations: [], added, removed };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

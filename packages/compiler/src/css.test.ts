@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   collectCssAssetManifest,
-  compileComponentModule,
   createCssAssetResolver,
   dedupeCss,
   scopeComponentCss,
   selectCssAssets,
-} from './index.js';
-import type { ComponentCssAsset } from './index.js';
+} from './internal.js';
+import { compileComponentModule } from './index.js';
+import type { ComponentCssAsset } from './internal.js';
 
 function cssAssetSnapshot(assets: readonly ComponentCssAsset[]) {
   return assets.map((asset) => ({

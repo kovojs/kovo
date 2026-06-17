@@ -7,7 +7,8 @@
 // that preserves `component()` so a route page can call `Foo.definition.render(data)`
 // with live query results (SPEC §5.2; commerce does exactly this with its
 // src/generated/*.tsx artifacts).
-import { compileComponentModule, type ComponentCssAsset } from '@kovojs/compiler';
+import { compileComponentModule } from '@kovojs/compiler';
+import type { ComponentCssAsset } from '@kovojs/compiler/internal';
 import type { Plugin } from 'vite';
 
 const virtualCssManifestId = 'virtual:kovo-fixture-css-manifest';

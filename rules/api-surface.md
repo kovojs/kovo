@@ -1,10 +1,12 @@
 # API Surface Rules
 
 How Kovo draws the line between **public** API (an outside consumer may depend on
-it; it is documented and changes only under the stability policy) and **internal**
-API (repo-internal; no outside consumer should import it and it may change at any
-time). The boundary is machine-enforced — these rules explain the mechanism so it
-stays binding rather than conventional. Tracked by `plans/api-cleanup.md`.
+it; it is documented and changes only under the stability policy), **generated**
+ABI (compiler-emitted code may import it; app authors may not), **internal** API
+(repo-internal; no outside consumer should import it and it may change at any
+time), and **private** implementation files (not exported from a package). The
+boundary is machine-enforced — these rules explain the mechanism so it stays
+binding rather than conventional. Tracked by `plans/api-boudnary.md`.
 
 ## The manifest is the source of truth
 
@@ -18,26 +20,41 @@ enforcement cannot diverge. Adding a package without classifying it fails
 - `visibility: "private"` — repo-internal. MUST set `package.json` `"private": true`.
 - `kind` — `library` (importable), `build-tool` (consumed by an app's build/codegen
   step), `cli` (run as a bin), `starter` (shadcn-style copy-in, not a versioned dep).
+- `apiBoundary.public` — package export subpaths that are app-facing public API.
+- `apiBoundary.generated` — package export subpaths that form compiler-emitted
+  generated-code ABI. These are published and typed when listed in `exports`, but
+  are not human-public API.
+- `apiBoundary.internal` — package export subpaths for repo-internal consumers.
+  Use the narrowest subsystem path that matches the dependency graph; a broad
+  `./internal` barrel is a compatibility fallback, not the default design.
 - `apiRef` — present when the package's public surface is rendered into the generated
-  API reference.
+  API reference. Public docs are root/public-entry only; generated and internal
+  subpaths are excluded.
 
-## `@public` / `@internal` on exports
+## Public, generated, internal, and private exports
 
 A package being public does **not** make every symbol it exports public. Within a
-public package:
+public package, every `package.json` export subpath is classified by
+`public-packages.json`:
 
-- A symbol reachable from a published entry point (the `package.json` `exports` map)
-  is **public by default** and must be documented (JSDoc, ideally citing the SPEC §).
-- Mark a symbol `@internal` (JSDoc tag) when it is exported only for other in-repo
-  packages, tests, or compiler-emitted code — never for app authors. `@internal`
-  symbols are excluded from the API reference, and the api-surface gate
-  (`scripts/api-surface-gate.mjs`) is what makes the tag binding: it fails when an
-  untagged, undocumented symbol becomes reachable from a published entry. (The
-  rolled-up `.d.ts` does not yet strip `@internal` — the gate, not the build, is the
-  enforcement.)
-- Prefer moving a cluster of internal exports behind a dedicated internal **subpath**
-  (e.g. `@kovojs/server/internal`, `@kovojs/runtime/loader`) over scattering
-  `@internal` tags on a flat barrel.
+- Public subpaths expose only app-facing API. Every exported declaration must be
+  documented (JSDoc, ideally citing the SPEC § where behavior is normative), and
+  public subpaths must not export declarations tagged `@internal` or `@generated`.
+- Generated subpaths, such as `@kovojs/runtime/generated`, expose compiler-emitted
+  ABI. They may export declarations tagged `@generated` plus documented public
+  types needed to type that ABI. They must not export `@internal` declarations or
+  untagged undocumented declarations.
+- Internal subpaths, such as `@kovojs/server/internal/wire`, expose repo-internal
+  contracts. They may export declarations tagged `@internal` plus documented
+  public types needed to type those contracts. They must not export `@generated`
+  declarations or untagged undocumented declarations.
+- Private files are implementation details imported only by relative paths within
+  the same package. Do not add a package export for a file unless a sibling
+  package, emitted module, test fixture, or tool has a real import contract.
+
+`scripts/api-surface-gate.mjs` makes these tags binding. The rolled-up `.d.ts`
+files may still contain generated/internal declarations for their non-public
+subpaths; docs and the gate define whether an entry is human-public.
 
 ## No `export *` on a public barrel
 
@@ -74,8 +91,10 @@ every published target resolves to a built file.
 ## Enforcement
 
 - `scripts/public-packages.test.mjs` — every package classified; `private` flags match.
-- api-surface CI gate (`scripts/api-surface-gate.mjs`) — fails when an untagged,
-  undocumented symbol is reachable from a published entry (a ratchet against
+- api-surface CI gate (`scripts/api-surface-gate.mjs`) — fails when
+  `@internal`/`@generated` declarations are reachable from a public subpath, when
+  generated/internal subpaths export declarations outside their allowed tier, or
+  when a new untagged undocumented public export appears (a ratchet against
   `api-surface-baseline.json`).
 - `scripts/build-publish.mjs` (CI gate `pnpm run check:publish`) — builds each public
   package and asserts every `publishConfig` target file exists under `dist/` (publish-readiness).

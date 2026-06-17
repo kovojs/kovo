@@ -4,11 +4,8 @@ import { performance } from 'node:perf_hooks';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  compileComponentModule,
-  type CompileResult,
-  type RegistryFacts,
-} from '../packages/compiler/src/index.js';
+import { compileComponentModule, type CompileResult } from '../packages/compiler/src/index.js';
+import type { RegistryFacts } from '../packages/compiler/src/internal.js';
 
 interface CompilerPerfBudget {
   coldMaxMs: number;

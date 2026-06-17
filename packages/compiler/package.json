@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./graph": "./src/graph.ts",
+    "./internal": "./src/internal.ts",
+    "./internal/graph": "./src/internal/graph.ts",
     "./package-styles": "./src/package-styles.ts"
   },
   "publishConfig": {
@@ -20,6 +22,14 @@
         "types": "./dist/graph.d.mts",
         "default": "./dist/graph.mjs"
       },
+      "./internal": {
+        "types": "./dist/internal.d.mts",
+        "default": "./dist/internal.mjs"
+      },
+      "./internal/graph": {
+        "types": "./dist/internal/graph.d.mts",
+        "default": "./dist/internal/graph.mjs"
+      },
       "./package-styles": {
         "types": "./dist/package-styles.d.mts",
         "default": "./dist/package-styles.mjs"
@@ -27,7 +37,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/graph.ts src/index.ts src/package-styles.ts --dts",
+    "build:dist": "vp pack src/graph.ts src/index.ts src/internal.ts src/internal/graph.ts src/package-styles.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

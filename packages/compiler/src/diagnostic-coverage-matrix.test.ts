@@ -1,7 +1,8 @@
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule, deriveAppGraph, queryShapeFactDiagnostics } from './index.js';
+import { compileComponentModule, deriveAppGraph } from './index.js';
+import { queryShapeFactDiagnostics } from './internal.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 
 type DiagnosticRunner = () => readonly CompilerDiagnostic[];
