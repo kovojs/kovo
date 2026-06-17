@@ -119,7 +119,8 @@ function referenceHubRoute(): AnyRoute {
   return docRoute(
     '/reference/',
     {
-      description: 'Reference — generated API docs, the diagnostics catalog, and the normative spec.',
+      description:
+        'Reference — generated API docs, the diagnostics catalog, and the normative spec.',
       title: 'Reference · Kovo',
     },
     {
@@ -131,17 +132,20 @@ function referenceHubRoute(): AnyRoute {
           {
             title: 'API Reference',
             url: '/api/',
-            description: 'Generated reference for every public package — types, functions, and contracts.',
+            description:
+              'Generated reference for every public package — types, functions, and contracts.',
           },
           {
             title: 'Diagnostics',
             url: '/reference/diagnostics/',
-            description: 'Every framework diagnostic (KV###) and its fix, kept in sync with the registry.',
+            description:
+              'Every framework diagnostic (KV###) and its fix, kept in sync with the registry.',
           },
           {
             title: 'Specification',
             url: '/spec/',
-            description: 'The normative spec, rendered verbatim from SPEC.md. The docs explain; the spec decides.',
+            description:
+              'The normative spec, rendered verbatim from SPEC.md. The docs explain; the spec decides.',
           },
         ],
       }),

@@ -1,7 +1,13 @@
 /** @jsxImportSource @kovojs/server */
 import { escapeHtml } from '@kovojs/server';
 
-import type { ApiSidebar as ApiSidebarData, DocSection, Heading, NavGroup, NavLink } from '../content.js';
+import type {
+  ApiSidebar as ApiSidebarData,
+  DocSection,
+  Heading,
+  NavGroup,
+  NavLink,
+} from '../content.js';
 import { SECTION_INTROS } from '../content.js';
 import {
   ApiSidebar,

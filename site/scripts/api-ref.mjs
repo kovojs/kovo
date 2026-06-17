@@ -114,7 +114,9 @@ function functionLikeOf(decl) {
  * legible (object-literal and deep-generic types can be enormous). */
 function normalizeType(text) {
   const collapsed = text.replace(/\s+/g, ' ').trim();
-  return collapsed.length > MAX_TYPE_LENGTH ? `${collapsed.slice(0, MAX_TYPE_LENGTH - 1)}…` : collapsed;
+  return collapsed.length > MAX_TYPE_LENGTH
+    ? `${collapsed.slice(0, MAX_TYPE_LENGTH - 1)}…`
+    : collapsed;
 }
 
 /** Parameter and return types from a declaration's real signature (the
@@ -313,7 +315,8 @@ function renderTypeCell(typeText, slug, targets) {
     const name = match[0];
     const target = targets.get(name);
     if (target) {
-      const href = target.slug === slug ? `#${target.anchor}` : `/api/${target.slug}/#${target.anchor}`;
+      const href =
+        target.slug === slug ? `#${target.anchor}` : `/api/${target.slug}/#${target.anchor}`;
       out += `<a href="${href}">${name}</a>`;
     } else {
       out += name;

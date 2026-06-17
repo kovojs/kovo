@@ -29,7 +29,7 @@ listener.
 - The **left sidebar** (`DocsSidebar`, `chrome.tsx:105`) lists sections/pages and is fine; the
   symbol problem is the right rail.
 - **Param tables** come from `renderParamsTable` (`api-ref.mjs:215`): columns are **`Parameter |
-  Description`** only — no type. JSDoc `@param` carries no type; the only type information is in the
+Description`** only — no type. JSDoc `@param` carries no type; the only type information is in the
   fenced `ts` signature block. Types are therefore never tabulated and never linkable.
 - **⌘K does not work on load.** `bindShortcuts()` (`site/src/client/search.js:19`) registers the
   `keydown` listener, but it is only ever called from inside `open()` (`search.js:51`), and `open()`
@@ -65,7 +65,7 @@ listener.
   script in `document-template.ts` listens for ⌘K/Ctrl-K and `Escape`, and opens the existing
   `<dialog id="site-search">`. Typing then loads `search.js#query` via the loader's existing
   delegated `on:input` binding — so the index and search logic stay L1-lazy; only the keystroke that
-  *opens* the dialog is eager. Remove the now-dead `bindShortcuts()` lazy path.
+  _opens_ the dialog is eager. Remove the now-dead `bindShortcuts()` lazy path.
 - **Per-symbol search entries.** The search index gains one entry per API symbol
   (`{section, title, url: /api/<slug>/#<anchor>, kind, signature}`), built from the same api-ref
   manifest so it cannot drift from the pages. Result rendering shows kind + symbol + section and
@@ -79,7 +79,7 @@ listener.
 - **Reference becomes a landing-page hub at `/reference/`, no URL changes elsewhere.** (Decided
   2026-06-17.) `NAV` collapses to one `Reference` entry pointing at `/reference/`, which renders a
   zero-JS card grid linking to the API reference (`/api/`), the diagnostics catalog, and the Spec
-  (`/spec/`). **Wrinkle:** `/reference/` is *currently* the diagnostics-catalog section index
+  (`/spec/`). **Wrinkle:** `/reference/` is _currently_ the diagnostics-catalog section index
   (`gen/reference/diagnostics.md`). The hub takes over `/reference/`; the diagnostics catalog moves
   to a stable child URL (e.g. `/reference/diagnostics/` — already its page URL) and the section
   index is replaced by the hub. Active-state highlights Reference for any path under `/api/`,
@@ -120,8 +120,7 @@ listener.
 
 ### 3. ⌘K search shortcut
 
-- [ ] Add an always-present inline opener in `document-template.ts` (⌘K / Ctrl-K → `preventDefault`
-      + `dialog.showModal()` + focus input; `Escape` closes). Keep it tiny and CSP-safe (matches the
+- [ ] Add an always-present inline opener in `document-template.ts` (⌘K / Ctrl-K → `preventDefault` + `dialog.showModal()` + focus input; `Escape` closes). Keep it tiny and CSP-safe (matches the
       existing `THEME_SCRIPT` pattern).
 - [ ] Remove the dead `bindShortcuts()` lazy path from `search.js`; `open()` stays for the button.
 - [ ] Verify the loader's delegated `on:input` still lazy-loads `search.js#query` when the dialog is
@@ -130,7 +129,7 @@ listener.
 ### 4. Search results: per-symbol + better preview
 
 - [ ] Build per-symbol search entries from the api-ref manifest (`{section, title: name, url:
-      /api/<slug>/#anchor, kind, signature}`) and merge them into `content.search`
+    /api/<slug>/#anchor, kind, signature}`) and merge them into `content.search`
       (`content.ts`/`aux.ts`); keep the page-level entries too.
 - [ ] `renderResults` (`search.js`) shows kind badge + symbol name + section and links to the deep
       anchor; `score()` weights symbol-name matches. Style the richer result row (`styles.css`
@@ -206,4 +205,4 @@ listener.
 - `cd site && pnpm test` — site unit tests (`api-ref.test.mjs`, `serve-static.test.mjs`, etc.).
 - `cd site && node scripts/smoke.mjs` — Playwright smoke (search index fetched on demand, pages
   render); extend it to assert ⌘K opens the dialog and a symbol search deep-links.
-</content>
+  </content>
