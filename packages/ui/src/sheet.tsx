@@ -1,54 +1,182 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   dialogCloseAttributes,
   dialogContentAttributes,
   dialogRootAttributes,
   dialogTriggerAttributes,
-  type ClassValue,
 } from '@kovojs/headless-ui';
 import { escapeHtml } from '@kovojs/server';
+import * as style from '@kovojs/style';
 
 export type SheetSide = 'top' | 'right' | 'bottom' | 'left';
 export type DrawerSide = SheetSide;
 
+export interface SheetStyleOverrides {
+  body?: style.StyleInput;
+  close?: style.StyleInput;
+  content?: style.StyleInput;
+  description?: style.StyleInput;
+  header?: style.StyleInput;
+  root?: style.StyleInput;
+  title?: style.StyleInput;
+  trigger?: style.StyleInput;
+}
+
 export interface SheetProps {
   children?: string;
-  class?: ClassValue;
   closeLabel?: string;
-  contentClass?: ClassValue;
   contentId: string;
   description?: string;
   disabled?: boolean;
   open?: boolean;
   side?: SheetSide;
+  styles?: SheetStyleOverrides;
   title: string;
   trigger?: string;
-  triggerClass?: ClassValue;
 }
 
 export interface DrawerProps extends SheetProps {
   side?: DrawerSide;
 }
 
-export const sheetContentClassNames = defineVariants({
-  base: 'fixed z-50 flex flex-col gap-4 border-neutral-200 bg-white p-6 text-neutral-950 shadow-xl',
-  variants: {
-    side: {
-      bottom: 'inset-x-0 bottom-0 max-h-[85vh] border-t',
-      left: 'inset-y-0 left-0 w-full max-w-sm border-r',
-      right: 'inset-y-0 right-0 w-full max-w-sm border-l',
-      top: 'inset-x-0 top-0 max-h-[85vh] border-b',
+export const sheetStyles = style.create(
+  {
+    body: {
+      fontSize: 14,
+    },
+    close: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 32,
+      justifyContent: 'center',
+      paddingInline: 10,
+      transitionProperty: 'background-color',
+      width: 'fit-content',
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
+    },
+    content: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderStyle: 'solid',
+      borderWidth: 0,
+      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+      color: '#0a0a0a',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 16,
+      padding: 24,
+      position: 'fixed',
+      zIndex: 50,
+    },
+    description: {
+      color: '#525252',
+      fontSize: 14,
+    },
+    header: {
+      display: 'grid',
+      gap: 4,
+    },
+    root: {
+      display: 'contents',
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: 600,
+    },
+    trigger: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 36,
+      justifyContent: 'center',
+      paddingInline: 12,
+      transitionProperty: 'background-color',
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
     },
   },
-  defaultVariants: {
-    side: 'right',
-  },
-});
+  { namespace: 'sheet', source: 'sheet.tsx' },
+);
 
-export const sheetContentClasses = sheetContentClassNames.classes;
+export const sheetSideStyles = style.create(
+  {
+    bottom: {
+      borderTopWidth: 1,
+      bottom: 0,
+      left: 0,
+      maxHeight: '85vh',
+      right: 0,
+    },
+    left: {
+      borderRightWidth: 1,
+      bottom: 0,
+      left: 0,
+      maxWidth: 384,
+      top: 0,
+      width: '100%',
+    },
+    right: {
+      borderLeftWidth: 1,
+      bottom: 0,
+      maxWidth: 384,
+      right: 0,
+      top: 0,
+      width: '100%',
+    },
+    top: {
+      borderBottomWidth: 1,
+      left: 0,
+      maxHeight: '85vh',
+      right: 0,
+      top: 0,
+    },
+  },
+  { namespace: 'sheetSide', source: 'sheet.tsx' },
+);
+
+export const sheetClasses = [style.attrs(sheetStyles.root).class ?? ''] as const;
+export const sheetTriggerClasses = [style.attrs(sheetStyles.trigger).class ?? ''] as const;
+export const sheetContentClasses = [
+  style.attrs(sheetStyles.content, sheetSideStyles.right).class ?? '',
+  style.attrs(sheetSideStyles.bottom).class ?? '',
+  style.attrs(sheetSideStyles.left).class ?? '',
+  style.attrs(sheetSideStyles.top).class ?? '',
+] as const;
+export const sheetHeaderClasses = [style.attrs(sheetStyles.header).class ?? ''] as const;
+export const sheetTitleClasses = [style.attrs(sheetStyles.title).class ?? ''] as const;
+export const sheetDescriptionClasses = [style.attrs(sheetStyles.description).class ?? ''] as const;
+export const sheetBodyClasses = [style.attrs(sheetStyles.body).class ?? ''] as const;
+export const sheetCloseClasses = [style.attrs(sheetStyles.close).class ?? ''] as const;
+export const sheetContentClassNames = sheetStyles.content;
 
 function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
   const open = props.open === true;
@@ -75,21 +203,30 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
     contentId: props.contentId,
     open,
   });
+  const rootStyleAttrs = style.attrs(sheetStyles.root, props.styles?.root);
+  const triggerStyleAttrs = style.attrs(sheetStyles.trigger, props.styles?.trigger);
+  const contentStyleAttrs = style.attrs(
+    sheetStyles.content,
+    sheetSideStyles[side],
+    props.styles?.content,
+  );
+  const headerStyleAttrs = style.attrs(sheetStyles.header, props.styles?.header);
+  const titleStyleAttrs = style.attrs(sheetStyles.title, props.styles?.title);
+  const descriptionStyleAttrs = style.attrs(sheetStyles.description, props.styles?.description);
+  const bodyStyleAttrs = style.attrs(sheetStyles.body, props.styles?.body);
+  const closeStyleAttrs = style.attrs(sheetStyles.close, props.styles?.close);
 
   return (
     <div
-      class={cn('contents', props.class)}
+      {...rootStyleAttrs}
       data-disabled={rootAttrs['data-disabled']}
       data-state={rootAttrs['data-state']}
     >
       <button
+        {...triggerStyleAttrs}
         aria-controls={triggerAttrs['aria-controls']}
         aria-expanded={triggerAttrs['aria-expanded']}
         aria-haspopup={triggerAttrs['aria-haspopup']}
-        class={cn(
-          'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50',
-          props.triggerClass,
-        )}
         command={triggerAttrs.command}
         commandfor={triggerAttrs.commandfor}
         data-disabled={triggerAttrs['data-disabled']}
@@ -100,29 +237,29 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
         {escapeHtml(props.trigger ?? 'Open')}
       </button>
       <dialog
+        {...contentStyleAttrs}
         aria-describedby={contentAttrs['aria-describedby']}
         aria-labelledby={contentAttrs['aria-labelledby']}
-        class={cn(sheetContentClassNames({ side }), props.contentClass)}
         closedby={contentAttrs.closedby}
         data-state={contentAttrs['data-state']}
         id={contentAttrs.id}
         open={contentAttrs.open}
       >
-        <header class="grid gap-1">
-          <h2 class="text-base font-semibold" id={titleId}>
+        <header {...headerStyleAttrs}>
+          <h2 {...titleStyleAttrs} id={titleId}>
             {escapeHtml(props.title)}
           </h2>
           {descriptionId === undefined ? (
             ''
           ) : (
-            <p class="text-sm text-neutral-600" id={descriptionId}>
+            <p {...descriptionStyleAttrs} id={descriptionId}>
               {escapeHtml(props.description ?? '')}
             </p>
           )}
         </header>
-        <div class="text-sm">{props.children}</div>
+        <div {...bodyStyleAttrs}>{props.children}</div>
         <button
-          class="inline-flex h-8 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-2.5 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50"
+          {...closeStyleAttrs}
           command={closeAttrs.command}
           commandfor={closeAttrs.commandfor}
           data-disabled={closeAttrs['data-disabled']}

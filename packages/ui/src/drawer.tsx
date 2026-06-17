@@ -1,49 +1,186 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  cn,
-  defineVariants,
   dialogCloseAttributes,
   dialogContentAttributes,
   dialogRootAttributes,
   dialogTriggerAttributes,
-  type ClassValue,
 } from '@kovojs/headless-ui';
 import { escapeHtml } from '@kovojs/server';
+import * as style from '@kovojs/style';
 
 export type DrawerSide = 'top' | 'right' | 'bottom' | 'left';
 
+export interface DrawerStyleOverrides {
+  body?: style.StyleInput;
+  close?: style.StyleInput;
+  content?: style.StyleInput;
+  description?: style.StyleInput;
+  handle?: style.StyleInput;
+  header?: style.StyleInput;
+  root?: style.StyleInput;
+  title?: style.StyleInput;
+  trigger?: style.StyleInput;
+}
+
 export interface DrawerProps {
   children?: string;
-  class?: ClassValue;
   closeLabel?: string;
-  contentClass?: ClassValue;
   contentId: string;
   description?: string;
   disabled?: boolean;
   open?: boolean;
   side?: DrawerSide;
+  styles?: DrawerStyleOverrides;
   title: string;
   trigger?: string;
-  triggerClass?: ClassValue;
 }
 
-export const drawerContentClassNames = defineVariants({
-  base: 'fixed z-50 flex flex-col gap-4 border-neutral-200 bg-white p-6 text-neutral-950 shadow-xl',
-  variants: {
-    side: {
-      bottom: 'inset-x-0 bottom-0 max-h-[85vh] border-t',
-      left: 'inset-y-0 left-0 w-full max-w-sm border-r',
-      right: 'inset-y-0 right-0 w-full max-w-sm border-l',
-      top: 'inset-x-0 top-0 max-h-[85vh] border-b',
+export const drawerStyles = style.create(
+  {
+    body: {
+      fontSize: 14,
+    },
+    close: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 32,
+      justifyContent: 'center',
+      paddingInline: 10,
+      transitionProperty: 'background-color',
+      width: 'fit-content',
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
+    },
+    content: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderStyle: 'solid',
+      borderWidth: 0,
+      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+      color: '#0a0a0a',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 16,
+      padding: 24,
+      position: 'fixed',
+      zIndex: 50,
+    },
+    description: {
+      color: '#525252',
+      fontSize: 14,
+    },
+    handle: {
+      backgroundColor: '#d4d4d4',
+      borderRadius: 9999,
+      height: 6,
+      marginInline: 'auto',
+      width: 48,
+    },
+    header: {
+      display: 'grid',
+      gap: 4,
+    },
+    root: {
+      display: 'contents',
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: 600,
+    },
+    trigger: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 36,
+      justifyContent: 'center',
+      paddingInline: 12,
+      transitionProperty: 'background-color',
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
     },
   },
-  defaultVariants: {
-    side: 'bottom',
-  },
-});
+  { namespace: 'drawer', source: 'drawer.tsx' },
+);
 
-export const drawerContentClasses = drawerContentClassNames.classes;
+export const drawerSideStyles = style.create(
+  {
+    bottom: {
+      borderTopWidth: 1,
+      bottom: 0,
+      left: 0,
+      maxHeight: '85vh',
+      right: 0,
+    },
+    left: {
+      borderRightWidth: 1,
+      bottom: 0,
+      left: 0,
+      maxWidth: 384,
+      top: 0,
+      width: '100%',
+    },
+    right: {
+      borderLeftWidth: 1,
+      bottom: 0,
+      maxWidth: 384,
+      right: 0,
+      top: 0,
+      width: '100%',
+    },
+    top: {
+      borderBottomWidth: 1,
+      left: 0,
+      maxHeight: '85vh',
+      right: 0,
+      top: 0,
+    },
+  },
+  { namespace: 'drawerSide', source: 'drawer.tsx' },
+);
+
+export const drawerClasses = [style.attrs(drawerStyles.root).class ?? ''] as const;
+export const drawerTriggerClasses = [style.attrs(drawerStyles.trigger).class ?? ''] as const;
+export const drawerContentClasses = [
+  style.attrs(drawerStyles.content, drawerSideStyles.bottom).class ?? '',
+  style.attrs(drawerSideStyles.left).class ?? '',
+  style.attrs(drawerSideStyles.right).class ?? '',
+  style.attrs(drawerSideStyles.top).class ?? '',
+] as const;
+export const drawerHandleClasses = [style.attrs(drawerStyles.handle).class ?? ''] as const;
+export const drawerHeaderClasses = [style.attrs(drawerStyles.header).class ?? ''] as const;
+export const drawerTitleClasses = [style.attrs(drawerStyles.title).class ?? ''] as const;
+export const drawerDescriptionClasses = [style.attrs(drawerStyles.description).class ?? ''] as const;
+export const drawerBodyClasses = [style.attrs(drawerStyles.body).class ?? ''] as const;
+export const drawerCloseClasses = [style.attrs(drawerStyles.close).class ?? ''] as const;
+export const drawerContentClassNames = drawerStyles.content;
 
 export const Drawer = component({
   render(props: DrawerProps) {
@@ -71,21 +208,31 @@ export const Drawer = component({
       contentId: props.contentId,
       open,
     });
+    const rootStyleAttrs = style.attrs(drawerStyles.root, props.styles?.root);
+    const triggerStyleAttrs = style.attrs(drawerStyles.trigger, props.styles?.trigger);
+    const contentStyleAttrs = style.attrs(
+      drawerStyles.content,
+      drawerSideStyles[side],
+      props.styles?.content,
+    );
+    const handleStyleAttrs = style.attrs(drawerStyles.handle, props.styles?.handle);
+    const headerStyleAttrs = style.attrs(drawerStyles.header, props.styles?.header);
+    const titleStyleAttrs = style.attrs(drawerStyles.title, props.styles?.title);
+    const descriptionStyleAttrs = style.attrs(drawerStyles.description, props.styles?.description);
+    const bodyStyleAttrs = style.attrs(drawerStyles.body, props.styles?.body);
+    const closeStyleAttrs = style.attrs(drawerStyles.close, props.styles?.close);
 
     return (
       <div
-        class={cn('contents', props.class)}
+        {...rootStyleAttrs}
         data-disabled={rootAttrs['data-disabled']}
         data-state={rootAttrs['data-state']}
       >
         <button
+          {...triggerStyleAttrs}
           aria-controls={triggerAttrs['aria-controls']}
           aria-expanded={triggerAttrs['aria-expanded']}
           aria-haspopup={triggerAttrs['aria-haspopup']}
-          class={cn(
-            'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50',
-            props.triggerClass,
-          )}
           command={triggerAttrs.command}
           commandfor={triggerAttrs.commandfor}
           data-disabled={triggerAttrs['data-disabled']}
@@ -96,30 +243,30 @@ export const Drawer = component({
           {escapeHtml(props.trigger ?? 'Open')}
         </button>
         <dialog
+          {...contentStyleAttrs}
           aria-describedby={contentAttrs['aria-describedby']}
           aria-labelledby={contentAttrs['aria-labelledby']}
-          class={cn(drawerContentClassNames({ side }), props.contentClass)}
           closedby={contentAttrs.closedby}
           data-state={contentAttrs['data-state']}
           id={contentAttrs.id}
           open={contentAttrs.open}
         >
-          <div aria-hidden="true" class="mx-auto h-1.5 w-12 rounded-full bg-neutral-300" />
-          <header class="grid gap-1">
-            <h2 class="text-base font-semibold" id={titleId}>
+          <div {...handleStyleAttrs} aria-hidden="true" />
+          <header {...headerStyleAttrs}>
+            <h2 {...titleStyleAttrs} id={titleId}>
               {escapeHtml(props.title)}
             </h2>
             {descriptionId === undefined ? (
               ''
             ) : (
-              <p class="text-sm text-neutral-600" id={descriptionId}>
+              <p {...descriptionStyleAttrs} id={descriptionId}>
                 {escapeHtml(props.description ?? '')}
               </p>
             )}
           </header>
-          <div class="text-sm">{props.children}</div>
+          <div {...bodyStyleAttrs}>{props.children}</div>
           <button
-            class="inline-flex h-8 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-2.5 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50"
+            {...closeStyleAttrs}
             command={closeAttrs.command}
             commandfor={closeAttrs.commandfor}
             data-disabled={closeAttrs['data-disabled']}

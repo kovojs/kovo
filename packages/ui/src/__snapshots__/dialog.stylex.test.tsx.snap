@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Dialog StyleX slots > exports StyleX style groups 1`] = `
+{
+  "closeMarker": true,
+  "contentMarker": true,
+  "keys": [
+    "close",
+    "content",
+    "root",
+    "trigger",
+  ],
+  "rootMarker": true,
+  "triggerMarker": true,
+}
+`;
+
+exports[`@kovojs/ui Dialog StyleX slots > matches author-last slot override output 1`] = `"<div class="kv-dialog-d-1578mh kv-dialog-opacity-1wmp2v kv-app-dialog-fg-1oi3mq" data-style-src="dialog.tsx#root; app-dialog.tsx#root" data-state="open"><button class="kv-dialog-align-1iqt7n kv-dialog-bd-6z92hc kv-dialog-bd-smofdm kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-1vl67i kv-dialog-fg-1kcq42 kv-dialog-d-xsx1ae kv-dialog-font-kvxk8f kv-dialog-font-161lny kv-dialog-h-ln0fuf kv-dialog-justify-fb6poo kv-dialog-pad-raz2zz kv-dialog-transition-1lh199 kv-dialog-opacity-kqyp6b kv-dialog-pointer-1x8bv7 kv-dialog-outline-1xqxl4 kv-dialog-outline-ervi1a kv-dialog-outline-t32sn9 kv-dialog-outline-l3281x kv-dialog-bg-1v6skk kv-app-dialog-bg-zqd7av" data-style-src="dialog.tsx#trigger; app-dialog.tsx#trigger" aria-controls="account-dialog" aria-expanded="true" aria-haspopup="dialog" command="show-modal" commandfor="account-dialog" data-state="open" type="button">Edit account</button><dialog class="kv-dialog-bg-wpm5im kv-dialog-bd-8qgrmx kv-dialog-bd-1luezx kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-5bneq7 kv-dialog-fg-1kcq42 kv-dialog-m-17m6m7 kv-dialog-pad-1kfxum kv-dialog-d-1que9w kv-dialog-bg-qyhm2q kv-app-dialog-max-f07eir" data-style-src="dialog.tsx#content; app-dialog.tsx#content" closedby="any" data-state="open" id="account-dialog" open>Account form</dialog><button class="kv-dialog-align-1iqt7n kv-dialog-bg-wpm5im kv-dialog-bd-6z92hc kv-dialog-bd-smofdm kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-1vl67i kv-dialog-d-xsx1ae kv-dialog-font-kvxk8f kv-dialog-font-161lny kv-dialog-h-sx26or kv-dialog-justify-fb6poo kv-dialog-pad-1bwelk kv-dialog-transition-1lh199 kv-dialog-opacity-kqyp6b kv-dialog-pointer-1x8bv7 kv-dialog-outline-1xqxl4 kv-dialog-outline-ervi1a kv-dialog-outline-t32sn9 kv-dialog-outline-l3281x kv-dialog-bg-1v6skk kv-app-dialog-fg-1oi3mq" data-style-src="dialog.tsx#close; app-dialog.tsx#close" command="request-close" commandfor="account-dialog" data-state="open" type="button">Close</button></div>"`;
+
+exports[`@kovojs/ui Dialog StyleX slots > matches dialog markup with StyleX slot output 1`] = `
+{
+  "classes": [
+    "kv-dialog-fg-1kcq42 kv-dialog-d-1578mh kv-dialog-opacity-1wmp2v",
+  ],
+  "closeClasses": [
+    "kv-dialog-align-1iqt7n kv-dialog-bg-wpm5im kv-dialog-bd-6z92hc kv-dialog-bd-smofdm kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-1vl67i kv-dialog-fg-1kcq42 kv-dialog-d-xsx1ae kv-dialog-font-kvxk8f kv-dialog-font-161lny kv-dialog-h-sx26or kv-dialog-justify-fb6poo kv-dialog-pad-1bwelk kv-dialog-transition-1lh199 kv-dialog-opacity-kqyp6b kv-dialog-pointer-1x8bv7 kv-dialog-outline-1xqxl4 kv-dialog-outline-ervi1a kv-dialog-outline-t32sn9 kv-dialog-outline-l3281x kv-dialog-bg-1v6skk",
+  ],
+  "contentClasses": [
+    "kv-dialog-bg-wpm5im kv-dialog-bd-8qgrmx kv-dialog-bd-1luezx kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-5bneq7 kv-dialog-fg-1kcq42 kv-dialog-m-17m6m7 kv-dialog-max-rbx48h kv-dialog-pad-1kfxum kv-dialog-d-1que9w kv-dialog-bg-qyhm2q",
+  ],
+  "open": "<div class="kv-dialog-fg-1kcq42 kv-dialog-d-1578mh kv-dialog-opacity-1wmp2v" data-style-src="dialog.tsx#root" data-state="open" id="dialog-root"><button class="kv-dialog-align-1iqt7n kv-dialog-bg-wpm5im kv-dialog-bd-6z92hc kv-dialog-bd-smofdm kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-1vl67i kv-dialog-fg-1kcq42 kv-dialog-d-xsx1ae kv-dialog-font-kvxk8f kv-dialog-font-161lny kv-dialog-h-ln0fuf kv-dialog-justify-fb6poo kv-dialog-pad-raz2zz kv-dialog-transition-1lh199 kv-dialog-opacity-kqyp6b kv-dialog-pointer-1x8bv7 kv-dialog-outline-1xqxl4 kv-dialog-outline-ervi1a kv-dialog-outline-t32sn9 kv-dialog-outline-l3281x kv-dialog-bg-1v6skk" data-style-src="dialog.tsx#trigger" aria-controls="account-dialog" aria-expanded="true" aria-haspopup="dialog" command="show-modal" commandfor="account-dialog" data-state="open" type="button">Edit account</button><dialog class="kv-dialog-bg-wpm5im kv-dialog-bd-8qgrmx kv-dialog-bd-1luezx kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-5bneq7 kv-dialog-fg-1kcq42 kv-dialog-m-17m6m7 kv-dialog-max-rbx48h kv-dialog-pad-1kfxum kv-dialog-d-1que9w kv-dialog-bg-qyhm2q" data-style-src="dialog.tsx#content" aria-describedby="account-description" aria-labelledby="account-title" closedby="any" data-state="open" id="account-dialog" open><h2 id="account-title">Account</h2><p id="account-description">Profile settings</p></dialog><button class="kv-dialog-align-1iqt7n kv-dialog-bg-wpm5im kv-dialog-bd-6z92hc kv-dialog-bd-smofdm kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-1vl67i kv-dialog-fg-1kcq42 kv-dialog-d-xsx1ae kv-dialog-font-kvxk8f kv-dialog-font-161lny kv-dialog-h-sx26or kv-dialog-justify-fb6poo kv-dialog-pad-1bwelk kv-dialog-transition-1lh199 kv-dialog-opacity-kqyp6b kv-dialog-pointer-1x8bv7 kv-dialog-outline-1xqxl4 kv-dialog-outline-ervi1a kv-dialog-outline-t32sn9 kv-dialog-outline-l3281x kv-dialog-bg-1v6skk" data-style-src="dialog.tsx#close" command="request-close" commandfor="account-dialog" data-state="open" type="button">Done</button></div>",
+  "triggerClasses": [
+    "kv-dialog-align-1iqt7n kv-dialog-bg-wpm5im kv-dialog-bd-6z92hc kv-dialog-bd-smofdm kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-1vl67i kv-dialog-fg-1kcq42 kv-dialog-d-xsx1ae kv-dialog-font-kvxk8f kv-dialog-font-161lny kv-dialog-h-ln0fuf kv-dialog-justify-fb6poo kv-dialog-pad-raz2zz kv-dialog-transition-1lh199 kv-dialog-opacity-kqyp6b kv-dialog-pointer-1x8bv7 kv-dialog-outline-1xqxl4 kv-dialog-outline-ervi1a kv-dialog-outline-t32sn9 kv-dialog-outline-l3281x kv-dialog-bg-1v6skk",
+  ],
+}
+`;

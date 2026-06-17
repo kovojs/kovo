@@ -6,11 +6,17 @@ import {
   alertDialogContentAttributes,
   alertDialogRootAttributes,
   alertDialogTriggerAttributes,
-  cn,
-  defineVariants,
   type AlertDialogActionIntent,
-  type ClassValue,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface AlertDialogStyleOverrides {
+  action?: style.StyleInput;
+  cancel?: style.StyleInput;
+  content?: style.StyleInput;
+  root?: style.StyleInput;
+  trigger?: style.StyleInput;
+}
 
 export interface AlertDialogStateProps {
   disabled?: boolean;
@@ -19,71 +25,182 @@ export interface AlertDialogStateProps {
 
 export interface AlertDialogProps extends AlertDialogStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: AlertDialogStyleOverrides;
 }
 
 export interface AlertDialogTriggerProps extends AlertDialogStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   id?: string;
+  styles?: AlertDialogStyleOverrides;
 }
 
 export interface AlertDialogContentProps extends AlertDialogStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   descriptionId?: string;
+  styles?: AlertDialogStyleOverrides;
   titleId?: string;
 }
 
 export interface AlertDialogCancelProps extends AlertDialogStateProps {
   autoFocus?: boolean;
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   id?: string;
+  styles?: AlertDialogStyleOverrides;
 }
 
 export interface AlertDialogActionProps extends AlertDialogStateProps {
   children?: string;
-  class?: ClassValue;
   contentId?: string;
   id?: string;
   intent?: AlertDialogActionIntent;
+  styles?: AlertDialogStyleOverrides;
 }
 
-export const alertDialogClassNames = defineVariants({
-  base: 'contents text-neutral-950 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const alertDialogStyles = style.create(
+  {
+    action: {
+      alignItems: 'center',
+      backgroundColor: '#0a0a0a',
+      borderColor: 'transparent',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#ffffff',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 32,
+      justifyContent: 'center',
+      paddingInline: 10,
+      transitionProperty: 'background-color',
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#262626',
+      },
+      '[data-intent=destructive]': {
+        backgroundColor: '#dc2626',
+      },
+      '[data-intent=destructive]:hover': {
+        backgroundColor: '#b91c1c',
+      },
+    },
+    cancel: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 32,
+      justifyContent: 'center',
+      paddingInline: 10,
+      transitionProperty: 'background-color',
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
+    },
+    content: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 8,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+      color: '#0a0a0a',
+      margin: 'auto',
+      maxWidth: 448,
+      padding: 24,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+      '::backdrop': {
+        backgroundColor: 'rgb(0 0 0 / 0.4)',
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'contents',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    trigger: {
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      height: 36,
+      justifyContent: 'center',
+      paddingInline: 12,
+      transitionProperty: 'background-color',
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
+    },
+  },
+  { namespace: 'alertDialog', source: 'alert-dialog.tsx' },
+);
 
-export const alertDialogTriggerClassNames = defineVariants({
-  base: 'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50',
-  variants: {},
-});
-
-export const alertDialogContentClassNames = defineVariants({
-  base: 'm-auto max-w-md rounded-lg border border-neutral-200 bg-white p-6 text-neutral-950 shadow-xl backdrop:bg-black/40 data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const alertDialogCancelClassNames = defineVariants({
-  base: 'inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-2.5 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50',
-  variants: {},
-});
-
-export const alertDialogActionClassNames = defineVariants({
-  base: 'inline-flex h-8 items-center justify-center rounded-md border border-transparent bg-neutral-950 px-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50 data-[intent=destructive]:bg-red-600 data-[intent=destructive]:hover:bg-red-700',
-  variants: {},
-});
-
-export const alertDialogClasses = alertDialogClassNames.classes;
-export const alertDialogTriggerClasses = alertDialogTriggerClassNames.classes;
-export const alertDialogContentClasses = alertDialogContentClassNames.classes;
-export const alertDialogCancelClasses = alertDialogCancelClassNames.classes;
-export const alertDialogActionClasses = alertDialogActionClassNames.classes;
+export const alertDialogClasses = [style.attrs(alertDialogStyles.root).class ?? ''] as const;
+export const alertDialogTriggerClasses = [
+  style.attrs(alertDialogStyles.trigger).class ?? '',
+] as const;
+export const alertDialogContentClasses = [
+  style.attrs(alertDialogStyles.content).class ?? '',
+] as const;
+export const alertDialogCancelClasses = [style.attrs(alertDialogStyles.cancel).class ?? ''] as const;
+export const alertDialogActionClasses = [style.attrs(alertDialogStyles.action).class ?? ''] as const;
+export const alertDialogClassNames = alertDialogStyles.root;
+export const alertDialogTriggerClassNames = alertDialogStyles.trigger;
+export const alertDialogContentClassNames = alertDialogStyles.content;
+export const alertDialogCancelClassNames = alertDialogStyles.cancel;
+export const alertDialogActionClassNames = alertDialogStyles.action;
 
 function alertDialogState(props: AlertDialogStateProps) {
   return {
@@ -95,10 +212,11 @@ function alertDialogState(props: AlertDialogStateProps) {
 export const AlertDialog = component({
   render(props: AlertDialogProps) {
     const attrs = alertDialogRootAttributes(alertDialogState(props));
+    const styleAttrs = style.attrs(alertDialogStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(alertDialogClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -115,13 +233,14 @@ export const AlertDialogTrigger = component({
       ...alertDialogState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(alertDialogStyles.trigger, props.styles?.trigger);
 
     return (
       <button
+        {...styleAttrs}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         aria-haspopup={attrs['aria-haspopup']}
-        class={cn(alertDialogTriggerClassNames(), props.class)}
         command={attrs.command}
         commandfor={attrs.commandfor}
         data-disabled={attrs['data-disabled']}
@@ -144,13 +263,14 @@ export const AlertDialogContent = component({
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.titleId === undefined ? {} : { titleId: props.titleId }),
     });
+    const styleAttrs = style.attrs(alertDialogStyles.content, props.styles?.content);
 
     return (
       <dialog
+        {...styleAttrs}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-modal={attrs['aria-modal']}
-        class={cn(alertDialogContentClassNames(), props.class)}
         data-state={attrs['data-state']}
         id={attrs.id}
         open={attrs.open}
@@ -169,11 +289,12 @@ export const AlertDialogCancel = component({
       ...(props.autoFocus === undefined ? {} : { autoFocus: props.autoFocus }),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
+    const styleAttrs = style.attrs(alertDialogStyles.cancel, props.styles?.cancel);
 
     return (
       <button
+        {...styleAttrs}
         autofocus={attrs.autofocus}
-        class={cn(alertDialogCancelClassNames(), props.class)}
         command={attrs.command}
         commandfor={attrs.commandfor}
         data-disabled={attrs['data-disabled']}
@@ -196,10 +317,11 @@ export const AlertDialogAction = component({
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
       ...(props.intent === undefined ? {} : { intent: props.intent }),
     });
+    const styleAttrs = style.attrs(alertDialogStyles.action, props.styles?.action);
 
     return (
       <button
-        class={cn(alertDialogActionClassNames(), props.class)}
+        {...styleAttrs}
         command={attrs.command}
         commandfor={attrs.commandfor}
         data-disabled={attrs['data-disabled']}

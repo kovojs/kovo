@@ -1,0 +1,65 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Drawer StyleX slots > exports StyleX style groups 1`] = `
+{
+  "contentMarker": true,
+  "handleMarker": true,
+  "keys": [
+    "body",
+    "close",
+    "content",
+    "description",
+    "handle",
+    "header",
+    "root",
+    "title",
+    "trigger",
+  ],
+  "rootMarker": true,
+  "sideKeys": [
+    "bottom",
+    "left",
+    "right",
+    "top",
+  ],
+  "triggerMarker": true,
+}
+`;
+
+exports[`@kovojs/ui Drawer StyleX slots > matches author-last slot override output 1`] = `"<div class="kv-drawer-d-1578mh kv-app-drawer-fg-15vazc" data-style-src="drawer.tsx#root; app-drawer.tsx#root" data-state="open"><button class="kv-drawer-align-1iqt7n kv-drawer-bd-6z92hc kv-drawer-bd-smofdm kv-drawer-bd-1hi42t kv-drawer-bd-6qr8e1 kv-drawer-box-1vl67i kv-drawer-fg-1kcq42 kv-drawer-d-xsx1ae kv-drawer-font-1j4wws kv-drawer-font-161lny kv-drawer-h-ln0fuf kv-drawer-justify-fb6poo kv-drawer-pad-raz2zz kv-drawer-transition-1lh199 kv-drawer-opacity-kqyp6b kv-drawer-pointer-1x8bv7 kv-drawer-bg-1v6skk kv-app-drawer-bg-zqd7av" data-style-src="drawer.tsx#trigger; app-drawer.tsx#trigger" aria-controls="custom-drawer" aria-expanded="true" aria-haspopup="dialog" command="show-modal" commandfor="custom-drawer" data-state="open" type="button">Customize</button><dialog class="kv-drawer-bg-wpm5im kv-drawer-bd-8qgrmx kv-drawer-bd-1hi42t kv-drawer-bd-b9bdux kv-drawer-box-5bneq7 kv-drawer-fg-1kcq42 kv-drawer-d-z1wnt7 kv-drawer-flex-ghzzqp kv-drawer-gap-53gj4t kv-drawer-pad-1kfxum kv-drawer-position-qymjrz kv-drawer-z-1ag0ds kv-drawer-side-bd-m1idbw kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-right-19ea6y kv-app-drawer-max-1jkgbi" data-style-src="drawer.tsx#content; drawer.tsx#bottom; app-drawer.tsx#content" aria-describedby="custom-drawer-description" aria-labelledby="custom-drawer-title" closedby="any" data-state="open" id="custom-drawer" open><div class="kv-drawer-bd-19um72 kv-drawer-h-13zoso kv-drawer-m-1gtxy7 kv-drawer-w-1kd9u9 kv-app-drawer-bg-k58xbs" data-style-src="drawer.tsx#handle; app-drawer.tsx#handle" aria-hidden="true"></div><header class="kv-drawer-d-10w2xa kv-app-drawer-gap-who5uc" data-style-src="drawer.tsx#header; app-drawer.tsx#header"><h2 class="kv-drawer-font-ghu8bz kv-drawer-font-keb3sr kv-app-drawer-fg-15vazc" data-style-src="drawer.tsx#title; app-drawer.tsx#title" id="custom-drawer-title">Custom drawer</h2><p class="kv-drawer-font-1j4wws kv-app-drawer-fg-i7l95u" data-style-src="drawer.tsx#description; app-drawer.tsx#description" id="custom-drawer-description">Custom description</p></header><div class="kv-drawer-font-1j4wws kv-app-drawer-fg-15vazc" data-style-src="drawer.tsx#body; app-drawer.tsx#body">Custom drawer body</div><button class="kv-drawer-align-1iqt7n kv-drawer-bg-wpm5im kv-drawer-bd-6z92hc kv-drawer-bd-smofdm kv-drawer-bd-1hi42t kv-drawer-bd-6qr8e1 kv-drawer-box-1vl67i kv-drawer-d-xsx1ae kv-drawer-font-1j4wws kv-drawer-font-161lny kv-drawer-h-sx26or kv-drawer-justify-fb6poo kv-drawer-pad-1bwelk kv-drawer-transition-1lh199 kv-drawer-w-mw1jw0 kv-drawer-opacity-kqyp6b kv-drawer-pointer-1x8bv7 kv-drawer-bg-1v6skk kv-app-drawer-fg-15vazc" data-style-src="drawer.tsx#close; app-drawer.tsx#close" command="request-close" commandfor="custom-drawer" data-state="open" type="button">Done</button></dialog></div>"`;
+
+exports[`@kovojs/ui Drawer StyleX slots > matches drawer markup with StyleX slot output 1`] = `
+{
+  "bodyClasses": [
+    "kv-drawer-font-1j4wws",
+  ],
+  "classes": [
+    "kv-drawer-d-1578mh",
+  ],
+  "closeClasses": [
+    "kv-drawer-align-1iqt7n kv-drawer-bg-wpm5im kv-drawer-bd-6z92hc kv-drawer-bd-smofdm kv-drawer-bd-1hi42t kv-drawer-bd-6qr8e1 kv-drawer-box-1vl67i kv-drawer-fg-1kcq42 kv-drawer-d-xsx1ae kv-drawer-font-1j4wws kv-drawer-font-161lny kv-drawer-h-sx26or kv-drawer-justify-fb6poo kv-drawer-pad-1bwelk kv-drawer-transition-1lh199 kv-drawer-w-mw1jw0 kv-drawer-opacity-kqyp6b kv-drawer-pointer-1x8bv7 kv-drawer-bg-1v6skk",
+  ],
+  "contentClasses": [
+    "kv-drawer-bg-wpm5im kv-drawer-bd-8qgrmx kv-drawer-bd-1hi42t kv-drawer-bd-b9bdux kv-drawer-box-5bneq7 kv-drawer-fg-1kcq42 kv-drawer-d-z1wnt7 kv-drawer-flex-ghzzqp kv-drawer-gap-53gj4t kv-drawer-pad-1kfxum kv-drawer-position-qymjrz kv-drawer-z-1ag0ds kv-drawer-side-bd-m1idbw kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y",
+    "kv-drawer-side-bd-8y7uhv kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-5ahn0m kv-drawer-side-top-1tjk6d kv-drawer-side-w-9lrs26",
+    "kv-drawer-side-bd-1tuf6s kv-drawer-side-bottom-jbyfoh kv-drawer-side-max-5ahn0m kv-drawer-side-right-19ea6y kv-drawer-side-top-1tjk6d kv-drawer-side-w-9lrs26",
+    "kv-drawer-side-bd-r2so6s kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y kv-drawer-side-top-1tjk6d",
+  ],
+  "descriptionClasses": [
+    "kv-drawer-fg-1nywcb kv-drawer-font-1j4wws",
+  ],
+  "handleClasses": [
+    "kv-drawer-bg-9zruy kv-drawer-bd-19um72 kv-drawer-h-13zoso kv-drawer-m-1gtxy7 kv-drawer-w-1kd9u9",
+  ],
+  "headerClasses": [
+    "kv-drawer-d-10w2xa kv-drawer-gap-g1e2dk",
+  ],
+  "open": "<div class="kv-drawer-d-1578mh" data-style-src="drawer.tsx#root" data-state="open"><button class="kv-drawer-align-1iqt7n kv-drawer-bg-wpm5im kv-drawer-bd-6z92hc kv-drawer-bd-smofdm kv-drawer-bd-1hi42t kv-drawer-bd-6qr8e1 kv-drawer-box-1vl67i kv-drawer-fg-1kcq42 kv-drawer-d-xsx1ae kv-drawer-font-1j4wws kv-drawer-font-161lny kv-drawer-h-ln0fuf kv-drawer-justify-fb6poo kv-drawer-pad-raz2zz kv-drawer-transition-1lh199 kv-drawer-opacity-kqyp6b kv-drawer-pointer-1x8bv7 kv-drawer-bg-1v6skk" data-style-src="drawer.tsx#trigger" aria-controls="standalone-drawer" aria-expanded="true" aria-haspopup="dialog" command="show-modal" commandfor="standalone-drawer" data-state="open" type="button">Open drawer</button><dialog class="kv-drawer-bg-wpm5im kv-drawer-bd-8qgrmx kv-drawer-bd-1hi42t kv-drawer-bd-b9bdux kv-drawer-box-5bneq7 kv-drawer-fg-1kcq42 kv-drawer-d-z1wnt7 kv-drawer-flex-ghzzqp kv-drawer-gap-53gj4t kv-drawer-pad-1kfxum kv-drawer-position-qymjrz kv-drawer-z-1ag0ds kv-drawer-side-bd-m1idbw kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y" data-style-src="drawer.tsx#content; drawer.tsx#bottom" aria-describedby="standalone-drawer-description" aria-labelledby="standalone-drawer-title" closedby="any" data-state="open" id="standalone-drawer" open><div class="kv-drawer-bg-9zruy kv-drawer-bd-19um72 kv-drawer-h-13zoso kv-drawer-m-1gtxy7 kv-drawer-w-1kd9u9" data-style-src="drawer.tsx#handle" aria-hidden="true"></div><header class="kv-drawer-d-10w2xa kv-drawer-gap-g1e2dk" data-style-src="drawer.tsx#header"><h2 class="kv-drawer-font-ghu8bz kv-drawer-font-keb3sr" data-style-src="drawer.tsx#title" id="standalone-drawer-title">Standalone drawer</h2><p class="kv-drawer-fg-1nywcb kv-drawer-font-1j4wws" data-style-src="drawer.tsx#description" id="standalone-drawer-description">Standalone drawer description.</p></header><div class="kv-drawer-font-1j4wws" data-style-src="drawer.tsx#body">Drawer body</div><button class="kv-drawer-align-1iqt7n kv-drawer-bg-wpm5im kv-drawer-bd-6z92hc kv-drawer-bd-smofdm kv-drawer-bd-1hi42t kv-drawer-bd-6qr8e1 kv-drawer-box-1vl67i kv-drawer-fg-1kcq42 kv-drawer-d-xsx1ae kv-drawer-font-1j4wws kv-drawer-font-161lny kv-drawer-h-sx26or kv-drawer-justify-fb6poo kv-drawer-pad-1bwelk kv-drawer-transition-1lh199 kv-drawer-w-mw1jw0 kv-drawer-opacity-kqyp6b kv-drawer-pointer-1x8bv7 kv-drawer-bg-1v6skk" data-style-src="drawer.tsx#close" command="request-close" commandfor="standalone-drawer" data-state="open" type="button">Close</button></dialog></div>",
+  "titleClasses": [
+    "kv-drawer-font-ghu8bz kv-drawer-font-keb3sr",
+  ],
+  "triggerClasses": [
+    "kv-drawer-align-1iqt7n kv-drawer-bg-wpm5im kv-drawer-bd-6z92hc kv-drawer-bd-smofdm kv-drawer-bd-1hi42t kv-drawer-bd-6qr8e1 kv-drawer-box-1vl67i kv-drawer-fg-1kcq42 kv-drawer-d-xsx1ae kv-drawer-font-1j4wws kv-drawer-font-161lny kv-drawer-h-ln0fuf kv-drawer-justify-fb6poo kv-drawer-pad-raz2zz kv-drawer-transition-1lh199 kv-drawer-opacity-kqyp6b kv-drawer-pointer-1x8bv7 kv-drawer-bg-1v6skk",
+  ],
+}
+`;
