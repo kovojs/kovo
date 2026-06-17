@@ -295,6 +295,35 @@ export const CartTable = component({
     `);
   });
 
+  it('allows fragment target children to use model-backed imports and constants', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+import { formatMoney } from './money';
+
+const CURRENCY = 'USD';
+
+export const CartRow = component({
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
+});
+
+export const CartTable = component({
+  render: ({ cart }) => (
+    <table>
+      <CartRow rowId={cart.rowId}>
+        <span>{formatMoney(cart.total)} {CURRENCY}</span>
+      </CartRow>
+    </table>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('does not report KV230 for local child variables named like non-serializable captures', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',

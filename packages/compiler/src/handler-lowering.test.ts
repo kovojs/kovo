@@ -2,7 +2,7 @@ import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { collectMinifierReservedNames, compileComponentModule } from './index.js';
-import { lowerEventHandlers } from './lower/handlers.js';
+import { capturesUnserializableReferences, lowerEventHandlers } from './lower/handlers.js';
 import { parseComponentModule } from './scan/parse.js';
 
 const kv210 = diagnosticDefinitions.KV210;
@@ -18,6 +18,28 @@ function escapeRegExp(value: string): string {
 }
 
 describe('handler lowering', () => {
+  it('requires parsed model facts to allow module imports and constants as serializable captures', () => {
+    const fileName = 'components/cart/cart-actions.tsx';
+    const source = `
+import { component } from '@kovojs/core';
+import { track } from './analytics';
+
+const LABEL = 'cart';
+
+export const CartActions = component({
+  render: () => <button onClick={() => track(LABEL)}>Track</button>,
+});
+`;
+    const model = parseComponentModule(fileName, source);
+    const emptyModel = parseComponentModule(
+      'components/cart/empty.tsx',
+      'export const Empty = component({ render: () => <button>Empty</button> });',
+    );
+
+    expect(capturesUnserializableReferences(['track', 'LABEL'], { model })).toBe(false);
+    expect(capturesUnserializableReferences(['track', 'LABEL'], { model: emptyModel })).toBe(true);
+  });
+
   it('names element params from parsed property-access terminal facts', () => {
     const source = `
 import { component } from '@kovojs/core';
@@ -221,6 +243,30 @@ export const CartBadge = component({
     expect(clientSource).toContain("const LABEL = 'cart';");
     expect(clientSource).toContain('ctx.state.count += ctx.params.quantity;');
     expect(clientSource).toContain('track(LABEL, event.type, ctx.state.count);');
+  });
+
+  it('passes a model-backed capture context through handler lowering', () => {
+    const fileName = 'components/cart/cart-actions.tsx';
+    const source = `
+import { component } from '@kovojs/core';
+import { track } from './analytics';
+
+const LABEL = 'cart';
+
+export const CartActions = component({
+  state: () => ({ count: 0 }),
+  render: () => (
+    <button onClick={() => track(LABEL, state.count)}>Track</button>
+  ),
+});
+`;
+    const [handler] = lowerEventHandlers(
+      { fileName, source },
+      'CartActions',
+      parseComponentModule(fileName, source),
+    );
+
+    expect(handler?.diagnostics?.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
   });
 
   it('allows standard expression roots without treating them as captures', () => {

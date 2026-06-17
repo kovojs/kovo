@@ -527,15 +527,23 @@ compiler-quality gaps found during the 2026-06-16 audit.
 
 ## Compatibility Paths
 
-- [ ] Re-prove weak compatibility helper retirement.
-  - [ ] Verify `capturesUnserializableReferences()` requires a model-backed context.
-  - [ ] Verify handler lowering calls `capturesUnserializableReferences()` with model-backed context.
-  - [ ] Verify fragment-target validation calls `capturesUnserializableReferences()` with
+- [x] Re-prove weak compatibility helper retirement.
+  - [x] Verify `capturesUnserializableReferences()` requires a model-backed context.
+    - Evidence (2026-06-16): [packages/compiler/src/handler-lowering.test.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/handler-lowering.test.ts) now proves `capturesUnserializableReferences(['track', 'LABEL'], { model })` accepts parsed named-import/module-constant facts, while the same references are rejected against an empty parsed model.
+  - [x] Verify handler lowering calls `capturesUnserializableReferences()` with model-backed context.
+    - Evidence (2026-06-16): [packages/compiler/src/handler-lowering.test.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/handler-lowering.test.ts) keeps a direct `lowerEventHandlers(...)` fixture that allows named-import and module-constant captures and emits only KV210, proving the lowering path passes the parsed model-backed context into `capturesUnserializableReferences()`.
+  - [x] Verify fragment-target validation calls `capturesUnserializableReferences()` with
         model-backed context.
-  - [ ] Verify no public compiler export exposes a weak capture-check helper.
-  - [ ] Verify tests use explicit fixtures rather than a weak helper mode.
-  - [ ] Run KV201 handler capture fixtures.
-  - [ ] Run KV230 fragment-target child capture fixtures.
+    - Evidence (2026-06-16): [packages/compiler/src/fragment-targets.test.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/fragment-targets.test.ts) now proves fragment-target children can reference a named import plus module constant (`formatMoney`, `CURRENCY`) without KV230, which depends on the model-backed allowlist in [packages/compiler/src/validate/component-contracts.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/validate/component-contracts.ts).
+  - [x] Verify no public compiler export exposes a weak capture-check helper.
+    - Evidence (2026-06-16): [packages/compiler/src/compatibility-boundary.test.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/compatibility-boundary.test.ts) asserts `packages/compiler/package.json` still publishes only `.` and `./graph`, and [packages/compiler/src/index.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/index.ts) does not export or re-export `capturesUnserializableReferences()`.
+  - [x] Verify tests use explicit fixtures rather than a weak helper mode.
+    - Evidence (2026-06-16): [packages/compiler/src/compatibility-boundary.test.ts](/Users/mini/kovo-agent-weak-capture/packages/compiler/src/compatibility-boundary.test.ts) asserts the KV201/KV230 coverage files keep explicit `compileComponentModule({ source: ... })` fixtures and do not reference helper-mode toggles.
+  - [x] Run KV201 handler capture fixtures.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run src/handler-lowering.test.ts src/conformance-compat.test.ts src/compatibility-boundary.test.ts` passed.
+  - [x] Run KV230 fragment-target child capture fixtures.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run src/fragment-targets.test.ts src/conformance-compat.test.ts src/compatibility-boundary.test.ts` passed.
+  - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run src/diagnostic-coverage-matrix.test.ts -t "keeps KV201 and KV230 teaching diagnostics compatibility-visible"` passed.
 
 ## Plan Cleanup
 
