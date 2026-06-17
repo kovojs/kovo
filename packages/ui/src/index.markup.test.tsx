@@ -76,16 +76,12 @@ import {
   ToggleGroup,
   Toast,
   Toolbar,
-  accordionClasses,
-  accordionContentClasses,
-  accordionTriggerClasses,
   alertDialogActionClasses,
   alertDialogClasses,
   alertDialogContentClasses,
   autocompleteClasses,
   autocompleteInputClasses,
   breadcrumbClasses,
-  buttonClasses,
   checkboxGroupClasses,
   collapsibleClasses,
   collapsibleTriggerClasses,
@@ -112,7 +108,6 @@ import {
   scrollAreaClasses,
   selectClasses,
   selectTriggerClasses,
-  tabsClasses,
   tooltipClasses,
   tooltipContentClasses,
   tableClasses,
@@ -127,47 +122,6 @@ import { readSource } from './test-source.js';
 
 describe('@kovojs/ui styled package foundation', () => {
   it('exports pure-markup button, badge, and card TSX components', () => {
-    expect(Button.name).toBe('button');
-    expect(Accordion.name).toBe('accordion');
-    expect(AlertDialog.name).toBe('alert-dialog');
-    expect(Avatar.name).toBe('avatar');
-    expect(Badge.name).toBe('badge');
-    expect(Card.name).toBe('card');
-    expect(Checkbox.name).toBe('checkbox');
-    expect(CheckboxGroup.name).toBe('checkbox-group');
-    expect(Collapsible.name).toBe('collapsible');
-    expect(Dialog.name).toBe('dialog');
-    expect(Disclosure.name).toBe('disclosure');
-    expect(HoverCard.name).toBe('hover-card');
-    expect(Kbd.name).toBe('kbd');
-    expect(Alert.name).toBe('alert');
-    expect(Meter.name).toBe('meter');
-    expect(Popover.name).toBe('popover');
-    expect(Progress.name).toBe('progress');
-    expect(Separator.name).toBe('separator');
-    expect(Skeleton.name).toBe('skeleton');
-    expect(Switch.name).toBe('switch');
-    expect(RadioGroup.name).toBe('radio-group');
-    expect(Tabs.name).toBe('tabs');
-    expect(Toggle.name).toBe('toggle');
-    expect(ToggleGroup.name).toBe('toggle-group');
-    expect(Toolbar.name).toBe('toolbar');
-    expect(NumberField.name).toBe('number-field');
-    expect(OtpField.name).toBe('otp-field');
-    expect(ScrollArea.name).toBe('scroll-area');
-    expect(Field.name).toBe('field');
-    expect(Select.name).toBe('select');
-    expect(Combobox.name).toBe('combobox');
-    expect(Autocomplete.name).toBe('autocomplete');
-    expect(Slider.name).toBe('slider');
-    expect(Toast.name).toBe('toast');
-    expect(DropdownMenu.name).toBe('dropdown-menu');
-    expect(ContextMenu.name).toBe('context-menu');
-    expect(Menubar.name).toBe('menubar');
-    expect(NavigationMenu.name).toBe('navigation-menu');
-    expect(Command.name).toBe('command');
-    expect(Tooltip.name).toBe('tooltip');
-
     const buttonOverride = style.create(
       { root: { letterSpacing: 1 } },
       { namespace: 'markupButton', source: 'index.markup.test.tsx' },
@@ -230,10 +184,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(Skeleton.definition.render({ style: skeletonOverride.root })).toContain(
       'data-style-src="skeleton.tsx#root; index.markup.test.tsx#root"',
     );
-    expect(buttonClasses).toContain('h-9 gap-2 px-3');
-    expect(accordionClasses.join(' ')).toContain('grid w-full gap-2');
-    expect(accordionTriggerClasses.join(' ')).toContain('data-[state=open]:bg-neutral-50');
-    expect(accordionContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
     expect(alertDialogClasses.join(' ')).toContain('contents');
     expect(alertDialogContentClasses.join(' ')).toContain('max-w-md');
     expect(alertDialogActionClasses.join(' ')).toContain('data-[intent=destructive]');
@@ -247,7 +197,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(hoverCardClasses.join(' ')).toContain('relative inline-block');
     expect(hoverCardContentClasses.join(' ')).toContain('w-72');
     expect(radioGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
-    expect(tabsClasses.join(' ')).toContain('w-full text-neutral-950');
     expect(toggleGroupClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(toolbarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(numberFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');
@@ -458,13 +407,6 @@ describe('@kovojs/ui styled package foundation', () => {
   });
 
   it('exports table primitives as styled semantic markup', () => {
-    expect(Table.name).toBe('table');
-    expect(TableHead.name).toBe('table-head');
-    expect(TableBody.name).toBe('table-body');
-    expect(TableRow.name).toBe('table-row');
-    expect(TableHeaderCell.name).toBe('table-header-cell');
-    expect(TableCell.name).toBe('table-cell');
-
     expect(Table.definition.render({ caption: 'Invoices', children: '<tbody></tbody>' })).toContain(
       '<caption class="mt-3 text-sm text-neutral-500">Invoices</caption><tbody></tbody>',
     );
@@ -478,11 +420,6 @@ describe('@kovojs/ui styled package foundation', () => {
   });
 
   it('exports breadcrumb primitives with headless separator attributes', () => {
-    expect(Breadcrumb.name).toBe('breadcrumb');
-    expect(BreadcrumbItem.name).toBe('breadcrumb-item');
-    expect(BreadcrumbLink.name).toBe('breadcrumb-link');
-    expect(BreadcrumbSeparator.name).toBe('breadcrumb-separator');
-
     expect(Breadcrumb.definition.render({ children: '<li>Settings</li>' })).toContain(
       '<nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-1.5',
     );

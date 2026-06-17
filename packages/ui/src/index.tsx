@@ -555,16 +555,12 @@ export {
   AccordionHeader,
   AccordionItem,
   AccordionTrigger,
-  accordionClassNames,
   accordionClasses,
-  accordionContentClassNames,
   accordionContentClasses,
-  accordionHeaderClassNames,
   accordionHeaderClasses,
-  accordionItemClassNames,
   accordionItemClasses,
-  accordionTriggerClassNames,
   accordionTriggerClasses,
+  accordionStyles,
 } from './accordion.js';
 export type {
   AccordionContentProps,
@@ -572,6 +568,7 @@ export type {
   AccordionItemProps,
   AccordionProps,
   AccordionStateProps,
+  AccordionStyleOverrides,
   AccordionTriggerProps,
 } from './accordion.js';
 export {

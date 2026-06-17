@@ -69,6 +69,7 @@ describe('kovo add', () => {
       expect(
         main([
           'add',
+          'accordion',
           'alert',
           'autocomplete',
           'avatar',
@@ -108,6 +109,9 @@ describe('kovo add', () => {
       expect(stderr).not.toHaveBeenCalled();
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('kovo-add/v1\n');
+      expect(output).toContain(
+        `ADD accordion path=${JSON.stringify(join(outDir, 'accordion.tsx'))} source=tsx`,
+      );
       expect(output).toContain(
         `ADD alert path=${JSON.stringify(join(outDir, 'alert.tsx'))} source=tsx`,
       );
@@ -202,6 +206,7 @@ describe('kovo add', () => {
         `ADD toolbar path=${JSON.stringify(join(outDir, 'toolbar.tsx'))} source=tsx`,
       );
 
+      const accordion = readFileSync(join(outDir, 'accordion.tsx'), 'utf8');
       const alert = readFileSync(join(outDir, 'alert.tsx'), 'utf8');
       const autocomplete = readFileSync(join(outDir, 'autocomplete.tsx'), 'utf8');
       const avatar = readFileSync(join(outDir, 'avatar.tsx'), 'utf8');
@@ -233,6 +238,10 @@ describe('kovo add', () => {
       const toggleGroup = readFileSync(join(outDir, 'toggle-group.tsx'), 'utf8');
       const toast = readFileSync(join(outDir, 'toast.tsx'), 'utf8');
       const toolbar = readFileSync(join(outDir, 'toolbar.tsx'), 'utf8');
+      expect(accordion).toContain('export const Accordion = component({');
+      expect(accordion).toContain("import * as style from '@kovojs/style';");
+      expect(accordion).toContain('export const accordionStyles = style.create');
+      expect(accordion).toContain('styles?: AccordionStyleOverrides');
       expect(alert).toContain('export const Alert = component({');
       expect(alert).toContain("import * as style from '@kovojs/style';");
       expect(alert).toContain('export const alertStyles =');
@@ -324,6 +333,7 @@ describe('kovo add', () => {
       expect(toolbar).toContain('export const Toolbar = component({');
       expect(toolbar).toContain('export const toolbarClassNames = defineVariants');
       const vendoredSource = [
+        accordion,
         alert,
         autocomplete,
         avatar,

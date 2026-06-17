@@ -6,13 +6,19 @@ import {
   accordionItemAttributes,
   accordionRootAttributes,
   accordionTriggerAttributes,
-  cn,
-  defineVariants,
   type AccordionType,
   type AccordionValue,
-  type ClassValue,
   type CollectionOrientation,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface AccordionStyleOverrides {
+  content?: style.StyleInput;
+  header?: style.StyleInput;
+  item?: style.StyleInput;
+  root?: style.StyleInput;
+  trigger?: style.StyleInput;
+}
 
 export interface AccordionStateProps {
   collapsible?: boolean;
@@ -24,15 +30,15 @@ export interface AccordionStateProps {
 
 export interface AccordionProps extends AccordionStateProps {
   children?: string;
-  class?: ClassValue;
   id?: string;
+  styles?: AccordionStyleOverrides;
 }
 
 export interface AccordionItemProps extends AccordionStateProps {
   children?: string;
-  class?: ClassValue;
   itemDisabled?: boolean;
   itemValue: string;
+  styles?: AccordionStyleOverrides;
 }
 
 export interface AccordionHeaderProps extends AccordionItemProps {
@@ -49,36 +55,84 @@ export interface AccordionContentProps extends AccordionItemProps {
   triggerId?: string;
 }
 
-export const accordionClassNames = defineVariants({
-  base: 'grid w-full gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50',
-  variants: {},
-});
+export const accordionStyles = style.create(
+  {
+    content: {
+      color: '#404040',
+      fontSize: 14,
+      paddingBottom: 12,
+      paddingInline: 12,
+      paddingTop: 4,
+      '[data-state=closed]': {
+        display: 'none',
+      },
+    },
+    header: {
+      fontSize: 14,
+      fontWeight: 500,
+      margin: 0,
+    },
+    item: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    root: {
+      color: '#0a0a0a',
+      display: 'grid',
+      fontSize: 14,
+      rowGap: 8,
+      width: '100%',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+    },
+    trigger: {
+      alignItems: 'center',
+      borderRadius: 6,
+      color: '#0a0a0a',
+      display: 'flex',
+      fontSize: 14,
+      fontWeight: 500,
+      justifyContent: 'space-between',
+      paddingBlock: 8,
+      paddingInline: 12,
+      textAlign: 'left',
+      transitionProperty: 'background-color, color',
+      width: '100%',
+      '[data-disabled]': {
+        opacity: 0.5,
+      },
+      '[data-state=open]': {
+        backgroundColor: '#fafafa',
+      },
+      ':disabled': {
+        pointerEvents: 'none',
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
+    },
+  },
+  { namespace: 'accordion', source: 'accordion.tsx' },
+);
 
-export const accordionItemClassNames = defineVariants({
-  base: 'rounded-md border border-neutral-200 bg-white data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const accordionHeaderClassNames = defineVariants({
-  base: 'm-0 text-sm font-medium',
-  variants: {},
-});
-
-export const accordionTriggerClassNames = defineVariants({
-  base: 'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none data-[state=open]:bg-neutral-50 data-[disabled]:opacity-50',
-  variants: {},
-});
-
-export const accordionContentClassNames = defineVariants({
-  base: 'px-3 pb-3 pt-1 text-sm text-neutral-700 data-[state=closed]:hidden',
-  variants: {},
-});
-
-export const accordionClasses = accordionClassNames.classes;
-export const accordionItemClasses = accordionItemClassNames.classes;
-export const accordionHeaderClasses = accordionHeaderClassNames.classes;
-export const accordionTriggerClasses = accordionTriggerClassNames.classes;
-export const accordionContentClasses = accordionContentClassNames.classes;
+export const accordionClasses = [style.attrs(accordionStyles.root).class ?? ''] as const;
+export const accordionItemClasses = [style.attrs(accordionStyles.item).class ?? ''] as const;
+export const accordionHeaderClasses = [style.attrs(accordionStyles.header).class ?? ''] as const;
+export const accordionTriggerClasses = [style.attrs(accordionStyles.trigger).class ?? ''] as const;
+export const accordionContentClasses = [style.attrs(accordionStyles.content).class ?? ''] as const;
 
 function accordionState(props: AccordionStateProps) {
   return {
@@ -101,10 +155,11 @@ function accordionItemState(props: AccordionItemProps) {
 export const Accordion = component({
   render(props: AccordionProps) {
     const attrs = accordionRootAttributes(accordionState(props));
+    const styleAttrs = style.attrs(accordionStyles.root, props.styles?.root);
 
     return (
       <div
-        class={cn(accordionClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         id={props.id}
@@ -118,10 +173,11 @@ export const Accordion = component({
 export const AccordionItem = component({
   render(props: AccordionItemProps) {
     const attrs = accordionItemAttributes(accordionItemState(props));
+    const styleAttrs = style.attrs(accordionStyles.item, props.styles?.item);
 
     return (
       <div
-        class={cn(accordionItemClassNames(), props.class)}
+        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         open={attrs.open}
@@ -138,11 +194,12 @@ export const AccordionHeader = component({
       ...accordionItemState(props),
       ...(props.level === undefined ? {} : { level: props.level }),
     });
+    const styleAttrs = style.attrs(accordionStyles.header, props.styles?.header);
 
     return (
       <h3
+        {...styleAttrs}
         aria-level={attrs['aria-level']}
-        class={cn(accordionHeaderClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         role={attrs.role}
@@ -160,12 +217,13 @@ export const AccordionTrigger = component({
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
       ...(props.triggerId === undefined ? {} : { triggerId: props.triggerId }),
     });
+    const styleAttrs = style.attrs(accordionStyles.trigger, props.styles?.trigger);
 
     return (
       <button
+        {...styleAttrs}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
-        class={cn(accordionTriggerClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
@@ -185,11 +243,12 @@ export const AccordionContent = component({
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
       ...(props.triggerId === undefined ? {} : { triggerId: props.triggerId }),
     });
+    const styleAttrs = style.attrs(accordionStyles.content, props.styles?.content);
 
     return (
       <div
+        {...styleAttrs}
         aria-labelledby={attrs['aria-labelledby']}
-        class={cn(accordionContentClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}

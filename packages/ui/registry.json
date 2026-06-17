@@ -27,11 +27,9 @@
           "accordionTriggerAttributes",
           "AccordionType",
           "AccordionValue",
-          "ClassValue",
-          "cn",
-          "CollectionOrientation",
-          "defineVariants"
+          "CollectionOrientation"
         ],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []
