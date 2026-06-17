@@ -1,5 +1,8 @@
 import { runInNewContext } from 'node:vm';
 
+import { diagnosticDefinitions } from '@kovojs/core';
+
+import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { compilerIrHeader } from '../ir.js';
 import {
   authorJsxAttributes,
@@ -36,8 +39,17 @@ export interface EmittedServerModule {
 }
 
 export interface ServerRenderLowering {
+  diagnostics: readonly CompilerDiagnostic[];
   outputContexts: readonly GeneratedOutputWriteFact[];
   replacements: readonly SourceReplacement[];
+  stampWrites: readonly ServerRenderStampWriteFact[];
+}
+
+export interface ServerRenderStampWriteFact {
+  attr: 'kovo-c' | 'kovo-deps' | 'kovo-state';
+  mode: 'insert' | 'preserve' | 'replace';
+  value: string;
+  writer: 'host dependency stamp' | 'host identity stamp' | 'host state stamp';
 }
 
 export function emitServerModule(renderedSource: string): EmittedServerModule {
@@ -51,8 +63,9 @@ export function serverRenderLowering(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
   domComponentName: string,
+  options?: { fileName: string; source: string },
 ): ServerRenderLowering {
-  return serverRenderPatches(handlers, model, domComponentName);
+  return serverRenderPatches(handlers, model, domComponentName, options);
 }
 
 export function semanticRenderEquivalenceCheck(
@@ -364,14 +377,18 @@ function serverRenderPatches(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
   domComponentName: string,
+  options?: { fileName: string; source: string },
 ): ServerRenderLowering {
+  const diagnostics: CompilerDiagnostic[] = [];
   const host = componentRenderHost(model);
   const patches: SourceReplacement[] = [];
   const outputContexts: GeneratedOutputWriteFact[] = [];
+  const stampWrites: ServerRenderStampWriteFact[] = [];
   const chained = chainedPrimitiveHandlerPatches(handlers, model);
   const chainedHandlers = new Set(chained.handlers);
   patches.push(...chained.patches);
   outputContexts.push(...chained.outputContexts);
+  if (options) diagnostics.push(...handlerStampConflictDiagnostics(handlers, model, options));
   const hostHandlers = host
     ? handlers.filter(
         (handler) => handler.attributeStart >= host.start && handler.attributeEnd <= host.end,
@@ -391,7 +408,7 @@ function serverRenderPatches(
 
   if (host) {
     const hostElement = componentRenderHostElement(model);
-    if (!hostElement) return { outputContexts, replacements: patches };
+    if (!hostElement) return { diagnostics, outputContexts, replacements: patches, stampWrites };
 
     patches.push(
       ...hostHandlers
@@ -403,11 +420,14 @@ function serverRenderPatches(
         .filter((handler) => !chainedHandlers.has(handler))
         .flatMap((handler) => handlerOutputContexts(handler)),
     );
-    patches.push(...renderHostStampPatches(model, hostElement, domComponentName));
-    outputContexts.push(...renderHostStampOutputContexts(model, hostElement, domComponentName));
+    const hostStamps = renderHostStampWrites(model, hostElement, domComponentName);
+    stampWrites.push(...hostStamps.writes);
+    patches.push(...renderHostStampPatches(hostElement, hostStamps.writes));
+    outputContexts.push(...renderHostStampOutputContexts(hostStamps.writes));
+    if (options) diagnostics.push(...renderHostStampConflictDiagnostics(hostStamps.conflicts, options));
   }
 
-  return { outputContexts, replacements: patches };
+  return { diagnostics, outputContexts, replacements: patches, stampWrites };
 }
 
 function handlerOutputContexts(
@@ -528,32 +548,28 @@ function handlerAttributeReplacement(handler: HandlerLowering): string {
 }
 
 function renderHostStampPatches(
-  model: ComponentModuleModel,
   hostElement: JsxElementModel,
-  domComponentName: string,
+  writes: readonly ServerRenderStampWriteFact[],
 ): SourceReplacement[] {
   const patches: SourceReplacement[] = [];
   const insertedAttributes: string[] = [];
-  const componentIdentity = componentIdentityStamp(hostElement, domComponentName);
-  const declaredQueryDeps = declaredQueryDepsStamp(model, hostElement);
-  const stateJson = staticStateJson(model);
 
-  if (componentIdentity) insertedAttributes.push(componentIdentity);
-
-  if (declaredQueryDeps) {
-    const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-deps');
-    if (existing) {
+  for (const write of writes) {
+    const rendered = renderHostStampAttribute(write);
+    if (write.mode === 'insert') {
+      insertedAttributes.push(rendered);
+      continue;
+    }
+    if (write.mode === 'replace') {
+      const existing = hostElement.attributes.find((attribute) => attribute.name === write.attr);
+      if (!existing) continue;
       patches.push({
         end: existing.end,
-        replacement: declaredQueryDeps,
+        replacement: rendered,
         start: existing.start,
       });
-    } else {
-      insertedAttributes.push(declaredQueryDeps);
     }
   }
-
-  if (stateJson) insertedAttributes.push(`kovo-state="${escapeAttribute(stateJson)}"`);
 
   if (insertedAttributes.length > 0) {
     const insertion = openingTagAttributeInsertion(hostElement, insertedAttributes);
@@ -568,73 +584,109 @@ function renderHostStampPatches(
 }
 
 function renderHostStampOutputContexts(
+  writes: readonly ServerRenderStampWriteFact[],
+): GeneratedOutputWriteFact[] {
+  return writes.map((write) => ({
+    context: 'attribute',
+    expression: write.value,
+    sink: write.attr,
+    source: 'server-render',
+    writer: write.writer,
+  }));
+}
+
+function renderHostStampWrites(
   model: ComponentModuleModel,
   hostElement: JsxElementModel,
   domComponentName: string,
-): GeneratedOutputWriteFact[] {
-  const facts: GeneratedOutputWriteFact[] = [];
+): {
+  conflicts: readonly HostStampConflict[];
+  writes: readonly ServerRenderStampWriteFact[];
+} {
+  const conflicts: HostStampConflict[] = [];
+  const writes: ServerRenderStampWriteFact[] = [];
   const componentIdentity = componentIdentityStamp(hostElement, domComponentName);
   const declaredQueryDeps = declaredQueryDepsStamp(model, hostElement);
   const stateJson = staticStateJson(model);
 
   if (componentIdentity) {
-    facts.push({
-      context: 'attribute',
-      expression: domComponentName,
-      sink: 'kovo-c',
-      source: 'server-render',
-      writer: 'host identity stamp',
-    });
+    if (componentIdentity.mode === 'replace') {
+      const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-c');
+      if (existing) {
+        conflicts.push({ attribute: existing, attr: 'kovo-c', writer: 'host identity stamp' });
+      }
+    }
+    writes.push(componentIdentity);
   }
   if (declaredQueryDeps) {
-    facts.push({
-      context: 'attribute',
-      expression: declaredQueryDeps,
-      sink: 'kovo-deps',
-      source: 'server-render',
-      writer: 'host dependency stamp',
-    });
+    writes.push(declaredQueryDeps);
   }
   if (stateJson) {
-    facts.push({
-      context: 'attribute',
-      expression: stateJson,
-      sink: 'kovo-state',
-      source: 'server-render',
-      writer: 'host state stamp',
-    });
+    const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-state');
+    if (existing) {
+      if (!sameEscapedOrRawAttributeValue(existing.value, stateJson)) {
+        conflicts.push({ attribute: existing, attr: 'kovo-state', writer: 'host state stamp' });
+      }
+      writes.push({
+        attr: 'kovo-state',
+        mode: 'preserve',
+        value: stateJson,
+        writer: 'host state stamp',
+      });
+    } else {
+      writes.push({
+        attr: 'kovo-state',
+        mode: 'insert',
+        value: stateJson,
+        writer: 'host state stamp',
+      });
+    }
   }
 
-  return facts;
+  return { conflicts, writes };
 }
 
-// SPEC.md §4.2: component identity is the kovo-c stamp. The compiler omits it
-// when the host tag already spells the component name (dashed tags are inert
-// sugar) and emits it explicitly on native hosts (`<tr kovo-c="cart-row">`), so
-// authored sugar never hand-writes the stamp (§4.8 residual-string rule).
 function componentIdentityStamp(
   hostElement: JsxElementModel,
   domComponentName: string,
-): string | null {
+): ServerRenderStampWriteFact | null {
   const tagName = hostElement.tag;
   if (tagName !== tagName.toLowerCase()) return null;
   if (tagName === domComponentName || tagName.includes('-')) return null;
-  if (hostElement.attributes.some((attribute) => attribute.name === 'kovo-c')) return null;
+  const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-c');
+  if (existing) {
+    return {
+      attr: 'kovo-c',
+      mode: existing.value === domComponentName ? 'preserve' : 'replace',
+      value: domComponentName,
+      writer: 'host identity stamp',
+    };
+  }
 
-  return `kovo-c="${escapeAttribute(domComponentName)}"`;
+  return {
+    attr: 'kovo-c',
+    mode: 'insert',
+    value: domComponentName,
+    writer: 'host identity stamp',
+  };
 }
 
 function declaredQueryDepsStamp(
   model: ComponentModuleModel,
   hostElement: JsxElementModel,
-): string | null {
+): ServerRenderStampWriteFact | null {
   const deps = componentOptionObjectKeys(model, 'queries');
   if (deps.length === 0) return null;
 
   const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-deps');
   const existingDeps = splitDepValue(existing?.value ?? '');
   const depValue = mergeDepValues(existingDeps, deps).join(' ');
-  return `kovo-deps="${escapeAttribute(depValue)}"`;
+  return {
+    attr: 'kovo-deps',
+    mode: existing ? 'replace' : 'insert',
+    value: depValue,
+    writer: 'host dependency stamp',
+  };
 }
 
 function mergeDepValues(existing: readonly string[], declared: readonly string[]): string[] {
@@ -644,6 +696,81 @@ function mergeDepValues(existing: readonly string[], declared: readonly string[]
 function staticStateJson(model: ComponentModuleModel): string | null {
   const stateObject = componentStateReturnObjectModel(model);
   return stateObject?.staticValue ? JSON.stringify(stateObject.staticValue) : null;
+}
+
+interface HostStampConflict {
+  attr: 'kovo-c' | 'kovo-state';
+  attribute: JsxAttributeModel;
+  writer: 'host identity stamp' | 'host state stamp';
+}
+
+function renderHostStampAttribute(write: ServerRenderStampWriteFact): string {
+  return `${write.attr}="${escapeAttribute(write.value)}"`;
+}
+
+function sameEscapedOrRawAttributeValue(
+  actual: string | undefined,
+  expectedRaw: string,
+): boolean {
+  return actual === expectedRaw || actual === escapeAttribute(expectedRaw);
+}
+
+function renderHostStampConflictDiagnostics(
+  conflicts: readonly HostStampConflict[],
+  options: { fileName: string; source: string },
+): CompilerDiagnostic[] {
+  return conflicts.map((conflict) =>
+    writerConflictDiagnostic(options, conflict.attribute, conflict.attr, 'author JSX', conflict.writer),
+  );
+}
+
+function handlerStampConflictDiagnostics(
+  handlers: readonly HandlerLowering[],
+  model: ComponentModuleModel,
+  options: { fileName: string; source: string },
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+
+  for (const handler of handlers) {
+    const element = model.jsxElements.find(
+      (candidate) =>
+        handler.attributeStart >= candidate.start && handler.attributeEnd <= candidate.openingEnd,
+    );
+    if (!element) continue;
+
+    const generatedAttrs = [
+      ...handler.params.map((param) => param.attributeName),
+      ...(emitElementParamTypes(handler.params) ? ['kovo-param-types'] : []),
+    ];
+    for (const name of generatedAttrs) {
+      const existing = element.attributes.find((attribute) => attribute.name === name);
+      if (!existing) continue;
+      diagnostics.push(
+        writerConflictDiagnostic(options, existing, name, 'author JSX', 'event handler param lowering'),
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
+function writerConflictDiagnostic(
+  options: { fileName: string; source: string },
+  attribute: JsxAttributeModel,
+  detail: string,
+  firstWriter: string,
+  secondWriter: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(
+      options.fileName,
+      'KV231',
+      options.source,
+      attribute.start,
+      attribute.end - attribute.start,
+    ),
+    message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
+  };
 }
 
 function openingTagAttributeInsertion(

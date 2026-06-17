@@ -101,18 +101,18 @@ compiler-quality gaps found during the 2026-06-16 audit.
         `SourceReplacement` is absent from the boundary document or lacks an ownership class;
         `pnpm --filter @kovojs/compiler exec vitest run` passes in the integrated main worktree.
 
-- [ ] Move remaining overlapping structural rewrites into the JSX IR.
+- [x] Move remaining overlapping structural rewrites into the JSX IR.
   - [x] Migrate platform behavior substitution attributes into the JSX IR or prove they are terminal
         and non-overlapping.
   - [x] Migrate `href()` call and navigation attribute replacement into the JSX IR where it rewrites
         JSX attributes.
-  - [ ] Migrate server-render component identity/dependency/state stamp insertion into the JSX IR or
+  - [x] Migrate server-render component identity/dependency/state stamp insertion into the JSX IR or
         a typed terminal stamp phase with conflict detection.
-  - [ ] Migrate state derive URL versioning from attribute string patches to typed derive/reference
+  - [x] Migrate state derive URL versioning from attribute string patches to typed derive/reference
         facts.
   - [x] Migrate static StyleX/style extraction attribute rewrites into the JSX IR or prove the style
         phase is terminal and conflict-checked.
-  - [ ] Add writer/provenance diagnostics for conflicts between author, primitive, structural
+  - [x] Add writer/provenance diagnostics for conflicts between author, primitive, structural
         lowerer, style lowerer, server stamp, and handler stamp writers.
   - Evidence (2026-06-17): `packages/compiler/src/style.ts` now records StyleX-owned static and
         dynamic style attribute spans; `packages/compiler/src/compile.ts` threads those spans into
@@ -154,6 +154,28 @@ compiler-quality gaps found during the 2026-06-16 audit.
         src/navigation-lowering.test.ts src/structural-jsx-ir.test.ts
         src/structural-boundary.test.ts src/platform-lowering.test.ts src/compile-component.test.ts`
         passed; `pnpm exec tsc --noEmit --pretty false` passed.
+  - Evidence (2026-06-17): `packages/compiler/src/emit/server.ts` now returns
+        `ServerRenderStampWriteFact` records from `serverRenderLowering(...)` for `kovo-c`,
+        `kovo-deps`, and `kovo-state`; `packages/compiler/src/stamps.test.ts` snapshots those typed
+        stamp writes and KV231 diagnostics for author conflicts with host identity, host state, and
+        handler-param stamp writers.
+  - Evidence (2026-06-17): `packages/compiler/src/compile.ts` now collects
+        `StateDeriveReferenceFact` records with `placeholder`, `exportName`, `clientHref`, and
+        target span before terminal URL replacement; `packages/compiler/src/state-bindings.test.ts`
+        snapshots the typed reference facts before versioning.
+  - Evidence (2026-06-17): `packages/compiler/src/style.ts` now composes authored static `class`
+        with generated StyleX classes and emits KV231 with writer names when an authored class
+        expression cannot be merged; `packages/compiler/src/style.test.ts` snapshots both paths.
+  - Evidence (2026-06-17): `packages/compiler/src/lower/structural-jsx.ts` emits KV231 with writer
+        names when structural platform behavior attributes conflict with author-owned attributes;
+        `packages/compiler/src/platform-lowering.test.ts` snapshots the author/structural writer
+        conflict. Existing `packages/compiler/src/attribute-merge.test.ts` and
+        `packages/compiler/src/structural-jsx-ir.test.ts` cover primitive/author writer names.
+  - Evidence (2026-06-17): `packages/compiler/src/lower/structural-boundary.md` records the typed
+        terminal fact rule for server stamps and state derive URL versioning.
+  - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest --run
+        src/platform-lowering.test.ts src/stamps.test.ts src/state-bindings.test.ts
+        src/style.test.ts` passed; `pnpm exec tsc --noEmit --pretty false` passed.
 
 - [x] Prove structural rewrite composition with one end-to-end fixture.
   - [x] Include primitive attrs/asChild in the fixture.
@@ -663,26 +685,53 @@ compiler-quality gaps found during the 2026-06-16 audit.
 
 ## Plan Cleanup
 
-- [ ] Reconcile or archive `plans/compiler-quality.md` once this follow-up is complete.
-  - [ ] Remove or correct stale executive-summary claims that describe implemented follow-up work as
+- [x] Reconcile or archive `plans/compiler-quality.md` once this follow-up is complete.
+  - [x] Remove or correct stale executive-summary claims that describe implemented follow-up work as
         still missing.
-  - [ ] Remove or correct checked entries whose implementation evidence was superseded by this plan.
-  - [ ] Preserve the original assessment as historical context if useful, but make clear that this
+  - [x] Remove or correct checked entries whose implementation evidence was superseded by this plan.
+  - [x] Preserve the original assessment as historical context if useful, but make clear that this
         follow-up ledger contains the authoritative closure evidence.
-  - [ ] Archive `plans/compiler-quality.md` if it no longer describes active work.
+  - [x] Archive `plans/compiler-quality.md` if it no longer describes active work.
+  - Evidence (2026-06-17): `plans/compiler-quality.md` was deleted from active `plans/`, and
+        `plans/archive.md` now records it as the retired compiler-quality assessment superseded by
+        this follow-up ledger.
 
 ## Final Acceptance
 
-- [ ] Run final compiler-quality gates from a clean or intentionally documented worktree.
-  - [ ] `pnpm --filter @kovojs/compiler exec tsc --noEmit`
-  - [ ] `pnpm --filter @kovojs/compiler exec vitest run`
-  - [ ] `pnpm --filter @kovojs/core exec vitest run src/diagnostics.test.ts`
-  - [ ] `pnpm --filter @kovojs/runtime exec tsc --noEmit`
-  - [ ] `pnpm --filter @kovojs/runtime exec vitest run src/security-output.test.ts src/query-bindings.test.ts`
-  - [ ] `pnpm run test:compiler-perf`
-  - [ ] `pnpm run test:browser`
-  - [ ] `pnpm run test:conformance`
-  - [ ] `pnpm run check:kovo`
-  - [ ] `git diff --check`
-  - [ ] Record exact command results under the checklist item they prove.
-  - [ ] Record a concrete reason and scoped replacement evidence for any skipped command.
+- [x] Run final compiler-quality gates from a clean or intentionally documented worktree.
+  - [x] `pnpm --filter @kovojs/compiler exec tsc --noEmit`
+    - Evidence (2026-06-17): passed after the final defer-stream generated-contract refresh.
+  - [x] `pnpm --filter @kovojs/compiler exec vitest run`
+    - Evidence (2026-06-17): passed, 41 test files and 343 tests.
+  - [x] `pnpm --filter @kovojs/core exec vitest run src/diagnostics.test.ts`
+    - Evidence (2026-06-17): passed, 1 test file and 4 tests.
+  - [x] `pnpm --filter @kovojs/runtime exec tsc --noEmit`
+    - Evidence (2026-06-17): passed.
+  - [x] `pnpm --filter @kovojs/runtime exec vitest run src/security-output.test.ts src/query-bindings.test.ts`
+    - Evidence (2026-06-17): passed, 2 test files and 19 tests.
+  - [x] `pnpm run test:compiler-perf`
+    - Evidence (2026-06-17): passed; `tests/compiler-perf.test.ts` reported 125 files,
+          7,098 input LOC, 27,753 emitted LOC, 250 compileCount, 316.6ms total cold, and
+          254.7ms total warm.
+  - [x] `pnpm run test:browser`
+    - Evidence (2026-06-17): passed, 21 browser test files and 63 tests across Chromium,
+          Firefox, and WebKit.
+  - [x] `pnpm run test:conformance`
+    - Evidence (2026-06-17): passed after the final generated-contract refresh; Drizzle pin
+          conformance passed 9 files/188 tests, Better Auth pin passed 6 files/38 tests, and
+          auth/webhook/app-shell spike conformance passed 1 file/4 tests, 1 file/4 tests, and
+          1 file/6 tests respectively.
+  - [x] `pnpm run check:kovo`
+    - Evidence (2026-06-17): passed after refreshing `generatedWireResponseBodies` for
+          `defer-stream.http`; `kovo-check/v1 OK`, 50 tests passed.
+  - [x] `git diff --check`
+    - Evidence (2026-06-17): passed after the final generated-contract refresh.
+  - [x] Record exact command results under the checklist item they prove.
+    - Evidence (2026-06-17): exact pass counts/results are recorded above.
+  - [x] Record a concrete reason and scoped replacement evidence for any skipped command.
+    - Evidence (2026-06-17): no final acceptance command was skipped; the initially failing
+          `pnpm run check:kovo` red baseline was resolved by syncing
+          `packages/conformance-fixtures/src/wire-fixtures.ts` with
+          `fixtures/wire/defer-stream.http`, proven by
+          `pnpm exec vitest --run packages/conformance-fixtures/src/wire-fixtures.test.ts
+          packages/server/src/wire-fixtures.test.ts` and the final `pnpm run check:kovo`.

@@ -65,6 +65,7 @@ export type {
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
   RenderEquivalenceCheck,
+  StateDeriveReferenceFact,
   ViewTransitionStamp,
 } from './types.js';
 export {

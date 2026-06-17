@@ -7,10 +7,12 @@ import {
   type CreateOptions,
   type StyleObject,
 } from '@kovojs/style';
+import { diagnosticDefinitions } from '@kovojs/core';
 import ts from 'typescript';
 
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import type { StyleRuleUsage } from './css.js';
+import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import type { ComponentModuleModel, JsxAttributeModel, SourceSpan } from './scan/parse.js';
 import { knownQueryNames, queryNameFromPath } from './analyze/query-shapes.js';
@@ -28,6 +30,7 @@ import type {
  */
 export interface KovoStyleExtraction {
   css: string | null;
+  diagnostics: readonly CompilerDiagnostic[];
   handledSpans: readonly SourceSpan[];
   outputContexts: readonly GeneratedOutputWriteFact[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
@@ -88,11 +91,16 @@ export function extractKovoStyles(
     return emptyStyleExtraction();
   }
 
-  const lowered = styleAttributeReplacements(model, environment.bindings, componentName, options);
+  const lowered = styleAttributeReplacements(model, environment.bindings, componentName, {
+    ...options,
+    fileName,
+    source,
+  });
   const css = environment.rules.length > 0 ? emitAtomicCss(environment.rules) : null;
 
   return {
     css,
+    diagnostics: lowered.diagnostics,
     handledSpans: lowered.handledSpans,
     outputContexts: css
       ? [
@@ -115,6 +123,7 @@ export function extractKovoStyles(
 function emptyStyleExtraction(): KovoStyleExtraction {
   return {
     css: null,
+    diagnostics: [],
     handledSpans: [],
     outputContexts: [],
     queryUpdatePlans: [],
@@ -261,12 +270,17 @@ function styleAttributeReplacements(
   model: ComponentModuleModel,
   bindings: ReadonlyMap<string, StyleBinding>,
   componentName: string,
-  options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'>,
+  options: Pick<
+    CompileComponentOptions,
+    'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts' | 'source'
+  >,
 ): {
+  readonly diagnostics: readonly CompilerDiagnostic[];
   readonly dynamic: readonly DynamicStyleLowering[];
   readonly handledSpans: readonly SourceSpan[];
   readonly replacements: readonly SourceReplacement[];
 } {
+  const diagnostics: CompilerDiagnostic[] = [];
   const handledSpans: SourceSpan[] = [];
   const replacements: SourceReplacement[] = [];
   const dynamic: DynamicStyleLowering[] = [];
@@ -295,18 +309,75 @@ function styleAttributeReplacements(
         continue;
       }
       const merged = attrs(resolved.map((binding) => binding.style));
-      const replacement = styleAttributeReplacement(merged);
-      if (!replacement) continue;
+      const lowered = staticStyleAttributeReplacement(element, attribute, merged, options);
+      diagnostics.push(...lowered.diagnostics);
+      if (!lowered.styleReplacement) continue;
       handledSpans.push({ end: attribute.end, start: attribute.start });
+      replacements.push(...lowered.extraReplacements);
       replacements.push({
         end: attribute.end,
-        replacement,
+        replacement: lowered.styleReplacement,
         start: attribute.start,
       });
     }
   }
 
-  return { dynamic, handledSpans, replacements };
+  return { diagnostics, dynamic, handledSpans, replacements };
+}
+
+function staticStyleAttributeReplacement(
+  element: ComponentModuleModel['jsxElements'][number],
+  styleAttribute: JsxAttributeModel,
+  attributes: ReturnType<typeof attrs>,
+  options: Pick<CompileComponentOptions, 'fileName' | 'source'>,
+): {
+  diagnostics: readonly CompilerDiagnostic[];
+  extraReplacements: readonly SourceReplacement[];
+  styleReplacement: string | null;
+} {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const extraReplacements: SourceReplacement[] = [];
+  const remaining = { ...attributes };
+  const classAttribute = element.attributes.find((attribute) => attribute.name === 'class');
+  const styleSrcAttribute = element.attributes.find((attribute) => attribute.name === 'data-style-src');
+
+  if (remaining.class && classAttribute) {
+    const existingClass = staticAttributeString(classAttribute);
+    if (existingClass === null) {
+      diagnostics.push(
+        styleWriterConflictDiagnostic(options, classAttribute, 'class', 'author JSX', 'style lowerer'),
+      );
+    } else {
+      extraReplacements.push({
+        end: classAttribute.end,
+        replacement: `class="${escapeAttribute(`${existingClass} ${remaining.class}`.trim())}"`,
+        start: classAttribute.start,
+      });
+      delete remaining.class;
+    }
+  }
+
+  if (remaining['data-style-src'] && styleSrcAttribute) {
+    const existingStyleSrc = staticAttributeString(styleSrcAttribute);
+    if (existingStyleSrc !== remaining['data-style-src']) {
+      diagnostics.push(
+        styleWriterConflictDiagnostic(
+          options,
+          styleSrcAttribute,
+          'data-style-src',
+          'author JSX',
+          'style lowerer',
+        ),
+      );
+    }
+    delete remaining['data-style-src'];
+  }
+
+  return {
+    diagnostics,
+    extraReplacements,
+    styleReplacement: styleAttributeReplacement(remaining),
+  };
 }
 
 function styleAttributeReplacement(attributes: ReturnType<typeof attrs>): string | null {
@@ -317,6 +388,30 @@ function styleAttributeReplacement(attributes: ReturnType<typeof attrs>): string
   }
   if (attributes.style) parts.push(`style="${escapeAttribute(attributes.style)}"`);
   return parts.length > 0 ? parts.join(' ') : null;
+}
+
+function staticAttributeString(attribute: JsxAttributeModel): string | null {
+  if (attribute.value !== undefined) return attribute.value;
+  return typeof attribute.expressionStaticValue === 'string' ? attribute.expressionStaticValue : null;
+}
+
+function styleWriterConflictDiagnostic(
+  options: Pick<CompileComponentOptions, 'fileName' | 'source'>,
+  attribute: JsxAttributeModel,
+  detail: string,
+  firstWriter: string,
+  secondWriter: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(
+      options.fileName,
+      'KV231',
+      options.source,
+      attribute.start,
+      attribute.end - attribute.start,
+    ),
+    message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
+  };
 }
 
 function resolveStyleBindings(

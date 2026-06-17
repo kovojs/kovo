@@ -311,6 +311,16 @@ export interface StateDeriveFact {
   placeholder: string;
 }
 
+export interface StateDeriveReferenceFact {
+  attr: string;
+  clientHref: string;
+  exportName: string;
+  placeholder: string;
+  target: { end: number; start: number };
+  value: string;
+  writer: 'state derive URL versioning';
+}
+
 /**
  * @internal A DOM stamp fact binding a derived value to an element attribute/selector within
  * a query update plan. Lowered-IR fact; in-repo use only (SPEC.md §5.2).

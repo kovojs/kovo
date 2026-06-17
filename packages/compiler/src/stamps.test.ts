@@ -45,7 +45,7 @@ export const Recommendations = component({
         },
         {
           "context": "attribute",
-          "expression": "kovo-deps="product:p1 cart"",
+          "expression": "product:p1 cart",
           "sink": "kovo-deps",
           "source": "server-render",
           "writer": "host dependency stamp",
@@ -56,6 +56,97 @@ export const Recommendations = component({
           "sink": "kovo-state",
           "source": "server-render",
           "writer": "host state stamp",
+        },
+      ]
+    `);
+    expect(lowering.stampWrites).toMatchInlineSnapshot(`
+      [
+        {
+          "attr": "kovo-c",
+          "mode": "insert",
+          "value": "recommendations",
+          "writer": "host identity stamp",
+        },
+        {
+          "attr": "kovo-deps",
+          "mode": "replace",
+          "value": "product:p1 cart",
+          "writer": "host dependency stamp",
+        },
+        {
+          "attr": "kovo-state",
+          "mode": "insert",
+          "value": "{"open":true}",
+          "writer": "host state stamp",
+        },
+      ]
+    `);
+    expect(lowering.diagnostics).toEqual([]);
+  });
+
+  it('reports author conflicts with terminal server and handler stamp writers', () => {
+    const result = compileComponentModule({
+      fileName: 'stamp-conflict.tsx',
+      registryFacts: { components: ['other-widget'] },
+      source: `
+export const StampConflict = component({
+  queries: { item: itemQuery },
+  state: () => ({ open: true }),
+  render: ({ item }) => (
+    <section kovo-c="other-widget" kovo-state="{&quot;open&quot;:false}">
+      <button data-p-id="author" onClick={() => save(item.id)}>Save</button>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231')).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV231",
+          "fileName": "stamp-conflict.tsx",
+          "help": "Would lower to: a single composed attribute set for primitive composition.
+      Blocked reason: both primitive and author write an attribute whose merge rule is ambiguous or unsafe, such as IDREF, data-p-*, kovo-c, or kovo-state.
+      Fixes: keep one writer, pass the value through the primitive API, or move the relationship/state ownership to one component.
+      SPEC §4.6 defines primitive attribute merge rules and treats double-wired relationships as errors.",
+          "length": 18,
+          "message": "Unmergeable attribute conflict in primitive composition. data-p-id (writers: author JSX, event handler param lowering)",
+          "severity": "error",
+          "start": {
+            "column": 15,
+            "line": 7,
+          },
+        },
+        {
+          "code": "KV231",
+          "fileName": "stamp-conflict.tsx",
+          "help": "Would lower to: a single composed attribute set for primitive composition.
+      Blocked reason: both primitive and author write an attribute whose merge rule is ambiguous or unsafe, such as IDREF, data-p-*, kovo-c, or kovo-state.
+      Fixes: keep one writer, pass the value through the primitive API, or move the relationship/state ownership to one component.
+      SPEC §4.6 defines primitive attribute merge rules and treats double-wired relationships as errors.",
+          "length": 21,
+          "message": "Unmergeable attribute conflict in primitive composition. kovo-c (writers: author JSX, host identity stamp)",
+          "severity": "error",
+          "start": {
+            "column": 14,
+            "line": 6,
+          },
+        },
+        {
+          "code": "KV231",
+          "fileName": "stamp-conflict.tsx",
+          "help": "Would lower to: a single composed attribute set for primitive composition.
+      Blocked reason: both primitive and author write an attribute whose merge rule is ambiguous or unsafe, such as IDREF, data-p-*, kovo-c, or kovo-state.
+      Fixes: keep one writer, pass the value through the primitive API, or move the relationship/state ownership to one component.
+      SPEC §4.6 defines primitive attribute merge rules and treats double-wired relationships as errors.",
+          "length": 37,
+          "message": "Unmergeable attribute conflict in primitive composition. kovo-state (writers: author JSX, host state stamp)",
+          "severity": "error",
+          "start": {
+            "column": 36,
+            "line": 6,
+          },
         },
       ]
     `);
@@ -283,6 +374,15 @@ export const Recommendations = component({
     });
 
     expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV231',
+        fileName: 'recommendations.tsx',
+        length: 26,
+        message:
+          'Unmergeable attribute conflict in primitive composition. kovo-c (writers: author JSX, host identity stamp)',
+        severity: 'error',
+        start: { column: 14, line: 5 },
+      },
       {
         code: 'KV223',
         fileName: 'recommendations.tsx',

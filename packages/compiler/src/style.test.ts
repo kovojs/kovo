@@ -97,6 +97,87 @@ export const Button = component({
     );
   });
 
+  it('composes generated StyleX classes with authored static class writers', () => {
+    const result = compileComponentModule({
+      fileName: 'components/button.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const base = style.create({
+  root: {
+    backgroundColor: 'black',
+    color: 'white',
+  },
+}, { namespace: 'button', source: 'button.tsx' });
+
+export const Button = component({
+  render: () => <button class="manual" style={base.root}>Buy</button>,
+});
+`,
+    });
+
+    expect(result.loweredSource).toMatchInlineSnapshot(`
+      "
+      import { component } from '@kovojs/core';
+      import * as style from '@kovojs/style';
+
+      const base = style.create({
+        root: {
+          backgroundColor: 'black',
+          color: 'white',
+        },
+      }, { namespace: 'button', source: 'button.tsx' });
+
+      export const Button = component({
+        render: () => <button class="manual kv-button-bg-e38gwa kv-button-fg-c5dqff" data-style-src="button.tsx#root">Buy</button>,
+      });
+      Button.name = "components/button/button";
+      "
+    `);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports unmergeable author class expression conflicts with the StyleX lowerer', () => {
+    const result = compileComponentModule({
+      fileName: 'components/button.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const base = style.create({
+  root: {
+    backgroundColor: 'black',
+  },
+}, { namespace: 'button', source: 'button.tsx' });
+
+export const Button = component({
+  render: ({ className }) => <button class={className} style={base.root}>Buy</button>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231')).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV231",
+          "fileName": "components/button.tsx",
+          "help": "Would lower to: a single composed attribute set for primitive composition.
+      Blocked reason: both primitive and author write an attribute whose merge rule is ambiguous or unsafe, such as IDREF, data-p-*, kovo-c, or kovo-state.
+      Fixes: keep one writer, pass the value through the primitive API, or move the relationship/state ownership to one component.
+      SPEC §4.6 defines primitive attribute merge rules and treats double-wired relationships as errors.",
+          "length": 17,
+          "message": "Unmergeable attribute conflict in primitive composition. class (writers: author JSX, style lowerer)",
+          "severity": "error",
+          "start": {
+            "column": 38,
+            "line": 12,
+          },
+        },
+      ]
+    `);
+  });
+
   it('lowers state-driven style object toggles through versioned state derives', () => {
     const result = compileComponentModule({
       fileName: 'components/badge.tsx',

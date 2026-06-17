@@ -20,6 +20,12 @@ derive stamps, or other span patches over compiler-owned emitted IR slots. A ter
 change an authored tag, unwrap JSX, remove children, expand a spread, or compete with an authored
 attribute writer.
 
+Terminal stamp phases outside `lower/**` must expose typed facts before rendering source patches.
+`emit/server.ts` emits `ServerRenderStampWriteFact` records for `kovo-c`, `kovo-deps`, and
+`kovo-state`, and reports KV231 when author JSX competes with host identity/state or handler-param
+stamp writers. `compile.ts` collects `StateDeriveReferenceFact` records from compiler-generated
+state derive placeholders before terminal client-href versioning.
+
 ## Registered Lowerers
 
 | Lowerer | File | Boundary class | Notes |

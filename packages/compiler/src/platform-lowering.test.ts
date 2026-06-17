@@ -47,6 +47,59 @@ export const CartButton = component({
     );
   });
 
+  it('reports author conflicts with structural platform behavior writers', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-button.tsx',
+      source: `
+export const CartButton = component({
+  render: () => (
+    <section>
+      <button commandfor="manual-drawer" onClick={() => document.getElementById('cart-drawer')!.showModal()}>
+        Open cart
+      </button>
+      <dialog id="cart-drawer">Cart</dialog>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231')).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV231",
+          "fileName": "cart-button.tsx",
+          "help": "Would lower to: a single composed attribute set for primitive composition.
+      Blocked reason: both primitive and author write an attribute whose merge rule is ambiguous or unsafe, such as IDREF, data-p-*, kovo-c, or kovo-state.
+      Fixes: keep one writer, pass the value through the primitive API, or move the relationship/state ownership to one component.
+      SPEC §4.6 defines primitive attribute merge rules and treats double-wired relationships as errors.",
+          "length": 26,
+          "message": "Unmergeable attribute conflict in primitive composition. commandfor (writers: author JSX, platform behavior lowering)",
+          "severity": "error",
+          "start": {
+            "column": 15,
+            "line": 5,
+          },
+        },
+        {
+          "code": "KV231",
+          "fileName": "cart-button.tsx",
+          "help": "Would lower to: a single composed attribute set for primitive composition.
+      Blocked reason: both primitive and author write an attribute whose merge rule is ambiguous or unsafe, such as IDREF, data-p-*, kovo-c, or kovo-state.
+      Fixes: keep one writer, pass the value through the primitive API, or move the relationship/state ownership to one component.
+      SPEC §4.6 defines primitive attribute merge rules and treats double-wired relationships as errors.",
+          "length": 26,
+          "message": "Unmergeable attribute conflict in primitive composition. commandfor",
+          "severity": "error",
+          "start": {
+            "column": 15,
+            "line": 5,
+          },
+        },
+      ]
+    `);
+  });
+
   it('lowers requestClose dialog behavior to a valid invoker command', () => {
     const result = compileComponentModule({
       fileName: 'cart-close-button.tsx',

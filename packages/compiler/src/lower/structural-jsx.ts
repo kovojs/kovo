@@ -3,6 +3,8 @@ import {
   queryNameFromPath,
   queryPathUsesKnownQuery,
 } from '../analyze/query-shapes.js';
+import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import {
   outputContextForAttribute,
@@ -122,7 +124,7 @@ export function lowerStructuralJsx(
   lowerPrimitiveSpreads(tree.elements);
   diagnostics.push(...lowerPrimitiveComposition(tree.elements, options));
   lowerNavigationLinks(tree.elements, options);
-  lowerPlatformBehaviors(model, tree.elements, options, platformSubstitutions);
+  lowerPlatformBehaviors(model, tree.elements, options, platformSubstitutions, diagnostics);
   lowerHrefAttributes(model, tree.elements, options);
   needsStylePropertyHelper = lowerViewTransitionNames(
     tree.elements,
@@ -344,6 +346,7 @@ function lowerPlatformBehaviors(
   elements: readonly JsxIrElement[],
   options: StructuralJsxLoweringOptions,
   substitutions: PlatformSubstitution[],
+  diagnostics: CompilerDiagnostic[],
 ): void {
   for (const element of elements) {
     const match = platformElementSubstitution(model, element.element);
@@ -351,6 +354,21 @@ function lowerPlatformBehaviors(
 
     removeJsxIrAttribute(element, match.attribute.name);
     for (const attribute of platformJsxIrAttributes(match.substitution, options)) {
+      const existing = attributeByName(element, attribute.name);
+      if (
+        existing?.ownership === 'author' &&
+        jsxIrAttributeValue(existing) !== jsxIrAttributeValue(attribute)
+      ) {
+        diagnostics.push(
+          structuralWriterConflictDiagnostic(
+            options,
+            existing,
+            attribute.name,
+            'author JSX',
+            attribute.provenance.writer,
+          ),
+        );
+      }
       element.attributes.push(attribute);
       markJsxIrChanged(element);
     }
@@ -1050,6 +1068,26 @@ function withMergeWriterNames(diagnostics: readonly CompilerDiagnostic[]): Compi
     ...diagnostic,
     message: `${diagnostic.message} (writers: primitive attrs, author JSX)`,
   }));
+}
+
+function structuralWriterConflictDiagnostic(
+  options: { fileName: string; source: string },
+  attribute: JsxIrAttribute,
+  detail: string,
+  firstWriter: string,
+  secondWriter: string,
+): CompilerDiagnostic {
+  const anchor = attribute.anchor;
+  return {
+    ...diagnosticFor(
+      options.fileName,
+      'KV231',
+      options.source,
+      anchor?.start,
+      anchor ? anchor.end - anchor.start : undefined,
+    ),
+    message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
+  };
 }
 
 function attributeByName(element: JsxIrElement, name: string): JsxIrAttribute | undefined {

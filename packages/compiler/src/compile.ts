@@ -48,6 +48,7 @@ import type {
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
   StateDeriveFact,
+  StateDeriveReferenceFact,
 } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
 
@@ -183,11 +184,19 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
         },
       ]
     : [];
-  const serverRender = serverRenderLowering(versionedHandlers, model, componentNames.domName);
+  const serverRender = serverRenderLowering(versionedHandlers, model, componentNames.domName, {
+    fileName: options.fileName,
+    source,
+  });
+  const stateDeriveReferences = collectStateDeriveReferenceFacts(
+    model,
+    stateDerives,
+    clientHref,
+  );
   const serverRenderReplacements = [
     ...serverRender.replacements,
     ...componentDescriptorNameAssignments(model, componentNames.registryKey),
-    ...versionStateDeriveReferences(model, stateDerives, clientHref),
+    ...versionStateDeriveReferences(stateDeriveReferences),
   ];
   const serverRenderedSource = applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements);
   const serverModule = emitServerModule(serverRenderedSource);
@@ -211,6 +220,8 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...authoringSurfaceDiagnostics,
       ...versionedHandlers.flatMap((handler) => handler.diagnostics ?? []),
       ...structuralLowering.diagnostics,
+      ...styleExtraction.diagnostics,
+      ...serverRender.diagnostics,
       ...packagePrefixDiagnostics,
       ...validationDiagnostics,
     ],
@@ -263,15 +274,15 @@ function componentDescriptorNameAssignments(
   ];
 }
 
-function versionStateDeriveReferences(
+export function collectStateDeriveReferenceFacts(
   model: ComponentModuleModel,
   stateDerives: readonly StateDeriveFact[],
   clientHref: string,
-): SourceReplacement[] {
+): StateDeriveReferenceFact[] {
   if (stateDerives.length === 0) return [];
 
   const derivesByPlaceholder = new Map(stateDerives.map((derive) => [derive.placeholder, derive]));
-  const replacements: SourceReplacement[] = [];
+  const references: StateDeriveReferenceFact[] = [];
 
   for (const element of jsxElements(model)) {
     for (const attribute of element.attributes) {
@@ -285,15 +296,29 @@ function versionStateDeriveReferences(
       const derive = derivesByPlaceholder.get(attribute.value);
       if (!derive) continue;
 
-      replacements.push({
-        end: attribute.end,
-        replacement: `${attribute.name}="${escapeAttribute(`${clientHref}#${derive.exportName}`)}"`,
-        start: attribute.start,
+      references.push({
+        attr: attribute.name,
+        clientHref,
+        exportName: derive.exportName,
+        placeholder: derive.placeholder,
+        target: { end: attribute.end, start: attribute.start },
+        value: `${clientHref}#${derive.exportName}`,
+        writer: 'state derive URL versioning',
       });
     }
   }
 
-  return replacements;
+  return references;
+}
+
+function versionStateDeriveReferences(
+  references: readonly StateDeriveReferenceFact[],
+): SourceReplacement[] {
+  return references.map((reference) => ({
+    end: reference.target.end,
+    replacement: `${reference.attr}="${escapeAttribute(reference.value)}"`,
+    start: reference.target.start,
+  }));
 }
 
 function mergeQueryUpdatePlans(

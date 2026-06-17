@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { collectStateDeriveReferenceFacts } from './compile.js';
 import { assertFixpoint, compileComponentModule } from './index.js';
+import { lowerStructuralJsx } from './lower/structural-jsx.js';
+import { parseComponentModule } from './scan/parse.js';
+import { applySourceReplacements } from './shared.js';
 
 describe('compiler state bindings', () => {
   it('lowers sole text-child state paths to data-bind without a query plan', () => {
@@ -234,6 +238,51 @@ export const DisclosureDemo = component({
     ]);
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('collects typed state derive reference facts before terminal URL versioning', () => {
+    const fileName = 'disclosure-demo.tsx';
+    const source = `
+export const DisclosureDemo = component({
+  state: () => ({ open: false }),
+  render: (_queries, state) => (
+    <disclosure-demo>
+      <button aria-expanded={state.open ? 'true' : 'false'}>Toggle</button>
+      <section hidden={!state.open}>Panel</section>
+    </disclosure-demo>
+  ),
+});
+`;
+    const model = parseComponentModule(fileName, source);
+    const structural = lowerStructuralJsx(model, 'DisclosureDemo', { fileName, source });
+    const loweredSource = applySourceReplacements(source, structural.replacements);
+    const loweredModel = parseComponentModule(fileName, loweredSource);
+    const references = collectStateDeriveReferenceFacts(
+      loweredModel,
+      structural.stateDerives,
+      '/c/disclosure-demo.client.js?v=HASH',
+    );
+
+    expect(references.map(({ target: _target, ...reference }) => reference)).toMatchInlineSnapshot(`
+      [
+        {
+          "attr": "data-bind:aria-expanded",
+          "clientHref": "/c/disclosure-demo.client.js?v=HASH",
+          "exportName": "DisclosureDemo$button_aria_expanded_derive",
+          "placeholder": "state.DisclosureDemo$button_aria_expanded_derive",
+          "value": "/c/disclosure-demo.client.js?v=HASH#DisclosureDemo$button_aria_expanded_derive",
+          "writer": "state derive URL versioning",
+        },
+        {
+          "attr": "data-bind:hidden",
+          "clientHref": "/c/disclosure-demo.client.js?v=HASH",
+          "exportName": "DisclosureDemo$section_hidden_derive",
+          "placeholder": "state.DisclosureDemo$section_hidden_derive",
+          "value": "/c/disclosure-demo.client.js?v=HASH#DisclosureDemo$section_hidden_derive",
+          "writer": "state derive URL versioning",
+        },
+      ]
+    `);
   });
 
   it('reports unhandled state and mixed query/state render expressions as KV311', () => {
