@@ -37,6 +37,13 @@ describe('structural IR ownership boundary', () => {
       );
     }
   });
+
+  it('keeps production platform behavior lowering on the JSX IR path', () => {
+    const compileSource = readFileSync(join(compilerSrcDir, 'compile.ts'), 'utf8');
+
+    expect(compileSource).not.toContain('platformBehaviorLowering');
+    expect(compileSource).toContain('structuralLowering.platformSubstitutions');
+  });
 });
 
 function lowererSourceFiles(): string[] {

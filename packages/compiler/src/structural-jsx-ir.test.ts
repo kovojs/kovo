@@ -138,6 +138,7 @@ export const ProductPage = component({
         "primitive-spreads",
         "primitive-composition",
         "link-navigation",
+        "platform-behaviors",
         "view-transition-name",
         "inline-attribute-derives",
         "inline-text-bindings",

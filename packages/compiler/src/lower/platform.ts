@@ -2,6 +2,8 @@ import {
   jsxElements,
   type ComponentModuleModel,
   type DocumentElementActionModel,
+  type JsxAttributeModel,
+  type JsxElementModel,
 } from '../scan/parse.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
 
@@ -23,14 +25,15 @@ interface PlatformBehaviorLowering {
   substitutions: PlatformSubstitution[];
 }
 
+export interface PlatformElementSubstitution {
+  attribute: JsxAttributeModel;
+  substitution: PlatformSubstitution;
+}
+
 export function platformBehaviorLowering(model: ComponentModuleModel): PlatformBehaviorLowering {
   const matches = jsxElements(model).flatMap((element) => {
-    const onClick = element.attributes.find((attribute) => attribute.domEventName === 'click');
-    const action = onClick?.zeroArgArrow?.documentElementAction;
-    const substitution = action
-      ? platformSubstitutionFromDocumentAction(model, element.tag, action)
-      : null;
-    return onClick && substitution ? [{ attribute: onClick, substitution }] : [];
+    const match = platformElementSubstitution(model, element);
+    return match ? [match] : [];
   });
   const replacements: SourceReplacement[] = matches.map((match) => {
     const attributes = platformAttributes(match.substitution);
@@ -45,6 +48,18 @@ export function platformBehaviorLowering(model: ComponentModuleModel): PlatformB
     replacements,
     substitutions: matches.map((match) => match.substitution),
   };
+}
+
+export function platformElementSubstitution(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): PlatformElementSubstitution | null {
+  const onClick = element.attributes.find((attribute) => attribute.domEventName === 'click');
+  const action = onClick?.zeroArgArrow?.documentElementAction;
+  const substitution = action
+    ? platformSubstitutionFromDocumentAction(model, element.tag, action)
+    : null;
+  return onClick && substitution ? { attribute: onClick, substitution } : null;
 }
 
 function platformSubstitutionFromDocumentAction(
@@ -129,7 +144,7 @@ function hasPopoverAttribute(element: ReturnType<typeof jsxElements>[number]): b
   return element.attributes.some((attribute) => attribute.name === 'popover');
 }
 
-function platformAttributes(substitution: PlatformSubstitution): string {
+export function platformAttributes(substitution: PlatformSubstitution): string {
   if (substitution.kind === 'dialog') {
     return `commandfor="${escapeAttribute(substitution.target)}" command="${substitution.action}"`;
   }

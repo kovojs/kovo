@@ -17,7 +17,6 @@ import {
   versionHandlerLowering,
 } from './lower/handlers.js';
 import { navigationHrefLowering } from './lower/navigation.js';
-import { platformBehaviorLowering } from './lower/platform.js';
 import { lowerStructuralJsx } from './lower/structural-jsx.js';
 import {
   inferComponentName,
@@ -99,13 +98,11 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ...compileOptions,
     skipInlineAttributeDeriveSpans: styleExtraction.handledSpans,
   });
-  const platformLowering = platformBehaviorLowering(originalState.model);
   const hrefReplacements = navigationHrefLowering(originalState.model);
   const modelPatch = applyModelPatchPass(
     originalState,
     [
       ...structuralLowering.replacements,
-      ...platformLowering.replacements,
       ...hrefReplacements,
       ...styleExtraction.replacements,
     ],
@@ -202,7 +199,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     registryComponentName: componentNames.registryKey,
     fragmentTargetFacts,
     handlers: versionedHandlers,
-    platformSubstitutions: platformLowering.substitutions,
+    platformSubstitutions: structuralLowering.platformSubstitutions,
     queryUpdatePlans,
     ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
     viewTransitions: structuralLowering.viewTransitionStamps,
@@ -238,7 +235,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...queryUpdatePlans.flatMap((plan) => [...(plan.outputContexts ?? [])]),
       ...stateDerives.map((derive) => derive.outputContext),
     ]),
-    platformSubstitutions: platformLowering.substitutions,
+    platformSubstitutions: structuralLowering.platformSubstitutions,
     queryUpdatePlans,
     // SPEC §5.2 rule 3: render the authored Kovo JSX model and the lowered server artifact
     // independently, then ignore only generated runtime stamps with an explicit allowlist.

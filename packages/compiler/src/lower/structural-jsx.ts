@@ -35,7 +35,11 @@ import type { StaticLiteralValue } from '../scan/object.js';
 import { literalStringValue } from '../scan/object.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
-import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
+import type {
+  CompileComponentOptions,
+  StateDeriveFact,
+  ViewTransitionStamp,
+} from '../types.js';
 import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,
@@ -45,6 +49,11 @@ import {
   type MergeableAttribute,
   type MergeableAttributeValue,
 } from './attribute-merge.js';
+import {
+  platformAttributes,
+  platformElementSubstitution,
+  type PlatformSubstitution,
+} from './platform.js';
 
 type StructuralJsxLoweringOptions = Pick<
   CompileComponentOptions,
@@ -73,6 +82,7 @@ interface InlineStateTextDerive {
 export interface StructuralJsxLowering {
   diagnostics: readonly CompilerDiagnostic[];
   outputContexts: readonly GeneratedOutputWriteFact[];
+  platformSubstitutions: readonly PlatformSubstitution[];
   replacements: readonly SourceReplacement[];
   stateDerives: readonly StateDeriveFact[];
   viewTransitionStamps: readonly ViewTransitionStamp[];
@@ -82,6 +92,7 @@ export const structuralJsxPhaseOrder = [
   'primitive-spreads',
   'primitive-composition',
   'link-navigation',
+  'platform-behaviors',
   'view-transition-name',
   'inline-attribute-derives',
   'inline-text-bindings',
@@ -97,6 +108,7 @@ export function lowerStructuralJsx(
   const tree = createJsxIrTree(model, options);
   const diagnostics: CompilerDiagnostic[] = [];
   const outputContexts: GeneratedOutputWriteFact[] = [];
+  const platformSubstitutions: PlatformSubstitution[] = [];
   const viewTransitionStamps: ViewTransitionStamp[] = [];
   const deriveExports: string[] = [];
   const stateDerives: StateDeriveFact[] = [];
@@ -108,6 +120,7 @@ export function lowerStructuralJsx(
   lowerPrimitiveSpreads(tree.elements);
   diagnostics.push(...lowerPrimitiveComposition(tree.elements, options));
   lowerNavigationLinks(tree.elements, options);
+  lowerPlatformBehaviors(model, tree.elements, options, platformSubstitutions);
   needsStylePropertyHelper = lowerViewTransitionNames(
     tree.elements,
     componentName,
@@ -170,7 +183,14 @@ export function lowerStructuralJsx(
     replacements.push({ end: start, replacement: prefix, start });
   }
 
-  return { diagnostics, outputContexts, replacements, stateDerives, viewTransitionStamps };
+  return {
+    diagnostics,
+    outputContexts,
+    platformSubstitutions,
+    replacements,
+    stateDerives,
+    viewTransitionStamps,
+  };
 }
 
 function lowerPrimitiveSpreads(elements: readonly JsxIrElement[]): void {
@@ -314,6 +334,44 @@ function lowerNavigationLinks(
     sortHrefFirstForStaticLink(link, Boolean(target));
     markJsxIrChanged(link);
   }
+}
+
+function lowerPlatformBehaviors(
+  model: ComponentModuleModel,
+  elements: readonly JsxIrElement[],
+  options: StructuralJsxLoweringOptions,
+  substitutions: PlatformSubstitution[],
+): void {
+  for (const element of elements) {
+    const match = platformElementSubstitution(model, element.element);
+    if (!match) continue;
+
+    removeJsxIrAttribute(element, match.attribute.name);
+    for (const attribute of platformJsxIrAttributes(match.substitution, options)) {
+      element.attributes.push(attribute);
+      markJsxIrChanged(element);
+    }
+    substitutions.push(match.substitution);
+  }
+}
+
+function platformJsxIrAttributes(
+  substitution: PlatformSubstitution,
+  options: StructuralJsxLoweringOptions,
+): JsxIrAttribute[] {
+  const attributes = platformAttributes(substitution);
+  if (!attributes) return [];
+
+  return attributes.split(' ').map((attribute) => {
+    const [name, rawValue] = attribute.split('=');
+    const value = rawValue?.replace(/^"|"$/g, '') ?? '';
+    return generatedJsxIrAttribute(
+      name ?? '',
+      { kind: 'string', value },
+      'platform behavior lowering',
+      options,
+    );
+  });
 }
 
 function lowerViewTransitionNames(
