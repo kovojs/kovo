@@ -825,6 +825,16 @@ borrowing its concrete API/spike detail.
     @kovojs/integration-tests exec playwright test tests/integration/specs/late-fragment-static-css.spec.ts`,
     `pnpm --filter @kovojs/integration-tests exec playwright test --list`, `pnpm install
     --frozen-lockfile`, `pnpm exec tsc --noEmit --pretty false`, and `git diff --check` pass.
+  - Evidence (partial, 2026-06-17): `@kovojs/headless-ui` token aliases now use document-token names
+    (`KovoUiDocumentTokenProperty`, `kovoUiDocumentTokenCss`, `documentTokenProperty` /
+    `documentTokenValue`) and `packages/headless-ui/src/lib/variants.ts` no longer carries stale
+    utility-discovery wording. `packages/headless-ui/src/lib/token-sheet.test.ts` snapshots the
+    generated token CSS and alias map. `api-surface-baseline.json` was regenerated and shrank by the
+    two removed old headless-ui exports. `rg -n
+    "tailwind|Tailwind|@source|tailwindcss|KovoUiTailwindThemeProperty|kovoUiTailwindThemeCss|tailwindThemeProperty|tailwindThemeValue|renderTailwindThemeCss"
+    packages/headless-ui` returns no matches. `pnpm exec vitest --run packages/headless-ui/src`,
+    `pnpm run check:api-surface`, `pnpm exec tsc --noEmit --pretty false`, and `git diff --check`
+    pass in `agent/stylex-headless-cleanup`.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

@@ -59,8 +59,8 @@ export function defineVariants<Variants extends VariantGroups>(
 ): VariantFn<Variants> {
   const classes = variantClasses(definition);
 
-  // SPEC.md §13.1 requires Tailwind utility classes to stay statically discoverable:
-  // this helper only selects explicit strings from the variant definition.
+  // SPEC.md §13.1 keeps component styles as document CSS; this helper only selects
+  // explicit strings from the variant definition.
   const variantFn = ((options: VariantOptions<Variants> = {}) => {
     const selection = { ...definition.defaultVariants, ...options } as VariantSelection<Variants>;
     const selected: ClassValue[] = [definition.base];
