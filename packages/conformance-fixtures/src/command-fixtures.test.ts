@@ -180,9 +180,9 @@ describe('@kovojs/test command fixtures', () => {
     const config = await loadVitePlusConfig(
       [
         "import { defineConfig } from 'vite-plus';",
-        "import tailwindcss from '@tailwindcss/vite';",
+        "import fixturePlugin from 'fixture-vite-plugin';",
         'export default defineConfig({',
-        '  plugins: [tailwindcss()],',
+        '  plugins: [fixturePlugin()],',
         '  run: {',
         '    tasks: {',
         "      'kovo-check': {",

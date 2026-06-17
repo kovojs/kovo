@@ -38,7 +38,7 @@ describe('@kovojs/test starter template fixtures', () => {
         devDependencies: { typescript: '^5.9.0', vite: '^7.0.0' },
         scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
       }),
-      stylesSource: '@import "tailwindcss";\n@source "../index.html";\n',
+      stylesSource: ':root { color-scheme: light; }\n',
       viteConfigSource: [
         "import { defineConfig } from 'vite-plus';",
         'export default defineConfig({',
@@ -60,7 +60,7 @@ describe('@kovojs/test starter template fixtures', () => {
       appSource: 'export const app = true;',
       ciRunCommands: ['vp install', 'vp run kovo-check'],
       clientSource: 'export const client = true;',
-      cssDirectives: ['"../index.html"'],
+      cssDirectives: [],
       graph: { queries: [{ domains: ['cart'], query: 'cart' }] },
       indexHtml: {
         htmlAttrs: { lang: 'en' },
@@ -116,7 +116,7 @@ describe('@kovojs/test starter template fixtures', () => {
       );
       await writeFile(join(root, 'src/app.tsx'), 'export const app = "loaded";');
       await writeFile(join(root, 'src/client.ts'), 'export const client = "loaded";');
-      await writeFile(join(root, 'src/styles.css'), '@source "./src/**/*";\n');
+      await writeFile(join(root, 'src/styles.css'), ':root { color-scheme: light; }\n');
       await writeFile(
         join(root, 'vite.config.ts'),
         [
@@ -131,7 +131,7 @@ describe('@kovojs/test starter template fixtures', () => {
         appSource: 'export const app = "loaded";',
         ciRunCommands: ['vp run kovo-check'],
         clientSource: 'export const client = "loaded";',
-        cssDirectives: ['"./src/**/*"'],
+        cssDirectives: [],
         graph: { pages: [{ route: '/' }] },
         indexHtml: { scriptAttrs: [{ type: 'module' }] },
         package: {
@@ -479,7 +479,7 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
       );
       await writeFile(join(templateRoot, 'src/app.tsx'), appSource);
       await writeFile(join(templateRoot, 'src/client.ts'), clientSource);
-      await writeFile(join(templateRoot, 'src/styles.css'), '@source "../index.html";\n');
+      await writeFile(join(templateRoot, 'src/styles.css'), ':root { color-scheme: light; }\n');
 
       const compiled = { files: ['compiled'] };
       const kovoOutputs = [

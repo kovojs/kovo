@@ -876,8 +876,11 @@ void test('P2 page hints keep speculation rules opt-in and non-empty', async () 
     },
     emptyOptInHtml: '',
     renderedHtml:
-      '<script type="speculationrules">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
-    scriptAttrs: { type: 'speculationrules' },
+      '<script type="speculationrules" data-kovo-csp-hash="sha256-VDbRXdVrG1h/HSZeEzeFOKzfY6aegZfd8rNURnGGk4A=">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
+    scriptAttrs: {
+      'data-kovo-csp-hash': 'sha256-VDbRXdVrG1h/HSZeEzeFOKzfY6aegZfd8rNURnGGk4A=',
+      type: 'speculationrules',
+    },
   });
 });
 
@@ -1771,7 +1774,7 @@ void test('P3 commerce mutation runs through the transaction lifecycle', async (
   });
 });
 
-void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', async () => {
+void test('D1 commerce enhanced fragments carry stylesheet hints', async () => {
   assert.deepEqual(await serverCommerceStylesheetBehaviorFact(serverCommerceStylesheetRuntime), {
     deferred: {
       fragmentAttrs: { target: 'recommendations' },
@@ -1779,25 +1782,29 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
         href: '/assets/recommendations.css',
         rel: 'stylesheet',
       },
-      sectionAttrs: { class: 'border-slate-200' },
-      tags: ['main', 'kovo-defer', 'kovo-fragment', 'link', 'section'],
+      sectionAttrs: { class: 'recommendation-panel' },
+      tags: ['main', 'kovo-defer', 'kovo-fragment', 'link', 'section', 'script', 'script'],
     },
     failure: {
-      body: '<kovo-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/tailwind.css"><form class="border-slate-200"><output role="alert">Only 0 left.</output></form></kovo-fragment>',
+      body: '<kovo-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/styles.css"><form class="cart-form-panel"><output role="alert">Only 0 left.</output></form></kovo-fragment>',
       headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
       status: 422,
     },
     pageHints: {
-      earlyHints: {
-        Link: '</assets/tailwind.css>; rel=preload; as=style',
+      csp: {
+        scripts: [],
+        styles: ['sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s='],
       },
-      html: '<style data-kovo-critical-href="/assets/tailwind.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/tailwind.css"><link rel="stylesheet" href="/assets/recommendations.css">',
+      earlyHints: {
+        Link: '</assets/styles.css>; rel=preload; as=style',
+      },
+      html: '<style data-kovo-critical-href="/assets/styles.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/styles.css"><link rel="stylesheet" href="/assets/recommendations.css">',
     },
     selectedStylesheets: [
       {
         criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
         fragmentTargets: ['cart-badge'],
-        href: '/assets/tailwind.css',
+        href: '/assets/styles.css',
       },
     ],
   });
@@ -1823,7 +1830,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
     prefetch: false,
     queries: ['cart', 'productGrid', 'orderHistory'],
     route: '/cart',
-    stylesheets: ['/assets/tailwind.css'],
+    stylesheets: ['/assets/styles.css'],
   });
   assert.deepEqual(fact.graph.receiptMutation, {
     enctype: 'multipart/form-data',
@@ -1837,12 +1844,16 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.deepEqual(fact.pageHints, {
     missingQueryMessage: 'Missing query data for route meta: cart',
     rendered: {
+      csp: {
+        scripts: ['sha256-428PRljyKzl7OW83C4phJF4OKCzGr42vPOLbx/jnYFI='],
+        styles: [],
+      },
       earlyHints: {},
       html: [
         '<title>Kovo Commerce (1)</title>',
         '<meta name="description" content="Browse products and checkout with 1 verifiable cart item.">',
         '<meta property="og:description" content="Browse products and checkout with 1 verifiable cart item.">',
-        '<script type="application/json" kovo-i18n locale="en-US">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
+        '<script type="application/json" kovo-i18n locale="en-US" data-kovo-csp-hash="sha256-428PRljyKzl7OW83C4phJF4OKCzGr42vPOLbx/jnYFI=">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
       ].join(''),
     },
     translation: 'Cart (1)',
@@ -1897,7 +1908,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.equal(fact.upload.pendingDuringResponse, '');
   assert.equal(fact.upload.pendingAfterSubmit, null);
   assert.deepEqual(fact.fragmentFailure, {
-    body: '<kovo-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section role="alert">fragment failed</section></kovo-fragment>',
+    body: '<kovo-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/styles.css"><section role="alert">fragment failed</section></kovo-fragment>',
     headers: {
       'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       'Kovo-Changes': '[]',
@@ -2075,10 +2086,9 @@ void test('P10 starter wires graph assertions into CI', async () => {
     compileComponentModule,
     expectedDevDependencies: [
       '@kovojs/compiler',
-      '@tailwindcss/vite',
+      '@types/node',
       '@typescript/native-preview',
       'kovo',
-      'tailwindcss',
       'typescript',
       'vite',
       'vite-plus',
@@ -2091,7 +2101,13 @@ void test('P10 starter wires graph assertions into CI', async () => {
   });
 
   assert.deepEqual(starterAcceptance.package, {
-    dependencies: ['@kovojs/better-auth', '@kovojs/core', '@kovojs/runtime', '@kovojs/server'],
+    dependencies: [
+      '@kovojs/better-auth',
+      '@kovojs/core',
+      '@kovojs/runtime',
+      '@kovojs/server',
+      '@kovojs/style',
+    ],
     scripts: {
       emitGraph: 'node scripts/emit-graph.mjs',
       kovoCheck: undefined,
@@ -2101,10 +2117,9 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.deepEqual(starterAcceptance.devDependencyCoverage, {
     expected: [
       '@kovojs/compiler',
-      '@tailwindcss/vite',
+      '@types/node',
       '@typescript/native-preview',
       'kovo',
-      'tailwindcss',
       'typescript',
       'vite',
       'vite-plus',
@@ -2113,10 +2128,9 @@ void test('P10 starter wires graph assertions into CI', async () => {
     missing: [],
     present: [
       '@kovojs/compiler',
-      '@tailwindcss/vite',
+      '@types/node',
       '@typescript/native-preview',
       'kovo',
-      'tailwindcss',
       'typescript',
       'vite',
       'vite-plus',
@@ -2277,11 +2291,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
     loaderInstallCount: 1,
   });
 
-  assert.deepEqual(starterAcceptance.cssDirectives, [
-    '"../index.html"',
-    '"./**/*.{ts,tsx,html}"',
-    'inline("bg-emerald-50 text-emerald-700 border-emerald-200 bg-amber-50 text-amber-700 border-amber-200")',
-  ]);
+  assert.deepEqual(starterAcceptance.cssDirectives, []);
   assert.deepEqual(starterAcceptance.html.tags, [
     'html',
     'head',

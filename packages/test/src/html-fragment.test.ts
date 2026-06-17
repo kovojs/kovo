@@ -111,7 +111,7 @@ describe('@kovojs/test html fragment seam', () => {
           '<main data-shell="cart">',
           '<a HREF="/cart" data-active>Cart</a>',
           '<a href="/products">Products</a>',
-          '<link rel="stylesheet" href="/assets/tailwind.css">',
+          '<link rel="stylesheet" href="/assets/styles.css">',
           '</main>',
         ].join(''),
         { tag: 'a', attrs: { href: '/cart', 'data-active': true } },
@@ -145,16 +145,16 @@ describe('@kovojs/test html fragment seam', () => {
   it('represents void elements as complete facts', () => {
     expect(
       htmlElementFacts(
-        '<head><link rel="stylesheet" href="/assets/tailwind.css"><meta name="description" content="Cart"></head>',
-        { attrs: { href: '/assets/tailwind.css' }, tag: 'link' },
+        '<head><link rel="stylesheet" href="/assets/styles.css"><meta name="description" content="Cart"></head>',
+        { attrs: { href: '/assets/styles.css' }, tag: 'link' },
       ),
     ).toEqual([
       {
         attrs: {
-          href: '/assets/tailwind.css',
+          href: '/assets/styles.css',
           rel: 'stylesheet',
         },
-        html: '<link rel="stylesheet" href="/assets/tailwind.css">',
+        html: '<link rel="stylesheet" href="/assets/styles.css">',
         innerHtml: '',
         tag: 'link',
       },
@@ -167,13 +167,13 @@ describe('@kovojs/test html fragment seam', () => {
       '<title>Cart &amp; Checkout</title>',
       '<meta name="description" content="Ready cart">',
       '<link rel="modulepreload" href="/c/app.js">',
-      '<link rel="stylesheet" href="/assets/tailwind.css">',
+      '<link rel="stylesheet" href="/assets/styles.css">',
       '<script type="application/json" kovo-i18n locale="en-US">{"cartLabel":"Cart"}</script>',
-      '</head><body class="min-h-dvh"><main>Sign in <strong>ready</strong></main></body></html>',
+      '</head><body class="page-shell"><main>Sign in <strong>ready</strong></main></body></html>',
     ].join('');
 
     expect(htmlDocumentFacts(html)).toMatchObject({
-      bodyAttrs: { class: 'min-h-dvh' },
+      bodyAttrs: { class: 'page-shell' },
       jsonScripts: [
         {
           attrs: { 'kovo-i18n': '', locale: 'en-US', type: 'application/json' },
@@ -183,7 +183,7 @@ describe('@kovojs/test html fragment seam', () => {
       ],
       links: [
         { attrs: { href: '/c/app.js', rel: 'modulepreload' }, tag: 'link' },
-        { attrs: { href: '/assets/tailwind.css', rel: 'stylesheet' }, tag: 'link' },
+        { attrs: { href: '/assets/styles.css', rel: 'stylesheet' }, tag: 'link' },
       ],
       metas: [{ attrs: { content: 'Ready cart', name: 'description' }, tag: 'meta' }],
       text: 'Sign in ready',
@@ -199,7 +199,7 @@ describe('@kovojs/test html fragment seam', () => {
       '<!doctype html><html lang="en"><head>',
       '<meta charset="utf-8">',
       '<link rel="modulepreload" href="/c/app.js">',
-      '<link rel="stylesheet" href="/assets/tailwind.css">',
+      '<link rel="stylesheet" href="/assets/styles.css">',
       '</head><body class="page"><main>Ready</main></body></html>',
     ].join('');
 
@@ -212,7 +212,7 @@ describe('@kovojs/test html fragment seam', () => {
       htmlElementFacts(htmlDocumentRegions(html).body.innerHtml).map((item) => item.tag),
     ).toEqual(['main']);
     expect(htmlLinkHrefs(html, { rel: 'modulepreload' })).toEqual(['/c/app.js']);
-    expect(htmlLinkHrefs(html, { rel: 'stylesheet' })).toEqual(['/assets/tailwind.css']);
+    expect(htmlLinkHrefs(html, { rel: 'stylesheet' })).toEqual(['/assets/styles.css']);
   });
 
   it('rejects malformed document region probes with a useful count summary', () => {
@@ -349,7 +349,7 @@ describe('@kovojs/test html fragment seam', () => {
     const html = [
       '<kovo-fragment target="cart-badge"><cart-badge><span>2</span></cart-badge></kovo-fragment>',
       '<kovo-fragment target="product-grid" error-boundary="product-grid">',
-      '<link rel="stylesheet" href="/assets/tailwind.css">',
+      '<link rel="stylesheet" href="/assets/styles.css">',
       '<section><article kovo-key="p1">Mug</article></section>',
       '</kovo-fragment>',
     ].join('');
@@ -364,10 +364,10 @@ describe('@kovojs/test html fragment seam', () => {
           'error-boundary': 'product-grid',
           target: 'product-grid',
         },
-        html: '<kovo-fragment target="product-grid" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section><article kovo-key="p1">Mug</article></section></kovo-fragment>',
+        html: '<kovo-fragment target="product-grid" error-boundary="product-grid"><link rel="stylesheet" href="/assets/styles.css"><section><article kovo-key="p1">Mug</article></section></kovo-fragment>',
         innerHtml:
-          '<link rel="stylesheet" href="/assets/tailwind.css"><section><article kovo-key="p1">Mug</article></section>',
-        stylesheetHrefs: ['/assets/tailwind.css'],
+          '<link rel="stylesheet" href="/assets/styles.css"><section><article kovo-key="p1">Mug</article></section>',
+        stylesheetHrefs: ['/assets/styles.css'],
         target: 'product-grid',
       },
     ]);
@@ -379,7 +379,7 @@ describe('@kovojs/test html fragment seam', () => {
       '<kovo-query name="productGrid">{"items":[{"id":"p1"}]}</kovo-query>',
       '<kovo-fragment target="cart-badge"><cart-badge><span>2</span></cart-badge></kovo-fragment>',
       '<kovo-fragment target="product-grid">',
-      '<link rel="stylesheet" href="/assets/tailwind.css">',
+      '<link rel="stylesheet" href="/assets/styles.css">',
       '<section><article kovo-key="p1">Mug</article></section>',
       '</kovo-fragment>',
     ].join('');
@@ -394,7 +394,7 @@ describe('@kovojs/test html fragment seam', () => {
       queryNames: ['cart', 'productGrid'],
       stylesheetHrefsByTarget: {
         'cart-badge': [],
-        'product-grid': ['/assets/tailwind.css'],
+        'product-grid': ['/assets/styles.css'],
       },
     });
     expect(kovoQueryJsonValues(html, 'cart')).toEqual([{ count: 2 }]);

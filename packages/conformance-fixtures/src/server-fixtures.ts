@@ -457,7 +457,7 @@ export async function serverCommerceStylesheetBehaviorFact(
     {
       criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
       fragmentTargets: ['cart-badge'],
-      href: '/assets/tailwind.css',
+      href: '/assets/styles.css',
     },
     {
       fragmentTargets: ['recommendations'],
@@ -474,7 +474,7 @@ export async function serverCommerceStylesheetBehaviorFact(
       {
         fragments: [
           {
-            html: '<section class="border-slate-200">Ready</section>',
+            html: '<section class="recommendation-panel">Ready</section>',
             stylesheets: runtime.stylesheetsForTargets(stylesheetManifest, ['recommendations']),
             target: 'recommendations',
           },
@@ -509,12 +509,12 @@ export async function serverCommerceStylesheetBehaviorFact(
       tags: deferredElements.map((element) => element.tag),
     },
     failure: await runtime.renderMutationEndpointResponse(addToCart, {
-      failureStylesheets: ['/assets/tailwind.css'],
+      failureStylesheets: ['/assets/styles.css'],
       failureTarget: 'product-form:p2',
       headers: { 'Kovo-Fragment': 'true' },
       rawInput: { productId: 'p2' },
       renderFailureFragment: () =>
-        '<form class="border-slate-200"><output role="alert">Only 0 left.</output></form>',
+        '<form class="cart-form-panel"><output role="alert">Only 0 left.</output></form>',
       request: {},
     }),
     pageHints,
@@ -698,7 +698,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
           render() {
             throw new Error('fragment failed');
           },
-          stylesheets: ['/assets/tailwind.css'],
+          stylesheets: ['/assets/styles.css'],
           target: 'product-grid',
         },
         {

@@ -27,16 +27,16 @@ import {
 } from './source-fixtures.js';
 
 describe('@kovojs/test source fixture seam', () => {
-  it('extracts Tailwind source directives without keeping a local kovo-check parser', () => {
+  it('extracts CSS source directives without keeping a local kovo-check parser', () => {
     expect(
       cssSourceDirectives(
         [
-          '@import "tailwindcss";',
+          ':root { color-scheme: light; }',
           '  @source "../index.html";',
-          '@source inline("bg-emerald-50 text-emerald-700");',
+          '@source inline("component-card component-title");',
         ].join('\n'),
       ),
-    ).toEqual(['"../index.html"', 'inline("bg-emerald-50 text-emerald-700")']);
+    ).toEqual(['"../index.html"', 'inline("component-card component-title")']);
   });
 
   it('extracts structured CSS scope rules from generated component styles', () => {
