@@ -11,7 +11,7 @@ import {
 } from '@kovojs/test/html-fragment';
 import type { QueryDefinition } from '@kovojs/server';
 
-import type { TouchGraph } from '@kovojs/drizzle';
+import type { TouchGraph } from '@kovojs/core/internal/graph';
 import { morphStructuralTree } from '@kovojs/runtime';
 
 import {

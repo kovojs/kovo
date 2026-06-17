@@ -1,24 +1,4 @@
-export type {
-  AlgebraicField,
-  AlgebraicQueryShape,
-  DerivationResult,
-  OrderByColumn,
-  PuntReason,
-  Rowset,
-  RowsetFilter,
-  RowWitness,
-  SymbolicEffect,
-  SymbolicMatch,
-  SymbolicValue,
-} from '@kovojs/core/internal/derivation';
 export type { DiagnosticCode } from '@kovojs/core';
-export type {
-  ReadSite,
-  TouchGraph,
-  TouchGraphEntry,
-  TouchSite,
-  UnresolvedWriteSite,
-} from '@kovojs/core/internal/graph';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { diagnosticDefinitionText, diagnosticDefinitions, type JsonValue } from '@kovojs/core';
