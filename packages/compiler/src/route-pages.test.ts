@@ -71,6 +71,59 @@ export const detail = route('/questions/:id', {
     ]);
   });
 
+  it('records keyed repeated component route facts', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+
+export const products = route('/products', {
+  page: ({ loaderData }) => (
+    <ProductShell>
+      {loaderData.products.map((product) => (
+        <ProductCard key={product.id} productId={product.id} featured={product.featured} />
+      ))}
+    </ProductShell>
+  ),
+});
+`,
+    });
+
+    expect(result.routePageFacts).toEqual([
+      {
+        components: [
+          {
+            localName: 'ProductShell',
+            props: [],
+            propsExpression: '{}',
+            serializedPropsExpression: 'JSON.stringify({})',
+          },
+          {
+            keyExpression: 'product.id',
+            localName: 'ProductCard',
+            props: [
+              {
+                expression: 'product.id',
+                name: 'productId',
+                propertyAccesses: ['product.id'],
+              },
+              {
+                expression: 'product.featured',
+                name: 'featured',
+                propertyAccesses: ['product.featured'],
+              },
+            ],
+            propsExpression: '{ productId: product.id, featured: product.featured }',
+            serializedPropsExpression:
+              'JSON.stringify({ productId: product.id, featured: product.featured })',
+          },
+        ],
+        fileName: 'src/routes.tsx',
+        route: '/products',
+      },
+    ]);
+  });
+
   it('extracts nested layout and region component composition', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',

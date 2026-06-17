@@ -132,6 +132,131 @@ export const ProductDetail = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('emits generated renderer facts for a route-param-backed component', () => {
+    const component = compileComponentModule({
+      fileName: 'components/questions/question-detail.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { answerListQuery, questionQuery } from '../queries.js';
+
+export const QuestionDetail = component({
+  props: { questionId: String },
+  queries: {
+    question: questionQuery.args((props) => ({ id: props.questionId })),
+    answers: answerListQuery.args((props) => ({ questionId: props.questionId })),
+  },
+  render: ({ question, answers }) => <section>{question.title}{answers.items.length}</section>,
+});
+`,
+    });
+    const route = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+
+export const detail = route('/questions/:id', {
+  page: ({ params }) => <QuestionDetail key={params.id} questionId={params.id} />,
+});
+`,
+    });
+
+    const registry = component.files[2]?.source ?? '';
+
+    expect(route.routePageFacts[0]?.components[0]).toEqual({
+      keyExpression: 'params.id',
+      localName: 'QuestionDetail',
+      props: [
+        {
+          expression: 'params.id',
+          name: 'questionId',
+          propertyAccesses: ['params.id'],
+        },
+      ],
+      propsExpression: '{ questionId: params.id }',
+      serializedPropsExpression: 'JSON.stringify({ questionId: params.id })',
+    });
+    expect(registry).toContain(
+      `'components/questions/question-detail/question-detail': { component: 'components/questions/question-detail/question-detail'; queries: readonly ['question', 'answers']; queryBindings: readonly [{ name: 'question'; queryExpression: "questionQuery"; argsExpression: "({ id: props.questionId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.questionId'] }, { name: 'answers'; queryExpression: "answerListQuery"; argsExpression: "({ questionId: props.questionId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.questionId'] }]; props: { questionId: string }; };`,
+    );
+    expect(component.loweredSource).toContain(`export const QuestionDetail$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
+  component: QuestionDetail,
+  componentId: "components/questions/question-detail/question-detail",
+  queries: [
+    {
+      name: "question",
+      query: questionQuery,
+      args: (props) => ({ id: props.questionId }),
+    },
+    {
+      name: "answers",
+      query: answerListQuery,
+      args: (props) => ({ questionId: props.questionId }),
+    },
+  ],
+}));`);
+    expect(() => assertFixpoint(component)).not.toThrow();
+  });
+
+  it('emits generated renderer facts for keyed repeated components', () => {
+    const component = compileComponentModule({
+      fileName: 'components/products/product-card.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { productQuery } from '../queries.js';
+
+export const ProductCard = component({
+  props: { productId: String },
+  queries: {
+    product: productQuery.args((props) => ({ id: props.productId })),
+  },
+  render: ({ product }) => <article>{product.name}</article>,
+});
+`,
+    });
+    const route = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+
+export const products = route('/products', {
+  page: ({ loaderData }) => (
+    <ProductGrid>
+      {loaderData.products.map((product) => (
+        <ProductCard key={product.id} productId={product.id} />
+      ))}
+    </ProductGrid>
+  ),
+});
+`,
+    });
+
+    expect(route.routePageFacts[0]?.components[1]).toEqual({
+      keyExpression: 'product.id',
+      localName: 'ProductCard',
+      props: [
+        {
+          expression: 'product.id',
+          name: 'productId',
+          propertyAccesses: ['product.id'],
+        },
+      ],
+      propsExpression: '{ productId: product.id }',
+      serializedPropsExpression: 'JSON.stringify({ productId: product.id })',
+    });
+    expect(component.loweredSource).toContain(`export const ProductCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
+  component: ProductCard,
+  componentId: "components/products/product-card/product-card",
+  queries: [
+    {
+      name: "product",
+      query: productQuery,
+      args: (props) => ({ id: props.productId }),
+    },
+  ],
+}));`);
+    expect(() => assertFixpoint(component)).not.toThrow();
+  });
+
   it('derives registry facts from graph query, mutation, and page facts', () => {
     const registryFacts = deriveRegistryFactsFromGraph(
       {

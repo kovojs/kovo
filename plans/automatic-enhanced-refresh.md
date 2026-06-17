@@ -853,7 +853,7 @@ removes app-authored bookkeeping from the enhanced path.
 
 ## Verification Targets
 
-- [ ] **Compiler tests prove generated registry facts.**
+- [x] **Compiler tests prove generated registry facts.**
   - Add fixtures for singleton, keyed repeated, and route-param-backed query
     components.
   - Progress 2026-06-17:
@@ -866,8 +866,21 @@ removes app-authored bookkeeping from the enhanced path.
     - `packages/compiler/src/route-pages.test.ts` covers route-param-backed
       component invocation facts for generated props serialization and
       `keyExpression`.
-    - Remaining gap: keyed repeated and route-param-backed generated-renderer
-      fixtures are still pending.
+  - Evidence 2026-06-17:
+    - `packages/compiler/src/registry.test.ts` now covers route-param-backed
+      generated renderer facts for `<QuestionDetail key={params.id}
+      questionId={params.id} />`, including two prop-derived query arg
+      bindings in `QuestionDetail$liveTargetRenderer`.
+    - `packages/compiler/src/registry.test.ts` and
+      `packages/compiler/src/route-pages.test.ts` now cover keyed repeated
+      components such as `<ProductCard key={product.id}
+      productId={product.id} />`, proving the route page fact includes
+      `keyExpression`, serializable props, and the generated renderer reloads
+      prop-backed queries.
+    - Verified with
+      `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/compile-component.test.ts`
+      and
+      `git diff --check -- packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts`.
 - [ ] **Runtime/server tests prove no app-authored fragment renderers are needed.**
   - Enhanced mutation success should update visible query-backed targets using the
     generated registry.
