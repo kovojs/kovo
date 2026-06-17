@@ -1,0 +1,7 @@
+<main>
+  <section kovo-c="scoped-panel">
+    <h2>
+      "Scoped panel"
+    <aside kovo-c="nested-badge">
+      <span>
+        "Nested copy"

@@ -79,7 +79,7 @@ const URL_ATTRS = new Set(['action', 'href', 'src', 'formaction']);
 const OPAQUE_TAGS = new Set(['script', 'style', 'kovo-query']);
 
 /** Form field names that are pure wire mechanics, never user-facing semantics. */
-const VOLATILE_FIELD_NAMES = new Set(['csrf', 'kovo-idem', '_csrf']);
+const VOLATILE_FIELD_NAMES = new Set(['csrf', 'kovo-csrf', 'kovo-idem', '_csrf']);
 
 /** Elements rendered for their text/structure only; never recurse into raw text. */
 const RAW_TEXT_TAGS = new Set(['script', 'style']);
@@ -173,14 +173,22 @@ function renderAttrs(attrs: Record<string, string>, keep: ReadonlySet<string>): 
 }
 
 function normalizeAttrValue(name: string, value: string): string {
-  if (URL_ATTRS.has(name)) {
-    // Collapse cache-busting versions and content hashes so a rebuild that only
-    // changes a hash doesn't churn the snapshot.
-    return value
-      .replace(/([?&]v=)[0-9a-f]{6,}/gi, '$1*')
-      .replace(/\.[0-9a-f]{8,}(\.[a-z0-9]+)$/i, '.*$1');
+  if (URL_ATTRS.has(name) || name.startsWith('on:')) {
+    return normalizeUrlLikeAttrValue(value);
   }
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeUrlLikeAttrValue(value: string): string {
+  // Collapse cache-busting versions and content hashes so a rebuild that only
+  // changes a hash doesn't churn the snapshot. `on:*` handler refs carry the
+  // same URL-shaped values as href/src, sometimes as a whitespace-separated
+  // chain, so the replacement intentionally scans the whole attribute value.
+  return value
+    .replace(/([?&]v=)[0-9a-f]{6,}/gi, '$1*')
+    .replace(/\.[0-9a-f]{8,}(\.[a-z0-9]+)(?=$|[#?\s])/gi, '.*$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // --- minimal, dependency-free HTML fragment parser -------------------------------

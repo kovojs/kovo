@@ -42,15 +42,29 @@ export async function renderAppRouteDocumentResponse({
     {
       currentUrl: appRequestUrl(url),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
+      renderForbidden: async () =>
+        appErrorDocumentResponseBody(await renderAppErrorDocumentResponse(app, request, 403)),
       ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
     },
   );
+
+  if (routeResponse.status === 404) {
+    return renderAppErrorDocumentResponse(app, request, 404);
+  }
+
+  if (routeResponse.status === 500) {
+    return renderAppErrorDocumentResponse(app, request, 500);
+  }
 
   return renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
     hints: route,
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     ...(app.document.template === undefined ? {} : { template: app.document.template }),
   });
+}
+
+function appErrorDocumentResponseBody(response: RoutePageResponse): string {
+  return typeof response.body === 'string' ? response.body : '';
 }
 
 export async function renderAppErrorDocumentResponse(

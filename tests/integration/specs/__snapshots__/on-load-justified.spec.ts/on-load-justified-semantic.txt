@@ -1,0 +1,5 @@
+<main>
+  <h1>
+    "Load trigger"
+  <output kovo-state="{}" on:load="/client.ts#markLoad">
+    "loaded"

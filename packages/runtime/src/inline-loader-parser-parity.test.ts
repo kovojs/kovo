@@ -55,7 +55,10 @@ describe('inline loader parser parity', () => {
     expect(alternateReadable).not.toContain(inlineWireParserReadableSource);
     expect(alternateReadable).toContain('readInlineMutationResponseBodyChunks(body)');
     expect(alternateReadable).toContain(
-      'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body), {',
+      'const chunks = readInlineMutationResponseBodyChunks(body)',
+    );
+    expect(alternateReadable).toContain(
+      'applyInlineMutationResponseChunks(chunks, { findFragmentTarget: ft });',
     );
   });
 

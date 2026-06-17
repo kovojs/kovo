@@ -228,7 +228,8 @@ export function serverResponseToWebResponse(
   response: ServerResponseBase<WebResponseBody, ResponseHeaders>,
   request: Pick<Request, 'method'>,
 ): Response {
-  return new Response(request.method === 'HEAD' ? null : webResponseBodyToBodyInit(response.body), {
+  const body = request.method === 'HEAD' || response.status === 304 ? null : response.body;
+  return new Response(webResponseBodyToBodyInit(body), {
     headers: webResponseHeaders(response.headers),
     status: response.status,
   });

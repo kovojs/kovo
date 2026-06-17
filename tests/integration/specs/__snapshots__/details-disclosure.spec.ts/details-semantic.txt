@@ -1,0 +1,6 @@
+<main>
+  <details open="">
+    <summary>
+      "Shipping details"
+    <p>
+      "Ships in two business days."

@@ -1,0 +1,12 @@
+<main>
+  <h1>
+    "Dialog terminal state"
+  <button command="show-modal" commandfor="settings-dialog" type="button">
+    "Open settings"
+  <dialog id="settings-dialog" open="">
+    <h2 id="settings-title">
+      "Account settings"
+    <p>
+      "Review account preferences."
+    <button command="close" commandfor="settings-dialog" type="button">
+      "Close settings"

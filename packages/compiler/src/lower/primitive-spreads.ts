@@ -5,8 +5,10 @@ import type { CompilerDiagnostic } from '../diagnostics.js';
 import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,
+  primitiveIdRewrite,
   primitiveObjectEntryAttributes,
   renderMergedAttributes,
+  rewritePrimitiveIdrefAttributes,
   type MergeableAttribute,
 } from './attribute-merge.js';
 
@@ -21,12 +23,16 @@ export function lowerPrimitiveAttributeSpreads(
 ): PrimitiveSpreadLowering {
   const diagnostics: CompilerDiagnostic[] = [];
   const replacements: SourceReplacement[] = [];
+  const compositions = primitiveCompositionPatches(model, options);
+  const compositionByWrapper = new Map(
+    compositions.map((composition) => [composition.wrapper, composition] as const),
+  );
 
   for (const element of model.jsxElements) {
-    const composition = primitiveCompositionPatches(model, element, options);
-    if (composition.length > 0) {
-      replacements.push(...composition.flatMap((patch) => patch.replacements));
-      diagnostics.push(...composition.flatMap((patch) => patch.diagnostics));
+    const composition = compositionByWrapper.get(element);
+    if (composition) {
+      replacements.push(...composition.replacements);
+      diagnostics.push(...composition.diagnostics);
       continue;
     }
 
@@ -50,43 +56,94 @@ export function lowerPrimitiveAttributeSpreads(
 interface PrimitiveCompositionPatch {
   diagnostics: readonly CompilerDiagnostic[];
   replacements: readonly SourceReplacement[];
+  wrapper: JsxElementModel;
 }
 
 function primitiveCompositionPatches(
   model: ComponentModuleModel,
-  element: JsxElementModel,
   options: { fileName: string; source: string },
 ): PrimitiveCompositionPatch[] {
-  if (!isComponentTag(element.tag)) return [];
+  const candidates = primitiveCompositionCandidates(model);
+  const rewrites = primitiveIdRewrites(candidates);
+  return candidates.map((candidate) =>
+    unwrapPrimitiveWrapper(
+      candidate.wrapper,
+      candidate.child,
+      rewritePrimitiveIdrefAttributes(candidate.primitiveAttributes, rewrites),
+      candidate.authorAttributes,
+      options,
+    ),
+  );
+}
+
+interface PrimitiveCompositionCandidate {
+  authorAttributes: readonly MergeableAttribute[];
+  child: JsxElementModel;
+  primitiveAttributes: readonly MergeableAttribute[];
+  wrapper: JsxElementModel;
+}
+
+function primitiveCompositionCandidates(
+  model: ComponentModuleModel,
+): PrimitiveCompositionCandidate[] {
+  const candidates: PrimitiveCompositionCandidate[] = [];
+
+  for (const element of model.jsxElements) {
+    const candidate = primitiveCompositionCandidate(model, element);
+    if (candidate) candidates.push(candidate);
+  }
+
+  return candidates;
+}
+
+function primitiveCompositionCandidate(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): PrimitiveCompositionCandidate | null {
+  if (!isComponentTag(element.tag)) return null;
 
   const attrs = element.attributes.find(
     (attribute) => attribute.name === 'attrs',
   )?.expressionObjectEntries;
-  if (!attrs) return [];
+  if (!attrs) return null;
 
   const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
-  if (primitiveAttributes === null) return [];
+  if (primitiveAttributes === null) return null;
 
-  if (element.attributes.some((attribute) => attribute.name === 'asChild')) {
-    const child = singleImmediateChildElement(model, element);
-    return child ? [unwrapPrimitiveWrapper(element, child, primitiveAttributes, options)] : [];
-  }
+  const child = element.attributes.some((attribute) => attribute.name === 'asChild')
+    ? singleImmediateChildElement(model, element)
+    : singleAttrsFunctionChildElement(model, element);
+  if (!child || childHasUnsupportedSpreads(child)) return null;
 
-  const child = singleAttrsFunctionChildElement(model, element);
-  return child ? [unwrapPrimitiveWrapper(element, child, primitiveAttributes, options)] : [];
+  return {
+    authorAttributes: authorJsxAttributes(child.attributes),
+    child,
+    primitiveAttributes,
+    wrapper: element,
+  };
+}
+
+function primitiveIdRewrites(
+  candidates: readonly PrimitiveCompositionCandidate[],
+): ReadonlyMap<string, string> {
+  return new Map(
+    candidates.flatMap((candidate) => {
+      const rewrite = primitiveIdRewrite(candidate.primitiveAttributes, candidate.authorAttributes);
+      return rewrite ? [rewrite] : [];
+    }),
+  );
 }
 
 function unwrapPrimitiveWrapper(
   wrapper: JsxElementModel,
   child: JsxElementModel,
   primitiveAttributes: readonly MergeableAttribute[],
+  authorAttributes: readonly MergeableAttribute[],
   options: { fileName: string; source: string },
 ): PrimitiveCompositionPatch {
-  if (childHasUnsupportedSpreads(child)) return { diagnostics: [], replacements: [] };
-
   const merge = mergePrimitiveAndAuthorAttributes(
     primitiveAttributes,
-    authorJsxAttributes(child.attributes),
+    authorAttributes,
     options,
   );
   const attributes = renderMergedAttributes(merge.attributes);
@@ -106,6 +163,7 @@ function unwrapPrimitiveWrapper(
           : [],
       ),
     ],
+    wrapper,
   };
 }
 

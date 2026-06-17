@@ -42,6 +42,33 @@ describe('decoded query runtime apply', () => {
     expect(productLabel.getAttribute('aria-label')).toBe('Product ready');
   });
 
+  it('scopes keyed query chunks to matching kovo-deps consumers', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const p1Stock = scopedBinding('product:p1', 'product.stock', '2');
+    const p2Stock = scopedBinding('product:p2', 'product.stock', '9');
+    root.bindings.push(p1Stock, p2Stock);
+
+    const applied = applyQueryChunksToRuntime(
+      store,
+      [{ key: 'product:p1', name: 'product', value: { stock: 7 } }],
+      {
+        queryPlans: {
+          product: { bindings: false },
+          'product:p1': { bindings: true },
+        },
+        root,
+      },
+    );
+
+    // SPEC.md §10.2: canonical query instance keys partition same-query
+    // consumers, so a product:p1 chunk cannot overwrite product:p2 bindings.
+    expect(applied).toEqual(['product:p1']);
+    expect(store.get('product', 'product:p1')).toEqual({ stock: 7 });
+    expect(p1Stock.textContent).toBe('7');
+    expect(p2Stock.textContent).toBe('9');
+  });
+
   it('applies query chunks through one canonical runtime batch with interposed values', () => {
     const store = createQueryStore();
     const cartPlan = vi.fn();
@@ -95,3 +122,22 @@ describe('decoded query runtime apply', () => {
     expect(Object.hasOwn(queryApplyModule, 'readQueryScriptChunk')).toBe(false);
   });
 });
+
+function scopedBinding(
+  deps: string,
+  path: string,
+  textContent: string,
+): FakeQueryBindingElement {
+  const element = new FakeQueryBindingElement(path, textContent) as FakeQueryBindingElement & {
+    closest(selector: string): FakeQueryBindingElement | null;
+  };
+  element.closest = (selector: string) =>
+    selector === '[kovo-deps]'
+      ? ({
+          getAttribute(name: string) {
+            return name === 'kovo-deps' ? deps : null;
+          },
+        } as FakeQueryBindingElement)
+      : null;
+  return element;
+}

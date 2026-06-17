@@ -51,6 +51,7 @@ describe('loader disposal', () => {
 
       expect(root.listeners.has('click')).toBe(true);
       expect(root.listeners.has('visibilitychange')).toBe(true);
+      expect(root.listeners.has('pageshow')).toBe(true);
       expect(root.listeners.has('pagehide')).toBe(true);
       expect(focusTarget.listeners.has('focus')).toBe(false);
       expect(observer.observe).toHaveBeenCalledWith(visibleElement);

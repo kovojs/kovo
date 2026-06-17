@@ -129,9 +129,12 @@ entries keep components in their own files.
   - Evidence: `fixtures/counter` (`specs/counter.spec.ts`) — click → `/_m/counter/increment` → morph
     `data-bind="count.count"` 0→1, no nav, db verified, semantic snapshot. `fixtures/stock`
     (`specs/stock.spec.ts`) — typed `OUT_OF_STOCK` failure morphs a `data-error-code` fragment.
-  - [ ] Remaining first-wave fixtures: query refetch/visible-return, optimistic success +
+  - [x] Remaining first-wave fixtures: query refetch/visible-return, optimistic success +
         failure/rollback, inline-loader enhanced submit nuances, loader lifecycle. (Pattern proven;
         author against the `counter`/`stock` template.)
+    - Evidence: `plans/integration-test-cases.md` now marks `query-refetch`, `optimistic-success`,
+      `optimistic-rollback`, `enhanced-submit-controls`, and `loader-lifecycle` complete with
+      focused Playwright/runtime proving commands.
 - [x] **I4 — CI / acceptance wiring.** `vp run integration` task + root `test:integration` →
       added to `acceptance`; CI step after the browser gate (Chromium already installed);
       `tests/integration/**` excluded from the root vitest run; Playwright `outputDir` outside the tree.

@@ -1,0 +1,2 @@
+<div data-error-code="CARD_DECLINED" kovo-fragment-target="checkout-error" role="alert">
+  "Card declined"

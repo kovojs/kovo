@@ -129,6 +129,12 @@ export type JsonValue =
 /** Opaque result of a component's `render` — the compiler lowers it to HTML/IR. */
 export type ComponentRenderResult = unknown;
 
+/** Render-time composition values for `children` and named slots (SPEC §4.5). */
+export interface ComponentRenderSlots {
+  children?: unknown;
+  [slot: string]: unknown;
+}
+
 /** Typed body of a component: its query bindings, island state factory, and `render`. */
 export interface ComponentDefinition<
   Queries = Record<string, unknown>,
@@ -137,7 +143,7 @@ export interface ComponentDefinition<
   fragmentTarget?: boolean;
   queries?: Queries;
   state?: () => State;
-  render: (queries: Queries, state: State) => ComponentRenderResult;
+  render: (queries: Queries, state: State, slots: ComponentRenderSlots) => ComponentRenderResult;
 }
 
 /** Loosely-typed input accepted by `component()` before inference narrows it. */
@@ -176,9 +182,9 @@ export interface Component<Definition extends ComponentDefinitionInput> {
  *     `<button>${state.count}</button>`,
  * });
  */
-export function component<
-  const Definition extends ComponentDefinitionInput,
->(definition: Definition): Component<Definition> {
+export function component<const Definition extends ComponentDefinitionInput>(
+  definition: Definition,
+): Component<Definition> {
   return { definition };
 }
 

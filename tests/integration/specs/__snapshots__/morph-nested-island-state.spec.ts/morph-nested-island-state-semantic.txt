@@ -1,0 +1,10 @@
+<section kovo-deps="parent" kovo-fragment-target="parent-panel" kovo-key="parent-panel">
+  <p>
+    "Parent version"
+    <output data-bind="parent.version">
+      "1"
+  <nested-counter kovo-c="nested-counter" kovo-key="nested-counter" kovo-state="{\"count\":1}">
+    <button type="button">
+      "Nested count"
+      <span data-bind="state.count">
+        "1"

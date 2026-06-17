@@ -34,7 +34,9 @@ import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } fr
 import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,
+  primitiveIdRewrite,
   primitiveObjectEntryAttributes,
+  rewritePrimitiveIdrefAttributes,
   type MergeableAttribute,
   type MergeableAttributeValue,
 } from './attribute-merge.js';
@@ -165,6 +167,34 @@ function lowerPrimitiveComposition(
   options: { fileName: string; source: string },
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
+  const candidates = primitiveCompositionCandidates(elements);
+  const rewrites = primitiveIdRewrites(candidates);
+
+  for (const candidate of candidates) {
+    const merge = mergePrimitiveAndAuthorAttributes(
+      rewritePrimitiveIdrefAttributes(candidate.primitiveAttributes, rewrites),
+      candidate.authorAttributes,
+      options,
+    );
+    diagnostics.push(...withMergeWriterNames(merge.diagnostics));
+    unwrapPrimitiveWrapper(candidate.wrapper, candidate.child, merge.attributes, options);
+  }
+
+  return diagnostics;
+}
+
+interface PrimitiveCompositionCandidate {
+  authorAttributes: readonly MergeableAttribute[];
+  child: JsxIrElement;
+  primitiveAttributes: readonly MergeableAttribute[];
+  wrapper: JsxIrElement;
+}
+
+function primitiveCompositionCandidates(
+  elements: readonly JsxIrElement[],
+): PrimitiveCompositionCandidate[] {
+  const candidates: PrimitiveCompositionCandidate[] = [];
+
   for (const wrapper of elements) {
     if (!isComponentTag(wrapper.tag)) continue;
     const attrsAttribute = wrapper.element.attributes.find(
@@ -181,15 +211,26 @@ function lowerPrimitiveComposition(
       : singleAttrsFunctionElementChild(wrapper);
     if (!child || childHasUnsupportedSpreads(child)) continue;
 
-    const merge = mergePrimitiveAndAuthorAttributes(
+    candidates.push({
+      authorAttributes: authorJsxAttributes(child.element.attributes),
+      child,
       primitiveAttributes,
-      authorJsxAttributes(child.element.attributes),
-      options,
-    );
-    diagnostics.push(...withMergeWriterNames(merge.diagnostics));
-    unwrapPrimitiveWrapper(wrapper, child, merge.attributes, options);
+      wrapper,
+    });
   }
-  return diagnostics;
+
+  return candidates;
+}
+
+function primitiveIdRewrites(
+  candidates: readonly PrimitiveCompositionCandidate[],
+): ReadonlyMap<string, string> {
+  return new Map(
+    candidates.flatMap((candidate) => {
+      const rewrite = primitiveIdRewrite(candidate.primitiveAttributes, candidate.authorAttributes);
+      return rewrite ? [rewrite] : [];
+    }),
+  );
 }
 
 function unwrapPrimitiveWrapper(

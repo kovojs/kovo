@@ -136,6 +136,35 @@ export function mergePrimitiveAndAuthorAttributes(
   };
 }
 
+export function primitiveIdRewrite(
+  primitiveAttributes: readonly MergeableAttribute[],
+  authorAttributes: readonly MergeableAttribute[],
+): readonly [from: string, to: string] | null {
+  const primitiveId = staticString(attributeValue(primitiveAttributes, 'id'));
+  const authorId = staticString(attributeValue(authorAttributes, 'id'));
+  if (!primitiveId || !authorId || primitiveId === authorId) return null;
+  return [primitiveId, authorId];
+}
+
+// SPEC.md §4.6: when an author id wins, primitive-owned IDREFs target the surviving id.
+export function rewritePrimitiveIdrefAttributes(
+  attributes: readonly MergeableAttribute[],
+  rewrites: ReadonlyMap<string, string>,
+): readonly MergeableAttribute[] {
+  if (rewrites.size === 0) return attributes;
+
+  return attributes.map((attribute) => {
+    if (!idrefAttributes.has(attribute.name)) return attribute;
+    const value = staticString(attribute.value);
+    if (value === undefined) return attribute;
+
+    const rewritten = rewriteIdrefValue(value, rewrites);
+    return rewritten === value
+      ? attribute
+      : { ...attribute, value: { kind: 'string', value: rewritten } };
+  });
+}
+
 export function renderMergedAttributes(attributes: readonly MergeableAttribute[]): string {
   return attributes.map(renderMergedAttribute).join(' ');
 }
@@ -263,6 +292,21 @@ function primitiveOwnedDataStateAttribute(name: string): boolean {
   return name === 'data-state';
 }
 
+function attributeValue(
+  attributes: readonly MergeableAttribute[],
+  name: string,
+): MergeableAttributeValue | undefined {
+  return attributes.find((attribute) => attribute.name === name)?.value;
+}
+
+function rewriteIdrefValue(value: string, rewrites: ReadonlyMap<string, string>): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => rewrites.get(token) ?? token)
+    .join(' ');
+}
+
 function isBindingAttribute(name: string): boolean {
   return name === 'data-bind' || name.startsWith('data-bind:');
 }
@@ -336,7 +380,8 @@ function booleanish(value: MergeableAttributeValue): boolean | undefined {
   return undefined;
 }
 
-function staticString(value: MergeableAttributeValue): string | undefined {
+function staticString(value: MergeableAttributeValue | undefined): string | undefined {
+  if (value === undefined) return undefined;
   if (value.kind === 'string') return value.value;
   if (value.kind === 'number') return String(value.value);
   if (value.kind === 'boolean') return value.value ? 'true' : 'false';

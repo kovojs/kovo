@@ -1,0 +1,9 @@
+<inventory-panel kovo-deps="inventory">
+  <p>
+    <span data-bind="inventory.label">
+      "Sold out"
+    ":"
+    <span data-bind="inventory.count">
+      "0"
+  <button data-bind:disabled="/derive.ts#Inventory$disableWhenUnavailable" disabled="" type="button">
+    "Ship order"

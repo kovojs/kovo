@@ -5,7 +5,16 @@
   "type": "module",
   "dependencies": {
     "@kovojs/core": "workspace:*",
+    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
-    "@kovojs/test": "workspace:*"
+    "@kovojs/test": "workspace:*",
+    "axe-core": "4.12.1",
+    "kovo": "workspace:*"
+  },
+  "devDependencies": {
+    "@kovojs/compiler": "workspace:*",
+    "@playwright/test": "1.60.0",
+    "@tailwindcss/node": "^4.3.0",
+    "tailwindcss": "^4.3.0"
   }
 }

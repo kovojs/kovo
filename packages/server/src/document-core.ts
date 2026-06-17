@@ -90,14 +90,13 @@ const fallbackTitles = {
 
 export function renderDocument(options: DocumentAssemblyOptions): DocumentRenderResult {
   const assembled = assembleDocumentParts(options);
+  const template = options.template ?? defaultDocumentTemplate;
+  const html = template({ csp: assembled.csp, parts: assembled.parts });
 
   return {
     csp: assembled.csp,
     earlyHints: assembled.earlyHints,
-    html: (options.template ?? defaultDocumentTemplate)({
-      csp: assembled.csp,
-      parts: assembled.parts,
-    }),
+    html: enforceDocumentTemplateParts(html, assembled.parts, 'DocumentTemplate'),
   };
 }
 
@@ -105,15 +104,18 @@ export function renderDeferredDocument(
   options: DeferredDocumentAssemblyOptions,
 ): DeferredDocumentRenderResult {
   const assembled = assembleDocumentParts(options);
-  const frame = (options.template ?? defaultDeferredDocumentTemplate)({
-    csp: assembled.csp,
-    parts: assembled.parts,
-  });
+  const template = options.template ?? defaultDeferredDocumentTemplate;
+  const frame = template({ csp: assembled.csp, parts: assembled.parts });
+  const shell = enforceDocumentTemplateParts(
+    frame.shell,
+    assembled.parts,
+    'DeferredDocumentTemplate',
+  );
   const response = renderDeferredStream({
     chunks: options.chunks,
     closeHtml: frame.closeHtml,
     ...(options.boundary === undefined ? {} : { boundary: options.boundary }),
-    shell: frame.shell,
+    shell,
   });
 
   return {
@@ -236,6 +238,38 @@ function defaultDeferredDocumentTemplate({
       parts.body,
     ].join(''),
   };
+}
+
+function enforceDocumentTemplateParts(
+  html: string,
+  parts: DocumentParts,
+  templateName: string,
+): string {
+  const missing = requiredDocumentTemplateParts(parts).filter(
+    ({ value }) => !html.includes(value),
+  );
+  if (missing.length === 0) return html;
+
+  // SPEC §9.5: custom templates receive assembled parts rather than a blank
+  // canvas, so they cannot silently drop loader, query scripts, or page body.
+  throw new Error(
+    `${templateName} omitted required assembled document part(s): ${missing
+      .map(({ name }) => name)
+      .join(', ')}.`,
+  );
+}
+
+function requiredDocumentTemplateParts(
+  parts: DocumentParts,
+): readonly { name: string; value: string }[] {
+  return [
+    { name: 'parts.head', value: parts.head },
+    ...parts.queryScripts.map((value, index) => ({
+      name: `parts.queryScripts[${index}]`,
+      value,
+    })),
+    { name: 'parts.body', value: parts.body },
+  ].filter(({ value }) => value.length > 0);
 }
 
 function inlineLoaderScript(): { csp: CspInlineMetadata; html: string } {

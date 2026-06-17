@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { domain } from './domain.js';
 import { renderMutationEndpointResponse } from './mutation.js';
 import { query } from './query.js';
-import { s } from './schema.js';
+import { s, type Schema } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server mutation endpoint routing', () => {
@@ -151,4 +151,42 @@ describe('server mutation endpoint routing', () => {
       status: 422,
     });
   });
+
+  it('renders structurally recognized input schema failures as field-scoped 422 fragments', async () => {
+    const reserve = mutation('inventory/reserve', {
+      input: alienValidationSchema<{ quantity: number }>('Expected number >= 1', ['quantity']),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(reserve, {
+        failureTarget: 'reservation-form',
+        headers: { 'Kovo-Fragment': 'true' },
+        rawInput: {},
+        redirectTo: '/',
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<kovo-fragment target="reservation-form"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
+      headers: {
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      },
+      status: 422,
+    });
+  });
 });
+
+function alienValidationSchema<T>(message: string, path: readonly string[]): Schema<T> {
+  return {
+    parse(): T {
+      const error = new Error(message) as Error & {
+        issues: readonly { message: string; path: readonly string[] }[];
+      };
+      error.name = 'SchemaValidationError';
+      error.issues = [{ message, path }];
+      throw error;
+    },
+  };
+}

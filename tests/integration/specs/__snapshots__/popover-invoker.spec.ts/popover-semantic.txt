@@ -1,0 +1,6 @@
+<main>
+  <button popovertarget="account-popover" popovertargetaction="toggle" type="button">
+    "Toggle account menu"
+  <section aria-label="Account menu" id="account-popover" popover="auto">
+    <p>
+      "Account actions"

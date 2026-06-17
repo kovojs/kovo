@@ -11,6 +11,7 @@ import { reportRuntimeContextError } from './error-policy.js';
 /** @internal */
 export interface DelegatedEvent {
   preventDefault?: () => void;
+  submitter?: unknown;
   type: string;
   target: EventTargetLike | null;
 }

@@ -13,6 +13,7 @@ import { bootFixture, type BootedFixture } from './boot-fixture.js';
 import { login as performLogin, type LoginOptions } from './login.js';
 import { semanticSnapshot, type SemanticSnapshotOptions } from './semantic-snapshot.js';
 import type { PgliteTestDb } from '../pglite.js';
+import type { DbVerificationDiagnostic } from '../verifier-diagnostics.js';
 
 const DEFAULT_FIXTURES_ROOT = fileURLToPath(
   new URL('../../../../tests/integration/fixtures/', import.meta.url),
@@ -28,6 +29,8 @@ export interface KovoApp {
   login(options: LoginOptions): Promise<void>;
   /** Canonical semantic-structure snapshot of the first match of `selector`. */
   semantic(selector: string, options?: SemanticSnapshotOptions): Promise<string>;
+  /** Runtime DB verification diagnostics collected by the fixture server. */
+  verificationDiagnostics(): readonly DbVerificationDiagnostic[];
 }
 
 /** Options a spec sets with `test.use(...)`. */
@@ -91,6 +94,7 @@ export const test = base.extend<KovoTestFixtures, KovoTestOptions & KovoWorkerFi
       origin: kovoServer.origin,
       login: (options) => performLogin(page, kovoServer.origin, options),
       semantic: (selector, options) => snapshotLocator(page.locator(selector).first(), options),
+      verificationDiagnostics: () => kovoServer.verificationDiagnostics(),
     };
     await use(app);
   },

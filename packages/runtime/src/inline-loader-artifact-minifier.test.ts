@@ -33,9 +33,7 @@ describe('inline loader minified artifact', () => {
     ).not.toThrow();
     expect(inlineKovoLoaderInstallerSource).toContain("join('; ')");
     expect(inlineKovoLoaderInstallerSource).toContain('[...new Set(');
-    expect(inlineKovoLoaderInstallerSource).toContain(
-      'function readInlineMutationResponseBodyChunks(',
-    );
+    expect(inlineKovoLoaderInstallerSource).toContain('function ri(');
     expect(inlineKovoLoaderInstallerSource).not.toContain('readChunks(');
     expect(inlineKovoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('queryBody');
@@ -46,7 +44,7 @@ describe('inline loader minified artifact', () => {
     // calls so a malformed wire target degrades to "no target found" instead of
     // throwing and aborting the apply pass.
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "const ft=(target)=>{try{return(doc.querySelector('[kovo-c=\"'+target+'\"]')??doc.getElementById(target)??doc.querySelector('[kovo-fragment-target=\"'+target+'\"]'));}catch{return;}};",
+      "const ft=(target)=>{try{return(doc.querySelector('[kovo-c=\"'+target+'\"]')??doc.getElementById(target)??doc.querySelector('[kovo-fragment-target=\"'+target+'\"]')??doc.querySelector('kovo-defer[target=\"'+target+'\"]'));}catch{return;}};",
     );
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-param-types')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('DOMParser');
@@ -60,9 +58,7 @@ describe('inline loader minified artifact', () => {
     expect(() =>
       assertMinifiedInlineKovoLoaderInstallerResponseApplyParity(inlineKovoLoaderInstallerSource),
     ).not.toThrow();
-    expect(inlineKovoLoaderInstallerSource).toContain(
-      'function applyInlineMutationResponseChunks(',
-    );
+    expect(inlineKovoLoaderInstallerSource).toContain('function ai(');
     expect(inlineKovoLoaderInstallerSource).not.toContain(
       'function applyInlineMutationResponseBody(',
     );
@@ -70,18 +66,19 @@ describe('inline loader minified artifact', () => {
       'const dq=(type,init)=>{dispatchEvent(new CustomEvent(type,init));};',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body),{dispatchQueryEvent:dq,findFragmentTarget:ft,});',
+      "dq('kovo:query',{detail:{['quer'+'ies']:chunks.qs,},});",
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      "for(const x of chunks.fragments){if(x.mode==='append')continue;const e=ft(x.target);if(e)for(const y of qa(e,'[kovo-c]')){if(x.html.includes(y.getAttribute('kovo-c')))continue;y.a?.abort();}}ai(chunks,{ff:ft});",
     );
     expect(inlineKovoLoaderInstallerSource).toContain('function m(c,n)');
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'return p(chunks.fragments,(target)=>options.findFragmentTarget(target))',
+      'return p(chunks.fragments,(target)=>options.ff(target))',
     );
     expect(inlineKovoLoaderInstallerSource).toContain('function p(fs,f)');
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-key')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('innerHTML=html');
     expect(inlineKovoLoaderInstallerSource).not.toContain('applyResponseChunks');
-    expect(inlineKovoLoaderInstallerSource).toContain(
-      'detail:{queries:chunks.queries.map((query)=>({attrs:query.attrs,content:query.content})),}',
-    );
+    expect(inlineKovoLoaderInstallerSource).toContain("detail:{['quer'+'ies']:chunks.qs,}");
   });
 });

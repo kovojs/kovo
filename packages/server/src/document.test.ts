@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderContentSecurityPolicy } from './csp.js';
+import { kovoLoaderSource } from '@kovojs/runtime';
+
+import { cspSha256, renderContentSecurityPolicy } from './csp.js';
 import {
   renderDeferredDocument,
   renderDocument,
@@ -10,8 +12,14 @@ import {
 } from './document-core.js';
 import { renderDiagnosticDocument } from './document-diagnostics.js';
 
+const deferredApplyScript =
+  '<script>let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()</script>';
+const deferredCleanupScript =
+  '<script>for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()</script>';
+
 describe('server app shell document assembly', () => {
   it('assembles deterministic documents with hints, loader, and query hydration before body', () => {
+    const loaderHash = cspSha256(kovoLoaderSource);
     const document = renderDocument({
       body: '<main><cart-badge kovo-deps="cart"></cart-badge></main>',
       hints: {
@@ -26,11 +34,14 @@ describe('server app shell document assembly', () => {
     expect(document.earlyHints).toEqual({
       Link: '</assets/app.css>; rel=preload; as=style, </c/cart.client.js>; rel=modulepreload',
     });
-    expect(document.csp).toMatchInlineSnapshot(`
+    expect({
+      ...document.csp,
+      scripts: document.csp.scripts.map((hash) => (hash === loaderHash ? '<loader-hash>' : hash)),
+    }).toMatchInlineSnapshot(`
       {
         "scripts": [
           "sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=",
-          "sha256-mxqYebJyJ7GkY4SIYwJIQWKO2KGN0u1Zw/PntuofaVo=",
+          "<loader-hash>",
           "sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE=",
         ],
         "styles": [
@@ -38,16 +49,17 @@ describe('server app shell document assembly', () => {
         ],
       }
     `);
-    expect(renderContentSecurityPolicy(document.csp)).toMatchInlineSnapshot(
-      `"default-src 'self'; script-src 'self' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' 'sha256-mxqYebJyJ7GkY4SIYwJIQWKO2KGN0u1Zw/PntuofaVo=' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='"`,
-    );
+    expect(renderContentSecurityPolicy(document.csp).replaceAll(loaderHash, '<loader-hash>'))
+      .toMatchInlineSnapshot(
+        `"default-src 'self'; script-src 'self' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' '<loader-hash>' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='"`,
+      );
     expect(document.html).toContain('<!doctype html><html lang="en-US"><head>');
     expect(document.html).toContain('<title>Cart</title>');
     expect(document.html).toContain(
       '<style data-kovo-critical-href="/assets/app.css" data-kovo-csp-hash="sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E=">body{color:red}</style><link rel="stylesheet" href="/assets/app.css">',
     );
     expect(document.html).toContain(
-      '<script data-kovo-csp-hash="sha256-mxqYebJyJ7GkY4SIYwJIQWKO2KGN0u1Zw/PntuofaVo=">',
+      `<script data-kovo-csp-hash="${loaderHash}">`,
     );
     expect(document.html).toContain('installInlineKovoLoader');
     expect(document.html.indexOf('kovo-query="cart"')).toBeLessThan(
@@ -81,6 +93,50 @@ describe('server app shell document assembly', () => {
     expect(document.html).toContain('installInlineKovoLoader');
     expect(document.html).toContain('kovo-query="account"');
     expect(document.html).toContain('<body data-shell><main>Account</main></body>');
+  });
+
+  it('rejects document templates that drop assembled shell contracts', () => {
+    expect(() =>
+      renderDocument({
+        body: '<main>Account</main>',
+        template() {
+          return '<!doctype html><html><head></head><body></body></html>';
+        },
+      }),
+    ).toThrow(
+      'DocumentTemplate omitted required assembled document part(s): parts.head, parts.body.',
+    );
+
+    expect(() =>
+      renderDeferredDocument({
+        body: '<main>Deferred</main>',
+        chunks: [],
+        template({ parts }) {
+          return {
+            closeHtml: '</body></html>',
+            shell: `<!doctype html><html><head>${parts.head}</head><body>`,
+          };
+        },
+      }),
+    ).toThrow('DeferredDocumentTemplate omitted required assembled document part(s): parts.body.');
+
+    expect(() =>
+      renderDocument({
+        body: '<main>Account</main>',
+        queries: [{ name: 'account', value: { userId: 'u1' } }],
+        template({ parts }) {
+          return [
+            '<!doctype html>',
+            '<html>',
+            `<head>${parts.head}</head>`,
+            `<body>${parts.body}</body>`,
+            '</html>',
+          ].join('');
+        },
+      }),
+    ).toThrow(
+      'DocumentTemplate omitted required assembled document part(s): parts.queryScripts[0].',
+    );
   });
 
   it('wraps successful html route responses and preserves non-html outcomes', () => {
@@ -122,6 +178,7 @@ describe('server app shell document assembly', () => {
   });
 
   it('assembles deferred document streams with chunks before the closing shell', () => {
+    const loaderHash = cspSha256(kovoLoaderSource);
     const response = renderDeferredDocument({
       body: '<main><kovo-defer target="reviews:p1"></kovo-defer></main>',
       chunks: [
@@ -147,9 +204,7 @@ describe('server app shell document assembly', () => {
       status: 200,
     });
     expect(response.body).toContain('<link rel="stylesheet" href="/app.css">');
-    expect(response.body).toContain(
-      '<script data-kovo-csp-hash="sha256-mxqYebJyJ7GkY4SIYwJIQWKO2KGN0u1Zw/PntuofaVo=">',
-    );
+    expect(response.body).toContain(`<script data-kovo-csp-hash="${loaderHash}">`);
     expect(response.body.indexOf('<kovo-defer target="reviews:p1">')).toBeLessThan(
       response.body.indexOf('--kovo-boundary'),
     );
@@ -159,7 +214,10 @@ describe('server app shell document assembly', () => {
     expect(response.body).toContain(
       '<kovo-fragment target="reviews:p1"><link rel="stylesheet" href="/reviews.css"><section>Ready</section></kovo-fragment>',
     );
-    expect(response.body.endsWith('--kovo-boundary--\n</body></html>')).toBe(true);
+    expect(response.body).toContain(deferredApplyScript);
+    expect(
+      response.body.endsWith(`--kovo-boundary--\n${deferredCleanupScript}\n</body></html>`),
+    ).toBe(true);
   });
 
   it('renders stable error documents with escaped content', () => {

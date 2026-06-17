@@ -48,8 +48,8 @@ import {
   reserveMutationReplayBeforeRun,
 } from './replay.js';
 import {
+  isSchemaValidationError,
   parseSchemaAsync,
-  SchemaValidationError,
   type InferSchema,
   type Schema,
   type ValidationFailurePayload,
@@ -732,7 +732,7 @@ async function parseMutationInput<InputSchema extends Schema<unknown>>(
       value: (await parseSchemaAsync(schema, rawInput)) as InferSchema<InputSchema>,
     };
   } catch (error) {
-    if (!(error instanceof SchemaValidationError)) throw error;
+    if (!isSchemaValidationError(error)) throw error;
 
     return {
       failure: {

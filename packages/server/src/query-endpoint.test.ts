@@ -7,7 +7,7 @@ import {
   renderQueryRegistryEndpointResponse,
   runQuery,
 } from './query.js';
-import { s } from './schema.js';
+import { s, type Schema } from './schema.js';
 
 describe('query endpoints', () => {
   it('runs query endpoints through args schemas, guards, and request context', async () => {
@@ -84,6 +84,67 @@ describe('query endpoints', () => {
     });
   });
 
+  it('renders structurally recognized args schema failures as safe 422 JSON', async () => {
+    const productQuery = query('product', {
+      args: alienValidationSchema<{ id: string }>('Expected string', ['id']),
+      load(input: { id: string }) {
+        return { id: input.id };
+      },
+      reads: [domain('product')],
+    });
+
+    await expect(renderQueryEndpointResponse(productQuery, { request: {} })).resolves.toEqual({
+      body: '{"code":"VALIDATION","payload":{"issues":[{"message":"Expected string","path":["id"]}]}}',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      status: 422,
+    });
+  });
+
+  it('validates query output schemas before rendering typed read wire HTML', async () => {
+    const productQuery = query('product', {
+      load() {
+        return { id: 'p1', stock: 3 };
+      },
+      output: s.object({ id: s.string(), stock: s.number().int() }),
+      reads: [domain('product')],
+    });
+
+    await expect(runQuery(productQuery, {}, {})).resolves.toEqual({
+      input: {},
+      ok: true,
+      value: { id: 'p1', stock: 3 },
+    });
+    await expect(renderQueryEndpointResponse(productQuery, { request: {} })).resolves.toEqual({
+      body: '<kovo-query name="product">{"id":"p1","stock":3}</kovo-query>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    });
+  });
+
+  it('reports query output schema drift as safe KV410 JSON', async () => {
+    const productQuery = query('product', {
+      load() {
+        return { id: 'p1', stock: 'three' };
+      },
+      output: s.object({ id: s.string(), stock: s.number().int() }) as unknown as Schema<{
+        id: string;
+        stock: string;
+      }>,
+      reads: [domain('product')],
+    });
+
+    await expect(runQuery(productQuery, {}, {})).resolves.toEqual({
+      error: { code: 'KV410', payload: {} },
+      ok: false,
+      status: 500,
+    });
+    await expect(renderQueryEndpointResponse(productQuery, { request: {} })).resolves.toEqual({
+      body: '{"code":"KV410","payload":{}}',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      status: 500,
+    });
+  });
+
   it('dispatches typed read endpoints through a query registry', async () => {
     const productQuery = query('product', {
       args: s.object({ id: s.string() }),
@@ -116,3 +177,16 @@ describe('query endpoints', () => {
     });
   });
 });
+
+function alienValidationSchema<T>(message: string, path: readonly string[]): Schema<T> {
+  return {
+    parse(): T {
+      const error = new Error(message) as Error & {
+        issues: readonly { message: string; path: readonly string[] }[];
+      };
+      error.name = 'SchemaValidationError';
+      error.issues = [{ message, path }];
+      throw error;
+    },
+  };
+}

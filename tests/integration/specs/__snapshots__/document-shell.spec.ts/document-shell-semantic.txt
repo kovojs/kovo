@@ -1,0 +1,15 @@
+<html>
+  <head>
+    <meta>
+    <meta name="viewport">
+    <title>
+      "Document Shell"
+    <script>
+  <body>
+    <script kovo-query="shell" type="application/json">
+    <main>
+      <h1>
+        "Document Shell"
+      <section kovo-deps="shell">
+        <output data-bind="shell.message">
+          "Shell ready"

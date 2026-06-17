@@ -37,6 +37,11 @@ export interface DeferredStreamResponse extends ServerResponseBase<
   200
 > {}
 
+const deferredChunkApplyScript =
+  '<script>let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()</script>';
+const deferredCloseCleanupScript =
+  '<script>for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()</script>';
+
 export function renderDeferredStream(options: DeferredStreamOptions): DeferredStreamResponse {
   const boundary = options.boundary ?? 'kovo-boundary';
   const chunks = sortDeferredChunks(options.chunks).map((chunk) =>
@@ -44,11 +49,18 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
       `--${boundary}`,
       ...renderDeferredQueryChunks(chunk.queries ?? []),
       ...sortDeferredFragments(chunk.fragments).map(renderDeferredFragmentChunk),
+      deferredChunkApplyScript,
     ].join('\n'),
   );
 
   return {
-    body: [options.shell, ...chunks, `--${boundary}--`, options.closeHtml ?? ''].join('\n'),
+    body: [
+      options.shell,
+      ...chunks,
+      `--${boundary}--`,
+      deferredCloseCleanupScript,
+      options.closeHtml ?? '',
+    ].join('\n'),
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
     },

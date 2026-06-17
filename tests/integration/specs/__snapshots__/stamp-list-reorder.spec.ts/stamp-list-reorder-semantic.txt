@@ -1,0 +1,22 @@
+<board-list kovo-deps="board">
+  <ol aria-label="Board order" data-bind-list="board.items" kovo-key="id">
+    <li data-row="b" kovo-key="b">
+      <span data-bind=".rank">
+        "1"
+      <span data-bind=".label">
+        "Beta"
+    <li data-row="c" kovo-key="c">
+      <span data-bind=".rank">
+        "2"
+      <span data-bind=".label">
+        "Gamma"
+    <li data-row="a" kovo-key="a">
+      <span data-bind=".rank">
+        "3"
+      <span data-bind=".label">
+        "Alpha moved"
+    <template>
+      <li data-row="" kovo-key="">
+        <span data-bind=".rank">
+          "0"
+        <span data-bind=".label">

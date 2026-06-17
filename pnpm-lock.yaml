@@ -178,15 +178,9 @@ importers:
       '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
-      '@tailwindcss/vite':
-        specifier: ^4.3.0
-        version: 4.3.0(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
       kovo:
         specifier: workspace:*
         version: link:../../packages/cli
-      tailwindcss:
-        specifier: ^4.3.0
-        version: 4.3.0
       vite:
         specifier: 8.0.16
         version: 8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)
@@ -286,15 +280,9 @@ importers:
       '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
-      '@tailwindcss/vite':
-        specifier: ^4.3.0
-        version: 4.3.0(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
       kovo:
         specifier: workspace:*
         version: link:../../packages/cli
-      tailwindcss:
-        specifier: ^4.3.0
-        version: 4.3.0
       vite:
         specifier: 8.0.16
         version: 8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)
@@ -549,12 +537,34 @@ importers:
       '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@kovojs/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
       '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
+      axe-core:
+        specifier: 4.12.1
+        version: 4.12.1
+      kovo:
+        specifier: workspace:*
+        version: link:../../packages/cli
+    devDependencies:
+      '@kovojs/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
+      '@playwright/test':
+        specifier: 1.60.0
+        version: 1.60.0
+      '@tailwindcss/node':
+        specifier: ^4.3.0
+        version: 4.3.0
+      tailwindcss:
+        specifier: ^4.3.0
+        version: 4.3.0
 
 packages:
 

@@ -68,8 +68,8 @@ function installInlineKovoLoader(im) {
   const doc = document;
   let ic = 0;
   const ci = () =>
-    crypto.randomUUID?.() ??
-    'idem_' + Date.now().toString(36) + '_' + (ic += 1).toString(36);
+    crypto.randomUUID?.() ||
+    'i_' + Date.now().toString(36) + '_' + (ic += 1).toString(36);
   const rh = (el) => el.closest?.('[kovo-state]') ?? el;
   const rs = (el) => {
     try {
@@ -112,9 +112,9 @@ function installInlineKovoLoader(im) {
       el.indeterminate = val != null;
     }
   };
-  const ws = (el, path, bt, state) => {
-    if (!path?.startsWith('state.')) return;
-    const val = vp(state, path.slice('state.'.length));
+  const ws = (el, path, bt, state, root = 'state') => {
+    if (!path?.startsWith(root + '.')) return;
+    const val = vp(state, path.slice(root.length + 1));
     if (bt) {
       wa(el, bt, val);
     } else if (el.value !== undefined) {
@@ -184,7 +184,7 @@ function installInlineKovoLoader(im) {
           const deps = rd(el.getAttribute('kovo-deps'));
           const target =
             el.getAttribute('kovo-fragment-target') ?? el.id ?? el.getAttribute('kovo-c');
-          return target && (deps.length > 0 ? target + '=' + deps.join(' ') : target);
+          return target && (deps.length ? target + '=' + deps.join(' ') : target);
         })
         .filter(Boolean)
     )
@@ -199,12 +199,14 @@ function installInlineKovoLoader(im) {
       return (
         doc.querySelector('[kovo-c="' + target + '"]') ??
         doc.getElementById(target) ??
-        doc.querySelector('[kovo-fragment-target="' + target + '"]')
+        doc.querySelector('[kovo-fragment-target="' + target + '"]') ??
+        doc.querySelector('kovo-defer[target="' + target + '"]')
       );
     } catch {
       return;
     }
   };
+  const hs = (el) => ((el = el.closest('[kovo-c]') || el).a ||= new AbortController()).signal;
   for (const el of qa(
     doc,
     'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
@@ -217,11 +219,23 @@ function installInlineKovoLoader(im) {
     dispatchEvent(new CustomEvent(type, init));
   };
   const ab = (body) => {
-    applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body), {
-      dispatchQueryEvent: dq,
-      findFragmentTarget: ft,
+    const chunks = readInlineMutationResponseBodyChunks(body);
+    dq('kovo:query', {
+      detail: {
+        ['quer' + 'ies']: chunks.queries,
+      },
     });
+    for (const x of chunks.fragments) {
+      if (x.mode === 'append') continue;
+      const e = ft(x.target);
+      if (e) for (const y of qa(e, '[kovo-c]')) {
+        if (x.html.includes(y.getAttribute('kovo-c'))) continue;
+        y.a?.abort();
+      }
+    }
+    applyInlineMutationResponseChunks(chunks, { findFragmentTarget: ft });
   };
+  globalThis.__kovo_a = ab;
   const fsb = (form) => {
     if (typeof form.submit === 'function') {
       form.submit();
@@ -230,15 +244,10 @@ function installInlineKovoLoader(im) {
     form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
     form.setAttribute?.('kovo-error', '');
   };
-  const ha = (form, name) => form.getAttribute?.(name) != null;
-  const ief = (form) =>
-    ha(form, 'enhance') ||
-    ha(form, 'data-enhance') ||
-    ha(form, 'data-mutation');
   const sef = (event, form) => {
     event.preventDefault();
     fetch(form.action, {
-      body: new FormData(form),
+      body: new FormData(form, event.submitter),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',
@@ -261,7 +270,7 @@ function installInlineKovoLoader(im) {
   const dispatch = async (event) => {
     if (event.type === 'submit') {
       const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]',);
-      if (form && ief(form)) {
+      if (form) {
         sef(event, form);
         return;
       }
@@ -273,7 +282,7 @@ function installInlineKovoLoader(im) {
     const pt = rp(el);
     const state = rs(el);
     const st = rh(el);
-    const context = { params, state, signal: new AbortController().signal };
+    const context = { params, state, signal: hs(el) };
     for (const attr of el.attributes || []) {
       if (!attr.name.startsWith('data-p-')) continue;
       const name = attr.name
@@ -313,20 +322,25 @@ function installInlineKovoLoader(im) {
     );
   crossing('pointerover', 'pointerenter');
   crossing('pointerout', 'pointerleave');
-  doc.querySelectorAll('[on\\:load]').forEach((el) => trigger('load', el));
-  doc
-    .querySelectorAll('[on\\:idle]')
-    .forEach((el) => (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el)),);
-  if (globalThis.IntersectionObserver) {
-    const observer = new IntersectionObserver((entries) =>
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        observer.unobserve(entry.target);
-        trigger('visible', entry.target);
-      }),
-    );
-    doc.querySelectorAll('[on\\:visible]').forEach((el) => observer.observe(el));
-  }
+  // SPEC.md §4.7: declared triggers are legible in body markup, while the default
+  // document emits the loader in <head>. Defer the scan one task so the parser can
+  // continue into the body; event delegation above is installed immediately.
+  setTimeout(() => {
+    doc.querySelectorAll('[on\\:load]').forEach((el) => trigger('load', el));
+    doc
+      .querySelectorAll('[on\\:idle]')
+      .forEach((el) => (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el)),);
+    if (globalThis.IntersectionObserver) {
+      const observer = new IntersectionObserver((entries) =>
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          observer.unobserve(entry.target);
+          trigger('visible', entry.target);
+        }),
+      );
+      doc.querySelectorAll('[on\\:visible]').forEach((el) => observer.observe(el));
+    }
+  });
 }
 `;
 }
@@ -609,9 +623,12 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
   // the parse-checked minifier runs.
   const replacements = new Map([
     ['readMutationResponseBodyCore', 'rb'],
+    ['readInlineMutationResponseBodyChunks', 'ri'],
     ['readMutationResponseElementChunks', 'rc'],
     ['readFragmentChunksFromElements', 'rfs'],
     ['readFragmentElementChunk', 'rf'],
+    ['applyInlineMutationResponseChunks', 'ai'],
+    ['findFragmentTarget', 'ff'],
     ['readElementChunks', 're'],
     ['matchingElementEnd', 'me'],
     ['escapeRegExp', 'er'],
@@ -623,6 +640,7 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['elementTag', 'et'],
     ['closeStart', 'cs'],
     ['queryOptions', 'qo'],
+    ['queries', 'qs'],
     ['fragmentOptions', 'fo'],
     ['onMalformedQuery', 'oq'],
     ['onMalformedFragment', 'of'],
@@ -631,6 +649,7 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['current', 'cur'],
     ['segment', 'seg'],
     ['attribute', 'attr'],
+    ['response', 'res'],
     // Installer-local helper names (not referenced by the parity-checked helper
     // closures); compacting them reclaims gzip headroom for the M10 selector
     // guard within the SPEC.md §4.4 4KB ceiling.
@@ -639,6 +658,12 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['crossing', 'cr'],
     ['enterType', 'en'],
     ['overType', 'ov'],
+    ['selector', 'sl'],
+    ['component', 'cp'],
+    ['island', 'is'],
+    ['existing', 'ex'],
+    ['controller', 'ac'],
+    ['nextHtml', 'nh'],
   ]);
   let compacted = source;
 

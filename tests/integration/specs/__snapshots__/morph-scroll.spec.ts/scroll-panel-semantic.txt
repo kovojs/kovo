@@ -1,0 +1,62 @@
+<section kovo-deps="scroll" kovo-fragment-target="scroll-panel" kovo-key="scroll-panel">
+  <div kovo-key="scroll-region">
+    <p data-row="1" kovo-key="row-1">
+      "Stable row 1"
+    <p data-row="2" kovo-key="row-2">
+      "Stable row 2"
+    <p data-row="3" kovo-key="row-3">
+      "Stable row 3"
+    <p data-row="4" kovo-key="row-4">
+      "Stable row 4"
+    <p data-row="5" kovo-key="row-5">
+      "Stable row 5"
+    <p data-row="6" kovo-key="row-6">
+      "Stable row 6"
+    <p data-row="7" kovo-key="row-7">
+      "Stable row 7"
+    <p data-row="8" kovo-key="row-8">
+      "Stable row 8"
+    <p data-row="9" kovo-key="row-9">
+      "Stable row 9"
+    <p data-row="10" kovo-key="row-10">
+      "Stable row 10"
+    <p data-row="11" kovo-key="row-11">
+      "Stable row 11"
+    <p data-row="12" kovo-key="row-12">
+      "Stable row 12"
+    <p data-row="13" kovo-key="row-13">
+      "Stable row 13"
+    <p data-row="14" kovo-key="row-14">
+      "Inserted content version 1"
+    <p data-row="15" kovo-key="row-15">
+      "Stable row 15"
+    <p data-row="16" kovo-key="row-16">
+      "Stable row 16"
+    <p data-row="17" kovo-key="row-17">
+      "Stable row 17"
+    <p data-row="18" kovo-key="row-18">
+      "Stable row 18"
+    <p data-row="19" kovo-key="row-19">
+      "Stable row 19"
+    <p data-row="20" kovo-key="row-20">
+      "Stable row 20"
+    <p data-row="21" kovo-key="row-21">
+      "Stable row 21"
+    <p data-row="22" kovo-key="row-22">
+      "Stable row 22"
+    <p data-row="23" kovo-key="row-23">
+      "Stable row 23"
+    <p data-row="24" kovo-key="row-24">
+      "Stable row 24"
+    <p data-row="25" kovo-key="row-25">
+      "Stable row 25"
+    <p data-row="26" kovo-key="row-26">
+      "Stable row 26"
+    <p data-row="27" kovo-key="row-27">
+      "Stable row 27"
+    <p data-row="28" kovo-key="row-28">
+      "Stable row 28"
+  <p>
+    "Server version"
+    <output data-bind="scroll.version">
+      "1"

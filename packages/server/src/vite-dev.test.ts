@@ -29,10 +29,17 @@ describe('server app shell Vite dev seam', () => {
     ).toBe(true);
     expect(
       shouldHandleKovoAppShellViteRequest(request('/products/p1', { method: 'POST' }), app),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldHandleKovoAppShellViteRequest(request('/_m/cart/add', { method: 'POST' }), app),
     ).toBe(true);
+    expect(
+      shouldHandleKovoAppShellViteRequest(
+        request('/missing', { headers: { accept: 'text/html' } }),
+        app,
+      ),
+    ).toBe(true);
+    expect(shouldHandleKovoAppShellViteRequest(request('/missing'), app)).toBe(false);
     expect(shouldHandleKovoAppShellViteRequest(request('/c/dev.client.js?v=r7'), app)).toBe(true);
     expect(shouldHandleKovoAppShellViteRequest(request('/c/dev.client.js'), app)).toBe(false);
     expect(shouldHandleKovoAppShellViteRequest(request('/src/styles.css'), app)).toBe(false);
@@ -69,6 +76,54 @@ describe('server app shell Vite dev seam', () => {
         'Content-Type': 'text/html; charset=utf-8',
       },
       status: 500,
+    });
+  });
+
+  it('keeps non-error module diagnostics observable without making them blocking', () => {
+    const diagnostics = createKovoAppShellDevDiagnosticLedger();
+    diagnostics.recordModuleDiagnostics({
+      diagnostics: [
+        {
+          code: 'KV210',
+          fileName: 'src/components/cart.tsx',
+          message: 'Anonymous handler; name it for stable identity.',
+        },
+      ],
+      fileName: 'src/components/cart.tsx',
+      moduleHrefs: ['/c/custom-cart.client.js?v=lint'],
+    });
+
+    expect(diagnostics.diagnosticsForModuleHref('/c/custom-cart.client.js?v=lint')).toBeUndefined();
+    expect(diagnostics.allDiagnosticsForFile('src/components/cart.tsx')).toMatchObject({
+      diagnostics: [{ code: 'KV210' }],
+      fileName: 'src/components/cart.tsx',
+    });
+    expect(
+      diagnostics.allDiagnosticsForModuleHref('/c/custom-cart.client.js?v=lint'),
+    ).toMatchObject({
+      diagnostics: [{ code: 'KV210' }],
+      fileName: 'src/components/cart.tsx',
+    });
+
+    diagnostics.recordModuleDiagnostics({
+      diagnostics: [
+        {
+          code: 'KV225',
+          fileName: 'src/components/cart.tsx',
+          message: 'JSX nesting violates the HTML content model.',
+        },
+      ],
+      fileName: 'src/components/cart.tsx',
+    });
+
+    expect(
+      diagnostics.allDiagnosticsForModuleHref('/c/custom-cart.client.js?v=lint'),
+    ).toBeUndefined();
+    expect(
+      diagnostics.diagnosticsForModuleHref('/c/src/components/cart.client.js?v=failed'),
+    ).toMatchObject({
+      diagnostics: [{ code: 'KV225' }],
+      fileName: 'src/components/cart.tsx',
     });
   });
 

@@ -1,0 +1,7 @@
+<main>
+  <h1>
+    "Event chain"
+  <button kovo-state="{}" on:click="/client.ts#author /client.ts#primitive" type="button">
+    "Run chain"
+  <output>
+    "author:prevented,primitive:saw-prevented"

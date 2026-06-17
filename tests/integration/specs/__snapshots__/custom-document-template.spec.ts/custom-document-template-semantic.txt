@@ -1,0 +1,18 @@
+<html data-template="custom">
+  <head>
+    <meta>
+    <meta name="kovo-template">
+    <title>
+      "Custom Document Template"
+    <script>
+  <body>
+    <header role="banner">
+      "Custom Chrome"
+    <div>
+      <main>
+        <h1>
+          "Custom Document Template"
+        <button kovo-state="{}" on:click="/client.ts#mark" type="button">
+          "Run client handler"
+        <output>
+          "handler ran"

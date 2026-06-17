@@ -1,0 +1,4 @@
+<deal-card kovo-deps="deal" kovo-fragment-target="deal-card">
+  <output data-bind="deal.contact?.name">
+  <a data-bind:aria-label="deal.contact?.name" data-bind:href="deal.contact?.name">
+    "Contact"

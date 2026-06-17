@@ -106,6 +106,8 @@ export interface KovoAppShellDevDiagnosticRecord {
  * Exported only for in-repo build/host config, not app authors.
  */
 export interface KovoAppShellDevDiagnosticLedger {
+  allDiagnosticsForFile(fileName: string): KovoAppShellDevDiagnosticRecord | undefined;
+  allDiagnosticsForModuleHref(href: string): KovoAppShellDevDiagnosticRecord | undefined;
   diagnosticsForModuleHref(href: string): KovoAppShellDevDiagnosticRecord | undefined;
   recordModuleDiagnostics(record: KovoAppShellDevModuleDiagnostics): void;
 }
@@ -116,19 +118,27 @@ export interface KovoAppShellDevDiagnosticLedger {
  * Exported only for in-repo build/host config, not app authors.
  */
 export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnosticLedger {
+  const allModuleRecords = new Map<string, KovoAppShellDevDiagnosticRecord>();
+  const allHrefToFileName = new Map<string, string>();
   const moduleRecords = new Map<string, KovoAppShellDevDiagnosticRecord>();
   const hrefToFileName = new Map<string, string>();
 
   return {
+    allDiagnosticsForFile(fileName) {
+      return allModuleRecords.get(slashPath(fileName));
+    },
+    allDiagnosticsForModuleHref(href) {
+      const fileName = allHrefToFileName.get(normalizedModuleHref(href));
+      return fileName === undefined ? undefined : allModuleRecords.get(fileName);
+    },
     diagnosticsForModuleHref(href) {
       const fileName = hrefToFileName.get(normalizedModuleHref(href));
       return fileName === undefined ? undefined : moduleRecords.get(fileName);
     },
     recordModuleDiagnostics(record) {
       const fileName = slashPath(record.fileName);
+      clearModuleRecord(fileName, allModuleRecords, allHrefToFileName);
       clearModuleRecord(fileName, moduleRecords, hrefToFileName);
-
-      if (!record.diagnostics.some(isErrorDiagnostic)) return;
 
       const nextRecord: KovoAppShellDevDiagnosticRecord = {
         diagnostics: record.diagnostics,
@@ -136,6 +146,13 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
         ...(record.moduleHrefs === undefined ? {} : { moduleHrefs: record.moduleHrefs }),
         ...(record.source === undefined ? {} : { source: record.source }),
       };
+      allModuleRecords.set(fileName, nextRecord);
+      for (const href of moduleDiagnosticHrefs(nextRecord)) {
+        allHrefToFileName.set(normalizedModuleHref(href), fileName);
+      }
+
+      if (!record.diagnostics.some(isErrorDiagnostic)) return;
+
       moduleRecords.set(fileName, nextRecord);
 
       for (const href of moduleDiagnosticHrefs(nextRecord)) {
@@ -215,8 +232,7 @@ export function shouldHandleKovoAppShellViteRequest(
     routes: app.routes,
   });
 
-  if (match.kind === 'not-found') return false;
-  if (match.kind === 'route') return match.methodAllowed;
+  if (match.kind === 'not-found') return isHtmlNavigationRequest(request);
 
   return true;
 }
@@ -239,6 +255,15 @@ function isUnversionedKovoAppShellClientModuleRequest(url: URL): boolean {
   // During Vite dev, unversioned /c/ URLs must keep falling through to Vite's
   // asset/middleware stack instead of being claimed by app replay.
   return url.pathname.startsWith('/c/') && !url.searchParams.has('v');
+}
+
+function isHtmlNavigationRequest(request: IncomingMessage): boolean {
+  if (request.method !== undefined && request.method !== 'GET' && request.method !== 'HEAD') {
+    return false;
+  }
+
+  const accept = readHeader(request.headers, 'accept')?.toLowerCase() ?? '';
+  return accept.includes('text/html');
 }
 
 /**

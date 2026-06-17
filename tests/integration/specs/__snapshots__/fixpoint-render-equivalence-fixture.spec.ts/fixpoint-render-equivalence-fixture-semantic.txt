@@ -1,0 +1,9 @@
+<fixpoint-render-equivalence-card kovo-state="{\"count\":2,\"open\":false}">
+  <h1>
+    "Fixpoint render equivalence"
+  <output data-bind="state.count">
+    "2"
+  <button aria-expanded="false" type="button">
+    "Toggle panel"
+  <section>
+    "Panel body"
