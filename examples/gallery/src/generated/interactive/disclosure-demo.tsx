@@ -45,26 +45,27 @@ export const GalleryDisclosureDemo = component({
     >
       <button
         aria-controls="gallery-interactive-disclosure-panel"
-        aria-expanded={String(state.open)}
-        data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_aria_expanded_derive"
         class={TRIGGER_CLASS}
-        data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_data_state_derive"
         on:click="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_click"
         type="button"
+        aria-expanded={String(state.open)}
+        data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_aria_expanded_derive"
+        data-state={state.open ? 'open' : 'closed'}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$button_data_state_derive"
       >
         Shipping rules
       </button>
       <div
         class={CONTENT_CLASS}
+        id="gallery-interactive-disclosure-panel"
         data-state={state.open ? 'open' : 'closed'}
         data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$div_data_state_derive"
         hidden={!state.open}
         data-bind:hidden="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=267ec72f#GalleryDisclosureDemo$div_hidden_derive"
-        id="gallery-interactive-disclosure-panel"
       >
         Orders over $50 ship free.
       </div>
     </section>
   ),
 });
+GalleryDisclosureDemo.name = 'generated/interactive/disclosure-demo/gallery-disclosure-demo';

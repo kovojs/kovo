@@ -49,30 +49,30 @@ export const GalleryPopoverDemo = component({
 
     return (
       <section
-        {...popoverRootAttributes({ open: state.open })}
         class={ROOT_CLASS}
         data-gallery-interactive="popover"
+        {...popoverRootAttributes({ open: state.open })}
         data-state={state.open ? 'open' : 'closed'}
         data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$section_data_state_derive"
         kovo-c="gallery-popover-demo"
         kovo-state='{"open":false}'
       >
         <button
+          class={TRIGGER_CLASS}
           {...popoverTriggerAttributes({ contentId, open: state.open })}
           aria-expanded={state.open ? 'true' : 'false'}
           data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$button_aria_expanded_derive"
-          class={TRIGGER_CLASS}
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$button_data_state_derive"
         >
           Delivery window
         </button>
         <div
-          {...popoverContentAttributes({ contentId, open: state.open })}
           class={CONTENT_CLASS}
+          on:beforetoggle="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$div_beforetoggle"
+          {...popoverContentAttributes({ contentId, open: state.open })}
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$div_data_state_derive"
-          on:beforetoggle="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=284715ea#GalleryPopoverDemo$div_beforetoggle"
         >
           Weekday arrivals are available from 9 AM to 5 PM.
         </div>
@@ -86,3 +86,4 @@ export const GalleryPopoverDemo = component({
     );
   },
 });
+GalleryPopoverDemo.name = 'generated/interactive/popover-demo/gallery-popover-demo';

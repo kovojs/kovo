@@ -117,6 +117,63 @@ export const ProductCard = component({
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
   });
 
+  it('lowers state style objects through generated style-property derives', () => {
+    const result = compileComponentModule({
+      fileName: 'slider-demo.tsx',
+      source: `
+export const SliderDemo = component({
+  state: () => ({ value: 50 }),
+  render: (_queries, state) => (
+    <slider-demo>
+      <span style={{ width: \`\${state.value}%\` }} />
+      <span style={{ left: \`\${state.value}%\`, top: '50%', transform: 'translate(-50%, -50%)' }} />
+    </slider-demo>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect({
+      clientSource: clientSource.replace(/v=[0-9a-f]{8}/g, 'v=HASH'),
+      diagnostics: result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236'),
+      serverSource: serverSource.replace(/v=[0-9a-f]{8}/g, 'v=HASH'),
+    }).toMatchInlineSnapshot(`
+      {
+        "clientSource": "// @kovojs-ir
+      import { derive, kovoStyleProperty } from '@kovojs/runtime';
+
+      export const SliderDemo$span_style_derive = derive(["state"], (state) => [kovoStyleProperty("width", \`\${state.value}%\`)].filter(Boolean).join('; '));
+      export const SliderDemo$span_style_derive_2 = derive(["state"], (state) => [kovoStyleProperty("left", \`\${state.value}%\`), kovoStyleProperty("top", '50%'), kovoStyleProperty("transform", 'translate(-50%, -50%)')].filter(Boolean).join('; '));
+      ",
+        "diagnostics": [],
+        "serverSource": "// @kovojs-ir
+      export function renderSource() {
+        return \`import { derive, kovoStyleProperty } from '@kovojs/runtime';
+
+      export const SliderDemo$span_style_derive = derive(["state"], (state: any) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
+      export const SliderDemo$span_style_derive_2 = derive(["state"], (state: any) => [kovoStyleProperty("left", \\\`\\\${state.value}%\\\`), kovoStyleProperty("top", '50%'), kovoStyleProperty("transform", 'translate(-50%, -50%)')].filter(Boolean).join('; '));
+
+
+      export const SliderDemo = component({
+        state: () => ({ value: 50 }),
+        render: (_queries, state) => (
+          <slider-demo kovo-state="{&quot;value&quot;:50}">
+            <span style={{ width: \\\`\\\${state.value}%\\\` }} data-bind:style="/c/slider-demo.client.js?v=HASH#SliderDemo$span_style_derive" />
+            <span style={{ left: \\\`\\\${state.value}%\\\`, top: '50%', transform: 'translate(-50%, -50%)' }} data-bind:style="/c/slider-demo.client.js?v=HASH#SliderDemo$span_style_derive_2" />
+          </slider-demo>
+        ),
+      });
+      SliderDemo.name = "slider-demo/slider-demo";
+      \`;
+      }
+      ",
+      }
+    `);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('escapes list template stamps in the client HTML-fragment path', () => {
     const result = compileComponentModule({
       fileName: 'cart-list.tsx',

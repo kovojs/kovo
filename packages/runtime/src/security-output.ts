@@ -41,11 +41,29 @@ export function kovoBoundAttributeValue(name: string, value: unknown): string {
 export function kovoStyleProperty(name: string, value: unknown): string {
   if (value === undefined || value === null || value === '') return '';
 
-  if (name === 'view-transition-name') {
+  const propertyName = normalizeCssPropertyName(name);
+  if (propertyName === 'view-transition-name') {
     return `view-transition-name: ${sanitizeCssIdentifier(String(value))}`;
   }
 
+  if (SAFE_LENGTH_PROPERTIES.has(propertyName)) {
+    const rendered = sanitizeCssLengthPercentage(value);
+    return rendered === null ? '' : `${propertyName}: ${rendered}`;
+  }
+
+  if (propertyName === 'transform') {
+    const rendered = sanitizeCssTransform(value);
+    return rendered === null ? '' : `${propertyName}: ${rendered}`;
+  }
+
   return '';
+}
+
+export function kovoStyleProperties(properties: Record<string, unknown>): string {
+  return Object.entries(properties)
+    .map(([name, value]) => kovoStyleProperty(name, value))
+    .filter(Boolean)
+    .join('; ');
 }
 
 function formatOutputValue(value: unknown): string {
@@ -90,4 +108,43 @@ function sanitizeCssIdentifier(value: string): string {
   if (/^-?[_a-zA-Z][-_a-zA-Z0-9]*$/.test(trimmed)) return trimmed;
 
   return trimmed.replace(/[^-_a-zA-Z0-9]/g, '-').replace(/^-?[^_a-zA-Z]+/, 'kovo-');
+}
+
+const SAFE_LENGTH_PROPERTIES = new Set([
+  'bottom',
+  'height',
+  'left',
+  'max-height',
+  'max-width',
+  'min-height',
+  'min-width',
+  'right',
+  'top',
+  'width',
+]);
+
+function normalizeCssPropertyName(name: string): string {
+  if (name.startsWith('--')) return name;
+  return name.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`).toLowerCase();
+}
+
+function sanitizeCssLengthPercentage(value: unknown): string | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
+
+  const rendered = String(value).trim();
+  if (/^-?(?:\d+|\d*\.\d+)(?:%|px|rem|em|vh|vw|vmin|vmax|ch|ex|lh|rlh)?$/.test(rendered)) {
+    return rendered;
+  }
+
+  return null;
+}
+
+function sanitizeCssTransform(value: unknown): string | null {
+  const rendered = String(value).trim();
+  const match = /^translate(?:3d|X|Y)?\((.*)\)$/.exec(rendered);
+  if (!match) return null;
+
+  const parts = (match[1] ?? '').split(',').map((part) => part.trim());
+  if (parts.length < 1 || parts.length > 3) return null;
+  return parts.every((part) => sanitizeCssLengthPercentage(part) !== null) ? rendered : null;
 }

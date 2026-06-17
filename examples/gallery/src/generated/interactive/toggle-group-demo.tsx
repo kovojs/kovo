@@ -90,18 +90,18 @@ export const GalleryToggleGroupDemo = component({
         <div class={GROUP_CLASS}>
           <span {...toggleGroupItemAttributes(boldState)} class={ITEM_CLASS}>
             <button
+              class={BUTTON_CLASS}
+              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dcaea183#GalleryToggleGroupDemo$button_click"
               {...toggleGroupButtonAttributes({
                 ...boldState,
                 id: 'gallery-toggle-group-bold',
               })}
               aria-pressed={String(state.value === 'bold' || state.value === 'bold,italic')}
               data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dcaea183#GalleryToggleGroupDemo$button_aria_pressed_derive"
-              class={BUTTON_CLASS}
               data-state={
                 state.value === 'bold' || state.value === 'bold,italic' ? 'pressed' : 'off'
               }
               data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dcaea183#GalleryToggleGroupDemo$button_data_state_derive"
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dcaea183#GalleryToggleGroupDemo$button_click"
               tabIndex={state.activeValue === 'bold' ? 0 : -1}
               data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dcaea183#GalleryToggleGroupDemo$button_tabIndex_derive"
             >
@@ -123,18 +123,18 @@ export const GalleryToggleGroupDemo = component({
           </span>
           <span {...toggleGroupItemAttributes(italicState)} class={ITEM_CLASS}>
             <button
+              class={BUTTON_CLASS}
+              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dcaea183#GalleryToggleGroupDemo$button_click_2"
               {...toggleGroupButtonAttributes({
                 ...italicState,
                 id: 'gallery-toggle-group-italic',
               })}
               aria-pressed={String(state.value === 'italic' || state.value === 'bold,italic')}
               data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dcaea183#GalleryToggleGroupDemo$button_aria_pressed_derive_2"
-              class={BUTTON_CLASS}
               data-state={
                 state.value === 'italic' || state.value === 'bold,italic' ? 'pressed' : 'off'
               }
               data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dcaea183#GalleryToggleGroupDemo$button_data_state_derive_2"
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dcaea183#GalleryToggleGroupDemo$button_click_2"
               tabIndex={state.activeValue === 'italic' ? 0 : -1}
               data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dcaea183#GalleryToggleGroupDemo$button_tabIndex_derive_2"
             >
@@ -153,3 +153,4 @@ export const GalleryToggleGroupDemo = component({
     );
   },
 });
+GalleryToggleGroupDemo.name = 'generated/interactive/toggle-group-demo/gallery-toggle-group-demo';

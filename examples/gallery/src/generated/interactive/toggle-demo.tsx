@@ -40,13 +40,13 @@ export const GalleryToggleDemo = component({
     >
       <button
         aria-label="Toggle gallery density"
-        aria-pressed={String(state.pressed)}
-        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_aria_pressed_derive"
         class={BUTTON_CLASS}
-        data-state={state.pressed ? 'pressed' : 'off'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_data_state_derive"
         on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_click"
         type="button"
+        aria-pressed={String(state.pressed)}
+        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_aria_pressed_derive"
+        data-state={state.pressed ? 'pressed' : 'off'}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=a845756d#GalleryToggleDemo$button_data_state_derive"
       >
         Dense rows
       </button>
@@ -60,3 +60,4 @@ export const GalleryToggleDemo = component({
     </section>
   ),
 });
+GalleryToggleDemo.name = 'generated/interactive/toggle-demo/gallery-toggle-demo';

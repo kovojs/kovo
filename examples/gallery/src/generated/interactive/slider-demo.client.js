@@ -1,5 +1,5 @@
 // @kovojs-ir
-import { derive, handler } from '@kovojs/runtime';
+import { derive, handler, kovoStyleProperty } from '@kovojs/runtime';
 
 import {
   sliderKeyDown as _sliderKeyDown,
@@ -78,9 +78,8 @@ export const GallerySliderDemo$span_data_value_derive = derive(['state'], (state
 export const GallerySliderDemo$span_data_value_ratio_derive = derive(['state'], (state) =>
   String(state.value / 100),
 );
-export const GallerySliderDemo$span_style_derive = derive(
-  ['state'],
-  (state) => `width: ${state.value}%;`,
+export const GallerySliderDemo$span_style_derive = derive(['state'], (state) =>
+  [kovoStyleProperty('width', `${state.value}%`)].filter(Boolean).join('; '),
 );
 export const GallerySliderDemo$span_aria_valuenow_derive = derive(
   ['state'],
@@ -99,9 +98,14 @@ export const GallerySliderDemo$span_data_value_derive_2 = derive(['state'], (sta
 export const GallerySliderDemo$span_data_value_ratio_derive_2 = derive(['state'], (state) =>
   String(state.value / 100),
 );
-export const GallerySliderDemo$span_style_derive_2 = derive(
-  ['state'],
-  (state) => `left: ${state.value}%; top: 50%; transform: translate(-50%, -50%);`,
+export const GallerySliderDemo$span_style_derive_2 = derive(['state'], (state) =>
+  [
+    kovoStyleProperty('left', `${state.value}%`),
+    kovoStyleProperty('top', '50%'),
+    kovoStyleProperty('transform', 'translate(-50%, -50%)'),
+  ]
+    .filter(Boolean)
+    .join('; '),
 );
 export const GallerySliderDemo$output_text_derive = derive(['state'], (state) =>
   String(state.value),

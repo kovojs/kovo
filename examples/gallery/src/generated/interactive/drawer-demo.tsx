@@ -66,35 +66,35 @@ export const GalleryDrawerDemo = component({
 
     return (
       <section
-        {...dialogRootAttributes({ open: state.open })}
         class="grid gap-2"
         data-gallery-interactive="drawer"
         data-side="bottom"
+        {...dialogRootAttributes({ open: state.open })}
         data-state={state.open ? 'open' : 'closed'}
         data-bind:data-state="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$section_data_state_derive"
         kovo-c="gallery-drawer-demo"
         kovo-state='{"open":false}'
       >
         <button
-          {...dialogTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
+          on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$button_click"
+          {...dialogTriggerAttributes({ contentId, open: state.open })}
           aria-expanded={state.open ? 'true' : 'false'}
           data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$button_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$button_data_state_derive"
-          on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$button_click"
         >
           Open drawer
         </button>
         <dialog
-          {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
           class={CONTENT_CLASS}
           data-side="bottom"
+          on:cancel="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$dialog_cancel"
+          {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$dialog_data_state_derive"
           open={state.open}
           data-bind:open="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$dialog_open_derive"
-          on:cancel="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$dialog_cancel"
         >
           <div aria-hidden="true" class={HANDLE_CLASS} />
           <header class={HEADER_CLASS}>
@@ -107,11 +107,11 @@ export const GalleryDrawerDemo = component({
             </p>
           </header>
           <button
-            {...dialogCloseAttributes({ contentId, open: state.open })}
             class={CLOSE_CLASS}
+            on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$button_click_2"
+            {...dialogCloseAttributes({ contentId, open: state.open })}
             data-state={state.open ? 'open' : 'closed'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$button_data_state_derive_2"
-            on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=f8bd92a3#GalleryDrawerDemo$button_click_2"
           >
             Close drawer
           </button>
@@ -126,3 +126,4 @@ export const GalleryDrawerDemo = component({
     );
   },
 });
+GalleryDrawerDemo.name = 'generated/interactive/drawer-demo/gallery-drawer-demo';

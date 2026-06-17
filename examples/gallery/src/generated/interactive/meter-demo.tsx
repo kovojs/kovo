@@ -67,15 +67,15 @@ export const GalleryMeterDemo = component({
       >
         <label for="gallery-meter-value">Storage capacity</label>
         <meter
+          class={METER_CLASS}
+          id="gallery-meter-value"
           {...meterRootAttributes(meterState)}
           aria-valuetext={`${state.value} percent capacity`}
           data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=6a787584#GalleryMeterDemo$meter_aria_valuetext_derive"
-          class={METER_CLASS}
           data-state={state.dataState}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=6a787584#GalleryMeterDemo$meter_data_state_derive"
           data-value={String(state.value)}
           data-bind:data-value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=6a787584#GalleryMeterDemo$meter_data_value_derive"
-          id="gallery-meter-value"
           value={state.value}
           data-bind:value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=6a787584#GalleryMeterDemo$meter_value_derive"
         />
@@ -96,3 +96,4 @@ export const GalleryMeterDemo = component({
     );
   },
 });
+GalleryMeterDemo.name = 'generated/interactive/meter-demo/gallery-meter-demo';

@@ -119,27 +119,27 @@ export const GalleryRadioGroupDemo = component({
           Contact channel
         </h3>
         <div
-          {...radioGroupItemAttributes(emailState)}
           class={ITEM_CLASS}
+          {...radioGroupItemAttributes(emailState)}
           data-state={state.value === 'email' ? 'checked' : 'unchecked'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$div_data_state_derive"
         >
           <input
+            class={RADIO_CLASS}
+            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_click"
             {...radioGroupRadioAttributes({ ...emailState, controlId: 'gallery-radio-email' })}
             aria-checked={String(state.value === 'email')}
             data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_aria_checked_derive"
             checked={state.value === 'email'}
             data-bind:checked="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_checked_derive"
-            class={RADIO_CLASS}
             data-state={state.value === 'email' ? 'checked' : 'unchecked'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_data_state_derive"
-            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_click"
             tabIndex={state.value === 'email' ? 0 : -1}
             data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_tabIndex_derive"
           />
           <label
-            {...radioGroupLabelAttributes({ ...emailState, controlId: 'gallery-radio-email' })}
             class={LABEL_CLASS}
+            {...radioGroupLabelAttributes({ ...emailState, controlId: 'gallery-radio-email' })}
             data-state={state.value === 'email' ? 'checked' : 'unchecked'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$label_data_state_derive"
           >
@@ -147,25 +147,25 @@ export const GalleryRadioGroupDemo = component({
           </label>
         </div>
         <div
-          {...radioGroupItemAttributes(phoneState)}
           class={ITEM_CLASS}
+          {...radioGroupItemAttributes(phoneState)}
           data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$div_data_state_derive_2"
         >
           <input
+            class={RADIO_CLASS}
+            tabIndex={-1}
             {...radioGroupRadioAttributes({ ...phoneState, controlId: 'gallery-radio-phone' })}
             aria-checked={String(state.value === 'phone')}
             data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_aria_checked_derive_2"
             checked={state.value === 'phone'}
             data-bind:checked="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_checked_derive_2"
-            class={RADIO_CLASS}
             data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_data_state_derive_2"
-            tabIndex={-1}
           />
           <label
-            {...radioGroupLabelAttributes({ ...phoneState, controlId: 'gallery-radio-phone' })}
             class={LABEL_CLASS}
+            {...radioGroupLabelAttributes({ ...phoneState, controlId: 'gallery-radio-phone' })}
             data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$label_data_state_derive_2"
           >
@@ -173,27 +173,27 @@ export const GalleryRadioGroupDemo = component({
           </label>
         </div>
         <div
-          {...radioGroupItemAttributes(smsState)}
           class={ITEM_CLASS}
+          {...radioGroupItemAttributes(smsState)}
           data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$div_data_state_derive_3"
         >
           <input
+            class={RADIO_CLASS}
+            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_click_2"
             {...radioGroupRadioAttributes({ ...smsState, controlId: 'gallery-radio-sms' })}
             aria-checked={String(state.value === 'sms')}
             data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_aria_checked_derive_3"
             checked={state.value === 'sms'}
             data-bind:checked="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_checked_derive_3"
-            class={RADIO_CLASS}
             data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_data_state_derive_3"
-            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_click_2"
             tabIndex={state.value === 'sms' ? 0 : -1}
             data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$input_tabIndex_derive_2"
           />
           <label
-            {...radioGroupLabelAttributes({ ...smsState, controlId: 'gallery-radio-sms' })}
             class={LABEL_CLASS}
+            {...radioGroupLabelAttributes({ ...smsState, controlId: 'gallery-radio-sms' })}
             data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=f92cfa81#GalleryRadioGroupDemo$label_data_state_derive_3"
           >
@@ -211,3 +211,4 @@ export const GalleryRadioGroupDemo = component({
     );
   },
 });
+GalleryRadioGroupDemo.name = 'generated/interactive/radio-group-demo/gallery-radio-group-demo';

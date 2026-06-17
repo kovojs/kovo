@@ -60,23 +60,23 @@ export const GalleryTooltipDemo = component({
         kovo-state='{"open":false}'
       >
         <button
-          {...tooltipTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
-          aria-describedby={state.open ? 'gallery-tooltip-content' : null}
-          data-bind:aria-describedby="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=52d827a7#GalleryTooltipDemo$button_aria_describedby_derive"
-          data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=52d827a7#GalleryTooltipDemo$button_data_state_derive"
           on:blur="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=52d827a7#GalleryTooltipDemo$button_blur"
           on:focus="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=52d827a7#GalleryTooltipDemo$button_focus"
           on:keydown="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=52d827a7#GalleryTooltipDemo$button_keydown"
           on:pointerenter="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=52d827a7#GalleryTooltipDemo$button_pointerenter"
           on:pointerleave="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=52d827a7#GalleryTooltipDemo$button_pointerleave"
+          {...tooltipTriggerAttributes({ contentId, open: state.open })}
+          aria-describedby={state.open ? 'gallery-tooltip-content' : null}
+          data-bind:aria-describedby="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=52d827a7#GalleryTooltipDemo$button_aria_describedby_derive"
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=52d827a7#GalleryTooltipDemo$button_data_state_derive"
         >
           Shipping code
         </button>
         <span
-          {...tooltipContentAttributes({ contentId, open: state.open })}
           class={CONTENT_CLASS}
+          {...tooltipContentAttributes({ contentId, open: state.open })}
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=52d827a7#GalleryTooltipDemo$span_data_state_derive"
           hidden={!state.open}
@@ -94,3 +94,4 @@ export const GalleryTooltipDemo = component({
     );
   },
 });
+GalleryTooltipDemo.name = 'generated/interactive/tooltip-demo/gallery-tooltip-demo';

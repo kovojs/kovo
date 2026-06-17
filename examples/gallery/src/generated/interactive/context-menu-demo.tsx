@@ -104,31 +104,31 @@ export const GalleryContextMenuDemo = component({
 
     return (
       <section
-        {...contextMenuRootAttributes(menuState)}
         class="grid gap-2"
         data-gallery-interactive="context-menu"
+        {...contextMenuRootAttributes(menuState)}
         data-state={state.open ? 'open' : 'closed'}
         data-bind:data-state="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$section_data_state_derive"
         kovo-c="gallery-context-menu-demo"
         kovo-state='{"highlightedValue":"copy","open":false,"point":{"x":24,"y":40},"value":"copy"}'
       >
         <div
-          {...contextMenuTriggerAttributes({ ...menuState, contentId })}
-          aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$div_aria_expanded_derive"
           class={TRIGGER_CLASS}
-          data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$div_data_state_derive"
           id="gallery-context-menu-trigger"
           on:contextmenu="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$div_contextmenu"
           on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$div_keydown"
           tabIndex="0"
+          {...contextMenuTriggerAttributes({ ...menuState, contentId })}
+          aria-expanded={state.open ? 'true' : 'false'}
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$div_aria_expanded_derive"
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$div_data_state_derive"
         >
           Right click target
         </div>
         <div
-          {...contextMenuContentAttributes({ ...menuState, id: contentId })}
           class={CONTENT_CLASS}
+          {...contextMenuContentAttributes({ ...menuState, id: contentId })}
           data-anchor-x={String(state.point.x)}
           data-bind:data-anchor-x="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$div_data_anchor_x_derive"
           data-anchor-y={String(state.point.y)}
@@ -139,25 +139,26 @@ export const GalleryContextMenuDemo = component({
           data-bind:hidden="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$div_hidden_derive"
         >
           <button
+            class={ITEM_CLASS}
+            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_click"
             {...contextMenuItemAttributes({
               ...menuState,
               id: 'gallery-context-menu-copy',
               itemLabel: 'Copy link',
               itemValue: 'copy',
             })}
-            class={ITEM_CLASS}
             data-highlighted={state.highlightedValue === 'copy' ? '' : null}
             data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_data_highlighted_derive"
             data-state={state.highlightedValue === 'copy' ? 'active' : 'inactive'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_data_state_derive"
             tabIndex={state.highlightedValue === 'copy' ? 0 : -1}
             data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_tabIndex_derive"
-            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_keydown"
-            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_click"
           >
             Copy link
           </button>
           <button
+            class={ITEM_CLASS}
             {...contextMenuItemAttributes({
               ...menuState,
               id: 'gallery-context-menu-delete',
@@ -165,26 +166,25 @@ export const GalleryContextMenuDemo = component({
               itemLabel: 'Delete',
               itemValue: 'delete',
             })}
-            class={ITEM_CLASS}
           >
             Delete
           </button>
           <button
+            class={ITEM_CLASS}
+            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_keydown_2"
+            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_click_2"
             {...contextMenuItemAttributes({
               ...menuState,
               id: 'gallery-context-menu-inspect',
               itemLabel: 'Inspect',
               itemValue: 'inspect',
             })}
-            class={ITEM_CLASS}
             data-highlighted={state.highlightedValue === 'inspect' ? '' : null}
             data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_data_highlighted_derive_2"
             data-state={state.highlightedValue === 'inspect' ? 'active' : 'inactive'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_data_state_derive_2"
             tabIndex={state.highlightedValue === 'inspect' ? 0 : -1}
             data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_tabIndex_derive_2"
-            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_keydown_2"
-            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=ecc5dd3f#GalleryContextMenuDemo$button_click_2"
           >
             Inspect
           </button>
@@ -202,3 +202,4 @@ export const GalleryContextMenuDemo = component({
     );
   },
 });
+GalleryContextMenuDemo.name = 'generated/interactive/context-menu-demo/gallery-context-menu-demo';

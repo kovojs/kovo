@@ -63,33 +63,33 @@ export const GalleryDialogDemo = component({
 
     return (
       <section
-        {...dialogRootAttributes({ open: state.open })}
         class="grid gap-2"
         data-gallery-interactive="dialog"
+        {...dialogRootAttributes({ open: state.open })}
         data-state={state.open ? 'open' : 'closed'}
         data-bind:data-state="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$section_data_state_derive"
         kovo-c="gallery-dialog-demo"
         kovo-state='{"open":false}'
       >
         <button
-          {...dialogTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
+          on:click="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$button_click"
+          {...dialogTriggerAttributes({ contentId, open: state.open })}
           aria-expanded={state.open ? 'true' : 'false'}
           data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$button_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$button_data_state_derive"
-          on:click="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$button_click"
         >
           Review cart
         </button>
         <dialog
-          {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
           class={CONTENT_CLASS}
+          on:cancel="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$dialog_cancel"
+          {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$dialog_data_state_derive"
           open={state.open}
           data-bind:open="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$dialog_open_derive"
-          on:cancel="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$dialog_cancel"
         >
           <h2 class={TITLE_CLASS} id={titleId}>
             Cart review
@@ -98,11 +98,11 @@ export const GalleryDialogDemo = component({
             Confirm the current cart before checkout.
           </p>
           <button
-            {...dialogCloseAttributes({ contentId, open: state.open })}
             class={CLOSE_CLASS}
+            on:click="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$button_click_2"
+            {...dialogCloseAttributes({ contentId, open: state.open })}
             data-state={state.open ? 'open' : 'closed'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$button_data_state_derive_2"
-            on:click="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=d27bab1d#GalleryDialogDemo$button_click_2"
           >
             Close review
           </button>
@@ -117,3 +117,4 @@ export const GalleryDialogDemo = component({
     );
   },
 });
+GalleryDialogDemo.name = 'generated/interactive/dialog-demo/gallery-dialog-demo';

@@ -22,6 +22,18 @@ describe('server jsx runtime', () => {
     expect(jsx('input', { value: 'a"b<c&d' })).toBe('<input value="a&quot;b&lt;c&amp;d">');
   });
 
+  it('renders style objects through property-level sanitizers', () => {
+    expect(
+      jsx('span', {
+        style: {
+          left: '25%',
+          transform: 'translate(-50%, -50%)',
+          width: 'url(javascript:alert(1))',
+        },
+      }),
+    ).toBe('<span style="left: 25%; transform: translate(-50%, -50%)"></span>');
+  });
+
   it('renders void elements without closing tags', () => {
     expect(jsx('input', { name: 'quantity', type: 'number', min: 1 })).toBe(
       '<input name="quantity" type="number" min="1">',

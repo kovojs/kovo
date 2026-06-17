@@ -117,3 +117,4 @@ export const GalleryPureMarkupDemo = component({
     </section>
   ),
 });
+GalleryPureMarkupDemo.name = 'generated/interactive/pure-markup-demo/gallery-pure-markup-demo';

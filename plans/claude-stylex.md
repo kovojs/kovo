@@ -749,9 +749,11 @@ borrowing its concrete API/spike detail.
     src/interactive-gallery.axe.browser.test.ts`, and
     `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.native.browser.test.ts src/interactive-gallery.interactions-b.browser.test.ts`.
-    `pnpm --filter @kovojs/example-gallery run emit:interactive-gallery` remains blocked by the
-    pre-existing compiler-quality follow-up gap where `examples/gallery/src/interactive/scroll-area-demo.tsx`
-    emits KV236 for dynamic raw `style` text.
+  - Evidence (partial, 2026-06-16): `pnpm --filter @kovojs/example-gallery run
+    emit:interactive-gallery` now passes after the compiler-quality follow-up for safe dynamic
+    style-object lowering; `examples/gallery/src/interactive/scroll-area-demo.tsx` and
+    `examples/gallery/src/interactive/slider-demo.tsx` use typed object-valued style props instead
+    of dynamic raw CSS text, and their generated client derives call `kovoStyleProperty(...)`.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

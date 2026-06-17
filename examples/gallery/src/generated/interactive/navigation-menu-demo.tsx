@@ -121,25 +121,29 @@ export const GalleryNavigationMenuDemo = component({
 
     return (
       <section
-        {...navigationMenuRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="navigation-menu"
+        on:keydown="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$section_keydown"
+        {...navigationMenuRootAttributes(rootState)}
         data-open={state.openValue || 'none'}
         data-bind:data-open="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$section_data_open_derive"
-        on:keydown="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$section_keydown"
         kovo-c="gallery-navigation-menu-demo"
         kovo-state='{"activeValue":"products","openValue":"","value":"none"}'
       >
-        <div {...navigationMenuListAttributes(rootState)} class={LIST_CLASS}>
+        <div class={LIST_CLASS} {...navigationMenuListAttributes(rootState)}>
           <div
-            {...navigationMenuItemAttributes({ ...rootState, itemValue: 'products' })}
             class={ITEM_CLASS}
+            {...navigationMenuItemAttributes({ ...rootState, itemValue: 'products' })}
             data-highlighted={state.activeValue === 'products' ? '' : null}
             data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_highlighted_derive"
             data-state={state.activeValue === 'products' ? 'active' : 'inactive'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_state_derive"
           >
             <button
+              class={TRIGGER_CLASS}
+              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_click"
+              on:focus="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_focus"
+              on:pointerenter="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_pointerenter"
               {...navigationMenuTriggerAttributes({
                 ...rootState,
                 contentId: 'gallery-navigation-products-content',
@@ -149,29 +153,28 @@ export const GalleryNavigationMenuDemo = component({
               })}
               aria-expanded={state.openValue === 'products' ? 'true' : 'false'}
               data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_aria_expanded_derive"
-              class={TRIGGER_CLASS}
               data-highlighted={state.activeValue === 'products' ? '' : null}
               data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_data_highlighted_derive"
               data-state={state.openValue === 'products' ? 'open' : 'closed'}
               data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_data_state_derive"
               tabIndex={state.activeValue === 'products' ? 0 : -1}
               data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_tabIndex_derive"
-              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_click"
-              on:focus="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_focus"
-              on:pointerenter="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$button_pointerenter"
             >
               Products
             </button>
           </div>
           <div
-            {...navigationMenuItemAttributes({ ...rootState, itemValue: 'docs' })}
             class={ITEM_CLASS}
+            {...navigationMenuItemAttributes({ ...rootState, itemValue: 'docs' })}
             data-highlighted={state.activeValue === 'docs' ? '' : null}
             data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_highlighted_derive_2"
             data-state={state.activeValue === 'docs' ? 'active' : 'inactive'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_state_derive_2"
           >
             <a
+              class={LINK_CLASS}
+              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_click"
+              on:focus="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_focus"
               {...navigationMenuLinkAttributes({
                 ...rootState,
                 href: '/docs',
@@ -179,28 +182,25 @@ export const GalleryNavigationMenuDemo = component({
                 itemLabel: 'Docs',
                 itemValue: 'docs',
               })}
-              class={LINK_CLASS}
               data-highlighted={state.activeValue === 'docs' ? '' : null}
               data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_data_highlighted_derive"
               data-state={state.activeValue === 'docs' ? 'active' : 'inactive'}
               data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_data_state_derive"
               tabIndex={state.activeValue === 'docs' ? 0 : -1}
               data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_tabIndex_derive"
-              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_click"
-              on:focus="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$a_focus"
             >
               Docs
             </a>
           </div>
         </div>
         <div
+          class={CONTENT_CLASS}
           {...navigationMenuContentAttributes({
             ...rootState,
             id: 'gallery-navigation-products-content',
             labelledBy: 'gallery-navigation-products-trigger',
             value: 'products',
           })}
-          class={CONTENT_CLASS}
           data-state={state.openValue === 'products' ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_state_derive_3"
           hidden={state.openValue !== 'products'}
@@ -209,8 +209,8 @@ export const GalleryNavigationMenuDemo = component({
           Platform primitives and gallery fixtures
         </div>
         <div
-          {...navigationMenuViewportAttributes({ ...rootState, id: 'gallery-navigation-viewport' })}
           class={VIEWPORT_CLASS}
+          {...navigationMenuViewportAttributes({ ...rootState, id: 'gallery-navigation-viewport' })}
           data-state={state.openValue === 'products' ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=d17a84e3#GalleryNavigationMenuDemo$div_data_state_derive_4"
           hidden={state.openValue === ''}
@@ -229,3 +229,5 @@ export const GalleryNavigationMenuDemo = component({
     );
   },
 });
+GalleryNavigationMenuDemo.name =
+  'generated/interactive/navigation-menu-demo/gallery-navigation-menu-demo';

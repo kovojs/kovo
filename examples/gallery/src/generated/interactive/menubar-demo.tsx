@@ -102,14 +102,17 @@ export const GalleryMenubarDemo = component({
       <section
         class="grid gap-2"
         data-gallery-interactive="menubar"
+        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$section_keydown"
         data-open={state.openValue || 'none'}
         data-bind:data-open="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$section_data_open_derive"
-        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$section_keydown"
         kovo-c="gallery-menubar-demo"
         kovo-state='{"activeValue":"file","openValue":"","value":"new"}'
       >
-        <div {...menubarRootAttributes(rootState)} class={ROOT_CLASS}>
+        <div class={ROOT_CLASS} {...menubarRootAttributes(rootState)}>
           <button
+            class={ITEM_CLASS}
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_click"
+            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_keydown"
             {...menubarItemAttributes({
               ...rootState,
               contentId: 'gallery-menubar-file-menu',
@@ -119,51 +122,51 @@ export const GalleryMenubarDemo = component({
             })}
             aria-expanded={state.openValue === 'file' ? 'true' : 'false'}
             data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_aria_expanded_derive"
-            class={ITEM_CLASS}
             data-highlighted={state.activeValue === 'file' ? '' : null}
             data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_highlighted_derive"
             data-state={state.activeValue === 'file' ? 'active' : 'inactive'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_state_derive"
             tabIndex={state.activeValue === 'file' ? 0 : -1}
             data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_tabIndex_derive"
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_click"
-            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_keydown"
           >
             File
           </button>
           <button
+            class={ITEM_CLASS}
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_click_2"
             {...menubarItemAttributes({
               ...rootState,
               id: 'gallery-menubar-edit',
               itemLabel: 'Edit',
               itemValue: 'edit',
             })}
-            class={ITEM_CLASS}
             data-highlighted={state.activeValue === 'edit' ? '' : null}
             data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_highlighted_derive_2"
             data-state={state.activeValue === 'edit' ? 'active' : 'inactive'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_state_derive_2"
             tabIndex={state.activeValue === 'edit' ? 0 : -1}
             data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_tabIndex_derive_2"
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_click_2"
           >
             Edit
           </button>
         </div>
         <div
+          class={SUBMENU_CLASS}
           {...menubarSubmenuAttributes({
             ...rootState,
             id: 'gallery-menubar-file-menu',
             labelledBy: 'gallery-menubar-file',
             value: 'file',
           })}
-          class={SUBMENU_CLASS}
           data-state={state.openValue === 'file' ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$div_data_state_derive"
           hidden={state.openValue !== 'file'}
           data-bind:hidden="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$div_hidden_derive"
         >
           <button
+            class={ITEM_CLASS}
+            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_keydown_2"
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_click_3"
             {...menubarItemAttributes({
               ...rootState,
               id: 'gallery-menubar-new',
@@ -171,19 +174,17 @@ export const GalleryMenubarDemo = component({
               itemParentValue: 'file',
               itemValue: 'new',
             })}
-            class={ITEM_CLASS}
             data-highlighted={state.activeValue === 'new' ? '' : null}
             data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_highlighted_derive_3"
             data-state={state.activeValue === 'new' ? 'active' : 'inactive'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_data_state_derive_3"
             tabIndex={state.activeValue === 'new' ? 0 : -1}
             data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_tabIndex_derive_3"
-            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_keydown_2"
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=966441ea#GalleryMenubarDemo$button_click_3"
           >
             New file
           </button>
           <button
+            class={ITEM_CLASS}
             {...menubarItemAttributes({
               ...rootState,
               id: 'gallery-menubar-import',
@@ -192,7 +193,6 @@ export const GalleryMenubarDemo = component({
               itemParentValue: 'file',
               itemValue: 'import',
             })}
-            class={ITEM_CLASS}
           >
             Import
           </button>
@@ -213,3 +213,4 @@ export const GalleryMenubarDemo = component({
     );
   },
 });
+GalleryMenubarDemo.name = 'generated/interactive/menubar-demo/gallery-menubar-demo';

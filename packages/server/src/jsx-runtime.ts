@@ -1,3 +1,5 @@
+import { kovoStyleProperties } from '@kovojs/runtime';
+
 import { escapeAttribute } from './html.js';
 
 // Server-side JSX runtime. Components author JSX sugar (SPEC.md section 4.1)
@@ -63,17 +65,25 @@ function renderJsxAttributes(props: JsxProps): string {
 
   for (const [name, value] of Object.entries(props)) {
     if (name === 'children' || value === false || value === null || value === undefined) continue;
-    rendered += value === true ? ` ${name}` : ` ${name}="${escapeAttribute(attributeText(value))}"`;
+    rendered +=
+      value === true
+        ? ` ${name}`
+        : ` ${name}="${escapeAttribute(attributeText(name, value))}"`;
   }
 
   return rendered;
 }
 
-function attributeText(value: unknown): string {
+function attributeText(name: string, value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'bigint') return value.toString();
+  if (name === 'style' && isStyleProperties(value)) return kovoStyleProperties(value);
 
   return JSON.stringify(value) ?? '';
+}
+
+function isStyleProperties(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function renderJsxChildren(children: JsxNode): string {

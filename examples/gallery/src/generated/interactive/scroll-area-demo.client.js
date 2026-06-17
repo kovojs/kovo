@@ -1,5 +1,5 @@
 // @kovojs-ir
-import { derive, handler } from '@kovojs/runtime';
+import { derive, handler, kovoStyleProperty } from '@kovojs/runtime';
 
 import {
   scrollAreaThumbDrag as _scrollAreaThumbDrag,
@@ -221,9 +221,13 @@ export const GalleryScrollAreaDemo$span_data_state_derive = derive(['state'], (s
 export const GalleryScrollAreaDemo$span_hidden_derive = derive(['state'], (state) =>
   !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging)) ? '' : null,
 );
-export const GalleryScrollAreaDemo$span_style_derive = derive(
-  ['state'],
-  (state) => `height: ${state.thumbSize}%; top: ${state.thumbOffset}%;`,
+export const GalleryScrollAreaDemo$span_style_derive = derive(['state'], (state) =>
+  [
+    kovoStyleProperty('height', `${state.thumbSize}%`),
+    kovoStyleProperty('top', `${state.thumbOffset}%`),
+  ]
+    .filter(Boolean)
+    .join('; '),
 );
 export const GalleryScrollAreaDemo$button_aria_pressed_derive = derive(['state'], (state) =>
   state.scrollY === 'end' ? 'true' : 'false',

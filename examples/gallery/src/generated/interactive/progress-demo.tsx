@@ -54,19 +54,19 @@ export const GalleryProgressDemo = component({
       >
         <label for="gallery-progress-value">Upload progress</label>
         <progress
+          class={PROGRESS_CLASS}
+          id="gallery-progress-value"
           {...progressRootAttributes({ max: 100, value: state.value, valueText })}
           aria-valuetext={
             state.value === null ? 'Upload pending' : `${state.value} percent uploaded`
           }
           data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_aria_valuetext_derive"
-          class={PROGRESS_CLASS}
           data-state={
             state.value === null ? 'indeterminate' : state.value === 100 ? 'complete' : 'loading'
           }
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_data_state_derive"
           data-value={state.value === null ? undefined : String(state.value)}
           data-bind:data-value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_data_value_derive"
-          id="gallery-progress-value"
           value={state.value === null ? undefined : state.value}
           data-bind:value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=6ae758fa#GalleryProgressDemo$progress_value_derive"
         />
@@ -96,3 +96,4 @@ export const GalleryProgressDemo = component({
     );
   },
 });
+GalleryProgressDemo.name = 'generated/interactive/progress-demo/gallery-progress-demo';

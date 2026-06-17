@@ -49,9 +49,9 @@ export const GalleryCollapsibleDemo = component({
 
     return (
       <details
-        {...collapsibleRootAttributes({ open: state.open })}
         class={ROOT_CLASS}
         data-gallery-interactive="collapsible"
+        {...collapsibleRootAttributes({ open: state.open })}
         data-state={state.open ? 'open' : 'closed'}
         data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$details_data_state_derive"
         open={state.open}
@@ -60,19 +60,19 @@ export const GalleryCollapsibleDemo = component({
         kovo-state='{"open":false}'
       >
         <summary
+          class={TRIGGER_CLASS}
+          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$summary_click"
           {...collapsibleTriggerAttributes({ contentId, open: state.open })}
           aria-expanded={String(state.open)}
           data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$summary_aria_expanded_derive"
-          class={TRIGGER_CLASS}
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$summary_data_state_derive"
-          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$summary_click"
         >
           Release notes
         </summary>
         <div
-          {...collapsibleContentAttributes({ contentId, open: state.open })}
           class={CONTENT_CLASS}
+          {...collapsibleContentAttributes({ contentId, open: state.open })}
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=52b91360#GalleryCollapsibleDemo$div_data_state_derive"
         >
@@ -82,3 +82,4 @@ export const GalleryCollapsibleDemo = component({
     );
   },
 });
+GalleryCollapsibleDemo.name = 'generated/interactive/collapsible-demo/gallery-collapsible-demo';

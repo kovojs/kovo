@@ -20,7 +20,12 @@ import {
   type JsxIrElement,
   type JsxIrExpression,
 } from '../jsx-ir.js';
-import type { ComponentModuleModel, JsxAttributeModel, JsxExpressionModel } from '../scan/parse.js';
+import type {
+  ComponentModuleModel,
+  JsxAttributeModel,
+  JsxExpressionModel,
+  ObjectLiteralEntry,
+} from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
 import { literalStringValue } from '../scan/object.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
@@ -94,15 +99,16 @@ export function lowerStructuralJsx(
     stateDerives,
     nameCounts,
   );
-  lowerInlineAttributeDerivesInIr(
-    tree.elements,
-    componentName,
-    knownQueries,
-    options,
-    deriveExports,
-    stateDerives,
-    nameCounts,
-  );
+  needsStylePropertyHelper =
+    lowerInlineAttributeDerivesInIr(
+      tree.elements,
+      componentName,
+      knownQueries,
+      options,
+      deriveExports,
+      stateDerives,
+      nameCounts,
+    ) || needsStylePropertyHelper;
   lowerInlineTextBindings(
     tree.elements,
     model,
@@ -292,7 +298,8 @@ function lowerInlineAttributeDerivesInIr(
   deriveExports: string[],
   stateDerives: StateDeriveFact[],
   nameCounts: Map<string, number>,
-): void {
+): boolean {
+  let needsStylePropertyHelper = false;
   for (const element of elements) {
     if (
       hasAuthoredAttribute(element, 'data-derive') ||
@@ -310,6 +317,7 @@ function lowerInlineAttributeDerivesInIr(
       .filter((derive): derive is InlineAttributeDerive => derive !== null);
     const forceQueryBindings = derives.filter((derive) => derive.source === 'query').length > 1;
     for (const derive of derives) {
+      if (derive.attribute.name === 'style') needsStylePropertyHelper = true;
       lowerAttributeDerive(
         derive,
         options,
@@ -320,6 +328,7 @@ function lowerInlineAttributeDerivesInIr(
       );
     }
   }
+  return needsStylePropertyHelper;
 }
 
 function lowerAttributeDerive(
@@ -558,6 +567,13 @@ function inlineAttributeDerive(
 ): InlineAttributeDerive | null {
   if (attribute.expression === undefined) return null;
   if (shouldSkipInlineAttributeDerive(attribute)) return null;
+  const styleObjectExpression =
+    attribute.name === 'style' && attribute.expressionObjectEntries
+      ? styleObjectDeriveExpression(attribute.expressionObjectEntries)
+      : null;
+  if (attribute.name === 'style' && attribute.expressionObjectEntries && !styleObjectExpression) {
+    return null;
+  }
 
   const queryRoots = new Set(
     (attribute.expressionPropertyAccesses ?? [])
@@ -580,7 +596,7 @@ function inlineAttributeDerive(
     attribute,
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attribute.name)}_derive`,
     element,
-    expression: attribute.expression.trim(),
+    expression: styleObjectExpression ?? attribute.expression.trim(),
     query,
     source: stateOnly ? 'state' : 'query',
     targetAttr: attribute.name,
@@ -1024,6 +1040,21 @@ function viewTransitionNameStyleExpression(
   const separator = existing === '' || existing.endsWith(';') ? '' : ';';
   const prefix = existing === '' ? '' : `${existing}${separator} `;
   return prefix === '' ? transition : `[${JSON.stringify(prefix)}, ${transition}].join('')`;
+}
+
+function styleObjectDeriveExpression(entries: readonly ObjectLiteralEntry[]): string | null {
+  const parts = entries.flatMap((entry) => {
+    if (entry.value === undefined) return [];
+    return [stylePropertyExpression(cssPropertyName(entry.key), entry.value)];
+  });
+  if (parts.length === 0) return null;
+
+  return `[${parts.join(', ')}].filter(Boolean).join('; ')`;
+}
+
+function cssPropertyName(name: string): string {
+  if (name.startsWith('--')) return name;
+  return name.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`).toLowerCase();
 }
 
 function deriveParam(candidate: InlineAttributeDerive): string {

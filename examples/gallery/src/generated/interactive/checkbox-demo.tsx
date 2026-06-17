@@ -50,11 +50,15 @@ export const GalleryCheckboxDemo = component({
       kovo-state='{"checked":"indeterminate"}'
     >
       <input
+        class={INPUT_CLASS}
+        name="gallery-email-summary"
+        on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_click"
+        type="checkbox"
+        value="enabled"
         aria-checked={state.checked === 'indeterminate' ? 'mixed' : String(state.checked)}
         data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_aria_checked_derive"
         checked={state.checked === true}
         data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_checked_derive"
-        class={INPUT_CLASS}
         data-state={
           state.checked === 'indeterminate'
             ? 'indeterminate'
@@ -65,10 +69,6 @@ export const GalleryCheckboxDemo = component({
         data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_data_state_derive"
         indeterminate={state.checked === 'indeterminate'}
         data-bind:indeterminate="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_indeterminate_derive"
-        name="gallery-email-summary"
-        on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=1dbc64b5#GalleryCheckboxDemo$input_click"
-        type="checkbox"
-        value="enabled"
       />
       <span class="select-none leading-none">Email summary</span>
       <output
@@ -81,3 +81,4 @@ export const GalleryCheckboxDemo = component({
     </label>
   ),
 });
+GalleryCheckboxDemo.name = 'generated/interactive/checkbox-demo/gallery-checkbox-demo';

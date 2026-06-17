@@ -43,13 +43,7 @@ export const GallerySwitchDemo = component({
       kovo-state='{"checked":false}'
     >
       <input
-        aria-checked={String(state.checked)}
-        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_aria_checked_derive"
-        checked={state.checked}
-        data-bind:checked="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_checked_derive"
         class={INPUT_CLASS}
-        data-state={state.checked ? 'checked' : 'unchecked'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_data_state_derive"
         form="gallery-switch-form"
         name="gallery-notifications"
         on:click="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_click"
@@ -57,6 +51,12 @@ export const GallerySwitchDemo = component({
         role="switch"
         type="checkbox"
         value="enabled"
+        aria-checked={String(state.checked)}
+        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_aria_checked_derive"
+        checked={state.checked}
+        data-bind:checked="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_checked_derive"
+        data-state={state.checked ? 'checked' : 'unchecked'}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=c092e76d#GallerySwitchDemo$input_data_state_derive"
       />
       <span class="select-none leading-none">Notifications</span>
       <output
@@ -69,3 +69,4 @@ export const GallerySwitchDemo = component({
     </label>
   ),
 });
+GallerySwitchDemo.name = 'generated/interactive/switch-demo/gallery-switch-demo';

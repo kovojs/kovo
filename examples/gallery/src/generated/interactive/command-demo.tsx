@@ -212,9 +212,9 @@ export const GalleryCommandDemo = component({
 
     return (
       <section
-        {...commandRootAttributes(commandState)}
         class={ROOT_CLASS}
         data-gallery-interactive="command"
+        {...commandRootAttributes(commandState)}
         data-placeholder={state.inputValue === '' ? '' : null}
         data-bind:data-placeholder="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$section_data_placeholder_derive"
         data-state={state.open ? 'open' : 'closed'}
@@ -224,25 +224,25 @@ export const GalleryCommandDemo = component({
       >
         <form id="gallery-command-form" data-gallery-form="command"></form>
         <button
+          class={TRIGGER_CLASS}
+          id="gallery-command-trigger"
+          on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click"
           {...commandTriggerAttributes({ ...commandState, contentId })}
           aria-expanded={state.open ? 'true' : 'false'}
           data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_aria_expanded_derive"
-          class={TRIGGER_CLASS}
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_state_derive"
-          id="gallery-command-trigger"
-          on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click"
         >
           Open command
         </button>
         <dialog
+          class={DIALOG_CLASS}
           {...commandDialogAttributes({
             ...commandState,
             contentId,
             descriptionId: 'gallery-command-description',
             titleId: 'gallery-command-title',
           })}
-          class={DIALOG_CLASS}
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$dialog_data_state_derive"
           open={state.open}
@@ -251,14 +251,14 @@ export const GalleryCommandDemo = component({
           <h2 id="gallery-command-title">Command menu</h2>
           <p id="gallery-command-description">Search project actions.</p>
           <input
+            class={INPUT_CLASS}
+            on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_input"
+            on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_keydown"
             {...commandInputAttributes({
               ...commandState,
               id: 'gallery-command-input',
               labelledBy: 'gallery-command-title',
             })}
-            class={INPUT_CLASS}
-            on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_input"
-            on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_keydown"
             aria-activedescendant={
               state.highlightedValue === 'invite'
                 ? 'gallery-command-listbox-item-1'
@@ -279,14 +279,16 @@ export const GalleryCommandDemo = component({
             data-bind:value="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$input_value_derive"
           />
           <div
-            {...commandListboxAttributes({ ...commandState, id: listboxId })}
             class={LISTBOX_CLASS}
+            {...commandListboxAttributes({ ...commandState, id: listboxId })}
             data-state={state.open ? 'open' : 'closed'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$div_data_state_derive"
             hidden={!state.open}
             data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$div_hidden_derive"
           >
             <button
+              class={ITEM_CLASS}
+              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click_2"
               {...commandItemAttributes({
                 ...commandState,
                 id: 'gallery-command-listbox-item-0',
@@ -295,7 +297,6 @@ export const GalleryCommandDemo = component({
               })}
               aria-selected={state.highlightedValue === 'dashboard' ? 'true' : 'false'}
               data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_aria_selected_derive"
-              class={ITEM_CLASS}
               data-highlighted={state.highlightedValue === 'dashboard' ? '' : null}
               data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_highlighted_derive"
               data-selected={state.value === 'dashboard' ? '' : null}
@@ -307,13 +308,14 @@ export const GalleryCommandDemo = component({
                 !'open dashboard dashboard'.includes(state.inputValue.toLocaleLowerCase())
               }
               data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_hidden_derive"
-              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click_2"
               tabIndex={state.highlightedValue === 'dashboard' ? 0 : -1}
               data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_tabIndex_derive"
             >
               Open dashboard
             </button>
             <button
+              class={ITEM_CLASS}
+              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click_3"
               {...commandItemAttributes({
                 ...commandState,
                 id: 'gallery-command-listbox-item-1',
@@ -322,7 +324,6 @@ export const GalleryCommandDemo = component({
               })}
               aria-selected={state.highlightedValue === 'invite' ? 'true' : 'false'}
               data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_aria_selected_derive_2"
-              class={ITEM_CLASS}
               data-highlighted={state.highlightedValue === 'invite' ? '' : null}
               data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_highlighted_derive_2"
               data-selected={state.value === 'invite' ? '' : null}
@@ -334,13 +335,14 @@ export const GalleryCommandDemo = component({
                 !'invite teammate invite'.includes(state.inputValue.toLocaleLowerCase())
               }
               data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_hidden_derive_2"
-              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click_3"
               tabIndex={state.highlightedValue === 'invite' ? 0 : -1}
               data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_tabIndex_derive_2"
             >
               Invite teammate
             </button>
             <button
+              class={ITEM_CLASS}
+              tabIndex={-1}
               {...commandItemAttributes({
                 ...commandState,
                 id: 'gallery-command-listbox-item-2',
@@ -350,7 +352,6 @@ export const GalleryCommandDemo = component({
               })}
               aria-selected={state.highlightedValue === 'delete' ? 'true' : 'false'}
               data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_aria_selected_derive_3"
-              class={ITEM_CLASS}
               data-highlighted={state.highlightedValue === 'delete' ? '' : null}
               data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_highlighted_derive_3"
               data-selected={state.value === 'delete' ? '' : null}
@@ -362,7 +363,6 @@ export const GalleryCommandDemo = component({
                 !'delete project delete'.includes(state.inputValue.toLocaleLowerCase())
               }
               data-bind:hidden="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_hidden_derive_3"
-              tabIndex={-1}
             >
               Delete project
             </button>
@@ -380,11 +380,11 @@ export const GalleryCommandDemo = component({
             </p>
           </div>
           <button
-            {...commandCloseAttributes({ ...commandState, contentId })}
             class={CLOSE_CLASS}
+            on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click_4"
+            {...commandCloseAttributes({ ...commandState, contentId })}
             data-state={state.open ? 'open' : 'closed'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_data_state_derive_5"
-            on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=9129d48e#GalleryCommandDemo$button_click_4"
           >
             Close
           </button>
@@ -408,3 +408,4 @@ export const GalleryCommandDemo = component({
     );
   },
 });
+GalleryCommandDemo.name = 'generated/interactive/command-demo/gallery-command-demo';

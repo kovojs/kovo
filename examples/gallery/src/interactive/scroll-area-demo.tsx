@@ -207,7 +207,7 @@ export const GalleryScrollAreaDemo = component({
             hidden={
               !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))
             }
-            style={`height: ${state.thumbSize}%; top: ${state.thumbOffset}%;`}
+            style={{ height: `${state.thumbSize}%`, top: `${state.thumbOffset}%` }}
             onPointerDown={() => {
               const result = _scrollAreaThumbDragStart(
                 Object(event),

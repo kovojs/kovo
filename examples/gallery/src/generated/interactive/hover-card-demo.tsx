@@ -55,37 +55,37 @@ export const GalleryHoverCardDemo = component({
 
     return (
       <section
-        {...hoverCardRootAttributes({ open: state.open })}
         class={ROOT_CLASS}
         data-gallery-interactive="hover-card"
+        {...hoverCardRootAttributes({ open: state.open })}
         data-state={state.open ? 'open' : 'closed'}
         data-bind:data-state="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$section_data_state_derive"
         kovo-c="gallery-hover-card-demo"
         kovo-state='{"open":false}'
       >
         <a
-          {...hoverCardTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
-          data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_data_state_derive"
           href="#hover-card-demo"
           on:blur="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_blur"
           on:focus="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_focus"
           on:keydown="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_keydown"
           on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_pointerenter"
           on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_pointerleave"
+          {...hoverCardTriggerAttributes({ contentId, open: state.open })}
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$a_data_state_derive"
         >
           Ada Lovelace
         </a>
         <aside
-          {...hoverCardContentAttributes({ contentId, open: state.open })}
           class={CONTENT_CLASS}
+          on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$aside_pointerenter"
+          on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$aside_pointerleave"
+          {...hoverCardContentAttributes({ contentId, open: state.open })}
           data-state={state.open ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$aside_data_state_derive"
           hidden={!state.open}
           data-bind:hidden="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$aside_hidden_derive"
-          on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$aside_pointerenter"
-          on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=ca08d3c6#GalleryHoverCardDemo$aside_pointerleave"
         >
           First programmer and analytical engine collaborator.
         </aside>
@@ -99,3 +99,4 @@ export const GalleryHoverCardDemo = component({
     );
   },
 });
+GalleryHoverCardDemo.name = 'generated/interactive/hover-card-demo/gallery-hover-card-demo';

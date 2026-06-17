@@ -105,22 +105,25 @@ export const GalleryFieldDemo = component({
         kovo-state='{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}'
       >
         <div
-          {...fieldRootAttributes({ ...emailFieldState, id: 'gallery-interactive-field-email' })}
           class={FIELD_CLASS}
+          {...fieldRootAttributes({ ...emailFieldState, id: 'gallery-interactive-field-email' })}
           data-invalid={state.invalid ? '' : null}
           data-bind:data-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$div_data_invalid_derive"
         >
           <label
+            class={LABEL_CLASS}
             {...fieldLabelAttributes({
               ...emailFieldState,
               controlId: 'gallery-interactive-field-email-input',
               id: 'gallery-interactive-field-email-label',
             })}
-            class={LABEL_CLASS}
           >
             Email
           </label>
           <input
+            type="email"
+            class={CONTROL_CLASS}
+            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_input"
             {...fieldControlAttributes({
               ...emailFieldState,
               descriptionId: 'gallery-interactive-field-email-description',
@@ -130,8 +133,6 @@ export const GalleryFieldDemo = component({
               name: 'gallery-email',
               pattern: '.+@kovo\\.sh',
             })}
-            type="email"
-            class={CONTROL_CLASS}
             aria-describedby={
               state.invalid
                 ? 'gallery-interactive-field-email-description gallery-interactive-field-email-error'
@@ -144,23 +145,22 @@ export const GalleryFieldDemo = component({
             data-bind:data-invalid="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_data_invalid_derive"
             value={state.email}
             data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_value_derive"
-            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_input"
           />
           <p
+            class={DESCRIPTION_CLASS}
             {...fieldDescriptionAttributes({
               id: 'gallery-interactive-field-email-description',
               required: true,
             })}
-            class={DESCRIPTION_CLASS}
           >
             Use a reachable address for receipts.
           </p>
           <p
+            class={ERROR_CLASS}
             {...fieldErrorAttributes({
               id: 'gallery-interactive-field-email-error',
               visible: state.invalid,
             })}
-            class={ERROR_CLASS}
             hidden={!state.invalid}
             data-bind:hidden="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$p_hidden_derive"
           >
@@ -215,6 +215,8 @@ export const GalleryFieldDemo = component({
             Plan
           </label>
           <select
+            class={SELECT_CLASS}
+            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$select_change"
             {...fieldControlAttributes({
               descriptionId: 'gallery-interactive-field-plan-description',
               form: 'gallery-interactive-field-form',
@@ -222,24 +224,22 @@ export const GalleryFieldDemo = component({
               name: 'gallery-plan',
               required: true,
             })}
-            class={SELECT_CLASS}
             value={state.plan}
             data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$select_value_derive"
-            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$select_change"
           >
             <option
               value="team"
+              class={SELECT_OPTION_CLASS}
               selected={state.plan === 'team'}
               data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$option_selected_derive"
-              class={SELECT_OPTION_CLASS}
             >
               Team
             </option>
             <option
               value="enterprise"
+              class={SELECT_OPTION_CLASS}
               selected={state.plan === 'enterprise'}
               data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$option_selected_derive_2"
-              class={SELECT_OPTION_CLASS}
             >
               Enterprise
             </option>
@@ -256,6 +256,7 @@ export const GalleryFieldDemo = component({
         </div>
 
         <fieldset
+          class={FIELDSET_CLASS}
           {...fieldsetRootAttributes({
             ...fieldsetState,
             descriptionId: 'gallery-interactive-fieldset-description',
@@ -263,34 +264,33 @@ export const GalleryFieldDemo = component({
             id: 'gallery-interactive-fieldset',
             name: 'gallery-shipping',
           })}
-          class={FIELDSET_CLASS}
           data-disabled={state.shippingDisabled ? '' : null}
           data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$fieldset_data_disabled_derive"
           disabled={state.shippingDisabled}
           data-bind:disabled="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$fieldset_disabled_derive"
         >
           <legend
+            class={LEGEND_CLASS}
             {...fieldsetLegendAttributes({
               id: 'gallery-interactive-fieldset-legend',
               required: true,
             })}
-            class={LEGEND_CLASS}
           >
             Shipping options
             <label class="ml-2 inline-flex items-center gap-1 text-sm font-normal text-neutral-700">
               <input
                 name="gallery-shipping-disabled"
                 type="checkbox"
+                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_click"
                 checked={state.shippingDisabled}
                 data-bind:checked="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_checked_derive"
-                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=6ab22cf6#GalleryFieldDemo$input_click"
               />
               Disable shipping group
             </label>
           </legend>
           <p
-            {...fieldDescriptionAttributes({ id: 'gallery-interactive-fieldset-description' })}
             class={DESCRIPTION_CLASS}
+            {...fieldDescriptionAttributes({ id: 'gallery-interactive-fieldset-description' })}
           >
             Grouped controls inherit native fieldset disabled behavior.
           </p>
@@ -309,3 +309,4 @@ export const GalleryFieldDemo = component({
     );
   },
 });
+GalleryFieldDemo.name = 'generated/interactive/field-demo/gallery-field-demo';

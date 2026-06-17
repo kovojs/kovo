@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   kovoBoundAttributeValue,
   kovoEscapeHtml,
+  kovoStyleProperties,
   kovoStyleProperty,
   trustedHtml,
 } from './security-output.js';
@@ -21,6 +22,14 @@ describe('runtime output-context helpers', () => {
     expect(kovoStyleProperty('view-transition-name', 'product hero')).toBe(
       'view-transition-name: product-hero',
     );
+    expect(
+      kovoStyleProperties({
+        height: '28%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: 'javascript:alert(1)',
+      }),
+    ).toBe('height: 28%; left: 50%; transform: translate(-50%, -50%)');
     expect(kovoStyleProperty('background-image', 'url(javascript:alert(1))')).toBe('');
     expect(trustedHtml('<b>safe</b>')).toEqual({
       __kovoTrustedHtml: true,

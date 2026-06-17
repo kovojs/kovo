@@ -89,6 +89,27 @@ compiler-quality gaps found during the 2026-06-16 audit.
 
 ## Security Contexts
 
+- [x] Lower safe dynamic style objects through property-scoped runtime sanitizers instead of dynamic
+      raw CSS text.
+  - Evidence (2026-06-16): `packages/compiler/src/lower/structural-jsx.ts` lowers
+    `style={{ ... }}` state/query derives to per-property `kovoStyleProperty(...)` calls while
+    preserving arbitrary dynamic raw `style={...}` rejection in
+    `packages/compiler/src/security/output-context.ts`.
+  - Evidence (2026-06-16): `packages/runtime/src/security-output.ts` adds
+    `kovoStyleProperties(...)` plus allowlisted length/transform property sanitizers, and
+    `packages/server/src/jsx-runtime.ts` uses it for object-valued server-rendered `style` props.
+  - Evidence (2026-06-16): `packages/compiler/src/output-context-security.test.ts` snapshots
+    state style-object lowering; `packages/runtime/src/security-output.test.ts` and
+    `packages/server/src/jsx-runtime.test.ts` cover property sanitization/server rendering.
+  - Evidence (2026-06-16): `pnpm --filter @kovojs/example-gallery run
+    emit:interactive-gallery`, `pnpm exec vitest --run
+    examples/gallery/src/interactive-gallery.compile.test.ts
+    examples/gallery/src/interactive-gallery.client-behavior.test.ts`, and `pnpm --filter
+    @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts
+    src/interactive-gallery.native.browser.test.ts` pass for the scroll-area/slider gallery
+    coverage that previously hit KV236.
+
 - [ ] Represent generated output contexts as typed compiler facts.
   - [ ] Add a shared compiler type for generated output writes with at least these contexts: text,
         attribute, boolean attribute, URL attribute, style property, CSS text, HTML fragment, script

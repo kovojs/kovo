@@ -94,13 +94,16 @@ export const GalleryAccordionDemo = component({
         kovo-state='{"activeValue":"shipping","value":"shipping"}'
       >
         <section
-          {...accordionItemAttributes(shippingState)}
           class={ITEM_CLASS}
+          {...accordionItemAttributes(shippingState)}
           data-state={state.value === 'shipping' ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$section_data_state_derive"
         >
-          <h3 {...accordionHeaderAttributes({ ...shippingState, level: 3 })} class={HEADER_CLASS}>
+          <h3 class={HEADER_CLASS} {...accordionHeaderAttributes({ ...shippingState, level: 3 })}>
             <button
+              class={TRIGGER_CLASS}
+              on:click="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$button_click"
+              value="shipping"
               {...accordionTriggerAttributes({
                 ...shippingState,
                 contentId: 'gallery-accordion-shipping-content',
@@ -108,24 +111,21 @@ export const GalleryAccordionDemo = component({
               })}
               aria-expanded={String(state.value === 'shipping')}
               data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$button_aria_expanded_derive"
-              class={TRIGGER_CLASS}
               data-state={state.value === 'shipping' ? 'open' : 'closed'}
               data-bind:data-state="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$button_data_state_derive"
-              on:click="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$button_click"
               tabIndex={state.activeValue === 'shipping' ? 0 : -1}
               data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$button_tabIndex_derive"
-              value="shipping"
             >
               Shipping
             </button>
           </h3>
           <div
+            class={CONTENT_CLASS}
             {...accordionContentAttributes({
               ...shippingState,
               contentId: 'gallery-accordion-shipping-content',
               triggerId: 'gallery-accordion-shipping-trigger',
             })}
-            class={CONTENT_CLASS}
             data-state={state.value === 'shipping' ? 'open' : 'closed'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$div_data_state_derive"
             hidden={state.value !== 'shipping'}
@@ -135,13 +135,16 @@ export const GalleryAccordionDemo = component({
           </div>
         </section>
         <section
-          {...accordionItemAttributes(billingState)}
           class={ITEM_CLASS}
+          {...accordionItemAttributes(billingState)}
           data-state={state.value === 'billing' ? 'open' : 'closed'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$section_data_state_derive_2"
         >
-          <h3 {...accordionHeaderAttributes({ ...billingState, level: 3 })} class={HEADER_CLASS}>
+          <h3 class={HEADER_CLASS} {...accordionHeaderAttributes({ ...billingState, level: 3 })}>
             <button
+              class={TRIGGER_CLASS}
+              on:click="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$button_click_2"
+              value="billing"
               {...accordionTriggerAttributes({
                 ...billingState,
                 contentId: 'gallery-accordion-billing-content',
@@ -149,24 +152,21 @@ export const GalleryAccordionDemo = component({
               })}
               aria-expanded={String(state.value === 'billing')}
               data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$button_aria_expanded_derive_2"
-              class={TRIGGER_CLASS}
               data-state={state.value === 'billing' ? 'open' : 'closed'}
               data-bind:data-state="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$button_data_state_derive_2"
-              on:click="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$button_click_2"
               tabIndex={state.activeValue === 'billing' ? 0 : -1}
               data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$button_tabIndex_derive_2"
-              value="billing"
             >
               Billing
             </button>
           </h3>
           <div
+            class={CONTENT_CLASS}
             {...accordionContentAttributes({
               ...billingState,
               contentId: 'gallery-accordion-billing-content',
               triggerId: 'gallery-accordion-billing-trigger',
             })}
-            class={CONTENT_CLASS}
             data-state={state.value === 'billing' ? 'open' : 'closed'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=5b6ee560#GalleryAccordionDemo$div_data_state_derive_2"
             hidden={state.value !== 'billing'}
@@ -186,3 +186,4 @@ export const GalleryAccordionDemo = component({
     );
   },
 });
+GalleryAccordionDemo.name = 'generated/interactive/accordion-demo/gallery-accordion-demo';

@@ -113,6 +113,8 @@ export const GalleryTabsDemo = component({
           class={LIST_CLASS}
         >
           <button
+            class={TRIGGER_CLASS}
+            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_click"
             {...tabsTriggerAttributes({
               ...rootState,
               id: 'gallery-tabs-overview-trigger',
@@ -121,16 +123,16 @@ export const GalleryTabsDemo = component({
             })}
             aria-selected={String(state.value === 'overview')}
             data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_aria_selected_derive"
-            class={TRIGGER_CLASS}
             data-state={state.value === 'overview' ? 'active' : 'inactive'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_data_state_derive"
-            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_click"
             tabIndex={state.activeValue === 'overview' ? 0 : -1}
             data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_tabIndex_derive"
           >
             Overview
           </button>
           <button
+            class={TRIGGER_CLASS}
+            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_click_2"
             {...tabsTriggerAttributes({
               ...rootState,
               id: 'gallery-tabs-details-trigger',
@@ -139,16 +141,16 @@ export const GalleryTabsDemo = component({
             })}
             aria-selected={String(state.value === 'details')}
             data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_aria_selected_derive_2"
-            class={TRIGGER_CLASS}
             data-state={state.value === 'details' ? 'active' : 'inactive'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_data_state_derive_2"
-            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_click_2"
             tabIndex={state.activeValue === 'details' ? 0 : -1}
             data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_tabIndex_derive_2"
           >
             Details
           </button>
           <button
+            class={TRIGGER_CLASS}
+            tabIndex={-1}
             {...tabsTriggerAttributes({
               ...rootState,
               id: 'gallery-tabs-audit-trigger',
@@ -157,22 +159,20 @@ export const GalleryTabsDemo = component({
             })}
             aria-selected={String(state.value === 'audit')}
             data-bind:aria-selected="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_aria_selected_derive_3"
-            class={TRIGGER_CLASS}
             data-state={state.value === 'audit' ? 'active' : 'inactive'}
             data-bind:data-state="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$button_data_state_derive_3"
-            tabIndex={-1}
           >
             Audit
           </button>
         </div>
         <section
+          class={PANEL_CLASS}
           {...tabsPanelAttributes({
             ...rootState,
             id: 'gallery-tabs-overview-panel',
             itemValue: 'overview',
             triggerId: 'gallery-tabs-overview-trigger',
           })}
-          class={PANEL_CLASS}
           data-state={state.value === 'overview' ? 'active' : 'inactive'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$section_data_state_derive"
           hidden={state.value !== 'overview'}
@@ -183,13 +183,13 @@ export const GalleryTabsDemo = component({
           Summary metrics stay visible without client runtime.
         </section>
         <section
+          class={PANEL_CLASS}
           {...tabsPanelAttributes({
             ...rootState,
             id: 'gallery-tabs-details-panel',
             itemValue: 'details',
             triggerId: 'gallery-tabs-details-trigger',
           })}
-          class={PANEL_CLASS}
           data-state={state.value === 'details' ? 'active' : 'inactive'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$section_data_state_derive_2"
           hidden={state.value !== 'details'}
@@ -200,13 +200,13 @@ export const GalleryTabsDemo = component({
           Detailed notes are selected by click or arrow-key activation.
         </section>
         <section
+          class={PANEL_CLASS}
           {...tabsPanelAttributes({
             ...rootState,
             id: 'gallery-tabs-audit-panel',
             itemValue: 'audit',
             triggerId: 'gallery-tabs-audit-trigger',
           })}
-          class={PANEL_CLASS}
           data-state={state.value === 'audit' ? 'active' : 'inactive'}
           data-bind:data-state="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=79c4538d#GalleryTabsDemo$section_data_state_derive_3"
           hidden={state.value !== 'audit'}
@@ -220,3 +220,4 @@ export const GalleryTabsDemo = component({
     );
   },
 });
+GalleryTabsDemo.name = 'generated/interactive/tabs-demo/gallery-tabs-demo';

@@ -1,6 +1,6 @@
 // @kovojs-ir - lowered from examples/gallery/src/interactive/slider-demo.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @kovojs/server */
-import { derive } from '@kovojs/runtime';
+import { derive, kovoStyleProperty } from '@kovojs/runtime';
 
 export const GallerySliderDemo$section_data_value_derive = derive(['state'], (state: any) =>
   String(state.value),
@@ -18,9 +18,8 @@ export const GallerySliderDemo$span_data_value_derive = derive(['state'], (state
 export const GallerySliderDemo$span_data_value_ratio_derive = derive(['state'], (state: any) =>
   String(state.value / 100),
 );
-export const GallerySliderDemo$span_style_derive = derive(
-  ['state'],
-  (state: any) => `width: ${state.value}%;`,
+export const GallerySliderDemo$span_style_derive = derive(['state'], (state: any) =>
+  [kovoStyleProperty('width', `${state.value}%`)].filter(Boolean).join('; '),
 );
 export const GallerySliderDemo$span_aria_valuenow_derive = derive(
   ['state'],
@@ -39,9 +38,14 @@ export const GallerySliderDemo$span_data_value_derive_2 = derive(['state'], (sta
 export const GallerySliderDemo$span_data_value_ratio_derive_2 = derive(['state'], (state: any) =>
   String(state.value / 100),
 );
-export const GallerySliderDemo$span_style_derive_2 = derive(
-  ['state'],
-  (state: any) => `left: ${state.value}%; top: 50%; transform: translate(-50%, -50%);`,
+export const GallerySliderDemo$span_style_derive_2 = derive(['state'], (state: any) =>
+  [
+    kovoStyleProperty('left', `${state.value}%`),
+    kovoStyleProperty('top', '50%'),
+    kovoStyleProperty('transform', 'translate(-50%, -50%)'),
+  ]
+    .filter(Boolean)
+    .join('; '),
 );
 export const GallerySliderDemo$output_text_derive = derive(['state'], (state: any) =>
   String(state.value),
@@ -105,11 +109,11 @@ export const GallerySliderDemo = component({
 
     return (
       <section
-        {...sliderRootAttributes(sliderState)}
         class={ROOT_CLASS}
         data-gallery-interactive="slider"
+        {...sliderRootAttributes(sliderState)}
         data-value={String(state.value)}
-        data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$section_data_value_derive"
+        data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$section_data_value_derive"
         kovo-c="gallery-slider-demo"
         kovo-state='{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}'
       >
@@ -118,55 +122,59 @@ export const GallerySliderDemo = component({
           Completion
         </label>
         <input
-          {...sliderHiddenInputAttributes(sliderState)}
           id="gallery-slider-input"
+          {...sliderHiddenInputAttributes(sliderState)}
           value={state.value}
-          data-bind:value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$input_value_derive"
+          data-bind:value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$input_value_derive"
         />
         <div
-          {...sliderTrackAttributes(sliderState)}
           class={TRACK_CLASS}
+          on:pointerdown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$div_pointerdown"
+          {...sliderTrackAttributes(sliderState)}
           data-value={String(state.value)}
-          data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$div_data_value_derive"
+          data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$div_data_value_derive"
           data-value-ratio={String(state.value / 100)}
-          data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$div_data_value_ratio_derive"
-          on:pointerdown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$div_pointerdown"
+          data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$div_data_value_ratio_derive"
         >
           <span
-            {...sliderRangeAttributes(sliderState)}
             class={RANGE_CLASS}
+            {...sliderRangeAttributes(sliderState)}
             data-value={String(state.value)}
-            data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_data_value_derive"
+            data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_data_value_derive"
             data-value-ratio={String(state.value / 100)}
-            data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_data_value_ratio_derive"
-            style={`width: ${state.value}%;`}
-            data-bind:style="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_style_derive"
+            data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_data_value_ratio_derive"
+            style={{ width: `${state.value}%` }}
+            data-bind:style="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_style_derive"
           />
           <span
-            {...sliderThumbAttributes(sliderState)}
             class={THUMB_CLASS}
+            on:keydown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_keydown"
+            on:pointerdown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_pointerdown"
+            on:pointermove="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_pointermove"
+            on:pointerup="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_pointerup"
+            {...sliderThumbAttributes(sliderState)}
             aria-valuenow={state.value}
-            data-bind:aria-valuenow="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_aria_valuenow_derive"
+            data-bind:aria-valuenow="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_aria_valuenow_derive"
             aria-valuetext={`${state.value} percent`}
-            data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_aria_valuetext_derive"
+            data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_aria_valuetext_derive"
             data-dragging={state.dragging ? '' : null}
-            data-bind:data-dragging="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_data_dragging_derive"
+            data-bind:data-dragging="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_data_dragging_derive"
             data-value={String(state.value)}
-            data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_data_value_derive_2"
+            data-bind:data-value="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_data_value_derive_2"
             data-value-ratio={String(state.value / 100)}
-            data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_data_value_ratio_derive_2"
-            style={`left: ${state.value}%; top: 50%; transform: translate(-50%, -50%);`}
-            data-bind:style="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_style_derive_2"
-            on:keydown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_keydown"
-            on:pointerdown="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_pointerdown"
-            on:pointermove="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_pointermove"
-            on:pointerup="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$span_pointerup"
+            data-bind:data-value-ratio="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_data_value_ratio_derive_2"
+            style={{
+              left: `${state.value}%`,
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+            }}
+            data-bind:style="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$span_style_derive_2"
           />
         </div>
         <output
           data-demo-state="slider-value"
           class={OUTPUT_CLASS}
-          data-bind="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=f214c7b7#GallerySliderDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=1c64835a#GallerySliderDemo$output_text_derive"
         >
           {String(state.value)}
         </output>
@@ -174,3 +182,4 @@ export const GallerySliderDemo = component({
     );
   },
 });
+GallerySliderDemo.name = 'generated/interactive/slider-demo/gallery-slider-demo';

@@ -92,7 +92,7 @@ export const GallerySliderDemo = component({
             class={RANGE_CLASS}
             data-value={String(state.value)}
             data-value-ratio={String(state.value / 100)}
-            style={`width: ${state.value}%;`}
+            style={{ width: `${state.value}%` }}
           />
           <span
             {...sliderThumbAttributes(sliderState)}
@@ -102,7 +102,11 @@ export const GallerySliderDemo = component({
             data-dragging={state.dragging ? '' : null}
             data-value={String(state.value)}
             data-value-ratio={String(state.value / 100)}
-            style={`left: ${state.value}%; top: 50%; transform: translate(-50%, -50%);`}
+            style={{
+              left: `${state.value}%`,
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+            }}
             onKeyDown={() => {
               const result = _sliderKeyDown(Object(event), {
                 max: 100,
