@@ -30,6 +30,7 @@ substitutions:
   _MAX_INSTANCES: '1' # pin to one instance so a returning visitor always hits the instance holding their session
   _MAX_SESSIONS: '40'
   _IDLE_MS: '1200000' # 20 min idle TTL per session
+  _COMMERCE_WEBHOOK_SECRET_NAME: 'commerce-webhook-secret'
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -63,13 +64,19 @@ steps:
         IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/examples:${_TAG}
         for EX in commerce crm stackoverflow; do
           echo "Deploying kovo-$$EX ..."
+          ENV_VARS="EXAMPLE=$$EX,KOVO_DEMO_MAX_SESSIONS=${_MAX_SESSIONS},KOVO_DEMO_IDLE_MS=${_IDLE_MS}"
+          SECRET_FLAGS=()
+          if [[ "$$EX" == "commerce" ]]; then
+            SECRET_FLAGS=(--set-secrets "COMMERCE_WEBHOOK_SECRET=${_COMMERCE_WEBHOOK_SECRET_NAME}:latest")
+          fi
           gcloud run deploy kovo-$$EX \
             --project ${_PROJECT_ID} \
             --image "$$IMAGE" \
             --region ${_REGION} \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars EXAMPLE=$$EX,KOVO_DEMO_MAX_SESSIONS=${_MAX_SESSIONS},KOVO_DEMO_IDLE_MS=${_IDLE_MS} \
+            --set-env-vars "$$ENV_VARS" \
+            "$${SECRET_FLAGS[@]}" \
             --memory ${_MEMORY} \
             --cpu ${_CPU} \
             --concurrency ${_CONCURRENCY} \
