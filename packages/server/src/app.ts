@@ -3,7 +3,12 @@ import { handleAppRequest } from './app-request.js';
 import { routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
+import { mutation } from './mutation.js';
+import { query } from './query.js';
+import { route } from './route.js';
 export type {
+  AppAuthoringContext,
+  AppAuthoringDeclarations,
   AppDocumentOptions,
   AppErrorShellOptions,
   AppDiagnostic,
@@ -22,7 +27,14 @@ export type {
   KovoApp,
   RequestHandler,
 } from './app-types.js';
-import type { AppLifecycleRequest, CreateAppOptions, KovoApp, RequestHandler } from './app-types.js';
+import type {
+  AppAuthoringContext,
+  AppAuthoringDeclarations,
+  AppLifecycleRequest,
+  CreateAppOptions,
+  KovoApp,
+  RequestHandler,
+} from './app-types.js';
 
 /**
  * Assemble the app aggregate: the routes, queries, mutations, endpoints,
@@ -53,16 +65,21 @@ export function createApp<
   RawRequest,
   AppRequest
 > {
+  const authoringContext = appAuthoringContext<AppRequest>();
+  const routes = resolveAppAuthoringDeclarations(options.routes, authoringContext);
+  const queries = resolveAppAuthoringDeclarations(options.queries, authoringContext);
+  const mutations = resolveAppAuthoringDeclarations(options.mutations, authoringContext);
+
   return {
     clientModules: options.clientModules ?? createMemoryVersionedClientModuleRegistry(),
-    diagnostics: routeTableDiagnostics(options.routes ?? []),
+    diagnostics: routeTableDiagnostics(routes),
     document: options.document ?? {},
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},
     liveTargetRenderers: options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers(),
-    mutations: options.mutations ?? [],
-    queries: options.queries ?? [],
-    routes: options.routes ?? [],
+    mutations,
+    queries,
+    routes,
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(options.db === undefined ? {} : { db: options.db }),
     ...(options.mutationReplayStore === undefined
@@ -91,4 +108,22 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
   }
 
   return (request) => handleAppRequest(app, request);
+}
+
+function appAuthoringContext<AppRequest>(): AppAuthoringContext<AppRequest> {
+  return {
+    mutation: mutation as AppAuthoringContext<AppRequest>['mutation'],
+    query: query as AppAuthoringContext<AppRequest>['query'],
+    route: route as AppAuthoringContext<AppRequest>['route'],
+  };
+}
+
+function resolveAppAuthoringDeclarations<Declaration, AppRequest>(
+  declarations: AppAuthoringDeclarations<Declaration, AppRequest> | undefined,
+  context: AppAuthoringContext<AppRequest>,
+): readonly Declaration[] {
+  if (declarations === undefined) return [];
+  return typeof declarations === 'function'
+    ? (declarations(context) as readonly Declaration[])
+    : declarations;
 }

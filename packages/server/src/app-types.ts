@@ -12,12 +12,12 @@ import type { EndpointDeclaration } from './endpoint.js';
 import type { DbProvider, LifecycleRequest, SessionProvider } from './guards.js';
 import type { Guard } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
-import type { MutationContext, MutationFail, MutationSuccess } from './mutation.js';
+import type { MutationContext, MutationFactory, MutationFail, MutationSuccess } from './mutation.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
-import type { QueryLoadContext, RegisteredQueryDefinition } from './query.js';
+import type { QueryDeclarationDefinition, QueryFactory } from './query.js';
 import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
-import type { RouteDeclaration } from './route.js';
+import type { RouteDeclaration, RouteFactory } from './route.js';
 import type { Schema } from './schema.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
@@ -28,12 +28,8 @@ export type AppLifecycleRequest<
   DbValue = never,
 > = LifecycleRequest<RawRequest, SessionValue, DbValue>;
 
-export type AppQueryDeclaration<AppRequest = unknown> = Omit<
-  RegisteredQueryDefinition,
-  'guard' | 'load'
-> & {
-  guard?: Guard<AppRequest>;
-  load?: (input: any, context?: QueryLoadContext<AppRequest>) => unknown;
+export type AppQueryDeclaration<AppRequest = unknown> = QueryDeclarationDefinition<AppRequest> & {
+  key: string;
 };
 
 export type AppRouteDeclaration<AppRequest = unknown> = RouteDeclaration<
@@ -44,6 +40,24 @@ export type AppRouteDeclaration<AppRequest = unknown> = RouteDeclaration<
   any,
   any
 >;
+
+/**
+ * App-scoped declaration helpers. When `createApp()` receives provider options, these helpers
+ * contextually type query loaders, mutation handlers, and route guards/pages with the provider
+ * request shape (SPEC §9.5/§10.2/§10.3).
+ */
+export interface AppAuthoringContext<AppRequest> {
+  /** Define a query whose `load`/`guard` callbacks see the app lifecycle request. */
+  query: QueryFactory<AppRequest>;
+  /** Define a mutation whose `handler`/`guard`/`transaction` callbacks see the app lifecycle request. */
+  mutation: MutationFactory<AppRequest>;
+  /** Define a route whose `guard`/`page` callbacks see the app lifecycle request. */
+  route: RouteFactory<AppRequest>;
+}
+
+export type AppAuthoringDeclarations<Declaration, AppRequest> =
+  | readonly Declaration[]
+  | ((context: AppAuthoringContext<AppRequest>) => readonly unknown[]);
 
 export interface AppErrorShellOptions {
   forbidden?: ErrorShellRenderer;
@@ -83,12 +97,12 @@ export interface CreateAppOptions<
   errorShells?: AppErrorShellOptions;
   liveTargetRenderers?: readonly LiveTargetRenderer<AppRequest>[];
   mutationResponses?: AppMutationResponses;
-  mutations?: readonly AppMutationDeclaration<AppRequest>[];
+  mutations?: AppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>;
   mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
-  queries?: readonly AppQueryDeclaration<AppRequest>[];
+  queries?: AppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>;
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
-  routes?: readonly AppRouteDeclaration<AppRequest>[];
+  routes?: AppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
 }
 

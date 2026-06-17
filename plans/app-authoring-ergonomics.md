@@ -104,7 +104,7 @@ item inherits from rather than re-deciding it:
     - `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`, `pnpm --filter @kovojs/example-crm run emit-components -- --check`, and `pnpm --filter @kovojs/example-commerce run emit-components -- --check` pass with route import rewrites installed.
     - Focused route/example tests pass: `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.rendering.test.ts`.
 
-- [ ] **2. Provision `db`/`session` through framework channels, not `Request` mutation.**
+- [x] **2. Provision `db`/`session` through framework channels, not `Request` mutation.**
   - Reconciliation (corrects the original `createApp({ context })` proposal):
     `SPEC.md` already specifies request provisioning. **Do not introduce a parallel
     `context.session`.**
@@ -142,19 +142,23 @@ item inherits from rather than re-deciding it:
       rename propagates red to consumers.
     - A live-target refresh test proves the generated fragment re-render receives
       the same `db`/session as the originating request.
-  - Current evidence:
+  - Evidence:
     - `createApp({ db })` is implemented in the app shell lifecycle and dispatches
       through route pages, query endpoints, mutation handlers/live-target refresh,
       and session-free endpoints; `pnpm exec vitest --run packages/server/src/app.test.ts`
       covers these paths.
+    - `createApp()` now accepts app-scoped declaration callbacks (`queries:
+      ({ query }) => ...`, `mutations: ({ mutation }) => ...`, `routes:
+      ({ route }) => ...`) whose helpers contextually type query loaders,
+      mutation handlers, route pages, and guards from configured `db` and
+      `sessionProvider`; `pnpm exec vitest --run packages/server/src/app-authoring-context.test.ts packages/server/src/app.test.ts` passes.
+    - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` passes with
+      `packages/server/src/app-authoring-context.test.ts` proving zero-annotation
+      `request.db` / `request.session` inference and `@ts-expect-error` provider
+      shape rename failures.
     - `rg -n "Object\.defineProperty\(request, '(db|session)'|attachCommerceRequestContext|withCommerceRequestContext" examples/stackoverflow/src examples/crm/src examples/commerce/src` exits 1 with no hits after regenerating example route artifacts.
     - Example checks pass: `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`; `pnpm --filter @kovojs/example-crm run emit-components -- --check`; `pnpm --filter @kovojs/example-commerce run emit-components -- --check`; `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.rendering.test.ts`.
     - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
-  - Remaining gap:
-    - The current `query()`/`mutation()`/`route()` APIs type their callbacks before
-      they reach `createApp()`, so provider-driven **zero-annotation** inference
-      inside those callbacks still needs a larger app-scoped builder or equivalent
-      API design before this item can be checked off.
 
 - [ ] **3. First-class nested layouts (supersedes the old "no layouts yet" item).**
   - Decision 2026-06-17: ship nested layouts for authoring parity with peer
@@ -324,7 +328,8 @@ item inherits from rather than re-deciding it:
 
 - [x] **No app-local generated imports in route/layout modules** (+ diagnostic fixture).
   - Evidence: item 1 compiler fixture and no-match route/layout import check above; generated imports that remain in tests/loaders, touch graph, optimistic helpers, and legacy non-route modules are owned by later items.
-- [ ] **No app-authored `Request` mutation for `db`/`session`; providers inferred end to end.** Evidence pending.
+- [x] **No app-authored `Request` mutation for `db`/`session`; providers inferred end to end.**
+  - Evidence: item 2 no-match, app-scoped declaration type-test, server lifecycle test, example tests, root `tsc`, API gate, and `git diff --check` above.
 - [ ] **Nested layouts compose, refresh layout queries, and scope boundaries/guards per segment.** Evidence pending.
 - [ ] **No string shell helpers; document via `documentTemplate`, chrome via layouts.** Evidence pending.
 - [ ] **Expected failures render via `<FieldError>/<FormError>` (KV242-checked); unexpected via error boundaries; no `formFailure({ message })`.** Evidence pending.

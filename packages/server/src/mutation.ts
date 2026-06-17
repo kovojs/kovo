@@ -195,6 +195,23 @@ export interface RunMutationOptions<
   csrf?: CsrfValidationOptions<Request>;
 }
 
+/** App-scoped mutation factory. `createApp()` uses this to contextually type handlers from configured request providers (SPEC §9.5/§10.3). */
+export interface MutationFactory<Request = unknown> {
+  <
+    const Key extends string,
+    InputSchema extends Schema<unknown>,
+    Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
+    Value = unknown,
+    GuardedRequest extends Request = Request,
+  >(
+    key: Key,
+    definition: Omit<
+      MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+      'key'
+    >,
+  ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key };
+}
+
 /**
  * Declare a typed write. A mutation couples a stable key, an input `Schema`, a
  * `handler` that performs the write, optional typed `errors`, an optional

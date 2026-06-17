@@ -135,6 +135,34 @@ export interface RegisteredQueryDefinition {
   version?: BivariantQueryVersion | number | string;
 }
 
+/** Definition object passed to `query()` before the stable key is attached. */
+export type QueryDeclarationDefinition<Request = unknown> = Omit<
+  RegisteredQueryDefinition,
+  'guard' | 'key' | 'load'
+> & {
+  guard?: BivariantGuard<Request>;
+  load?: { call(input: any, context?: QueryLoadContext<Request>): unknown }['call'];
+};
+
+/** App-scoped query factory. `createApp()` uses this to contextually type query callbacks from configured request providers (SPEC §9.5/§10.2). */
+export interface QueryFactory<Request = unknown> {
+  <
+    const Key extends string,
+    Input,
+    Value,
+    const Definition extends Omit<QueryArgsDeclarationDefinition<Key, Value, Input, Request>, 'key'>,
+  >(
+    key: Key,
+    definition: Definition,
+  ): QueryWithArgsBinding<Definition, Input> & { key: Key };
+  <const Key extends string, const Definition extends QueryDeclarationDefinition<Request>>(
+    key: Key,
+    definition: Definition,
+  ): Definition extends { args: Schema<infer Input> }
+    ? QueryWithArgsBinding<Definition, Input> & { key: Key }
+    : Definition & { key: Key };
+}
+
 /**
  * Declare a typed read. A query couples a stable key, a `load` function, and the
  * domains it `reads`. The read set is the entire invalidation declaration —

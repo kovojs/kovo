@@ -91,6 +91,19 @@ export interface RouteRequestInput {
   search?: unknown;
 }
 
+/** App-scoped route factory. `createApp()` uses this to contextually type route guards/pages from configured request providers (SPEC §6.4/§9.5). */
+export interface RouteFactory<Request = unknown> {
+  <
+    const Path extends string,
+    const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
+    const SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
+    Page = unknown,
+  >(
+    path: Path,
+    definition?: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, Request>,
+  ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, Request>;
+}
+
 /**
  * Declare a server route with a `page` handler. The path's `:params` and any
  * `search` schema are parsed and passed to `page` as a typed context; `page`
