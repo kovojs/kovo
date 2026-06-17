@@ -832,8 +832,22 @@ borrowing its concrete API/spike detail.
     "tailwind|@tailwindcss|tailwindcss|@source" Dockerfile pnpm-lock.yaml package.json
     packages/**/package.json examples/**/package.json tests/**/package.json site/package.json`
     returns no matches.
-- [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
+- [x] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
+  - Evidence (2026-06-17): `examples/commerce/scripts/measure-style-size.mjs` builds the commerce
+    CSS-heavy fixture, sums emitted CSS/JS asset bytes from `dist/assets`, SSR-renders
+    `renderCartPage()` through a middleware Vite server, and reports raw UTF-8 HTML bytes. The script
+    can target a historical worktree via `--root` so current and Tailwind-baseline numbers use the
+    same measurement code.
+  - Evidence (2026-06-17): current StyleX/plain-CSS commerce measurement:
+    `node examples/commerce/scripts/measure-style-size.mjs` ->
+    `build-ms=249`, `css-bytes=1652`, `css-files=dist/assets/styles.css`, `js-bytes=0`,
+    `html-bytes=3288`.
+  - Evidence (2026-06-17): Tailwind baseline measurement at detached worktree commit
+    `a4cde02c` (`../kovo-commerce-tailwind-baseline`, immediately before commerce migration):
+    `node examples/commerce/scripts/measure-style-size.mjs --root
+    ../kovo-commerce-tailwind-baseline/examples/commerce` -> `build-ms=333`, `css-bytes=9479`,
+    `css-files=dist/assets/tailwind.css`, `js-bytes=0`, `html-bytes=3290`.
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L
       lands; rewrite `site/content/guides/styling.md` + `components.md`; reconcile `plans/api-cleanup.md`
       STABILITY for any new public surface.
