@@ -472,10 +472,9 @@ removes app-authored bookkeeping from the enhanced path.
     - Verified with
       `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts packages/server/src/live-target-registry.test.ts`
       and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
-    - Remaining gaps: build/app-shell integration still needs to collect the
-      generated renderer exports without app-authored `createApp()` wiring; the
-      broad app-authored `mutationResponse` success-routing escape hatch is
-      still present until examples migrate.
+    - Earlier gap now closed below: generated renderer exports and ordinary
+      example success routing no longer require app-authored `createApp()`
+      registry wiring.
     - Additional progress 2026-06-17:
       Compiler-emitted live-target renderer exports now call the internal
       `registerGeneratedLiveTargetRenderer()` helper as generated component
@@ -488,11 +487,9 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
       `git diff --check`.
-    - Remaining gaps: Commerce still needs its ProductGrid request-slot and
-      error-boundary adapter generated before its app modules can drop the
-      explicit generated live-target registry import; the broad app-authored
-      `mutationResponse` success-routing escape hatch is still present until
-      failure/auth routing is split onto narrower surfaces.
+    - Earlier gap now closed below: Commerce's ProductGrid request-slot and
+      error-boundary adapter are generated, and Commerce app modules no longer
+      import generated live-target registries.
 - [ ] **7. Migrate StackOverflow.**
   - Move presentational enrichment and detail filtering into declared queries or
     query arg bindings.
@@ -693,9 +690,10 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/conformance-fixtures/src/commerce-fixtures.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
       `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-    - Remaining gaps: route-page wrapper helpers and the transitional generated
-      live-target registry import are still present; the app-shell still uses
-      `mutationResponse` for auth redirects and add-to-cart failure rendering.
+    - Earlier gap now closed below: Commerce route-page wrapper helpers,
+      generated live-target registry imports, and broad app-shell
+      `mutationResponse` switching have been removed from the app-authored
+      entry paths.
     - Additional progress 2026-06-17:
       `examples/commerce/src/app-shell.tsx` is now a TSX-authored route module
       whose dynamic `/` and `/cart` pages compose `<CartBadge />`,
@@ -745,10 +743,9 @@ removes app-authored bookkeeping from the enhanced path.
       `node scripts/api-surface-gate.mjs`,
       `rg -n "liveTargetRenderers|generated/live-targets" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`,
       and `git diff --check`.
-    - Remaining gaps after this checkpoint: static export and the legacy
-      `renderCartPage()` failure page path still use `renderCartPageBody`;
-      auth redirects and add-to-cart failure rendering still need a narrower
-      app-shell policy surface.
+    - Earlier gap now closed below: static export and the legacy failure page
+      no longer use `renderCartPageBody`, and auth/failure handling now uses
+      key-scoped app-shell mutation policies.
     - Additional progress 2026-06-17:
       `packages/server/src/app-types.ts` / `app-mutation-request.ts` now support
       key-scoped `createApp({ mutationResponses })` policies. App mutation
@@ -835,9 +832,8 @@ removes app-authored bookkeeping from the enhanced path.
     - `packages/server/src/mutation-response.test.ts` also proves generated
       live-target renderer `errorBoundary` handles a failing selected descriptor
       as a per-target fragment.
-    - Remaining gap: escape-hatch `mutationResponse` failure/auth routing
-      remains in Commerce until those paths move onto narrower declared
-      framework surfaces.
+    - Earlier gap now closed: Commerce failure/auth routing moved to key-scoped
+      `mutationResponses` policies.
   - Additional progress 2026-06-17:
     - StackOverflow and CRM now prove ordinary enhanced mutation success without
       app-authored generated live-target registry imports; generated component
