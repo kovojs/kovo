@@ -20,12 +20,11 @@ export { Card, cardClasses, cardStyles } from './card.js';
 export type { CardProps } from './card.js';
 export {
   Checkbox,
-  checkboxClassNames,
   checkboxClasses,
-  checkboxInputClassNames,
   checkboxInputClasses,
+  checkboxStyles,
 } from './checkbox.js';
-export type { CheckboxProps } from './checkbox.js';
+export type { CheckboxProps, CheckboxStyleOverrides } from './checkbox.js';
 export { Alert, alertClasses, alertStyles } from './alert.js';
 export type { AlertProps, AlertVariant } from './alert.js';
 export {

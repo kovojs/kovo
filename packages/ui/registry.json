@@ -203,13 +203,8 @@
       "files": ["src/checkbox.tsx"],
       "exports": ["Checkbox"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "CheckboxCheckedState",
-          "checkboxRootAttributes",
-          "ClassValue",
-          "cn",
-          "defineVariants"
-        ],
+        "@kovojs/headless-ui": ["CheckboxCheckedState", "checkboxRootAttributes"],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

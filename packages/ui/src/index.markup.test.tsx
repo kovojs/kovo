@@ -89,7 +89,6 @@ import {
   breadcrumbClasses,
   buttonClasses,
   checkboxGroupClasses,
-  checkboxClasses,
   collapsibleClasses,
   collapsibleTriggerClasses,
   comboboxClasses,
@@ -242,7 +241,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(alertDialogActionClasses.join(' ')).toContain('data-[intent=destructive]');
     expect(avatarClasses.join(' ')).toContain('rounded-full');
     expect(avatarFallbackClasses.join(' ')).toContain('data-[state=loaded]:hidden');
-    expect(checkboxClasses.join(' ')).toContain('inline-flex items-center gap-2');
     expect(checkboxGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
     expect(collapsibleClasses.join(' ')).toContain('border-neutral-200');
     expect(collapsibleTriggerClasses.join(' ')).toContain('cursor-pointer');

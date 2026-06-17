@@ -2,39 +2,68 @@
 import { component } from '@kovojs/core';
 import {
   checkboxRootAttributes,
-  cn,
-  defineVariants,
   type CheckboxCheckedState,
-  type ClassValue,
 } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+
+export interface CheckboxStyleOverrides {
+  input?: style.StyleInput;
+  root?: style.StyleInput;
+}
 
 export interface CheckboxProps {
   describedBy?: string;
   checked?: CheckboxCheckedState;
   children?: string;
-  class?: ClassValue;
   disabled?: boolean;
   form?: string;
   id?: string;
-  inputClass?: ClassValue;
   labelledBy?: string;
   name?: string;
   required?: boolean;
+  styles?: CheckboxStyleOverrides;
   value?: string;
 }
 
-export const checkboxClassNames = defineVariants({
-  base: 'inline-flex items-center gap-2 text-sm text-neutral-950 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
-  variants: {},
-});
+export const checkboxStyles = style.create(
+  {
+    input: {
+      accentColor: '#0a0a0a',
+      borderColor: '#d4d4d4',
+      borderRadius: 4,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#0a0a0a',
+      height: 16,
+      width: 16,
+      ':disabled': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+        outlineOffset: 2,
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+      },
+    },
+    root: {
+      alignItems: 'center',
+      color: '#0a0a0a',
+      columnGap: 8,
+      display: 'inline-flex',
+      fontSize: 14,
+      '[data-disabled]': {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      },
+    },
+  },
+  { namespace: 'checkbox', source: 'checkbox.tsx' },
+);
 
-export const checkboxInputClassNames = defineVariants({
-  base: 'h-4 w-4 rounded border border-neutral-300 text-neutral-950 accent-neutral-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50',
-  variants: {},
-});
-
-export const checkboxClasses = checkboxClassNames.classes;
-export const checkboxInputClasses = checkboxInputClassNames.classes;
+export const checkboxClasses = [style.attrs(checkboxStyles.root).class ?? ''] as const;
+export const checkboxInputClasses = [style.attrs(checkboxStyles.input).class ?? ''] as const;
 
 export const Checkbox = component({
   render(props: CheckboxProps) {
@@ -45,19 +74,21 @@ export const Checkbox = component({
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
     });
+    const rootStyleAttrs = style.attrs(checkboxStyles.root, props.styles?.root);
+    const inputStyleAttrs = style.attrs(checkboxStyles.input, props.styles?.input);
 
     return (
       <label
-        class={cn(checkboxClassNames(), props.class)}
+        {...rootStyleAttrs}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
       >
         <input
+          {...inputStyleAttrs}
           aria-checked={attrs['aria-checked']}
           aria-describedby={props.describedBy}
           aria-labelledby={props.labelledBy}
           checked={attrs.checked}
-          class={cn(checkboxInputClassNames(), props.inputClass)}
           data-disabled={attrs['data-disabled']}
           data-state={attrs['data-state']}
           disabled={attrs.disabled}

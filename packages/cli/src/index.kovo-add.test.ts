@@ -250,7 +250,9 @@ describe('kovo add', () => {
       expect(card).toContain('export const cardStyles = style.create');
       expect(card).toContain('style?: style.StyleInput');
       expect(checkbox).toContain('export const Checkbox = component({');
-      expect(checkbox).toContain('export const checkboxClassNames = defineVariants');
+      expect(checkbox).toContain("import * as style from '@kovojs/style';");
+      expect(checkbox).toContain('export const checkboxStyles = style.create');
+      expect(checkbox).toContain('styles?: CheckboxStyleOverrides');
       expect(checkboxGroup).toContain('export const CheckboxGroup = component({');
       expect(checkboxGroup).toContain('export const checkboxGroupClassNames = defineVariants');
       expect(combobox).toContain('export const Combobox = component({');

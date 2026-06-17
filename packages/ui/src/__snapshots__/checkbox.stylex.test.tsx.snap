@@ -1,0 +1,28 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Checkbox StyleX styles > exports StyleX style groups 1`] = `
+{
+  "inputMarker": true,
+  "keys": [
+    "input",
+    "root",
+  ],
+  "rootMarker": true,
+}
+`;
+
+exports[`@kovojs/ui Checkbox StyleX styles > matches author-last slot override output 1`] = `"<label class="kv-checkbox-align-pcwyi kv-checkbox-fg-1qpiwv kv-checkbox-d-1j551m kv-checkbox-font-ms8kpd kv-checkbox-cursor-fy5mi kv-checkbox-opacity-1wmp2v kv-app-checkbox-column-10rz7u kv-app-checkbox-font-1cogrf" data-style-src="checkbox.tsx#root; app-checkbox.tsx#root" data-state="checked"><input class="kv-checkbox-bd-1q3pu6 kv-checkbox-bd-odpe50 kv-checkbox-bd-1qf6xu kv-checkbox-bd-1wna9r kv-checkbox-fg-1qpiwv kv-checkbox-h-1vnehf kv-checkbox-cursor-1puzf0 kv-checkbox-opacity-6caix7 kv-checkbox-outline-nj20g6 kv-checkbox-outline-1ag1xs kv-checkbox-outline-piwjfh kv-checkbox-outline-1y03xn kv-app-checkbox-accent-qbm28l kv-app-checkbox-w-1n6f1n" data-style-src="checkbox.tsx#input; app-checkbox.tsx#input" aria-checked="true" checked data-state="checked" type="checkbox">Custom</label>"`;
+
+exports[`@kovojs/ui Checkbox StyleX styles > matches native checkbox states with StyleX output 1`] = `
+{
+  "checked": "<label class="kv-checkbox-align-pcwyi kv-checkbox-fg-1qpiwv kv-checkbox-column-1h4mh2 kv-checkbox-d-1j551m kv-checkbox-font-ms8kpd kv-checkbox-cursor-fy5mi kv-checkbox-opacity-1wmp2v" data-style-src="checkbox.tsx#root" data-state="checked"><input class="kv-checkbox-accent-1ykl6o kv-checkbox-bd-1q3pu6 kv-checkbox-bd-odpe50 kv-checkbox-bd-1qf6xu kv-checkbox-bd-1wna9r kv-checkbox-fg-1qpiwv kv-checkbox-h-1vnehf kv-checkbox-w-1cba8b kv-checkbox-cursor-1puzf0 kv-checkbox-opacity-6caix7 kv-checkbox-outline-nj20g6 kv-checkbox-outline-1ag1xs kv-checkbox-outline-piwjfh kv-checkbox-outline-1y03xn" data-style-src="checkbox.tsx#input" aria-checked="true" checked data-state="checked" id="terms" name="terms" required type="checkbox" value="accepted">Accept terms</label>",
+  "classes": [
+    "kv-checkbox-align-pcwyi kv-checkbox-fg-1qpiwv kv-checkbox-column-1h4mh2 kv-checkbox-d-1j551m kv-checkbox-font-ms8kpd kv-checkbox-cursor-fy5mi kv-checkbox-opacity-1wmp2v",
+  ],
+  "disabled": "<label class="kv-checkbox-align-pcwyi kv-checkbox-fg-1qpiwv kv-checkbox-column-1h4mh2 kv-checkbox-d-1j551m kv-checkbox-font-ms8kpd kv-checkbox-cursor-fy5mi kv-checkbox-opacity-1wmp2v" data-style-src="checkbox.tsx#root" data-disabled="" data-state="unchecked"><input class="kv-checkbox-accent-1ykl6o kv-checkbox-bd-1q3pu6 kv-checkbox-bd-odpe50 kv-checkbox-bd-1qf6xu kv-checkbox-bd-1wna9r kv-checkbox-fg-1qpiwv kv-checkbox-h-1vnehf kv-checkbox-w-1cba8b kv-checkbox-cursor-1puzf0 kv-checkbox-opacity-6caix7 kv-checkbox-outline-nj20g6 kv-checkbox-outline-1ag1xs kv-checkbox-outline-piwjfh kv-checkbox-outline-1y03xn" data-style-src="checkbox.tsx#input" aria-checked="false" data-disabled="" data-state="unchecked" disabled type="checkbox">Locked</label>",
+  "indeterminate": "<label class="kv-checkbox-align-pcwyi kv-checkbox-fg-1qpiwv kv-checkbox-column-1h4mh2 kv-checkbox-d-1j551m kv-checkbox-font-ms8kpd kv-checkbox-cursor-fy5mi kv-checkbox-opacity-1wmp2v" data-style-src="checkbox.tsx#root" data-state="indeterminate"><input class="kv-checkbox-accent-1ykl6o kv-checkbox-bd-1q3pu6 kv-checkbox-bd-odpe50 kv-checkbox-bd-1qf6xu kv-checkbox-bd-1wna9r kv-checkbox-fg-1qpiwv kv-checkbox-h-1vnehf kv-checkbox-w-1cba8b kv-checkbox-cursor-1puzf0 kv-checkbox-opacity-6caix7 kv-checkbox-outline-nj20g6 kv-checkbox-outline-1ag1xs kv-checkbox-outline-piwjfh kv-checkbox-outline-1y03xn" data-style-src="checkbox.tsx#input" aria-checked="mixed" data-state="indeterminate" name="permissions" type="checkbox" value="partial">Some permissions</label>",
+  "inputClasses": [
+    "kv-checkbox-accent-1ykl6o kv-checkbox-bd-1q3pu6 kv-checkbox-bd-odpe50 kv-checkbox-bd-1qf6xu kv-checkbox-bd-1wna9r kv-checkbox-fg-1qpiwv kv-checkbox-h-1vnehf kv-checkbox-w-1cba8b kv-checkbox-cursor-1puzf0 kv-checkbox-opacity-6caix7 kv-checkbox-outline-nj20g6 kv-checkbox-outline-1ag1xs kv-checkbox-outline-piwjfh kv-checkbox-outline-1y03xn",
+  ],
+}
+`;
