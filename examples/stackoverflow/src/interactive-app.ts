@@ -32,7 +32,7 @@ import { answers, questions } from './schema.js';
 // region. voteUp re-renders the list region (on `/`) and the question card (on a
 // detail page); postQuestion re-renders the list; postAnswer the detail region.
 
-const soStylesheets = ['/assets/tailwind.css'] as const;
+const soStylesheets = ['/assets/styles.css'] as const;
 
 async function loadAnswersForQuestion(db: SoDb, questionId: string): Promise<AnswerDetail[]> {
   const rows = await db
@@ -174,7 +174,7 @@ export async function buildSoInteractiveApp(
       // No per-fragment `stylesheets`: the page already loaded the app
       // stylesheet, and a fragment-leading <link> would become the morph root and
       // replace the region with a bare <link>. The re-rendered region reuses the
-      // already-present Tailwind classes.
+      // already-present app classes.
       const listRenderer = {
         render: () => renderQuestionListRegionFromDb(database),
         target: QUESTION_LIST_TARGET,

@@ -377,6 +377,21 @@ borrowing its concrete API/spike detail.
   - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/create-kovo/src/index.test.ts`,
     `pnpm --filter create-kovo run build:dist`, `pnpm exec tsc --noEmit`, and `git diff --check` pass
     after integration.
+  - Evidence (partial, 2026-06-16): `examples/crm` and `examples/stackoverflow` package manifests drop
+    `@tailwindcss/vite`/`tailwindcss`; both Vite configs remove the Tailwind plugin, rename the CSS entry
+    from `tailwind` to `styles`, and both app-shell stylesheet constants now point at
+    `/assets/styles.css`. Their `src/styles.css` files are checked-in baseline app CSS with no Tailwind
+    import or `@source` safelist; `rg -n -i "tailwind|assets/tailwind\.css|@tailwindcss" examples/crm
+    examples/stackoverflow` returns no matches.
+  - Evidence (partial, 2026-06-16): `pnpm --filter @kovojs/example-crm test`,
+    `pnpm --filter @kovojs/example-stackoverflow test`, `pnpm --filter @kovojs/example-crm run build`,
+    `pnpm --filter @kovojs/example-stackoverflow run build`, `pnpm --filter @kovojs/example-crm exec tsc
+    --noEmit --pretty false`, `pnpm --filter @kovojs/example-stackoverflow exec tsc --noEmit --pretty
+    false`, and `git diff --check` pass. The builds emit `dist/assets/styles.css` and
+    `.vite/manifest.json` records `"file": "assets/styles.css"` for both examples. Direct static export
+    scripts still fail before completing on existing KV229 param-route metadata gaps for `/deals/:id` and
+    `/questions/:id`; the broad `vp run export` task graph is additionally blocked by the out-of-scope
+    commerce Tailwind config/dependency state.
   - Evidence (partial, 2026-06-16): `packages/ui/src/alert.tsx` now uses `@kovojs/style`, exports
     `alertStyles`, accepts `style?: style.StyleInput`, and drops `defineVariants`/`cn` plus the `class`
     escape hatch. `packages/ui/src/alert.stylex.test.tsx` snapshots default/variant StyleX output,

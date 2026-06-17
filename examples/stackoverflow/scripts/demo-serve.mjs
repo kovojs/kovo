@@ -6,7 +6,7 @@ import { createDemoServeServer, runDemoServeCli } from '../../../scripts/demo-se
 // Each browser session drives its OWN seeded PGlite through the real node handler
 // (ranked question list with upvote + ask forms, per-question detail with upvote +
 // answer forms). See scripts/serve.mjs for the single-tenant variant; run
-// `vp build` first so built `/assets/*` (Tailwind) are present.
+// `vp build` first so built `/assets/*` stylesheets are present.
 
 const soRoot = fileURLToPath(new URL('../', import.meta.url));
 

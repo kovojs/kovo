@@ -40,7 +40,7 @@ import { activities, contacts, deals } from './schema.js';
 // the pipeline. The mutations carry a `guards.authed` guard, so the request gets
 // a demo session below.
 
-const crmStylesheets = ['/assets/tailwind.css'] as const;
+const crmStylesheets = ['/assets/styles.css'] as const;
 
 // The demo viewer attached to every request so the mutations' `guards.authed`
 // guard (SPEC.md §6.5) passes. This is a no-auth public demo; the session is a
@@ -205,7 +205,7 @@ export async function buildCrmInteractiveApp(
       // No per-fragment `stylesheets`: the page already loaded the app
       // stylesheet, and a fragment-leading <link> would become the morph root and
       // replace the region with a bare <link>. The re-rendered region reuses the
-      // already-present Tailwind classes.
+      // already-present app classes.
       const pipelineRenderer = {
         render: () => renderPipelineRegionFromDb(database),
         target: PIPELINE_TARGET,

@@ -6,7 +6,7 @@ import { createDemoServeServer, runDemoServeCli } from '../../../scripts/demo-se
 // session drives its OWN seeded PGlite through the real CRM node handler (pipeline
 // dashboard, new-deal/add-contact forms, move-stage/close-won actions). See
 // scripts/serve.mjs for the single-tenant variant; run `vp build` first so built
-// `/assets/*` (Tailwind) are present.
+// `/assets/*` stylesheets are present.
 
 const crmRoot = fileURLToPath(new URL('../', import.meta.url));
 

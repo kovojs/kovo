@@ -1,6 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite-plus';
 
 export const soViteConfig = defineConfig({
@@ -8,7 +7,7 @@ export const soViteConfig = defineConfig({
     manifest: true,
     rollupOptions: {
       input: {
-        tailwind: 'src/styles.css',
+        styles: 'src/styles.css',
       },
       output: {
         assetFileNames: 'assets/[name][extname]',
@@ -19,7 +18,6 @@ export const soViteConfig = defineConfig({
   // request dispatch, so drop the singleton app-shell dev plugin that would
   // otherwise claim app routes against one shared PGlite (SPEC.md §9.5).
   plugins: [
-    tailwindcss(),
     ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [soSharedAppShellDevPlugin()]),
   ],
   // PGlite (WASM) makes the build/dev/export paths slow; give the tests room.
