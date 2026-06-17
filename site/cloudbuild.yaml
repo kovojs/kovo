@@ -6,16 +6,18 @@
 #
 # The Cloud Build service account needs roles/run.admin and
 # roles/iam.serviceAccountUser to deploy (grant once):
-#   PROJECT_NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
-#   gcloud projects add-iam-policy-binding $PROJECT \
+#   PROJECT_ID=kovo-docs
+#   PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+#   gcloud projects add-iam-policy-binding $PROJECT_ID \
 #     --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com --role=roles/run.admin
-#   gcloud projects add-iam-policy-binding $PROJECT \
+#   gcloud projects add-iam-policy-binding $PROJECT_ID \
 #     --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com --role=roles/iam.serviceAccountUser
 #
 # Prerequisite (once): an Artifact Registry repo named by _REPO in _REGION:
-#   gcloud artifacts repositories create kovo --repository-format=docker --location=us-central1
+#   gcloud artifacts repositories create kovo --project=kovo-docs --repository-format=docker --location=us-central1
 
 substitutions:
+  _PROJECT_ID: kovo-docs
   _REGION: us-central1
   _REPO: kovo
   _SERVICE: kovo-docs
@@ -40,7 +42,7 @@ steps:
       - -f
       - site/Dockerfile
       - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/docs:${_TAG}
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${_TAG}
       - .
 
   - id: smoke
@@ -50,7 +52,7 @@ steps:
       - -c
       - |
         set -euo pipefail
-        IMAGE=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/docs:${_TAG}
+        IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${_TAG}
         CID=$$(docker run -d -e PORT=8080 -e HOST=0.0.0.0 "$$IMAGE")
         trap 'docker logs "$$CID" || true; docker rm -f "$$CID" >/dev/null 2>&1 || true' EXIT
 
@@ -68,7 +70,7 @@ steps:
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/docs:${_TAG}
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${_TAG}
 
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -77,8 +79,10 @@ steps:
       - run
       - deploy
       - ${_SERVICE}
+      - --project
+      - ${_PROJECT_ID}
       - --image
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/docs:${_TAG}
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${_TAG}
       - --region
       - ${_REGION}
       - --platform
