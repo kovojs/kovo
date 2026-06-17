@@ -6,7 +6,7 @@
 #
 # One image serves any one example, chosen at runtime by the EXAMPLE env var, so
 # the same image backs three Cloud Run services. Because the runtime is Vite SSR,
-# dev dependencies (vite-plus, tailwind) must stay installed — we do NOT prune to
+# dev dependencies such as vite-plus must stay installed — we do NOT prune to
 # production deps.
 #
 # Build:  docker build -t kovo-examples .
@@ -35,7 +35,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile \
   && pnpm rebuild esbuild
 
-# Build each example's client assets (Tailwind CSS -> dist/assets/*). The
+# Build each example's client assets (CSS and manifests -> dist/assets/*). The
 # per-session demo serve streams SSR from source but serves built /assets/* from
 # dist, so the apps render fully styled.
 RUN pnpm -C examples/commerce run build \

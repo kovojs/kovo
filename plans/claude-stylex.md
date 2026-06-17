@@ -825,6 +825,13 @@ borrowing its concrete API/spike detail.
     @kovojs/integration-tests exec playwright test tests/integration/specs/late-fragment-static-css.spec.ts`,
     `pnpm --filter @kovojs/integration-tests exec playwright test --list`, `pnpm install
     --frozen-lockfile`, `pnpm exec tsc --noEmit --pretty false`, and `git diff --check` pass.
+  - Evidence (partial, 2026-06-17): root/package-level Tailwind dependency residue is removed:
+    `Dockerfile` now refers generically to built CSS assets, orphaned `@tailwindcss/node` and
+    `tailwindcss` package snapshots are removed from `pnpm-lock.yaml`, `pnpm install
+    --frozen-lockfile` passes, and `rg -n -i
+    "tailwind|@tailwindcss|tailwindcss|@source" Dockerfile pnpm-lock.yaml package.json
+    packages/**/package.json examples/**/package.json tests/**/package.json site/package.json`
+    returns no matches.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L
