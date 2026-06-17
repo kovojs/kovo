@@ -25,5 +25,17 @@ export default defineConfig({
   use: {
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'firefox-engine-matrix',
+      testMatch: /browser-engine-degradation-matrix\.spec\.ts/,
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit-engine-matrix',
+      testMatch: /browser-engine-degradation-matrix\.spec\.ts/,
+      use: { ...devices['Desktop Safari'] },
+    },
+  ],
 });

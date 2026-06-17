@@ -81,6 +81,17 @@ The page wraps the component's `Component.definition.render(data)` output in
 The always-present inline-loader runtime morphs the named host in place — no
 navigation. The app's `mutationResponse` re-renders the fragment(s) from server truth.
 
+### Loader coverage split
+
+The document shell always includes the small inline loader. It owns delegated `on:*`
+handlers, enhanced form submission, mutation response parsing, fragment morphing, query
+chunk event dispatch, and island abort scopes. Heavier production-loader behavior must
+be exercised by importing `installKovoLoader(...)` from `@kovojs/runtime` in the fixture
+client module, as `fixtures/query-refetch`, `fixtures/broadcast-channel-sync`, and the
+runtime `loader-*` tests do. That installed-loader path owns query-store hydration,
+typed-read visible-return refetch, default BroadcastChannel replay, optimistic cleanup,
+and loader disposal hooks.
+
 ### Auth
 
 `fixtures/auth` shows `sessionProvider` + `guards.authed()` + `context.setCookie`. In a
