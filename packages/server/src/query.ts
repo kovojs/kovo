@@ -83,6 +83,7 @@ export type QueryArgsSchema<Input> = Schema<Input> & {
 
 export interface QueryArgsBinding<Input, Props extends Record<string, unknown>> {
   args: (props: Props) => Input;
+  query: QueryDefinition<string, unknown, Input, unknown>;
   schema: Schema<Input>;
 }
 
@@ -174,10 +175,15 @@ export function query<const Key extends string>(
   key: Key,
   definition: Omit<RegisteredQueryDefinition, 'key'>,
 ): unknown {
-  return {
+  const queryDefinition = {
     ...definition,
-    ...(definition.args ? { args: queryArgsSchema(definition.args) } : {}),
     key,
+  };
+  if (!definition.args) return queryDefinition;
+
+  return {
+    ...queryDefinition,
+    args: queryArgsSchema(definition.args, queryDefinition as QueryDefinition),
   };
 }
 
@@ -369,11 +375,15 @@ function parseQueryInput<const Key extends string, Value, Input, Request>(
   }
 }
 
-function queryArgsSchema<Input>(schema: Schema<Input>): QueryArgsSchema<Input> {
+function queryArgsSchema<Input>(
+  schema: Schema<Input>,
+  queryDefinition: QueryDefinition<string, unknown, Input, unknown>,
+): QueryArgsSchema<Input> {
   const bind = (<Props extends Record<string, unknown>>(
     mapper: (props: Props) => Input,
   ): QueryArgsBinding<Input, Props> => ({
     args: mapper,
+    query: queryDefinition,
     schema,
   })) as QueryArgsSchema<Input>;
 

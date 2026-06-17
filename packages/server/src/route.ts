@@ -12,6 +12,7 @@ import {
   type UnauthenticatedHandler,
 } from './guards.js';
 import type { PageHintOptions } from './hints.js';
+import { runWithJsxRequestContext } from './jsx-context.js';
 import {
   htmlServerErrorResponse,
   retryAfterHeaders,
@@ -194,7 +195,9 @@ export async function runRoutePage<
     };
   }
 
-  const value = await definition.page?.(routeRequest, lifecycleRequest as GuardedRequest);
+  const value = await runWithJsxRequestContext(lifecycleRequest, () =>
+    definition.page?.(routeRequest, lifecycleRequest as GuardedRequest),
+  );
   if (isNotFound(value)) return { ok: false, status: 404 };
   if (isRouteResponseOutcome(value)) return { ok: true, outcome: value };
   return { ok: true, value: value as Page };

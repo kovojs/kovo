@@ -262,9 +262,18 @@ removes app-authored bookkeeping from the enhanced path.
       generated lowered TSX renderer exports now consume emitted query binding
       facts, including `.args((props) => ...)`, and pass them to the server
       helper that reloads declared queries from serialized props.
-    - Remaining gap: route-generated initial render still needs to pass route
-      params/search as serialized component props, and build/app-shell wiring
-      still needs to collect the generated renderer exports automatically.
+    - Additional progress 2026-06-17:
+      `packages/server/src/query.ts` now keeps a back-reference to the backing
+      server query on runtime `.args((props) => ...)` bindings, so server JSX
+      route rendering can load prop-bound component queries without app-authored
+      loaders.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/component-render.test.tsx`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gap: compiler-generated route IR still needs to stamp serialized
+      component props for route pages, and build/app-shell wiring still needs to
+      collect generated renderer exports automatically.
 - [ ] **4. Server/compiler: lower route JSX pages.**
   - Support route pages that return TSX component invocations, for example
     `page: () => <QuestionListRegion />` and
@@ -306,8 +315,20 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
       `node scripts/api-surface-gate.mjs`.
-    - Remaining gap: this is fact extraction only; generated executable route IR,
-      initial query loading, and app-shell integration are still open.
+    - Additional progress 2026-06-17:
+      server route execution now installs request context for server JSX, and
+      `@kovojs/server/jsx-runtime` recognizes Kovo `component(...)` descriptors,
+      loads direct and prop-bound declared queries, and renders async JSX
+      children. This enables runtime-authored route pages such as
+      `page: () => <QuestionListRegion />` and
+      `page: ({ params }) => <QuestionDetailRegion questionId={params.id} />`.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/component-render.test.tsx packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+    - Remaining gap: compiler-generated executable route IR and build/app-shell
+      integration are still open; runtime JSX proves the authoring model but
+      does not yet remove transitional generated registry imports.
 - [ ] **5. Runtime: send complete live target descriptors.**
   - Extend `Kovo-Targets` collection so enhanced mutation POSTs carry enough
     structured target data for the server to find the generated registry entry and
@@ -499,9 +520,25 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`
       and
       `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`.
+    - Additional progress 2026-06-17:
+      `examples/stackoverflow/src/interactive-app.tsx` is now a TSX-authored
+      route module whose list and detail pages compose
+      `<QuestionListRegion />` and
+      `<QuestionDetailRegion questionId={params.id} />` directly through
+      server JSX. The route module no longer calls `renderQuestionListPage`,
+      `renderQuestionDetailPage`, or direct `question*.load(...)` page loaders.
+      `examples/stackoverflow/tsconfig.json` includes TSX app modules and the
+      demo server loads `/src/interactive-app.tsx`.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/component-render.test.tsx`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
     - Remaining gaps: list-region presentational enrichment is still outside the
-      declared query model; route-page wrapper helpers and a transitional
-      generated live-target registry import are still present.
+      declared query model, and the transitional generated live-target registry
+      import is still present.
 - [ ] **8. Migrate CRM.**
   - Move contact/deal/detail presentation data into declared queries or explicit
     component query args.

@@ -1,6 +1,9 @@
+import type { Component, ComponentDefinitionInput, ComponentRenderSlots, JsonValue } from '@kovojs/core';
 import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/runtime';
 
 import { escapeAttribute } from './html.js';
+import { currentJsxRequestContext } from './jsx-context.js';
+import { runQuery, type QueryDefinition } from './query.js';
 
 // Server-side JSX runtime. Components author JSX sugar (SPEC.md section 4.1)
 // and render to light-DOM HTML strings (SPEC.md section 3 pipeline, section
@@ -32,31 +35,49 @@ const voidElements = new Set([
   'wbr',
 ]);
 
-export type JsxNode = JsxNode[] | boolean | null | number | string | undefined;
+export type JsxNode =
+  | JsxNode[]
+  | boolean
+  | null
+  | number
+  | Promise<JsxNode>
+  | string
+  | undefined;
 
 export interface JsxProps {
   children?: JsxNode;
   [attribute: string]: unknown;
 }
 
-export type JsxComponent = (props: JsxProps) => string;
+type MaybePromise<Value> = Promise<Value> | Value;
 
-export function Fragment(props: JsxProps): string {
+export type JsxComponent = (props: JsxProps) => MaybePromise<string>;
+
+type KovoJsxComponent = Component<ComponentDefinitionInput>;
+
+export function Fragment(props: JsxProps): MaybePromise<string> {
   return renderJsxChildren(props.children);
 }
 
-export function jsx(type: JsxComponent | string, props: JsxProps): string {
+export function jsx(type: JsxComponent | KovoJsxComponent | string, props: JsxProps): MaybePromise<string> {
   if (typeof type === 'function') return type(props);
+  if (isKovoComponent(type)) return renderKovoComponent(type, props);
 
   const attributes = renderJsxAttributes(type, props);
   if (voidElements.has(type)) return `<${type}${attributes}>`;
 
-  return `<${type}${attributes}>${renderJsxChildren(renderJsxContent(props))}</${type}>`;
+  const children = renderJsxChildren(renderJsxContent(props));
+  return isPromiseLike(children)
+    ? children.then((html) => `<${type}${attributes}>${html}</${type}>`)
+    : `<${type}${attributes}>${children}</${type}>`;
 }
 
 export const jsxs = jsx;
 
-export function jsxDEV(type: JsxComponent | string, props: JsxProps): string {
+export function jsxDEV(
+  type: JsxComponent | KovoJsxComponent | string,
+  props: JsxProps,
+): MaybePromise<string> {
   return jsx(type, props);
 }
 
@@ -145,16 +166,119 @@ function isRawHtmlAttribute(name: string): boolean {
   );
 }
 
-function renderJsxChildren(children: JsxNode): string {
+function renderJsxChildren(children: JsxNode): MaybePromise<string> {
   if (children === null || children === undefined || typeof children === 'boolean') return '';
-  if (Array.isArray(children)) return children.map((child) => renderJsxChildren(child)).join('');
+  if (isPromiseLike(children)) return children.then((child) => renderJsxChildren(child));
+  if (Array.isArray(children)) {
+    const rendered = children.map((child) => renderJsxChildren(child));
+    return rendered.some(isPromiseLike)
+      ? Promise.all(rendered).then((values) => values.join(''))
+      : rendered.join('');
+  }
 
   return String(children);
 }
 
+async function renderKovoComponent(
+  component: KovoJsxComponent,
+  props: JsxProps,
+): Promise<string> {
+  const request = currentJsxRequestContext();
+  const queries = await loadComponentQueries(component, props, request);
+  const state = component.definition.state?.() as JsonValue | undefined;
+  const slots = componentRenderSlots(component, props, request);
+  const render = component.definition.render as (
+    queries: Record<string, unknown>,
+    state: JsonValue | undefined,
+    slots: ComponentRenderSlots,
+  ) => unknown;
+  const rendered = render({ ...props, ...queries }, state, slots) as JsxNode;
+  return renderJsxChildren(rendered);
+}
+
+async function loadComponentQueries(
+  component: KovoJsxComponent,
+  props: JsxProps,
+  request: unknown,
+): Promise<Record<string, unknown>> {
+  const queryBindings = component.definition.queries;
+  if (!isRecord(queryBindings)) return {};
+
+  const values: Record<string, unknown> = {};
+  for (const [name, binding] of Object.entries(queryBindings)) {
+    const resolved = componentQueryBinding(binding, props);
+    if (!resolved) continue;
+    if (request === undefined) {
+      throw new Error(`Route JSX component ${component.name ?? name} requires request context.`);
+    }
+
+    const result = await runQuery(resolved.query, resolved.input, request);
+    if (!result.ok) {
+      throw new Error(`Route JSX component query failed: ${resolved.query.key}`);
+    }
+    values[name] = result.value;
+  }
+  return values;
+}
+
+function componentQueryBinding(
+  binding: unknown,
+  props: JsxProps,
+): { input: unknown; query: QueryDefinition } | undefined {
+  if (isQueryDefinition(binding)) return { input: undefined, query: binding };
+  if (isQueryArgsBinding(binding)) return { input: binding.args(props), query: binding.query };
+  return undefined;
+}
+
+function componentRenderSlots(
+  component: KovoJsxComponent,
+  props: JsxProps,
+  request: unknown,
+): ComponentRenderSlots {
+  const forms = isRecord(component.definition.mutations)
+    ? Object.fromEntries(Object.keys(component.definition.mutations).map((key) => [key, { failure: null }]))
+    : undefined;
+
+  return {
+    ...(props.children === undefined ? {} : { children: props.children }),
+    ...(forms === undefined ? {} : { forms }),
+    ...(request === undefined ? {} : { request }),
+  };
+}
+
+function isKovoComponent(value: unknown): value is KovoJsxComponent {
+  return (
+    isRecord(value) &&
+    isRecord(value.definition) &&
+    typeof value.definition.render === 'function'
+  );
+}
+
+function isQueryDefinition(value: unknown): value is QueryDefinition {
+  return isRecord(value) && typeof value.key === 'string' && Array.isArray(value.reads);
+}
+
+function isQueryArgsBinding(
+  value: unknown,
+): value is { args: (props: JsxProps) => unknown; query: QueryDefinition } {
+  return (
+    isRecord(value) &&
+    typeof value.args === 'function' &&
+    isQueryDefinition(value.query)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isPromiseLike<Value>(value: MaybePromise<Value>): value is Promise<Value> {
+  return isRecord(value) && typeof value.then === 'function';
+}
+
 export declare namespace JSX {
-  type Element = string;
-  type ElementType = JsxComponent | string;
+  type Element = MaybePromise<string>;
+  type ElementType = JsxComponent | KovoJsxComponent | string;
   interface ElementChildrenAttribute {
     children: unknown;
   }
