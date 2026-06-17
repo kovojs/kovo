@@ -9,6 +9,11 @@ import {
 } from './document-core.js';
 import { renderDiagnosticDocument } from './document-diagnostics.js';
 
+const deferredApplyScript =
+  '<script>let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()</script>';
+const deferredCleanupScript =
+  '<script>for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()</script>';
+
 describe('server app shell document assembly', () => {
   it('assembles deterministic documents with hints, loader, and query hydration before body', () => {
     const document = renderDocument({
@@ -73,7 +78,9 @@ describe('server app shell document assembly', () => {
           return '<!doctype html><html><head></head><body></body></html>';
         },
       }),
-    ).toThrow('DocumentTemplate omitted required assembled document part(s): parts.head, parts.body.');
+    ).toThrow(
+      'DocumentTemplate omitted required assembled document part(s): parts.head, parts.body.',
+    );
 
     expect(() =>
       renderDeferredDocument({
@@ -181,7 +188,10 @@ describe('server app shell document assembly', () => {
     expect(response.body).toContain(
       '<kovo-fragment target="reviews:p1"><link rel="stylesheet" href="/reviews.css"><section>Ready</section></kovo-fragment>',
     );
-    expect(response.body.endsWith('--kovo-boundary--\n</body></html>')).toBe(true);
+    expect(response.body).toContain(deferredApplyScript);
+    expect(
+      response.body.endsWith(`--kovo-boundary--\n${deferredCleanupScript}\n</body></html>`),
+    ).toBe(true);
   });
 
   it('renders stable error documents with escaped content', () => {

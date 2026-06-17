@@ -914,15 +914,27 @@ tests/integration/specs/opaque-projection-schema.spec.ts`.
 
 ## Streaming and deferred content
 
-- [ ] `kovo-defer-initial-stream` / `kovo-defer-initial-stream.spec.ts`: `<kovo-defer>` renders a
+- [x] `kovo-defer-initial-stream` / `kovo-defer-initial-stream.spec.ts`: `<kovo-defer>` renders a
       fallback, streams the real fragment later in the same response, and morphs it in.
   - SPEC refs: §8 out-of-order streaming, §13.3 streaming details.
   - Assertions: fallback visible first; final content replaces it; query JSON arrives before/with
     consumers.
-  - Gap: public `renderDeferredDocument`/`renderDeferredStream` can produce the wire artifact and the
-    runtime exposes stream-apply helpers, but the current inline loader does not consume initial
-    document stream boundaries in the browser, so the fallback-then-morph integration assertion is
-    not yet expressible through the public harness.
+  - Evidence 2026-06-16: `tests/integration/fixtures/kovo-defer-initial-stream` streams a public
+    `renderDeferredDocument` response with shell-first fallback and a delayed boundary chunk;
+    `tests/integration/specs/kovo-defer-initial-stream.spec.ts` verifies fallback visibility before
+    the late chunk, final `<kovo-defer>` replacement, query-bound text, removed wire artifacts, and
+    the semantic snapshot. `packages/server/src/deferred-stream.ts` emits per-chunk apply scripts and
+    closing cleanup for initial document streams; `packages/runtime/src/inline-loader-build.ts`
+    exposes the generated inline loader's shared body-apply hook and recognizes deferred hosts.
+    Proving commands: focused Playwright for
+    `tests/integration/specs/kovo-defer-initial-stream.spec.ts`; focused Vitest for
+    `packages/server/src/deferred-stream.test.ts`, `packages/server/src/document.test.ts`,
+    `packages/runtime/src/fragment-targets.test.ts`, `packages/runtime/src/inline-loader-build.test.ts`,
+    `packages/runtime/src/inline-loader-artifact-minifier.test.ts`,
+    `packages/runtime/src/inline-loader-fragment-target.test.ts`,
+    `packages/runtime/src/inline-loader-response-apply-runtime.test.ts`,
+    `packages/runtime/src/apply-deferred-stream.test.ts`, and
+    `packages/runtime/src/apply-deferred-stream-rootless.test.ts`; runtime `check:inline-loader`.
 - [x] `deferred-fragment-styles` / `deferred-fragment-styles.spec.ts`: late fragments request or reuse
       required styles without duplicating per-page CSS.
   - SPEC refs: §13.1 CSS, §13.3 streaming details.

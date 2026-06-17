@@ -1,0 +1,5 @@
+<section kovo-c="reviews:p1" kovo-deps="reviews:p1">
+  <h2>
+    "Reviews ready"
+  <p data-bind="reviews.count">
+    "1"

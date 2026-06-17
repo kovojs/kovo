@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { renderDeferredStream } from './deferred-stream.js';
 
+const applyScript =
+  '<script>let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()</script>';
+const cleanupScript =
+  '<script>for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()</script>';
+
 describe('deferred streams', () => {
   it('renders deferred streams with shell first and query JSON before fragments', () => {
     expect(
@@ -29,7 +34,9 @@ describe('deferred streams', () => {
         '--kovo-boundary',
         '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</kovo-query>',
         '<kovo-fragment target="reviews:p1"><section kovo-c="reviews" kovo-deps="product:p1"><article kovo-key="r1">5</article></section></kovo-fragment>',
+        applyScript,
         '--kovo-boundary--',
+        cleanupScript,
         '</body></html>',
       ].join('\n'),
       headers: {
@@ -66,10 +73,13 @@ describe('deferred streams', () => {
         '<kovo-query name="criticalQuery">{"ready":true}</kovo-query>',
         '<kovo-fragment target="critical&amp;details" priority="5"><section>critical</section></kovo-fragment>',
         '<kovo-fragment target="normal"><section>normal</section></kovo-fragment>',
+        applyScript,
         '--kovo-boundary',
         '<kovo-query name="lowQuery">{"ready":true}</kovo-query>',
         '<kovo-fragment target="low"><section>low</section></kovo-fragment>',
+        applyScript,
         '--kovo-boundary--',
+        cleanupScript,
         '',
       ].join('\n'),
       headers: {
@@ -97,7 +107,9 @@ describe('deferred streams', () => {
         '--kovo-boundary',
         '<kovo-query name="cart">{"count":1}</kovo-query>',
         '<kovo-fragment target="normal" priority="0"><section>normal</section></kovo-fragment>',
+        applyScript,
         '--kovo-boundary--',
+        cleanupScript,
         '',
       ].join('\n'),
     );
@@ -125,7 +137,9 @@ describe('deferred streams', () => {
         '<!doctype html><html><body><kovo-defer target="product-grid"></kovo-defer>',
         '--kovo-boundary',
         '<kovo-fragment target="product-grid" mode="append"><article kovo-key="p3">Third</article></kovo-fragment>',
+        applyScript,
         '--kovo-boundary--',
+        cleanupScript,
         '',
       ].join('\n'),
     );
@@ -148,7 +162,7 @@ describe('deferred streams', () => {
         shell: '<!doctype html><html><body><kovo-defer target="reviews:p1"></kovo-defer>',
       }).body,
     ).toContain(
-      '<kovo-fragment target="reviews:p1"><link rel="stylesheet" href="/assets/reviews.css"><section class="reviews-card">Ready</section></kovo-fragment>',
+      `<kovo-fragment target="reviews:p1"><link rel="stylesheet" href="/assets/reviews.css"><section class="reviews-card">Ready</section></kovo-fragment>\n${applyScript}`,
     );
   });
 });
