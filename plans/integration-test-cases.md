@@ -370,13 +370,24 @@ integration harness uniquely proves.
     `{"code":"VALIDATION","payload":{"issues":[...]}}`. Proving commands:
     `pnpm exec vitest run packages/server/src/mutation-endpoint.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/schema.test.ts` and
     `pnpm exec playwright test tests/integration/specs/validation-field-errors.spec.ts tests/integration/specs/query-args-search.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
-- [ ] `broadcast-channel-sync` / `broadcast-channel-sync.spec.ts`: mutation response query chunks
+- [x] `broadcast-channel-sync` / `broadcast-channel-sync.spec.ts`: mutation response query chunks
       rebroadcast to another same-user tab.
   - SPEC refs: §9.3 BroadcastChannel liveness.
   - Assertions: two pages share session; mutation in one tab updates the other without navigation.
-  - Gap: not implemented in this slice because the fixture document shell uses the generated inline
-    loader, which now applies local query chunks to text/attr bindings but still does not install the
-    full `installKovoLoader` BroadcastChannel mutation rebroadcast path.
+  - Evidence: `tests/integration/fixtures/broadcast-channel-sync` installs public runtime query
+    hydration plus `installMutationBroadcast()` over a real browser `BroadcastChannel`; the
+    submitting tab posts through `submitEnhancedMutation()` with the broadcast publisher attached.
+    `tests/integration/specs/broadcast-channel-sync.spec.ts` opens two pages in one browser context,
+    mutates page A, waits for the mutation response, verifies page B updates its
+    `[data-bind="presence.status"]` consumer to the broadcast query truth without navigation, and
+    confirms page B did not issue its own mutation request. Proving commands:
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/broadcast-channel-sync.spec.ts
+    --config playwright.config.ts --workers=1`; `pnpm exec vitest run
+    packages/runtime/src/loader-enhanced-mutation-broadcast.test.ts
+    packages/runtime/src/mutation-optimistic.test.ts`; `pnpm exec vp check
+    tests/integration/fixtures/broadcast-channel-sync/app.tsx
+    tests/integration/fixtures/broadcast-channel-sync/client.ts
+    tests/integration/specs/broadcast-channel-sync.spec.ts`.
 
 ## Morph survival
 
