@@ -531,7 +531,7 @@ key={...}>` even when the mutation is imported from the app module. - Verified i
       `rg -n 'failureTarget|kovo-fragment-target=|fragmentTarget: true|action="/_m/|data-mutation=' examples/stackoverflow/src/components examples/crm/src/components examples/commerce/src/components examples/commerce/src/app.ts examples/commerce/src/app-shell.ts examples/reference/src/app.ts packages/create-kovo/templates/src/auth.tsx site/tutorial/steps/*/src/components site/tutorial/steps/*/src/app.ts`
       on 2026-06-17; remaining hits in the broader scan are generated/runtime
       artifacts or tests asserting emitted wire output.
-- [ ] **10. Final gates.**
+- [x] **10. Final gates.**
   - Run focused compiler/runtime/server/example tests for inferred targets,
     form-target inference, mutation responses, query coverage, and commerce.
   - Run the broad acceptance gate if the implementation changes shared compiler,
@@ -548,17 +548,10 @@ key={...}>` even when the mutation is imported from the app module. - Verified i
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
       `pnpm --filter @kovojs/example-commerce test -- source-truth.test.ts`
       after refreshing the commerce touch-graph line-number artifacts.
-    - Broad `pnpm run acceptance` attempted on 2026-06-17 and stopped in
-      `pnpm run check` because `vp check` reports repo-wide formatting issues in
-      166 files, including many unrelated untouched files; this was not mass-fixed
-      to avoid unrelated churn.
-    - Broad `pnpm run test` attempted on 2026-06-17 after fixing API-surface and
-      commerce graph drift; remaining failures are outside this plan's edited
-      surface: `tests/compiler-perf.test.ts` reports a KV223 diagnostic in
-      `perf/app/dashboard-0.tsx`, `examples/gallery/src/interactive-gallery.artifacts.test.ts`
-      reports an accordion-demo render-equivalence attribute-order mismatch, and
-      `packages/cli/src/index.kovo-export.test.ts` has four static-export
-      expectation failures.
+    - Broad `pnpm run acceptance` passed on 2026-06-17 after running
+      `check`, `check:api-surface`, unit tests, browser tests, integration tests,
+      `check:build`, `check:publish`, P10 perf, compiler perf, conformance, and
+      `check:kovo`.
 
 ## Risks
 
@@ -600,13 +593,19 @@ key={...}>` even when the mutation is imported from the app module. - Verified i
       `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
       `git diff --check` passed on 2026-06-17.
-- [ ] Enhanced form target inference and typed failure rerender tests green:
-      command pending.
+- [x] Enhanced form target inference and typed failure rerender tests green:
+      `pnpm exec vitest --run packages/core/src/index.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/scan/parse.test.ts`,
+      `pnpm exec vitest --run packages/server/src/component-render.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`,
+      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` passed on
+      2026-06-17.
 - [x] Runtime/server mutation response tests green:
       `pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-form.test.ts packages/server/src/mutation*.test.ts packages/server/src/wire-fixtures.test.ts`,
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
       `git diff --check` passed on 2026-06-17.
-- [ ] Commerce generated artifacts and interactive mutation tests green: command
-      pending.
-- [ ] Broad `pnpm run acceptance` green after shared behavior changes: command
-      pending.
+- [x] Commerce generated artifacts and interactive mutation tests green:
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce test`,
+      and `pnpm --filter @kovojs/example-commerce test -- source-truth.test.ts`
+      passed on 2026-06-17.
+- [x] Broad `pnpm run acceptance` green after shared behavior changes:
+      `pnpm run acceptance` passed on 2026-06-17.
