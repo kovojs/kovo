@@ -5,6 +5,7 @@ import { component } from '@kovojs/core';
 import { csrfField } from '@kovojs/server';
 
 import {
+  addToCart,
   commerceCsrf,
   type AddToCartFailure,
   type AddToCartFailureState,
@@ -108,11 +109,9 @@ export function renderAddToCartForm(
 ): string {
   return (
     <form
-      method="post"
-      action="/_m/cart/add"
       enhance
-      data-mutation="cart/add"
-      kovo-fragment-target={productFormTarget(item.id)}
+      method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${item.id}`}
+      kovo-key={item.id}
       class="mt-3 flex flex-wrap items-end gap-2"
     >
       {request?.session?.id ? csrfField(request, commerceCsrf) : ''}
@@ -155,8 +154,4 @@ export function renderAddToCartError(failure: AddToCartFailure): string {
       Unable to add this item.
     </output>
   );
-}
-
-export function productFormTarget(productId: string): string {
-  return `product-form:${productId}`;
 }

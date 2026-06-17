@@ -53,7 +53,7 @@ describe('render-equivalence production boundary', () => {
 
     const compileSource = readFileSync(join(compilerSrcDir, 'compile.ts'), 'utf8');
     expect(compileSource).toContain(
-      'semanticRenderEquivalenceCheck(fileNames.server, originalModel, serverModule.executableSource)',
+      'semanticRenderEquivalenceCheck(fileNames.server, originalModel, serverModule.executableSource,',
     );
   });
 });

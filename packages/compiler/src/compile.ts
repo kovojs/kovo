@@ -186,6 +186,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     : [];
   const serverRender = serverRenderLowering(versionedHandlers, model, componentNames.domName, {
     fileName: options.fileName,
+    ...(compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {}),
     source,
   });
   const stateDeriveReferences = collectStateDeriveReferenceFacts(
@@ -251,7 +252,9 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     // SPEC §5.2 rule 3: render the authored Kovo JSX model and the lowered server artifact
     // independently, then ignore only generated runtime stamps with an explicit allowlist.
     renderEquivalenceChecks: [
-      semanticRenderEquivalenceCheck(fileNames.server, originalModel, serverModule.executableSource),
+      semanticRenderEquivalenceCheck(fileNames.server, originalModel, serverModule.executableSource, {
+        ...(compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {}),
+      }),
     ],
     updateCoverage,
     viewTransitions: structuralLowering.viewTransitionStamps,

@@ -220,6 +220,31 @@ export const AddToCartForm = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('lowers imported typed enhanced mutation forms from registry facts', () => {
+    const result = compileComponentModule({
+      fileName: 'product-grid.tsx',
+      registryFacts: { mutations: { 'cart/add': 'typeof addToCart' } },
+      source: `
+import { addToCart } from '../app.js';
+
+export const ProductGrid = component({
+  render: (_queries, _state, { productId }) => (
+    <form enhance mutation={addToCart} key={productId}>
+      <input type="hidden" name="productId" value={productId} />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.loweredSource).toContain(
+      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${productId}`} kovo-key={productId}',
+    );
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('stamps rendered component markup with declared query dependencies', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

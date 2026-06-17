@@ -738,7 +738,6 @@ export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
 // mutation handlers' write-site line numbers in this file.
 export const {
   ProductGrid,
-  productFormTarget,
   renderAddToCartError,
   renderAddToCartForm,
   renderProductGridItems,

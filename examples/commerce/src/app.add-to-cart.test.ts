@@ -228,7 +228,7 @@ describe('commerce example', () => {
       { db, session: { id: 's-enhanced-fail', user: { id: 'u1' } } },
       {
         'Kovo-Fragment': 'true',
-        'Kovo-Targets': 'product-form:p2',
+        'Kovo-Targets': 'add-to-cart:p2',
       },
     );
 
@@ -238,10 +238,10 @@ describe('commerce example', () => {
       },
       status: 422,
     });
-    const [formFragment] = kovoFragmentFacts(response.body, 'product-form:p2');
+    const [formFragment] = kovoFragmentFacts(response.body, 'add-to-cart:p2');
     expect(formFragment).toMatchObject({
       stylesheetHrefs: ['/assets/styles.css'],
-      target: 'product-form:p2',
+      target: 'add-to-cart:p2',
     });
     expect(htmlFormFacts(formFragment?.innerHtml ?? '')).toMatchObject([
       {
@@ -254,7 +254,7 @@ describe('commerce example', () => {
     ]);
     expect(
       htmlElementFacts(formFragment?.innerHtml ?? '', {
-        attrs: { 'kovo-fragment-target': 'product-form:p2' },
+        attrs: { 'kovo-fragment-target': 'add-to-cart:p2' },
       }),
     ).toHaveLength(1);
     expect(

@@ -32,6 +32,7 @@ import {
   emitElementParamTypes,
   type HandlerLowering,
   type RenderEquivalenceCheck,
+  type RegistryFacts,
 } from '../types.js';
 
 export interface EmittedServerModule {
@@ -68,7 +69,7 @@ export function serverRenderLowering(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
   domComponentName: string,
-  options?: { fileName: string; source: string },
+  options?: { fileName: string; registryFacts?: RegistryFacts; source: string },
 ): ServerRenderLowering {
   return serverRenderPatches(handlers, model, domComponentName, options);
 }
@@ -77,8 +78,9 @@ export function semanticRenderEquivalenceCheck(
   artifact: string,
   expectedModel: ComponentModuleModel,
   executableSource: string,
+  options: SemanticRenderContext = {},
 ): RenderEquivalenceCheck {
-  const expected = semanticRenderModel(expectedModel);
+  const expected = semanticRenderModel(expectedModel, options);
   const actualSource = emittedServerRenderSource(executableSource);
   const actualModel = parseComponentModule(artifact, actualSource);
   const actual = semanticRenderModel(actualModel);
@@ -118,34 +120,51 @@ const voidElements = new Set([
   'wbr',
 ]);
 
-function semanticRenderModel(model: ComponentModuleModel): string {
+interface SemanticRenderContext {
+  registryFacts?: RegistryFacts;
+}
+
+interface SemanticElementOptions extends SemanticRenderContext {
+  forcedAttributes?: string;
+}
+
+function semanticRenderModel(
+  model: ComponentModuleModel,
+  options: SemanticRenderContext = {},
+): string {
   const host = componentRenderHostElement(model);
   if (!host) return '';
 
-  return renderSemanticElement(model, host);
+  return renderSemanticElement(model, host, options);
 }
 
 function renderSemanticElement(
   model: ComponentModuleModel,
   element: JsxElementModel,
-  options: { forcedAttributes?: string } = {},
+  options: SemanticElementOptions = {},
 ): string {
   const primitiveChild = semanticPrimitiveChild(model, element);
-  if (primitiveChild) return renderSemanticElement(model, primitiveChild.child, primitiveChild);
+  if (primitiveChild) {
+    return renderSemanticElement(model, primitiveChild.child, { ...options, ...primitiveChild });
+  }
 
   const tag = semanticElementTag(element);
-  const attributes = options.forcedAttributes ?? renderSemanticAttributes(model, element);
+  const attributes = options.forcedAttributes ?? renderSemanticAttributes(model, element, options);
 
   if (voidElements.has(tag)) return `<${tag}${attributes}>`;
 
-  return `<${tag}${attributes}>${renderSemanticChildren(model, element)}</${tag}>`;
+  return `<${tag}${attributes}>${renderSemanticChildren(model, element, options)}</${tag}>`;
 }
 
 function semanticElementTag(element: JsxElementModel): string {
   return element.tag === 'Link' ? 'a' : element.tag;
 }
 
-function renderSemanticAttributes(model: ComponentModuleModel, element: JsxElementModel): string {
+function renderSemanticAttributes(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  options: SemanticRenderContext = {},
+): string {
   if (element.tag === 'Link') {
     return [
       semanticLinkHrefAttribute(element),
@@ -157,7 +176,7 @@ function renderSemanticAttributes(model: ComponentModuleModel, element: JsxEleme
       .join('');
   }
 
-  const formMutation = enhancedMutationFormLowering(model, element);
+  const formMutation = enhancedMutationFormLowering(model, element, options.registryFacts);
   const viewTransitionStyle = semanticViewTransitionStyle(element);
   const semanticAttributes: string[] = [];
   for (const attribute of element.attributes) {
@@ -298,7 +317,11 @@ function renderStaticAttributeValue(
   return ` ${name}="${escapeAttribute(JSON.stringify(value) ?? '')}"`;
 }
 
-function renderSemanticChildren(model: ComponentModuleModel, element: JsxElementModel): string {
+function renderSemanticChildren(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  options: SemanticRenderContext = {},
+): string {
   const body = element.childBody;
   if (!body) return '';
 
@@ -306,7 +329,7 @@ function renderSemanticChildren(model: ComponentModuleModel, element: JsxElement
   const tokens = [
     ...directChildElements(model, element).map((child) => ({
       end: child.end,
-      render: () => renderSemanticElement(model, child),
+      render: () => renderSemanticElement(model, child, options),
       start: child.start,
     })),
     ...element.childExpressionContainers.map((container) => ({
@@ -393,7 +416,7 @@ function serverRenderPatches(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
   domComponentName: string,
-  options?: { fileName: string; source: string },
+  options?: { fileName: string; registryFacts?: RegistryFacts; source: string },
 ): ServerRenderLowering {
   const diagnostics: CompilerDiagnostic[] = [];
   const host = componentRenderHost(model);
@@ -452,7 +475,7 @@ function serverRenderPatches(
 
 function enhancedMutationFormRenderLowering(
   model: ComponentModuleModel,
-  options?: { fileName: string; source: string },
+  options?: { fileName: string; registryFacts?: RegistryFacts; source: string },
 ): {
   diagnostics: readonly CompilerDiagnostic[];
   outputContexts: readonly GeneratedOutputWriteFact[];
@@ -463,7 +486,7 @@ function enhancedMutationFormRenderLowering(
   const outputContexts: GeneratedOutputWriteFact[] = [];
 
   for (const element of model.jsxElements) {
-    const lowering = enhancedMutationFormLowering(model, element);
+    const lowering = enhancedMutationFormLowering(model, element, options?.registryFacts);
     if (!lowering) continue;
 
     replacements.push(...lowering.replacements);
@@ -501,13 +524,18 @@ interface EnhancedMutationFormLowering {
 function enhancedMutationFormLowering(
   model: ComponentModuleModel,
   element: JsxElementModel,
+  registryFacts?: RegistryFacts,
 ): EnhancedMutationFormLowering | null {
   if (element.tag !== 'form') return null;
 
   const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
   if (!mutationAttribute?.expressionBareIdentifierName) return null;
 
-  const mutationKey = localMutationKey(model, mutationAttribute.expressionBareIdentifierName);
+  const mutationKey = localMutationKey(
+    model,
+    mutationAttribute.expressionBareIdentifierName,
+    registryFacts,
+  );
   if (!mutationKey) return null;
 
   const conflicts = enhancedMutationFormConflicts(element);
@@ -592,7 +620,11 @@ function enhancedMutationFormConflicts(
     .map((attribute) => ({ attribute }));
 }
 
-function localMutationKey(model: ComponentModuleModel, localName: string): string | null {
+function localMutationKey(
+  model: ComponentModuleModel,
+  localName: string,
+  registryFacts?: RegistryFacts,
+): string | null {
   const call = model.calls.find(
     (candidate) =>
       candidate.name === 'mutation' &&
@@ -600,7 +632,12 @@ function localMutationKey(model: ComponentModuleModel, localName: string): strin
       typeof candidate.argumentStaticValues[0] === 'string',
   );
   const key = call?.argumentStaticValues[0];
-  return typeof key === 'string' ? key : null;
+  if (typeof key === 'string') return key;
+
+  const registryEntry = Object.entries(registryFacts?.mutations ?? {}).find(
+    ([, typeSource]) => typeSource.trim() === `typeof ${localName}`,
+  );
+  return registryEntry?.[0] ?? null;
 }
 
 function submittedFormKeyReplacement(attribute: JsxAttributeModel): SourceReplacement {

@@ -266,14 +266,14 @@ describe('commerce example', () => {
     const firstPage = await loadProductGrid(db, { limit: 2 });
     const secondPage = await loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
 
-    expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
+    expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p1', 'p2', 'p2']);
     expect(
       htmlElementFacts(renderProductGrid(firstPage), {
         attrs: { href: '/products?after=p2' },
         tag: 'a',
       }),
     ).toHaveLength(1);
-    expect(htmlKeyValues(renderProductGrid(secondPage))).toEqual(['p3']);
+    expect(htmlKeyValues(renderProductGrid(secondPage))).toEqual(['p3', 'p3']);
 
     const appendFragment = await renderProductGridPageFragment(
       db,
@@ -283,7 +283,7 @@ describe('commerce example', () => {
     expect(kovoFragmentFacts(appendFragment, 'product-grid')).toMatchObject([
       { attrs: { mode: 'append', target: 'product-grid' } },
     ]);
-    expect(htmlKeyValues(appendFragment)).toEqual(['p3']);
+    expect(htmlKeyValues(appendFragment)).toEqual(['p3', 'p3']);
     expect(htmlElementFacts(appendFragment, { attrs: { 'kovo-c': 'product-grid' } })).toHaveLength(
       0,
     );
@@ -324,7 +324,7 @@ describe('commerce example', () => {
     );
     const thirdProduct = appendedGrid.children?.[2];
 
-    expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
+    expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p1', 'p2', 'p2']);
     expect(
       kovoFragmentFacts(
         await renderProductGridPageFragment(db, productGridInput(firstPage.nextCursor)),

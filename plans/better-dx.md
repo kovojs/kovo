@@ -323,9 +323,14 @@ export const AddToCartForm = component({
     - Commerce response wiring now relies on request-derived submitted form
       targets instead of manual `failureTarget` for add-to-cart handlers in
       `examples/commerce/src/app.ts` and `app-shell.ts`.
-    - Remaining gap: imported/app-wide mutation value resolution for ordinary
-      component modules, typed render-context failure state, and compiler
-      diagnostics for ambiguous repeated forms are not complete.
+    - Imported mutation values resolve through `registryFacts.mutations`, so
+      ordinary component modules can lower `<form enhance mutation={addToCart}
+      key={...}>` even when the mutation is imported from the app module.
+    - Verified imported mutation lowering with
+      `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`
+      on 2026-06-17.
+    - Remaining gap: typed render-context failure state and compiler diagnostics
+      for ambiguous repeated forms are not complete.
 - [x] **7. Type registry and breaking migration.**
   - Generate `FragmentTargets` facts for inferred targets so existing typed APIs
     keep working.
@@ -380,10 +385,21 @@ export const AddToCartForm = component({
       `examples/commerce/src/app.ts` or `app-shell.ts`; verified with
       `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app-shell.test.ts`
       on 2026-06-17.
-    - Remaining gap: the add-to-cart form still hand-authors
-      `kovo-fragment-target` and still posts through string
-      `action="/_m/cart/add"`; migrate this after imported/app-wide typed form
-      lowering and typed failure state land.
+    - Add-to-cart form source now writes `mutation={addToCart}` and
+      `key={item.id}` instead of manual `action`, `data-mutation`, or
+      `kovo-fragment-target`; `examples/commerce/scripts/emit-components.mjs`
+      passes mutation registry facts and rejects hand-authored
+      `kovo-fragment-target` in source.
+    - Regenerated `examples/commerce/src/generated/product-grid.tsx` now carries
+      compiler-emitted `action`, `data-mutation`, `kovo-fragment-target`, and
+      `kovo-key` for the add-to-cart form, with target
+      `add-to-cart:${item.id}`.
+    - Verified with `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app-shell.test.ts source-truth.test.ts`,
+      `pnpm --filter @kovojs/example-commerce test`, and
+      `pnpm exec vitest --run packages/compiler/src/stamps.test.ts` on 2026-06-17.
+    - Remaining gap: commerce still passes no-JS/enhanced failure state through
+      explicit render context instead of typed `forms.addToCart.failure`.
 - [ ] **9. Broader example/docs migration.**
   - Audit StackOverflow and CRM components that currently hand-author
     `kovo-fragment-target` and remove attributes where inference covers them.
@@ -400,9 +416,9 @@ export const AddToCartForm = component({
       wire hooks.
     - Verified with `pnpm --filter @kovojs/site run content` and
       `pnpm --filter @kovojs/site test -- --runInBand` on 2026-06-17.
-    - Remaining gap: example component source, tutorial step source/generated
-      artifacts, StackOverflow, CRM, and commerce still need migration after
-      compiler/runtime support lands.
+    - Remaining gap: tutorial step source/generated artifacts, StackOverflow,
+      CRM, starter/reference auth forms, and remaining commerce auth/upload
+      forms still need migration after typed failure-state support lands.
 - [ ] **10. Final gates.**
   - Run focused compiler/runtime/server/example tests for inferred targets,
     form-target inference, mutation responses, query coverage, and commerce.
