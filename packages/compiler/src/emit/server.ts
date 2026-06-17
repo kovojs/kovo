@@ -203,6 +203,7 @@ function renderSemanticAttributes(model: ComponentModuleModel, element: JsxEleme
   const viewTransitionStyle = semanticViewTransitionStyle(element);
   return element.attributes
     .filter((attribute) => attribute.name !== 'viewTransitionName')
+    .filter((attribute) => !isQueryExpressionAttribute(model, attribute))
     .map((attribute) =>
       attribute.name === 'style' && viewTransitionStyle
         ? renderSemanticStyleAttribute(attribute, viewTransitionStyle)
@@ -215,6 +216,18 @@ function renderSemanticAttributes(model: ComponentModuleModel, element: JsxEleme
     )
     .filter((attribute): attribute is string => attribute !== null)
     .join('');
+}
+
+function isQueryExpressionAttribute(
+  model: ComponentModuleModel,
+  attribute: JsxAttributeModel,
+): boolean {
+  if (attribute.expression === undefined) return false;
+  const queryNames = new Set(componentOptionObjectKeys(model, 'queries'));
+  return (attribute.expressionPropertyAccesses ?? []).some((access) => {
+    const [root] = access.path.split('.');
+    return root !== undefined && queryNames.has(root);
+  });
 }
 
 function semanticPrimitiveChild(
@@ -376,7 +389,11 @@ function renderSemanticExpression(model: ComponentModuleModel, container: Source
     (candidate) =>
       candidate.containerStart === container.start && candidate.containerEnd === container.end,
   );
-  return expression ? `{${expression.expression}}` : '';
+  return expression ? `{${normalizeGeneratedSemanticExpression(expression.expression)}}` : '';
+}
+
+function normalizeGeneratedSemanticExpression(expression: string): string {
+  return expression.replace(/\bescapeText\(([^()]+)\)/g, '$1');
 }
 
 function childBodySlice(

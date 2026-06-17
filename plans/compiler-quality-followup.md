@@ -69,15 +69,14 @@ compiler-quality gaps found during the 2026-06-16 audit.
         do not overlap authored structural rewrites.
   - [x] Add a source-level guard or test that fails when a new lowerer under `packages/compiler/src/lower`
         returns structural `SourceReplacement`s without being registered in the boundary document.
-  - Evidence (2026-06-16): `packages/compiler/src/lower/structural-boundary.md` defines the
+  - Evidence (2026-06-17): `packages/compiler/src/lower/structural-boundary.md` defines the
         SPEC §5.2 ownership rule for JSX IR structural rewrites versus terminal
         `SourceReplacement` patches, and registers current source-patch lowerers as `jsx-ir-owner`,
         `structural-debt`, or `legacy-structural-entrypoint`.
-  - Evidence (2026-06-16): `packages/compiler/src/structural-boundary.test.ts` scans
+  - Evidence (2026-06-17): `packages/compiler/src/structural-boundary.test.ts` scans
         `packages/compiler/src/lower/*.ts` and fails when an exported lowerer that imports
         `SourceReplacement` is absent from the boundary document or lacks an ownership class;
-        `pnpm --filter @kovojs/compiler exec vitest --run src/structural-boundary.test.ts
-        src/structural-jsx-ir.test.ts` passes.
+        `pnpm --filter @kovojs/compiler exec vitest run` passes in the integrated main worktree.
 
 - [ ] Move remaining overlapping structural rewrites into the JSX IR.
   - [ ] Migrate platform behavior substitution attributes into the JSX IR or prove they are terminal
@@ -331,24 +330,25 @@ compiler-quality gaps found during the 2026-06-16 audit.
 ## Conformance Bar
 
 - [x] Build a mechanically auditable diagnostic coverage matrix for compiler-owned diagnostics.
-  - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) defines one authoritative `compilerOwnedDiagnosticMatrix` table covering in-scope compiler-owned KV2xx/KV3xx diagnostics and an explicit `outOfScopeCompilerDiagnostics` table for `KV310`.
-  - Evidence (2026-06-16): `./node_modules/.bin/vitest run packages/compiler/src/diagnostic-coverage-matrix.test.ts -u` passes in the diagnostic-matrix worktree.
+  - Evidence (2026-06-17): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo/packages/compiler/src/diagnostic-coverage-matrix.test.ts) defines one authoritative `compilerOwnedDiagnosticMatrix` table covering in-scope compiler-owned KV2xx/KV3xx diagnostics and an explicit `outOfScopeCompilerDiagnostics` table for `KV310`.
+  - Evidence (2026-06-17): `pnpm --filter @kovojs/compiler exec vitest run` passes in the
+        integrated main worktree.
   - [x] Define the authoritative list of compiler-owned KV2xx/KV3xx codes in one test/table.
-    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) centralizes the list in `compilerOwnedDiagnosticMatrix`.
+    - Evidence (2026-06-17): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo/packages/compiler/src/diagnostic-coverage-matrix.test.ts) centralizes the list in `compilerOwnedDiagnosticMatrix`.
   - [x] Mark non-compiler-owned or future-domain diagnostics out of scope with an explicit reason.
-    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) snapshots `outOfScopeCompilerDiagnostics`, explicitly documenting why `KV310` is excluded from the executable compiler matrix.
+    - Evidence (2026-06-17): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo/packages/compiler/src/diagnostic-coverage-matrix.test.ts) snapshots `outOfScopeCompilerDiagnostics`, explicitly documenting why `KV310` is excluded from the executable compiler matrix.
   - [x] For every in-scope code, add a positive fixture showing accepted behavior.
-    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) runs one `positive` fixture per matrix row and asserts zero emissions for that row's diagnostic.
+    - Evidence (2026-06-17): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo/packages/compiler/src/diagnostic-coverage-matrix.test.ts) runs one `positive` fixture per matrix row and asserts zero emissions for that row's diagnostic.
   - [x] For every in-scope code, add a negative fixture emitting the diagnostic.
-    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) runs one `negative` fixture per matrix row and asserts at least one emission for that row's diagnostic.
+    - Evidence (2026-06-17): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo/packages/compiler/src/diagnostic-coverage-matrix.test.ts) runs one `negative` fixture per matrix row and asserts at least one emission for that row's diagnostic.
   - [x] For every in-scope code, snapshot code, severity, message, help/fix menu, source position,
         source length, and source file.
-    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) snapshots representative normalized diagnostic facts with `code`, `severity`, `message`, `help`, `start`, `length`, and `fileName`.
+    - Evidence (2026-06-17): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo/packages/compiler/src/diagnostic-coverage-matrix.test.ts) snapshots representative normalized diagnostic facts with `code`, `severity`, `message`, `help`, `start`, `length`, and `fileName`.
   - [x] Include KV201 and KV230 compatibility snapshots because they guard SPEC §4.3/§4.5 capture
         channels.
-    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) keeps a dedicated `keeps KV201 and KV230 teaching diagnostics compatibility-visible` snapshot.
+    - Evidence (2026-06-17): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo/packages/compiler/src/diagnostic-coverage-matrix.test.ts) keeps a dedicated `keeps KV201 and KV230 teaching diagnostics compatibility-visible` snapshot.
   - [x] Add a guard that fails when a new compiler-owned KV2xx/KV3xx diagnostic lacks matrix rows.
-    - Evidence (2026-06-16): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo-agent-diagnostic-matrix/packages/compiler/src/diagnostic-coverage-matrix.test.ts) compares `diagnosticDefinitions` against `compilerOwnedDiagnosticMatrix` plus `outOfScopeCompilerDiagnostics` and fails on uncovered new codes.
+    - Evidence (2026-06-17): [packages/compiler/src/diagnostic-coverage-matrix.test.ts](/Users/mini/kovo/packages/compiler/src/diagnostic-coverage-matrix.test.ts) compares `diagnosticDefinitions` against `compilerOwnedDiagnosticMatrix` plus `outOfScopeCompilerDiagnostics` and fails on uncovered new codes.
 
 - [ ] Prove SPEC clause coverage for the quantified compiler promises.
   - [ ] Create a SPEC coverage map for §4.3 handler/capture lowering accepted paths and diagnostics.

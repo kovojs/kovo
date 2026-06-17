@@ -417,7 +417,11 @@ export function assertFixpoint(result: CompileResult): void {
 export function assertRenderEquivalence(result: CompileResult): void {
   for (const check of result.renderEquivalenceChecks) {
     if (!check.ok) {
-      throw new Error(`Render equivalence failed for ${check.artifact}`);
+      const detail =
+        check.expected === undefined && check.actual === undefined
+          ? ''
+          : ` expected=${JSON.stringify(check.expected)} actual=${JSON.stringify(check.actual)}`;
+      throw new Error(`Render equivalence failed for ${check.artifact}${detail}`);
     }
   }
 }

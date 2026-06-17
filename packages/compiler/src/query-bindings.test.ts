@@ -282,13 +282,26 @@ export const DealCard = component({
     expect(result.files[0]?.source).toContain(
       '<span data-bind="deal.contact?.name">{deal.contact?.name}</span>',
     );
-    expect(result.queryUpdatePlans).toEqual([
-      {
-        componentName: 'DealCard',
-        paths: ['deal.contact?.name'],
-        query: 'deal',
-      },
-    ]);
+    expect(result.queryUpdatePlans).toMatchInlineSnapshot(`
+      [
+        {
+          "componentName": "DealCard",
+          "outputContexts": [
+            {
+              "context": "text",
+              "expression": "deal.contact?.name",
+              "sink": "textContent",
+              "source": "client-query",
+              "writer": "query text binding",
+            },
+          ],
+          "paths": [
+            "deal.contact?.name",
+          ],
+          "query": "deal",
+        },
+      ]
+    `);
     expect(result.diagnostics).toEqual([]);
   });
 
