@@ -306,9 +306,7 @@ describe('wire parser HTML entity handling', () => {
     // value). readAttribute returns '' for a valueless attribute and null when
     // absent; the parser must treat non-null as true.
     expect(
-      readQueryChunks(
-        '<kovo-query name="cart" delta>{"set":{"count":2}}</kovo-query>',
-      ),
+      readQueryChunks('<kovo-query name="cart" delta>{"set":{"count":2}}</kovo-query>'),
     ).toEqual([{ delta: true, name: 'cart', value: { set: { count: 2 } } }]);
   });
 
@@ -341,9 +339,7 @@ describe('wire parser HTML entity handling', () => {
 
   it('parses a delta chunk with key attribute', () => {
     expect(
-      readQueryChunks(
-        '<kovo-query name="product" key="p1" delta>{"set":{"stock":5}}</kovo-query>',
-      ),
+      readQueryChunks('<kovo-query name="product" key="p1" delta>{"set":{"stock":5}}</kovo-query>'),
     ).toEqual([{ delta: true, key: 'p1', name: 'product', value: { set: { stock: 5 } } }]);
   });
 

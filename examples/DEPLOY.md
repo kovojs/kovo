@@ -78,13 +78,13 @@ done
 
 ## Tuning knobs (env)
 
-| Var | Default | Meaning |
-| --- | --- | --- |
-| `EXAMPLE` | `commerce` | Which example this service serves |
-| `PORT` | `8080` | Listen port (Cloud Run sets this) |
-| `HOST` | `0.0.0.0` | Bind address |
-| `KOVO_DEMO_MAX_SESSIONS` | `40` | LRU cap on live per-visitor instances |
-| `KOVO_DEMO_IDLE_MS` | `1200000` | Idle TTL before a session is evicted (20 min) |
+| Var                      | Default    | Meaning                                       |
+| ------------------------ | ---------- | --------------------------------------------- |
+| `EXAMPLE`                | `commerce` | Which example this service serves             |
+| `PORT`                   | `8080`     | Listen port (Cloud Run sets this)             |
+| `HOST`                   | `0.0.0.0`  | Bind address                                  |
+| `KOVO_DEMO_MAX_SESSIONS` | `40`       | LRU cap on live per-visitor instances         |
+| `KOVO_DEMO_IDLE_MS`      | `1200000`  | Idle TTL before a session is evicted (20 min) |
 
 ## Local check
 

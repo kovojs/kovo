@@ -127,9 +127,7 @@ function spanContainsAttribute(
   spans: readonly SourceSpan[],
   attribute: JsxAttributeModel,
 ): boolean {
-  return spans.some(
-    (span) => attribute.start >= span.start && attribute.end <= span.end,
-  );
+  return spans.some((span) => attribute.start >= span.start && attribute.end <= span.end);
 }
 
 function validateUrlAttribute(

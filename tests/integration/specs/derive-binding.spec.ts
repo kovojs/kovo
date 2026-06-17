@@ -14,8 +14,9 @@ test('lazily imports a named derive on query change and updates the bound attrib
   await expect.poll(() => page.evaluate(() => window.__deriveBindingImports ?? 0)).toBe(0);
 
   const [response] = await Promise.all([
-    page.waitForResponse((candidate) =>
-      candidate.url().endsWith('/_m/derive-binding/sell-out') && candidate.status() === 200,
+    page.waitForResponse(
+      (candidate) =>
+        candidate.url().endsWith('/_m/derive-binding/sell-out') && candidate.status() === 200,
     ),
     page.getByRole('button', { name: 'Sell out' }).click(),
   ]);

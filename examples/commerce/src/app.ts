@@ -1101,7 +1101,7 @@ async function loadProductGridForRequest(
 async function renderAddToCartFailureFragment(
   db: CommerceDb,
   rawInput: unknown,
-  failure: AddToCartFailure,
+  failure: MutationFail,
   request: CommerceRequest,
 ): Promise<string> {
   const productId = productIdFromRawInput(rawInput);

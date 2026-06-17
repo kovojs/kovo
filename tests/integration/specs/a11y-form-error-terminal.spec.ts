@@ -12,8 +12,9 @@ test('enhanced form error terminal state links invalid field to alert text', asy
 
   await page.getByRole('textbox', { name: 'Email' }).fill('invalid');
   await Promise.all([
-    page.waitForResponse((response) =>
-      response.url().endsWith('/_m/a11y-form-error/subscribe') && response.status() === 422,
+    page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/_m/a11y-form-error/subscribe') && response.status() === 422,
     ),
     page.getByRole('button', { name: 'Subscribe' }).click(),
   ]);

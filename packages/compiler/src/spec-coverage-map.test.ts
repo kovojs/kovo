@@ -26,8 +26,12 @@ describe('compiler SPEC coverage map', () => {
     expect(compilerSpecCoverageMap.map((entry) => entry.clause)).toEqual(requiredClauses);
 
     for (const entry of compilerSpecCoverageMap) {
-      expect(entry.accepted.length, `${entry.clause} needs accepted-path coverage`).toBeGreaterThan(0);
-      expect(entry.diagnostics.length, `${entry.clause} needs diagnostic coverage`).toBeGreaterThan(0);
+      expect(entry.accepted.length, `${entry.clause} needs accepted-path coverage`).toBeGreaterThan(
+        0,
+      );
+      expect(entry.diagnostics.length, `${entry.clause} needs diagnostic coverage`).toBeGreaterThan(
+        0,
+      );
       expect(
         entry.referenceApp.length,
         `${entry.clause} needs reference or commerce app fixture coverage`,
@@ -47,7 +51,10 @@ describe('compiler SPEC coverage map', () => {
           `${citation.file} ${citation.testName}`,
         ).toBeGreaterThan(0);
         for (const code of codes) {
-          expect(diagnosticDefinitions[code], `${code} must exist in SPEC §11.3 registry`).toBeDefined();
+          expect(
+            diagnosticDefinitions[code],
+            `${code} must exist in SPEC §11.3 registry`,
+          ).toBeDefined();
           expect(source, `${citation.file} should cite ${code}`).toContain(code);
         }
       }
@@ -351,8 +358,10 @@ function expectCitationExists(file: string, testName: string): void {
   expect(source, `Missing cited SPEC coverage test "${testName}" in ${file}`).toContain(testName);
 }
 
-function coverageCodes(citation: DiagnosticCoverageCitation): readonly (keyof typeof diagnosticDefinitions)[] {
-  return 'codes' in citation ? citation.codes ?? [] : [];
+function coverageCodes(
+  citation: DiagnosticCoverageCitation,
+): readonly (keyof typeof diagnosticDefinitions)[] {
+  return 'codes' in citation ? (citation.codes ?? []) : [];
 }
 
 function coverageErrorSurface(citation: DiagnosticCoverageCitation): string | undefined {

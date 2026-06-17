@@ -81,13 +81,12 @@ export const Row = component({
 `,
     });
 
-    const [composedCartRow, composedOrderRow] = composePageComponentArtifacts([
-      cartRow,
-      orderRow,
-    ]);
+    const [composedCartRow, composedOrderRow] = composePageComponentArtifacts([cartRow, orderRow]);
 
     const cartServerSource = composedCartRow?.files.find((file) => file.kind === 'server')?.source;
-    const orderServerSource = composedOrderRow?.files.find((file) => file.kind === 'server')?.source;
+    const orderServerSource = composedOrderRow?.files.find(
+      (file) => file.kind === 'server',
+    )?.source;
     expect(cartServerSource).toContain('<tr kovo-c="components/cart-row/row">');
     expect(orderServerSource).toContain('<tr kovo-c="components/order-row/row">');
     expect(cartServerSource).not.toContain('kovo-c="row"');

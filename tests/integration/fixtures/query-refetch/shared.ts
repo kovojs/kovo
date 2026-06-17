@@ -2,6 +2,7 @@ import { domain, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/integration/define';
 
 export interface RefetchResult {
+  [key: string]: unknown;
   message: string;
 }
 

@@ -6,7 +6,7 @@ import { LineItemsTable } from './line-items-table';
 const homeRoute = route('/', {
   page: () => `<main>
     <h1>Native host identity</h1>
-    ${LineItemsTable.definition.render({}, null)}
+    ${LineItemsTable.definition.render()}
   </main>`,
 });
 

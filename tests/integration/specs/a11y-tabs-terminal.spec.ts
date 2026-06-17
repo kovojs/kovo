@@ -24,7 +24,14 @@ test('tabs terminal selected state exposes role and panel relationships', async 
 
   expect(
     await kovoApp.semantic('[aria-label="Account sections"]', {
-      keepAttrs: ['aria-controls', 'aria-labelledby', 'aria-selected', 'data-state', 'hidden', 'id'],
+      keepAttrs: [
+        'aria-controls',
+        'aria-labelledby',
+        'aria-selected',
+        'data-state',
+        'hidden',
+        'id',
+      ],
     }),
   ).toMatchSnapshot('a11y-tabs-terminal.semantic.txt');
 });

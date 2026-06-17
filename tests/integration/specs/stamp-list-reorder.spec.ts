@@ -18,9 +18,9 @@ test('keyed template stamps reorder without replacing existing row identity', as
   });
 
   const [response] = await Promise.all([
-    page.waitForResponse((candidate) =>
-      candidate.url().endsWith('/_m/stamp-list-reorder/reorder') &&
-      candidate.status() === 200,
+    page.waitForResponse(
+      (candidate) =>
+        candidate.url().endsWith('/_m/stamp-list-reorder/reorder') && candidate.status() === 200,
     ),
     page.getByRole('button', { name: 'Reorder board' }).click(),
   ]);

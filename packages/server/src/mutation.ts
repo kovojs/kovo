@@ -902,7 +902,9 @@ async function renderQueryChunks(
       throw new Error(`Rerun query failed: ${queryDefinition.key}`, { cause: result });
     }
 
-    chunks.push(renderQueryRerunChunk(queryDefinition, result.input, result.value, affectedKeysByDomain));
+    chunks.push(
+      renderQueryRerunChunk(queryDefinition, result.input, result.value, affectedKeysByDomain),
+    );
   }
 
   return chunks;
@@ -930,11 +932,7 @@ function renderQueryRerunChunk<const Key extends string, Value, Input, Request>(
   // Automatic full-vs-delta selection (SPEC §9.1.1): attempt a delta only when the
   // query has delta-eligible collections, then ship whichever is smaller.
   if (queryDefinition.delta && queryDefinition.delta.length > 0) {
-    const delta = buildQueryDelta(
-      value as JsonValue,
-      affectedKeysByDomain,
-      queryDefinition.delta,
-    );
+    const delta = buildQueryDelta(value as JsonValue, affectedKeysByDomain, queryDefinition.delta);
     if (delta !== undefined && queryDeltaIsSmaller(delta, value as JsonValue)) {
       return renderQueryWireHtml({
         delta: true,
@@ -1091,9 +1089,7 @@ function targetIsPlanCovered(
   target: string,
   renderersByTarget: ReadonlyMap<string, FragmentRenderer>,
 ): boolean {
-  return (
-    renderersByTarget.get(target)?.updateCoverage === 'plan' || !renderersByTarget.has(target)
-  );
+  return renderersByTarget.get(target)?.updateCoverage === 'plan' || !renderersByTarget.has(target);
 }
 
 function queryRerunTokens(query: QueryRerun): string[] {
@@ -1149,7 +1145,10 @@ function renderMutationServerErrorFragment<Request>(
 
 function mutationFailureTarget<Request>(wireRequest: MutationWireRequest<Request>): string {
   return (
-    wireRequest.failureTarget ?? wireRequest.submittedFormTarget ?? wireRequest.targets?.[0] ?? 'error'
+    wireRequest.failureTarget ??
+    wireRequest.submittedFormTarget ??
+    wireRequest.targets?.[0] ??
+    'error'
   );
 }
 

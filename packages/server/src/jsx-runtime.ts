@@ -78,9 +78,7 @@ function renderJsxAttributes(type: string, props: JsxProps): string {
       continue;
     }
     rendered +=
-      value === true
-        ? ` ${name}`
-        : ` ${name}="${escapeAttribute(attributeText(name, value))}"`;
+      value === true ? ` ${name}` : ` ${name}="${escapeAttribute(attributeText(name, value))}"`;
   }
 
   return rendered;

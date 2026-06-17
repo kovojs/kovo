@@ -60,6 +60,7 @@ const app = createApp({
 
 export default defineFixture({
   app,
-  schema: 'create table island_patch (id integer primary key, installed integer not null default 0)',
+  schema:
+    'create table island_patch (id integer primary key, installed integer not null default 0)',
   seed: (db) => db.exec('insert into island_patch (id, installed) values (1, 0)'),
 });

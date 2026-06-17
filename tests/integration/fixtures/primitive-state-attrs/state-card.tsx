@@ -1,6 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 
+declare const Primitive: {
+  Toggle: (props: Record<string, unknown>) => string;
+};
+
 export const PrimitiveStateAttrsCard = component({
   render: () => (
     <section data-case="primitive-state-attrs">
@@ -13,7 +17,7 @@ export const PrimitiveStateAttrsCard = component({
           type: 'button',
         }}
       >
-        {(attrs) => (
+        {(attrs: Record<string, string>) => (
           <button
             {...attrs}
             class="author-toggle"

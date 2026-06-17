@@ -26,9 +26,7 @@ export const Button = component({
     const serverSource = result.files.find((file) => file.kind === 'server')?.source;
     const cssSource = result.files.find((file) => file.kind === 'css')?.source;
 
-    expect(serverSource).toContain(
-      'class="kv-button-bg-',
-    );
+    expect(serverSource).toContain('class="kv-button-bg-');
     expect(serverSource).toContain('data-style-src="button.tsx#root"');
     expect(serverSource).not.toContain('style={base.root}');
     expect(cssSource).toContain('@layer kovo-style.3000');
@@ -92,9 +90,7 @@ export const Button = component({
     expect(serverSource).toContain('class="kv-button-fg-');
     expect(serverSource).toContain('kv-button-override-bg-');
     expect(serverSource).not.toContain('kv-button-bg-');
-    expect(serverSource).toContain(
-      'data-style-src="button.tsx#root; button.override.tsx#danger"',
-    );
+    expect(serverSource).toContain('data-style-src="button.tsx#root; button.override.tsx#danger"');
   });
 
   it('composes generated StyleX classes with authored static class writers', () => {
@@ -157,7 +153,8 @@ export const Button = component({
 `,
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231')).toMatchInlineSnapshot(`
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231'))
+      .toMatchInlineSnapshot(`
       [
         {
           "code": "KV231",
@@ -223,16 +220,14 @@ export const Badge = component({
     expect(clientSource).not.toContain('setAttribute');
     expect(result.clientExports).toContain('Badge$style_class_derive');
     expect(result.queryUpdatePlans).toEqual([]);
-    expect(result.updateCoverage).toContainEqual(
-      {
-        componentName: 'Badge',
-        detail: 'style-object toggle',
-        position: 'attribute',
-        query: 'state.bouncing',
-        source: 'state',
-        status: 'plan',
-      },
-    );
+    expect(result.updateCoverage).toContainEqual({
+      componentName: 'Badge',
+      detail: 'style-object toggle',
+      position: 'attribute',
+      query: 'state.bouncing',
+      source: 'state',
+      status: 'plan',
+    });
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
     expect(() => assertFixpoint(result)).not.toThrow();
   });

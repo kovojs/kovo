@@ -115,7 +115,8 @@ export const StampConflict = component({
 `,
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231')).toMatchInlineSnapshot(`
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231'))
+      .toMatchInlineSnapshot(`
       [
         {
           "code": "KV231",

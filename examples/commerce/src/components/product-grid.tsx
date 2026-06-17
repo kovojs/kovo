@@ -1,13 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { component, form, type FormFailure } from '@kovojs/core';
+import { component, form, type ComponentRenderSlots, type FormFailure } from '@kovojs/core';
 import { componentMutationFailureSlots, csrfField, type MutationFail } from '@kovojs/server';
 
-import {
-  addToCart,
-  commerceCsrf,
-  type CommerceRequest,
-  type ProductGridResult,
-} from '../app.js';
+import { addToCart, commerceCsrf, type CommerceRequest, type ProductGridResult } from '../app.js';
 import { productGridQuery } from '../queries.js';
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native
@@ -29,16 +24,13 @@ const addToCartForm = form<
 
 export type AddToCartFailure = FormFailure<typeof addToCartForm>;
 
-export interface ProductGridRenderSlots {
-  forms: {
-    addToCart: {
-      failure: AddToCartFailure | null;
-    };
-  };
+type ProductGridMutationSlots = ComponentRenderSlots<{ addToCart: typeof addToCartForm }>;
+
+export type ProductGridRenderSlots = ProductGridMutationSlots & {
   productId?: string | undefined;
   readOnly?: boolean | undefined;
   request?: CommerceRequest | undefined;
-}
+};
 
 const defaultProductGridRenderSlots: ProductGridRenderSlots = {
   forms: { addToCart: { failure: null } },
@@ -79,12 +71,7 @@ export function renderProductGridItems(
   options: { readOnly?: boolean | undefined } = {},
 ): string {
   const cards = result.items.map((item) =>
-    renderProductCard(
-      item,
-      failureProductId === item.id ? failure : null,
-      request,
-      options,
-    ),
+    renderProductCard(item, failureProductId === item.id ? failure : null, request, options),
   );
   const cursor = result.nextCursor;
   return (
@@ -125,12 +112,7 @@ export function renderAddToCartForm(
   request?: CommerceRequest,
 ): string {
   return (
-    <form
-      enhance
-      mutation={addToCart}
-      key={item.id}
-      class="mt-3 flex flex-wrap items-end gap-2"
-    >
+    <form enhance mutation={addToCart} key={item.id} class="mt-3 flex flex-wrap items-end gap-2">
       {request?.session?.id ? csrfField(request, commerceCsrf) : ''}
       <input type="hidden" name="productId" value={item.id} />
       <label class="grid gap-1 text-xs font-medium text-slate-700">
@@ -181,15 +163,7 @@ export function renderAddToCartError(failure: AddToCartFailure): string {
     );
   }
 
-  return (
-    <output
-      role="alert"
-      data-error-code={failure.code}
-      class="basis-full text-sm text-red-700"
-    >
-      Unable to add this item.
-    </output>
-  );
+  return '';
 }
 
 function addToCartFailureFromMutation(failure: MutationFail): AddToCartFailure {
@@ -197,7 +171,7 @@ function addToCartFailureFromMutation(failure: MutationFail): AddToCartFailure {
     'addToCart',
     failure,
     defaultProductGridRenderSlots,
-  ) as ProductGridRenderSlots;
+  ) as unknown as ProductGridRenderSlots;
   const formFailure = slots.forms.addToCart.failure;
   if (!formFailure) {
     throw new Error('Expected add-to-cart mutation failure slot');

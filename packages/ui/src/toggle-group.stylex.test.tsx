@@ -12,7 +12,11 @@ import {
   toggleGroupStyles,
 } from './toggle-group.js';
 
-const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'strike' }] as const;
+const items = [
+  { value: 'bold' },
+  { value: 'italic' },
+  { disabled: true, value: 'strike' },
+] as const;
 
 describe('@kovojs/ui ToggleGroup StyleX slots', () => {
   it('renders headless toggle-group attrs with StyleX slot classes', () => {

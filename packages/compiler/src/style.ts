@@ -135,7 +135,13 @@ function emptyStyleExtraction(): KovoStyleExtraction {
 }
 
 function styleNamespaceImports(source: string, fileName: string): Set<string> {
-  const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
   const namespaces = new Set<string>();
 
   for (const statement of sourceFile.statements) {
@@ -143,7 +149,8 @@ function styleNamespaceImports(source: string, fileName: string): Set<string> {
     if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
     if (statement.moduleSpecifier.text !== '@kovojs/style') continue;
     const namedBindings = statement.importClause?.namedBindings;
-    if (namedBindings && ts.isNamespaceImport(namedBindings)) namespaces.add(namedBindings.name.text);
+    if (namedBindings && ts.isNamespaceImport(namedBindings))
+      namespaces.add(namedBindings.name.text);
   }
 
   return namespaces;
@@ -154,7 +161,13 @@ function collectStyleEnvironment(
   source: string,
   styleNamespaces: ReadonlySet<string>,
 ): StyleEnvironment {
-  const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
   const bindings = new Map<string, StyleBinding>();
   const rules: AtomicRule[] = [];
   const usages: StyleRuleUsage[] = [];
@@ -214,7 +227,9 @@ function styleCreateCall(
   };
 }
 
-function styleNamespacesFromObject(node: ts.ObjectLiteralExpression): Record<string, StyleObject> | null {
+function styleNamespacesFromObject(
+  node: ts.ObjectLiteralExpression,
+): Record<string, StyleObject> | null {
   const styles: Record<string, StyleObject> = {};
 
   for (const property of node.properties) {
@@ -339,13 +354,21 @@ function staticStyleAttributeReplacement(
   const extraReplacements: SourceReplacement[] = [];
   const remaining = { ...attributes };
   const classAttribute = element.attributes.find((attribute) => attribute.name === 'class');
-  const styleSrcAttribute = element.attributes.find((attribute) => attribute.name === 'data-style-src');
+  const styleSrcAttribute = element.attributes.find(
+    (attribute) => attribute.name === 'data-style-src',
+  );
 
   if (remaining.class && classAttribute) {
     const existingClass = staticAttributeString(classAttribute);
     if (existingClass === null) {
       diagnostics.push(
-        styleWriterConflictDiagnostic(options, classAttribute, 'class', 'author JSX', 'style lowerer'),
+        styleWriterConflictDiagnostic(
+          options,
+          classAttribute,
+          'class',
+          'author JSX',
+          'style lowerer',
+        ),
       );
     } else {
       extraReplacements.push({
@@ -392,7 +415,9 @@ function styleAttributeReplacement(attributes: ReturnType<typeof attrs>): string
 
 function staticAttributeString(attribute: JsxAttributeModel): string | null {
   if (attribute.value !== undefined) return attribute.value;
-  return typeof attribute.expressionStaticValue === 'string' ? attribute.expressionStaticValue : null;
+  return typeof attribute.expressionStaticValue === 'string'
+    ? attribute.expressionStaticValue
+    : null;
 }
 
 function styleWriterConflictDiagnostic(
@@ -426,7 +451,10 @@ function resolveStyleBindings(
   if (ts.isArrayLiteralExpression(expression)) {
     const result: StyleBinding[] = [];
     for (const element of expression.elements) {
-      if (element.kind === ts.SyntaxKind.FalseKeyword || element.kind === ts.SyntaxKind.NullKeyword) {
+      if (
+        element.kind === ts.SyntaxKind.FalseKeyword ||
+        element.kind === ts.SyntaxKind.NullKeyword
+      ) {
         continue;
       }
       const nested = resolveStyleBindings(element, bindings);
@@ -471,10 +499,9 @@ function dynamicStyleAttributeLowering(
     `${sanitizeIdentifier(componentName)}$style_class_derive`,
     nameCounts,
   );
-  const replacement =
-    stateOnly
-      ? `class={${classExpression}} data-bind:class="state.${exportName}"`
-      : `data-derive="${escapeAttribute(`${query}.${exportName}`)}" data-derive-attr="class"`;
+  const replacement = stateOnly
+    ? `class={${classExpression}} data-bind:class="state.${exportName}"`
+    : `data-derive="${escapeAttribute(`${query}.${exportName}`)}" data-derive-attr="class"`;
   const coverage = styleUpdateCoverage(attribute, componentName, query, stateOnly);
 
   return {
@@ -673,7 +700,8 @@ function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutputWriteFa
 }
 
 function propertyNameText(name: ts.PropertyName): string | null {
-  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name))
+    return name.text;
   return null;
 }
 

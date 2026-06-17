@@ -102,11 +102,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const hrefReplacements = navigationStandaloneHrefLowering(originalState.model);
   const modelPatch = applyModelPatchPass(
     originalState,
-    [
-      ...structuralLowering.replacements,
-      ...hrefReplacements,
-      ...styleExtraction.replacements,
-    ],
+    [...structuralLowering.replacements, ...hrefReplacements, ...styleExtraction.replacements],
     parseComponentModuleModel,
   );
   const source = modelPatch.state.source;
@@ -141,12 +137,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const fileNames = compileArtifactFileNames(options.fileName);
   const stateDerives = [...structuralLowering.stateDerives, ...styleExtraction.stateDerives];
 
-  const clientSource = emitClientModule(
-    handlers,
-    queryUpdatePlans,
-    stateDerives,
-    componentName,
-  );
+  const clientSource = emitClientModule(handlers, queryUpdatePlans, stateDerives, componentName);
   const clientHref = clientModuleUrl(options.fileName, clientModuleVersion(clientSource));
   const versionedHandlers = handlers.map((handler) =>
     versionHandlerLowering(handler, options.fileName, clientHref),
@@ -189,11 +180,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ...(compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {}),
     source,
   });
-  const stateDeriveReferences = collectStateDeriveReferenceFacts(
-    model,
-    stateDerives,
-    clientHref,
-  );
+  const stateDeriveReferences = collectStateDeriveReferenceFacts(model, stateDerives, clientHref);
   const serverRenderReplacements = [
     ...serverRender.replacements,
     ...componentDescriptorNameAssignments(model, componentNames.registryKey),
@@ -252,9 +239,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     // SPEC §5.2 rule 3: render the authored Kovo JSX model and the lowered server artifact
     // independently, then ignore only generated runtime stamps with an explicit allowlist.
     renderEquivalenceChecks: [
-      semanticRenderEquivalenceCheck(fileNames.server, originalModel, serverModule.executableSource, {
-        ...(compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {}),
-      }),
+      semanticRenderEquivalenceCheck(
+        fileNames.server,
+        originalModel,
+        serverModule.executableSource,
+        compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {},
+      ),
     ],
     updateCoverage,
     viewTransitions: structuralLowering.viewTransitionStamps,
@@ -324,9 +314,7 @@ function versionStateDeriveReferences(
   }));
 }
 
-function mergeQueryUpdatePlans(
-  plans: readonly QueryUpdatePlanFact[],
-): QueryUpdatePlanFact[] {
+function mergeQueryUpdatePlans(plans: readonly QueryUpdatePlanFact[]): QueryUpdatePlanFact[] {
   const byQuery = new Map<string, QueryUpdatePlanFact[]>();
   for (const plan of plans) {
     byQuery.set(plan.query, [...(byQuery.get(plan.query) ?? []), plan]);
@@ -398,10 +386,7 @@ function mergeStyleUpdateCoverage(
   ];
 }
 
-function containsSourceSpan(
-  outer: SourceSpan,
-  inner: { length: number; start: number },
-): boolean {
+function containsSourceSpan(outer: SourceSpan, inner: { length: number; start: number }): boolean {
   return inner.start >= outer.start && inner.start + inner.length <= outer.end;
 }
 

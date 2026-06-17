@@ -35,7 +35,11 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
             descriptionId: 'delete-description',
             titleId: 'delete-title',
           }) +
-          AlertDialogCancel.definition.render({ ...dialogState, autoFocus: true, children: 'Cancel' }) +
+          AlertDialogCancel.definition.render({
+            ...dialogState,
+            autoFocus: true,
+            children: 'Cancel',
+          }) +
           AlertDialogAction.definition.render({
             ...dialogState,
             children: 'Delete',

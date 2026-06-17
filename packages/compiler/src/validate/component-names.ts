@@ -47,10 +47,7 @@ export function validateDuplicateComponentNames(
     if (registryNames.has(registration.effectiveName)) {
       diagnostics.push(registryComponentNameDiagnostic(source, options.fileName, registration));
     }
-    if (
-      previousRegistryNames.size > 0 &&
-      !previousRegistryNames.has(registration.effectiveName)
-    ) {
+    if (previousRegistryNames.size > 0 && !previousRegistryNames.has(registration.effectiveName)) {
       const previousName = previousRegistryNameForDomLeaf(
         previousRegistryNames,
         registration.domName,
@@ -168,11 +165,15 @@ function fragmentTargetRegistrations(
   fileName: string,
 ): FragmentTargetRegistration[] {
   return model.components.flatMap((component) => {
-    if (component.options.find((option) => option.key === 'disableServerRefresh')?.staticValue === true) {
+    if (
+      component.options.find((option) => option.key === 'disableServerRefresh')?.staticValue ===
+      true
+    ) {
       return [];
     }
 
-    const queries = component.options.find((option) => option.key === 'queries')?.objectEntries ?? [];
+    const queries =
+      component.options.find((option) => option.key === 'queries')?.objectEntries ?? [];
     if (queries.length === 0) return [];
 
     return [

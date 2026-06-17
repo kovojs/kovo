@@ -202,7 +202,8 @@ export function selectCssAssets(
 export function createCssAssetResolver(manifest: CssAssetManifest): CssAssetResolver {
   return (renderTarget) => {
     if (!renderTarget) return allManifestAssets(manifest);
-    if (renderTarget.sourceFileNames) return selectCssAssets(manifest, renderTarget.sourceFileNames);
+    if (renderTarget.sourceFileNames)
+      return selectCssAssets(manifest, renderTarget.sourceFileNames);
     if (manifest.chunks) {
       if (renderTarget.kind === 'page') {
         return renderTarget.route
@@ -245,7 +246,15 @@ function computeCssSplitChunks(
   const baseNames = new Set(baseAssets.map((asset) => asset.sourceFileName));
   const base =
     baseAssets.length > 0
-      ? [chunkAsset('base.css', 'css-base', fragmentTargetsForAssets(baseAssets), baseAssets, options)]
+      ? [
+          chunkAsset(
+            'base.css',
+            'css-base',
+            fragmentTargetsForAssets(baseAssets),
+            baseAssets,
+            options,
+          ),
+        ]
       : [];
   const routes: Record<string, ComponentCssAsset[]> = {};
 
@@ -269,7 +278,8 @@ function computeCssSplitChunks(
   for (const target of fragmentTargetsForAssets(manifest.stylesheets)) {
     const fragmentAssets = manifest.stylesheets.filter(
       (asset) =>
-        !baseNames.has(asset.sourceFileName) && asset.fragmentTargets.some((item) => item === target),
+        !baseNames.has(asset.sourceFileName) &&
+        asset.fragmentTargets.some((item) => item === target),
     );
     fragments[target] =
       fragmentAssets.length > 0
@@ -337,9 +347,7 @@ function sharedRouteCssAssets(
     }
   }
 
-  return [...counts.values()]
-    .filter((entry) => entry.count > 1)
-    .map((entry) => entry.asset);
+  return [...counts.values()].filter((entry) => entry.count > 1).map((entry) => entry.asset);
 }
 
 function fragmentTargetsForAssets(assets: readonly ComponentCssAsset[]): string[] {

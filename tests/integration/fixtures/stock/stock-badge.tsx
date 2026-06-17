@@ -4,7 +4,6 @@ import { component } from '@kovojs/core';
 import { itemQuery, type StockResult } from './shared';
 
 export const StockBadge = component({
-  fragmentTarget: true,
   queries: { item: itemQuery },
   render: ({ item }: { item: StockResult }) => (
     <stock-badge kovo-fragment-target="stock-badge">

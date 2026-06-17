@@ -166,12 +166,7 @@ export const PopoverContent = component({
     const styleAttrs = style.attrs(popoverStyles.content, props.styles?.content);
 
     return (
-      <div
-        {...styleAttrs}
-        data-state={attrs['data-state']}
-        id={attrs.id}
-        popover={attrs.popover}
-      >
+      <div {...styleAttrs} data-state={attrs['data-state']} id={attrs.id} popover={attrs.popover}>
         {props.children}
       </div>
     );

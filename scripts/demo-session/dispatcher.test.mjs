@@ -88,7 +88,9 @@ describe('createPerSessionDispatcher', () => {
   });
 
   it('rejects an implausible/hostile cookie by minting a fresh id', async () => {
-    const dispatcher = createPerSessionDispatcher({ buildHandler: () => (_r, res) => res.writeHead(200) });
+    const dispatcher = createPerSessionDispatcher({
+      buildHandler: () => (_r, res) => res.writeHead(200),
+    });
     const res = fakeRes();
     await dispatcher.dispatch(fakeReq('kovo_demo_sid=../etc/passwd'), res);
     expect(sidFromRes(res)).toBeTruthy(); // replaced, not honored

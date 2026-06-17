@@ -802,7 +802,9 @@ function componentOptions(
 }
 
 function componentHasInferredFragmentTarget(component: ComponentModel): boolean {
-  if (component.options.find((option) => option.key === 'disableServerRefresh')?.staticValue === true) {
+  if (
+    component.options.find((option) => option.key === 'disableServerRefresh')?.staticValue === true
+  ) {
     return false;
   }
 

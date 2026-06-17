@@ -41,7 +41,10 @@ const cardStyles = style.create({
 export const ProductCard = component({
   render({ item }: { item: { id: string; stock: number } }) {
     return (
-      <article kovo-key={item.id} {...style.attrs(cardStyles.root, item.stock < 3 && cardStyles.lowStock)}>
+      <article
+        kovo-key={item.id}
+        {...style.attrs(cardStyles.root, item.stock < 3 && cardStyles.lowStock)}
+      >
         <h2>{item.id}</h2>
         <p>{item.stock} in stock</p>
       </article>

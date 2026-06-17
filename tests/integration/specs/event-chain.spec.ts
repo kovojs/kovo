@@ -14,9 +14,7 @@ test('runs chained event refs in order even when default is prevented', async ({
 
   await page.getByRole('button', { name: 'Run chain' }).click();
 
-  await expect(page.locator('[data-order]')).toHaveText(
-    'author:prevented,primitive:saw-prevented',
-  );
+  await expect(page.locator('[data-order]')).toHaveText('author:prevented,primitive:saw-prevented');
   expect(await kovoApp.semantic('main', { keepAttrs: ['on:click'] })).toMatchSnapshot(
     'event-chain.semantic.txt',
   );

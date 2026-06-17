@@ -26,13 +26,23 @@ describe('compatibility path boundaries', () => {
       join(compilerSrcDir, 'conformance-compat.test.ts'),
       'utf8',
     );
-    const handlerFixtureSource = readFileSync(join(compilerSrcDir, 'handler-lowering.test.ts'), 'utf8');
-    const fragmentFixtureSource = readFileSync(join(compilerSrcDir, 'fragment-targets.test.ts'), 'utf8');
+    const handlerFixtureSource = readFileSync(
+      join(compilerSrcDir, 'handler-lowering.test.ts'),
+      'utf8',
+    );
+    const fragmentFixtureSource = readFileSync(
+      join(compilerSrcDir, 'fragment-targets.test.ts'),
+      'utf8',
+    );
 
-    expect(compatibilitySource).toContain('source: \'<button onClick={() => window.alert("x")}>x</button>\'');
+    expect(compatibilitySource).toContain(
+      'source: \'<button onClick={() => window.alert("x")}>x</button>\'',
+    );
     expect(compatibilitySource).toContain('const snapshot = readSnapshot();');
     expect(compatibilitySource).not.toContain('capturesUnserializableReferences(');
-    expect(handlerFixtureSource).toContain('source: \'<button onClick={() => window.alert("x")}>x</button>\'');
+    expect(handlerFixtureSource).toContain(
+      'source: \'<button onClick={() => window.alert("x")}>x</button>\'',
+    );
     expect(fragmentFixtureSource).toContain('<span>{snapshot.total}</span>');
 
     const forbiddenModeNames = /\b(?:allowWeakCaptures|helperMode|compatMode|weakHelper)\b/;

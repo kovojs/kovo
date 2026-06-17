@@ -4,9 +4,9 @@ import { renderFragmentWireHtml, renderQueryScript, renderQueryWireHtml } from '
 
 describe('renderQueryWireHtml', () => {
   it('emits a full query chunk without delta attribute by default', () => {
-    expect(
-      renderQueryWireHtml({ name: 'cart', value: { count: 2 } }),
-    ).toBe('<kovo-query name="cart">{"count":2}</kovo-query>');
+    expect(renderQueryWireHtml({ name: 'cart', value: { count: 2 } })).toBe(
+      '<kovo-query name="cart">{"count":2}</kovo-query>',
+    );
   });
 
   it('emits the boolean delta attribute when delta: true (SPEC §9.1.1)', () => {

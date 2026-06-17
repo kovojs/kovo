@@ -345,11 +345,7 @@ export const ComboboxValue = component({
     const styleAttrs = style.attrs(comboboxStyles.value, props.styles?.value);
 
     return (
-      <span
-        {...styleAttrs}
-        data-placeholder={attrs['data-placeholder']}
-        id={attrs.id}
-      >
+      <span {...styleAttrs} data-placeholder={attrs['data-placeholder']} id={attrs.id}>
         {escapeHtml(comboboxValueText(props))}
       </span>
     );

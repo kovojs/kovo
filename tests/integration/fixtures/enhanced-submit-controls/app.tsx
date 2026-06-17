@@ -4,6 +4,7 @@ import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
 
 interface SubmissionRow {
+  [key: string]: unknown;
   include_gift: number;
   quantity: number;
 }
@@ -36,10 +37,10 @@ export const submitOrder = mutation('enhanced-submit-controls/submit', {
     quantity: s.number().int().min(1),
   }),
   handler: async (input, request: KovoFixtureRequest) => {
-    await request.db.query('insert into enhanced_submit_log (quantity, include_gift) values ($1, $2)', [
-      input.quantity,
-      input.includeGift ? 1 : 0,
-    ]);
+    await request.db.query(
+      'insert into enhanced_submit_log (quantity, include_gift) values ($1, $2)',
+      [input.quantity, input.includeGift ? 1 : 0],
+    );
     return {};
   },
 });

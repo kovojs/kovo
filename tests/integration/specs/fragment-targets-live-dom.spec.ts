@@ -3,7 +3,9 @@ import { expect, test } from '@kovojs/test/integration';
 
 test.use({ kovoFixture: 'fragment-targets-live-dom' });
 
-test('includes patched-in fragment targets in later enhanced mutation requests', async ({ page }) => {
+test('includes patched-in fragment targets in later enhanced mutation requests', async ({
+  page,
+}) => {
   await page.goto('/');
   await expect(page.locator('[data-bind="wire.stage"]')).toHaveText('Stage 0');
 

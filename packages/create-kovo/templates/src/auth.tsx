@@ -210,11 +210,7 @@ export const starterAuthStyleCss = style.emitAtomicCss(
 // `enhance` attribute only upgrades the same form to the fragment wire.
 export function renderLoginForm(auth: StarterAuthBindings, options: LoginFormOptions = {}): string {
   return (
-    <form
-      enhance
-      mutation={auth.signIn}
-      {...style.attrs(authStyles.form)}
-    >
+    <form enhance mutation={auth.signIn} {...style.attrs(authStyles.form)}>
       {options.request ? csrfField(options.request, starterAuthCsrf) : ''}
       <input type="hidden" name="next" value={options.next ?? '/cart'} />
       <label {...style.attrs(authStyles.field)}>
@@ -257,10 +253,7 @@ export function renderLoginForm(auth: StarterAuthBindings, options: LoginFormOpt
 
 export function renderLogoutForm(auth: StarterAuthBindings, request: StarterAuthRequest): string {
   return (
-    <form
-      enhance
-      mutation={auth.signOut}
-    >
+    <form enhance mutation={auth.signOut}>
       {csrfField(request, starterAuthCsrf)}
       <button {...style.attrs(authStyles.secondaryAction)} type="submit">
         Sign out

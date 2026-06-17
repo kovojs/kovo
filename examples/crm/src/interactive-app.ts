@@ -14,11 +14,7 @@ import {
   renderDealDetailPage,
   renderDealDetailRegion,
 } from './generated/deal-detail.js';
-import {
-  PIPELINE_TARGET,
-  renderPipelinePage,
-  renderPipelineRegion,
-} from './generated/pipeline.js';
+import { PIPELINE_TARGET, renderPipelinePage, renderPipelineRegion } from './generated/pipeline.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
 import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';

@@ -151,9 +151,7 @@ export interface CreateDeltaMissRefetcherOptions extends QueryRefetchOptions {
  *
  * @internal
  */
-export function createDeltaMissRefetcher(
-  options: CreateDeltaMissRefetcherOptions,
-): OnDeltaMiss {
+export function createDeltaMissRefetcher(options: CreateDeltaMissRefetcherOptions): OnDeltaMiss {
   // SPEC §9.1.1: on a delta miss, refetch the full value over /_q/<wireKey>.
   // Debounce rapid repeated misses for the same query key so one response can
   // serve multiple quick triggers during a single microtask drain.

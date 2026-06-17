@@ -12,7 +12,8 @@ async function renderPanel(db: KovoFixtureRequest['db']): Promise<string> {
   const version = await readVersion(db);
   const rows = Array.from({ length: 28 }, (_value, index) => {
     const rowNumber = index + 1;
-    const label = rowNumber === 14 ? `Inserted content version ${version}` : `Stable row ${rowNumber}`;
+    const label =
+      rowNumber === 14 ? `Inserted content version ${version}` : `Stable row ${rowNumber}`;
     return `<p kovo-key="row-${rowNumber}" data-row="${rowNumber}">${label}</p>`;
   }).join('');
 

@@ -34,7 +34,8 @@ export interface SpecCoverageMapEntry {
 export const compilerSpecCoverageMap = [
   {
     clause: 'SPEC.md §4.3',
-    promise: 'handler closure lowering crosses only ctx/state, element params, imports, and static module constants',
+    promise:
+      'handler closure lowering crosses only ctx/state, element params, imports, and static module constants',
     accepted: [
       {
         file: 'packages/compiler/src/handler-lowering.test.ts',
@@ -76,7 +77,8 @@ export const compilerSpecCoverageMap = [
   },
   {
     clause: 'SPEC.md §4.6',
-    promise: 'primitive composition merges attributes deterministically and diagnoses unmergeable writers',
+    promise:
+      'primitive composition merges attributes deterministically and diagnoses unmergeable writers',
     accepted: [
       {
         file: 'packages/compiler/src/attribute-merge.test.ts',
@@ -116,7 +118,8 @@ export const compilerSpecCoverageMap = [
   },
   {
     clause: 'SPEC.md §4.8',
-    promise: 'bindings, derives, stamps, nullability, and residual stamps are derived and validated',
+    promise:
+      'bindings, derives, stamps, nullability, and residual stamps are derived and validated',
     accepted: [
       {
         file: 'packages/compiler/src/query-coverage.test.ts',
@@ -158,7 +161,8 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/compiler/src/diagnostic-coverage-matrix.test.ts',
-        testName: 'proves every in-scope compiler-owned diagnostic has positive and negative coverage',
+        testName:
+          'proves every in-scope compiler-owned diagnostic has positive and negative coverage',
         codes: ['KV222'],
       },
     ],
@@ -171,7 +175,8 @@ export const compilerSpecCoverageMap = [
   },
   {
     clause: 'SPEC.md §4.9',
-    promise: 'every query/state-dependent rendered position is classified as plan, isomorphic, fragment, or renderOnce',
+    promise:
+      'every query/state-dependent rendered position is classified as plan, isomorphic, fragment, or renderOnce',
     accepted: [
       {
         file: 'packages/compiler/src/query-coverage.test.ts',
@@ -216,7 +221,8 @@ export const compilerSpecCoverageMap = [
   },
   {
     clause: 'SPEC.md §5.2',
-    promise: 'TSX-only authoring, fixpoint, semantic equivalence, teaching diagnostics, and typed-fact decisions hold',
+    promise:
+      'TSX-only authoring, fixpoint, semantic equivalence, teaching diagnostics, and typed-fact decisions hold',
     accepted: [
       {
         file: 'packages/compiler/src/compile-component.test.ts',
@@ -333,7 +339,8 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/compiler/src/id-content-model.test.ts',
-        testName: 'reports KV221 for package-prefixed behavior IDREFs that miss component scope ids',
+        testName:
+          'reports KV221 for package-prefixed behavior IDREFs that miss component scope ids',
         codes: ['KV221'],
       },
       {
@@ -351,7 +358,8 @@ export const compilerSpecCoverageMap = [
   },
   {
     clause: 'SPEC.md §11.3/§11.4',
-    promise: 'diagnostic registry, kovo check, explain, and mutation/domain verifier surfaces are mechanically audited',
+    promise:
+      'diagnostic registry, kovo check, explain, and mutation/domain verifier surfaces are mechanically audited',
     accepted: [
       {
         file: 'packages/compiler/src/diagnostic-coverage-matrix.test.ts',
@@ -359,7 +367,8 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/compiler/src/diagnostic-coverage-matrix.test.ts',
-        testName: 'proves every in-scope compiler-owned diagnostic has positive and negative coverage',
+        testName:
+          'proves every in-scope compiler-owned diagnostic has positive and negative coverage',
       },
       {
         file: 'packages/compiler/src/direct-db.test.ts',
@@ -390,7 +399,8 @@ export const compilerSpecCoverageMap = [
     referenceApp: [
       {
         file: 'examples/commerce/src/source-truth.test.ts',
-        testName: 'accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire',
+        testName:
+          'accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire',
       },
       {
         file: 'examples/reference/src/app.test.ts',

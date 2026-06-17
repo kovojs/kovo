@@ -17,7 +17,8 @@ export const Cart_Badge = component({
 `,
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV237')).toMatchInlineSnapshot(`
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV237'))
+      .toMatchInlineSnapshot(`
       [
         {
           "code": "KV237",
@@ -56,7 +57,8 @@ export const Cart_Badge = component({
 `,
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV237')).toMatchInlineSnapshot(`
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV237'))
+      .toMatchInlineSnapshot(`
       [
         {
           "code": "KV237",
@@ -109,7 +111,8 @@ export const CartBadge = component({
 `,
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV237')).toMatchInlineSnapshot(`
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV237'))
+      .toMatchInlineSnapshot(`
       [
         {
           "code": "KV237",

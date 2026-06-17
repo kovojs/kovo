@@ -373,9 +373,8 @@ export const Recommendations = component({
         },
       ]
     `);
-    expect(
-      cssAssetSnapshot(resolveCssAssets({ kind: 'page', route: '/cart' })),
-    ).toMatchInlineSnapshot(`
+    expect(cssAssetSnapshot(resolveCssAssets({ kind: 'page', route: '/cart' })))
+      .toMatchInlineSnapshot(`
       [
         {
           "componentName": "css-base",
@@ -400,9 +399,8 @@ export const Recommendations = component({
         },
       ]
     `);
-    expect(
-      cssAssetSnapshot(resolveCssAssets({ kind: 'page', route: '/products/:id' })),
-    ).toMatchInlineSnapshot(`
+    expect(cssAssetSnapshot(resolveCssAssets({ kind: 'page', route: '/products/:id' })))
+      .toMatchInlineSnapshot(`
       [
         {
           "componentName": "css-base",

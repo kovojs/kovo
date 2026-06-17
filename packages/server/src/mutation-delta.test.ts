@@ -36,9 +36,12 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
       delta: largeCartDeltaMeta(),
-      load: () => ({ ...largeCartValue(), items: largeCartValue().items.map(item =>
-        item.productId === 'p0' ? { ...item, qty: 2 } : item,
-      )}),
+      load: () => ({
+        ...largeCartValue(),
+        items: largeCartValue().items.map((item) =>
+          item.productId === 'p0' ? { ...item, qty: 2 } : item,
+        ),
+      }),
       reads: [cart],
     });
     const updateItem = mutation('cart/update', {
@@ -57,12 +60,17 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     const errors: unknown[] = [];
     const response = await renderMutationResponse(updateItem, {
       fragment: true,
-      onError: (err) => { errors.push(err); },
+      onError: (err) => {
+        errors.push(err);
+      },
       rawInput: { productId: 'p0' },
       request: {},
     });
 
-    expect(errors, `render errors: ${JSON.stringify(errors.map(e => e instanceof Error ? e.message : e))}`).toHaveLength(0);
+    expect(
+      errors,
+      `render errors: ${JSON.stringify(errors.map((e) => (e instanceof Error ? e.message : e)))}`,
+    ).toHaveLength(0);
     expect(response.status).toBe(200);
 
     // The delta chunk must carry the boolean `delta` attribute.

@@ -37,11 +37,7 @@ import type { StaticLiteralValue } from '../scan/object.js';
 import { literalStringValue } from '../scan/object.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
-import type {
-  CompileComponentOptions,
-  StateDeriveFact,
-  ViewTransitionStamp,
-} from '../types.js';
+import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
 import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,

@@ -66,8 +66,7 @@ const app = createApp({
 
 export default defineFixture({
   app,
-  schema:
-    'create table profile (id integer primary key, name text not null, status text not null)',
+  schema: 'create table profile (id integer primary key, name text not null, status text not null)',
   seed: (db) =>
     db.exec("insert into profile (id, name, status) values (1, 'Ada Lovelace', 'draft')"),
 });

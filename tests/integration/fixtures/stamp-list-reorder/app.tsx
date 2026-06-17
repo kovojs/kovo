@@ -14,6 +14,7 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration
 const boardDomain = domain('board');
 
 interface BoardItem {
+  [key: string]: unknown;
   id: string;
   label: string;
   rank: number;
@@ -26,7 +27,7 @@ interface BoardResult {
 async function readBoard(db: KovoFixtureRequest['db']): Promise<BoardResult> {
   const items = (await db.query(
     'select id, label, rank from board_item order by rank asc',
-  )) as BoardItem[];
+  )) as unknown as BoardItem[];
   return { items };
 }
 

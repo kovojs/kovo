@@ -25,9 +25,7 @@ test('preserves keyed scroll position while reconciling inserted content', async
 
   await expect(page.locator('[data-bind="scroll.version"]')).toHaveText('1');
   await expect(page.locator('[data-row="14"]')).toHaveText('Inserted content version 1');
-  await expect
-    .poll(() => scroller.evaluate((element) => element.scrollTop))
-    .toBe(beforeScrollTop);
+  await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBe(beforeScrollTop);
 
   const rows = await kovoApp.db.query('select version from scroll_state where id = 1');
   expect(rows[0]).toEqual({ version: 1 });

@@ -39,26 +39,25 @@ describe('@kovojs/ui ContextMenu StyleX slots', () => {
             open: true,
           }) +
           ContextMenuContent.definition.render({
-            children:
-              ContextMenuGroup.definition.render({
-                children:
-                  ContextMenuItem.definition.render({
-                    highlightedValue: 'copy',
-                    itemLabel: 'Copy',
-                    itemValue: 'copy',
-                    items,
-                    open: true,
-                  }) +
-                  ContextMenuSeparator.definition.render({ id: 'context-separator' }) +
-                  ContextMenuItem.definition.render({
-                    itemDisabled: true,
-                    itemLabel: 'Delete',
-                    itemValue: 'delete',
-                    items,
-                    open: true,
-                  }),
-                open: true,
-              }),
+            children: ContextMenuGroup.definition.render({
+              children:
+                ContextMenuItem.definition.render({
+                  highlightedValue: 'copy',
+                  itemLabel: 'Copy',
+                  itemValue: 'copy',
+                  items,
+                  open: true,
+                }) +
+                ContextMenuSeparator.definition.render({ id: 'context-separator' }) +
+                ContextMenuItem.definition.render({
+                  itemDisabled: true,
+                  itemLabel: 'Delete',
+                  itemValue: 'delete',
+                  items,
+                  open: true,
+                }),
+              open: true,
+            }),
             id: 'context-actions',
             labelledBy: 'context-label',
             open: true,

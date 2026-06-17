@@ -98,7 +98,9 @@ export const TrustedRawHtml = component({
     // SPEC §1/§5.2: explicit TrustedHtml values document the unsafe output-context escape hatch.
     expect({
       diagnostics: kv236Diagnostics(result),
-      outputContextFacts: result.outputContextFacts.filter((fact) => fact.context === 'trusted-html'),
+      outputContextFacts: result.outputContextFacts.filter(
+        (fact) => fact.context === 'trusted-html',
+      ),
       serverSource: normalizeArtifact(serverSource),
     }).toMatchInlineSnapshot(`
       {

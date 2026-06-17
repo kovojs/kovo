@@ -38,10 +38,9 @@ describe('semanticSnapshot', () => {
       '<button on:click="/c/cart-add.client.js?v=9f3ad21c#add /assets/legacy.4f8a9c1b.js#run">Add</button>';
 
     expect(semanticSnapshot(html, { keepAttrs: ['on:click'] })).toBe(
-      [
-        '<button on:click="/c/cart-add.client.js?v=*#add /assets/legacy.*.js#run">',
-        '  "Add"',
-      ].join('\n'),
+      ['<button on:click="/c/cart-add.client.js?v=*#add /assets/legacy.*.js#run">', '  "Add"'].join(
+        '\n',
+      ),
     );
   });
 

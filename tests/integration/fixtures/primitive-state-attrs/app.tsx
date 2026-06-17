@@ -6,7 +6,7 @@ import { PrimitiveStateAttrsCard } from './state-card';
 const homeRoute = route('/', {
   meta: { title: 'Primitive state attrs' },
   page: () =>
-    `<main><h1>Primitive state attrs</h1>${PrimitiveStateAttrsCard.definition.render({}, null) as string}</main>`,
+    `<main><h1>Primitive state attrs</h1>${PrimitiveStateAttrsCard.definition.render() as string}</main>`,
 });
 
 export default defineFixture({

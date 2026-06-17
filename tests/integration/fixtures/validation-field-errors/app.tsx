@@ -21,11 +21,12 @@ export const reserve = mutation('validation/reserve', {
   },
 });
 
-function renderReservationForm(
-  failure?: MutationFail<'VALIDATION', ValidationFailurePayload>,
-): string {
-  const issue =
-    failure?.error.code === 'VALIDATION' ? failure.error.payload.issues[0] : undefined;
+function renderReservationForm(failure?: MutationFail): string {
+  const payload =
+    failure?.error.code === 'VALIDATION'
+      ? (failure.error.payload as ValidationFailurePayload)
+      : undefined;
+  const issue = payload?.issues[0];
   const error =
     issue === undefined
       ? ''

@@ -2,7 +2,6 @@
 import { component } from '@kovojs/core';
 
 export const LateCard = component({
-  fragmentTarget: true,
   css: `
     .late-surface {
       background-color: rgb(12, 84, 96);

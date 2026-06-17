@@ -1,6 +1,11 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 
+declare const Primitive: {
+  DialogContent: (props: Record<string, unknown>) => string;
+  DialogTrigger: (props: Record<string, unknown>) => string;
+};
+
 export const PrimitiveIdAuthorWinsCard = component({
   render: () => (
     <section data-case="primitive-id-author-wins">

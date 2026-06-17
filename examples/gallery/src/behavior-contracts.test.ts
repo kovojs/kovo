@@ -255,10 +255,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'hidden>GH</span>',
     'hidden src="/avatars/missing.png"',
   ],
-  '/components/alert': [
-    'role="status"',
-    'role="alert"',
-  ],
+  '/components/alert': ['role="status"', 'role="alert"'],
   '/components/alert-dialog': [
     'command="show-modal"',
     'commandfor="gallery-alert-dialog-content"',

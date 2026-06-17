@@ -7,7 +7,7 @@ interface AppSession {
   id: string;
   user: { id: string; roles: readonly string[] };
 }
-type AppRequest = KovoFixtureRequest & { session?: AppSession | null };
+type AppRequest = Request & KovoFixtureRequest & { session?: AppSession | null };
 
 const sessionDomain = domain('session-once');
 
@@ -62,7 +62,7 @@ export default defineFixture({
     queries: [sessionOnceQuery],
     routes: [routeCase],
     sessionProvider: async (request) => {
-      const appRequest = request as AppRequest;
+      const appRequest = request as unknown as AppRequest;
       const caseKey = request.headers.get('x-session-case') ?? new URL(request.url).pathname;
       const session = {
         id: `session-${caseKey}`,

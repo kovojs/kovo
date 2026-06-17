@@ -428,9 +428,9 @@ describe('diagnostic registry', () => {
       const definition = diagnosticDefinitions[code];
       const help = (definition as { help?: string }).help;
       const schema = compilerDiagnosticTeachingSchemas[code];
-      const labels = Object.values('detailLabels' in definition ? definition.detailLabels : {}).join(
-        '\n',
-      );
+      const labels = Object.values(
+        'detailLabels' in definition ? definition.detailLabels : {},
+      ).join('\n');
 
       expect(definition.message, `${code} states the problem`).toEqual(expect.any(String));
       expect(definition.message.trim(), `${code} states the problem`).not.toBe('');
@@ -445,10 +445,9 @@ describe('diagnostic registry', () => {
       }
 
       if (schema.loweredForm === 'required') {
-        expect(
-          `${help}\n${labels}`,
-          `${code} shows the would-have-lowered form`,
-        ).toMatch(/Would (?:lower|hoist) (?:to|children to):/);
+        expect(`${help}\n${labels}`, `${code} shows the would-have-lowered form`).toMatch(
+          /Would (?:lower|hoist) (?:to|children to):/,
+        );
       }
 
       if (schema.escapePosture === 'documented') {

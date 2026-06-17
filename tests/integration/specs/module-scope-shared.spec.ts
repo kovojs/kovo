@@ -23,6 +23,7 @@ test('shares module-scope values across repeated handler imports while params st
     JSON.stringify({ callCount: 3, itemId: 'alpha', seen: ['alpha', 'beta'] }),
   );
 
-  expect(await kovoApp.semantic('main', { keepAttrs: ['on:click', 'data-p-item-id'] }))
-    .toMatchSnapshot('module-scope-shared.semantic.txt');
+  expect(
+    await kovoApp.semantic('main', { keepAttrs: ['on:click', 'data-p-item-id'] }),
+  ).toMatchSnapshot('module-scope-shared.semantic.txt');
 });

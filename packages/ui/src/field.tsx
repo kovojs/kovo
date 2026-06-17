@@ -249,9 +249,7 @@ export const fieldSelectOptionClasses = [
 export const fieldDescriptionClasses = [style.attrs(fieldStyles.description).class ?? ''] as const;
 export const fieldErrorClasses = [style.attrs(fieldStyles.error).class ?? ''] as const;
 export const fieldsetClasses = [style.attrs(fieldStyles.fieldset).class ?? ''] as const;
-export const fieldsetLegendClasses = [
-  style.attrs(fieldStyles.fieldsetLegend).class ?? '',
-] as const;
+export const fieldsetLegendClasses = [style.attrs(fieldStyles.fieldsetLegend).class ?? ''] as const;
 
 export const Field = component({
   render(props: FieldProps) {

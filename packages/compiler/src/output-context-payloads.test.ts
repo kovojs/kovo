@@ -581,8 +581,9 @@ function selectorAttributeRecord(
   result: ReturnType<typeof compileComponentModule>,
   attr: string,
 ): Record<string, string> {
-  const selector = result.queryUpdatePlans[0]?.stamps?.find((stamp) => stamp.attr === attr)
-    ?.selector;
+  const selector = result.queryUpdatePlans[0]?.stamps?.find(
+    (stamp) => stamp.attr === attr,
+  )?.selector;
   if (!selector) throw new Error(`Missing selector for ${attr}`);
 
   const match = /^\[([^=\]]+)="([^"]*)"\]$/.exec(selector);
@@ -633,10 +634,7 @@ class FakeElement {
   attributes: Array<{ name: string; value: string }>;
   textContent: string | null;
 
-  constructor(
-    attributes: Record<string, string>,
-    options: { textContent?: string | null } = {},
-  ) {
+  constructor(attributes: Record<string, string>, options: { textContent?: string | null } = {}) {
     this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
     this.textContent = options.textContent ?? null;
   }

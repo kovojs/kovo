@@ -39,26 +39,25 @@ describe('@kovojs/ui DropdownMenu StyleX slots', () => {
             open: true,
           }) +
           DropdownMenuContent.definition.render({
-            children:
-              DropdownMenuGroup.definition.render({
-                children:
-                  DropdownMenuItem.definition.render({
-                    highlightedValue: 'open',
-                    itemLabel: 'Open',
-                    itemValue: 'open',
-                    items,
-                    open: true,
-                  }) +
-                  DropdownMenuSeparator.definition.render({ id: 'menu-separator' }) +
-                  DropdownMenuItem.definition.render({
-                    itemDisabled: true,
-                    itemLabel: 'Archive',
-                    itemValue: 'archive',
-                    items,
-                    open: true,
-                  }),
-                open: true,
-              }),
+            children: DropdownMenuGroup.definition.render({
+              children:
+                DropdownMenuItem.definition.render({
+                  highlightedValue: 'open',
+                  itemLabel: 'Open',
+                  itemValue: 'open',
+                  items,
+                  open: true,
+                }) +
+                DropdownMenuSeparator.definition.render({ id: 'menu-separator' }) +
+                DropdownMenuItem.definition.render({
+                  itemDisabled: true,
+                  itemLabel: 'Archive',
+                  itemValue: 'archive',
+                  items,
+                  open: true,
+                }),
+              open: true,
+            }),
             id: 'actions-menu',
             labelledBy: 'actions-label',
             open: true,

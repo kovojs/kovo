@@ -149,15 +149,12 @@ export const AddToCartForm = component({
   - Decision: typed failure state lives in the render context / third render arg,
     e.g. `render: (queries, state, { productId, forms }) => ...`, with
     `forms.addToCart.failure: null | { code; payload; fieldErrors? }`.
-  - Evidence:
-    - `SPEC.md` §6.3 now defines `<form enhance mutation={addToCart}
-      key={productId}>`, typed `forms.<mutation>.failure`, stable key
-      requirements, and compiler-derived submitted-form targets.
-    - `SPEC.md` §9.2 now defines enhanced HTTP 422 form-fragment rerender,
-      no-JS full-page parity, typed failure state, and bypassing success
-      invalidation selection on failures.
-    - Verified with `rg -n 'mutation=\\{addToCart\\}|forms\\.<mutation>\\.failure|Failure responses' SPEC.md`
-      and `git diff --check` on 2026-06-17.
+  - Evidence: - `SPEC.md` §6.3 now defines `<form enhance mutation={addToCart}
+key={productId}>`, typed `forms.<mutation>.failure`, stable key
+    requirements, and compiler-derived submitted-form targets. - `SPEC.md` §9.2 now defines enhanced HTTP 422 form-fragment rerender,
+    no-JS full-page parity, typed failure state, and bypassing success
+    invalidation selection on failures. - Verified with `rg -n 'mutation=\\{addToCart\\}|forms\\.<mutation>\\.failure|Failure responses' SPEC.md`
+    and `git diff --check` on 2026-06-17.
 - [x] **Define success vs failure response selection.**
   - Decision: on success, intersect committed changes with submitted live targets;
     send query value/delta when §4.8 covers affected output, otherwise send a
@@ -210,19 +207,14 @@ export const AddToCartForm = component({
   - Emit diagnostics when a query-backed component cannot be server-refreshed:
     missing single root, unserializable props/children, ambiguous repeated target,
     or unsupported client-owned state.
-  - Evidence:
-    - Integrated commit `b43620d9` (`compiler: infer fragment targets from
-      queries`) from `agent/inferred-targets`.
-    - `packages/compiler/src/scan/parse.ts` derives fragment targets from
-      query-backed components and honors `disableServerRefresh: true`.
-    - `packages/compiler/src/graph.ts` generates `FragmentTargets` facts from the
-      inferred target set.
-    - `packages/compiler/src/validate/component-contracts.ts` reports removed
-      `fragmentTarget` usage and reconstructability/coverage diagnostics against
-      inferred targets.
-    - Verified with `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
-      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
-      `git diff --check` on 2026-06-17.
+  - Evidence: - Integrated commit `b43620d9` (`compiler: infer fragment targets from
+queries`) from `agent/inferred-targets`. - `packages/compiler/src/scan/parse.ts` derives fragment targets from
+    query-backed components and honors `disableServerRefresh: true`. - `packages/compiler/src/graph.ts` generates `FragmentTargets` facts from the
+    inferred target set. - `packages/compiler/src/validate/component-contracts.ts` reports removed
+    `fragmentTarget` usage and reconstructability/coverage diagnostics against
+    inferred targets. - Verified with `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
+    `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+    `git diff --check` on 2026-06-17.
 - [x] **3. Compiler lowering: always emit resolvable live target hooks.**
   - For inferred refresh targets, emit `kovo-fragment-target="<derived-target>"`
     on the component root whenever `kovo-c` will be omitted or insufficient.
@@ -268,21 +260,16 @@ export const AddToCartForm = component({
     rerenders the submitted form target with typed failure state.
   - Keep dev legible: full `<kovo-query>` and full `<kovo-fragment>` where a
     fragment is selected; prod may use §9.1.1 deltas.
-  - Evidence:
-    - Integrated commit `7a72498a` (`server: select mutation response targets
-      from live deps`) from `agent/runtime-selection`.
-    - `packages/server/src/mutation-wire.ts` parses structured live target deps
-      from `Kovo-Targets` while preserving legacy target strings.
-    - `packages/server/src/mutation.ts` selects response chunks from committed
-      rerun queries intersected with live target deps, sends plan-covered targets
-      through query chunks, and keeps reconstructible uncovered targets on the
-      fragment path.
-    - `packages/runtime/src/mutation-fetch.ts` sends structured live targets from
-      the live DOM and includes submitted form target metadata in modular
-      enhanced submits.
-    - Verified with `pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-form.test.ts packages/server/src/mutation*.test.ts packages/server/src/wire-fixtures.test.ts`,
-      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
-      `git diff --check` on 2026-06-17.
+  - Evidence: - Integrated commit `7a72498a` (`server: select mutation response targets
+from live deps`) from `agent/runtime-selection`. - `packages/server/src/mutation-wire.ts` parses structured live target deps
+    from `Kovo-Targets` while preserving legacy target strings. - `packages/server/src/mutation.ts` selects response chunks from committed
+    rerun queries intersected with live target deps, sends plan-covered targets
+    through query chunks, and keeps reconstructible uncovered targets on the
+    fragment path. - `packages/runtime/src/mutation-fetch.ts` sends structured live targets from
+    the live DOM and includes submitted form target metadata in modular
+    enhanced submits. - Verified with `pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-form.test.ts packages/server/src/mutation*.test.ts packages/server/src/wire-fixtures.test.ts`,
+    `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+    `git diff --check` on 2026-06-17.
 - [x] **6. Enhanced form-target inference and typed failure rerender.**
   - Lower enhanced mutation forms to carry a derived submitted-form target without
     app-authored `kovo-fragment-target`.
@@ -295,77 +282,56 @@ export const AddToCartForm = component({
     fragment responses and no-JS full-page 422 responses.
   - Remove manual `failureTarget` requirements where the submitted form target can
     be inferred from the request.
-  - Evidence:
-    - Partial runtime/server evidence: integrated commit `7a72498a` adds
-      `submittedFormTarget` parsing and failure fallback order
-      `failureTarget ?? submittedFormTarget ?? first target ?? error`.
-    - `packages/runtime/src/inline-loader-build.ts` and regenerated
-      `inline-loader.ts` now send `Kovo-Form-Target` from the submitted enhanced
-      form's derived target identity while preserving structured `Kovo-Targets`
-      collection from live query targets.
-    - `packages/runtime/src/inline-loader-enhanced-submit.test.ts` covers parity
-      with modular enhanced submit headers, including the submitted form target.
-    - Verified with `pnpm --filter @kovojs/runtime run build:inline-loader`,
-      `pnpm --filter @kovojs/runtime run check:inline-loader`, and
-      `pnpm exec vitest --run packages/runtime/src/inline-loader-enhanced-submit.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/mutation-fetch.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts`
-      on 2026-06-17.
-    - Partial compiler lowering evidence: `packages/compiler/src/emit/server.ts`
-      lowers locally resolvable `<form enhance mutation={addToCart}
-      key={productId}>` to emitted `method`, `action`, `data-mutation`,
-      `kovo-fragment-target`, and `kovo-key` attributes while preserving
-      render-equivalence semantics for generated `kovo-key`.
-    - `packages/compiler/src/stamps.test.ts` covers the typed form lowering,
-      output-context facts, render equivalence, and fixpoint behavior.
-    - Verified with `pnpm exec vitest --run packages/compiler/src/stamps.test.ts`,
-      `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
-      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
-      2026-06-17.
-    - Commerce response wiring now relies on request-derived submitted form
-      targets instead of manual `failureTarget` for add-to-cart handlers in
-      `examples/commerce/src/app.ts` and `app-shell.ts`.
-    - Imported mutation values resolve through `registryFacts.mutations`, so
-      ordinary component modules can lower `<form enhance mutation={addToCart}
-      key={...}>` even when the mutation is imported from the app module.
-    - Verified imported mutation lowering with
-      `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`
-      on 2026-06-17.
-    - `packages/compiler/src/scan/parse.ts` marks JSX elements inside `.map(...)`
-      callbacks as repeatable, and `packages/compiler/src/emit/server.ts`
-      rejects repeatable typed enhanced mutation forms without authored `key`
-      identity instead of guessing a submitted form target.
-    - `packages/compiler/src/scan/parse.test.ts` and `stamps.test.ts` cover the
-      repeatable-form parser fact and `KV238` diagnostic for unkeyed repeatable
-      typed mutation forms.
-    - Verified with
-      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/stamps.test.ts`
-      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
-      2026-06-17.
-    - `packages/core/src/index.ts` now exposes typed component mutation form
-      render context: declaring `mutations: { addToCart }` gives the third
-      render argument `forms.addToCart.failure` typed from `FormFailure`.
-    - `packages/core/src/index.test.ts` covers typed
-      `forms.addToCart.failure`, validation failures, and rejection of
-      undeclared form names.
-    - Verified with
-      `pnpm exec vitest --run packages/core/src/index.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/scan/parse.test.ts`,
-      `pnpm exec vitest --run packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-endpoint.test.ts`,
-      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
-      2026-06-17.
-    - `packages/server/src/component-render.ts` now provides
-      `renderComponentMutationFailure()` and `componentMutationFailureSlots()`,
-      injecting concrete SPEC §6.3/§9.2 `forms.<mutation>.failure` state into
-      the ordinary component render call.
-    - `packages/server/src/component-render.test.tsx` covers declared mutation
-      failures as `{ code, payload }` and schema validation failures as
-      `{ code: 'VALIDATION', fields }` in component render slots.
-    - `packages/server/src/mutation-response.test.ts` covers enhanced 422
-      fragment rerender through `renderComponentMutationFailure()`.
-    - `packages/server/src/mutation-no-js.test.ts` covers no-JS full-page 422
-      rerender through the same component mutation failure state helper.
-    - Verified with
-      `pnpm exec vitest --run packages/server/src/component-render.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`
-      and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
-      2026-06-17.
+  - Evidence: - Partial runtime/server evidence: integrated commit `7a72498a` adds
+    `submittedFormTarget` parsing and failure fallback order
+    `failureTarget ?? submittedFormTarget ?? first target ?? error`. - `packages/runtime/src/inline-loader-build.ts` and regenerated
+    `inline-loader.ts` now send `Kovo-Form-Target` from the submitted enhanced
+    form's derived target identity while preserving structured `Kovo-Targets`
+    collection from live query targets. - `packages/runtime/src/inline-loader-enhanced-submit.test.ts` covers parity
+    with modular enhanced submit headers, including the submitted form target. - Verified with `pnpm --filter @kovojs/runtime run build:inline-loader`,
+    `pnpm --filter @kovojs/runtime run check:inline-loader`, and
+    `pnpm exec vitest --run packages/runtime/src/inline-loader-enhanced-submit.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/mutation-fetch.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts`
+    on 2026-06-17. - Partial compiler lowering evidence: `packages/compiler/src/emit/server.ts`
+    lowers locally resolvable `<form enhance mutation={addToCart}
+key={productId}>` to emitted `method`, `action`, `data-mutation`,
+    `kovo-fragment-target`, and `kovo-key` attributes while preserving
+    render-equivalence semantics for generated `kovo-key`. - `packages/compiler/src/stamps.test.ts` covers the typed form lowering,
+    output-context facts, render equivalence, and fixpoint behavior. - Verified with `pnpm exec vitest --run packages/compiler/src/stamps.test.ts`,
+    `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`,
+    and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
+    2026-06-17. - Commerce response wiring now relies on request-derived submitted form
+    targets instead of manual `failureTarget` for add-to-cart handlers in
+    `examples/commerce/src/app.ts` and `app-shell.ts`. - Imported mutation values resolve through `registryFacts.mutations`, so
+    ordinary component modules can lower `<form enhance mutation={addToCart}
+key={...}>` even when the mutation is imported from the app module. - Verified imported mutation lowering with
+    `pnpm exec vitest --run $(find packages/compiler/src -name '*.test.ts' | sort)`
+    on 2026-06-17. - `packages/compiler/src/scan/parse.ts` marks JSX elements inside `.map(...)`
+    callbacks as repeatable, and `packages/compiler/src/emit/server.ts`
+    rejects repeatable typed enhanced mutation forms without authored `key`
+    identity instead of guessing a submitted form target. - `packages/compiler/src/scan/parse.test.ts` and `stamps.test.ts` cover the
+    repeatable-form parser fact and `KV238` diagnostic for unkeyed repeatable
+    typed mutation forms. - Verified with
+    `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/stamps.test.ts`
+    and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
+    2026-06-17. - `packages/core/src/index.ts` now exposes typed component mutation form
+    render context: declaring `mutations: { addToCart }` gives the third
+    render argument `forms.addToCart.failure` typed from `FormFailure`. - `packages/core/src/index.test.ts` covers typed
+    `forms.addToCart.failure`, validation failures, and rejection of
+    undeclared form names. - Verified with
+    `pnpm exec vitest --run packages/core/src/index.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/scan/parse.test.ts`,
+    `pnpm exec vitest --run packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-endpoint.test.ts`,
+    and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
+    2026-06-17. - `packages/server/src/component-render.ts` now provides
+    `renderComponentMutationFailure()` and `componentMutationFailureSlots()`,
+    injecting concrete SPEC §6.3/§9.2 `forms.<mutation>.failure` state into
+    the ordinary component render call. - `packages/server/src/component-render.test.tsx` covers declared mutation
+    failures as `{ code, payload }` and schema validation failures as
+    `{ code: 'VALIDATION', fields }` in component render slots. - `packages/server/src/mutation-response.test.ts` covers enhanced 422
+    fragment rerender through `renderComponentMutationFailure()`. - `packages/server/src/mutation-no-js.test.ts` covers no-JS full-page 422
+    rerender through the same component mutation failure state helper. - Verified with
+    `pnpm exec vitest --run packages/server/src/component-render.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`
+    and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` on
+    2026-06-17.
 - [x] **7. Type registry and breaking migration.**
   - Generate `FragmentTargets` facts for inferred targets so existing typed APIs
     keep working.

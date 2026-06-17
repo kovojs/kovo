@@ -23,8 +23,7 @@ describe('@kovojs/ui Tooltip StyleX slots', () => {
             children: 'Help',
             contentId: 'tooltip-help',
             disabled: true,
-          }) +
-          TooltipContent.definition.render({ children: 'Info', contentId: 'tooltip-help' }),
+          }) + TooltipContent.definition.render({ children: 'Info', contentId: 'tooltip-help' }),
         disabled: true,
       }),
       open: Tooltip.definition.render({

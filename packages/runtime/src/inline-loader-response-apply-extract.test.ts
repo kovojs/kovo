@@ -53,9 +53,7 @@ describe('inline loader response apply source', () => {
     expect(inlineResponseApplyReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableApply);
     expect(alternateReadable).not.toContain(inlineResponseApplyReadableSource);
-    expect(alternateReadable).toContain(
-      'applyInlineMutationResponseChunks(chunks, {',
-    );
+    expect(alternateReadable).toContain('applyInlineMutationResponseChunks(chunks, {');
   });
 
   it('extracts and checks readable and minified inline response apply embeds', () => {

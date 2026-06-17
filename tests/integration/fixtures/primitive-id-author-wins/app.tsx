@@ -4,7 +4,7 @@ import { defineFixture } from '@kovojs/test/integration/define';
 import { PrimitiveIdAuthorWinsCard } from './dialog-card';
 
 const homeRoute = route('/', {
-  page: () => `<main>${PrimitiveIdAuthorWinsCard.definition.render({}, null) as string}</main>`,
+  page: () => `<main>${PrimitiveIdAuthorWinsCard.definition.render() as string}</main>`,
 });
 
 export default defineFixture({

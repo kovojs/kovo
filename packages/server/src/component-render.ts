@@ -25,8 +25,9 @@ export interface ComponentRenderOptions<State extends JsonValue = JsonValue> {
  * Options for rendering a component with one SPEC §6.3 mutation form failure
  * injected into its `forms.<name>.failure` slot.
  */
-export interface ComponentMutationFailureRenderOptions<State extends JsonValue = JsonValue>
-  extends ComponentRenderOptions<State> {
+export interface ComponentMutationFailureRenderOptions<
+  State extends JsonValue = JsonValue,
+> extends ComponentRenderOptions<State> {
   /** Component-local key from `mutations: { ... }`, e.g. `addToCart`. */
   formName: string;
 }

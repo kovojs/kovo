@@ -26,7 +26,14 @@ test('menu terminal open state exposes expanded trigger and active item semantic
 
   expect(
     await kovoApp.semantic('main', {
-      keepAttrs: ['aria-controls', 'aria-expanded', 'aria-haspopup', 'aria-labelledby', 'hidden', 'id'],
+      keepAttrs: [
+        'aria-controls',
+        'aria-expanded',
+        'aria-haspopup',
+        'aria-labelledby',
+        'hidden',
+        'id',
+      ],
     }),
   ).toMatchSnapshot('a11y-menu-terminal.semantic.txt');
 });

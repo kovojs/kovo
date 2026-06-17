@@ -154,10 +154,16 @@ export const autocompleteStyles = style.create(
 );
 
 export const autocompleteClasses = [style.attrs(autocompleteStyles.root).class ?? ''] as const;
-export const autocompleteInputClasses = [style.attrs(autocompleteStyles.input).class ?? ''] as const;
+export const autocompleteInputClasses = [
+  style.attrs(autocompleteStyles.input).class ?? '',
+] as const;
 export const autocompleteListClasses = [style.attrs(autocompleteStyles.list).class ?? ''] as const;
-export const autocompleteOptionClasses = [style.attrs(autocompleteStyles.option).class ?? ''] as const;
-export const autocompleteValueClasses = [style.attrs(autocompleteStyles.value).class ?? ''] as const;
+export const autocompleteOptionClasses = [
+  style.attrs(autocompleteStyles.option).class ?? '',
+] as const;
+export const autocompleteValueClasses = [
+  style.attrs(autocompleteStyles.value).class ?? '',
+] as const;
 
 export const Autocomplete = component({
   render(props: AutocompleteProps) {
@@ -348,11 +354,7 @@ export const AutocompleteValue = component({
     const styleAttrs = style.attrs(autocompleteStyles.value, props.styles?.value);
 
     return (
-      <span
-        {...styleAttrs}
-        data-placeholder={attrs['data-placeholder']}
-        id={attrs.id}
-      >
+      <span {...styleAttrs} data-placeholder={attrs['data-placeholder']} id={attrs.id}>
         {escapeHtml(autocompleteValueText(props))}
       </span>
     );

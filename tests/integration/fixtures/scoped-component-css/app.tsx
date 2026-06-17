@@ -6,7 +6,7 @@ import { ScopedPanel } from './scoped-panel';
 
 const homeRoute = route('/', {
   stylesheets: kovoFixtureStylesheetsForTargets(),
-  page: () => `<main>${ScopedPanel.definition.render({}, null) as string}</main>`,
+  page: () => `<main>${ScopedPanel.definition.render() as string}</main>`,
 });
 
 export default defineFixture({

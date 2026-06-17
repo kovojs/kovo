@@ -159,7 +159,13 @@ describe('delta query chunk apply (SPEC §9.1.1)', () => {
   it('round-trip: store base + delta chunk = expected full value', () => {
     // SPEC §9.1.1: apply_delta(base, render_prod(Δ)) ≡ render_dev(full).
     const store = createQueryStore();
-    store.set('cart', { count: 2, items: [{ id: 'p1', qty: 1 }, { id: 'p2', qty: 3 }] });
+    store.set('cart', {
+      count: 2,
+      items: [
+        { id: 'p1', qty: 1 },
+        { id: 'p2', qty: 3 },
+      ],
+    });
 
     applyQueryChunksToRuntime(store, [
       {
@@ -174,7 +180,10 @@ describe('delta query chunk apply (SPEC §9.1.1)', () => {
 
     expect(store.get('cart')).toEqual({
       count: 4,
-      items: [{ id: 'p1', qty: 1 }, { id: 'p2', qty: 4 }],
+      items: [
+        { id: 'p1', qty: 1 },
+        { id: 'p2', qty: 4 },
+      ],
     });
   });
 
@@ -213,22 +222,14 @@ describe('delta query chunk apply (SPEC §9.1.1)', () => {
     const store = createQueryStore();
     const onDeltaMiss = vi.fn();
 
-    applyQueryChunksToRuntime(
-      store,
-      [{ name: 'cart', value: { count: 5 } }],
-      { onDeltaMiss },
-    );
+    applyQueryChunksToRuntime(store, [{ name: 'cart', value: { count: 5 } }], { onDeltaMiss });
 
     expect(onDeltaMiss).not.toHaveBeenCalled();
     expect(store.get('cart')).toEqual({ count: 5 });
   });
 });
 
-function scopedBinding(
-  deps: string,
-  path: string,
-  textContent: string,
-): FakeQueryBindingElement {
+function scopedBinding(deps: string, path: string, textContent: string): FakeQueryBindingElement {
   const element = new FakeQueryBindingElement(path, textContent) as FakeQueryBindingElement & {
     closest(selector: string): FakeQueryBindingElement | null;
   };

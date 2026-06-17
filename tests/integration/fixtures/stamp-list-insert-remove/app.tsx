@@ -14,6 +14,7 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration
 const cartDomain = domain('cart');
 
 interface CartItem {
+  [key: string]: unknown;
   id: string;
   name: string;
   qty: number;
@@ -26,7 +27,7 @@ interface CartResult {
 async function readCart(db: KovoFixtureRequest['db']): Promise<CartResult> {
   const items = (await db.query(
     'select id, name, qty from cart_item order by position asc',
-  )) as CartItem[];
+  )) as unknown as CartItem[];
   return { items };
 }
 

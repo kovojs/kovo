@@ -38,62 +38,62 @@ export const ContactsRegion = component({
 
     return (
       <div class="space-y-6">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight">Contacts</h1>
-        <p class="mt-1 text-sm text-slate-600">{contacts.length} people in the book.</p>
-      </div>
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Contacts</h1>
+          <p class="mt-1 text-sm text-slate-600">{contacts.length} people in the book.</p>
+        </div>
 
-      {/* SPEC.md §6.3: a no-JS "add contact" form. POSTs to the addContact
+        {/* SPEC.md §6.3: a no-JS "add contact" form. POSTs to the addContact
           mutation; the fragment re-renders this whole region so the new contact
           appears and the composer resets (with a fresh id). The text primary key
           is minted at render time so each submission is unique; ownerId is the
           demo session user. */}
-      <form
-        {...mutationFormAttributes(addContact)}
-        class="rounded-lg border border-slate-200 bg-white p-4"
-      >
-        <input type="hidden" name="id" value={freshId('c')} />
-        <input type="hidden" name="ownerId" value="u1" />
-        <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
-          <input
-            name="name"
-            required
-            placeholder="Full name"
-            class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-          <input
-            name="email"
-            required
-            type="email"
-            placeholder="name@example.com"
-            class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            class="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
-          >
-            Add contact
-          </button>
-        </div>
-      </form>
+        <form
+          {...mutationFormAttributes(addContact)}
+          class="rounded-lg border border-slate-200 bg-white p-4"
+        >
+          <input type="hidden" name="id" value={freshId('c')} />
+          <input type="hidden" name="ownerId" value="u1" />
+          <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
+            <input
+              name="name"
+              required
+              placeholder="Full name"
+              class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="email"
+              required
+              type="email"
+              placeholder="name@example.com"
+              class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              class="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              Add contact
+            </button>
+          </div>
+        </form>
 
-      <ul class="grid gap-3 sm:grid-cols-2">
-        {contacts.map((contact) => (
-          <li class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4">
-            <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
-              {initials(contact.name)}
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="truncate font-medium">{contact.name}</p>
-              <p class="truncate text-sm text-slate-500">{contact.email}</p>
-            </div>
-            <span class="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-              {contact.dealCount} {contact.dealCount === 1 ? 'deal' : 'deals'}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
+        <ul class="grid gap-3 sm:grid-cols-2">
+          {contacts.map((contact) => (
+            <li class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4">
+              <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
+                {initials(contact.name)}
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate font-medium">{contact.name}</p>
+                <p class="truncate text-sm text-slate-500">{contact.email}</p>
+              </div>
+              <span class="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                {contact.dealCount} {contact.dealCount === 1 ? 'deal' : 'deals'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
     );
   },
 });

@@ -4,13 +4,14 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration
 const inventoryDomain = domain('inventory');
 
 interface InventoryResult {
+  [key: string]: unknown;
   count: number;
   label: string;
 }
 
 async function readInventory(db: KovoFixtureRequest['db']): Promise<InventoryResult> {
   const rows = await db.query('select count, label from inventory_state where id = 1');
-  return rows[0] as InventoryResult;
+  return rows[0] as unknown as InventoryResult;
 }
 
 export const inventoryQuery = query('inventory', {

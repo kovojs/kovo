@@ -27,7 +27,8 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
           DialogTrigger.definition.render({ ...dialogState, children: 'Edit account' }) +
           DialogContent.definition.render({
             ...dialogState,
-            children: '<h2 id="account-title">Account</h2><p id="account-description">Profile settings</p>',
+            children:
+              '<h2 id="account-title">Account</h2><p id="account-description">Profile settings</p>',
             descriptionId: 'account-description',
             titleId: 'account-title',
           }) +

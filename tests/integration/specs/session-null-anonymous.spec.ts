@@ -12,9 +12,7 @@ test('null and undefined provider results behave as anonymous sessions', async (
 
     const guardedResponse = await request.get(`/account?mode=${mode}`, { maxRedirects: 0 });
     expect(guardedResponse.status()).toBe(303);
-    expect(guardedResponse.headers().location).toBe(
-      `/login?next=%2Faccount%3Fmode%3D${mode}`,
-    );
+    expect(guardedResponse.headers().location).toBe(`/login?next=%2Faccount%3Fmode%3D${mode}`);
     await expect(guardedResponse.text()).resolves.not.toContain('Internal Server Error');
   }
 

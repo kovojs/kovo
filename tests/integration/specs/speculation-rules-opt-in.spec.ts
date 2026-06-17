@@ -13,8 +13,7 @@ test('emits one speculationrules script only for the opted-in route', async ({ p
   expect(prerenderedResponse.status()).toBe(200);
   const prerenderedHtml = await prerenderedResponse.text();
   const matches =
-    prerenderedHtml.match(/<script\b[^>]*\btype="speculationrules"[^>]*>[\s\S]*?<\/script>/g) ??
-    [];
+    prerenderedHtml.match(/<script\b[^>]*\btype="speculationrules"[^>]*>[\s\S]*?<\/script>/g) ?? [];
   expect(matches).toHaveLength(1);
   expect(prerenderedHtml).toContain('"eagerness":"conservative"');
   expect(prerenderedHtml).toContain('"/products/sku-1"');

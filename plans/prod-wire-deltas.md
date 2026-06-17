@@ -95,7 +95,7 @@ keeping dev fully legible.
        mutations currently invalidate with `keys: null`; only the payment webhook carries keys).
        Today delta meta is declared explicitly per query; the protocol + wiring are complete.
 10. [ ] **`kovo explain`/MCP delta reconstruction CLI wrapper** (deferred — convenience). The
-        reconstruction *mechanism* is the exported `applyQueryDelta(base, delta)`; a thin
+        reconstruction _mechanism_ is the exported `applyQueryDelta(base, delta)`; a thin
         `kovo explain` argv wrapper over runtime base+delta artifacts is not yet added (SPEC
         §9.1.1 names this a convenience, not load-bearing — names are never mangled).
 

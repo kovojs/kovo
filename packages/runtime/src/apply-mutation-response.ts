@@ -1,4 +1,8 @@
-import { applyQueryChunksToRuntime, type OnDeltaMiss, type QueryApplyInterposition } from './query-apply.js';
+import {
+  applyQueryChunksToRuntime,
+  type OnDeltaMiss,
+  type QueryApplyInterposition,
+} from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import { definedProps } from './defined-props.js';
 import { applyFragments } from './morph.js';

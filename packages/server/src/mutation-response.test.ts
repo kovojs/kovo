@@ -148,13 +148,12 @@ describe('server mutation primitives', () => {
     >('cart/add');
     const AddToCartForm = component({
       mutations: { addToCart: addToCartForm },
-      render: (_queries, _state, { forms }) => (
+      render: (_queries, _state, { forms }) =>
         `<form>` +
         (forms.addToCart.failure?.code === 'OUT_OF_STOCK'
           ? `<output role="alert" data-error-code="OUT_OF_STOCK">Only ${forms.addToCart.failure.payload.availableQuantity} left.</output>`
           : '') +
-        `</form>`
-      ),
+        `</form>`,
     });
     const addToCart = mutation('cart/add', {
       errors: {

@@ -20,6 +20,7 @@ test('declarative invoker opens a dialog without importing client code', async (
   await expect(page.locator('dialog')).toHaveJSProperty('open', true);
   expect(clientModuleRequests).toEqual([]);
 
-  expect(await kovoApp.semantic('main', { keepAttrs: ['command', 'commandfor', 'id'] }))
-    .toMatchSnapshot('dialog.semantic.txt');
+  expect(
+    await kovoApp.semantic('main', { keepAttrs: ['command', 'commandfor', 'id'] }),
+  ).toMatchSnapshot('dialog.semantic.txt');
 });

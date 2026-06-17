@@ -32,7 +32,10 @@ describe('commerce orderHistory delta (SPEC §9.1.1)', () => {
     // Only the touched order row crosses the wire, not the whole history.
     expect(delta).toEqual({
       lists: {
-        items: { key: 'id', upsert: [{ id: 'o2', productId: 'p2', qty: 3, total: 60, userId: 'u1' }] },
+        items: {
+          key: 'id',
+          upsert: [{ id: 'o2', productId: 'p2', qty: 3, total: 60, userId: 'u1' }],
+        },
       },
     });
     expect(queryDeltaIsSmaller(delta!, fullReRun)).toBe(true);

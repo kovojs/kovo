@@ -53,11 +53,7 @@ export function renderAddToCartForm(
   request?: ShopRequest,
 ): string {
   return (
-    <form
-      enhance
-      mutation={addToCart}
-      key={item.id}
-    >
+    <form enhance mutation={addToCart} key={item.id}>
       {request?.session?.id ? csrfField(request, shopCsrf) : ''}
       <input type="hidden" name="productId" value={item.id} />
       <label>

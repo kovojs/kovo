@@ -64,7 +64,8 @@ export const CartButton = component({
 `,
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231')).toMatchInlineSnapshot(`
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV231'))
+      .toMatchInlineSnapshot(`
       [
         {
           "code": "KV231",

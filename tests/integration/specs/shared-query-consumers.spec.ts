@@ -15,9 +15,10 @@ test('ships one query value and updates multiple dependent islands together', as
   await expect(page.locator('profile-status [data-bind="profile.status"]')).toHaveText('draft');
 
   const [response] = await Promise.all([
-    page.waitForResponse((candidate) =>
-      candidate.url().endsWith('/_m/shared-query-consumers/publish') &&
-      candidate.status() === 200,
+    page.waitForResponse(
+      (candidate) =>
+        candidate.url().endsWith('/_m/shared-query-consumers/publish') &&
+        candidate.status() === 200,
     ),
     page.getByRole('button', { name: 'Publish profile' }).click(),
   ]);
@@ -28,9 +29,7 @@ test('ships one query value and updates multiple dependent islands together', as
   await expect(page.locator('profile-summary [data-bind="profile.name"]')).toHaveText(
     'Grace Hopper',
   );
-  await expect(page.locator('profile-status [data-bind="profile.status"]')).toHaveText(
-    'published',
-  );
+  await expect(page.locator('profile-status [data-bind="profile.status"]')).toHaveText('published');
   expect(new URL(page.url()).pathname).toBe('/');
 
   const rows = await kovoApp.db.query('select name, status from profile where id = 1');

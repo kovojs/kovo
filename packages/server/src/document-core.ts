@@ -83,8 +83,11 @@ export interface DocumentRenderResult {
   html: string;
 }
 
-export interface DeferredDocumentRenderResult
-  extends ServerResponseBase<string, Record<string, string>, 200> {
+export interface DeferredDocumentRenderResult extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  200
+> {
   csp: CspInlineMetadata;
 }
 
@@ -257,9 +260,7 @@ function enforceDocumentTemplateParts(
   parts: DocumentParts,
   templateName: string,
 ): string {
-  const missing = requiredDocumentTemplateParts(parts).filter(
-    ({ value }) => !html.includes(value),
-  );
+  const missing = requiredDocumentTemplateParts(parts).filter(({ value }) => !html.includes(value));
   if (missing.length === 0) return html;
 
   // SPEC §9.5: custom templates receive assembled parts rather than a blank
@@ -292,9 +293,10 @@ function inlineLoaderScript(): { csp: CspInlineMetadata; html: string } {
   };
 }
 
-function renderDocumentQueryScriptWithCsp(
-  options: QueryScriptRenderOptions,
-): { csp: CspInlineMetadata; html: string } {
+function renderDocumentQueryScriptWithCsp(options: QueryScriptRenderOptions): {
+  csp: CspInlineMetadata;
+  html: string;
+} {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
   const scriptText = escapeScriptJson(JSON.stringify(options.value));
   const hash = cspSha256(scriptText);

@@ -1,15 +1,10 @@
 export { renderDeferredStream } from '../deferred-stream.js';
 export { renderContentSecurityPolicy } from '../csp.js';
 export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
-export {
-  renderComponent,
-  renderComponentMutationFailure,
-} from '../component-render.js';
+export { renderComponent, renderComponentMutationFailure } from '../component-render.js';
 /** Build component render slots with one SPEC §6.3 mutation-form failure state. */
 export { componentMutationFailureSlots } from '../component-render.js';
-export type {
-  ComponentRenderOptions,
-} from '../component-render.js';
+export type { ComponentRenderOptions } from '../component-render.js';
 /** Options for `renderComponentMutationFailure(...)`. */
 export type { ComponentMutationFailureRenderOptions } from '../component-render.js';
 export type {

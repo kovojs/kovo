@@ -272,11 +272,7 @@ export const ToastTitle = component({
     const styleAttrs = style.attrs(toastStyles.title, props.styles?.title);
 
     return (
-      <div
-        {...styleAttrs}
-        data-part={attrs['data-part']}
-        id={attrs.id}
-      >
+      <div {...styleAttrs} data-part={attrs['data-part']} id={attrs.id}>
         {props.children}
       </div>
     );
@@ -289,11 +285,7 @@ export const ToastDescription = component({
     const styleAttrs = style.attrs(toastStyles.description, props.styles?.description);
 
     return (
-      <div
-        {...styleAttrs}
-        data-part={attrs['data-part']}
-        id={attrs.id}
-      >
+      <div {...styleAttrs} data-part={attrs['data-part']} id={attrs.id}>
         {props.children}
       </div>
     );

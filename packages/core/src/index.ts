@@ -136,7 +136,10 @@ export type JsonValue =
 /** Opaque result of a component's `render` — the compiler lowers it to HTML/IR. */
 export type ComponentRenderResult = unknown;
 
-type ComponentMutationDefinitions = Record<string, Form<string, Record<string, JsonValue>, unknown>>;
+type ComponentMutationDefinitions = Record<
+  string,
+  Form<string, Record<string, JsonValue>, unknown>
+>;
 type NoComponentMutations = Record<never, never>;
 type ComponentDefinitionMutations<Definition> = Definition extends { mutations: infer Mutations }
   ? Mutations extends ComponentMutationDefinitions

@@ -48,7 +48,8 @@ export const Cart_Row = component({
 `,
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238')).toMatchInlineSnapshot(`
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238'))
+      .toMatchInlineSnapshot(`
       [
         {
           "code": "KV238",
@@ -110,7 +111,8 @@ export const CartRow = component({
 `,
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238')).toMatchInlineSnapshot(`
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238'))
+      .toMatchInlineSnapshot(`
       [
         {
           "code": "KV238",

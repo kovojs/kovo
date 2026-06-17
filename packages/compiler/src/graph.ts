@@ -168,8 +168,8 @@ function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {
 }
 
 function deriveComponentFactsFromGraph(graph: RegistryGraphInput): string[] {
-  return [...new Set((graph.components ?? []).map((component) => component.name))].sort((left, right) =>
-    left.localeCompare(right),
+  return [...new Set((graph.components ?? []).map((component) => component.name))].sort(
+    (left, right) => left.localeCompare(right),
   );
 }
 

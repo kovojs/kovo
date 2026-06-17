@@ -1,8 +1,4 @@
-import {
-  diagnosticDefinitions,
-  type DiagnosticCode,
-  type DiagnosticSeverity,
-} from '@kovojs/core';
+import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule, deriveAppGraph, queryShapeFactDiagnostics } from './index.js';
@@ -671,7 +667,9 @@ export const ViewTransitionBad = component({
     positive: () =>
       compileComponentModule({
         fileName: 'component-key-stability-ok.tsx',
-        previousRegistryFacts: { components: ['component-key-stability-ok/component-key-stability-ok'] },
+        previousRegistryFacts: {
+          components: ['component-key-stability-ok/component-key-stability-ok'],
+        },
         source: `
 export const ComponentKeyStabilityOk = component({
   render: () => <component-key-stability-ok></component-key-stability-ok>,
@@ -875,9 +873,9 @@ describe('compiler diagnostic coverage matrix', () => {
     expect(matrixCodes()).toEqual(
       allCompilerOwnedKv2xxKv3xxCodes().filter((code) => !outOfScopeCodeSet().has(code)),
     );
-    expect([...matrixCodes(), ...outOfScopeCompilerDiagnostics.map((row) => row.code)].sort()).toEqual(
-      allCompilerOwnedKv2xxKv3xxCodes(),
-    );
+    expect(
+      [...matrixCodes(), ...outOfScopeCompilerDiagnostics.map((row) => row.code)].sort(),
+    ).toEqual(allCompilerOwnedKv2xxKv3xxCodes());
     expect(outOfScopeCompilerDiagnostics).toMatchInlineSnapshot(`
       [
         {
@@ -890,8 +888,12 @@ describe('compiler diagnostic coverage matrix', () => {
 
   it('proves every in-scope compiler-owned diagnostic has positive and negative coverage', () => {
     const coverageFacts = compilerOwnedDiagnosticMatrix.map((row) => {
-      const positiveDiagnostics = row.positive().filter((diagnostic) => diagnostic.code === row.code);
-      const negativeDiagnostics = row.negative().filter((diagnostic) => diagnostic.code === row.code);
+      const positiveDiagnostics = row
+        .positive()
+        .filter((diagnostic) => diagnostic.code === row.code);
+      const negativeDiagnostics = row
+        .negative()
+        .filter((diagnostic) => diagnostic.code === row.code);
 
       expect(
         positiveDiagnostics,
@@ -1661,7 +1663,7 @@ describe('compiler diagnostic coverage matrix', () => {
 });
 
 function matrixCodes(): DiagnosticCode[] {
-  return [...compilerOwnedDiagnosticMatrix.map((row) => row.code)].sort();
+  return compilerOwnedDiagnosticMatrix.map((row) => row.code).sort();
 }
 
 function outOfScopeCodeSet(): Set<DiagnosticCode> {
@@ -1674,10 +1676,9 @@ function allCompilerOwnedKv2xxKv3xxCodes(): DiagnosticCode[] {
     .sort() as DiagnosticCode[];
 }
 
-function isCompilerOwnedKv2xxKv3xxCode(code: string): code is Extract<
-  DiagnosticCode,
-  `KV${2 | 3}${number}${number}`
-> {
+function isCompilerOwnedKv2xxKv3xxCode(
+  code: string,
+): code is Extract<DiagnosticCode, `KV${2 | 3}${number}${number}`> {
   return /^KV[23]\d{2}$/.test(code);
 }
 

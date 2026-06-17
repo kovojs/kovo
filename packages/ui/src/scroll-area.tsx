@@ -146,7 +146,9 @@ export const scrollAreaStyles = style.create(
 );
 
 export const scrollAreaClasses = [style.attrs(scrollAreaStyles.root).class ?? ''] as const;
-export const scrollAreaViewportClasses = [style.attrs(scrollAreaStyles.viewport).class ?? ''] as const;
+export const scrollAreaViewportClasses = [
+  style.attrs(scrollAreaStyles.viewport).class ?? '',
+] as const;
 export const scrollAreaScrollbarClasses = [
   style.attrs(scrollAreaStyles.scrollbar).class ?? '',
 ] as const;

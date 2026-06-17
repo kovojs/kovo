@@ -23,7 +23,7 @@ test('wraps assembled document parts and keeps client interaction working', asyn
   await page.getByRole('button', { name: 'Run client handler' }).click();
   await expect(page.locator('[data-template-result]')).toHaveText('handler ran');
 
-  expect(await kovoApp.semantic('html', { keepAttrs: ['data-template', 'on:click'] })).toMatchSnapshot(
-    'custom-document-template.semantic.txt',
-  );
+  expect(
+    await kovoApp.semantic('html', { keepAttrs: ['data-template', 'on:click'] }),
+  ).toMatchSnapshot('custom-document-template.semantic.txt');
 });

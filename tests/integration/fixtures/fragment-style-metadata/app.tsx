@@ -37,7 +37,7 @@ export default defineFixture({
         fragmentRenderers: [
           {
             mode: 'append',
-            render: () => LateCard.definition.render({}, null) as string,
+            render: () => LateCard.definition.render() as string,
             stylesheets: kovoFixtureStylesheetsForTargets([lateCardTarget]),
             target: 'late-card',
           },

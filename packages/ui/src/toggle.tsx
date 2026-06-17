@@ -90,11 +90,7 @@ export const Toggle = component({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       pressed: props.pressed ?? false,
     });
-    const styleAttrs = style.attrs(
-      base.root,
-      variants[props.variant ?? 'outline'],
-      props.style,
-    );
+    const styleAttrs = style.attrs(base.root, variants[props.variant ?? 'outline'], props.style);
 
     return (
       <button

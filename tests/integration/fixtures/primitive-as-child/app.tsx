@@ -4,7 +4,7 @@ import { defineFixture } from '@kovojs/test/integration/define';
 import { PrimitiveAsChildCard } from './card';
 
 const homeRoute = route('/', {
-  page: () => `<main>${PrimitiveAsChildCard.definition.render({}, null) as string}</main>`,
+  page: () => `<main>${PrimitiveAsChildCard.definition.render() as string}</main>`,
 });
 
 export default defineFixture({

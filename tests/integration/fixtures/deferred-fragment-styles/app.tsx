@@ -31,7 +31,7 @@ const deferredWire = endpoint('/deferred-wire', {
         {
           fragments: [
             {
-              html: DeferredReview.definition.render({}, null) as string,
+              html: DeferredReview.definition.render() as string,
               mode: 'append',
               stylesheets: reviewStylesheets,
               target: 'deferred-review',

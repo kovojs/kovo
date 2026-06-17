@@ -61,110 +61,114 @@ export const PipelineRegion = component({
 
     return (
       <div class="space-y-8">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight">Sales pipeline</h1>
-        <p class="mt-1 text-sm text-slate-600">
-          {money(total)} across {buckets.length} stages, <span>{openDeals.items.length}</span>{' '}
-          deals open now.
-        </p>
-      </div>
-
-      <section>
-        <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">By stage</h2>
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {buckets.map((bucket) => (
-            <div class="rounded-lg border border-slate-200 bg-white p-4">
-              <div class="mb-2">{stageBadge(bucket.stage)}</div>
-              <p class="text-lg font-semibold">{money(bucket.total)}</p>
-            </div>
-          ))}
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Sales pipeline</h1>
+          <p class="mt-1 text-sm text-slate-600">
+            {money(total)} across {buckets.length} stages, <span>{openDeals.items.length}</span>{' '}
+            deals open now.
+          </p>
         </div>
-      </section>
 
-      {/* SPEC.md §6.3: a no-JS "new deal" form. POSTs to the createDeal mutation
+        <section>
+          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            By stage
+          </h2>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {buckets.map((bucket) => (
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <div class="mb-2">{stageBadge(bucket.stage)}</div>
+                <p class="text-lg font-semibold">{money(bucket.total)}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* SPEC.md §6.3: a no-JS "new deal" form. POSTs to the createDeal mutation
           (INSERT deal + bump contacts.dealCount); the fragment re-renders the
           pipeline so the new bucket total and open-deals row appear from server
           truth. The text primary key is minted at render time; ownerId is the
           demo session user. */}
-      <section>
-        <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">New deal</h2>
-        <form
-          {...mutationFormAttributes(createDeal)}
-          class="rounded-lg border border-slate-200 bg-white p-4"
-        >
-          <input type="hidden" name="id" value={freshId('d')} />
-          <input type="hidden" name="ownerId" value="u1" />
-          <div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-start">
-            <select
-              name="contactId"
-              required
-              class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            >
-              {contacts.map((contact) => (
-                <option value={contact.id}>{contact.name}</option>
-              ))}
-            </select>
-            <select
-              name="stage"
-              class="rounded-md border border-slate-300 px-3 py-2 text-sm capitalize"
-            >
-              {NEW_DEAL_STAGES.map((stage) => (
-                <option value={stage}>{stage}</option>
-              ))}
-            </select>
-            <input
-              name="amount"
-              type="number"
-              min="0"
-              required
-              placeholder="Amount"
-              class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            />
-            <button
-              type="submit"
-              class="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
-            >
-              Create deal
-            </button>
-          </div>
-        </form>
-      </section>
+        <section>
+          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            New deal
+          </h2>
+          <form
+            {...mutationFormAttributes(createDeal)}
+            class="rounded-lg border border-slate-200 bg-white p-4"
+          >
+            <input type="hidden" name="id" value={freshId('d')} />
+            <input type="hidden" name="ownerId" value="u1" />
+            <div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-start">
+              <select
+                name="contactId"
+                required
+                class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              >
+                {contacts.map((contact) => (
+                  <option value={contact.id}>{contact.name}</option>
+                ))}
+              </select>
+              <select
+                name="stage"
+                class="rounded-md border border-slate-300 px-3 py-2 text-sm capitalize"
+              >
+                {NEW_DEAL_STAGES.map((stage) => (
+                  <option value={stage}>{stage}</option>
+                ))}
+              </select>
+              <input
+                name="amount"
+                type="number"
+                min="0"
+                required
+                placeholder="Amount"
+                class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+              <button
+                type="submit"
+                class="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+              >
+                Create deal
+              </button>
+            </div>
+          </form>
+        </section>
 
-      <section>
-        <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Open deals
-        </h2>
-        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th class="px-4 py-2 font-medium">Deal</th>
-                <th class="px-4 py-2 font-medium">Contact</th>
-                <th class="px-4 py-2 text-right font-medium">Amount</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              {openDeals.items.map((deal) => (
-                <tr class="hover:bg-slate-50">
-                  <td class="px-4 py-2.5">
-                    <a
-                      class="font-medium text-slate-900 underline-offset-2 hover:underline"
-                      href={`/deals/${deal.id}`}
-                    >
-                      {deal.id.toUpperCase()}
-                    </a>
-                  </td>
-                  <td class="px-4 py-2.5 text-slate-600">
-                    {contactsById.get(deal.contactId)?.name ?? deal.contactId}
-                  </td>
-                  <td class="px-4 py-2.5 text-right tabular-nums">{money(deal.amount)}</td>
+        <section>
+          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Open deals
+          </h2>
+          <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+              <thead class="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th class="px-4 py-2 font-medium">Deal</th>
+                  <th class="px-4 py-2 font-medium">Contact</th>
+                  <th class="px-4 py-2 text-right font-medium">Amount</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                {openDeals.items.map((deal) => (
+                  <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-2.5">
+                      <a
+                        class="font-medium text-slate-900 underline-offset-2 hover:underline"
+                        href={`/deals/${deal.id}`}
+                      >
+                        {deal.id.toUpperCase()}
+                      </a>
+                    </td>
+                    <td class="px-4 py-2.5 text-slate-600">
+                      {contactsById.get(deal.contactId)?.name ?? deal.contactId}
+                    </td>
+                    <td class="px-4 py-2.5 text-right tabular-nums">{money(deal.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     );
   },
 });

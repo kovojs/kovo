@@ -18,9 +18,9 @@ test('keeps parameterized query instances distinct on the wire and applies only 
   });
 
   const [response] = await Promise.all([
-    page.waitForResponse((candidate) =>
-      candidate.url().endsWith('/_m/multi-instance-query/restock') &&
-      candidate.status() === 200,
+    page.waitForResponse(
+      (candidate) =>
+        candidate.url().endsWith('/_m/multi-instance-query/restock') && candidate.status() === 200,
     ),
     page.getByRole('button', { name: 'Restock Pen' }).click(),
   ]);

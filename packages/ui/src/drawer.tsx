@@ -177,7 +177,9 @@ export const drawerContentClasses = [
 export const drawerHandleClasses = [style.attrs(drawerStyles.handle).class ?? ''] as const;
 export const drawerHeaderClasses = [style.attrs(drawerStyles.header).class ?? ''] as const;
 export const drawerTitleClasses = [style.attrs(drawerStyles.title).class ?? ''] as const;
-export const drawerDescriptionClasses = [style.attrs(drawerStyles.description).class ?? ''] as const;
+export const drawerDescriptionClasses = [
+  style.attrs(drawerStyles.description).class ?? '',
+] as const;
 export const drawerBodyClasses = [style.attrs(drawerStyles.body).class ?? ''] as const;
 export const drawerCloseClasses = [style.attrs(drawerStyles.close).class ?? ''] as const;
 export const drawerContentClassNames = drawerStyles.content;

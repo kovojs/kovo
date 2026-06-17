@@ -17,10 +17,7 @@ test('serves readable versioned client modules used by on:* refs', async ({
 
   await page.goto('/');
   const button = page.getByRole('button', { name: 'Load versioned module' });
-  await expect(button).toHaveAttribute(
-    'on:click',
-    '/c/versioned.client.js?v=a1b2c3d4#mark',
-  );
+  await expect(button).toHaveAttribute('on:click', '/c/versioned.client.js?v=a1b2c3d4#mark');
 
   await button.click();
   await expect(page.locator('[data-client-version]')).toHaveText('loaded:a1b2c3d4');

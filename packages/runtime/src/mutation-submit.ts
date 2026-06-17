@@ -206,7 +206,12 @@ function defaultDeltaMissRefetcher(options: EnhancedMutationSubmitOptions): OnDe
   // SPEC §9.1.1: reuse the submit `fetch` for the /_q/<wireKey> GET so a stubbed
   // fetch in tests serves the refetch too, and production shares one transport.
   const refetchFetch: QueryRefetchFetch = (url, init) =>
-    options.fetch(url, { body: null, headers: init.headers, keepalive: false, method: init.method });
+    options.fetch(url, {
+      body: null,
+      headers: init.headers,
+      keepalive: false,
+      method: init.method,
+    });
 
   return createDeltaMissRefetcher({
     fetch: refetchFetch,
