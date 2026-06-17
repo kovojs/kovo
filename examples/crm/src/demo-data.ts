@@ -15,6 +15,8 @@ const DEMO_CONTACTS = [
     email: 'margaret@apollo.example.com',
     ownerId: 'u1',
     dealCount: 2,
+    company: 'Apollo Guidance',
+    title: 'Director of Software',
   },
   {
     id: 'c4',
@@ -22,6 +24,8 @@ const DEMO_CONTACTS = [
     email: 'katherine@apollo.example.com',
     ownerId: 'u1',
     dealCount: 1,
+    company: 'Apollo Guidance',
+    title: 'Lead Mathematician',
   },
   {
     id: 'c5',
@@ -29,6 +33,8 @@ const DEMO_CONTACTS = [
     email: 'alan@bletchley.example.com',
     ownerId: 'u2',
     dealCount: 2,
+    company: 'Bletchley Labs',
+    title: 'Chief Cryptographer',
   },
   {
     id: 'c6',
@@ -36,6 +42,8 @@ const DEMO_CONTACTS = [
     email: 'barbara@mit.example.com',
     ownerId: 'u2',
     dealCount: 1,
+    company: 'MIT Systems',
+    title: 'Principal Researcher',
   },
   {
     id: 'c7',
@@ -43,6 +51,8 @@ const DEMO_CONTACTS = [
     email: 'don@stanford.example.com',
     ownerId: 'u1',
     dealCount: 1,
+    company: 'Stanford Press',
+    title: 'Professor Emeritus',
   },
   {
     id: 'c8',
@@ -50,18 +60,20 @@ const DEMO_CONTACTS = [
     email: 'radia@spanningtree.example.com',
     ownerId: 'u2',
     dealCount: 1,
+    company: 'Spanning Tree',
+    title: 'Network Architect',
   },
 ];
 
 const DEMO_DEALS = [
-  { id: 'd3', contactId: 'c3', stage: 'open', amount: 8000, ownerId: 'u1' },
-  { id: 'd4', contactId: 'c3', stage: 'proposal', amount: 15000, ownerId: 'u1' },
-  { id: 'd5', contactId: 'c4', stage: 'qualified', amount: 6000, ownerId: 'u1' },
-  { id: 'd6', contactId: 'c5', stage: 'open', amount: 9500, ownerId: 'u2' },
-  { id: 'd7', contactId: 'c5', stage: 'won', amount: 22000, ownerId: 'u2' },
-  { id: 'd8', contactId: 'c6', stage: 'lead', amount: 3000, ownerId: 'u2' },
-  { id: 'd9', contactId: 'c7', stage: 'lost', amount: 4000, ownerId: 'u1' },
-  { id: 'd10', contactId: 'c8', stage: 'open', amount: 11000, ownerId: 'u2' },
+  { id: 'd3', contactId: 'c3', stage: 'open', amount: 8000, ownerId: 'u1', title: 'Apollo Guidance — Onboarding package' },
+  { id: 'd4', contactId: 'c3', stage: 'proposal', amount: 15000, ownerId: 'u1', title: 'Apollo Guidance — Platform expansion' },
+  { id: 'd5', contactId: 'c4', stage: 'qualified', amount: 6000, ownerId: 'u1', title: 'Apollo Guidance — Analytics add-on' },
+  { id: 'd6', contactId: 'c5', stage: 'open', amount: 9500, ownerId: 'u2', title: 'Bletchley Labs — Security tier' },
+  { id: 'd7', contactId: 'c5', stage: 'won', amount: 22000, ownerId: 'u2', title: 'Bletchley Labs — Enterprise rollout' },
+  { id: 'd8', contactId: 'c6', stage: 'lead', amount: 3000, ownerId: 'u2', title: 'MIT Systems — Pilot program' },
+  { id: 'd9', contactId: 'c7', stage: 'lost', amount: 4000, ownerId: 'u1', title: 'Stanford Press — Seat licenses' },
+  { id: 'd10', contactId: 'c8', stage: 'open', amount: 11000, ownerId: 'u2', title: 'Spanning Tree — Network module' },
 ];
 
 const DEMO_ACTIVITIES = [
