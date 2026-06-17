@@ -59,16 +59,26 @@ integration harness uniquely proves.
     packages/runtime/src/loader-query-hydration.test.ts
     packages/runtime/src/query-visible-return.browser.test.ts`; `pnpm --filter @kovojs/runtime run
     check:inline-loader`.
-- [ ] `optimistic-success` / `optimistic-success.spec.ts`: a hand-written optimistic transform
+- [x] `optimistic-success` / `optimistic-success.spec.ts`: a hand-written optimistic transform
       updates every consumer of the invalidated query immediately, marks affected islands pending,
       and reconciles cleanly when the server response arrives.
   - SPEC refs: §10.4 optimism, §4.8 update plan, §9.1 `<kovo-query>`.
   - Assertions: pre-response UI changes; `kovo-pending`/`aria-busy` present while pending; final
     server truth matches db and no pending state remains.
-  - Partial evidence: `tests/integration/specs/optimistic-success.spec.ts` records the current
-    browser-integration blocker: fixture bootstraps install enhanced submit/query plans, but they do
-    not expose optimistic plans or an `OptimisticRebaser` to authored fixtures. Focused command:
-    `pnpm exec playwright test tests/integration/specs/optimistic-success.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+  - Evidence: `tests/integration/fixtures/optimistic-success` installs the public optimistic runtime
+    APIs with an `OptimisticRebaser`, a DOM morph/target root, and a hand-written cart transform;
+    `tests/integration/specs/optimistic-success.spec.ts` verifies the browser moves from server
+    truth `1` to optimistic `3` before the delayed response, stamps the dependent island with
+    `kovo-pending`/`aria-busy`, then reconciles to server truth `4`, clears pending state, and
+    confirms database truth. Runtime unit coverage continues to pin optimistic success/rebase and
+    pagehide cleanup primitives. Proving commands:
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/optimistic-success.spec.ts
+    --config playwright.config.ts --workers=1`; `pnpm exec vitest run
+    packages/runtime/src/mutation-optimistic.test.ts packages/runtime/src/optimism-rebase.test.ts
+    packages/runtime/src/mutation-optimistic-pagehide.test.ts`; `pnpm exec vp check
+    tests/integration/fixtures/optimistic-success/app.tsx
+    tests/integration/fixtures/optimistic-success/client.ts
+    tests/integration/specs/optimistic-success.spec.ts`.
 - [ ] `optimistic-rollback` / `optimistic-rollback.spec.ts`: an optimistic transform predicts a
       change, the mutation returns a typed error, snapshots are restored, and the error fragment is
       rendered.

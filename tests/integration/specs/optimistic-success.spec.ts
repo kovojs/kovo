@@ -1,10 +1,42 @@
 // SPEC.md §10.4: optimistic query predictions should update all dependent
 // consumers before server truth, then reconcile cleanly on success.
-import { test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/integration';
 
-test.skip(
-  true,
-  'Blocked by current fixture bootstrap: browser integration installs enhanced submit/query plans, but it does not yet expose optimistic mutation plans or an OptimisticRebaser to authored fixtures, so there is no supported path to exercise optimistic success end-to-end.',
-);
+test.use({ kovoFixture: 'optimistic-success' });
 
-test('reconciles a successful optimistic mutation across all query consumers', async () => {});
+test('reconciles a successful optimistic mutation across all query consumers', async ({
+  page,
+  kovoApp,
+}) => {
+  await page.goto('/');
+  await page.waitForFunction(
+    () =>
+      (window as typeof window & { __optimisticSuccessReady?: boolean })
+        .__optimisticSuccessReady === true,
+  );
+
+  const panel = page.locator('#cart-panel');
+  const count = panel.locator('[data-bind="cart.count"]');
+  await expect(count).toHaveText('1');
+  await expect(panel).not.toHaveAttribute('kovo-pending', '');
+
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/_m/optimistic-success/add') && response.status() === 200,
+  );
+  await page.getByRole('button', { name: 'Add optimistically' }).click();
+
+  await expect(count).toHaveText('3');
+  await expect(panel).toHaveAttribute('kovo-pending', '');
+  await expect(panel).toHaveAttribute('aria-busy', 'true');
+
+  await responsePromise;
+  await expect(count).toHaveText('4');
+  await expect(panel).not.toHaveAttribute('kovo-pending', '');
+  await expect(panel).not.toHaveAttribute('aria-busy', 'true');
+
+  const rows = await kovoApp.db.query<{ count: number }>(
+    'select count from optimistic_cart where id = 1',
+  );
+  expect(Number(rows[0]?.count)).toBe(4);
+});
