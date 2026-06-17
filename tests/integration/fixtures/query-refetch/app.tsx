@@ -29,6 +29,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table refetch_state (id integer primary key, message text not null)',
-  seed: (db) =>
-    db.exec("insert into refetch_state (id, message) values (1, 'Initial message')"),
+  seed: (db) => db.exec("insert into refetch_state (id, message) values (1, 'Initial message')"),
 });

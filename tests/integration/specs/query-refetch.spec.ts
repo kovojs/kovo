@@ -8,7 +8,8 @@ test('visible-return refetch updates bound query consumers from typed-read truth
 }) => {
   await page.goto('/');
   await page.waitForFunction(
-    () => (window as typeof window & { __queryRefetchReady?: boolean }).__queryRefetchReady === true,
+    () =>
+      (window as typeof window & { __queryRefetchReady?: boolean }).__queryRefetchReady === true,
   );
   await expect(page.locator('refetch-card [data-bind="refetch.message"]')).toHaveText(
     'Initial message',
