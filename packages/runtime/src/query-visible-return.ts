@@ -164,16 +164,31 @@ export function installQueryVisibleReturnRefetch(
     await refetchOnce();
   };
 
+  // SPEC.md §8/§9.3: bfcache restoration resumes the same background typed-read
+  // recovery path as focus/visibility return. In browsers pageshow is a Window
+  // lifecycle event, while the loader root is usually document for query scans.
+  const pageShowTarget = globalPageShowTarget(options.root);
   options.root.addEventListener('visibilitychange', listener);
+  options.root.addEventListener('pageshow', listener);
+  pageShowTarget?.addEventListener('pageshow', listener);
 
   return {
     dispose() {
       disposed = true;
       options.root.removeEventListener?.('visibilitychange', listener);
+      options.root.removeEventListener?.('pageshow', listener);
+      pageShowTarget?.removeEventListener?.('pageshow', listener);
     },
     rememberAppliedQueries(queries) {
       if (disposed) return;
       ledger.remember(queries);
     },
   };
+}
+
+function globalPageShowTarget(
+  root: QueryVisibleReturnRefetchRoot,
+): ListenerTargetLike<unknown> | undefined {
+  const target = globalThis as unknown as ListenerTargetLike<unknown>;
+  return target !== root && typeof target.addEventListener === 'function' ? target : undefined;
 }

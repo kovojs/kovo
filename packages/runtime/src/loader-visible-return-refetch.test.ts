@@ -84,10 +84,12 @@ describe('loader visible-return refetch', () => {
     // later mutation query chunks, not just server-rendered hydration scripts.
     expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'recommendations']);
     expect(refetchFetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(refetchFetch).toHaveBeenNthCalledWith(2, '/_q/recommendations', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
@@ -156,10 +158,12 @@ describe('loader visible-return refetch', () => {
       // the same query-store path as the submitting tab.
       expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'reviews']);
       expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+        cache: 'no-store',
         headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
         method: 'GET',
       });
       expect(fetch).toHaveBeenNthCalledWith(2, '/_q/reviews', {
+        cache: 'no-store',
         headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
         method: 'GET',
       });
@@ -212,10 +216,12 @@ describe('loader visible-return refetch', () => {
     // same query instance key that hydration and mutation chunks expose.
     expect(refetchOnFocus).toHaveBeenCalledWith(['product:p1', 'product:p2']);
     expect(fetch).toHaveBeenNthCalledWith(1, '/_q/product%3Ap1', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(fetch).toHaveBeenNthCalledWith(2, '/_q/product%3Ap2', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
@@ -276,10 +282,12 @@ describe('loader visible-return refetch', () => {
     // SPEC.md §4.4: visible-return refetch tracks hydrated query data discovered after install.
     expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'reviews']);
     expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(fetch).toHaveBeenNthCalledWith(2, '/_q/reviews', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });

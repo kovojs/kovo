@@ -24,6 +24,7 @@ export interface QueryRefetchFetch {
   (
     url: string,
     init: {
+      cache: 'no-store';
       headers: Record<string, string>;
       method: 'GET';
     },
@@ -81,6 +82,7 @@ export async function refetchQueries(
 
     try {
       const response = await options.fetch(url, {
+        cache: 'no-store',
         headers: {
           Accept: 'text/html',
           'Kovo-Fragment': 'true',

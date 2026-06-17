@@ -229,13 +229,23 @@ export function installPagehideOptimismCleanup(
   options: PagehideOptimismCleanupOptions,
 ): () => void {
   // SPEC.md §8/§9.3: pagehide is bfcache-safe; unload handlers are forbidden.
+  // In browsers pagehide is a Window lifecycle event, while app loaders usually
+  // use document as their DOM root for query scans and delegated events.
   const listener = () => {
     options.discardPendingOptimism();
   };
+  const globalTarget = globalPagehideTarget(options.root);
   options.root.addEventListener('pagehide', listener);
+  globalTarget?.addEventListener('pagehide', listener);
   return () => {
     options.root.removeEventListener?.('pagehide', listener);
+    globalTarget?.removeEventListener?.('pagehide', listener);
   };
+}
+
+function globalPagehideTarget(root: PagehideRoot): PagehideRoot | undefined {
+  const target = globalThis as unknown as PagehideRoot;
+  return target !== root && typeof target.addEventListener === 'function' ? target : undefined;
 }
 
 /** @internal */

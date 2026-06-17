@@ -10,8 +10,8 @@ function visibleReturnEvent(): DelegatedEvent {
 }
 
 // SPEC.md §4.4/§9.4: installing visible-return refetch hydrates initial scripts
-// as loader lifecycle work, installs a deduped visibilitychange listener only
-// when typed-read refetch is configured, threads typed-read chunks and parse/
+// as loader lifecycle work, installs deduped visible-return listeners only when
+// typed-read refetch is configured, threads typed-read chunks and parse/
 // callback failures through the one runtime apply/error path, and goes inert on
 // disposal. The pure eligibility-ledger seam lives in the sibling
 // query-visible-return-ledger.test.ts file.
@@ -44,11 +44,13 @@ describe('query visible-return refetch', () => {
     expect(binding.textContent).toBe('1');
     expect(plan).toHaveBeenCalledWith({ count: 1 });
     expect(root.listeners.has('visibilitychange')).toBe(false);
+    expect(root.listeners.has('pageshow')).toBe(false);
 
     lifecycle.rememberAppliedQueries(['reviews']);
     lifecycle.dispose();
     lifecycle.rememberAppliedQueries(['inventory']);
     expect(root.listeners.has('visibilitychange')).toBe(false);
+    expect(root.listeners.has('pageshow')).toBe(false);
   });
 
   it('hydrates new query scripts before visible-return refetch and dedupes in-flight work', async () => {
@@ -105,6 +107,114 @@ describe('query visible-return refetch', () => {
 
     refetch.dispose();
     expect(root.listeners.has('visibilitychange')).toBe(false);
+    expect(root.listeners.has('pageshow')).toBe(false);
+  });
+
+  it('refetches on bfcache pageshow using the visible-return ledger', async () => {
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const refetchOnFocus = vi.fn();
+    const binding = new FakeQueryBindingElement('cart.count', '');
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+    root.bindings = [binding];
+
+    installQueryVisibleReturnRefetch({
+      queryPlans: { cart: { bindings: true } },
+      queryRefetch: { fetch },
+      queryStore: store,
+      refetchOnFocus,
+      root,
+    });
+
+    await root.listeners.get('pageshow')?.({
+      persisted: true,
+      target: null,
+      type: 'pageshow',
+    } as DelegatedEvent & {
+      persisted: true;
+    });
+
+    // SPEC.md §8/§9.3: a bfcache pageshow resumes from server truth through
+    // the same typed-read recovery path as visible-return refetch.
+    expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    expect(fetch).toHaveBeenCalledWith('/_q/cart', {
+      cache: 'no-store',
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(binding.textContent).toBe('2');
+  });
+
+  it('also listens for browser pageshow when the loader root is document-like', async () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originalAddEventListener = globalRecord.addEventListener;
+    const originalRemoveEventListener = globalRecord.removeEventListener;
+    const globalListeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+
+    try {
+      globalRecord.addEventListener = (
+        type: string,
+        listener: (event: DelegatedEvent) => void | Promise<void>,
+      ) => {
+        globalListeners.set(type, listener);
+      };
+      globalRecord.removeEventListener = (
+        type: string,
+        listener: (event: DelegatedEvent) => void | Promise<void>,
+      ) => {
+        if (globalListeners.get(type) === listener) globalListeners.delete(type);
+      };
+
+      const refetch = installQueryVisibleReturnRefetch({
+        queryRefetch: { fetch },
+        queryStore: store,
+        root,
+      });
+
+      expect(root.listeners.has('pageshow')).toBe(true);
+      expect(globalListeners.has('pageshow')).toBe(true);
+
+      await globalListeners.get('pageshow')?.({ target: null, type: 'pageshow' });
+      expect(fetch).toHaveBeenCalledWith('/_q/cart', {
+        cache: 'no-store',
+        headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+        method: 'GET',
+      });
+      expect(store.get('cart')).toEqual({ count: 2 });
+
+      refetch.dispose();
+      expect(root.listeners.has('pageshow')).toBe(false);
+      expect(globalListeners.has('pageshow')).toBe(false);
+    } finally {
+      if (originalAddEventListener === undefined) delete globalRecord.addEventListener;
+      else globalRecord.addEventListener = originalAddEventListener;
+      if (originalRemoveEventListener === undefined) delete globalRecord.removeEventListener;
+      else globalRecord.removeEventListener = originalRemoveEventListener;
+    }
   });
 
   it('makes query chunks returned by typed reads eligible for the next visible-return refetch', async () => {
@@ -140,6 +250,7 @@ describe('query visible-return refetch', () => {
 
     expect(refetchOnFocus).toHaveBeenNthCalledWith(1, ['cart']);
     expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
@@ -153,10 +264,12 @@ describe('query visible-return refetch', () => {
     // including canonical instance keys from SPEC.md §10.2.
     expect(refetchOnFocus).toHaveBeenNthCalledWith(2, ['cart', 'recommendations:user-1']);
     expect(fetch).toHaveBeenNthCalledWith(2, '/_q/cart', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(fetch).toHaveBeenNthCalledWith(3, '/_q/recommendations%3Auser-1', {
+      cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
@@ -267,6 +380,7 @@ describe('query visible-return refetch', () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(root.listeners.has('visibilitychange')).toBe(false);
+    expect(root.listeners.has('pageshow')).toBe(false);
   });
 
   it('does not continue typed-read refetch work after disposal during visible-return', async () => {
