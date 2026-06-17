@@ -901,7 +901,7 @@ removes app-authored bookkeeping from the enhanced path.
       `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
       `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
       and `rg -n "liveTargetRenderers|generated/live-targets" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`.
-- [ ] **Example no-match checks prove the DX outcome.**
+- [x] **Example no-match checks prove the DX outcome.**
   - `rg -n 'fragmentRenderers|mutationResponse\\(|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb' examples/stackoverflow/src examples/crm/src examples/commerce/src`
     should have no ordinary app-authored success-routing hits after migration
     except explicitly documented escape hatches.
@@ -912,6 +912,11 @@ removes app-authored bookkeeping from the enhanced path.
       `render*Region` helpers.
     - Verified with
       `rg -n "mutationResponse\\(|fragmentRenderers|liveTargetRenderers|generated/live-targets|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`.
-    - Remaining gap: broaden the no-match proof to all app-authored example
-      source after static export/failure-page helper cleanup, and keep generated
-      artifact/debugging hits out of authoring-surface claims.
+  - Evidence 2026-06-17:
+    - Broad app-authored source checks now have no matches for ordinary
+      success-routing plumbing in StackOverflow, CRM, or Commerce after excluding
+      generated artifacts.
+    - Verified with
+      `rg -n "fragmentRenderers|mutationResponse\\(|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb" examples/stackoverflow/src examples/crm/src examples/commerce/src --glob '!**/generated/**'`
+      and
+      `rg -n "liveTargetRenderers|generated/live-targets" examples/stackoverflow/src examples/crm/src examples/commerce/src --glob '!**/generated/**'`.
