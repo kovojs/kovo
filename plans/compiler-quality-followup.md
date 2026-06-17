@@ -176,7 +176,13 @@ compiler-quality gaps found during the 2026-06-16 audit.
       with `styles contains an unsafe CSS url()`.
     - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run
       src/output-context-security.test.ts` passes.
-  - [ ] Add template stamp tests where list item values attempt HTML injection.
+  - [x] Add template stamp tests where list item values attempt HTML injection.
+    - Evidence (2026-06-16): `packages/compiler/src/output-context-payloads.test.ts`
+      executes the generated `data-bind-list` query plan against a fake template-stamp host and
+      snapshots `kovoEscapeHtml(...)` output for list item values containing `<`, `>`, `&`, and
+      quotes.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/compiler exec vitest --run -u
+      src/output-context-payloads.test.ts` passes.
   - [ ] Add fragment-target tests where refreshed fragment values attempt HTML injection.
   - [x] Add raw HTML rejection tests for plain strings at every supported raw HTML sink.
     - Evidence (2026-06-16): `packages/compiler/src/output-context-raw-html.test.ts`

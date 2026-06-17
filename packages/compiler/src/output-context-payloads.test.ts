@@ -426,6 +426,86 @@ export const DynamicUrlPayloads = component({
     `);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
+
+  it('snapshots template stamp item payload escaping', () => {
+    const result = compileComponentModule({
+      fileName: 'template-payloads.tsx',
+      source: `
+export const TemplatePayloads = component({
+  queries: { cart: cartQuery },
+  render: () => (
+    <ul data-bind-list="cart.items" kovo-key="sku">
+      <template kovo-stamp>
+        <li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+    });
+    const clientModule = executeClientModule(fileByKind(result, 'client').source);
+    const updatePlans = clientModule.TemplatePayloads$queryUpdatePlans as QueryUpdatePlanExports;
+    const list = new FakeTemplateStampHost({
+      'data-bind-list': 'cart.items',
+      'kovo-key': 'sku',
+    });
+    const root = new FakeRoot([], [list]);
+    const applied = runQueryPlan(updatePlans, 'cart', root, {
+      items: [
+        {
+          name: '<img src=x onerror=alert(1)> & "quoted"',
+          qty: "5 > 4 & 3 < 6 'single'",
+          sku: 'p1',
+        },
+      ],
+    });
+
+    expect({
+      applied,
+      clientSource: normalizeArtifact(fileByKind(result, 'client').source),
+      diagnostics: result.diagnostics,
+      renderedItems: list.items,
+      renderedText: list.textContent,
+    }).toMatchInlineSnapshot(`
+      {
+        "applied": {
+          "bindings": [],
+          "derives": [],
+          "stamps": [],
+          "templateStamps": [
+            "[data-bind-list="cart.items"]",
+          ],
+        },
+        "clientSource": "// @kovojs-ir
+      import { applyCompiledQueryUpdatePlan, kovoEscapeHtml } from '@kovojs/runtime';
+
+      export const TemplatePayloads$queryUpdatePlans = {
+        "cart"(root, value) {
+          return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [{ key: "sku", list: "items", selector: "[data-bind-list=\\"cart.items\\"]", render(item) {
+            const record = item && typeof item === "object" ? item : {};
+            const read = (path) => path.reduce((value, key) => value && typeof value === "object" ? value[key] : undefined, record);
+            return ["<li><span data-bind=\\".qty\\">", kovoEscapeHtml(read(["qty"])), "</span> x <span data-bind=\\".name\\">", kovoEscapeHtml(read(["name"])), "</span></li>"].join("");
+          } }] });
+        },
+      };",
+        "diagnostics": [],
+        "renderedItems": [
+          {
+            "html": "<li><span data-bind=".qty">5 &gt; 4 &amp; 3 &lt; 6 'single'</span> x <span data-bind=".name">&lt;img src=x onerror=alert(1)&gt; &amp; &quot;quoted&quot;</span></li>",
+            "index": 0,
+            "key": "p1",
+            "value": {
+              "name": "<img src=x onerror=alert(1)> & "quoted"",
+              "qty": "5 > 4 & 3 < 6 'single'",
+              "sku": "p1",
+            },
+          },
+        ],
+        "renderedText": "<li><span data-bind=".qty">5 &gt; 4 &amp; 3 &lt; 6 'single'</span> x <span data-bind=".name">&lt;img src=x onerror=alert(1)&gt; &amp; &quot;quoted&quot;</span></li>",
+      }
+    `);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
 });
 
 type QueryUpdatePlanExports = Record<string, (root: FakeRoot, value: unknown) => unknown>;
@@ -545,6 +625,17 @@ class FakeElement {
       return;
     }
     this.attributes.push({ name, value });
+  }
+}
+
+class FakeTemplateStampHost extends FakeElement {
+  items: Array<{ html: string; index: number; key: string; value: unknown }> = [];
+
+  reconcileTemplateStamp(
+    items: readonly { html: string; index: number; key: string; value: unknown }[],
+  ): void {
+    this.items = items.map((item) => ({ ...item }));
+    this.textContent = items.map((item) => item.html).join('');
   }
 }
 
