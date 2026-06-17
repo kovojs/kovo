@@ -15,6 +15,10 @@ declare module '@kovojs/core' {
     products: ProductsResult;
   }
 
+  interface MutationRegistry {
+    'cart/add': typeof import('./app.js').addToCart;
+  }
+
   interface InvalidationSets {
     'cart/add': 'cart' | 'orderHistory' | 'products';
   }

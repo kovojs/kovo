@@ -197,15 +197,33 @@ path in more than one app — without changing the clean authoring spelling.
 
 ## Part B — Framework: wire `MutationRegistry` so inference works
 
-- [ ] **B1. Feed mutation facts into generated registries.** Extend the actual example/tutorial
+- [x] **B1. Feed mutation facts into generated registries.** Extend the actual example/tutorial
       graph generators (for example `examples/*/scripts/emit-graph.mjs`, tutorial registry emitters,
       and any app-shell graph emitters) so their emitted `declare module '@kovojs/core'` blocks include
       `MutationRegistry` entries. Prefer mapping each mutation key to `typeof <mutationDefinition>`
       when importable, because `core` already derives input/failure from server-style mutation value
       types; use explicit `{ input; failure }` facts only where the value type cannot be named.
-- [ ] **B2. Verify inference end to end.** A type-level test (or `tsc` assertion) that `form('cart/add')`
+      - Evidence 2026-06-17: `examples/{commerce,crm,stackoverflow}/scripts/emit-graph.mjs`
+        now emit `MutationRegistry` entries into checked-in
+        `src/generated/touch-graph.ts` artifacts using `typeof import(...)` references to the
+        real mutation definitions; tutorial registry files in steps 05-07 now declare the same
+        `'cart/add'` mutation fact.
+      - Verified with
+        `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
+        `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+        `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`,
+        `node site/tutorial/run-steps.mjs`, and
+        `rg -n "interface MutationRegistry" examples/{commerce,crm,stackoverflow}/src/generated/touch-graph.ts site/tutorial/steps/*/src/registries.ts`.
+- [x] **B2. Verify inference end to end.** A type-level test (or `tsc` assertion) that `form('cart/add')`
       with no explicit type args yields the same `input`/`failure` as `form<...>()` does today, and
       that a schema rename propagates (drift turns the consumer red). Evidence: the assertion file.
+      - Evidence 2026-06-17: `examples/commerce/src/form-registry.test.ts` imports the generated
+        touch graph, calls bare `form('cart/add')`, and asserts the schema-backed `productId`,
+        `quantity`, `OUT_OF_STOCK.data.availableQuantity`, and validation-failure types against
+        the explicit-form shape that app code previously carried by hand.
+      - Verified with `pnpm --filter @kovojs/example-commerce test -- --run src/form-registry.test.ts`,
+        `sh -c 'pnpm --filter @kovojs/example-commerce exec tsc -p tsconfig.json --noEmit --pretty false --noErrorTruncation 2>&1 | rg "form-registry" >/tmp/kovo-form-registry-diagnostics.txt && exit 1 || exit 0'`,
+        and `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 
 ## Part C — Example fixes (after A+B; commerce → crm → stackoverflow)
 

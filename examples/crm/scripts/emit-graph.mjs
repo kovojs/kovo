@@ -273,6 +273,13 @@ declare module '@kovojs/core' {
     pipelineByStage: PipelineByStageResult;
   }
 
+  interface MutationRegistry {
+    addContact: typeof import('../mutations.js').addContact;
+    createDeal: typeof import('../mutations.js').createDeal;
+    moveDeal: typeof import('../mutations.js').moveDeal;
+    closeDeal: typeof import('../mutations.js').closeDeal;
+  }
+
   interface InvalidationSets extends CrmInvalidationSets {}
 }
 `,

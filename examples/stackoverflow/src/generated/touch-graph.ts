@@ -66,5 +66,11 @@ declare module '@kovojs/core' {
     questionScore: QuestionScoreResult;
   }
 
+  interface MutationRegistry {
+    postAnswer: typeof import('../mutations.js').postAnswerMutation;
+    postQuestion: typeof import('../mutations.js').postQuestionMutation;
+    voteUp: typeof import('../mutations.js').voteUpMutation;
+  }
+
   interface InvalidationSets extends SoInvalidationSets {}
 }

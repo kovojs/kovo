@@ -212,6 +212,11 @@ declare module '@kovojs/core' {
     orderHistory: OrderHistoryResult;
   }
 
+  interface MutationRegistry {
+    'cart/add': typeof import('../app.js').addToCart;
+    'order/receipt': typeof import('../app.js').uploadReceipt;
+  }
+
   interface InvalidationSets extends CommerceInvalidationSets {}
 }
 `;
