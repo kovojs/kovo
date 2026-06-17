@@ -214,8 +214,8 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
     clientModules,
     document: { lang: 'en-US' },
     endpoints: [paymentWebhook],
-    mutationResponse({ key, rawInput, request }) {
-      if (key === commerceSignIn.key) {
+    mutationResponses: {
+      [commerceSignIn.key]: ({ rawInput, request }) => {
         return {
           csrf: shellCommerceAuthCsrf,
           redirectTo: (result) => authRedirectTo(result.value),
@@ -230,32 +230,30 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
               },
             )}</main></body></html>`,
         };
-      }
-
-      if (key === commerceSignOut.key) {
+      },
+      [commerceSignOut.key]: () => {
         return {
           csrf: shellCommerceAuthCsrf,
           redirectTo: (result) => authRedirectTo(result.value),
         };
-      }
-
-      if (key !== addToCart.key) return undefined;
-
-      const productId = productIdFromRawInput(rawInput);
-      return {
-        redirectTo: '/cart',
-        renderFailureFragment: (failure) =>
-          renderAddToCartFailureFragment(db, rawInput, failure, request as CommerceShellRequest),
-        renderFailurePage: (failure) =>
-          renderCartPage(
-            db,
-            {
-              failure,
-              ...(productId ? { productId } : {}),
-            },
-            request as CommerceShellRequest,
-          ),
-      };
+      },
+      [addToCart.key]: ({ rawInput, request }) => {
+        const productId = productIdFromRawInput(rawInput);
+        return {
+          redirectTo: '/cart',
+          renderFailureFragment: (failure) =>
+            renderAddToCartFailureFragment(db, rawInput, failure, request as CommerceShellRequest),
+          renderFailurePage: (failure) =>
+            renderCartPage(
+              db,
+              {
+                failure,
+                ...(productId ? { productId } : {}),
+              },
+              request as CommerceShellRequest,
+            ),
+        };
+      },
     },
     mutations: [addToCart, commerceSignIn, commerceSignOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),

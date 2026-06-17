@@ -7,6 +7,43 @@ import { mutation } from './mutation.js';
 import { s } from './schema.js';
 
 describe('server app mutation request boundary', () => {
+  it('resolves mutation response options from exact-key policies before the legacy resolver', async () => {
+    const seen: string[] = [];
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        seen.push(`handler:${input.productId}`);
+        return input;
+      },
+    });
+    const app = createApp({
+      mutationResponse() {
+        seen.push('fallback');
+        return { redirectTo: '/fallback' };
+      },
+      mutationResponses: {
+        'cart/add': ({ rawInput }) => {
+          seen.push(`policy:${rawInput instanceof FormData}`);
+          return { redirectTo: '/cart' };
+        },
+      },
+      mutations: [addToCart],
+    });
+    const form = new FormData();
+    form.set('productId', 'p1');
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: form,
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/cart');
+    expect(seen).toEqual(['policy:true', 'handler:p1']);
+  });
+
   it('resolves the app session once before mutation response options and guarded handlers', async () => {
     const seen: string[] = [];
     let sessionReads = 0;

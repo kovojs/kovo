@@ -15,6 +15,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isLiveTargetRenderers(value.liveTargetRenderers) &&
     isVersionedClientModuleRegistry(value.clientModules) &&
     isOptionalFunction(value.mutationResponse) &&
+    isMutationResponses(value.mutationResponses) &&
     isOptionalMutationReplayStore(value.mutationReplayStore) &&
     isOptionalFunction(value.onError) &&
     isOptionalFunction(value.renderRoute) &&
@@ -73,6 +74,30 @@ function isLiveTargetRenderers(value: unknown): value is KovoApp['liveTargetRend
         typeof renderer.component === 'string' &&
         typeof renderer.render === 'function',
     )
+  );
+}
+
+function isMutationResponses(value: unknown): value is KovoApp['mutationResponses'] {
+  return (
+    isRecord(value) &&
+    Object.entries(value).every(
+      ([key, policy]) =>
+        typeof key === 'string' &&
+        (typeof policy === 'function' || isMutationResponseOptions(policy)),
+    )
+  );
+}
+
+function isMutationResponseOptions(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isOptionalFunction(value.redirectTo) &&
+    isOptionalFunction(value.renderFailureFragment) &&
+    isOptionalFunction(value.renderFailurePage) &&
+    (value.failureTarget === undefined || typeof value.failureTarget === 'string') &&
+    (value.fragmentRenderers === undefined || Array.isArray(value.fragmentRenderers)) &&
+    (value.failureStylesheets === undefined || Array.isArray(value.failureStylesheets)) &&
+    (value.csrf === undefined || isOptionalCsrfOptions(value.csrf))
   );
 }
 

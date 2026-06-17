@@ -10,7 +10,9 @@ export type {
   AppMutationDeclaration,
   AppMutationResponseContext,
   AppMutationResponseOptions,
+  AppMutationResponsePolicy,
   AppMutationResponseResolver,
+  AppMutationResponses,
   AppRouteRenderContext,
   CreateAppOptions,
   ErrorShellRenderer,
@@ -57,6 +59,7 @@ export function createApp<SessionValue = unknown>(
     ...(options.mutationResponse === undefined
       ? {}
       : { mutationResponse: options.mutationResponse }),
+    mutationResponses: options.mutationResponses ?? {},
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),

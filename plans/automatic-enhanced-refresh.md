@@ -745,9 +745,35 @@ removes app-authored bookkeeping from the enhanced path.
       `node scripts/api-surface-gate.mjs`,
       `rg -n "liveTargetRenderers|generated/live-targets" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`,
       and `git diff --check`.
-    - Remaining gaps: static export and the legacy `renderCartPage()` failure
-      page path still use `renderCartPageBody`; the app-shell still uses
-      `mutationResponse` for auth redirects and add-to-cart failure rendering.
+    - Remaining gaps after this checkpoint: static export and the legacy
+      `renderCartPage()` failure page path still use `renderCartPageBody`;
+      auth redirects and add-to-cart failure rendering still need a narrower
+      app-shell policy surface.
+    - Additional progress 2026-06-17:
+      `packages/server/src/app-types.ts` / `app-mutation-request.ts` now support
+      key-scoped `createApp({ mutationResponses })` policies. App mutation
+      dispatch resolves the exact mutation key first, then falls back to the
+      legacy broad `mutationResponse` resolver for compatibility. This gives
+      auth redirects, CSRF overrides, and failure-page/fragment rendering a
+      narrow declared surface instead of requiring an app-authored switch.
+    - `examples/commerce/src/app-shell.tsx` now declares separate
+      `mutationResponses` entries for `auth/sign-in`, `auth/sign-out`, and
+      `cart/add`; it no longer defines a broad `mutationResponse({ key })`
+      switch.
+    - Verified with
+      `pnpm exec vitest --run packages/server/src/app-mutation-request.test.ts packages/server/src/app.test.ts`,
+      `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.add-to-cart.test.ts`,
+      `pnpm --filter @kovojs/example-commerce test`,
+      `pnpm --filter @kovojs/example-stackoverflow test`,
+      `pnpm --filter @kovojs/example-crm test`,
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`,
+      `rg -n "mutationResponse\\(|fragmentRenderers|liveTargetRenderers|generated/live-targets|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`,
+      and `git diff --check`.
+    - Remaining gap: static export and the legacy `renderCartPage()` failure
+      page path still use `renderCartPageBody`; the legacy broad
+      `mutationResponse` compatibility API still exists in the framework and
+      tests until follow-up cleanup removes or retires it.
 - [ ] **10. Docs/tutorial update.**
   - Teach the authoring model as "declare queries and serializable props; Kovo
     updates enhanced mutations from server truth automatically."
@@ -810,4 +836,13 @@ removes app-authored bookkeeping from the enhanced path.
   - `rg -n 'fragmentRenderers|mutationResponse\\(|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb' examples/stackoverflow/src examples/crm/src examples/commerce/src`
     should have no ordinary app-authored success-routing hits after migration
     except explicitly documented escape hatches.
-  - Evidence: pending.
+  - Progress 2026-06-17:
+    - The route/app-shell entry files for StackOverflow, CRM, and Commerce now
+      have no matches for broad `mutationResponse(`, app-authored
+      `fragmentRenderers`, generated live-target wiring, target constants, or
+      `render*Region` helpers.
+    - Verified with
+      `rg -n "mutationResponse\\(|fragmentRenderers|liveTargetRenderers|generated/live-targets|_TARGET|render[A-Za-z]+Region|render[A-Za-z]+RegionFromDb" examples/stackoverflow/src/interactive-app.tsx examples/crm/src/interactive-app.tsx examples/commerce/src/app-shell.tsx examples/commerce/src/app.ts`.
+    - Remaining gap: broaden the no-match proof to all app-authored example
+      source after static export/failure-page helper cleanup, and keep generated
+      artifact/debugging hits out of authoring-surface claims.

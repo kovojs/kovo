@@ -52,6 +52,7 @@ export interface CreateAppOptions<SessionValue = unknown> {
   errorShells?: AppErrorShellOptions;
   liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
   mutationResponse?: AppMutationResponseResolver;
+  mutationResponses?: AppMutationResponses;
   mutations?: readonly AppMutationDeclaration[];
   mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
@@ -86,6 +87,7 @@ export interface KovoApp<SessionValue = unknown> {
   errorShells: AppErrorShellOptions;
   liveTargetRenderers: readonly LiveTargetRenderer<Request>[];
   mutationResponse?: AppMutationResponseResolver;
+  mutationResponses: AppMutationResponses;
   mutations: readonly AppMutationDeclaration[];
   mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
@@ -119,6 +121,12 @@ export interface AppMutationResponseOptions {
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
 }
+
+export type AppMutationResponsePolicy =
+  | AppMutationResponseOptions
+  | AppMutationResponseResolver;
+
+export type AppMutationResponses = Readonly<Record<string, AppMutationResponsePolicy>>;
 
 export type AppMutationResponseResolver = (
   context: AppMutationResponseContext,

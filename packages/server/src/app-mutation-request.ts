@@ -7,7 +7,12 @@ import {
 import type { RegisteredQueryDefinition } from './query.js';
 import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
-import type { KovoApp } from './app-types.js';
+import type {
+  AppMutationResponseContext,
+  AppMutationResponseOptions,
+  AppMutationResponsePolicy,
+  KovoApp,
+} from './app-types.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
 
 export async function handleAppMutationRequest(
@@ -34,7 +39,7 @@ export async function handleAppMutationRequest(
   );
   const rawInput = await readMutationRequestBody(mutationRequest);
   const currentUrl = appRequestUrl(url);
-  const mutationResponseOptions = await app.mutationResponse?.({
+  const mutationResponseOptions = await resolveAppMutationResponsePolicy(app, {
     currentUrl,
     key: mutation.key,
     mutation,
@@ -85,6 +90,24 @@ export async function handleAppMutationRequest(
   });
 
   return serverResponseToWebResponse(mutationResponse, mutationRequest);
+}
+
+async function resolveAppMutationResponsePolicy(
+  app: KovoApp,
+  context: AppMutationResponseContext,
+): Promise<AppMutationResponseOptions | undefined> {
+  return (
+    (await resolveMutationResponsePolicy(app.mutationResponses[context.key], context)) ??
+    (await app.mutationResponse?.(context))
+  );
+}
+
+async function resolveMutationResponsePolicy(
+  policy: AppMutationResponsePolicy | undefined,
+  context: AppMutationResponseContext,
+): Promise<AppMutationResponseOptions | undefined> {
+  if (policy === undefined) return undefined;
+  return typeof policy === 'function' ? policy(context) : policy;
 }
 
 function mutationWithAppQueries<Request>(
