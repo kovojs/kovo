@@ -488,23 +488,46 @@ compiler-quality gaps found during the 2026-06-16 audit.
 
 ## Diagnostics
 
-- [ ] Enforce the full teaching diagnostic schema for every compiler diagnostic.
-  - [ ] Define the required schema per diagnostic class: lowering error, validation error, lint,
+- [x] Enforce the full teaching diagnostic schema for every compiler diagnostic.
+  - [x] Define the required schema per diagnostic class: lowering error, validation error, lint,
         warning, registry/graph error, and escape-hatch advisory.
-  - [ ] Require a problem statement for every compiler diagnostic.
-  - [ ] Require a would-have-lowered form when a lowering exists.
-  - [ ] Require a blocked reason for every blocking diagnostic.
-  - [ ] Require a concrete fix menu for every compiler diagnostic.
-  - [ ] Require a SPEC citation for every compiler diagnostic.
-  - [ ] Require suppression/escape posture text when a suppression or escape exists.
-  - [ ] Update KV238, KV239, KV240, and any similar short-help diagnostics to satisfy the schema.
-  - [ ] Add registry tests that validate schema by class, not only presence of `Fixes:` and `SPEC §`.
-  - [ ] Add Vite surface tests preserving structured help, source position, length, severity, and
+  - [x] Require a problem statement for every compiler diagnostic.
+  - [x] Require a would-have-lowered form when a lowering exists.
+  - [x] Require a blocked reason for every blocking diagnostic.
+  - [x] Require a concrete fix menu for every compiler diagnostic.
+  - [x] Require a SPEC citation for every compiler diagnostic.
+  - [x] Require suppression/escape posture text when a suppression or escape exists.
+  - [x] Update KV238, KV239, KV240, and any similar short-help diagnostics to satisfy the schema.
+  - [x] Add registry tests that validate schema by class, not only presence of `Fixes:` and `SPEC §`.
+  - [x] Add Vite surface tests preserving structured help, source position, length, severity, and
         dynamic context.
-  - [ ] Add CLI surface tests preserving structured help, source position, length, severity, and
+  - [x] Add CLI surface tests preserving structured help, source position, length, severity, and
         dynamic context.
-  - [ ] Add MCP surface tests preserving structured help, source position, length, severity, and
+  - [x] Add MCP surface tests preserving structured help, source position, length, severity, and
         dynamic context.
+  - Evidence (2026-06-17): `packages/core/src/diagnostics.ts` defines
+        `compilerDiagnosticTeachingSchemas` for KV201 plus compiler-owned KV2xx/KV3xx diagnostics,
+        classifying required lowered-form, blocked-reason, and escape-posture fields under
+        SPEC §5.2.
+  - Evidence (2026-06-17): `packages/core/src/diagnostics.test.ts` asserts each compiler
+        diagnostic has a problem statement, concrete `Fixes:`, `SPEC §` citation, required
+        `Would lower to:`/`Would hoist children to:` text, required `Blocked reason:`, and
+        documented escape posture when the schema marks one.
+  - Evidence (2026-06-17): `packages/core/src/diagnostics.ts` expands KV238, KV239, KV240, and
+        KV311 help with would-have-lowered and blocked-reason text;
+        `packages/compiler/src/diagnostic-coverage-matrix.test.ts` snapshots the expanded teaching
+        text plus source file, position, length, severity, and dynamic context.
+  - Evidence (2026-06-17): `packages/compiler/src/vite.test.ts` preserves structured KV201 help,
+        `SPEC §4.3 and §5.2`, `start`, `length`, and registry severity through the Vite module
+        diagnostic callback while the thrown teaching error renders each help line.
+  - Evidence (2026-06-17): `packages/cli/src/index.compile-mcp.test.ts` preserves structured
+        KV201/KV210 help, source position, length, severity, and SPEC citation through
+        `compileComponentV1(...)`, `handleKovoMcpRequest(...)`, and the SDK MCP lifecycle.
+  - Evidence (2026-06-17): `pnpm exec vitest --run packages/core/src/diagnostics.test.ts
+        packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/vite.test.ts
+        packages/cli/src/index.compile-mcp.test.ts packages/cli/src/index.kovo-check.test.ts`
+        passed.
+  - Evidence (2026-06-17): `pnpm exec tsc --noEmit --pretty false` passed.
 
 ## Identity And Collision Checks
 

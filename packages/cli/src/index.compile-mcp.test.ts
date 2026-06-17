@@ -347,7 +347,9 @@ export const Shell = component({
             },
             {
               code: 'KV201',
-              help: expect.stringContaining('Would lower to:'),
+              help: expect.stringContaining(
+                'SPEC §4.3 and §5.2 require handler lowering to cross only explicit serializable capture channels.',
+              ),
               length: 8,
               severity: 'error',
               start: { column: 9, line: 1 },
@@ -534,7 +536,9 @@ export const Shell = component({
             },
             {
               code: 'KV201',
-              help: expect.stringContaining('Would lower to:'),
+              help: expect.stringContaining(
+                'SPEC §4.3 and §5.2 require handler lowering to cross only explicit serializable capture channels.',
+              ),
               length: 8,
               severity: 'error',
               start: { column: 9, line: 1 },

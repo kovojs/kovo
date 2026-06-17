@@ -1125,6 +1125,7 @@ describe('compiler diagnostic coverage matrix', () => {
       Element params: -
       Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.
       Handlers may reference only state/ctx/event, data-p-* element params, named imports, and statically serializable module constants.
+      Blocked reason: captured runtime values cannot be serialized into the generated handler module boundary.
       SPEC §4.3 and §5.2 require handler lowering to cross only explicit serializable capture channels.",
           "length": 8,
           "message": "Closure captures unserializable value.",
@@ -1438,7 +1439,9 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV238",
           "fileName": "fragment-target-name-bad.tsx",
-          "help": "Fixes: rename the exported component binding, move one component so its derived module path namespace differs, or remove fragmentTarget from the component that should not receive enhanced patches.
+          "help": "Would lower to: one derived fragment-target registry key that maps to exactly one component render entry.
+      Blocked reason: duplicate fragment-target wire names make enhanced fragment patch routing ambiguous.
+      Fixes: rename the exported component binding, move one component so its derived module path namespace differs, or remove fragmentTarget from the component that should not receive enhanced patches.
       SPEC §4.5, §4.8, and §6.2 make fragment-target names derived registry-visible identities; duplicate keys make enhanced fragment patches ambiguous.
       Fragment target: fragment-target-name-bad/product-grid
       First writer: ProductGrid
@@ -1458,7 +1461,9 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV239",
           "fileName": "view-transition-bad.tsx",
-          "help": "Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
+          "help": "Would lower to: static view-transition-name values that uniquely pair old and new DOM elements.
+      Blocked reason: duplicate static transition names leave the browser and compiler without one canonical element pair.
+      Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
       SPEC §8 uses view-transition-name as a cross-document element-pair identity; duplicate static names in one rendered module or supplied registry facts are ambiguous.
       View-transition name: product-hero
       First writer: ViewTransitionBad <img>
@@ -1479,7 +1484,9 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV240",
           "fileName": "query-shapes-bad.tsx",
-          "help": "Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
+          "help": "Would lower to: one query-shape fact per query name for server render, client updates, and binding validation.
+      Blocked reason: duplicate query-shape facts would make graph indexing silently choose one shape for all generated bindings.
+      Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
       SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
           "length": null,
           "message": "Duplicate query-shape fact for one query name. query="cart" sources=generated/queries/cart-refresh.shape.ts, generated/queries/cart.shape.ts",
@@ -1564,6 +1571,8 @@ describe('compiler diagnostic coverage matrix', () => {
           "fileName": "coverage-bad.tsx",
           "help": "Coverage classification: CoverageBad expression UNHANDLED
       Blocked update: query expression has no data-bind, renderOnce, fragment, or isomorphic status
+      Would lower to: a data-bind/update plan, fragment boundary, isomorphic component, or renderOnce marker for the rendered position.
+      Blocked reason: the compiler found a query/state-dependent DOM position without an update strategy.
       Fixes: add a data-bind/query update plan, mark the expression renderOnce, move the subtree behind a fragment target, or make the component isomorphic.
       SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.",
           "length": 13,
@@ -1621,6 +1630,7 @@ describe('compiler diagnostic coverage matrix', () => {
       Element params: -
       Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.
       Handlers may reference only state/ctx/event, data-p-* element params, named imports, and statically serializable module constants.
+      Blocked reason: captured runtime values cannot be serialized into the generated handler module boundary.
       SPEC §4.3 and §5.2 require handler lowering to cross only explicit serializable capture channels.",
           "length": 8,
           "message": "Closure captures unserializable value.",

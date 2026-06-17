@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  compilerDiagnosticTeachingSchemas,
   diagnosticDefinitions,
   diagnosticDefinitionText,
   type DiagnosticCode,
@@ -67,6 +68,7 @@ describe('diagnostic registry', () => {
           },
           "help": "Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.
       Handlers may reference only state/ctx/event, data-p-* element params, named imports, and statically serializable module constants.
+      Blocked reason: captured runtime values cannot be serialized into the generated handler module boundary.
       SPEC §4.3 and §5.2 require handler lowering to cross only explicit serializable capture channels.",
           "message": "Closure captures unserializable value.",
           "severity": "error",
@@ -254,21 +256,27 @@ describe('diagnostic registry', () => {
         },
         "KV238": {
           "code": "KV238",
-          "help": "Fixes: rename the exported component binding, move one component so its derived module path namespace differs, or remove fragmentTarget from the component that should not receive enhanced patches.
+          "help": "Would lower to: one derived fragment-target registry key that maps to exactly one component render entry.
+      Blocked reason: duplicate fragment-target wire names make enhanced fragment patch routing ambiguous.
+      Fixes: rename the exported component binding, move one component so its derived module path namespace differs, or remove fragmentTarget from the component that should not receive enhanced patches.
       SPEC §4.5, §4.8, and §6.2 make fragment-target names derived registry-visible identities; duplicate keys make enhanced fragment patches ambiguous.",
           "message": "Duplicate fragment-target wire name.",
           "severity": "error",
         },
         "KV239": {
           "code": "KV239",
-          "help": "Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
+          "help": "Would lower to: static view-transition-name values that uniquely pair old and new DOM elements.
+      Blocked reason: duplicate static transition names leave the browser and compiler without one canonical element pair.
+      Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
       SPEC §8 uses view-transition-name as a cross-document element-pair identity; duplicate static names in one rendered module or supplied registry facts are ambiguous.",
           "message": "Duplicate static view-transition name.",
           "severity": "error",
         },
         "KV240": {
           "code": "KV240",
-          "help": "Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
+          "help": "Would lower to: one query-shape fact per query name for server render, client updates, and binding validation.
+      Blocked reason: duplicate query-shape facts would make graph indexing silently choose one shape for all generated bindings.
+      Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
       SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
           "message": "Duplicate query-shape fact for one query name.",
           "severity": "error",
@@ -326,7 +334,9 @@ describe('diagnostic registry', () => {
         },
         "KV311": {
           "code": "KV311",
-          "help": "Fixes: add a data-bind/query update plan, mark the expression renderOnce, move the subtree behind a fragment target, or make the component isomorphic.
+          "help": "Would lower to: a data-bind/update plan, fragment boundary, isomorphic component, or renderOnce marker for the rendered position.
+      Blocked reason: the compiler found a query/state-dependent DOM position without an update strategy.
+      Fixes: add a data-bind/query update plan, mark the expression renderOnce, move the subtree behind a fragment target, or make the component isomorphic.
       SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.",
           "message": "Query/state-dependent DOM position has no update status.",
           "severity": "warn",
@@ -403,17 +413,49 @@ describe('diagnostic registry', () => {
     `);
   });
 
-  it('requires teaching help for every compiler-owned KV2xx/KV3xx diagnostic', () => {
+  it('requires class-specific teaching help for every compiler-owned diagnostic', () => {
+    type CompilerTeachingCode = keyof typeof compilerDiagnosticTeachingSchemas;
     const compilerDiagnosticCodes = Object.keys(diagnosticDefinitions).filter(
-      (code): code is DiagnosticCode => /^KV[23]\d\d$/.test(code),
+      (code): code is CompilerTeachingCode => code === 'KV201' || /^KV[23]\d\d$/.test(code),
     );
 
     expect(compilerDiagnosticCodes).not.toEqual([]);
+    expect(Object.keys(compilerDiagnosticTeachingSchemas).sort()).toEqual(
+      compilerDiagnosticCodes.sort(),
+    );
+
     for (const code of compilerDiagnosticCodes) {
-      const help = (diagnosticDefinitions[code] as { help?: string }).help;
+      const definition = diagnosticDefinitions[code];
+      const help = (definition as { help?: string }).help;
+      const schema = compilerDiagnosticTeachingSchemas[code];
+      const labels = Object.values('detailLabels' in definition ? definition.detailLabels : {}).join(
+        '\n',
+      );
+
+      expect(definition.message, `${code} states the problem`).toEqual(expect.any(String));
+      expect(definition.message.trim(), `${code} states the problem`).not.toBe('');
       expect(help, `${code} has teaching help`).toEqual(expect.any(String));
       expect(help, `${code} names concrete fixes`).toContain('Fixes:');
       expect(help, `${code} cites the normative SPEC section`).toContain('SPEC §');
+
+      if (schema.blockedReason) {
+        expect(help, `${code} explains why lowering is blocked or degraded`).toContain(
+          'Blocked reason:',
+        );
+      }
+
+      if (schema.loweredForm === 'required') {
+        expect(
+          `${help}\n${labels}`,
+          `${code} shows the would-have-lowered form`,
+        ).toMatch(/Would (?:lower|hoist) (?:to|children to):/);
+      }
+
+      if (schema.escapePosture === 'documented') {
+        expect(help, `${code} documents suppression or escape posture`).toMatch(
+          /(?:Escape:|no suppression|advisory|lint-level|compilation continues|intentional)/,
+        );
+      }
     }
   });
 

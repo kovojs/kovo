@@ -63,12 +63,10 @@ describe('kovoVitePlugin', () => {
           {
             code: 'KV201',
             fileName: 'src/bad.tsx',
-            help: [
-              'Would lower to: on:click="/c/src/bad.client.js#Bad$button_click"',
-              'Fixes: move the value into component/query state via ctx.',
-            ].join('\n'),
+            help: kv201.help,
+            length: 9,
             message: kv201.message,
-            severity: 'lint',
+            severity: kv201.severity,
             start: { line: 3, column: 12 },
           },
         ],
@@ -93,8 +91,7 @@ describe('kovoVitePlugin', () => {
         'Kovo Vite transform failed with 1 error diagnostic.',
         [
           'KV201 src/bad.tsx:3:12 Closure captures unserializable value.',
-          '  help: Would lower to: on:click="/c/src/bad.client.js#Bad$button_click"',
-          '  help: Fixes: move the value into component/query state via ctx.',
+          ...kv201.help.split('\n').map((line) => `  help: ${line}`),
         ].join('\n'),
       ].join('\n\n'),
     );
@@ -103,7 +100,11 @@ describe('kovoVitePlugin', () => {
         expect.objectContaining({
           code: 'KV201',
           fileName: 'src/bad.tsx',
+          help: expect.stringContaining('SPEC §4.3 and §5.2'),
+          length: 9,
           message: kv201.message,
+          severity: kv201.severity,
+          start: { line: 3, column: 12 },
         }),
       ],
       fileName: 'src/bad.tsx',
