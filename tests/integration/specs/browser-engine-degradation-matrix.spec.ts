@@ -2,7 +2,7 @@
 // Chromium remains the full-suite baseline. This spec is the representative
 // cross-engine matrix for L0 document navigation, L1 form submission, and L2
 // loader/query enhancement behavior.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'browser-engine-degradation-matrix' });
 

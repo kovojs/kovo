@@ -1,6 +1,6 @@
 // SPEC.md §6.4: respond.stream() sends declared stream headers and still runs
 // route guards before the body is served.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'respond-stream' });
 

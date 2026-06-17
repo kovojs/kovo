@@ -1,7 +1,7 @@
 // SPEC.md §9.1: HMAC webhooks verify the raw body before parse/write and return
 // sanitized Kovo change metadata for accepted provider events.
 import { createHmac } from 'node:crypto';
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'webhook-hmac' });
 

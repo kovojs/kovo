@@ -1,6 +1,6 @@
 // SPEC §9.2 + §12.1: enhanced validation errors retain field/error relationships.
 import { createApp, mutation, route, s, type MutationFail } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 export const subscribe = mutation('a11y-form-error/subscribe', {
   csrf: false,

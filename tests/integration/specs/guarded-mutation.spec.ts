@@ -1,6 +1,6 @@
 // SPEC §6.5 + §10.3: mutation guards fail before writes and use the enhanced
 // typed-error fragment path instead of redirecting the fragment response.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'guarded-mutation' });
 

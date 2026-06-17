@@ -1,5 +1,5 @@
 // SPEC.md §10.3: mutation response query/fragments are rendered after commit.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'post-commit-rerun' });
 

@@ -9,7 +9,7 @@ import {
   route,
   s,
 } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const cartDomain = domain('cart');
 

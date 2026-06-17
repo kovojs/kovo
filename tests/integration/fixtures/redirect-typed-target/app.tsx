@@ -2,7 +2,7 @@
 // with params/search and still land on a normal document route.
 import { redirect, type Redirect } from '@kovojs/core';
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 declare module '@kovojs/core' {
   interface RouteRegistry {

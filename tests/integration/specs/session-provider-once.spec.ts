@@ -1,7 +1,7 @@
 // SPEC §6.5 + §9.5: sessionProvider is resolved once per route/query/mutation
 // request, and all guarded work sees the same session value.
-import { expect, test } from '@kovojs/test/integration';
-import type { KovoApp } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
+import type { KovoApp } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'session-provider-once' });
 

@@ -1,6 +1,6 @@
 // SPEC.md §9.1: Kovo-Targets is collected from the live DOM, including patched-in targets.
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readStage(db: KovoFixtureRequest['db']): Promise<number> {
   const rows = await db.query<{ stage: number }>('select stage from live_dom_state where id = 1');

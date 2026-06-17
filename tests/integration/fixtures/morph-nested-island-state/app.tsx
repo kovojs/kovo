@@ -1,5 +1,5 @@
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readVersion(db: KovoFixtureRequest['db']): Promise<number> {
   const rows = await db.query<{ version: number }>(

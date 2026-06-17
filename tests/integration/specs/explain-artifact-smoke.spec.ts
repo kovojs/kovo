@@ -1,7 +1,7 @@
 // SPEC.md §5.3 + §11.4: explain output is a stable graph for behavior intent.
 import { kovoExplain, type KovoExplainInput } from 'kovo';
 
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'explain-artifact-smoke' });
 

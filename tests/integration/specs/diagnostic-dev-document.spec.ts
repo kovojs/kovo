@@ -7,7 +7,7 @@ import {
   kovoAppShellVitePlugin,
   type KovoAppShellViteMiddleware,
 } from '@kovojs/server/app-shell/vite';
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'diagnostic-dev-document' });
 

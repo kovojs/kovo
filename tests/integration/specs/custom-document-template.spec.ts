@@ -1,6 +1,6 @@
 // SPEC.md §9.5: app document templates receive assembled shell parts, so custom
 // chrome can wrap the document while preserving the loader and body content.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'custom-document-template' });
 

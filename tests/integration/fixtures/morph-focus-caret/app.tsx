@@ -1,7 +1,7 @@
 // Morph survival fixture: a focused keyed input lives inside a fragment target
 // whose sibling server-truth text changes on enhanced mutation (SPEC §9.1).
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readVersion(db: KovoFixtureRequest['db']): Promise<number> {
   const rows = await db.query<{ version: number }>('select version from profile where id = 1');

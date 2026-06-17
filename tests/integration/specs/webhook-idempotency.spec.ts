@@ -1,7 +1,7 @@
 // SPEC.md §9.1: redelivered webhook events replay the stored response and do
 // not run the write handler a second time.
 import { createHmac } from 'node:crypto';
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'webhook-idempotency' });
 

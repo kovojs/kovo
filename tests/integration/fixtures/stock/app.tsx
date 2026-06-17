@@ -3,7 +3,7 @@
 // badge re-renders; on failure the app's renderFailureFragment morphs an error
 // region carrying the compiler/runtime error channel attrs (data-error-code).
 import { createApp, mutation, route, s, type MutationFail } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { item, readStock } from './shared';
 import { StockBadge } from './stock-badge';

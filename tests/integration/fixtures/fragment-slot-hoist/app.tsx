@@ -1,5 +1,5 @@
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { renderBalanceShell } from './balance-shell';
 import { account, balanceQuery } from './shared';

@@ -1,5 +1,5 @@
 import { createApp, route } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
   meta: { title: 'Asset Serving' },

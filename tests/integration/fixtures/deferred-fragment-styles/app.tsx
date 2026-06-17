@@ -1,5 +1,5 @@
 import { createApp, endpoint, renderDeferredDocument, route } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 import {
   kovoFixtureStylesheetManifest,
   kovoFixtureStylesheetsForTargets,

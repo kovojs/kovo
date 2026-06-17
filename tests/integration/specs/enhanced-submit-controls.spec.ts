@@ -1,6 +1,6 @@
 // SPEC.md §6.3/§9.1: enhanced forms stay real POST forms, and supported input
 // coercions survive enhancement without silently including disabled controls.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'enhanced-submit-controls' });
 

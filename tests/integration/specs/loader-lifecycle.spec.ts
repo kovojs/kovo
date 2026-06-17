@@ -1,7 +1,7 @@
 // SPEC.md §4.4/§4.7: delegated handlers start on interaction, keep a live
 // ctx.signal, and abort when a fragment morph removes their island.
-import { test } from '@kovojs/test/integration';
-import { expect } from '@kovojs/test/integration';
+import { test } from '@kovojs/test/internal/integration';
+import { expect } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'loader-lifecycle' });
 

@@ -8,7 +8,7 @@ import {
   type MutationFail,
   type ValidationFailurePayload,
 } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const reserve = mutation('validation/reserve', {
   csrf: false,

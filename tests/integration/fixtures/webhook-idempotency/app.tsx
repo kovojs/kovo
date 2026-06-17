@@ -10,7 +10,7 @@ import {
   type WebhookReplayStore,
   type WebhookWireResponse,
 } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type WebhookRequest = Request & KovoFixtureRequest;
 

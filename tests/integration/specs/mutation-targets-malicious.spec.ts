@@ -1,6 +1,6 @@
 // SPEC.md §6.5/§9.1: spoofed Kovo-Targets cannot force unauthorized fragment
 // refreshes or leak protected fragment data.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'mutation-targets-malicious' });
 

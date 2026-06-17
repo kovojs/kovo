@@ -9,11 +9,11 @@ import {
   defineVars,
   emitAtomicCss,
   firstThatWorks,
-  getPriority,
   keyframes,
   props,
   raw,
 } from './index.js';
+import { getPriority } from './internal.js';
 
 describe('@kovojs/style phase 1 runtime fork', () => {
   it('merges atoms with property-level last-wins semantics', () => {

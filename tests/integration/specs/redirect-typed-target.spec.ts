@@ -1,6 +1,6 @@
 // SPEC §6.4 + §9.1: no-JS mutation PRG follows the typed redirect target,
 // including path params and search params.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'redirect-typed-target' });
 

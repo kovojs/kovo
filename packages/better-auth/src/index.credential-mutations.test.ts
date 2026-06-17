@@ -9,7 +9,7 @@ import {
   type BetterAuthResponseLike,
   type BetterAuthSignInEmailLike,
   type BetterAuthSignUpEmailLike,
-} from './index.js';
+} from './internal.js';
 import {
   AuthApiError,
   FakeCredentialAuth,

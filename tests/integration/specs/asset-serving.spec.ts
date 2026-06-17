@@ -1,6 +1,6 @@
 // SPEC.md §9.5: built assets are served as immutable static files while app
 // routes continue through the Kovo request shell.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'asset-serving' });
 

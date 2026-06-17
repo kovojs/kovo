@@ -1,6 +1,6 @@
 // SPEC.md §9.1: mutation handlers may attach narrow transport headers.
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ count: number }>(

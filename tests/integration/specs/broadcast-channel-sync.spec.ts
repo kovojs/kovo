@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'broadcast-channel-sync' });
 

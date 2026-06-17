@@ -1,5 +1,5 @@
 // SPEC.md §9.1: response headers merge without replacing mutation response vocabulary.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'mutation-response-headers' });
 

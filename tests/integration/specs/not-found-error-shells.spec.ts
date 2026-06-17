@@ -1,6 +1,6 @@
 // SPEC §6.4 and §9.5: notFound() and request-shell misses render configured
 // 404 shells; SPEC §9.2 keeps unexpected route failures behind a safe 500 shell.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'not-found-error-shells' });
 

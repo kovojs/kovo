@@ -1,5 +1,5 @@
 // SPEC.md §9.2: render failures after commit are stable and keep sanitized changes.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'render-error-fragment' });
 

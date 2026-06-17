@@ -1,6 +1,6 @@
 // SPEC §6.4 + §7: GET forms coordinate typed route search params through the URL.
 import { createApp, route, s } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const catalogRoute = route('/catalog', {
   search: s.object({

@@ -2,7 +2,7 @@
 //
 // No global `webServer`: each spec declares the fixture app it drives with
 // `test.use({ kovoFixture: '<folder>' })`, and the harness boots that app per
-// worker on an ephemeral port (see @kovojs/test/integration). Chromium is the
+// worker on an ephemeral port (see @kovojs/test/internal/integration). Chromium is the
 // required baseline; a Firefox/WebKit matrix is added in I4 for engine-bound
 // behavior (mirrors plans/compiler-quality.md browser-matrix rule).
 import { fileURLToPath } from 'node:url';

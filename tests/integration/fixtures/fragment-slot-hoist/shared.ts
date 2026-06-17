@@ -1,4 +1,4 @@
-import type { KovoFixtureRequest } from '@kovojs/test/integration/define';
+import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const account = { key: 'slot_account' };
 

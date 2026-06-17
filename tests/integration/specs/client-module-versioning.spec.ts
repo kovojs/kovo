@@ -1,6 +1,6 @@
 // SPEC.md §4.3/§6.6: handler refs use readable versioned module URLs, and old
 // documents can import those immutable /c/ modules on first interaction.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'client-module-versioning' });
 

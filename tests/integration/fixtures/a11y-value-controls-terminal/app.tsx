@@ -1,6 +1,6 @@
 // SPEC §12.1: terminal value controls expose native value roles and names.
 import { createApp, route } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
   meta: { title: 'Value controls' },

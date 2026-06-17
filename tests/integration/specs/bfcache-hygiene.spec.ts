@@ -1,6 +1,6 @@
 // SPEC.md §8/§9.3: bfcache-safe navigation uses pagehide/pageshow lifecycle
 // hooks, keepalive enhanced mutations, and visible-return typed-read recovery.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'bfcache-hygiene' });
 

@@ -1,6 +1,6 @@
 // SPEC.md §9.5: page routes answer GET/HEAD, other page-path methods are 405,
 // and mutation POSTs are reserved under /_m/.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'http-methods' });
 

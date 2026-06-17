@@ -1,6 +1,6 @@
 // SPEC.md §6.5/§9.4: query arg validation runs before typed-read guards, but
 // valid anonymous reads still take the guard failure path.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'query-read-guard-validation-order' });
 

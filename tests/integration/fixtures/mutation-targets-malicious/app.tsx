@@ -1,7 +1,7 @@
 // SPEC.md §6.5/§9.1: Kovo-Targets is untrusted wire input. Unknown,
 // duplicated, malformed, or unauthorized targets must not leak protected data.
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const COOKIE = 'kovo_target_session';
 

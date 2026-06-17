@@ -1,7 +1,7 @@
 // Mutation wire fixture for SPEC.md §6.3 and §9.2: one mutation can expose
 // multiple declared typed errors and render the selected branch on the wire.
 import { createApp, mutation, route, s, type MutationFail } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const checkout = mutation('checkout/submit', {
   csrf: false,

@@ -72,23 +72,24 @@
       "apiBoundary": {
         "public": [
           ".",
-          "./integration",
-          "./integration/define",
           "./assertions",
           "./headers",
-          "./harness-operations",
           "./harness",
+          "./harness-operations",
           "./html-fragment",
           "./page",
           "./pglite",
           "./sql-observer",
           "./test-case",
+          "./verifier",
           "./verifier-diagnostics",
-          "./verifier-sql",
-          "./verifier"
+          "./verifier-sql"
         ],
         "generated": [],
-        "internal": []
+        "internal": [
+          "./internal/integration",
+          "./internal/integration/define"
+        ]
       },
       "apiRef": {
         "order": 4,
@@ -174,7 +175,9 @@
           "."
         ],
         "generated": [],
-        "internal": []
+        "internal": [
+          "./internal"
+        ]
       },
       "apiRef": {
         "order": 6,
@@ -192,7 +195,9 @@
           "."
         ],
         "generated": [],
-        "internal": []
+        "internal": [
+          "./internal"
+        ]
       },
       "apiRef": {
         "order": 7,

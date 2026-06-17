@@ -1,7 +1,7 @@
 // SPEC §9.4 + §10.2: typed read endpoints parse args from search params and
 // return chunks keyed by the canonical query instance key.
 import { createApp, domain, query, renderQueryScript, route, runQuery, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const productDomain = domain('product');
 

@@ -1,4 +1,4 @@
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 import { expectAxeClean } from './a11y-axe';
 

@@ -1,6 +1,6 @@
 // SPEC.md §10.1/§10.3: request-time owner scoping prevents an owner-scoped
 // query path from serving rows outside the resolved session.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'unscoped-owner-fixture' });
 

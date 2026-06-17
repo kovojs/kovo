@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
 import { compileComponentModule } from '../../../packages/compiler/src/index';
-import { expect, semanticSnapshot, test } from '@kovojs/test/integration';
+import { expect, semanticSnapshot, test } from '@kovojs/test/internal/integration';
 import ts from 'typescript';
 
 test.use({ kovoFixture: 'fixpoint-render-equivalence-fixture' });

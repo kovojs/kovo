@@ -1,5 +1,5 @@
 import { createApp, route, s } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 import { CatalogCard } from './catalog-card';
 import { ProductHero } from './product-hero';

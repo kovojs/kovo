@@ -1,6 +1,6 @@
 // SPEC §6.5: a null or undefined provider result is anonymous and takes the
 // normal unauthenticated path without a server error.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'session-null-anonymous' });
 

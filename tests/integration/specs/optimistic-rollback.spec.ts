@@ -1,6 +1,6 @@
 // SPEC.md §10.4 and §9.2: failed optimistic predictions must roll back shared
 // query state and then render the typed error fragment.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'optimistic-rollback' });
 

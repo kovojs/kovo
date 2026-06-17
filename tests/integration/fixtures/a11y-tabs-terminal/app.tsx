@@ -1,6 +1,6 @@
 // SPEC §12.1: terminal tab state exposes selected tab and panel relationships.
 import { createApp, route } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
   meta: { title: 'Tabs terminal state' },

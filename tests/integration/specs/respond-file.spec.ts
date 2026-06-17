@@ -1,6 +1,6 @@
 // SPEC.md §6.4: respond.file() keeps route guards, attachment headers, and
 // If-None-Match handling while bypassing HTML rendering.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'respond-file' });
 

@@ -1,6 +1,6 @@
 // SPEC.md §9.5: the default request shell assembles a complete document, and
 // SPEC.md §4.2: initial query JSON is present before its consumers.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'document-shell' });
 

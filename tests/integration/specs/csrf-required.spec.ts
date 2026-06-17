@@ -1,5 +1,5 @@
 // SPEC.md §6.6/§9.1: CSRF is stamped into forms and checked before parsing/guards.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'csrf-required' });
 

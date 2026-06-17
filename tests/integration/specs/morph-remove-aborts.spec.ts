@@ -1,6 +1,6 @@
 // SPEC.md §4.4/§4.7: removing an island through a fragment morph aborts its
 // ctx.signal and does not let removed handlers or pending triggers produce later effects.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'morph-remove-aborts' });
 

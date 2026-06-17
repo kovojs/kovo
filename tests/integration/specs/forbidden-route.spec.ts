@@ -1,6 +1,6 @@
 // SPEC §6.5: an authenticated user without the required role receives a 403,
 // while an authorized user reaches the guarded route.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'forbidden-route' });
 

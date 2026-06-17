@@ -1,7 +1,7 @@
 // SPEC.md §9.1 and §9.5: raw endpoint handlers receive the original Request
 // before body parsing, without ambient session, and dispatch before page routes.
 import { createApp, endpoint, route } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface RawSession {
   user: { id: string; roles: readonly string[] };

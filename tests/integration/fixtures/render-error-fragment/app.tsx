@@ -1,6 +1,6 @@
 // SPEC.md §9.2: post-commit render failures return a stable render-error fragment.
 import { createApp, domain, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const receiptDomain = domain('receipt');
 

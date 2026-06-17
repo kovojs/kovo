@@ -1,7 +1,7 @@
 // SPEC §6.5 + §9.5: the request shell resolves the sessionProvider once, then
 // route/query/mutation guards and handlers observe that same session value.
 import { createApp, domain, guards, mutation, query, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface AppSession {
   id: string;

@@ -1,7 +1,7 @@
 // Shared query + domain for the stock (error-union) fixture. Declares no Kovo
 // components, so the compiler plugin leaves it untouched.
 import { domain, query, type QueryLoadContext } from '@kovojs/server';
-import type { KovoFixtureRequest } from '@kovojs/test/integration/define';
+import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export interface StockResult {
   stock: number;

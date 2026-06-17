@@ -1,10 +1,10 @@
 // SPEC.md §8 + KV239: the public render path emits stable view-transition-name CSS
 // for matching route templates; duplicate-name rejection remains compiler coverage.
-import { expect, test } from '@kovojs/test/integration';
+import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'view-transition-names' });
 
-async function transitionNames(page: import('@kovojs/test/integration').Page): Promise<string[]> {
+async function transitionNames(page: import('@kovojs/test/internal/integration').Page): Promise<string[]> {
   return page.locator('[data-transition]').evaluateAll((elements) =>
     elements.map((element) => {
       const style = element.getAttribute('style') ?? '';
