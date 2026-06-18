@@ -5,11 +5,9 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
 import { route } from './route.js';
-import {
-  createKovoAppShellViteBuildFromBundle,
-  kovoAppShellViteManifestStylesheetHrefFromFile,
-} from './api/app-shell/vite.js';
+import { kovoAppShellViteManifestStylesheetHrefFromFile } from './api/app-shell/vite.js';
 import { kovoAppShellVitePlugin } from './internal/app-shell-vite.js';
+import { createKovoAppShellViteBuildFromBundle } from './vite-build.js';
 import {
   kovoAppShellViteManifestAssets,
   kovoAppShellViteManifestAssetsFromFile,

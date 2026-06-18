@@ -11,8 +11,8 @@ import {
   createKovoAppShellViteBuildFromBundle,
   createKovoAppShellViteBuildFromManifestFile,
   type KovoAppShellBuild,
-  type KovoAppShellViteBuildOutput,
-} from './api/app-shell/vite.js';
+} from './vite-build.js';
+import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
 import { kovoAppShellVitePlugin } from './internal/app-shell-vite.js';
 import { writeKovoAppShellViteBuildOutput } from './vite-build-output.js';
 

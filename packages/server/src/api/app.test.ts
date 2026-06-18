@@ -24,7 +24,6 @@ import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
-import * as viteStaticExportBuildApi from '../vite-static-export-build.js';
 import * as viteStaticExportManifestFileApi from '../vite-static-export-manifest-file.js';
 import * as wireHtmlApi from '../wire-html.js';
 
@@ -146,6 +145,7 @@ describe('server app-shell public API barrels', () => {
       'createMemoryVersionedClientModuleRegistry',
       'createRequestHandler',
       'exportStaticApp',
+      'layout',
       'respond',
       'route',
       'toNodeHandler',
@@ -156,6 +156,7 @@ describe('server app-shell public API barrels', () => {
         clientModulesApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: coreApi.createRequestHandler,
       exportStaticApp: staticExportApi.exportStaticApp,
+      layout: coreApi.layout,
       respond: coreApi.respond,
       route: coreApi.route,
       toNodeHandler: nodeApi.toNodeHandler,
@@ -227,6 +228,7 @@ describe('server app-shell public API barrels', () => {
       'createApp',
       'createRequestHandler',
       'isKovoApp',
+      'layout',
       'respond',
       'route',
     ]);
@@ -245,24 +247,14 @@ describe('server app-shell public API barrels', () => {
       'staticExportOutputPlan',
     ]);
     expect(moduleValueKeys(packageViteApi)).toEqual([
-      'createKovoAppShellViteBuild',
-      'createKovoAppShellViteBuildFromBundle',
-      'createKovoAppShellViteBuildFromManifestFile',
-      'exportKovoAppShellViteBuild',
-      'exportKovoAppShellViteBuildFromManifestFile',
-      'exportKovoAppShellViteBuildWithManifest',
       'exportKovoAppShellViteBuildWithManifestFromManifestFile',
       'kovoAppShellViteDevPlugin',
-      'kovoAppShellViteManifestFile',
       'kovoAppShellViteManifestStylesheetHrefFromFile',
-      'staticExportInventoryForKovoAppShellViteBuild',
-      'staticExportInventoryForKovoAppShellViteBuildFromManifestFile',
-      'staticExportManifestForKovoAppShellViteBuild',
-      'staticExportManifestForKovoAppShellViteBuildFromManifestFile',
     ]);
 
     expect(packageCoreApi.createApp).toBe(coreApi.createApp);
     expect(packageCoreApi.isKovoApp).toBe(coreApi.isKovoApp);
+    expect(packageCoreApi.layout).toBe(coreApi.layout);
     expect(packageCoreApi.route).toBe(routeApi.route);
     expect(packageCoreApi.respond).toBe(responseApi.respond);
     expect(packageClientModulesApi.versionedClientModuleHref).toBe(
@@ -293,62 +285,25 @@ describe('server app-shell public API barrels', () => {
     expect(packageStaticExportApi.isStaticExportDiagnosticError).toBe(
       staticExportDiagnosticsApi.isStaticExportDiagnosticError,
     );
-    expect(packageViteApi.createKovoAppShellViteBuild).toBe(viteApi.createKovoAppShellViteBuild);
-    expect(packageViteApi).not.toHaveProperty('createKovoAppShellBuild');
-    expect(packageViteApi).not.toHaveProperty('KovoAppShellViteInput');
-    expect(packageViteApi).not.toHaveProperty('writeKovoAppShellViteBuildOutput');
-    expect(packageViteApi).not.toHaveProperty('writeKovoAppShellVitePluginBuild');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteOutputDir');
-    expect(packageViteApi.exportKovoAppShellViteBuild).toBe(viteApi.exportKovoAppShellViteBuild);
-    expect(viteApi.exportKovoAppShellViteBuild).toBe(
-      viteStaticExportBuildApi.exportKovoAppShellViteBuild,
-    );
-    expect(packageViteApi.exportKovoAppShellViteBuildFromManifestFile).toBe(
-      viteApi.exportKovoAppShellViteBuildFromManifestFile,
-    );
-    expect(viteApi.exportKovoAppShellViteBuildFromManifestFile).toBe(
-      viteStaticExportManifestFileApi.exportKovoAppShellViteBuildFromManifestFile,
-    );
+    expect(packageViteApi.kovoAppShellViteDevPlugin).toBe(viteApi.kovoAppShellViteDevPlugin);
     expect(packageViteApi.exportKovoAppShellViteBuildWithManifestFromManifestFile).toBe(
-      viteApi.exportKovoAppShellViteBuildWithManifestFromManifestFile,
-    );
-    expect(viteApi.exportKovoAppShellViteBuildWithManifestFromManifestFile).toBe(
       viteStaticExportManifestFileApi.exportKovoAppShellViteBuildWithManifestFromManifestFile,
     );
-    expect(packageViteApi.exportKovoAppShellViteBuildWithManifest).toBe(
-      viteApi.exportKovoAppShellViteBuildWithManifest,
-    );
-    expect(viteApi.exportKovoAppShellViteBuildWithManifest).toBe(
-      viteStaticExportBuildApi.exportKovoAppShellViteBuildWithManifest,
-    );
-    expect(packageViteApi.staticExportInventoryForKovoAppShellViteBuild).toBe(
-      viteApi.staticExportInventoryForKovoAppShellViteBuild,
-    );
-    expect(viteApi.staticExportInventoryForKovoAppShellViteBuild).toBe(
-      viteStaticExportBuildApi.staticExportInventoryForKovoAppShellViteBuild,
-    );
-    expect(packageViteApi.staticExportInventoryForKovoAppShellViteBuildFromManifestFile).toBe(
-      viteApi.staticExportInventoryForKovoAppShellViteBuildFromManifestFile,
-    );
-    expect(viteApi.staticExportInventoryForKovoAppShellViteBuildFromManifestFile).toBe(
-      viteStaticExportManifestFileApi.staticExportInventoryForKovoAppShellViteBuildFromManifestFile,
-    );
-    expect(packageViteApi.staticExportManifestForKovoAppShellViteBuild).toBe(
-      viteApi.staticExportManifestForKovoAppShellViteBuild,
-    );
-    expect(viteApi.staticExportManifestForKovoAppShellViteBuild).toBe(
-      viteStaticExportBuildApi.staticExportManifestForKovoAppShellViteBuild,
-    );
-    expect(packageViteApi.staticExportManifestForKovoAppShellViteBuildFromManifestFile).toBe(
-      viteApi.staticExportManifestForKovoAppShellViteBuildFromManifestFile,
-    );
-    expect(viteApi.staticExportManifestForKovoAppShellViteBuildFromManifestFile).toBe(
-      viteStaticExportManifestFileApi.staticExportManifestForKovoAppShellViteBuildFromManifestFile,
-    );
-    expect(packageViteApi.kovoAppShellViteManifestFile).toBe(viteApi.kovoAppShellViteManifestFile);
     expect(packageViteApi.kovoAppShellViteManifestStylesheetHrefFromFile).toBe(
       viteApi.kovoAppShellViteManifestStylesheetHrefFromFile,
     );
+    expect(packageViteApi).not.toHaveProperty('createKovoAppShellViteBuild');
+    expect(packageViteApi).not.toHaveProperty('createKovoAppShellViteBuildFromBundle');
+    expect(packageViteApi).not.toHaveProperty('createKovoAppShellViteBuildFromManifestFile');
+    expect(packageViteApi).not.toHaveProperty('createKovoAppShellBuild');
+    expect(packageViteApi).not.toHaveProperty('KovoAppShellViteInput');
+    expect(packageViteApi).not.toHaveProperty('exportKovoAppShellViteBuild');
+    expect(packageViteApi).not.toHaveProperty('exportKovoAppShellViteBuildFromManifestFile');
+    expect(packageViteApi).not.toHaveProperty('exportKovoAppShellViteBuildWithManifest');
+    expect(packageViteApi).not.toHaveProperty('writeKovoAppShellViteBuildOutput');
+    expect(packageViteApi).not.toHaveProperty('writeKovoAppShellVitePluginBuild');
+    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteOutputDir');
+    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestFile');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteBuildStaticExportAssets');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestAssets');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestAssetsFromFile');

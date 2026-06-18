@@ -6,12 +6,10 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
-import {
-  createKovoAppShellViteBuild,
-  exportKovoAppShellViteBuild,
-  exportKovoAppShellViteBuildFromManifestFile,
-  type KovoAppShellViteBuildOutput,
-} from './api/app-shell/vite.js';
+import { createKovoAppShellViteBuild } from './vite-build.js';
+import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
+import { exportKovoAppShellViteBuild } from './vite-static-export-build.js';
+import { exportKovoAppShellViteBuildFromManifestFile } from './vite-static-export-manifest-file.js';
 import { kovoAppShellVitePlugin } from './internal/app-shell-vite.js';
 import { kovoAppShellViteStaticExportAssets } from './vite-build-assets.js';
 

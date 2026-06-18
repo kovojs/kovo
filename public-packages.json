@@ -29,12 +29,12 @@
           "./app-shell/core",
           "./app-shell/node",
           "./app-shell/static-export",
+          "./app-shell/vite",
           "./jsx-runtime",
           "./jsx-dev-runtime"
         ],
         "generated": [],
         "internal": [
-          "./app-shell/vite",
           "./internal/app-shell-vite",
           "./internal/html",
           "./internal/route",
@@ -45,7 +45,19 @@
       "apiRef": {
         "order": 2,
         "slug": "server",
-        "description": "Schemas and validation, guards and sessions, the request lifecycle, route matching, rendering, and streaming."
+        "description": "Schemas and validation, guards and sessions, the request lifecycle, route matching, rendering, and streaming.",
+        "entries": [
+          {
+            "path": ".",
+            "slug": "server",
+            "description": "Schemas and validation, guards and sessions, the request lifecycle, route matching, rendering, and streaming."
+          },
+          {
+            "path": "./app-shell/vite",
+            "slug": "server-app-shell-vite",
+            "description": "Public Vite dev/build/static-export bridge for app-shell based apps."
+          }
+        ]
       }
     },
     {
