@@ -25,6 +25,7 @@ registerHooks({
 const {
   deriveInvalidationRegistry,
   extractAlgebraicShapesFromProject,
+  extractQueryFactsFromProject,
   extractSymbolicEffectsFromProject,
   extractTouchGraphFromProject,
   serializeInvalidationRegistry,
@@ -83,6 +84,16 @@ function formatTs(source) {
   return source;
 }
 
+function queryDomainsFromFacts(facts) {
+  return [...facts]
+    .sort((left, right) => siteLineNumber(left.site) - siteLineNumber(right.site))
+    .map((fact) => ({ domains: [...fact.reads], query: fact.query }));
+}
+
+function siteLineNumber(site) {
+  return Number(String(site).split(':').pop() ?? 0);
+}
+
 const formatJson = (value, indent = 0) => {
   if (Array.isArray(value)) {
     if (value.length === 0) return '[]';
@@ -106,6 +117,7 @@ const formatJson = (value, indent = 0) => {
 // ── Extract the touch graph, effects, and shapes from the project ──────────────
 const touchProject = projectFiles();
 const extractedTouchGraph = extractTouchGraphFromProject({ files: touchProject.files });
+const queryFacts = extractQueryFactsFromProject({ files: projectFiles().files });
 const effectFacts = extractSymbolicEffectsFromProject({ files: projectFiles().files });
 const shapes = extractAlgebraicShapesFromProject({ files: projectFiles().files });
 
@@ -141,13 +153,7 @@ for (const fact of effectFacts) {
 const shapeByQuery = new Map(shapes.map((shape) => [shape.query, shape]));
 
 // ── Invalidation: which queries each mutation invalidates (domain overlap) ─────
-const queryDomains = [
-  { domains: ['question'], query: 'questionList' },
-  { domains: ['answer'], query: 'answerList' },
-  { domains: ['question'], query: 'questionDetail' },
-  { domains: ['answer'], query: 'questionAnswers' },
-  { domains: ['vote'], query: 'questionScore' },
-];
+const soQueryDomains = queryDomainsFromFacts(queryFacts);
 const invalidatedQueriesByMutation = {
   postQuestion: ['questionList'],
   postAnswer: ['questionList', 'answerList'],
@@ -175,13 +181,13 @@ for (const mutationKey of MUTATION_KEYS) {
 }
 
 // ── Build the KovoExplainInput graph.json (touchGraph EXTRACTED) ─────────────────
-const graph = createSoGraph(soTouchGraph);
+const graph = createSoGraph(soTouchGraph, soQueryDomains);
 const graphJson = `${formatJson(graph)}\n`;
 
 // ── Serialize the touch graph + invalidation registry artifact ─────────────────
 const invalidationRegistry = deriveInvalidationRegistry({
   mutations: MUTATION_KEYS.map((key) => ({ mutation: key, touchGraphKey: key })),
-  queries: queryDomains,
+  queries: soQueryDomains,
   touchGraph: soTouchGraph,
 });
 const invalidationRegistrySource = serializeInvalidationRegistry(invalidationRegistry, {
@@ -198,6 +204,8 @@ const touchGraphSource = formatTs(
 import type { AnswerListResult, QuestionAnswersResult, QuestionDetailResult, QuestionListResult, QuestionScoreResult } from '../types.js';
 
 ${serializedTouchGraph}
+export const soQueryDomains = ${formatJson(soQueryDomains)} as const;
+
 ${invalidationRegistrySource}
 declare module '@kovojs/core' {
   interface QueryRegistry {

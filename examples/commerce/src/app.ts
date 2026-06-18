@@ -50,7 +50,7 @@ import { CartBadge } from './generated/cart-badge.js';
 import { cartAddDerivedOptimistic } from './generated/optimistic/cart-add.js';
 import { OrderHistory } from './generated/order-history.js';
 import * as productGridComponent from './generated/product-grid.js';
-import { commerceTouchGraph } from './generated/touch-graph.js';
+import { commerceQueryDomains, commerceTouchGraph } from './generated/touch-graph.js';
 import { commerceStylesheets, createCommerceGraph } from './graph.js';
 import { commerceCartPageMeta } from './page-meta.js';
 import {
@@ -67,7 +67,7 @@ import {
 } from './queries.js';
 import { attachments, cartItems, orders, products } from './schema.js';
 
-export { commerceTouchGraph } from './generated/touch-graph.js';
+export { commerceQueryDomains, commerceTouchGraph } from './generated/touch-graph.js';
 export { commerceStylesheets } from './graph.js';
 export { commerceCartPageMeta } from './page-meta.js';
 export { createCommerceDb, type CommerceDb } from './db.js';
@@ -1147,4 +1147,8 @@ function commerceAuthResponse(cookies: readonly string[], status = 204): BetterA
 
 // A fresh, unmodified database has an empty cart (count 0); the demo graph is a
 // module-load static, so it uses that starter value rather than awaiting a read.
-export const commerceGraph = createCommerceGraph({ count: 0 }, commerceTouchGraph);
+export const commerceGraph = createCommerceGraph(
+  { count: 0 },
+  commerceTouchGraph,
+  commerceQueryDomains,
+);

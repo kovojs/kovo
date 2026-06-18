@@ -34,6 +34,7 @@ import {
   commerceCsrf,
   commerceCsrfInput,
   commerceGraph,
+  commerceQueryDomains,
   commerceTouchGraph,
   createCommerceDb,
   loadCartQuery,
@@ -68,7 +69,9 @@ describe('commerce source-truth graph acceptance', () => {
     const pageHints = htmlDocumentFacts(renderCommercePageHints(starterCart).html);
 
     expect(graphAcceptance.artifactGraph).toEqual(commerceGraph);
-    expect(createCommerceGraph(starterCart, commerceTouchGraph)).toEqual(commerceGraph);
+    expect(createCommerceGraph(starterCart, commerceTouchGraph, commerceQueryDomains)).toEqual(
+      commerceGraph,
+    );
     expect(graphPageFact(graphAcceptance.artifactGraph, '/cart').meta).toEqual(cartMeta);
     expect(graphPageFact(commerceGraph, '/cart').meta).toEqual(cartMeta);
     expect(pageHints.title).toBe(cartMeta.title);
@@ -435,10 +438,10 @@ describe('commerce source-truth graph acceptance', () => {
     expect(fact.uploadReceipt.updateQueries).toEqual([]);
     expect(fact.uploadReceipt.invalidates).toEqual([]);
     expect(fact.uploadReceipt.updateConsumers).toEqual([]);
-    expect(fact.addToCart.result).toMatchObject({
-      ok: true,
-      rerunQueries: expect.arrayContaining(fact.addToCart.updateQueries),
-    });
+    expect(fact.addToCart.result).toMatchObject({ ok: true });
+    expect(fact.fragmentResponse.queryNames).toEqual(
+      expect.arrayContaining(fact.addToCart.updateQueries),
+    );
     expect(fact.addToCart.diagnostics).toEqual([]);
     expect(fact.uploadReceipt.result).toMatchObject({
       ok: true,

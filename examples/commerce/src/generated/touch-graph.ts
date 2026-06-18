@@ -6,20 +6,20 @@ export const commerceTouchGraph = {
       {
         "domain": "cart",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:465",
+        "site": "examples/commerce/src/app.ts:464",
         "via": "cart_items"
       },
       {
         "domain": "order",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:470",
+        "site": "examples/commerce/src/app.ts:469",
         "via": "orders"
       },
       {
         "domain": "product",
         "keys": "arg:productId",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:478",
+        "site": "examples/commerce/src/app.ts:477",
         "via": "products"
       }
     ],
@@ -32,7 +32,7 @@ export const commerceTouchGraph = {
         "domain": "order",
         "keys": "arg:data.object.id",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:621",
+        "site": "examples/commerce/src/app.ts:619",
         "via": "orders"
       }
     ],
@@ -45,7 +45,7 @@ export const commerceTouchGraph = {
         "domain": "attachment",
         "keys": "arg:orderId",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:542",
+        "site": "examples/commerce/src/app.ts:540",
         "via": "attachments"
       }
     ],
@@ -53,6 +53,21 @@ export const commerceTouchGraph = {
     "unresolved": []
   }
 } as const;
+
+export const commerceQueryDomains = [
+  {
+    "domains": ["cart"],
+    "query": "cart"
+  },
+  {
+    "domains": ["product"],
+    "query": "productGrid"
+  },
+  {
+    "domains": ["order"],
+    "query": "orderHistory"
+  }
+] as const;
 
 export const commerceInvalidationSets = {
   'cart/add': [

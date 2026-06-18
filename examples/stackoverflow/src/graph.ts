@@ -1,4 +1,5 @@
 import type { KovoExplainInput, TouchGraph } from '@kovojs/core/internal/graph';
+import type { InvalidationQueryInput } from '@kovojs/drizzle/static';
 
 // SPEC.md §10.2 / §11.2: the Stack Overflow graph facts consumed by `kovo check`
 // and `kovo explain`. The optimistic[] coverage is entirely compiler-DERIVED
@@ -25,7 +26,7 @@ const AWAIT_FRAGMENT_OPTIMISTIC = [
   { mutation: 'voteUp', query: 'questionDetail' },
 ] as const;
 
-export function soGraphDeclarations() {
+export function soGraphDeclarations(queries: readonly InvalidationQueryInput[]) {
   return {
     mutations: [
       {
@@ -65,19 +66,13 @@ export function soGraphDeclarations() {
         status: 'await-fragment' as const,
       })),
     ),
-    queries: [
-      { domains: ['question'], query: 'questionList' },
-      { domains: ['answer'], query: 'answerList' },
-      { domains: ['question'], query: 'questionDetail' },
-      { domains: ['answer'], query: 'questionAnswers' },
-      { domains: ['vote'], query: 'questionScore' },
-    ],
+    queries,
   } satisfies Omit<KovoExplainInput, 'touchGraph'>;
 }
 
-export function createSoGraph(touchGraph: TouchGraph) {
+export function createSoGraph(touchGraph: TouchGraph, queries: readonly InvalidationQueryInput[]) {
   const graph = {
-    ...soGraphDeclarations(),
+    ...soGraphDeclarations(queries),
     touchGraph,
   };
 

@@ -30,6 +30,7 @@ const {
   deriveInvalidationRegistry,
   serializeInvalidationRegistry,
   extractTouchGraphFromProject,
+  extractQueryFactsFromProject,
   extractSymbolicEffectsFromProject,
   extractAlgebraicShapesFromProject,
 } = await import('@kovojs/drizzle/static');
@@ -45,6 +46,16 @@ const crmRoot = resolve(scriptDir, '..');
 // an external formatter keeps `emit-graph --check` deterministic across machines.
 function formatSource(source) {
   return source;
+}
+
+function queryDomainsFromFacts(facts) {
+  return [...facts]
+    .sort((left, right) => siteLineNumber(left.site) - siteLineNumber(right.site))
+    .map((fact) => ({ domains: [...fact.reads], query: fact.query }));
+}
+
+function siteLineNumber(site) {
+  return Number(String(site).split(':').pop() ?? 0);
 }
 
 const SOURCE_FILES = [
@@ -105,15 +116,6 @@ const MUTATIONS = [
 
 const FORM_IMPORT_PATH = '../../forms.js';
 
-// query → domains it reads (mirrors queries.ts `reads`).
-const QUERY_DOMAINS = {
-  contactList: ['contact'],
-  dealList: ['deal'],
-  contactDealCount: ['deal'],
-  openDeals: ['deal'],
-  pipelineByStage: ['deal'],
-};
-
 const TABLE_DOMAIN = { contacts: 'contact', deals: 'deal', activities: 'activity' };
 
 // The pairs deliberately served by `'await-fragment'` (wait for server truth)
@@ -129,6 +131,7 @@ const AWAIT_FRAGMENT_PAIRS = new Set([
 
 // ── Stage 1+2 extraction ──────────────────────────────────────────────────────
 const rawTouchGraph = extractTouchGraphFromProject({ files });
+const queryFacts = extractQueryFactsFromProject({ files });
 const effectFacts = extractSymbolicEffectsFromProject({ files });
 const shapes = extractAlgebraicShapesFromProject({ files });
 const shapeByQuery = new Map(shapes.map((shape) => [shape.query, shape]));
@@ -150,6 +153,12 @@ for (const mutation of MUTATIONS) {
   assert.ok(entry, `expected an extracted touch entry for ${mutation.handler}`);
   crmTouchGraph[mutation.key] = entry;
 }
+const touchedDomains = new Set(
+  Object.values(crmTouchGraph).flatMap((entry) => entry.touches.map((touch) => touch.domain)),
+);
+const crmQueryDomains = queryDomainsFromFacts(queryFacts).filter((entry) =>
+  entry.domains.some((domain) => touchedDomains.has(domain)),
+);
 
 // ── Stage 3 derivation + optimistic[] coverage matrix ─────────────────────────
 const optimisticEntries = [];
@@ -161,8 +170,8 @@ for (const mutation of MUTATIONS) {
   const overrides = new Set(mutation.overrides);
   const derivedEntries = [];
 
-  for (const query of Object.keys(QUERY_DOMAINS)) {
-    const invalidated = QUERY_DOMAINS[query].some((domain) => writtenDomains.has(domain));
+  for (const { domains, query } of crmQueryDomains) {
+    const invalidated = domains.some((domain) => writtenDomains.has(domain));
     if (!invalidated) continue;
 
     const shape = shapeByQuery.get(query);
@@ -240,11 +249,11 @@ const crmInvalidationRegistry = deriveInvalidationRegistry({
     mutation: mutation.key,
     touchGraphKey: mutation.key,
   })),
-  queries: Object.entries(QUERY_DOMAINS).map(([query, domains]) => ({ query, domains })),
+  queries: crmQueryDomains,
   touchGraph: crmTouchGraph,
 });
 
-const crmGraph = createCrmGraph(crmTouchGraph, optimisticEntries);
+const crmGraph = createCrmGraph(crmTouchGraph, optimisticEntries, crmQueryDomains);
 const { graph } = deriveAppGraph({ graph: crmGraph });
 
 const crmInvalidationSource = serializeInvalidationRegistry(crmInvalidationRegistry, {
@@ -262,6 +271,8 @@ const touchGraphSource = formatSource(
 } from '../queries.js';
 
 export const crmTouchGraph = ${formatJson(crmTouchGraph)} as const;
+
+export const crmQueryDomains = ${formatJson(crmQueryDomains)} as const;
 
 ${crmInvalidationSource}
 declare module '@kovojs/core' {

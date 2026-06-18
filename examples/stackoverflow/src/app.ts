@@ -4,7 +4,7 @@
 // browser/static-export here (the commerce example owns the full-UI story).
 
 import { createSoGraph } from './graph.js';
-import { soTouchGraph } from './generated/touch-graph.js';
+import { soQueryDomains, soTouchGraph } from './generated/touch-graph.js';
 
 export { answer, question, vote } from './domains.js';
 export { createSoDb, type SoDb } from './db.js';
@@ -37,8 +37,8 @@ export { postAnswerDerivedOptimistic } from './generated/optimistic/post-answer.
 export { postQuestionDerivedOptimistic } from './generated/optimistic/post-question.js';
 export { voteUpDerivedOptimistic } from './generated/optimistic/vote-up.js';
 
-export { soTouchGraph } from './generated/touch-graph.js';
+export { soQueryDomains, soTouchGraph } from './generated/touch-graph.js';
 export { createSoGraph, soGraphDeclarations } from './graph.js';
 
 /** The committed KovoExplainInput graph (declarations + the EXTRACTED touch graph). */
-export const soGraph = createSoGraph(soTouchGraph);
+export const soGraph = createSoGraph(soTouchGraph, soQueryDomains);

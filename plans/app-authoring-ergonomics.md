@@ -391,9 +391,19 @@ item inherits from rather than re-deciding it:
       `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`.
     - [ ] App shells, mutation registries, and `graph.ts` no longer carry manual
       query arrays for route/component/layout queries.
-      - Gap: runtime app-shell and mutation registry arrays are removed; `graph.ts`
-        and emit-script query-domain maps still need a compiler-derived graph
-        registry slice.
+      - Evidence: runtime app-shell and mutation registry arrays are removed;
+        graph query-domain facts now come from `extractQueryFactsFromProject()`
+        in the example graph emitters and are exported as generated
+        `commerceQueryDomains`, `crmQueryDomains`, and `soQueryDomains`.
+      - Verification: `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`;
+        `pnpm --filter @kovojs/example-crm run emit-graph -- --check`;
+        `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`;
+        `pnpm --filter @kovojs/example-commerce test -- source-truth.test.ts`;
+        `pnpm --filter @kovojs/example-crm test -- src/graph.test.ts`;
+        `pnpm --filter @kovojs/example-stackoverflow test -- src/kovo-graph.test.ts src/registry-facts.test.ts`.
+      - Gap: component/page graph consumer arrays in Commerce `graph.ts` remain
+        hand-authored display facts; removing those needs a compiler graph join
+        between route facts and component query facts.
     - [x] Per-component generated live-target query key arrays are inferred from
       component declarations rather than emitted as explicit generated metadata.
       - Evidence: `componentLiveTargetRenderer()` now normalizes

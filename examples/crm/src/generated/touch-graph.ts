@@ -71,6 +71,29 @@ export const crmTouchGraph = {
   }
 } as const;
 
+export const crmQueryDomains = [
+  {
+    "domains": ["contact"],
+    "query": "contactList"
+  },
+  {
+    "domains": ["deal"],
+    "query": "dealList"
+  },
+  {
+    "domains": ["deal"],
+    "query": "contactDealCount"
+  },
+  {
+    "domains": ["deal"],
+    "query": "openDeals"
+  },
+  {
+    "domains": ["deal"],
+    "query": "pipelineByStage"
+  }
+] as const;
+
 export const crmInvalidationSets = {
   'addContact': [
     { query: 'contactList', domains: ['contact'], keys: null },

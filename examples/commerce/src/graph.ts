@@ -1,4 +1,5 @@
 import type { KovoExplainInput, TouchGraph } from '@kovojs/core/internal/graph';
+import type { InvalidationQueryInput } from '@kovojs/drizzle/static';
 
 import { commerceCartPageMeta } from './page-meta.js';
 
@@ -10,7 +11,10 @@ export const commerceStylesheets = ['/assets/styles.css'] as const;
 
 // SPEC.md §10.2/§11.2: commerce graph facts are declared once and consumed by
 // both the runtime example and generated acceptance artifacts.
-export function commerceGraphDeclarations(cart: CommerceGraphCartSummary) {
+export function commerceGraphDeclarations(
+  cart: CommerceGraphCartSummary,
+  queries: readonly InvalidationQueryInput[],
+) {
   return {
     components: [
       {
@@ -118,11 +122,7 @@ export function commerceGraphDeclarations(cart: CommerceGraphCartSummary) {
         stylesheets: [...commerceStylesheets],
       },
     ],
-    queries: [
-      { domains: ['cart'], query: 'cart' },
-      { domains: ['product'], query: 'productGrid' },
-      { domains: ['order'], query: 'orderHistory' },
-    ],
+    queries,
     scopeAudits: [
       {
         detail: 'attachment download filters id plus session user',
@@ -136,9 +136,13 @@ export function commerceGraphDeclarations(cart: CommerceGraphCartSummary) {
   } satisfies Omit<KovoExplainInput, 'touchGraph'>;
 }
 
-export function createCommerceGraph(cart: CommerceGraphCartSummary, touchGraph: TouchGraph) {
+export function createCommerceGraph(
+  cart: CommerceGraphCartSummary,
+  touchGraph: TouchGraph,
+  queries: readonly InvalidationQueryInput[],
+) {
   const graph = {
-    ...commerceGraphDeclarations(cart),
+    ...commerceGraphDeclarations(cart, queries),
     touchGraph,
   };
 

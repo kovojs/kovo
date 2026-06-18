@@ -34,6 +34,29 @@ export const soTouchGraph = {
   },
 } as const;
 
+export const soQueryDomains = [
+  {
+    "domains": ["question"],
+    "query": "questionList"
+  },
+  {
+    "domains": ["answer"],
+    "query": "answerList"
+  },
+  {
+    "domains": ["question"],
+    "query": "questionDetail"
+  },
+  {
+    "domains": ["answer"],
+    "query": "questionAnswers"
+  },
+  {
+    "domains": ["vote"],
+    "query": "questionScore"
+  }
+] as const;
+
 export const soInvalidationSets = {
   'postAnswer': [
     { query: 'answerList', domains: ['answer'], keys: null },

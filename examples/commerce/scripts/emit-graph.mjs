@@ -19,6 +19,7 @@ const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 const {
   deriveInvalidationRegistry,
   serializeInvalidationRegistry,
+  extractQueryFactsFromProject,
   extractSymbolicEffectsFromProject,
   extractAlgebraicShapesFromProject,
 } = await import('@kovojs/drizzle/static');
@@ -55,6 +56,13 @@ const formatJson = (value, indent = 0) => {
   return JSON.stringify(value);
 };
 
+const queryDomainsFromFacts = (facts) =>
+  [...facts]
+    .sort((left, right) => siteLineNumber(left.site) - siteLineNumber(right.site))
+    .map((fact) => ({ domains: [...fact.reads], query: fact.query }));
+
+const siteLineNumber = (site) => Number(String(site).split(':').pop() ?? 0);
+
 // SPEC.md §10.5 / §11.1: run the real Drizzle static extractor over the
 // commerce source. Stage-1 symbolic effects (write → effect IR) and Stage-2
 // algebraic query shapes (loader → shape IR) are read directly from the
@@ -68,6 +76,8 @@ const extractionFiles = ['app.ts', 'queries.ts', 'schema.ts', 'db.ts', 'domains.
 
 const allEffectFacts = extractSymbolicEffectsFromProject({ files: extractionFiles });
 const algebraicShapes = extractAlgebraicShapesFromProject({ files: extractionFiles });
+const queryFacts = extractQueryFactsFromProject({ files: extractionFiles });
+const commerceQueryDomains = queryDomainsFromFacts(queryFacts);
 const shapeByQuery = new Map(algebraicShapes.map((shape) => [shape.query, shape]));
 
 // Map each exported mutation/webhook variable to the line span of its
@@ -178,7 +188,7 @@ const commerceTouchGraph = {
   },
 };
 
-const commerceGraph = createCommerceGraph(starterCart, commerceTouchGraph);
+const commerceGraph = createCommerceGraph(starterCart, commerceTouchGraph, commerceQueryDomains);
 
 const { graph } = deriveAppGraph({
   graph: commerceGraph,
@@ -188,7 +198,7 @@ const commerceInvalidationRegistry = deriveInvalidationRegistry({
     { mutation: 'cart/add', touchGraphKey: 'cart.addItem' },
     { mutation: 'order/receipt', touchGraphKey: 'order.receipt' },
   ],
-  queries: commerceGraph.queries,
+  queries: commerceQueryDomains,
   touchGraph: commerceTouchGraph,
 });
 
@@ -203,6 +213,8 @@ const commerceInvalidationRegistrySource = serializeInvalidationRegistry(
 const touchGraphSource = `import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from '../app.js';
 
 export const commerceTouchGraph = ${formatJson(commerceTouchGraph)} as const;
+
+export const commerceQueryDomains = ${formatJson(commerceQueryDomains)} as const;
 
 ${commerceInvalidationRegistrySource}
 declare module '@kovojs/core' {

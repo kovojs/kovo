@@ -1,4 +1,5 @@
 import type { KovoExplainInput, OptimisticCoverage, TouchGraph } from '@kovojs/core/internal/graph';
+import type { InvalidationQueryInput } from '@kovojs/drizzle/static';
 
 // SPEC.md §10.2/§10.5/§11.2: the CRM graph facts. The static declarations
 // (mutations, queries, endpoints) are authored once; the touch graph and the
@@ -10,7 +11,7 @@ import type { KovoExplainInput, OptimisticCoverage, TouchGraph } from '@kovojs/c
 // `kovo explain --optimistic` renders inline. Every invalidated pair is covered, so
 // `kovo check` reports zero unhandled KV310.
 
-export function crmGraphDeclarations() {
+export function crmGraphDeclarations(queries: readonly InvalidationQueryInput[]) {
   return {
     mutations: [
       {
@@ -46,19 +47,17 @@ export function crmGraphDeclarations() {
         writes: ['deal'],
       },
     ],
-    queries: [
-      { domains: ['contact'], query: 'contactList' },
-      { domains: ['deal'], query: 'dealList' },
-      { domains: ['deal'], query: 'contactDealCount' },
-      { domains: ['deal'], query: 'openDeals' },
-      { domains: ['deal'], query: 'pipelineByStage' },
-    ],
+    queries,
   } satisfies Omit<KovoExplainInput, 'touchGraph' | 'optimistic'>;
 }
 
-export function createCrmGraph(touchGraph: TouchGraph, optimistic: readonly OptimisticCoverage[]) {
+export function createCrmGraph(
+  touchGraph: TouchGraph,
+  optimistic: readonly OptimisticCoverage[],
+  queries: readonly InvalidationQueryInput[],
+) {
   const graph = {
-    ...crmGraphDeclarations(),
+    ...crmGraphDeclarations(queries),
     optimistic: [...optimistic],
     touchGraph,
   };
