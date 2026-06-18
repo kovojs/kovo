@@ -140,4 +140,94 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.querySelector('[kovo-nav-segment="page:/fast"]')?.textContent).toBe('Fast');
     expect(document.querySelector('[kovo-nav-segment="page:/slow"]')).toBeNull();
   });
+
+  it('collects mutation live targets from the post-navigation DOM', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Start</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-deps="viewer">',
+      '<a id="to-cart" href="/cart">Cart</a>',
+      '<section kovo-nav-segment="page:/start" kovo-nav-kind="page" kovo-nav-name="page">',
+      '<section kovo-fragment-target="old-target" kovo-deps="old">Old</section>',
+      '</section>',
+      '</main>',
+    ].join('');
+    const fetch = vi.fn(async (href: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return {
+          async text() {
+            return [
+              '<kovo-fragment target="cart-badge">',
+              '<section kovo-fragment-target="cart-badge" kovo-deps="cart">Updated cart</section>',
+              '</kovo-fragment>',
+            ].join('');
+          },
+        };
+      }
+
+      return {
+        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        async text() {
+          return [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-deps="viewer">',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<form id="cart-form" enhance action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
+            '<button type="submit">Save</button>',
+            '</form>',
+            '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-deps="cart">Cart</section>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join('');
+        },
+        url: new URL('/cart', location.href).href,
+      };
+    });
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installInlineKovoLoader(async () => ({}));
+    document.querySelector('#to-cart')?.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+    await vi.waitFor(() =>
+      expect(document.querySelector('[kovo-nav-segment="page:/cart"]')).not.toBeNull(),
+    );
+
+    document.querySelector('form')?.dispatchEvent(
+      new SubmitEvent('submit', { bubbles: true, cancelable: true }),
+    );
+
+    await vi.waitFor(() =>
+      expect(document.querySelector('[kovo-fragment-target="cart-badge"]')?.textContent).toBe(
+        'Updated cart',
+      ),
+    );
+
+    const mutationRequest = fetch.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+    )?.[1] as RequestInit | undefined;
+    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Form-Target']).toBe(
+      'cart-form',
+    );
+    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Targets']).toContain(
+      'cart-badge=cart',
+    );
+    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Targets']).toContain(
+      'layout-shell=viewer',
+    );
+    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Targets']).not.toContain(
+      'old-target',
+    );
+    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Live-Targets']).toContain(
+      'cart-badge#cart-badge/cart-badge:{}',
+    );
+    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Live-Targets']).toContain(
+      'layout-shell#layout-shell/layout-shell:{}',
+    );
+  });
 });

@@ -206,11 +206,14 @@ through client navigation.
     `kovo:navigate` announcement, and proves stale full-document responses do
     not override a newer navigation. Remaining gap: dedicated back/forward, hash
     restoration, and bfcache evidence.
-- [ ] **4. Mutation/live composition after enhanced navigation.**
+- [x] **4. Mutation/live composition after enhanced navigation.**
   - Prove `Kovo-Targets`/`Kovo-Live-Targets` snapshots include preserved layout
     targets after navigation, inserted leaf targets are discoverable, and stale
     targets do not double-morph.
-  - Evidence: pending.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves an enhanced mutation after enhanced navigation sends preserved layout
+    and inserted leaf entries in `Kovo-Targets`/`Kovo-Live-Targets`, excludes a
+    stale pre-navigation target, and applies the inserted leaf fragment once.
 - [ ] **5. Render-equivalence and no-JS gates.**
   - Extend the §5.2/§9.2 gates so no-JS full load and JS-on enhanced navigation
     produce equivalent DOM over the corpus, after normalizing intentionally
@@ -248,9 +251,11 @@ through client navigation.
 - [ ] **Version and guard safety:** build-token mismatch, auth redirect, 403/404,
       and morph failure fall back to full GET or morph the correct server shell.
   - Evidence: pending.
-- [ ] **Mutation/live after navigation:** preserved and inserted targets refresh
+- [x] **Mutation/live after navigation:** preserved and inserted targets refresh
       correctly with no stale-target or double-morph races.
-  - Evidence: pending.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    covers preserved layout target `layout-shell`, inserted target `cart-badge`,
+    stale target exclusion, and single fragment application after navigation.
 - [ ] **History/scroll/focus/a11y/bfcache:** back/forward, restoration,
       route-change announcement, axe, and bfcache hygiene pass.
   - Evidence: pending.
