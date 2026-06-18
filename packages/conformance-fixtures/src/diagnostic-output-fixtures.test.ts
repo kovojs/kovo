@@ -14,7 +14,7 @@ describe('@kovojs/test diagnostic output fixtures', () => {
           'Kovo Vite transform failed with 1 error diagnostic.',
           '',
           'KV201 routes/card.tsx:5:25 Event handler expression is not lowerable.',
-          '  help: Would lower to: on:click="/c/routes/card.client.js?v=1234abcd#Card$button_click"',
+          '  help: Would lower to: on:click="/c/__v/1234abcd/routes/card.client.js#Card$button_click"',
           '  help: Blocked expression: () => window.alert("x")',
           '  help: Element params: -',
           '  help: Use a top-level function or lowerable inline expression.',
@@ -30,7 +30,7 @@ describe('@kovojs/test diagnostic output fixtures', () => {
           help: [
             {
               label: 'Would lower to',
-              text: 'on:click="/c/routes/card.client.js?v=1234abcd#Card$button_click"',
+              text: 'on:click="/c/__v/1234abcd/routes/card.client.js#Card$button_click"',
             },
             { label: 'Blocked expression', text: '() => window.alert("x")' },
             { label: 'Element params', text: '-' },
@@ -90,7 +90,7 @@ describe('@kovojs/test diagnostic output fixtures', () => {
           'Kovo Vite transform failed with 1 error diagnostic.',
           '',
           'KV201 routes/card.tsx:5:25 Event handler expression is not lowerable.',
-          '  help: Would lower to: on:click="/c/routes/card.client.js?v=1234abcd#Card$button_click"',
+          '  help: Would lower to: on:click="/c/__v/1234abcd/routes/card.client.js#Card$button_click"',
           '  help: Blocked expression: () => window.alert("x")',
           '  help: Element params: -',
           '  help: Fixes: Use a top-level function.',
@@ -106,7 +106,7 @@ describe('@kovojs/test diagnostic output fixtures', () => {
       help: [
         {
           label: 'Would lower to',
-          text: 'on:click="/c/routes/card.client.js?v=1234abcd#Card$button_click"',
+          text: 'on:click="/c/__v/1234abcd/routes/card.client.js#Card$button_click"',
         },
         { label: 'Blocked expression', text: '() => window.alert("x")' },
         { label: 'Element params', text: '-' },

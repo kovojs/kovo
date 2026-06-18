@@ -33,7 +33,7 @@ describe('server static export app replay boundary', () => {
     await expect(replayStaticExportApp({ app, onNonExportable: 'skip' })).resolves.toEqual({
       artifacts: [
         {
-          body: expect.stringContaining('<button on:click="/c/cart.client.js?v=cart-static'),
+          body: expect.stringContaining('<button on:click="/c/__v/cart-static/cart.client.js'),
           headers: { 'content-type': 'text/html; charset=utf-8' },
           path: '/index.html',
           status: 200,
@@ -46,8 +46,8 @@ describe('server static export app replay boundary', () => {
             'cache-control': 'public, max-age=31536000, immutable',
             'content-type': 'text/javascript; charset=utf-8',
           },
-          href: '/c/cart.client.js?v=cart-static#Cart$open',
-          path: '/c/cart.client.js',
+          href: '/c/__v/cart-static/cart.client.js#Cart$open',
+          path: '/c/__v/cart-static/cart.client.js',
           status: 200,
         },
       ],

@@ -92,7 +92,8 @@ export const AccordionDemo = component({
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(serverSource).toContain('data-bind="/c/accordion-demo.client.js?v=');
+    expect(serverSource).toContain('data-bind="/c/__v/');
+    expect(serverSource).toContain('/accordion-demo.client.js#');
     expect(serverSource).toContain('#AccordionDemo$output_text_derive');
     expect(clientSource).toContain(
       `export const AccordionDemo$output_text_derive = derive(["state"], (state) => state.value || 'none');`,
@@ -202,9 +203,10 @@ export const DisclosureDemo = component({
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(serverSource).toContain('data-bind:aria-expanded="/c/disclosure-demo.client.js?v=');
+    expect(serverSource).toContain('data-bind:aria-expanded="/c/__v/');
     expect(serverSource).toContain('#DisclosureDemo$button_aria_expanded_derive');
-    expect(serverSource).toContain('data-bind:hidden="/c/disclosure-demo.client.js?v=');
+    expect(serverSource).toContain('data-bind:hidden="/c/__v/');
+    expect(serverSource).toContain('/disclosure-demo.client.js#');
     expect(serverSource).toContain('#DisclosureDemo$section_hidden_derive');
     expect(serverSource).not.toContain('data-derive=');
     expect(serverSource).toContain("aria-expanded={state.open ? 'true' : 'false'}");
@@ -260,25 +262,25 @@ export const DisclosureDemo = component({
     const references = collectStateDeriveReferenceFacts(
       loweredModel,
       structural.stateDerives,
-      '/c/disclosure-demo.client.js?v=HASH',
+      '/c/__v/HASH/disclosure-demo.client.js',
     );
 
     expect(references.map(({ target: _target, ...reference }) => reference)).toMatchInlineSnapshot(`
       [
         {
           "attr": "data-bind:aria-expanded",
-          "clientHref": "/c/disclosure-demo.client.js?v=HASH",
+          "clientHref": "/c/__v/HASH/disclosure-demo.client.js",
           "exportName": "DisclosureDemo$button_aria_expanded_derive",
           "placeholder": "state.DisclosureDemo$button_aria_expanded_derive",
-          "value": "/c/disclosure-demo.client.js?v=HASH#DisclosureDemo$button_aria_expanded_derive",
+          "value": "/c/__v/HASH/disclosure-demo.client.js#DisclosureDemo$button_aria_expanded_derive",
           "writer": "state derive URL versioning",
         },
         {
           "attr": "data-bind:hidden",
-          "clientHref": "/c/disclosure-demo.client.js?v=HASH",
+          "clientHref": "/c/__v/HASH/disclosure-demo.client.js",
           "exportName": "DisclosureDemo$section_hidden_derive",
           "placeholder": "state.DisclosureDemo$section_hidden_derive",
-          "value": "/c/disclosure-demo.client.js?v=HASH#DisclosureDemo$section_hidden_derive",
+          "value": "/c/__v/HASH/disclosure-demo.client.js#DisclosureDemo$section_hidden_derive",
           "writer": "state derive URL versioning",
         },
       ]

@@ -42,8 +42,8 @@ describe('server static export output boundary', () => {
             {
               body: 'export const cart = "plan";',
               headers: { 'content-type': 'text/javascript; charset=utf-8' },
-              href: '/c/cart.client.js?v=plan',
-              path: '/c/cart.client.js',
+              href: '/c/__v/plan/cart.client.js',
+              path: '/c/__v/plan/cart.client.js',
               status: 200,
             },
           ],
@@ -67,8 +67,8 @@ describe('server static export output boundary', () => {
         },
         {
           kind: 'client-module',
-          path: '/c/cart.client.js',
-          targetPath: path.join(outDir, 'c', 'cart.client.js'),
+          path: '/c/__v/plan/cart.client.js',
+          targetPath: path.join(outDir, 'c', '__v', 'plan', 'cart.client.js'),
         },
         {
           kind: 'static-asset',
@@ -178,7 +178,7 @@ describe('server static export output boundary', () => {
           },
         ],
       }),
-    ).toThrow(/with a v= version/);
+    ).toThrow(/with a path or query version/);
   });
 
   it('validates static asset sources before writing any output files', async () => {

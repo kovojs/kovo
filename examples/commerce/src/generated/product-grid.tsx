@@ -1,12 +1,7 @@
 // @kovojs-ir — lowered from examples/commerce/src/components/product-grid.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
 import { escapeText } from '@kovojs/server/internal/html';
-import {
-  component,
-  FieldError,
-  form,
-  FormError,
-} from '@kovojs/core';
+import { component, FieldError, form, FormError } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
@@ -33,9 +28,7 @@ export const ProductGrid = component({
   render: ({ productGrid }: { productGrid: ProductGridResult }) => {
     const { nextCursor } = productGrid;
     return (
-      <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid" kovo-fragment-target="product-grid" kovo-live-component="components/product-grid/product-grid">
-        {renderProductGridItems(productGrid)}
-      </section>
+      <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid" kovo-fragment-target="product-grid" kovo-live-component="components/product-grid/product-grid">{renderProductGridItems(productGrid)}</section>
     );
   },
 });
@@ -53,9 +46,7 @@ function renderProductGridError(): string {
   );
 }
 
-export function renderProductGridItems(
-  result: ProductGridResult,
-): string {
+export function renderProductGridItems(result: ProductGridResult): string {
   const cards = result.items.map((item) => renderProductCard(item));
   const cursor = result.nextCursor;
   return (
@@ -94,9 +85,7 @@ function stockBadge(stock: number): string {
   return Badge.definition.render({ variant: 'success', children: `${stock} in stock` });
 }
 
-function renderProductCard(
-  item: ProductItem,
-): string {
+function renderProductCard(item: ProductItem): string {
   const body = (
     <div class="grid gap-4">
       <div class="flex items-center gap-4">
@@ -118,9 +107,7 @@ function renderProductCard(
   return <article kovo-key={item.id}>{Card.definition.render({ children: body })}</article>;
 }
 
-export function renderAddToCartForm(
-  item: { id: string; stock: number },
-): string {
+export function renderAddToCartForm(item: { id: string; stock: number }): string {
   const soldOut = item.stock === 0;
   return (
     <form enhance mutation={addToCart} method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${item.id}`} kovo-key={item.id} class="flex flex-wrap items-end gap-2">

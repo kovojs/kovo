@@ -72,7 +72,7 @@ export const GalleryToolbarDemo = component({
         {...toolbarRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="toolbar"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=1f8b39ba#GalleryToolbarDemo$div_keydown"
+        on:keydown="/c/__v/1f8b39ba/examples/gallery/src/generated/interactive/toolbar-demo.client.js#GalleryToolbarDemo$div_keydown"
         kovo-c="gallery-toolbar-demo"
         kovo-state='{"activeValue":"bold","pressedValue":"bold"}'
       >
@@ -80,18 +80,18 @@ export const GalleryToolbarDemo = component({
           <span {...toolbarItemAttributes(boldState)} class={ITEM_CLASS}>
             <button
               class={BUTTON_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=1f8b39ba#GalleryToolbarDemo$button_click"
+              on:click="/c/__v/1f8b39ba/examples/gallery/src/generated/interactive/toolbar-demo.client.js#GalleryToolbarDemo$button_click"
               {...toolbarButtonAttributes({
                 ...boldState,
                 id: 'gallery-toolbar-bold',
                 pressed: state.pressedValue === 'bold',
               })}
               aria-pressed={String(state.pressedValue === 'bold')}
-              data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=1f8b39ba#GalleryToolbarDemo$button_aria_pressed_derive"
+              data-bind:aria-pressed="/c/__v/1f8b39ba/examples/gallery/src/generated/interactive/toolbar-demo.client.js#GalleryToolbarDemo$button_aria_pressed_derive"
               data-pressed={String(state.pressedValue === 'bold')}
-              data-bind:data-pressed="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=1f8b39ba#GalleryToolbarDemo$button_data_pressed_derive"
+              data-bind:data-pressed="/c/__v/1f8b39ba/examples/gallery/src/generated/interactive/toolbar-demo.client.js#GalleryToolbarDemo$button_data_pressed_derive"
               tabIndex={state.activeValue === 'bold' ? 0 : -1}
-              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=1f8b39ba#GalleryToolbarDemo$button_tabIndex_derive"
+              data-bind:tabIndex="/c/__v/1f8b39ba/examples/gallery/src/generated/interactive/toolbar-demo.client.js#GalleryToolbarDemo$button_tabIndex_derive"
             >
               Bold
             </button>
@@ -112,18 +112,18 @@ export const GalleryToolbarDemo = component({
           <span {...toolbarItemAttributes(linkState)} class={ITEM_CLASS}>
             <button
               class={BUTTON_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=1f8b39ba#GalleryToolbarDemo$button_click_2"
+              on:click="/c/__v/1f8b39ba/examples/gallery/src/generated/interactive/toolbar-demo.client.js#GalleryToolbarDemo$button_click_2"
               {...toolbarButtonAttributes({
                 ...linkState,
                 id: 'gallery-toolbar-link',
                 pressed: state.pressedValue === 'link',
               })}
               aria-pressed={String(state.pressedValue === 'link')}
-              data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=1f8b39ba#GalleryToolbarDemo$button_aria_pressed_derive_2"
+              data-bind:aria-pressed="/c/__v/1f8b39ba/examples/gallery/src/generated/interactive/toolbar-demo.client.js#GalleryToolbarDemo$button_aria_pressed_derive_2"
               data-pressed={String(state.pressedValue === 'link')}
-              data-bind:data-pressed="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=1f8b39ba#GalleryToolbarDemo$button_data_pressed_derive_2"
+              data-bind:data-pressed="/c/__v/1f8b39ba/examples/gallery/src/generated/interactive/toolbar-demo.client.js#GalleryToolbarDemo$button_data_pressed_derive_2"
               tabIndex={state.activeValue === 'link' ? 0 : -1}
-              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=1f8b39ba#GalleryToolbarDemo$button_tabIndex_derive_2"
+              data-bind:tabIndex="/c/__v/1f8b39ba/examples/gallery/src/generated/interactive/toolbar-demo.client.js#GalleryToolbarDemo$button_tabIndex_derive_2"
             >
               Link
             </button>
@@ -134,7 +134,7 @@ export const GalleryToolbarDemo = component({
         </output>
         <output
           data-demo-state="toolbar-pressed"
-          data-bind="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=1f8b39ba#GalleryToolbarDemo$output_text_derive"
+          data-bind="/c/__v/1f8b39ba/examples/gallery/src/generated/interactive/toolbar-demo.client.js#GalleryToolbarDemo$output_text_derive"
         >
           {state.pressedValue || 'none'}
         </output>

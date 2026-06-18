@@ -1,5 +1,6 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
+
 import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/headless-ui/checkbox';
 
 import { checkboxGroupItemClick as _checkboxGroupItemClick } from '@kovojs/headless-ui/checkbox-group';

@@ -78,7 +78,7 @@ describe('tutorial step 02 — islands', () => {
     // L1: the save button names its handler module and export in markup; the
     // module loads on first interaction, not at page load.
     expect(html).toMatch(
-      /on:click="\/c\/site\/tutorial\/steps\/02-islands\/src\/components\/product-actions\.client\.js\?v=[0-9a-f]{8}#ProductActions\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/site\/tutorial\/steps\/02-islands\/src\/components\/product-actions\.client\.js#ProductActions\$button_click"/,
     );
 
     // Island state is serialized in the markup, not hidden in a JS heap.
@@ -103,7 +103,8 @@ describe('tutorial step 02 — islands', () => {
     await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
     await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
 
-    expect(importedUrls[0]).toContain('/c/site/tutorial/steps/02-islands/');
+    expect(importedUrls[0]).toContain('/c/__v/');
+    expect(importedUrls[0]).toContain('/site/tutorial/steps/02-islands/');
     expect(element.getAttribute('kovo-state')).toBe('{"saved":2}');
   });
   // /snippet

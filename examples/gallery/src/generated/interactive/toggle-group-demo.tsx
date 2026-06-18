@@ -78,7 +78,7 @@ export const GalleryToggleGroupDemo = component({
         })}
         class="grid gap-2 text-sm text-neutral-950"
         data-gallery-interactive="toggle-group"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=a7e074cd#GalleryToggleGroupDemo$section_keydown"
+        on:keydown="/c/__v/a7e074cd/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$section_keydown"
         kovo-c="gallery-toggle-group-demo"
         kovo-state='{"activeValue":"bold","value":"bold"}'
       >
@@ -89,19 +89,19 @@ export const GalleryToggleGroupDemo = component({
           <span {...toggleGroupItemAttributes(boldState)} class={ITEM_CLASS}>
             <button
               class={BUTTON_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=a7e074cd#GalleryToggleGroupDemo$button_click"
+              on:click="/c/__v/a7e074cd/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$button_click"
               {...toggleGroupButtonAttributes({
                 ...boldState,
                 id: 'gallery-toggle-group-bold',
               })}
               aria-pressed={String(state.value === 'bold' || state.value === 'bold,italic')}
-              data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=a7e074cd#GalleryToggleGroupDemo$button_aria_pressed_derive"
+              data-bind:aria-pressed="/c/__v/a7e074cd/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$button_aria_pressed_derive"
               data-state={
                 state.value === 'bold' || state.value === 'bold,italic' ? 'pressed' : 'off'
               }
-              data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=a7e074cd#GalleryToggleGroupDemo$button_data_state_derive"
+              data-bind:data-state="/c/__v/a7e074cd/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$button_data_state_derive"
               tabIndex={state.activeValue === 'bold' ? 0 : -1}
-              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=a7e074cd#GalleryToggleGroupDemo$button_tabIndex_derive"
+              data-bind:tabIndex="/c/__v/a7e074cd/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$button_tabIndex_derive"
             >
               Bold
             </button>
@@ -122,19 +122,19 @@ export const GalleryToggleGroupDemo = component({
           <span {...toggleGroupItemAttributes(italicState)} class={ITEM_CLASS}>
             <button
               class={BUTTON_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=a7e074cd#GalleryToggleGroupDemo$button_click_2"
+              on:click="/c/__v/a7e074cd/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$button_click_2"
               {...toggleGroupButtonAttributes({
                 ...italicState,
                 id: 'gallery-toggle-group-italic',
               })}
               aria-pressed={String(state.value === 'italic' || state.value === 'bold,italic')}
-              data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=a7e074cd#GalleryToggleGroupDemo$button_aria_pressed_derive_2"
+              data-bind:aria-pressed="/c/__v/a7e074cd/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$button_aria_pressed_derive_2"
               data-state={
                 state.value === 'italic' || state.value === 'bold,italic' ? 'pressed' : 'off'
               }
-              data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=a7e074cd#GalleryToggleGroupDemo$button_data_state_derive_2"
+              data-bind:data-state="/c/__v/a7e074cd/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$button_data_state_derive_2"
               tabIndex={state.activeValue === 'italic' ? 0 : -1}
-              data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=a7e074cd#GalleryToggleGroupDemo$button_tabIndex_derive_2"
+              data-bind:tabIndex="/c/__v/a7e074cd/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$button_tabIndex_derive_2"
             >
               Italic
             </button>
@@ -143,7 +143,7 @@ export const GalleryToggleGroupDemo = component({
         <output
           class="text-xs text-neutral-500"
           data-demo-state="toggle-group-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=a7e074cd#GalleryToggleGroupDemo$output_text_derive"
+          data-bind="/c/__v/a7e074cd/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$output_text_derive"
         >
           {state.value || 'none'}
         </output>

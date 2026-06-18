@@ -68,9 +68,9 @@ describe('starter app shell', () => {
       await expect(readFile(join(outDir, 'index.html'), 'utf8')).resolves.toContain(
         'data-session="guest"',
       );
-      await expect(readFile(join(outDir, 'c/starter.client.js'), 'utf8')).resolves.toContain(
-        'Starter$announce',
-      );
+      await expect(
+        readFile(join(outDir, 'c/__v/starter-r7/starter.client.js'), 'utf8'),
+      ).resolves.toContain('Starter$announce');
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }

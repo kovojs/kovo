@@ -173,7 +173,7 @@ describe('kovoVitePlugin', () => {
 
     const transformed = plugin.transform?.(cartBadgeSource, 'components/cart/cart-badge.tsx');
     const clientRef = transformed?.code.match(
-      /\/c\/components\/cart\/cart-badge\.client\.js\?v=[0-9a-f]{8}/,
+      /\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
     )?.[0];
     expect(clientRef).toBeDefined();
     const res = {
@@ -213,7 +213,7 @@ describe('kovoVitePlugin', () => {
       '/workspace/app/src/components/cart/cart-badge.tsx',
     );
     const clientRef = transformed?.code.match(
-      /\/c\/src\/components\/cart\/cart-badge\.client\.js\?v=[0-9a-f]{8}/,
+      /\/c\/__v\/[0-9a-f]{8}\/src\/components\/cart\/cart-badge\.client\.js/,
     )?.[0];
     expect(clientRef).toBeDefined();
     expect(transformed?.code).not.toContain('/c/workspace/app/');
@@ -297,11 +297,11 @@ export const CartBadge = component({
 
     const first = plugin.transform?.(source('removeItem'), 'components/cart/cart-badge.tsx');
     const oldClientRef = first?.code.match(
-      /\/c\/components\/cart\/cart-badge\.client\.js\?v=[0-9a-f]{8}/,
+      /\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
     )?.[0];
     const second = plugin.transform?.(source('clearCart'), 'components/cart/cart-badge.tsx');
     const newClientRef = second?.code.match(
-      /\/c\/components\/cart\/cart-badge\.client\.js\?v=[0-9a-f]{8}/,
+      /\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
     )?.[0];
     const oldResponse = createMiddlewareResponse();
     const newResponse = createMiddlewareResponse();
@@ -342,11 +342,11 @@ export const CartBadge = component({
   it('sends a Kovo component-render HMR event for classified component refreshes', async () => {
     const ws = { send: vi.fn() };
     const previous = hmrMetadata({
-      clientHref: '/c/src/counter.client.js?v=11111111',
+      clientHref: '/c/__v/11111111/src/counter.client.js',
       factHash: 'previous',
     });
     const next = hmrMetadata({
-      clientHref: '/c/src/counter.client.js?v=22222222',
+      clientHref: '/c/__v/22222222/src/counter.client.js',
       factHash: 'next',
     });
     const plugin = createKovoVitePlugin(
@@ -378,8 +378,8 @@ export const CartBadge = component({
       data: expect.objectContaining({
         impact: 'componentRefresh',
         liveTargets: ['counter'],
-        newClientHref: '/c/src/counter.client.js?v=22222222',
-        oldClientHref: '/c/src/counter.client.js?v=11111111',
+        newClientHref: '/c/__v/22222222/src/counter.client.js',
+        oldClientHref: '/c/__v/11111111/src/counter.client.js',
         reasons: ['handler-only'],
         sourceFile: 'src/counter.tsx',
       }),
@@ -486,7 +486,7 @@ function compileResult(hmrImpact: HmrImpactMetadata, clientSource: string) {
 }
 
 function hmrMetadata({
-  clientHref = '/c/src/counter.client.js?v=11111111',
+  clientHref = '/c/__v/11111111/src/counter.client.js',
   diagnostics = [],
   factHash = 'fact',
   liveTargetFacts = [

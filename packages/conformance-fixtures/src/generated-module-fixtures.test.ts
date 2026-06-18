@@ -476,13 +476,13 @@ export function renderSource() {
   it('summarizes generated handler hrefs as reusable artifact facts', () => {
     expect(
       generatedHandlerReferenceFact(
-        '/c/routes/products/product-card.client.js?v=0a1b2c3d#ProductCard$button_click',
+        '/c/__v/0a1b2c3d/routes/products/product-card.client.js#ProductCard$button_click',
       ),
     ).toEqual({
       handlerName: 'ProductCard$button_click',
       modulePath: '/c/routes/products/product-card.client.js',
-      requestPath: '/c/routes/products/product-card.client.js?cache=1&v=0a1b2c3d',
-      staleVersionRequestPath: '/c/routes/products/product-card.client.js?v=00000000',
+      requestPath: '/c/__v/0a1b2c3d/routes/products/product-card.client.js?cache=1',
+      staleVersionRequestPath: '/c/__v/00000000/routes/products/product-card.client.js',
       version: '0a1b2c3d',
       versionShape: 'lower-hex-8',
     });
@@ -491,7 +491,7 @@ export function renderSource() {
   it('summarizes generated handler hrefs for compact behavior assertions', () => {
     expect(
       generatedHandlerReferenceSummaryFact(
-        '/c/routes/products/product-card.client.js?v=0a1b2c3d#ProductCard$button_click',
+        '/c/__v/0a1b2c3d/routes/products/product-card.client.js#ProductCard$button_click',
       ),
     ).toEqual({
       handlerName: 'ProductCard$button_click',
@@ -503,7 +503,7 @@ export function renderSource() {
   it('marks malformed generated handler href versions without hiding the parsed target', () => {
     expect(
       generatedHandlerReferenceFact(
-        '/c/routes/products/product-card.client.js?v=zzzzzzzz#ProductCard$button_click',
+        '/c/__v/zzzzzzzz/routes/products/product-card.client.js#ProductCard$button_click',
       ),
     ).toMatchObject({
       handlerName: 'ProductCard$button_click',

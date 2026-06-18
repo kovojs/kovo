@@ -50,7 +50,11 @@ describe('compiled interactive gallery demos', () => {
       const componentName = demo.replace(/-demo$/, '');
       expect(html).toContain(`href="#${demo}"`);
       expect(html).toContain(`data-gallery-interactive="${componentName}"`);
-      expect(html).toContain(`/c/examples/gallery/src/generated/interactive/${demo}.client.js`);
+      expect(html).toMatch(
+        new RegExp(
+          `/c/__v/[0-9a-f]{8}/examples/gallery/src/generated/interactive/${demo}\\.client\\.js`,
+        ),
+      );
     }
   });
 
@@ -90,21 +94,36 @@ describe('compiled interactive gallery demos', () => {
         ...galleryInteractiveClientModuleHrefs,
       ]) {
         expect(html).toContain(`<link rel="modulepreload" href="${href}">`);
-        const modulePath = href.replace(/^\//, '').replace(/\?v=[0-9a-f]{8}$/, '');
+        const modulePath = href.replace(/^\//, '');
         expect(existsSync(join(distDir, modulePath)), `${modulePath} was exported`).toBe(true);
       }
 
       const progressClient = readFileSync(
-        join(distDir, 'c/examples/gallery/src/generated/interactive/progress-demo.client.js'),
+        join(
+          distDir,
+          exportedModulePath(
+            galleryInteractiveClientModuleHrefs.find((href) =>
+              href.endsWith('/examples/gallery/src/generated/interactive/progress-demo.client.js'),
+            ) ?? '',
+          ),
+        ),
         'utf8',
       );
       expect(progressClient).toContain('GalleryProgressDemo$button_click');
 
       const tabsClient = readFileSync(
-        join(distDir, 'c/examples/gallery/src/generated/interactive/tabs-demo.client.js'),
+        join(
+          distDir,
+          exportedModulePath(
+            galleryInteractiveClientModuleHrefs.find((href) =>
+              href.endsWith('/examples/gallery/src/generated/interactive/tabs-demo.client.js'),
+            ) ?? '',
+          ),
+        ),
         'utf8',
       );
-      expect(tabsClient).toContain("from '/c/packages/headless-ui/src/primitives/tabs.js?v=");
+      expect(tabsClient).toContain("from '/c/__v/");
+      expect(tabsClient).toContain("/packages/headless-ui/src/primitives/tabs.js'");
     } finally {
       rmSync(distDir, { force: true, recursive: true });
     }
@@ -143,3 +162,8 @@ describe('compiled interactive gallery demos', () => {
     }
   });
 });
+
+function exportedModulePath(href: string): string {
+  if (!href) throw new Error('Missing gallery exported module href.');
+  return href.replace(/^\//, '');
+}

@@ -10,13 +10,7 @@ import { Card } from '@kovojs/ui/card';
 import { soCsrf } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
 import { postQuestionForm, type QuestionListItem, type SoRequest } from '../model.js';
-import {
-  freshId,
-  parseTags,
-  renderAuthor,
-  renderTags,
-  voteButton,
-} from '../components/chrome.js';
+import { freshId, parseTags, renderAuthor, renderTags, voteButton } from '../components/chrome.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
@@ -66,13 +60,17 @@ function renderQuestionRow(question: QuestionListItem, request?: SoRequest): str
 export const QuestionListRegion = component({
   mutations: { postQuestion: postQuestionForm },
   queries: { questionList, questionScore },
-  render: ({
-    questionList,
-    questionScore,
-  }: {
-    questionList: QuestionListQueryResult;
-    questionScore: QuestionScoreQueryResult;
-  }, _state, slots: QuestionListRenderSlots = defaultQuestionListRenderSlots) => {
+  render: (
+    {
+      questionList,
+      questionScore,
+    }: {
+      questionList: QuestionListQueryResult;
+      questionScore: QuestionScoreQueryResult;
+    },
+    _state,
+    slots: QuestionListRenderSlots = defaultQuestionListRenderSlots,
+  ) => {
     const questions = questionList.items;
     const totalVotes = questionScore.score;
     const askButton = Button.definition.render({

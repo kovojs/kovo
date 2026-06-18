@@ -83,7 +83,7 @@ export const App = component({
           <button
             {...style.attrs(appStyles.action)}
             data-p-message="starter"
-            on:click="/c/starter.client.js?v=starter-r7#Starter$announce"
+            on:click="/c/__v/starter-r7/starter.client.js#Starter$announce"
             type="button"
           >
             Try interaction

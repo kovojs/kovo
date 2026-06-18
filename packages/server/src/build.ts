@@ -364,14 +364,6 @@ async function emitNodePreset(
   context: PresetContext,
   options: NodePresetOptions,
 ): Promise<void> {
-  if (build.staticOutput !== undefined) {
-    const outDir = resolvedFileSystemPath(context.outDir);
-    await mkdir(outDir, { recursive: true });
-    await cp(build.staticOutput.dir, outDir, { recursive: true });
-    context.log(`Emitted Kovo node static preset output to ${outDir}`);
-    return;
-  }
-
   if (build.serverHandlerPath === undefined) {
     throw new Error('The node preset requires a neutral build with server/handler.mjs.');
   }

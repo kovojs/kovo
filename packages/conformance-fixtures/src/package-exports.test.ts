@@ -950,7 +950,7 @@ describe('@kovojs/test package subpath exports', () => {
           'Kovo Vite transform failed with 1 error diagnostic.',
           '',
           'KV201 routes/card.tsx:1:1 message.',
-          '  help: Would lower to: on:click="/c/routes/card.client.js?v=1234abcd#Card$click"',
+          '  help: Would lower to: on:click="/c/__v/1234abcd/routes/card.client.js#Card$click"',
           '  help: Element params: -',
         ].join('\n'),
       ).loweredHandler,
@@ -1551,18 +1551,20 @@ describe('@kovojs/test package subpath exports', () => {
     }).toMatchObject({
       generatedMatchesCompilerOutput: true,
     } satisfies Partial<GeneratedComponentCommittedIrFact>);
-    expect(generatedHandlerReferenceFact('/c/cart.client.js?v=0a1b2c3d#Cart$click')).toMatchObject({
+    expect(
+      generatedHandlerReferenceFact('/c/__v/0a1b2c3d/cart.client.js#Cart$click'),
+    ).toMatchObject({
       handlerName: 'Cart$click',
       modulePath: '/c/cart.client.js',
       versionShape: 'lower-hex-8',
     });
-    expect(generatedHandlerReferenceSummaryFact('/c/cart.client.js?v=0a1b2c3d#Cart$click')).toEqual(
-      {
-        handlerName: 'Cart$click',
-        modulePath: '/c/cart.client.js',
-        versionShape: 'lower-hex-8',
-      } satisfies GeneratedHandlerReferenceSummaryFact,
-    );
+    expect(
+      generatedHandlerReferenceSummaryFact('/c/__v/0a1b2c3d/cart.client.js#Cart$click'),
+    ).toEqual({
+      handlerName: 'Cart$click',
+      modulePath: '/c/cart.client.js',
+      versionShape: 'lower-hex-8',
+    } satisfies GeneratedHandlerReferenceSummaryFact);
     expect(
       generatedRenderedElementFactsFromSource(
         "export function renderSource() { return '<button>Add</button>'; }",

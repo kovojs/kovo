@@ -9,7 +9,7 @@ Per SPEC.md section 9.3, v1 liveness is intentionally limited to client-owned be
 
 No SSE or live bus ships in v1. SSE-backed `<kovo-live>` subscriptions and live-bus infrastructure are v2 features, using the same fragment/query vocabulary as an additive transport.
 
-Client handler modules are immutable URLs under `/c/*?v=...`. Keep old versioned client module artifacts published across deploys until documents that reference them have aged out; never rewrite a versioned `/c/` URL to the latest module.
+Client handler modules are immutable URLs under `/c/__v/<version>/*`. Keep old versioned client module artifacts published across deploys until documents that reference them have aged out; never rewrite a versioned `/c/` URL to the latest module.
 
 Kovo-owned deployment environment variables are limited to `PORT`, `HOST`, `NODE_ENV`, and `DATABASE_URL`. The Node preset reads `PORT` and `HOST` when it starts, generated container output sets `NODE_ENV=production`, and `kovo build` declares `DATABASE_URL` to presets when the bundled request handler references it. App-specific secrets remain ordinary platform environment variables and are not named by Kovo.
 

@@ -906,10 +906,14 @@ function isKovoHmrRequest(url: URL): boolean {
 }
 
 function isUnversionedKovoAppShellClientModuleRequest(url: URL): boolean {
-  // SPEC §9.5 reserves immutable app-shell client modules as /c/<module>?v=.
+  // SPEC §9.5 reserves immutable app-shell client modules as versioned /c/ URLs.
   // During Vite dev, unversioned /c/ URLs must keep falling through to Vite's
   // asset/middleware stack instead of being claimed by app replay.
-  return url.pathname.startsWith('/c/') && !url.searchParams.has('v');
+  return (
+    url.pathname.startsWith('/c/') &&
+    !url.pathname.startsWith('/c/__v/') &&
+    !url.searchParams.has('v')
+  );
 }
 
 function isHtmlNavigationRequest(request: IncomingMessage): boolean {

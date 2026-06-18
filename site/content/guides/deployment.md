@@ -43,7 +43,7 @@ Here's why it matters. Kovo documents are long-lived. A tab opened before your T
 has HTML pointing at Tuesday-minus-one's handler modules:
 
 ```html
-<button on:click="/c/cart.client.js?v=8f3a1c#Cart$removeItem">×</button>
+<button on:click="/c/__v/8f3a1c/cart.client.js#Cart$removeItem">×</button>
 ```
 
 The loader imports that URL on first interaction, which may be hours after the deploy that replaced

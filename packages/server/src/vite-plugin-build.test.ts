@@ -29,7 +29,7 @@ describe('server app shell Vite plugin build boundary', () => {
               page() {
                 return [
                   '<main class="cart">Cart',
-                  '<button on:click="/c/cart.client.js?v=cart-v1#Cart$add">Add</button>',
+                  '<button on:click="/c/__v/cart-v1/cart.client.js#Cart$add">Add</button>',
                   '</main>',
                 ].join('');
               },
@@ -81,8 +81,8 @@ describe('server app shell Vite plugin build boundary', () => {
       ]);
       expect(result.output.clientModuleOutputPlan).toEqual([
         {
-          path: '/c/cart.client.js',
-          targetPath: join(outDir, 'c/cart.client.js'),
+          path: '/c/__v/cart-v1/cart.client.js',
+          targetPath: join(outDir, 'c/__v/cart-v1/cart.client.js'),
         },
       ]);
       expect(result.output.staticExportAssets).toEqual([
@@ -107,20 +107,20 @@ describe('server app shell Vite plugin build boundary', () => {
             'cache-control': 'public, max-age=31536000, immutable',
             'content-type': 'text/javascript; charset=utf-8',
           },
-          href: '/c/cart.client.js?v=cart-v1#Cart$add',
-          path: '/c/cart.client.js',
+          href: '/c/__v/cart-v1/cart.client.js#Cart$add',
+          path: '/c/__v/cart-v1/cart.client.js',
           status: 200,
         },
       ]);
       expect(built).toEqual([result.build]);
       expect(outputs).toEqual([result.output]);
-      await expect(readFile(join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
+      await expect(readFile(join(outDir, 'c/__v/cart-v1/cart.client.js'), 'utf8')).resolves.toBe(
         'export const cartClient = true;',
       );
       await expect(readFile(join(exportDir, 'cart/index.html'), 'utf8')).resolves.toContain(
         '<link rel="stylesheet" href="/assets/cart.css">',
       );
-      await expect(readFile(join(exportDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
+      await expect(readFile(join(exportDir, 'c/__v/cart-v1/cart.client.js'), 'utf8')).resolves.toBe(
         'export const cartClient = true;',
       );
       await expect(readFile(join(exportDir, 'assets/cart.js'), 'utf8')).resolves.toBe(

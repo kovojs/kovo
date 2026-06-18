@@ -36,7 +36,7 @@ describe('server static export', () => {
           'content-type': 'text/javascript; charset=utf-8',
         },
         href: `${cartHref}#Cart$add`,
-        path: '/c/cart.client.js',
+        path: '/c/__v/cart-dry-run/cart.client.js',
         status: 200,
       },
     ]);
@@ -74,18 +74,18 @@ describe('server static export', () => {
         `${menuHref}#Menu$open`,
       ]);
       expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
-        '/c/cart.client.js',
-        '/c/menu.client.js',
+        '/c/__v/cart-1/cart.client.js',
+        '/c/__v/menu-1/menu.client.js',
       ]);
 
       const cartResponse = await handler(new Request(`https://kovo.local${cartHref}`));
       const menuResponse = await handler(new Request(`https://kovo.local${menuHref}`));
-      await expect(readFile(path.join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
-        await cartResponse.text(),
-      );
-      await expect(readFile(path.join(outDir, 'c/menu.client.js'), 'utf8')).resolves.toBe(
-        await menuResponse.text(),
-      );
+      await expect(
+        readFile(path.join(outDir, 'c/__v/cart-1/cart.client.js'), 'utf8'),
+      ).resolves.toBe(await cartResponse.text());
+      await expect(
+        readFile(path.join(outDir, 'c/__v/menu-1/menu.client.js'), 'utf8'),
+      ).resolves.toBe(await menuResponse.text());
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }
@@ -123,15 +123,15 @@ describe('server static export', () => {
       });
 
       expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
-        '/c/cart.client.js?v=cart-absolute',
-        '/c/menu.client.js?v=menu-absolute#Menu$open',
+        '/c/__v/cart-absolute/cart.client.js',
+        '/c/__v/menu-absolute/menu.client.js#Menu$open',
       ]);
-      await expect(readFile(path.join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
-        'export const cart = "absolute-build";',
-      );
-      await expect(readFile(path.join(outDir, 'c/menu.client.js'), 'utf8')).resolves.toBe(
-        'export const menu = "absolute-build";',
-      );
+      await expect(
+        readFile(path.join(outDir, 'c/__v/cart-absolute/cart.client.js'), 'utf8'),
+      ).resolves.toBe('export const cart = "absolute-build";');
+      await expect(
+        readFile(path.join(outDir, 'c/__v/menu-absolute/menu.client.js'), 'utf8'),
+      ).resolves.toBe('export const menu = "absolute-build";');
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }

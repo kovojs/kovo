@@ -594,12 +594,18 @@ export function generatedHandlerReferenceFact(
   baseUrl = 'http://kovo.test',
 ): GeneratedHandlerReferenceFact {
   const url = new URL(href, baseUrl);
-  const version = url.searchParams.get('v') ?? '';
+  const pathVersion = /^\/c\/__v\/([^/]+)\/(.+)$/.exec(url.pathname);
+  const version = pathVersion?.[1] ?? url.searchParams.get('v') ?? '';
+  const modulePath = pathVersion ? `/c/${pathVersion[2] ?? ''}` : url.pathname;
   return {
     handlerName: url.hash.startsWith('#') ? url.hash.slice(1) : '',
-    modulePath: url.pathname,
-    requestPath: `${url.pathname}?cache=1&v=${version}`,
-    staleVersionRequestPath: `${url.pathname}?v=00000000`,
+    modulePath,
+    requestPath: pathVersion
+      ? `/c/__v/${version}/${pathVersion[2] ?? ''}?cache=1`
+      : `${url.pathname}?cache=1&v=${version}`,
+    staleVersionRequestPath: pathVersion
+      ? `/c/__v/00000000/${pathVersion[2] ?? ''}`
+      : `${url.pathname}?v=00000000`,
     version,
     versionShape: version.length === 8 && isLowerHex(version) ? 'lower-hex-8' : 'invalid',
   };

@@ -52,9 +52,9 @@ describe('server app shell Vite plugin', () => {
     const module = build.clientModules[0];
     if (!module) throw new Error('expected a compiled client module');
     expect(module).toMatchObject({
-      file: 'c/cart.client.js',
-      href: expect.stringMatching(/^\/c\/cart\.client\.js\?v=[a-f0-9]{12}$/),
-      path: '/c/cart.client.js',
+      file: expect.stringMatching(/^c\/__v\/[a-f0-9]{12}\/cart\.client\.js$/),
+      href: expect.stringMatching(/^\/c\/__v\/[a-f0-9]{12}\/cart\.client\.js$/),
+      path: expect.stringMatching(/^\/c\/__v\/[a-f0-9]{12}\/cart\.client\.js$/),
       source: 'export const cart = 1;',
     });
     expect(build.assets).toEqual([
@@ -299,22 +299,22 @@ describe('server app shell Vite plugin', () => {
       await expect(writeKovoAppShellViteBuildOutput(build, { outDir })).resolves.toEqual({
         clientModuleOutputPlan: [
           {
-            path: '/c/cart.client.js',
-            targetPath: join(outDir, 'c/cart.client.js'),
+            path: '/c/__v/cart-v1/cart.client.js',
+            targetPath: join(outDir, 'c/__v/cart-v1/cart.client.js'),
           },
         ],
         clientModules: [
           {
-            file: 'c/cart.client.js',
-            href: '/c/cart.client.js?v=cart-v1',
-            path: '/c/cart.client.js',
+            file: 'c/__v/cart-v1/cart.client.js',
+            href: '/c/__v/cart-v1/cart.client.js',
+            path: '/c/__v/cart-v1/cart.client.js',
             source: 'export const cart = true;',
             version: 'cart-v1',
           },
         ],
         staticExportAssets: [],
       });
-      await expect(readFile(join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
+      await expect(readFile(join(outDir, 'c/__v/cart-v1/cart.client.js'), 'utf8')).resolves.toBe(
         'export const cart = true;',
       );
     } finally {
@@ -362,7 +362,7 @@ describe('server app shell Vite plugin', () => {
         },
       );
 
-      await expect(readFile(join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
+      await expect(readFile(join(outDir, 'c/__v/cart-v1/cart.client.js'), 'utf8')).resolves.toBe(
         'export const cart = true;',
       );
       expect(built).toHaveLength(1);
@@ -370,15 +370,15 @@ describe('server app shell Vite plugin', () => {
         {
           clientModuleOutputPlan: [
             {
-              path: '/c/cart.client.js',
-              targetPath: join(outDir, 'c/cart.client.js'),
+              path: '/c/__v/cart-v1/cart.client.js',
+              targetPath: join(outDir, 'c/__v/cart-v1/cart.client.js'),
             },
           ],
           clientModules: [
             {
-              file: 'c/cart.client.js',
-              href: '/c/cart.client.js?v=cart-v1',
-              path: '/c/cart.client.js',
+              file: 'c/__v/cart-v1/cart.client.js',
+              href: '/c/__v/cart-v1/cart.client.js',
+              path: '/c/__v/cart-v1/cart.client.js',
               source: 'export const cart = true;',
               version: 'cart-v1',
             },

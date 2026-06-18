@@ -183,5 +183,5 @@ function kv236Diagnostics(result: ReturnType<typeof compileComponentModule>) {
 }
 
 function normalizeArtifact(source: string): string {
-  return source.replaceAll(/\?v=[0-9a-f]{8}/g, '?v=HASH').trim();
+  return source.replaceAll(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/HASH/').trim();
 }

@@ -1037,7 +1037,7 @@ describe('kovo check', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      expect(output).toBe('kovo: add, audit, check, compile, explain, export, mcp\n');
+      expect(output).toBe('kovo: add, audit, build, check, compile, explain, export, mcp\n');
     } finally {
       rmSync(parent, { force: true, recursive: true });
     }

@@ -26,8 +26,8 @@ describe('semanticSnapshot', () => {
   });
 
   it('normalizes cache-busting versions and content hashes in URLs', () => {
-    const html = '<a href="/c/cart-add.client.js?v=9f3ad21c">x</a>';
-    expect(semanticSnapshot(html)).toBe('<a href="/c/cart-add.client.js?v=*">\n  "x"');
+    const html = '<a href="/c/__v/9f3ad21c/cart-add.client.js">x</a>';
+    expect(semanticSnapshot(html)).toBe('<a href="/c/__v/*/cart-add.client.js">\n  "x"');
 
     const asset = '<img src="/assets/logo.4f8a9c1b.png">';
     expect(semanticSnapshot(asset)).toBe('<img src="/assets/logo.*.png">');
@@ -35,12 +35,13 @@ describe('semanticSnapshot', () => {
 
   it('normalizes versioned handler refs kept in on attributes', () => {
     const html =
-      '<button on:click="/c/cart-add.client.js?v=9f3ad21c#add /assets/legacy.4f8a9c1b.js#run">Add</button>';
+      '<button on:click="/c/__v/9f3ad21c/cart-add.client.js#add /assets/legacy.4f8a9c1b.js#run">Add</button>';
 
     expect(semanticSnapshot(html, { keepAttrs: ['on:click'] })).toBe(
-      ['<button on:click="/c/cart-add.client.js?v=*#add /assets/legacy.*.js#run">', '  "Add"'].join(
-        '\n',
-      ),
+      [
+        '<button on:click="/c/__v/*/cart-add.client.js#add /assets/legacy.*.js#run">',
+        '  "Add"',
+      ].join('\n'),
     );
   });
 

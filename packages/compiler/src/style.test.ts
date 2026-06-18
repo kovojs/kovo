@@ -383,7 +383,8 @@ export const Badge = component({
     expect(serverSource).toContain('class={((state.bouncing))');
     expect(serverSource).toContain('kv-badge-fg-');
     expect(serverSource).toContain('kv-badge-motion-bg-');
-    expect(serverSource).toContain('data-bind:class="/c/components/badge.client.js?v=');
+    expect(serverSource).toContain('data-bind:class="/c/__v/');
+    expect(serverSource).toContain('/components/badge.client.js#Badge$style_class_derive');
     expect(serverSource).toContain('#Badge$style_class_derive');
     expect(serverSource).not.toContain('style={[base.root');
     expect(clientSource).toContain(

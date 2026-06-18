@@ -153,7 +153,9 @@ export function versionHandlerLowering(
 
 export function clientModuleUrl(fileName: string, version?: string): string {
   const href = `/c/${replaceExtension(fileName, '.client.js').replace(/^\/+/, '')}`;
-  return version ? `${href}?v=${version}` : href;
+  if (!version) return href;
+
+  return `/c/__v/${encodeURIComponent(version)}/${href.slice('/c/'.length)}`;
 }
 
 export function clientModuleVersion(source: string): string {

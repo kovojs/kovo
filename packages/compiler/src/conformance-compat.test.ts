@@ -24,7 +24,7 @@ function diagnosticTextSnapshot(diagnostics: readonly CompilerDiagnostic[]): Arr
 }
 
 function normalizeDiagnosticHelp(help: string): string {
-  return help.replaceAll(/\?v=[0-9a-f]{8}/g, '?v=<version>');
+  return help.replaceAll(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/<version>/');
 }
 
 describe('compiler conformance compatibility diagnostics', () => {
@@ -84,7 +84,7 @@ export const CartBadge = component({
         {
           "code": "KV201",
           "fileName": "cart-badge.tsx",
-          "help": "Would lower to: on:click="/c/cart-badge.client.js?v=<version>#CartBadge$button_click"
+          "help": "Would lower to: on:click="/c/__v/<version>/cart-badge.client.js#CartBadge$button_click"
       Blocked expression: () => window.alert("x")
       Element params: -
       Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.

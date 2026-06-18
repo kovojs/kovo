@@ -143,7 +143,7 @@ describe('server node adapter', () => {
         body: expect.stringContaining('<main>Cart 0</main>'),
         headers: expect.objectContaining({
           'content-type': 'text/html; charset=utf-8',
-          link: `</c/cart.client.js?v=cart-v1>; rel=modulepreload`,
+          link: `</c/__v/cart-v1/cart.client.js>; rel=modulepreload`,
         }),
         status: 200,
       });

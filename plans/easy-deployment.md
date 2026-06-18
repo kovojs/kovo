@@ -85,7 +85,7 @@ adapter-*` packages. Selection is host **auto-detection** (`VERCEL` / `CF_PAGES`
   `packages/create-kovo/templates/src/app-shell.ts`,
   `examples/commerce/src/app-shell.ts:367-373`.
 - Client asset build + Vite manifest (`build.manifest: true`), assets under
-  `/assets/*`, immutable client modules under `/c/*?v=…` that must persist across
+  `/assets/*`, immutable client modules under `/c/__v/<version>/*` that must persist across
   deploys (`SPEC.md` §6.6). Evidence: `examples/commerce/vite.config.ts`,
   `templates/docs/deployment.md`.
 
@@ -259,19 +259,20 @@ Design decisions to lock in code review:
     diagnostics are empty, `KovoNeutralBuild.staticOutput` points at the static tree
     and `node()`, `vercel()`, and `cloudflare()` prefer it over a server handler.
     `packages/server/src/build.test.ts` verifies the neutral static tree includes
-    HTML, `/c/` client modules, and `/assets/` files, and verifies all three
-    presets omit their server/function/worker entry for a proven static-only app.
+    HTML, `/c/` client modules, and `/assets/` files, verifies `node()` still emits
+    a runnable server for explicitly selected Node deployments, and verifies the
+    edge/static-host presets omit their function/worker entry for a proven static-only app.
     `packages/cli/src/index.kovo-build.test.ts` verifies `VERCEL=1` static-only
     apps emit `.vercel/output/static` with no function. Gap: mixed apps still emit
     dynamic preset output only; per-route static plus function routing remains open.
-- [ ] **Immutable `/c/` retention across deploys (`SPEC.md` §6.6).** Versioned
+- [x] **Immutable `/c/` retention across deploys (`SPEC.md` §6.6).** Versioned
       client-module URLs must survive deploys until referencing documents age out.
       Each preset documents/implements "don't overwrite, accrete": e.g. the node preset
       serves a retained `c/` dir; Vercel/CF rely on content-hash immutability +
       guidance to not purge old versions. This is a real correctness constraint, not a
       nicety — surfaced in preset docs and `inspect()` warnings.
-  - Partial evidence: `packages/create-kovo/templates/docs/deployment.md` documents that
-    `/c/*?v=...` client handler modules are immutable and that old versioned
+  - Evidence: `packages/create-kovo/templates/docs/deployment.md` documents that
+    `/c/__v/<version>/*` client handler modules are immutable and that old versioned
     artifacts must stay published until referencing documents age out.
     `packages/server/src/build.ts` emits a `client-module-retention` warning from
     `node().inspect()`, `vercel().inspect()`, and `cloudflare().inspect()` whenever
@@ -279,10 +280,16 @@ Design decisions to lock in code review:
     verifies all three built-in presets emit that warning, and the existing node,
     Vercel, and Cloudflare preset tests verify emitted `/c/` files keep
     `public, max-age=31536000, immutable` cache behavior.
-  - Gap: generated client-module URLs still use a stable path plus version query
-    (`/c/name.js?v=...`). A new deploy can overwrite `client/c/name.js`, so old
-    documents may fetch new module bytes for an old query version. Actual
-    retained versioned artifact paths or query-aware retained serving remain open.
+  - Evidence: `packages/server/src/client-modules.ts` and
+    `packages/compiler/src/lower/handlers.ts` now emit canonical
+    `/c/__v/<version>/...` client-module hrefs while retaining legacy
+    `/c/name.js?v=...` request resolution. `packages/server/src/build.test.ts`,
+    `packages/cli/src/index.kovo-build.test.ts`, and
+    `packages/server/src/static-export-output-targets.test.ts` verify Vite,
+    neutral, preset, and static-export outputs physically write retained
+    `c/__v/<version>/...` artifacts.
+  - Evidence: `corepack pnpm exec vitest --run examples/gallery/src/interactive-gallery.compile.test.ts examples/gallery/src/interactive-gallery.artifacts.test.ts examples/gallery/src/interactive-gallery.static-export.test.ts examples/commerce/src/app-shell.test.ts examples/reference/src/app-shell.test.ts packages/create-kovo/src/index.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/state-bindings.test.ts packages/compiler/src/output-context-raw-html.test.ts packages/compiler/src/vite.test.ts packages/conformance-fixtures/src/generated-module-fixtures.test.ts packages/conformance-fixtures/src/diagnostic-output-fixtures.test.ts packages/conformance-fixtures/src/vite-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts packages/test/src/integration/semantic-snapshot.test.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/build.test.ts` passed with 122 tests across 17 files.
+  - Evidence: `corepack pnpm exec vitest --run site/tutorial/steps site/src site/scripts packages/server/src/hints.test.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-client-module-refs.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-export-replay.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/node.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-dev-middleware.test.ts packages/server/src/vite-build-wiring.test.ts` passed with 156 tests across 27 files.
 - [x] **Env & origin.** Convention: `PORT`, `HOST`, `NODE_ENV`, and `DATABASE_URL`
       (only env Kovo names for the data plane). Origin/proto already handled via
       `Host`/`x-forwarded-proto` in `node.ts`; presets set `origin` appropriately for
@@ -364,7 +371,7 @@ packages/runtime/src packages/core/src -g '*.ts'` was run in this session. The
     emitted node preset output copied into a runtime root with only production
     Kovo package roots (`@kovojs/core`, `@kovojs/runtime`, `@kovojs/server`) plus
     throwing `vite`/`vite-plus` guard packages, then verifies a route, a `/_m/`
-    mutation, an immutable `/c/cart.client.js?v=cart-v1` response, and an
+    mutation, an immutable `/c/__v/cart-v1/cart.client.js` response, and an
     immutable Vite-built `/assets/*.css` response. Verification: `corepack pnpm
 exec vitest --run packages/server/src/client-modules.test.ts
 packages/server/src/build.test.ts packages/server/src/api/app.test.ts
@@ -453,7 +460,7 @@ vitest --run packages/cli/src/index.kovo-build.test.ts packages/server/src/build
     in `packages/cli/src/index.kovo-build.test.ts` runs `kovo build`, asserts the
     generated node output has a `Dockerfile` and no `node_modules`, builds the
     image, runs the container, and verifies a route, `/_m/` mutation, immutable
-    `/c/cart.client.js?v=cart-v1`, and immutable Vite-built `/assets/*.css`.
+    `/c/__v/cart-v1/cart.client.js`, and immutable Vite-built `/assets/*.css`.
     Verification: `KOVO_TEST_DOCKER=1 corepack pnpm exec vitest --run
 packages/cli/src/index.kovo-build.test.ts -t "generated node Dockerfile"`.
 

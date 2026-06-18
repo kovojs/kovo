@@ -216,7 +216,9 @@ describe('create-kovo starter', () => {
       expect(appSource).toContain('props: { cartCount: Number }');
       expect(appSource).toContain('Starter cart count: {cartCount}');
       expect(appSource).toContain('<main');
-      expect(appSource).toContain('on:click="/c/starter.client.js?v=starter-r7#Starter$announce"');
+      expect(appSource).toContain(
+        'on:click="/c/__v/starter-r7/starter.client.js#Starter$announce"',
+      );
       expect(appSource).not.toContain('mx-auto');
       expect(appSource).not.toContain('text-kovo-accent');
       expect(appSource).toContain('tokens.sys.color.primary');
@@ -541,11 +543,11 @@ describe('create-kovo starter', () => {
 
       const documentBody = await fetchTextWhenReady(`${origin}/`, output);
       expect(documentBody).toContain(
-        'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
+        'on:click="/c/__v/starter-r7/starter.client.js#Starter$announce"',
       );
 
       const moduleBody = await fetchTextWhenReady(
-        `${origin}/c/starter.client.js?v=starter-r7`,
+        `${origin}/c/__v/starter-r7/starter.client.js`,
         output,
       );
       expect(moduleBody).toContain('export function Starter$announce');
@@ -589,11 +591,11 @@ describe('create-kovo starter', () => {
         expect(output()).toContain(`Kovo node server listening on ${origin}`);
         expect(documentBody).toContain('--kovo-theme-sys-color-primary');
         expect(documentBody).toContain(
-          'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
+          'on:click="/c/__v/starter-r7/starter.client.js#Starter$announce"',
         );
 
         const moduleBody = await fetchTextWhenReady(
-          `${origin}/c/starter.client.js?v=starter-r7`,
+          `${origin}/c/__v/starter-r7/starter.client.js`,
           output,
         );
         expect(moduleBody).toContain('export function Starter$announce');
@@ -640,7 +642,7 @@ describe('create-kovo starter', () => {
         expect(cssFile).toBeTypeOf('string');
         expect(output).toContain('starter-export/v1\nHTML /index.html status=200 bytes=');
         expect(output).toContain(
-          'CLIENT-MODULE /c/starter.client.js href="/c/starter.client.js?v=starter-r7" status=200 bytes=',
+          'CLIENT-MODULE /c/__v/starter-r7/starter.client.js href="/c/__v/starter-r7/starter.client.js" status=200 bytes=',
         );
         expect(output).toContain(`ASSET /assets/${cssFile} status=200 bytes=`);
         expect(output).toContain('SUMMARY html=1 clientModules=1 assets=1 diagnostics=0');
@@ -649,7 +651,7 @@ describe('create-kovo starter', () => {
         expect(distIndex).toContain('--kovo-theme-sys-color-primary');
         expect(distIndex).toContain('kv-starter-app-');
         expect(distIndex).toContain(
-          'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
+          'on:click="/c/__v/starter-r7/starter.client.js#Starter$announce"',
         );
         expect(distIndex).not.toContain('/src/styles.css');
         expect(distIndex).not.toContain('/src/client.ts');
@@ -658,9 +660,9 @@ describe('create-kovo starter', () => {
         expect(exportedCss).toContain('@layer kovo-starter-base');
         expect(exportedCss).toContain('var(--kovo-theme-sys-color-surface)');
         expect(exportedCss).not.toContain(legacyCssTool);
-        expect(readFileSync(join(root, 'dist/c/starter.client.js'), 'utf8')).toContain(
-          'Starter$announce',
-        );
+        expect(
+          readFileSync(join(root, 'dist/c/__v/starter-r7/starter.client.js'), 'utf8'),
+        ).toContain('Starter$announce');
 
         staticPreviewServer = spawn(
           vpCommand(),
@@ -689,7 +691,7 @@ describe('create-kovo starter', () => {
         expect(previewDocument).toContain('--kovo-theme-sys-color-primary');
         expect(previewDocument).toContain('kv-starter-app-');
         expect(previewDocument).toContain(
-          'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
+          'on:click="/c/__v/starter-r7/starter.client.js#Starter$announce"',
         );
         expect(previewDocument).not.toContain('/src/styles.css');
 
@@ -699,7 +701,7 @@ describe('create-kovo starter', () => {
         expect(previewCss).not.toContain(legacyCssTool);
 
         const previewClientModule = await fetchTextWhenReady(
-          `${origin}/c/starter.client.js?v=starter-r7`,
+          `${origin}/c/__v/starter-r7/starter.client.js`,
           previewOutput,
         );
         expect(previewClientModule).toContain('Starter$announce');
@@ -710,7 +712,7 @@ describe('create-kovo starter', () => {
         expect(headDocument.headers.get('content-length')).toBe(String(distIndex.length));
         await expect(headDocument.text()).resolves.toBe('');
 
-        const headClientModule = await fetch(`${origin}/c/starter.client.js?v=starter-r7`, {
+        const headClientModule = await fetch(`${origin}/c/__v/starter-r7/starter.client.js`, {
           method: 'HEAD',
         });
         expect(headClientModule.status).toBe(200);

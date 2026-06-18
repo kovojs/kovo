@@ -205,7 +205,7 @@ export const ProductCard = component({
 
     expect(result.viewTransitions).toEqual([]);
     expect(serverSource).toContain(
-      '<img data-derive="product.ProductCard$img_style_derive" data-derive-attr="style" src="/p1.png" kovo-c="product-card" kovo-deps="product" kovo-fragment-target="product-card" />',
+      '<img data-derive="product.ProductCard$img_style_derive" data-derive-attr="style" src="/p1.png" kovo-c="product-card" kovo-deps="product" kovo-fragment-target="product-card" kovo-live-component="product-card/product-card" />',
     );
     expect(clientSource).toContain(
       'export const ProductCard$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));',
@@ -233,7 +233,7 @@ export const ProductCard = component({
     const clientSource = result.files[1]?.source ?? '';
 
     expect(serverSource).toContain(
-      '<img style="opacity: .8" data-derive="product.ProductCard$img_style_derive" data-derive-attr="style" src="/p1.png" kovo-c="product-card" kovo-deps="product" kovo-fragment-target="product-card" />',
+      '<img style="opacity: .8" data-derive="product.ProductCard$img_style_derive" data-derive-attr="style" src="/p1.png" kovo-c="product-card" kovo-deps="product" kovo-fragment-target="product-card" kovo-live-component="product-card/product-card" />',
     );
     expect(clientSource).toContain(
       `export const ProductCard$img_style_derive = derive(["product"], (product) => ["opacity: .8; ", kovoStyleProperty("view-transition-name", product.slug)].join(''));`,

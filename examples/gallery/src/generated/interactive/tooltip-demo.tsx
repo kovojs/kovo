@@ -56,16 +56,16 @@ export const GalleryTooltipDemo = component({
       >
         <button
           class={TRIGGER_CLASS}
-          on:blur="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=fcc3e50c#GalleryTooltipDemo$button_blur"
-          on:focus="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=fcc3e50c#GalleryTooltipDemo$button_focus"
-          on:keydown="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=fcc3e50c#GalleryTooltipDemo$button_keydown"
-          on:pointerenter="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=fcc3e50c#GalleryTooltipDemo$button_pointerenter"
-          on:pointerleave="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=fcc3e50c#GalleryTooltipDemo$button_pointerleave"
+          on:blur="/c/__v/fcc3e50c/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$button_blur"
+          on:focus="/c/__v/fcc3e50c/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$button_focus"
+          on:keydown="/c/__v/fcc3e50c/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$button_keydown"
+          on:pointerenter="/c/__v/fcc3e50c/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$button_pointerenter"
+          on:pointerleave="/c/__v/fcc3e50c/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$button_pointerleave"
           {...tooltipTriggerAttributes({ contentId, open: state.open })}
           aria-describedby={state.open ? 'gallery-tooltip-content' : null}
-          data-bind:aria-describedby="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=fcc3e50c#GalleryTooltipDemo$button_aria_describedby_derive"
+          data-bind:aria-describedby="/c/__v/fcc3e50c/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$button_aria_describedby_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=fcc3e50c#GalleryTooltipDemo$button_data_state_derive"
+          data-bind:data-state="/c/__v/fcc3e50c/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$button_data_state_derive"
         >
           Shipping code
         </button>
@@ -73,15 +73,15 @@ export const GalleryTooltipDemo = component({
           class={CONTENT_CLASS}
           {...tooltipContentAttributes({ contentId, open: state.open })}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=fcc3e50c#GalleryTooltipDemo$span_data_state_derive"
+          data-bind:data-state="/c/__v/fcc3e50c/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$span_data_state_derive"
           hidden={!state.open}
-          data-bind:hidden="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=fcc3e50c#GalleryTooltipDemo$span_hidden_derive"
+          data-bind:hidden="/c/__v/fcc3e50c/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$span_hidden_derive"
         >
           Use the code printed on the packing slip.
         </span>
         <output
           data-demo-state="tooltip-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=fcc3e50c#GalleryTooltipDemo$output_text_derive"
+          data-bind="/c/__v/fcc3e50c/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

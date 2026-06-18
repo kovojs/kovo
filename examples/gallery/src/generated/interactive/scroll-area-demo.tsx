@@ -160,24 +160,24 @@ export const GalleryScrollAreaDemo = component({
       <section
         class={ROOT_CLASS}
         data-gallery-interactive="scroll-area"
-        on:pointerenter="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$section_pointerenter"
-        on:pointerleave="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$section_pointerleave"
+        on:pointerenter="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$section_pointerenter"
+        on:pointerleave="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$section_pointerleave"
         {...scrollAreaRootAttributes({ ...rootState, id: 'gallery-scroll-area-root' })}
         data-dragging={state.dragging ? '' : null}
-        data-bind:data-dragging="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$section_data_dragging_derive"
+        data-bind:data-dragging="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$section_data_dragging_derive"
         data-has-overflow-y={state.hasOverflowY ? '' : null}
-        data-bind:data-has-overflow-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$section_data_has_overflow_y_derive"
+        data-bind:data-has-overflow-y="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$section_data_has_overflow_y_derive"
         data-hovering={state.hovering ? '' : null}
-        data-bind:data-hovering="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$section_data_hovering_derive"
+        data-bind:data-hovering="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$section_data_hovering_derive"
         data-scrolling={state.scrolling ? '' : null}
-        data-bind:data-scrolling="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$section_data_scrolling_derive"
+        data-bind:data-scrolling="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$section_data_scrolling_derive"
         kovo-c="gallery-scroll-area-demo"
         kovo-state='{"dragging":false,"dragPointerStart":0,"dragScrollTop":0,"dragThumbSize":28,"dragTrackSize":72,"hasOverflowY":true,"hovering":false,"scrolling":false,"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}'
       >
         <div
           class={VIEWPORT_CLASS}
           style="max-height: 72px; overflow: auto;"
-          on:scroll="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_scroll"
+          on:scroll="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_scroll"
           {...scrollAreaViewportAttributes({
             ...rootState,
             id: viewportId,
@@ -185,13 +185,13 @@ export const GalleryScrollAreaDemo = component({
             scrollY: state.scrollY,
           })}
           data-has-overflow-y={state.hasOverflowY ? '' : null}
-          data-bind:data-has-overflow-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_data_has_overflow_y_derive"
+          data-bind:data-has-overflow-y="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_data_has_overflow_y_derive"
           data-scrolling={state.scrolling ? '' : null}
-          data-bind:data-scrolling="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_data_scrolling_derive"
+          data-bind:data-scrolling="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_data_scrolling_derive"
           data-scroll-y={state.scrollY}
-          data-bind:data-scroll-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_data_scroll_y_derive"
+          data-bind:data-scroll-y="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_data_scroll_y_derive"
           scrollTop={state.scrollTop}
-          data-bind:scrollTop="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_scrollTop_derive"
+          data-bind:scrollTop="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_scrollTop_derive"
         >
           <div style="min-height: 260px;">
             <p>Framework primitives keep native scrolling in charge.</p>
@@ -202,7 +202,7 @@ export const GalleryScrollAreaDemo = component({
         </div>
         <div
           class={SCROLLBAR_CLASS}
-          on:pointerdown="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_pointerdown"
+          on:pointerdown="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_pointerdown"
           {...scrollAreaScrollbarAttributes({
             ...rootState,
             id: 'gallery-scroll-area-scrollbar',
@@ -210,25 +210,25 @@ export const GalleryScrollAreaDemo = component({
             visible: state.verticalVisible && (state.hovering || state.scrolling || state.dragging),
           })}
           data-has-overflow-y={state.hasOverflowY ? '' : null}
-          data-bind:data-has-overflow-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_data_has_overflow_y_derive_2"
+          data-bind:data-has-overflow-y="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_data_has_overflow_y_derive_2"
           data-hovering={state.hovering ? '' : null}
-          data-bind:data-hovering="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_data_hovering_derive"
+          data-bind:data-hovering="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_data_hovering_derive"
           data-scrolling={state.scrolling ? '' : null}
-          data-bind:data-scrolling="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_data_scrolling_derive_2"
+          data-bind:data-scrolling="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_data_scrolling_derive_2"
           data-state={
             state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
               ? 'visible'
               : 'hidden'
           }
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_data_state_derive"
+          data-bind:data-state="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_data_state_derive"
           hidden={!(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))}
-          data-bind:hidden="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$div_hidden_derive"
+          data-bind:hidden="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$div_hidden_derive"
         >
           <span
             class={THUMB_CLASS}
-            on:pointerdown="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_pointerdown"
-            on:pointermove="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_pointermove"
-            on:pointerup="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_pointerup"
+            on:pointerdown="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_pointerdown"
+            on:pointermove="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_pointermove"
+            on:pointerup="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_pointerup"
             {...scrollAreaThumbAttributes({
               ...rootState,
               id: 'gallery-scroll-area-thumb',
@@ -238,27 +238,27 @@ export const GalleryScrollAreaDemo = component({
                 state.verticalVisible && (state.hovering || state.scrolling || state.dragging),
             })}
             data-dragging={state.dragging ? '' : null}
-            data-bind:data-dragging="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_data_dragging_derive"
+            data-bind:data-dragging="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_data_dragging_derive"
             data-has-overflow-y={state.hasOverflowY ? '' : null}
-            data-bind:data-has-overflow-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_data_has_overflow_y_derive"
+            data-bind:data-has-overflow-y="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_data_has_overflow_y_derive"
             data-hovering={state.hovering ? '' : null}
-            data-bind:data-hovering="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_data_hovering_derive"
+            data-bind:data-hovering="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_data_hovering_derive"
             data-scrolling={state.scrolling ? '' : null}
-            data-bind:data-scrolling="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_data_scrolling_derive"
+            data-bind:data-scrolling="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_data_scrolling_derive"
             data-scroll-position={state.scrollY}
-            data-bind:data-scroll-position="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_data_scroll_position_derive"
+            data-bind:data-scroll-position="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_data_scroll_position_derive"
             data-state={
               state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
                 ? 'visible'
                 : 'hidden'
             }
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_data_state_derive"
+            data-bind:data-state="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_data_state_derive"
             hidden={
               !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))
             }
-            data-bind:hidden="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_hidden_derive"
+            data-bind:hidden="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_hidden_derive"
             style={{ height: `${state.thumbSize}%`, top: `${state.thumbOffset}%` }}
-            data-bind:style="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_style_derive"
+            data-bind:style="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_style_derive"
           />
         </div>
         <div
@@ -273,11 +273,11 @@ export const GalleryScrollAreaDemo = component({
           aria-controls={viewportId}
           class={TOGGLE_CLASS}
           id="gallery-scroll-area-toggle"
-          on:click="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$button_click"
+          on:click="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$button_click"
           aria-pressed={state.scrollY === 'end' ? 'true' : 'false'}
-          data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$button_aria_pressed_derive"
+          data-bind:aria-pressed="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$button_aria_pressed_derive"
         >
-          <span data-bind="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=76c86589#GalleryScrollAreaDemo$span_text_derive">
+          <span data-bind="/c/__v/76c86589/examples/gallery/src/generated/interactive/scroll-area-demo.client.js#GalleryScrollAreaDemo$span_text_derive">
             {state.scrollY === 'end' ? 'Back to top' : 'Jump to end'}
           </span>
         </button>

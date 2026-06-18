@@ -19,8 +19,9 @@ export const CartBadge = component({
 `;
 
 function expectHandlerRef(source: string, path: string, exportName: string): void {
+  const relativePath = escapeRegExp(path.replace(/^\/c\//, ''));
   expect(source).toMatch(
-    new RegExp(`${escapeRegExp(path)}\\?v=[0-9a-f]{8}#${escapeRegExp(exportName)}`),
+    new RegExp(`/c/__v/[0-9a-f]{8}/${relativePath}#${escapeRegExp(exportName)}`),
   );
 }
 
@@ -891,7 +892,7 @@ export const CartBadge = component({
         help: expect.stringContaining(
           'Blocked reason: app source imports non-public Kovo subpath `@kovojs/cli/internal`.',
         ),
-        length: 20,
+        length: 22,
         message:
           'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
         severity: 'error',

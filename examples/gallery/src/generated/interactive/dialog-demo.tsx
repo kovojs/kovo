@@ -64,29 +64,29 @@ export const GalleryDialogDemo = component({
         data-gallery-interactive="dialog"
         {...dialogRootAttributes({ open: state.open })}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=88d53d45#GalleryDialogDemo$section_data_state_derive"
+        data-bind:data-state="/c/__v/88d53d45/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$section_data_state_derive"
         kovo-c="gallery-dialog-demo"
         kovo-state='{"open":false}'
       >
         <button
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=88d53d45#GalleryDialogDemo$button_click"
+          on:click="/c/__v/88d53d45/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$button_click"
           {...dialogTriggerAttributes({ contentId, open: state.open })}
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=88d53d45#GalleryDialogDemo$button_aria_expanded_derive"
+          data-bind:aria-expanded="/c/__v/88d53d45/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$button_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=88d53d45#GalleryDialogDemo$button_data_state_derive"
+          data-bind:data-state="/c/__v/88d53d45/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$button_data_state_derive"
         >
           Review cart
         </button>
         <dialog
           class={CONTENT_CLASS}
-          on:cancel="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=88d53d45#GalleryDialogDemo$dialog_cancel"
+          on:cancel="/c/__v/88d53d45/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$dialog_cancel"
           {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=88d53d45#GalleryDialogDemo$dialog_data_state_derive"
+          data-bind:data-state="/c/__v/88d53d45/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$dialog_data_state_derive"
           open={state.open}
-          data-bind:open="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=88d53d45#GalleryDialogDemo$dialog_open_derive"
+          data-bind:open="/c/__v/88d53d45/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$dialog_open_derive"
         >
           <h2 class={TITLE_CLASS} id={titleId}>
             Cart review
@@ -96,17 +96,17 @@ export const GalleryDialogDemo = component({
           </p>
           <button
             class={CLOSE_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=88d53d45#GalleryDialogDemo$button_click_2"
+            on:click="/c/__v/88d53d45/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$button_click_2"
             {...dialogCloseAttributes({ contentId, open: state.open })}
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=88d53d45#GalleryDialogDemo$button_data_state_derive_2"
+            data-bind:data-state="/c/__v/88d53d45/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$button_data_state_derive_2"
           >
             Close review
           </button>
         </dialog>
         <output
           data-demo-state="open"
-          data-bind="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=88d53d45#GalleryDialogDemo$output_text_derive"
+          data-bind="/c/__v/88d53d45/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

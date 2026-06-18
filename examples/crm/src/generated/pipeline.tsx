@@ -97,15 +97,19 @@ export const PipelineRegion = component({
     openDeals: openDealsQuery,
     pipelineByStage: pipelineByStageQuery,
   },
-  render: ({
-    contactList,
-    openDeals,
-    pipelineByStage,
-  }: {
-    contactList: ContactListResult;
-    openDeals: OpenDealsResult;
-    pipelineByStage: PipelineByStageResult;
-  }, _state, slots: PipelineRenderSlots = {}) => {
+  render: (
+    {
+      contactList,
+      openDeals,
+      pipelineByStage,
+    }: {
+      contactList: ContactListResult;
+      openDeals: OpenDealsResult;
+      pipelineByStage: PipelineByStageResult;
+    },
+    _state,
+    slots: PipelineRenderSlots = {},
+  ) => {
     const contacts = contactList.items;
     const buckets = pipelineByStage.buckets;
     const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));

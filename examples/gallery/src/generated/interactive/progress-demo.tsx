@@ -60,35 +60,35 @@ export const GalleryProgressDemo = component({
           aria-valuetext={
             state.value === null ? 'Upload pending' : `${state.value} percent uploaded`
           }
-          data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$progress_aria_valuetext_derive"
+          data-bind:aria-valuetext="/c/__v/cce5b0f8/examples/gallery/src/generated/interactive/progress-demo.client.js#GalleryProgressDemo$progress_aria_valuetext_derive"
           data-state={
             state.value === null ? 'indeterminate' : state.value === 100 ? 'complete' : 'loading'
           }
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$progress_data_state_derive"
+          data-bind:data-state="/c/__v/cce5b0f8/examples/gallery/src/generated/interactive/progress-demo.client.js#GalleryProgressDemo$progress_data_state_derive"
           data-value={state.value === null ? undefined : String(state.value)}
-          data-bind:data-value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$progress_data_value_derive"
+          data-bind:data-value="/c/__v/cce5b0f8/examples/gallery/src/generated/interactive/progress-demo.client.js#GalleryProgressDemo$progress_data_value_derive"
           value={state.value === null ? undefined : state.value}
-          data-bind:value="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$progress_value_derive"
+          data-bind:value="/c/__v/cce5b0f8/examples/gallery/src/generated/interactive/progress-demo.client.js#GalleryProgressDemo$progress_value_derive"
         />
         <div class="inline-flex gap-2">
           <button
             type="button"
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$button_click"
+            on:click="/c/__v/cce5b0f8/examples/gallery/src/generated/interactive/progress-demo.client.js#GalleryProgressDemo$button_click"
           >
             Complete upload
           </button>
           <button
             type="button"
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$button_click_2"
+            on:click="/c/__v/cce5b0f8/examples/gallery/src/generated/interactive/progress-demo.client.js#GalleryProgressDemo$button_click_2"
           >
             Mark pending
           </button>
         </div>
         <output
           data-demo-state="progress-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=cce5b0f8#GalleryProgressDemo$output_text_derive"
+          data-bind="/c/__v/cce5b0f8/examples/gallery/src/generated/interactive/progress-demo.client.js#GalleryProgressDemo$output_text_derive"
         >
           {state.value === null ? 'pending' : `${state.value}%`}
         </output>

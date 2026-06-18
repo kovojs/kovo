@@ -72,7 +72,7 @@ describe('kovo build', () => {
           '<kovo-query name="cart">{"count":2}</kovo-query>',
         );
 
-        const clientModuleResponse = await fetch(`${origin}/c/cart.client.js?v=cart-v1`);
+        const clientModuleResponse = await fetch(`${origin}/c/__v/cart-v1/cart.client.js`);
         await expect(clientModuleResponse.text()).resolves.toBe('export const cartClient = true;');
         expect(clientModuleResponse.status).toBe(200);
         expect(clientModuleResponse.headers.get('cache-control')).toBe(
@@ -190,7 +190,7 @@ describe('kovo build', () => {
         await expect(updatedDocument.text()).resolves.toContain('<main>Cart 3</main>');
         expect(updatedDocument.status).toBe(200);
 
-        const clientModuleResponse = await fetch(`${origin}/c/cart.client.js?v=cart-v1`);
+        const clientModuleResponse = await fetch(`${origin}/c/__v/cart-v1/cart.client.js`);
         await expect(clientModuleResponse.text()).resolves.toBe('export const cartClient = true;');
         expect(clientModuleResponse.status).toBe(200);
         expect(clientModuleResponse.headers.get('cache-control')).toBe(
@@ -264,7 +264,7 @@ describe('kovo build', () => {
         await expect(updatedDocument.text()).resolves.toContain('<main>Cart 5</main>');
         expect(updatedDocument.status).toBe(200);
 
-        const clientModuleResponse = await fetch(`${origin}/c/cart.client.js?v=cart-v1`);
+        const clientModuleResponse = await fetch(`${origin}/c/__v/cart-v1/cart.client.js`);
         await expect(clientModuleResponse.text()).resolves.toBe('export const cartClient = true;');
         expect(clientModuleResponse.headers.get('cache-control')).toBe(
           'public, max-age=31536000, immutable',
@@ -424,9 +424,9 @@ describe('kovo build', () => {
         runtime: 'nodejs22.x',
         shouldAddHelpers: true,
       });
-      expect(readFileSync(join(outDir, '.vercel/output/static/c/cart.client.js'), 'utf8')).toBe(
-        'export const cartClient = true;',
-      );
+      expect(
+        readFileSync(join(outDir, '.vercel/output/static/c/__v/cart-v1/cart.client.js'), 'utf8'),
+      ).toBe('export const cartClient = true;');
       const stylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
       expect(
         readFileSync(join(outDir, '.vercel/output/static', stylesheetPath.slice(1)), 'utf8'),
@@ -505,9 +505,9 @@ describe('kovo build', () => {
       expect(readFileSync(join(outDir, 'cloudflare/worker.mjs'), 'utf8')).toContain(
         "import handler from './server/handler.mjs';",
       );
-      expect(readFileSync(join(outDir, 'cloudflare/client/c/cart.client.js'), 'utf8')).toBe(
-        'export const cartClient = true;',
-      );
+      expect(
+        readFileSync(join(outDir, 'cloudflare/client/c/__v/cart-v1/cart.client.js'), 'utf8'),
+      ).toBe('export const cartClient = true;');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

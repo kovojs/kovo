@@ -79,9 +79,11 @@ export const QuestionDetailRegion = component({
     {
       answers,
       question,
+      questionId,
     }: {
       answers: QuestionAnswersResult;
       question: QuestionDetailResult | null;
+      questionId: string;
     },
     _state,
     slots: { request?: SoRequest | undefined } = {},
@@ -123,7 +125,7 @@ export const QuestionDetailRegion = component({
           <form enhance mutation={postAnswerMutation} class="so-composer">
             {slots.request ? csrfField(slots.request, soCsrf) : ''}
             <input type="hidden" name="id" value={freshId('a')} />
-            <input type="hidden" name="questionId" value={question.id} />
+            <input type="hidden" name="questionId" value={questionId} />
             <input type="hidden" name="authorId" value="demo-viewer" />
             <label class="so-composer-title" for="answer-body">
               Your answer

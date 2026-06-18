@@ -185,6 +185,7 @@ function normalizeUrlLikeAttrValue(value: string): string {
   // same URL-shaped values as href/src, sometimes as a whitespace-separated
   // chain, so the replacement intentionally scans the whole attribute value.
   return value
+    .replace(/\/c\/__v\/[0-9a-f]{6,}\//gi, '/c/__v/*/')
     .replace(/([?&]v=)[0-9a-f]{6,}/gi, '$1*')
     .replace(/\.[0-9a-f]{8,}(\.[a-z0-9]+)(?=$|[#?\s])/gi, '.*$1')
     .replace(/\s+/g, ' ')

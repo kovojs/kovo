@@ -31,8 +31,8 @@ describe('server static export output target boundary', () => {
             {
               body: 'export const app = true;',
               headers: {},
-              href: '/c/app.client.js?v=app',
-              path: '/c/app.client.js',
+              href: '/c/__v/app/app.client.js',
+              path: '/c/__v/app/app.client.js',
               status: 200,
             },
           ],
@@ -54,11 +54,11 @@ describe('server static export output target boundary', () => {
         targetPath: path.join(root, 'index.html'),
       },
       {
-        diagnosticPath: '/c/app.client.js',
+        diagnosticPath: '/c/__v/app/app.client.js',
         itemIndex: 0,
         itemKind: 'client-module',
         kind: 'client module',
-        targetPath: path.join(root, 'c', 'app.client.js'),
+        targetPath: path.join(root, 'c', '__v', 'app', 'app.client.js'),
       },
       {
         diagnosticPath: '/assets/app.css',

@@ -138,9 +138,9 @@ export const SliderDemo = component({
     const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
     expect({
-      clientSource: clientSource.replace(/v=[0-9a-f]{8}/g, 'v=HASH'),
+      clientSource: clientSource.replace(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/HASH/'),
       diagnostics: result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236'),
-      serverSource: serverSource.replace(/v=[0-9a-f]{8}/g, 'v=HASH'),
+      serverSource: serverSource.replace(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/HASH/'),
     }).toMatchInlineSnapshot(`
       {
         "clientSource": "// @kovojs-ir
@@ -162,8 +162,8 @@ export const SliderDemo = component({
         state: () => ({ value: 50 }),
         render: (_queries, state) => (
           <slider-demo kovo-state="{&quot;value&quot;:50}">
-            <span style={{ width: \\\`\\\${state.value}%\\\` }} data-bind:style="/c/slider-demo.client.js?v=HASH#SliderDemo$span_style_derive" />
-            <span style={{ left: \\\`\\\${state.value}%\\\`, top: '50%', transform: 'translate(-50%, -50%)' }} data-bind:style="/c/slider-demo.client.js?v=HASH#SliderDemo$span_style_derive_2" />
+            <span style={{ width: \\\`\\\${state.value}%\\\` }} data-bind:style="/c/__v/HASH/slider-demo.client.js#SliderDemo$span_style_derive" />
+            <span style={{ left: \\\`\\\${state.value}%\\\`, top: '50%', transform: 'translate(-50%, -50%)' }} data-bind:style="/c/__v/HASH/slider-demo.client.js#SliderDemo$span_style_derive_2" />
           </slider-demo>
         ),
       });

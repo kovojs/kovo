@@ -165,7 +165,9 @@ function factHash(value: unknown): string {
 }
 
 function normalizeCompilerClientVersions(value: string): string {
-  return value.replace(/\/c\/([^"'#?\s]+\.client\.js)\?v=[0-9a-f]{8}/g, '/c/$1');
+  return value
+    .replace(/\/c\/__v\/[0-9a-f]{8}\/([^"'#?\s]+\.client\.js)/g, '/c/$1')
+    .replace(/\/c\/([^"'#?\s]+\.client\.js)\?v=[0-9a-f]{8}/g, '/c/$1');
 }
 
 function canonicalJson(value: unknown): string {

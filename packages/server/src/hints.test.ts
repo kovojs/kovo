@@ -57,16 +57,16 @@ describe('page hints', () => {
       }),
     ).toEqual({
       earlyHints: {
-        Link: '</c/cart.client.js?v=cart-1>; rel=modulepreload, </c/generated/app.client.js?v=build-1>; rel=modulepreload',
+        Link: '</c/__v/cart-1/cart.client.js>; rel=modulepreload, </c/__v/build-1/generated/app.client.js>; rel=modulepreload',
       },
       html: [
-        '<link rel="modulepreload" href="/c/cart.client.js?v=cart-1">',
-        '<link rel="modulepreload" href="/c/generated/app.client.js?v=build-1">',
-        '<script type="module" src="/c/generated/app.client.js?v=build-1"></script>',
+        '<link rel="modulepreload" href="/c/__v/cart-1/cart.client.js">',
+        '<link rel="modulepreload" href="/c/__v/build-1/generated/app.client.js">',
+        '<script type="module" src="/c/__v/build-1/generated/app.client.js"></script>',
       ].join(''),
     });
     expect(versionedClientModuleHref('/c/cart.client.js#Cart$add', 'cart-1')).toBe(
-      '/c/cart.client.js?v=cart-1#Cart$add',
+      '/c/__v/cart-1/cart.client.js#Cart$add',
     );
   });
 

@@ -256,7 +256,7 @@ describe('server app shell Vite plugin', () => {
       await expect(nodeFetch(`${origin}/products/p1`)).resolves.toMatchObject({
         body: expect.stringContaining('<main>p1</main>'),
         headers: expect.objectContaining({
-          link: `</c/product.client.js?v=product-v1>; rel=modulepreload`,
+          link: `</c/__v/product-v1/product.client.js>; rel=modulepreload`,
         }),
         status: 200,
       });

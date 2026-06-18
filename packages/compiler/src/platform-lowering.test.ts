@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { assertFixpoint, compileComponentModule } from './index.js';
 
 function expectHandlerRef(source: string, path: string, exportName: string): void {
+  const relativePath = escapeRegExp(path.replace(/^\/c\//, ''));
   expect(source).toMatch(
-    new RegExp(`${escapeRegExp(path)}\\?v=[0-9a-f]{8}#${escapeRegExp(exportName)}`),
+    new RegExp(`/c/__v/[0-9a-f]{8}/${relativePath}#${escapeRegExp(exportName)}`),
   );
 }
 

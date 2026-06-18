@@ -1,10 +1,6 @@
 // @kovojs-ir — lowered from examples/stackoverflow/src/components/question-detail.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
 import { escapeText } from '@kovojs/server/internal/html';
-import { derive } from '@kovojs/runtime/generated';
-
-export const QuestionDetailRegion$input_value_derive = derive(["question"], (question) => question.id);
-
 import { component } from '@kovojs/core';
 import { csrfField } from '@kovojs/server';
 import { Badge } from '@kovojs/ui/badge';
@@ -14,13 +10,7 @@ import { Card } from '@kovojs/ui/card';
 import { soCsrf } from '../mutations.js';
 import { questionAnswers, questionDetail } from '../queries.js';
 import type { QuestionAnswersResult, QuestionDetailResult, SoRequest } from '../model.js';
-import {
-  freshId,
-  parseTags,
-  renderAuthor,
-  renderTags,
-  voteButton,
-} from '../components/chrome.js';
+import { freshId, parseTags, renderAuthor, renderTags, voteButton } from '../components/chrome.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
@@ -89,15 +79,19 @@ export const QuestionDetailRegion = component({
     answers: questionAnswers.args((props) => ({ questionId: props.questionId })),
     question: questionDetail.args((props) => ({ id: props.questionId })),
   },
-  render: ({
-    answers,
-    question,
-    questionId,
-  }: {
-    answers: QuestionAnswersResult;
-    question: QuestionDetailResult | null;
-    questionId: string;
-  }, _state, slots: { request?: SoRequest | undefined } = {}) => {
+  render: (
+    {
+      answers,
+      question,
+      questionId,
+    }: {
+      answers: QuestionAnswersResult;
+      question: QuestionDetailResult | null;
+      questionId: string;
+    },
+    _state,
+    slots: { request?: SoRequest | undefined } = {},
+  ) => {
     if (!question) {
       return (
         <div class="so-stack">
@@ -123,7 +117,7 @@ export const QuestionDetailRegion = component({
           &larr; All questions
         </a>
 
-          {renderQuestionCard(question, slots.request)}
+        {renderQuestionCard(question, slots.request)}
 
         <section class="so-stack">
           <h2 class="so-answers-head">
@@ -135,7 +129,7 @@ export const QuestionDetailRegion = component({
           <form enhance method="post" action="/_m/postAnswer" data-mutation="postAnswer" kovo-fragment-target="post-answer-mutation" class="so-composer">
             {slots.request ? csrfField(slots.request, soCsrf) : ''}
             <input type="hidden" name="id" value={freshId('a')} />
-            <input type="hidden" name="questionId" data-derive="question.QuestionDetailRegion$input_value_derive" data-derive-attr="value" />
+            <input type="hidden" name="questionId" value={questionId} />
             <input type="hidden" name="authorId" value="demo-viewer" />
             <label class="so-composer-title" for="answer-body">
               Your answer

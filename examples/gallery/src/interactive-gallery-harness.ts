@@ -128,14 +128,14 @@ export function extractGeneratedClientRefs(
   return [...html.matchAll(/on:([a-z]+)="([^"]+)"/g)].map((match) => {
     const eventName = match[1] ?? '';
     const ref = match[2] ?? '';
-    const parsed = ref.match(/^([^?#"]+)\?v=([0-9a-f]{8})#([A-Za-z0-9_$]+)$/);
+    const parsed = ref.match(/^\/c\/__v\/([0-9a-f]{8})\/([^?#"]+\.client\.js)#([A-Za-z0-9_$]+)$/);
     if (parsed === null) throw new Error(`Unexpected generated client ref: ${ref}`);
 
     return {
       eventName,
       exportName: parsed[3] ?? '',
-      modulePath: parsed[1] ?? '',
-      version: parsed[2] ?? '',
+      modulePath: `/c/${parsed[2] ?? ''}`,
+      version: parsed[1] ?? '',
     };
   });
 }

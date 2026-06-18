@@ -64,14 +64,15 @@ export const ProductPage = component({
     expect(serverSource).toContain('class="primitive nav-link"');
     expect(serverSource).toContain('href="/products/p1"');
     expect(serverSource).toMatch(
-      /on:click="\/c\/product-page\.client\.js\?v=[0-9a-f]{8}#ProductPage\$selectProduct \/c\/primitive#click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/product-page\.client\.js#ProductPage\$selectProduct \/c\/primitive#click"/,
     );
     expect(serverSource).toContain('data-state="closed"');
     expect(serverSource).toContain('commandfor="details" command="show-modal"');
     expect(serverSource).toContain('<dialog id="details">Details</dialog>');
     expect(serverSource).toContain('data-derive="product.ProductPage$a_title_derive"');
     expect(serverSource).toContain('data-derive-attr="title"');
-    expect(serverSource).toContain('data-bind:hidden="/c/product-page.client.js?v=');
+    expect(serverSource).toContain('data-bind:hidden="/c/__v/');
+    expect(serverSource).toContain('/product-page.client.js#ProductPage$a_hidden_derive');
     expect(serverSource).toContain('Product <span data-bind="product.name">{product.name}</span>');
     expect(serverSource).toContain('#ProductPage$span_text_derive');
     expect(serverSource).toContain(
@@ -171,9 +172,9 @@ export const ImportOrder = component({
     const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
     expect({
-      clientSource: clientSource.replace(/v=[0-9a-f]{8}/g, 'v=HASH'),
+      clientSource: clientSource.replace(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/HASH/'),
       diagnostics: result.diagnostics,
-      serverSource: serverSource.replace(/v=[0-9a-f]{8}/g, 'v=HASH'),
+      serverSource: serverSource.replace(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/HASH/'),
     }).toMatchInlineSnapshot(`
       {
         "clientSource": "// @kovojs-ir
@@ -207,7 +208,7 @@ export const ImportOrder = component({
         render: ({ product, label }, state) => (
           <import-order kovo-deps="product" kovo-state="{&quot;value&quot;:50}">
             <img data-derive="product.ImportOrder$img_style_derive" data-derive-attr="style" src="/p1.png" />
-            <span style={{ width: \\\`\\\${state.value}%\\\` }} data-bind:style="/c/import-order.client.js?v=HASH#ImportOrder$span_style_derive" />
+            <span style={{ width: \\\`\\\${state.value}%\\\` }} data-bind:style="/c/__v/HASH/import-order.client.js#ImportOrder$span_style_derive" />
             <strong>{escapeText(label.name)}</strong>
           </import-order>
         ),

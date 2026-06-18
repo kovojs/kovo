@@ -21,7 +21,7 @@ describe('vite-fixtures', () => {
     const plugin: VitePluginLike = {
       configureServer(server) {
         server.middlewares.use((request, response, next) => {
-          if (request.url === '/c/card.client.js?cache=1&v=1234abcd') {
+          if (request.url === '/c/__v/1234abcd/card.client.js?cache=1') {
             response.statusCode = 200;
             response.setHeader('Content-Type', 'text/javascript');
             response.end('export const Card$click = (event, ctx) => ctx.params.id;');
@@ -33,7 +33,7 @@ describe('vite-fixtures', () => {
       name: 'kovo',
       transform() {
         return {
-          code: `export function renderSource() { return '<button on:click="/c/card.client.js?v=1234abcd#Card$click" data-p-id="{product.id}">Add</button>'; }`,
+          code: `export function renderSource() { return '<button on:click="/c/__v/1234abcd/card.client.js#Card$click" data-p-id="{product.id}">Add</button>'; }`,
           map: null,
         };
       },
@@ -140,7 +140,7 @@ describe('vite-fixtures', () => {
     const plugin: VitePluginLike = {
       configureServer(server) {
         server.middlewares.use((request, response, next) => {
-          if (request.url === '/c/routes/products/product-card.client.js?cache=1&v=1234abcd') {
+          if (request.url === '/c/__v/1234abcd/routes/products/product-card.client.js?cache=1') {
             response.statusCode = 200;
             response.setHeader('Content-Type', 'text/javascript');
             response.end(
@@ -154,7 +154,7 @@ describe('vite-fixtures', () => {
       name: 'kovo',
       transform() {
         return {
-          code: `export function renderSource() { return '<button on:click="/c/routes/products/product-card.client.js?v=1234abcd#ProductCard$button_click" data-p-id="{product.id}">Add</button>'; }`,
+          code: `export function renderSource() { return '<button on:click="/c/__v/1234abcd/routes/products/product-card.client.js#ProductCard$button_click" data-p-id="{product.id}">Add</button>'; }`,
           map: null,
         };
       },
@@ -195,7 +195,8 @@ describe('vite-fixtures', () => {
       },
       renderedButtonAttrs: {
         'data-p-id': '{product.id}',
-        'on:click': '/c/routes/products/product-card.client.js?v=1234abcd#ProductCard$button_click',
+        'on:click':
+          '/c/__v/1234abcd/routes/products/product-card.client.js#ProductCard$button_click',
       },
     });
   });

@@ -102,7 +102,7 @@ describe('server static export', () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/cart/index.html']);
-    expect(result.clientModules.map((artifact) => artifact.path)).toEqual(['/c/cart.client.js']);
+    expect(result.clientModules.map((artifact) => artifact.path)).toEqual([cartHref]);
   });
 
   it('does not treat comments or raw-text examples as static export server endpoints', async () => {
@@ -140,6 +140,6 @@ describe('server static export', () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/guide/index.html']);
-    expect(result.clientModules.map((artifact) => artifact.path)).toEqual(['/c/real.client.js']);
+    expect(result.clientModules.map((artifact) => artifact.path)).toEqual([realHref]);
   });
 });

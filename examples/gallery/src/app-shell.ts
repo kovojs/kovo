@@ -105,7 +105,7 @@ function registerGalleryInteractiveClientModule(demoName: string): string {
     version,
   });
 
-  if (href !== `${modulePath}?v=${version}`) {
+  if (href !== `/c/__v/${version}/${modulePath.slice('/c/'.length)}`) {
     throw new Error(`Unexpected gallery client module href for ${demoName}: ${href}`);
   }
 
@@ -114,6 +114,7 @@ function registerGalleryInteractiveClientModule(demoName: string): string {
 
 function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
   const hrefs = new Map<string, string>();
+  const modules: Array<{ modulePath: string; source: string }> = [];
 
   for (const directory of ['lib', 'primitives']) {
     for (const fileName of readdirSync(
@@ -132,14 +133,23 @@ function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
         },
         fileName,
       }).outputText;
-      const href = galleryInteractiveClientModules.put({
-        path: modulePath,
-        source: transpiled,
-        version: createHash('sha256').update(transpiled).digest('hex').slice(0, 8),
-      });
-
-      hrefs.set(modulePath, href);
+      modules.push({ modulePath, source: transpiled });
     }
+  }
+
+  const graphVersion = createHash('sha256')
+    .update(modules.map((module) => `${module.modulePath}\n${module.source}`).join('\n'))
+    .digest('hex')
+    .slice(0, 8);
+
+  for (const module of modules) {
+    const href = galleryInteractiveClientModules.put({
+      path: module.modulePath,
+      source: module.source,
+      version: graphVersion,
+    });
+
+    hrefs.set(module.modulePath, href);
   }
 
   return hrefs;
@@ -175,7 +185,7 @@ function generatedClientModuleVersion(
   demoName: string,
 ): string {
   const escapedModulePath = escapeRegExp(modulePath);
-  const versionPattern = new RegExp(`${escapedModulePath}\\?v=([0-9a-f]{8})#`, 'g');
+  const versionPattern = new RegExp(`/c/__v/([0-9a-f]{8})/${escapedModulePath.slice(3)}#`, 'g');
   const versions = new Set<string>();
   let match: RegExpExecArray | null;
 

@@ -9,8 +9,9 @@ import { parseComponentModule } from './scan/parse.js';
 const kv210 = diagnosticDefinitions.KV210;
 
 function expectHandlerRef(source: string, path: string, exportName: string): void {
+  const relativePath = escapeRegExp(path.replace(/^\/c\//, ''));
   expect(source).toMatch(
-    new RegExp(`${escapeRegExp(path)}\\?v=[0-9a-f]{8}#${escapeRegExp(exportName)}`),
+    new RegExp(`/c/__v/[0-9a-f]{8}/${relativePath}#${escapeRegExp(exportName)}`),
   );
 }
 
@@ -171,7 +172,7 @@ export const CartBadge = component({
     ]);
     const kv201 = result.diagnostics.find((diagnostic) => diagnostic.code === 'KV201');
     expect(kv201?.help).toMatch(
-      /Would lower to: on:click="\/c\/cart-badge\.client\.js\?v=[0-9a-f]{8}#CartBadge\$button_click"/,
+      /Would lower to: on:click="\/c\/__v\/[0-9a-f]{8}\/cart-badge\.client\.js#CartBadge\$button_click"/,
     );
     expect(kv201?.help).toContain('Blocked expression: () => window.alert("x")');
     expect(kv201?.help).toContain(
@@ -361,9 +362,9 @@ export const CartBadge = component({
       source: source.replace('add(item.id)', 'remove(item.id)'),
     });
 
-    const firstVersion = first.files[0]?.source.match(/\.client\.js\?v=([0-9a-f]{8})#/)?.[1];
-    const secondVersion = second.files[0]?.source.match(/\.client\.js\?v=([0-9a-f]{8})#/)?.[1];
-    const changedVersion = changed.files[0]?.source.match(/\.client\.js\?v=([0-9a-f]{8})#/)?.[1];
+    const firstVersion = first.files[0]?.source.match(/\/c\/__v\/([0-9a-f]{8})\//)?.[1];
+    const secondVersion = second.files[0]?.source.match(/\/c\/__v\/([0-9a-f]{8})\//)?.[1];
+    const changedVersion = changed.files[0]?.source.match(/\/c\/__v\/([0-9a-f]{8})\//)?.[1];
 
     expect(firstVersion).toBeDefined();
     expect(secondVersion).toBe(firstVersion);
@@ -493,7 +494,7 @@ export const CartActions = component({
     const clientSource = result.files[1]?.source ?? '';
 
     expect(serverSource).toMatch(
-      /on:click="\/c\/components\/cart\/cart-actions\.client\.js\?v=[0-9a-f]{8}#CartActions\$button_click \/c\/primitives\/toggle\.client\.js#toggleTriggerClick"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/toggle\.client\.js#toggleTriggerClick"/,
     );
     expect(serverSource).not.toContain('onClick=');
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
@@ -532,7 +533,7 @@ export const CartActions = component({
     const clientSource = result.files[1]?.source ?? '';
 
     expect(serverSource).toMatch(
-      /on:click="\/c\/components\/cart\/cart-actions\.client\.js\?v=[0-9a-f]{8}#CartActions\$button_click \/c\/primitives\/toggle\.client\.js#toggleTriggerClick"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/toggle\.client\.js#toggleTriggerClick"/,
     );
     expect(serverSource).toContain('data-state="off"');
     expect(serverSource).toContain('role="button"');
@@ -573,7 +574,7 @@ export const CartActions = component({
     const serverSource = result.files[0]?.source ?? '';
 
     expect(serverSource).toMatch(
-      /on:click="\/c\/components\/cart\/cart-actions\.client\.js\?v=[0-9a-f]{8}#CartActions\$button_click \/c\/primitives\/tooltip\.client\.js#tooltipTriggerClick"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/tooltip\.client\.js#tooltipTriggerClick"/,
     );
     expect(serverSource).toContain('data-state="closed"');
     expect(serverSource).toContain('role="button"');
@@ -612,7 +613,7 @@ export const CartActions = component({
     const serverSource = result.files[0]?.source ?? '';
 
     expect(serverSource).toMatch(
-      /on:click="\/c\/components\/cart\/cart-actions\.client\.js\?v=[0-9a-f]{8}#CartActions\$button_click \/c\/primitives\/tooltip\.client\.js#tooltipTriggerClick"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/tooltip\.client\.js#tooltipTriggerClick"/,
     );
     expect(serverSource).toContain('data-state="closed"');
     expect(serverSource).toContain('role="button"');

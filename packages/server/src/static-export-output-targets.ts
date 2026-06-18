@@ -94,7 +94,7 @@ function assertStaticExportClientModuleTarget(artifact: StaticExportClientModule
     hrefUrl.origin === 'https://kovo.local' &&
     artifact.path.startsWith('/c/') &&
     hrefUrl.pathname === artifact.path &&
-    hrefUrl.searchParams.get('v')
+    (hrefUrl.searchParams.get('v') || hrefUrl.pathname.startsWith('/c/__v/'))
   ) {
     return;
   }
@@ -102,7 +102,7 @@ function assertStaticExportClientModuleTarget(artifact: StaticExportClientModule
   throw new StaticExportError([
     staticExportDiagnostic(
       artifact.path,
-      `KV229 static export refused client module '${artifact.path}' with href '${artifact.href}'. SPEC §4.3 and §9.5 publish same-origin immutable versioned /c/ module URLs, so artifact path and href pathname must match under /c/ with a v= version.`,
+      `KV229 static export refused client module '${artifact.path}' with href '${artifact.href}'. SPEC §4.3 and §9.5 publish same-origin immutable versioned /c/ module URLs, so artifact path and href pathname must match under /c/ with a path or query version.`,
     ),
   ]);
 }

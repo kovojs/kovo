@@ -45,12 +45,12 @@ export const GalleryDisclosureDemo = component({
       <button
         aria-controls="gallery-interactive-disclosure-panel"
         class={TRIGGER_CLASS}
-        on:click="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=c6b93550#GalleryDisclosureDemo$button_click"
+        on:click="/c/__v/c6b93550/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$button_click"
         type="button"
         aria-expanded={String(state.open)}
-        data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=c6b93550#GalleryDisclosureDemo$button_aria_expanded_derive"
+        data-bind:aria-expanded="/c/__v/c6b93550/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$button_aria_expanded_derive"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=c6b93550#GalleryDisclosureDemo$button_data_state_derive"
+        data-bind:data-state="/c/__v/c6b93550/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$button_data_state_derive"
       >
         Shipping rules
       </button>
@@ -58,9 +58,9 @@ export const GalleryDisclosureDemo = component({
         class={CONTENT_CLASS}
         id="gallery-interactive-disclosure-panel"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=c6b93550#GalleryDisclosureDemo$div_data_state_derive"
+        data-bind:data-state="/c/__v/c6b93550/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$div_data_state_derive"
         hidden={!state.open}
-        data-bind:hidden="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=c6b93550#GalleryDisclosureDemo$div_hidden_derive"
+        data-bind:hidden="/c/__v/c6b93550/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$div_hidden_derive"
       >
         Orders over $50 ship free.
       </div>

@@ -25,14 +25,14 @@ render-plan version skew checks.
 
 - [x] **Client handler modules are already immutable and versioned.**
   - Evidence: `packages/compiler/src/lower/handlers.ts` derives
-    `/c/<source>.client.js?v=<hash>` handler URLs with source-derived export
+    `/c/__v/<hash>/<source>.client.js` handler URLs with source-derived export
     names; `packages/server/src/client-modules.ts` serves versioned modules with
     immutable cache headers; `packages/compiler/src/vite.test.ts` verifies old
     and new client module versions are both retained after repeat transforms.
 - [x] **The current compiler Vite plugin only records compiled client modules.**
   - Evidence: `packages/compiler/src/vite.ts` compiles component modules in
     `transform()`, stores emitted `kind === 'client'` files in an in-memory map,
-    and serves matching `/c/...?...` requests from middleware. It does not emit
+    and serves matching `/c/__v/<hash>/...` requests from middleware. It does not emit
     HMR messages, invalidate Vite's module graph, or classify edit impact.
 - [x] **The app-shell dev plugin already reloads the server app per request.**
   - Evidence: `packages/server/src/vite-dev.ts` calls `server.ssrLoadModule()`
@@ -345,7 +345,7 @@ site/dist-css` exiting 1.
 ## Risks
 
 - [x] **Stale immutable module URLs.**
-  - Because old `/c/...?...` URLs intentionally stay valid, HMR must refresh
+  - Because old `/c/...?...` URLs intentionally stay valid as compatibility requests, HMR must refresh
     eligible DOM from the server or full reload. Silent mixed behavior where
     existing DOM keeps old handlers after a claimed hot update is not acceptable.
   - Evidence: compiler/Vite tests assert old/new client hrefs on handler-only

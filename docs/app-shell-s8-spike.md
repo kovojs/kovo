@@ -14,7 +14,7 @@ The prototype dispatch table follows the D8 order:
 
 1. `/_m/<mutation-key>`
 2. `/_q/<query-key>`
-3. `/c/<module>?v=`
+3. `/c/__v/<version>/<module>`
 4. route table / shell fallback
 
 The conformance test parses the pinned `fixtures/wire/*.http` transcripts and sends equivalent HTTP/1.1 requests over a raw socket. It compares the live response status line, fixture-declared headers, and decoded body bytes against the pinned transcripts for:
@@ -30,7 +30,7 @@ application chunks: the shell before `--kovo-boundary`, then the deferred query/
 This is the S8 evidence for the SPEC §13.3 placement concern named in the archived
 `plans/app-shell.md` ledger.
 
-The `/c/` path is covered by a versioned module request to `/c/cart.client.js?v=s8`, served through the same prototype dispatch path. The test fetches the module over real HTTP, verifies the immutable-module response headers, then imports the fetched source as a JavaScript module to prove the first-interaction load path. There is no existing pinned `fixtures/wire` transcript for `/c/`; R3/R5 should add one when the production module registry lands.
+The `/c/` path is covered by a versioned module request to `/c/__v/s8/cart.client.js`, served through the same prototype dispatch path. The test fetches the module over real HTTP, verifies the immutable-module response headers, then imports the fetched source as a JavaScript module to prove the first-interaction load path. There is no existing pinned `fixtures/wire` transcript for `/c/`; R3/R5 should add one when the production module registry lands.
 
 ## Decision Gate
 

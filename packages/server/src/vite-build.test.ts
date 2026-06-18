@@ -99,8 +99,8 @@ describe('server app shell Vite build seam', () => {
       });
       expect(output.clientModuleOutputPlan).toEqual([
         {
-          path: '/c/cart.client.js',
-          targetPath: join(distDir, 'c/cart.client.js'),
+          path: '/c/__v/cartclient/cart.client.js',
+          targetPath: join(distDir, 'c/__v/cartclient/cart.client.js'),
         },
       ]);
       expect(output.staticExportAssets).toEqual([
@@ -120,9 +120,9 @@ describe('server app shell Vite build seam', () => {
           source: join(distDir, 'assets/catalog.json'),
         },
       ]);
-      await expect(readFile(join(distDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
-        'export const cartClient = true;',
-      );
+      await expect(
+        readFile(join(distDir, 'c/__v/cartclient/cart.client.js'), 'utf8'),
+      ).resolves.toBe('export const cartClient = true;');
 
       const exported = output.staticExport;
       if (!exported) throw new Error('expected app-shell build output static export');

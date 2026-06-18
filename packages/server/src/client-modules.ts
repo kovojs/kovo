@@ -57,8 +57,8 @@ export interface MemoryVersionedClientModuleRegistryOptions {
 /** @internal Construct a version-stamped client-module href for framework request-shell output. */
 export function versionedClientModuleHref(href: string, version: string): string {
   const url = clientModuleUrl(href);
-  url.searchParams.set('v', version);
-  return `${url.pathname}${url.search}${url.hash}`;
+  const relativePath = url.pathname.slice('/c/'.length);
+  return `/c/__v/${encodeURIComponent(version)}/${relativePath}${url.hash}`;
 }
 
 /**
@@ -123,10 +123,10 @@ export function createMemoryVersionedClientModuleRegistry(
     },
     resolve(href) {
       const url = clientModuleUrl(href);
-      const version = url.searchParams.get('v');
-      if (!version) return missingClientModuleResponse();
+      const target = versionedClientModuleTarget(url);
+      if (target === undefined) return missingClientModuleResponse();
 
-      const module = modules.get(versionedClientModuleKey(url.pathname, version));
+      const module = modules.get(versionedClientModuleKey(target.path, target.version));
       if (!module) return missingClientModuleResponse();
 
       // SPEC §6.6: versioned emitted module URLs are immutable and retained across deploys.
@@ -163,7 +163,7 @@ export function renderVersionedClientModuleResponse(
     return missingClientModuleResponse();
   }
 
-  if (!url.searchParams.has('v')) return missingClientModuleResponse();
+  if (versionedClientModuleTarget(url) === undefined) return missingClientModuleResponse();
 
   return registry.resolve(`${url.pathname}${url.search}${url.hash}`);
 }
@@ -185,6 +185,36 @@ function clientModuleUrl(href: string): URL {
     throw new Error(`Client module href must live under /c/: ${href}`);
   }
   return url;
+}
+
+function versionedClientModuleTarget(url: URL): { path: string; version: string } | undefined {
+  const versionedPath = versionedClientModulePathTarget(url.pathname);
+  if (versionedPath !== undefined) return versionedPath;
+
+  const version = url.searchParams.get('v');
+  if (!version) return undefined;
+  return { path: url.pathname, version };
+}
+
+function versionedClientModulePathTarget(
+  pathname: string,
+): { path: string; version: string } | undefined {
+  if (!pathname.startsWith('/c/__v/')) return undefined;
+
+  const rest = pathname.slice('/c/__v/'.length);
+  const separator = rest.indexOf('/');
+  if (separator <= 0 || separator === rest.length - 1) return undefined;
+
+  let version: string;
+  try {
+    version = decodeURIComponent(rest.slice(0, separator));
+  } catch {
+    return undefined;
+  }
+  const path = `/c/${rest.slice(separator + 1)}`;
+  if (path.startsWith('/c/__v/')) return undefined;
+
+  return { path, version };
 }
 
 function versionedClientModuleKey(path: string, version: string): string {

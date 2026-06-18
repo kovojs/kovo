@@ -19,8 +19,8 @@ describe('versioned client modules', () => {
       version: 'new',
     });
 
-    expect(oldHref).toBe('/c/cart.client.js?v=old');
-    expect(newHref).toBe('/c/cart.client.js?v=new');
+    expect(oldHref).toBe('/c/__v/old/cart.client.js');
+    expect(newHref).toBe('/c/__v/new/cart.client.js');
     expect(registry.resolve(oldHref)).toEqual({
       body: 'export const version = "old";',
       headers: {
@@ -31,6 +31,10 @@ describe('versioned client modules', () => {
     });
     expect(registry.resolve(newHref)).toMatchObject({
       body: 'export const version = "new";',
+      status: 200,
+    });
+    expect(registry.resolve('/c/cart.client.js?v=old')).toMatchObject({
+      body: 'export const version = "old";',
       status: 200,
     });
   });

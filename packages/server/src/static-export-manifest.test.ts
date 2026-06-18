@@ -68,7 +68,7 @@ describe('server static export', () => {
         },
         href: cartHref,
         kind: 'client-module',
-        path: '/c/cart.client.js',
+        path: cartHref,
         status: 200,
       },
       {
@@ -123,8 +123,8 @@ describe('server static export', () => {
         },
         {
           kind: 'client-module',
-          path: '/c/cart.client.js',
-          targetPath: path.join(outDir, 'c', 'cart.client.js'),
+          path: cartHref,
+          targetPath: path.join(outDir, cartHref.replace(/^\//, '')),
         },
         {
           kind: 'static-asset',
@@ -136,7 +136,7 @@ describe('server static export', () => {
       await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toBe(
         writeResult.artifacts[0]?.body,
       );
-      await expect(readFile(path.join(outDir, 'c', 'cart.client.js'), 'utf8')).resolves.toBe(
+      await expect(readFile(path.join(outDir, cartHref.replace(/^\//, '')), 'utf8')).resolves.toBe(
         'export const cart = "output-plan";',
       );
       await expect(readFile(path.join(outDir, 'assets', 'app.css'), 'utf8')).resolves.toBe(
@@ -197,7 +197,7 @@ describe('server static export', () => {
             'content-type': 'text/javascript; charset=utf-8',
           },
           href: cartHref,
-          path: '/c/cart.client.js',
+          path: cartHref,
           status: 200,
         },
       ],
@@ -227,7 +227,7 @@ describe('server static export', () => {
           },
           href: cartHref,
           kind: 'client-module',
-          path: '/c/cart.client.js',
+          path: cartHref,
           status: 200,
         },
         {

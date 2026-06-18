@@ -119,6 +119,7 @@ function registerGalleryInteractiveSupportClientModules(
   });
   moduleHrefs.set(runtimePath, runtimeHref);
 
+  const modules: Array<{ pathName: string; source: string }> = [];
   for (const directory of ['lib', 'primitives']) {
     const dirPath = path.join(headlessUiSourceRoot, directory);
     for (const entry of sortedDirectoryEntries(dirPath)) {
@@ -134,13 +135,21 @@ function registerGalleryInteractiveSupportClientModules(
         },
         fileName: entry,
       }).outputText;
-      const href = clientModules.put({
-        path: pathName,
-        source: transpiled,
-        version: contentHash(transpiled).slice(0, 8),
-      });
-      moduleHrefs.set(pathName, href);
+      modules.push({ pathName, source: transpiled });
     }
+  }
+
+  const graphVersion = contentHash(
+    modules.map((module) => `${module.pathName}\n${module.source}`).join('\n'),
+  ).slice(0, 8);
+
+  for (const module of modules) {
+    const href = clientModules.put({
+      path: module.pathName,
+      source: module.source,
+      version: graphVersion,
+    });
+    moduleHrefs.set(module.pathName, href);
   }
 
   return { headlessUiModuleHrefs: moduleHrefs, runtimeHref };
@@ -201,7 +210,7 @@ function galleryInteractiveClientModuleVersion(
   name: string,
 ): string {
   const escaped = modulePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`${escaped}\\?v=([0-9a-f]{8})#`, 'g');
+  const pattern = new RegExp(`/c/__v/([0-9a-f]{8})/${escaped.slice(3)}#`, 'g');
   const versions = new Set<string>();
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(serverTsx)) !== null) versions.add(String(match[1]));

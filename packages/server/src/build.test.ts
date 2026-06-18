@@ -57,7 +57,7 @@ describe('server build-time deployment API', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main>Cart <button on:click="/c/cart.client.js?v=cart-v1#Cart$click">Click</button></main>';
+                return '<main>Cart <button on:click="/c/__v/cart-v1/cart.client.js#Cart$click">Click</button></main>';
               },
             }),
           ],
@@ -78,9 +78,9 @@ describe('server build-time deployment API', () => {
           'export default async function handler() { return new Response("ok"); }\n',
       });
 
-      await expect(readFile(join(outDir, 'client/c/cart.client.js'), 'utf8')).resolves.toBe(
-        'export const cart = true;',
-      );
+      await expect(
+        readFile(join(outDir, 'client/c/__v/cart-v1/cart.client.js'), 'utf8'),
+      ).resolves.toBe('export const cart = true;');
       await expect(readFile(join(outDir, 'client/assets/cart.css'), 'utf8')).resolves.toBe(
         '.cart { color: green; }',
       );
@@ -93,9 +93,9 @@ describe('server build-time deployment API', () => {
       await expect(readFile(join(outDir, 'static/cart/index.html'), 'utf8')).resolves.toContain(
         'Cart <button',
       );
-      await expect(readFile(join(outDir, 'static/c/cart.client.js'), 'utf8')).resolves.toBe(
-        'export const cart = true;',
-      );
+      await expect(
+        readFile(join(outDir, 'static/c/__v/cart-v1/cart.client.js'), 'utf8'),
+      ).resolves.toBe('export const cart = true;');
       await expect(readFile(join(outDir, 'static/assets/cart.css'), 'utf8')).resolves.toBe(
         '.cart { color: green; }',
       );
@@ -106,9 +106,9 @@ describe('server build-time deployment API', () => {
         ],
         clientModules: [
           {
-            file: 'c/cart.client.js',
-            href: '/c/cart.client.js?v=cart-v1',
-            path: '/c/cart.client.js',
+            file: 'c/__v/cart-v1/cart.client.js',
+            href: '/c/__v/cart-v1/cart.client.js',
+            path: '/c/__v/cart-v1/cart.client.js',
             version: 'cart-v1',
           },
         ],
@@ -133,7 +133,7 @@ describe('server build-time deployment API', () => {
         version: 'kovo-neutral-build/v1',
       });
       expect(build).toMatchObject({
-        clientModules: [{ href: '/c/cart.client.js?v=cart-v1' }],
+        clientModules: [{ href: '/c/__v/cart-v1/cart.client.js' }],
         outDir,
         routeHints: [{ routePath: '/cart' }],
         serverHandlerPath: join(outDir, 'server/handler.mjs'),
@@ -213,24 +213,24 @@ describe('server build-time deployment API', () => {
           'export default async function handler() { return new Response("ok"); }\n',
       });
 
-      await expect(readFile(join(outDir, 'client/c/app.client.js'), 'utf8')).resolves.toBe(
-        'export const appClient = true;',
-      );
+      await expect(
+        readFile(join(outDir, 'client/c/__v/app-v1/app.client.js'), 'utf8'),
+      ).resolves.toBe('export const appClient = true;');
       await expect(readJson(join(outDir, 'manifest.json'))).resolves.toMatchObject({
         clientModules: [
           {
-            file: 'c/app.client.js',
-            href: '/c/app.client.js?v=app-v1',
-            path: '/c/app.client.js',
+            file: 'c/__v/app-v1/app.client.js',
+            href: '/c/__v/app-v1/app.client.js',
+            path: '/c/__v/app-v1/app.client.js',
             version: 'app-v1',
           },
         ],
       });
       expect(build.clientModules).toEqual([
         {
-          file: 'c/app.client.js',
-          href: '/c/app.client.js?v=app-v1',
-          path: '/c/app.client.js',
+          file: 'c/__v/app-v1/app.client.js',
+          href: '/c/__v/app-v1/app.client.js',
+          path: '/c/__v/app-v1/app.client.js',
           source: 'export const appClient = true;',
           version: 'app-v1',
         },
@@ -330,7 +330,7 @@ export default async function handler(request) {
         );
         expect(routeResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
 
-        const clientModuleResponse = await fetch(`${baseUrl}/c/cart.client.js?v=cart-v1`);
+        const clientModuleResponse = await fetch(`${baseUrl}/c/__v/cart-v1/cart.client.js`);
         await expect(clientModuleResponse.text()).resolves.toBe('export const cart = true;');
         expect(clientModuleResponse.headers.get('cache-control')).toBe(
           'public, max-age=31536000, immutable',
@@ -458,9 +458,9 @@ export default async function handler(request) {
       });
 
       expect(logs).toEqual([`Emitted Kovo vercel preset output to ${vercelOutDir}`]);
-      await expect(readFile(join(vercelOutDir, 'static/c/cart.client.js'), 'utf8')).resolves.toBe(
-        'export const cart = true;',
-      );
+      await expect(
+        readFile(join(vercelOutDir, 'static/c/__v/cart-v1/cart.client.js'), 'utf8'),
+      ).resolves.toBe('export const cart = true;');
       await expect(readFile(join(vercelOutDir, 'static/assets/cart.css'), 'utf8')).resolves.toBe(
         'main { color: teal; }',
       );
@@ -549,10 +549,12 @@ export default async function handler(request) {
           return build;
         },
       });
-      await expect(readFile(join(nodeOutDir, 'index.html'), 'utf8')).resolves.toContain(
-        'Static Home',
+      await expect(readFile(join(nodeOutDir, 'server.mjs'), 'utf8')).resolves.toContain(
+        'createServer',
       );
-      await expect(readFile(join(nodeOutDir, 'server.mjs'), 'utf8')).rejects.toThrow();
+      await expect(
+        readFile(join(nodeOutDir, 'client/c/__v/static-v1/static.client.js'), 'utf8'),
+      ).resolves.toContain('staticClient');
 
       const vercelOutDir = join(root, '.vercel/output');
       await vercel().emit(build, {
@@ -641,7 +643,7 @@ export default async function handler(request) {
 
       expect(logs).toEqual([`Emitted Kovo cloudflare preset output to ${cloudflareOutDir}`]);
       await expect(
-        readFile(join(cloudflareOutDir, 'client/c/cart.client.js'), 'utf8'),
+        readFile(join(cloudflareOutDir, 'client/c/__v/cart-v1/cart.client.js'), 'utf8'),
       ).resolves.toBe('export const cart = true;');
       await expect(
         readFile(join(cloudflareOutDir, 'server/handler.mjs'), 'utf8'),
@@ -673,7 +675,7 @@ export default async function handler(request) {
       };
 
       const assetResponse = await workerModule.default.fetch(
-        new Request('https://worker.test/c/cart.client.js?v=cart-v1'),
+        new Request('https://worker.test/c/__v/cart-v1/cart.client.js'),
         {
           ASSETS: {
             fetch: async () =>

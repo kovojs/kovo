@@ -31,7 +31,7 @@ function register(
 
 export const siteClientModules = createMemoryVersionedClientModuleRegistry();
 
-/** Versioned hrefs (path + ?v=hash) for each island, threaded into chrome
+/** Versioned hrefs (/c/__v/<version>/...) for each island, threaded into chrome
  * render context and the markdown copy button so on:click resolves the exact
  * registered module. */
 export const clientHrefs = {

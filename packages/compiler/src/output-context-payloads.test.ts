@@ -294,6 +294,8 @@ export const PayloadCard = component({
         "serverSource": "// @kovojs-ir
       export function renderSource() {
         return \`import { derive } from '@kovojs/runtime/generated';
+      import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
 
       export const PayloadCard$article_title_derive = derive(["product"], (product) => product.name);
       export const PayloadCard$article_aria_label_derive = derive(["product"], (product) => product.label);
@@ -303,12 +305,17 @@ export const PayloadCard = component({
       export const PayloadCard = component({
         queries: { product: productQuery },
         render: ({ product }) => (
-          <article data-bind:title="product.PayloadCard$article_title_derive" data-bind:aria-label="product.PayloadCard$article_aria_label_derive" data-bind:aria-description="product.PayloadCard$article_aria_description_derive" kovo-c="payload-card" kovo-deps="product" kovo-fragment-target="payload-card">
+          <article data-bind:title="product.PayloadCard$article_title_derive" data-bind:aria-label="product.PayloadCard$article_aria_label_derive" data-bind:aria-description="product.PayloadCard$article_aria_description_derive" kovo-c="payload-card" kovo-deps="product" kovo-fragment-target="payload-card" kovo-live-component="payload-card/payload-card">
             <h2 data-bind="product.name">{product.name}</h2>
           </article>
         ),
       });
       PayloadCard.name = "payload-card/payload-card";
+
+      export const PayloadCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
+        component: PayloadCard,
+        componentId: "payload-card/payload-card",
+      }));
       \`;
       }",
       }
@@ -627,7 +634,7 @@ function executeClientModule(source: string): Record<string, unknown> {
 }
 
 function normalizeArtifact(source: string): string {
-  return source.replaceAll(/\?v=[0-9a-f]{8}/g, '?v=HASH').trim();
+  return source.replaceAll(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/HASH/').trim();
 }
 
 class FakeElement {

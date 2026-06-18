@@ -373,9 +373,11 @@ function slashPath(fileName: string): string {
 function devClientModuleKey(url: string | undefined): string | null {
   if (!url) return null;
 
-  const [path = '', query = ''] = url.split(/[?#]/, 2);
-  const version = new URLSearchParams(query).get('v');
-  if (!path.startsWith('/c/') || !version) return null;
+  const parsed = new URL(url, 'https://kovo.local');
+  if (parsed.pathname.startsWith('/c/__v/')) return parsed.pathname;
 
-  return `${path}?v=${version}`;
+  const version = parsed.searchParams.get('v');
+  if (!parsed.pathname.startsWith('/c/') || !version) return null;
+
+  return `${parsed.pathname}?v=${version}`;
 }
