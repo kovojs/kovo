@@ -4,12 +4,8 @@ import { pathToFileURL } from 'node:url';
 
 /**
  * Embed runnable example apps in the docs site (plan: examples-in-docs-site).
- * Each example is a self-contained static export served from a stable base path
- * and shown in a sandboxed <iframe> next to its authored source. The export is
- * produced by the example's own static-export bridge (SPEC §9.5) — we re-root
- * its absolute asset/handler refs under the iframe base so the docs site can
- * serve it from a subdirectory without colliding with the docs' own /assets and
- * /c namespaces.
+ * Examples can be dynamic services or self-contained static exports served from
+ * a stable base path and shown in a sandboxed <iframe> next to authored source.
  *
  * Manifest-driven: every example declares its dir, export bridge, and the source
  * files to surface; build/render is one generic path (commerce, crm, so all run
@@ -31,8 +27,8 @@ export const EXAMPLES = [
     blurb:
       'A full Kovo storefront — product grid, cart badge, and order history — running live next to the authored components, queries, and derived optimism that drive it.',
     dir: 'examples/commerce',
-    exportModule: 'examples/commerce/scripts/export-static.mjs',
-    exportFn: 'exportCommerceStaticApp',
+    exportModule: '',
+    exportFn: '',
     appExportField: 'commerce.client.js',
     embed: 'service',
     serviceUrlEnv: 'KOVO_EXAMPLE_COMMERCE_URL',
@@ -51,8 +47,8 @@ export const EXAMPLES = [
     blurb:
       'A multi-page sales CRM — pipeline dashboard, contact book, and per-deal detail — over a real Drizzle/PGlite database. The source tabs show the derived + hand-written optimism mix that powers create/move/close-deal.',
     dir: 'examples/crm',
-    exportModule: 'examples/crm/scripts/export-static.mjs',
-    exportFn: 'exportCrmStaticApp',
+    exportModule: '',
+    exportFn: '',
     appExportField: '',
     embed: 'service',
     serviceUrlEnv: 'KOVO_EXAMPLE_CRM_URL',
@@ -72,8 +68,8 @@ export const EXAMPLES = [
     blurb:
       'A multi-page Q&A site — ranked question list and per-question answers — over a real Drizzle/PGlite database. The source tabs show the fully compiler-derived optimism behind voting and posting answers.',
     dir: 'examples/stackoverflow',
-    exportModule: 'examples/stackoverflow/scripts/export-static.mjs',
-    exportFn: 'exportSoStaticApp',
+    exportModule: '',
+    exportFn: '',
     appExportField: '',
     embed: 'service',
     serviceUrlEnv: 'KOVO_EXAMPLE_STACKOVERFLOW_URL',

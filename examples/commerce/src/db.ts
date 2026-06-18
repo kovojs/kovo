@@ -19,7 +19,6 @@ const SCHEMA_DDL = [
   "CREATE TABLE products (id text PRIMARY KEY, name text NOT NULL DEFAULT 'Sample Product', category text NOT NULL DEFAULT 'General', emoji text NOT NULL DEFAULT '📦', stock integer NOT NULL, unit_price integer NOT NULL);",
   'CREATE TABLE cart_items (id serial PRIMARY KEY, product_id text NOT NULL, qty integer NOT NULL, unit_price integer NOT NULL);',
   'CREATE TABLE orders (id text PRIMARY KEY, product_id text NOT NULL, qty integer NOT NULL, total integer NOT NULL, user_id text NOT NULL);',
-  'CREATE TABLE attachments (id text PRIMARY KEY, order_id text NOT NULL, user_id text NOT NULL, content_type text NOT NULL, filename text NOT NULL, size integer NOT NULL, storage_key text NOT NULL);',
 ].join('\n');
 
 const SEED_PRODUCTS =

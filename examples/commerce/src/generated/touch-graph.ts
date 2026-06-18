@@ -6,47 +6,21 @@ export const commerceTouchGraph = {
       {
         "domain": "cart",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:464",
+        "site": "examples/commerce/src/app.ts:299",
         "via": "cart_items"
       },
       {
         "domain": "order",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:469",
+        "site": "examples/commerce/src/app.ts:304",
         "via": "orders"
       },
       {
         "domain": "product",
         "keys": "arg:productId",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:477",
+        "site": "examples/commerce/src/app.ts:312",
         "via": "products"
-      }
-    ],
-    "reads": [],
-    "unresolved": []
-  },
-  "payment.webhook": {
-    "touches": [
-      {
-        "domain": "order",
-        "keys": "arg:data.object.id",
-        "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:619",
-        "via": "orders"
-      }
-    ],
-    "reads": [],
-    "unresolved": []
-  },
-  "order.receipt": {
-    "touches": [
-      {
-        "domain": "attachment",
-        "keys": "arg:orderId",
-        "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:540",
-        "via": "attachments"
       }
     ],
     "reads": [],
@@ -90,7 +64,6 @@ declare module '@kovojs/core' {
 
   interface MutationRegistry {
     'cart/add': typeof import('../app.js').addToCart;
-    'order/receipt': typeof import('../app.js').uploadReceipt;
   }
 
   interface InvalidationSets extends CommerceInvalidationSets {}

@@ -16,31 +16,7 @@
       "queries": ["orderHistory"]
     }
   ],
-  "endpoints": [
-    {
-      "auth": "verifier:stripe:v1:hmac-sha256",
-      "csrf": "exempt",
-      "csrfJustification": "payment/stripe webhook verifier stripe:v1:hmac-sha256",
-      "method": "POST",
-      "name": "payment/stripe",
-      "path": "/webhooks/stripe",
-      "writes": ["order"]
-    },
-    {
-      "auth": "authed",
-      "csrf": "checked",
-      "method": "GET",
-      "name": "orders/export",
-      "path": "/exports/orders.csv"
-    },
-    {
-      "auth": "authed",
-      "csrf": "checked",
-      "method": "GET",
-      "name": "attachments/download",
-      "path": "/attachments/:id"
-    }
-  ],
+  "endpoints": [],
   "mutations": [
     {
       "guards": ["authed", "rateLimit:session"],
@@ -49,15 +25,6 @@
       "key": "cart/add",
       "session": "commerceSession",
       "writes": ["cart", "product", "order"]
-    },
-    {
-      "enctype": "multipart/form-data",
-      "fileFields": ["receipt"],
-      "guards": ["authed", "rateLimit:session"],
-      "inputFields": ["orderId", "receipt"],
-      "key": "order/receipt",
-      "session": "commerceSession",
-      "writes": ["attachment"]
     },
     {
       "guards": ["authed"],
@@ -93,21 +60,8 @@
       "status": "derived"
     }
   ],
-  "ownerDomains": [
-    {
-      "domain": "attachment",
-      "owner": "userId"
-    }
-  ],
+  "ownerDomains": [],
   "pages": [
-    {
-      "guards": ["role:admin"],
-      "modulepreloads": [],
-      "prefetch": false,
-      "queries": [],
-      "route": "/admin",
-      "stylesheets": ["/assets/styles.css"]
-    },
     {
       "i18n": ["en-US:cartLabel,productStock"],
       "meta": {
@@ -135,63 +89,28 @@
       "query": "orderHistory"
     }
   ],
-  "scopeAudits": [
-    {
-      "detail": "attachment download filters id plus session user",
-      "domain": "attachment",
-      "kind": "query",
-      "name": "attachments/download",
-      "scope": "session",
-      "site": "examples/commerce/src/app.ts:attachmentDownloadRoute"
-    }
-  ],
+  "scopeAudits": [],
   "touchGraph": {
     "cart.addItem": {
       "touches": [
         {
           "domain": "cart",
           "keys": null,
-          "site": "examples/commerce/src/app.ts:464",
+          "site": "examples/commerce/src/app.ts:299",
           "via": "cart_items"
         },
         {
           "domain": "order",
           "keys": null,
-          "site": "examples/commerce/src/app.ts:469",
+          "site": "examples/commerce/src/app.ts:304",
           "via": "orders"
         },
         {
           "domain": "product",
           "keys": "arg:productId",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:477",
+          "site": "examples/commerce/src/app.ts:312",
           "via": "products"
-        }
-      ],
-      "reads": [],
-      "unresolved": []
-    },
-    "payment.webhook": {
-      "touches": [
-        {
-          "domain": "order",
-          "keys": "arg:data.object.id",
-          "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:619",
-          "via": "orders"
-        }
-      ],
-      "reads": [],
-      "unresolved": []
-    },
-    "order.receipt": {
-      "touches": [
-        {
-          "domain": "attachment",
-          "keys": "arg:orderId",
-          "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:540",
-          "via": "attachments"
         }
       ],
       "reads": [],

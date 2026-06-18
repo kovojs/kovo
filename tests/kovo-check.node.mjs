@@ -542,11 +542,6 @@ void test('P10 commerce invalidation is expressed through graph facts', async ()
       orderHistory: 'derived',
       productGrid: 'derived',
     },
-    'order/receipt': {
-      cart: 'no-invalidation',
-      orderHistory: 'no-invalidation',
-      productGrid: 'no-invalidation',
-    },
   });
 });
 
@@ -1818,15 +1813,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
     route: '/cart',
     stylesheets: ['/assets/styles.css'],
   });
-  assert.deepEqual(fact.graph.receiptMutation, {
-    enctype: 'multipart/form-data',
-    fileFields: ['receipt'],
-    guards: ['authed', 'rateLimit:session'],
-    inputFields: ['orderId', 'receipt'],
-    key: 'order/receipt',
-    session: 'commerceSession',
-    writes: ['attachment'],
-  });
+  assert.deepEqual(fact.graph.receiptMutation, {});
   assert.deepEqual(fact.pageHints, {
     missingQueryMessage: 'Missing query data for route meta: cart',
     rendered: {
@@ -1960,28 +1947,6 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     version: 'kovo-explain/v1',
     writes: ['cart', 'product', 'order'],
   });
-  assert.deepEqual(fact.orderReceiptExplain, {
-    enctype: 'multipart/form-data',
-    exitCode: 0,
-    fileFields: ['receipt'],
-    guards: ['authed', 'rateLimit:session'],
-    inputFields: ['orderId', 'receipt'],
-    invalidates: [],
-    manualInvalidates: [],
-    optimisticSummary: {
-      PUNTED: '0',
-      UNHANDLED: '0',
-      'await-fragment': '0',
-      derived: '0',
-      'hand-written': '0',
-      total: '0',
-    },
-    session: 'commerceSession',
-    subject: 'MUTATION order/receipt',
-    updateConsumers: [],
-    version: 'kovo-explain/v1',
-    writes: ['attachment'],
-  });
   assert.equal(
     diagnosticDefinitions.KV310.message,
     'Invalidated query lacks optimistic transform.',
@@ -2033,18 +1998,18 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
       { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
       { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
     ],
-    domains: ['attachment', 'auth', 'cart', 'order', 'product'],
+    domains: ['auth', 'cart', 'order', 'product'],
     invalidations: {
       'cart/add': ['cart', 'orderHistory', 'productGrid'],
     },
-    mutations: ['auth/sign-out', 'cart/add', 'order/receipt'],
+    mutations: ['auth/sign-out', 'cart/add'],
     optimistic: [
       { mutation: 'cart/add', query: 'cart', status: 'derived' },
       { mutation: 'cart/add', query: 'orderHistory', status: 'derived' },
       { mutation: 'cart/add', query: 'productGrid', status: 'derived' },
     ],
-    routes: ['/admin', '/cart'],
-    touchGraphKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
+    routes: ['/cart'],
+    touchGraphKeys: ['cart.addItem'],
   });
   assert.deepEqual(fact.componentGraphFacts, [
     {
@@ -2064,7 +2029,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.deepEqual(fact.matrix.matrix, graphOptimisticStatusMatrix(commerceGraph));
   assert.deepEqual(fact.matrix.staticInvalidationMismatches, []);
   assert.deepEqual(fact.matrix.unhandledMutations, []);
-  assert.deepEqual(fact.touchGraphKeys, ['cart.addItem', 'order.receipt', 'payment.webhook']);
+  assert.deepEqual(fact.touchGraphKeys, ['cart.addItem']);
 });
 
 void test('P10 starter wires graph assertions into CI', async () => {
@@ -3435,28 +3400,26 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
         { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
         { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
       ],
-      domains: ['attachment', 'auth', 'cart', 'order', 'product'],
+      domains: ['auth', 'cart', 'order', 'product'],
       invalidations: {
         'cart/add': ['cart', 'orderHistory', 'productGrid'],
       },
-      mutations: ['auth/sign-out', 'cart/add', 'order/receipt'],
+      mutations: ['auth/sign-out', 'cart/add'],
       optimistic: [
         { mutation: 'cart/add', query: 'cart', status: 'derived' },
         { mutation: 'cart/add', query: 'orderHistory', status: 'derived' },
         { mutation: 'cart/add', query: 'productGrid', status: 'derived' },
       ],
-      routes: ['/admin', '/cart'],
-      touchGraphKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
+      routes: ['/cart'],
+      touchGraphKeys: ['cart.addItem'],
     },
     touchGraph: {
-      entryKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
+      entryKeys: ['cart.addItem'],
       sourceLineMismatchCount: 0,
       sourceSitePaths: ['examples/commerce/src/app.ts'],
       sourceSitesHavePositiveLines: true,
       touchCountsByMutation: {
         'cart.addItem': 3,
-        'order.receipt': 1,
-        'payment.webhook': 1,
       },
       unresolvedMutations: [],
     },

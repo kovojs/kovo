@@ -618,7 +618,6 @@ describe('@kovojs/test package subpath exports', () => {
     expectTypeOf<CommerceMutationQueryAcceptanceFact>().toMatchTypeOf<{
       addToCart: { updateQueries: string[] };
       fragmentResponse: { expectedFragmentTargets: string[] };
-      uploadReceipt: { invalidates: string[] };
     }>();
     expectTypeOf<CommerceMutationQueryAcceptanceOptions<unknown, { components: [] }>>()
       .toHaveProperty('kovoExplain')
@@ -739,9 +738,9 @@ describe('@kovojs/test package subpath exports', () => {
     ).toMatchObject([{ action: '/_m/cart/add', fields: [{ name: 'productId', value: 'p1' }] }]);
     expect(
       htmlFormActions(
-        '<form action="/_m/cart/add"></form><form action="/_m/order/receipt"></form>',
+        '<form action="/_m/cart/add"></form><form action="/_m/auth/sign-out"></form>',
       ),
-    ).toEqual(['/_m/cart/add', '/_m/order/receipt']);
+    ).toEqual(['/_m/cart/add', '/_m/auth/sign-out']);
     expect(
       htmlFormFields(
         '<form><input name="productId" value="p1"><input name="quantity" value="2"></form>',
@@ -1237,7 +1236,7 @@ describe('@kovojs/test package subpath exports', () => {
         [
           'kovo-explain/v1',
           'ENDPOINTS',
-          'ENDPOINT orders/export method=GET path=/exports/orders.csv mount=exact auth=authed csrf=checked writes=-',
+          'ENDPOINT reports/export method=GET path=/exports/reports.ndjson mount=exact auth=authed csrf=checked writes=-',
           '',
         ].join('\n'),
       ),
@@ -1245,10 +1244,10 @@ describe('@kovojs/test package subpath exports', () => {
       {
         auth: 'authed',
         csrf: 'checked',
-        endpoint: 'orders/export',
+        endpoint: 'reports/export',
         method: 'GET',
         mount: 'exact',
-        path: '/exports/orders.csv',
+        path: '/exports/reports.ndjson',
         writes: [],
       },
     ]);

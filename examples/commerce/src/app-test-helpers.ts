@@ -1,5 +1,3 @@
-import { createHmac } from 'node:crypto';
-
 import { headerValues, setCookieValues } from '@kovojs/test/headers';
 import { type StructuralMorphNode } from '@kovojs/runtime';
 import { eq } from 'drizzle-orm';
@@ -10,7 +8,7 @@ import {
   type CommerceDb,
   type ProductGridInput,
 } from './app.js';
-import { attachments, cartItems, orders, products } from './schema.js';
+import { cartItems, orders, products } from './schema.js';
 
 // SPEC.md §14: the test DB is real Drizzle/PGlite, so tests seed and read rows
 // with Drizzle statements (the old in-memory array/Map accessors are gone).
@@ -23,15 +21,6 @@ export type OrderRow = {
   productId: string;
   qty: number;
   total: number;
-  userId: string;
-};
-export type AttachmentRow = {
-  contentType: string;
-  filename: string;
-  id: string;
-  orderId: string;
-  size: number;
-  storageKey: string;
   userId: string;
 };
 
@@ -47,13 +36,6 @@ export async function seedCartItems(db: CommerceDb, rows: readonly CartItemRow[]
 
 export async function seedOrders(db: CommerceDb, rows: readonly OrderRow[]): Promise<void> {
   for (const row of rows) await db.insert(orders).values(row);
-}
-
-export async function seedAttachments(
-  db: CommerceDb,
-  rows: readonly AttachmentRow[],
-): Promise<void> {
-  for (const row of rows) await db.insert(attachments).values(row);
 }
 
 export async function readProducts(db: CommerceDb): Promise<ProductRow[]> {
@@ -83,21 +65,6 @@ export async function readOrders(db: CommerceDb): Promise<OrderRow[]> {
     .orderBy(orders.id);
 }
 
-export async function readAttachments(db: CommerceDb): Promise<AttachmentRow[]> {
-  return db
-    .select({
-      contentType: attachments.contentType,
-      filename: attachments.filename,
-      id: attachments.id,
-      orderId: attachments.orderId,
-      size: attachments.size,
-      storageKey: attachments.storageKey,
-      userId: attachments.userId,
-    })
-    .from(attachments)
-    .orderBy(attachments.id);
-}
-
 export async function readProduct(db: CommerceDb, id: string): Promise<ProductRow | undefined> {
   return (await db.select().from(products).where(eq(products.id, id)).limit(1))[0];
 }
@@ -115,24 +82,12 @@ export async function seedCommerceState(
     products?: readonly ProductRow[];
   },
 ): Promise<void> {
-  await db.delete(attachments);
   await db.delete(cartItems);
   await db.delete(orders);
   await db.delete(products);
   for (const row of state.products ?? []) await db.insert(products).values(row);
   for (const row of state.cartItems ?? []) await db.insert(cartItems).values(row);
   for (const row of state.orders ?? []) await db.insert(orders).values(row);
-}
-
-export function commerceFile(name: string, type: string, size: number) {
-  return {
-    async arrayBuffer() {
-      return new ArrayBuffer(size);
-    },
-    name,
-    size,
-    type,
-  };
 }
 
 export interface CommerceAddToCartPropertyState {
@@ -190,29 +145,6 @@ export function commerceAddToCartPropertyCases(): {
   }
 
   return cases;
-}
-
-export function stripeHeader(
-  body: string,
-  secret: string,
-  timestamp = Math.floor(Date.now() / 1000),
-) {
-  const signature = createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
-  return `t=${timestamp},v1=${signature}`;
-}
-
-export function requestWithDb(
-  body: string,
-  db = createCommerceDb(),
-  headers: Record<string, string> = {},
-) {
-  const request = new Request('https://commerce.test/webhooks/stripe', {
-    body,
-    headers,
-    method: 'POST',
-  }) as Request & { db: ReturnType<typeof createCommerceDb> };
-  request.db = db;
-  return request;
 }
 
 export function queryContext(db = createCommerceDb()) {

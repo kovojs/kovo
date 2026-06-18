@@ -160,32 +160,6 @@ const commerceTouchGraph = {
     reads: [],
     unresolved: [],
   },
-  'payment.webhook': {
-    touches: [
-      {
-        domain: 'order',
-        keys: 'arg:data.object.id',
-        predicate: 'eq',
-        site: siteFor('paymentWebhook', 'orders'),
-        via: 'orders',
-      },
-    ],
-    reads: [],
-    unresolved: [],
-  },
-  'order.receipt': {
-    touches: [
-      {
-        domain: 'attachment',
-        keys: 'arg:orderId',
-        predicate: 'eq',
-        site: siteFor('uploadReceipt', 'attachments'),
-        via: 'attachments',
-      },
-    ],
-    reads: [],
-    unresolved: [],
-  },
 };
 
 const commerceGraph = createCommerceGraph(starterCart, commerceTouchGraph, commerceQueryDomains);
@@ -194,10 +168,7 @@ const { graph } = deriveAppGraph({
   graph: commerceGraph,
 });
 const commerceInvalidationRegistry = deriveInvalidationRegistry({
-  mutations: [
-    { mutation: 'cart/add', touchGraphKey: 'cart.addItem' },
-    { mutation: 'order/receipt', touchGraphKey: 'order.receipt' },
-  ],
+  mutations: [{ mutation: 'cart/add', touchGraphKey: 'cart.addItem' }],
   queries: commerceQueryDomains,
   touchGraph: commerceTouchGraph,
 });
@@ -226,7 +197,6 @@ declare module '@kovojs/core' {
 
   interface MutationRegistry {
     'cart/add': typeof import('../app.js').addToCart;
-    'order/receipt': typeof import('../app.js').uploadReceipt;
   }
 
   interface InvalidationSets extends CommerceInvalidationSets {}

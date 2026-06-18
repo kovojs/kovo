@@ -34,7 +34,6 @@ const graph = {
   ],
   mutations: [
     { invalidates: ['cart', 'product'], key: 'cart/add' },
-    { invalidates: ['attachment'], key: 'order/receipt' },
   ],
   optimistic: [
     { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
@@ -42,7 +41,6 @@ const graph = {
   ],
   pages: [
     { queries: ['cart', 'productGrid'], route: '/cart' },
-    { queries: [], route: '/admin' },
   ],
   queries: [
     { domains: ['cart'], query: 'cart' },
@@ -51,7 +49,6 @@ const graph = {
   ],
   touchGraph: {
     'cart.addItem': {},
-    'order.receipt': {},
   },
 };
 
@@ -93,11 +90,6 @@ describe('@kovojs/test graph fixture seam', () => {
         orderHistory: 'no-invalidation',
         productGrid: 'await-fragment',
       },
-      'order/receipt': {
-        cart: 'no-invalidation',
-        orderHistory: 'no-invalidation',
-        productGrid: 'no-invalidation',
-      },
     });
   });
 
@@ -106,34 +98,34 @@ describe('@kovojs/test graph fixture seam', () => {
       { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
       { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
     ]);
-    expect(graphDomainFacts(graph)).toEqual(['attachment', 'cart', 'order', 'product']);
+    expect(graphDomainFacts(graph)).toEqual(['cart', 'order', 'product']);
     expect(graphInvalidationFacts(graph)).toEqual({
       'cart/add': ['cart', 'productGrid'],
     });
-    expect(graphMutationKeys(graph)).toEqual(['cart/add', 'order/receipt']);
+    expect(graphMutationKeys(graph)).toEqual(['cart/add']);
     expect(graphOptimisticFacts(graph)).toEqual([
       { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
       { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
     ]);
-    expect(graphRouteFacts(graph)).toEqual(['/admin', '/cart']);
-    expect(graphTouchGraphKeys(graph)).toEqual(['cart.addItem', 'order.receipt']);
+    expect(graphRouteFacts(graph)).toEqual(['/cart']);
+    expect(graphTouchGraphKeys(graph)).toEqual(['cart.addItem']);
     expect(graphTouchGraphKeys(graph, ['cart.addItem'])).toEqual(['cart.addItem']);
     expect(graphStaticBehaviorFact(graph)).toEqual({
       components: [
         { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
         { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
       ],
-      domains: ['attachment', 'cart', 'order', 'product'],
+      domains: ['cart', 'order', 'product'],
       invalidations: {
         'cart/add': ['cart', 'productGrid'],
       },
-      mutations: ['cart/add', 'order/receipt'],
+      mutations: ['cart/add'],
       optimistic: [
         { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
         { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
       ],
-      routes: ['/admin', '/cart'],
-      touchGraphKeys: ['cart.addItem', 'order.receipt'],
+      routes: ['/cart'],
+      touchGraphKeys: ['cart.addItem'],
     });
   });
 
@@ -146,7 +138,6 @@ describe('@kovojs/test graph fixture seam', () => {
       ],
       mutations: [
         { invalidates: ['cart', 'product', 'order'], key: 'cart/add', writes: ['cart'] },
-        { invalidates: [], key: 'order/receipt', writes: ['attachment'] },
       ],
       optimistic: [
         { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
@@ -161,8 +152,6 @@ describe('@kovojs/test graph fixture seam', () => {
       ],
       touchGraph: {
         'cart.addItem': { touches: [], unresolved: [] },
-        'order.receipt': { touches: [], unresolved: [] },
-        'payment.webhook': { touches: [], unresolved: [] },
       },
     } as const;
     const kovoExplain = (_graph: unknown, options: Record<string, unknown>) => {
@@ -200,23 +189,7 @@ describe('@kovojs/test graph fixture seam', () => {
         };
       }
 
-      return {
-        exitCode: 0,
-        output: [
-          'kovo-explain/v1',
-          'MUTATION order/receipt',
-          'writes: attachment',
-          'invalidates: -',
-          'manual-invalidates: -',
-          'input-fields: orderId, receipt',
-          'file-fields: receipt',
-          'enctype: multipart/form-data',
-          'guards: authed, rateLimit:session',
-          'session: commerceSession',
-          'updates: -',
-          'OPTIMISTIC-SUMMARY total=0 derived=0 hand-written=0 await-fragment=0 UNHANDLED=0 PUNTED=0',
-        ].join('\n'),
-      };
+      throw new Error(`Unexpected explain target: ${String(options.target)}`);
     };
     const fact = commerceGraphBehaviorFact({
       compileComponentModule: () => ({
@@ -267,7 +240,7 @@ describe('@kovojs/test graph fixture seam', () => {
       invalidations: {},
       routes: [],
     });
-    expect(fact.touchGraphKeys).toEqual(['cart.addItem', 'order.receipt', 'payment.webhook']);
+    expect(fact.touchGraphKeys).toEqual(['cart.addItem']);
   });
 
   it('projects generated graph artifact honesty from emit checks and provenance', () => {
@@ -426,17 +399,17 @@ describe('@kovojs/test graph fixture seam', () => {
           { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
           { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
         ],
-        domains: ['attachment', 'cart', 'order', 'product'],
+        domains: ['cart', 'order', 'product'],
         invalidations: {
           'cart/add': ['cart', 'productGrid'],
         },
-        mutations: ['cart/add', 'order/receipt'],
+        mutations: ['cart/add'],
         optimistic: [
           { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
           { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
         ],
-        routes: ['/admin', '/cart'],
-        touchGraphKeys: ['cart.addItem', 'order.receipt'],
+        routes: ['/cart'],
+        touchGraphKeys: ['cart.addItem'],
       },
       touchGraph: {
         entryKeys: ['cart.addItem'],
@@ -494,17 +467,17 @@ describe('@kovojs/test graph fixture seam', () => {
           { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
           { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
         ],
-        domains: ['attachment', 'cart', 'order', 'product'],
+        domains: ['cart', 'order', 'product'],
         invalidations: {
           'cart/add': ['cart', 'productGrid'],
         },
-        mutations: ['cart/add', 'order/receipt'],
+        mutations: ['cart/add'],
         optimistic: [
           { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
           { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
         ],
-        routes: ['/admin', '/cart'],
-        touchGraphKeys: ['cart.addItem', 'order.receipt'],
+        routes: ['/cart'],
+        touchGraphKeys: ['cart.addItem'],
       },
       touchGraph: {
         entryKeys: ['cart.addItem'],
@@ -550,17 +523,17 @@ describe('@kovojs/test graph fixture seam', () => {
           { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
           { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
         ],
-        domains: ['attachment', 'cart', 'order', 'product'],
+        domains: ['cart', 'order', 'product'],
         invalidations: {
           'cart/add': ['cart', 'productGrid'],
         },
-        mutations: ['cart/add', 'order/receipt'],
+        mutations: ['cart/add'],
         optimistic: [
           { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
           { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
         ],
-        routes: ['/admin', '/cart'],
-        touchGraphKeys: ['cart.addItem', 'order.receipt'],
+        routes: ['/cart'],
+        touchGraphKeys: ['cart.addItem'],
       },
       summary: {
         emitCheck: {

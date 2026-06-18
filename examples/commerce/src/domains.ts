@@ -4,6 +4,5 @@ import { domain } from '@kovojs/server';
 // leaf module so TSX component modules can import their queries without
 // creating an eagerly-evaluated cycle through app.ts.
 export const cart = domain('cart');
-export const attachment = domain('attachment');
 export const order = domain('order');
 export const product = domain('product');

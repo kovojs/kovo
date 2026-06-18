@@ -1,5 +1,4 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { createHmac } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createNetServer, type AddressInfo } from 'node:net';
 import { readFile } from 'node:fs/promises';
@@ -14,25 +13,21 @@ import { cookiePair, firstSetCookiePair } from '@kovojs/test/headers';
 import {
   kovoFragmentFacts,
   kovoQueryJsonValues,
-  htmlDocumentFacts,
   htmlElementCount,
   htmlElementFacts,
   htmlFormActions,
-  htmlFormFacts,
   htmlFormFields,
 } from '@kovojs/test/html-fragment';
 
 import {
   commerceAuthCsrf,
   commerceCsrf,
-  commercePaymentWebhookSecret,
   commerceSignIn,
 } from './app.js';
 import {
   commerceClientModuleHref,
   createCommerceAppShell,
 } from './generated/app-shell.kovo-route.js';
-import { readOrders } from './app-test-helpers.js';
 import { commerceSharedAppShellDevPlugin, commerceViteConfig } from '../vite.config.ts';
 
 let server: Server | undefined;
@@ -247,42 +242,6 @@ describe('commerce app shell HTTP entry', () => {
       expect(mutation.status, formatDevServerFailure(mutationBody, devServerError)).toBe(200);
       expect(kovoFragmentFacts(mutationBody, 'cart-badge')).toHaveLength(1);
 
-      const webhookBody = JSON.stringify({
-        data: {
-          object: {
-            id: 'order-dev-http-1',
-            productId: 'p1',
-            quantity: 1,
-            total: 1499,
-            userId: 'u1',
-          },
-        },
-        id: 'evt_dev_http_1',
-        type: 'checkout.session.completed',
-      });
-      const webhook = await fetch(`${origin}/webhooks/stripe`, {
-        body: webhookBody,
-        headers: {
-          'Content-Type': 'application/json',
-          'stripe-signature': stripeHeader(webhookBody, commercePaymentWebhookSecret),
-        },
-        method: 'POST',
-      });
-      const webhookResponseBody = await webhook.text();
-
-      expect(webhook.status, formatDevServerFailure(webhookResponseBody, devServerError)).toBe(200);
-      expect(webhook.headers.get('kovo-changes')).toBe(
-        '[{"domain":"order","keys":["order-dev-http-1"]}]',
-      );
-      expect(webhookResponseBody).toBe('ok');
-      expect(await readOrders(viteShell.commerceAppShell.db)).toContainEqual({
-        id: 'order-dev-http-1',
-        productId: 'p1',
-        qty: 1,
-        total: 1499,
-        userId: 'u1',
-      });
-
       const sourceAsset = await fetch(`${origin}/src/styles.css`);
       const sourceAssetBody = await sourceAsset.text();
       expect(sourceAsset.status, formatDevServerFailure(sourceAssetBody, devServerError)).toBe(200);
@@ -439,22 +398,18 @@ describe('commerce app shell HTTP entry', () => {
     expect(kovoQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 3 }]);
   });
 
-  it('dispatches shell login and logout mutations before guarded admin routes', async () => {
+  it('dispatches shell login and logout mutations', async () => {
     const shell = createCommerceAppShell();
 
     server = createServer(shell.nodeHandler);
     await listen(server);
     const origin = serverOrigin(server);
 
-    const anonymousAdmin = await fetch(`${origin}/admin`, { redirect: 'manual' });
-    expect(anonymousAdmin.status).toBe(303);
-    expect(anonymousAdmin.headers.get('location')).toBe('/login?next=%2Fadmin');
-
     const failedForm = new URLSearchParams();
     failedForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
     failedForm.set('email', 'ada@example.com');
     failedForm.set('password', 'wrong');
-    failedForm.set('next', '/admin');
+    failedForm.set('next', '/cart');
     const failedLogin = await fetch(`${origin}/_m/auth/sign-in`, {
       body: failedForm,
       // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
@@ -474,41 +429,13 @@ describe('commerce app shell HTTP entry', () => {
         tag: 'output',
       }),
     ).toHaveLength(1);
-    expect(htmlFormFields(failedBody, 'next')).toMatchObject([{ name: 'next', value: '/admin' }]);
-
-    const memberLoginForm = new URLSearchParams();
-    memberLoginForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
-    memberLoginForm.set('email', 'grace@example.com');
-    memberLoginForm.set('password', 'correct');
-    memberLoginForm.set('next', '/admin');
-    const memberLogin = await fetch(`${origin}/_m/auth/sign-in`, {
-      body: memberLoginForm,
-      // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'x-forwarded-for': '203.0.113.32',
-      },
-      method: 'POST',
-      redirect: 'manual',
-    });
-    const memberSessionCookie = cookiePair(memberLogin.headers.get('set-cookie') ?? '');
-
-    expect(memberLogin.status).toBe(303);
-    expect(memberLogin.headers.get('location')).toBe('/admin');
-    expect(memberSessionCookie).toBe('kovo_commerce_session=session-u2');
-
-    const memberAdmin = await fetch(`${origin}/admin`, {
-      headers: { cookie: memberSessionCookie },
-      redirect: 'manual',
-    });
-
-    expect(memberAdmin.status).toBe(403);
+    expect(htmlFormFields(failedBody, 'next')).toMatchObject([{ name: 'next', value: '/cart' }]);
 
     const loginForm = new URLSearchParams();
     loginForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
     loginForm.set('email', 'ada@example.com');
     loginForm.set('password', 'correct');
-    loginForm.set('next', '/admin');
+    loginForm.set('next', '/cart');
     const login = await fetch(`${origin}/_m/auth/sign-in`, {
       body: loginForm,
       // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
@@ -522,23 +449,8 @@ describe('commerce app shell HTTP entry', () => {
     const sessionCookie = cookiePair(login.headers.get('set-cookie') ?? '');
 
     expect(login.status).toBe(303);
-    expect(login.headers.get('location')).toBe('/admin');
+    expect(login.headers.get('location')).toBe('/cart');
     expect(sessionCookie).toBe('kovo_commerce_session=session-u1');
-
-    const admin = await fetch(`${origin}/admin`, {
-      headers: { cookie: sessionCookie },
-      redirect: 'manual',
-    });
-    const adminBody = await admin.text();
-
-    expect(admin.status, adminBody).toBe(200);
-    expect(htmlDocumentFacts(adminBody).text).toContain('admin:u1');
-    expect(htmlFormFacts(adminBody)).toMatchObject([
-      {
-        action: '/_m/auth/sign-out',
-        attrs: expect.objectContaining({ 'data-mutation': 'auth/sign-out' }),
-      },
-    ]);
 
     const logoutForm = new URLSearchParams();
     logoutForm.set(
@@ -614,11 +526,6 @@ function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceAppShell>['db
     db,
     headers: new Headers(),
   };
-}
-
-function stripeHeader(body: string, secret: string, timestamp = Math.floor(Date.now() / 1000)) {
-  const signature = createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
-  return `t=${timestamp},v1=${signature}`;
 }
 
 function formatDevServerFailure(body: string, error: unknown): string {

@@ -4,7 +4,6 @@ import { join } from 'node:path';
 
 import { compileComponentModule, deriveAppGraph } from '@kovojs/compiler';
 import {
-  commerceFixtureFile,
   commerceHarnessQueryFact,
   commerceMutationQueryAcceptanceFact,
   commerceUpdateIntentFact,
@@ -41,7 +40,6 @@ import {
   productGridQuery,
   renderCommercePageHints,
   submitAddToCart,
-  uploadReceipt,
 } from './app.js';
 import { resetProducts } from './app-test-helpers.js';
 import { createCommerceGraph } from './graph.js';
@@ -94,14 +92,12 @@ describe('commerce source-truth graph acceptance', () => {
       invalidationKeys: ['cart/add'],
       staticBehavior: graphStaticBehaviorFact(commerceGraph),
       touchGraph: {
-        entryKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
+        entryKeys: ['cart.addItem'],
         sourceLineMismatchCount: 0,
         sourceSitePaths: ['examples/commerce/src/app.ts'],
         sourceSitesHavePositiveLines: true,
         touchCountsByMutation: {
           'cart.addItem': 3,
-          'order.receipt': 1,
-          'payment.webhook': 1,
         },
         unresolvedMutations: [],
       },
@@ -112,21 +108,12 @@ describe('commerce source-truth graph acceptance', () => {
       status: 'ok',
       version: 'kovo-check/v1',
     });
+
     const cartAddExplain = kovoExplain(commerceGraph, {
       kind: 'mutation',
       optimistic: true,
       target: 'cart/add',
     });
-    const receiptExplain = kovoExplain(commerceGraph, {
-      kind: 'mutation',
-      target: 'order/receipt',
-    });
-    const receiptOptimisticExplain = kovoExplain(commerceGraph, {
-      kind: 'mutation',
-      optimistic: true,
-      target: 'order/receipt',
-    });
-
     expect(kovoExplainMutationAssertionFact(cartAddExplain)).toEqual({
       exitCode: 0,
       guards: ['authed', 'rateLimit:session'],
@@ -153,29 +140,6 @@ describe('commerce source-truth graph acceptance', () => {
       writes: ['cart', 'product', 'order'],
     });
 
-    expect(kovoExplainMutationAssertionFact(receiptExplain)).toEqual({
-      enctype: 'multipart/form-data',
-      exitCode: 0,
-      fileFields: ['receipt'],
-      guards: ['authed', 'rateLimit:session'],
-      inputFields: ['orderId', 'receipt'],
-      invalidates: [],
-      manualInvalidates: [],
-      session: 'commerceSession',
-      subject: 'MUTATION order/receipt',
-      updateConsumers: [],
-      version: 'kovo-explain/v1',
-      writes: ['attachment'],
-    });
-    expect(kovoExplainMutationAssertionFact(receiptOptimisticExplain).optimisticSummary).toEqual({
-      PUNTED: '0',
-      UNHANDLED: '0',
-      'await-fragment': '0',
-      derived: '0',
-      'hand-written': '0',
-      total: '0',
-    });
-
     const queryExplainExpectations = {
       cart: {
         consumers: ['component:CartBadge', 'page:/cart'],
@@ -184,7 +148,7 @@ describe('commerce source-truth graph acceptance', () => {
       },
       orderHistory: {
         consumers: ['component:OrderHistory', 'page:/cart'],
-        domainWrites: ['cart.addItem', 'payment.webhook'],
+        domainWrites: ['cart.addItem'],
         reads: ['order'],
       },
       productGrid: {
@@ -221,90 +185,25 @@ describe('commerce source-truth graph acceptance', () => {
       viewTransitions: [],
     });
 
-    const unguardedExplain = kovoExplain(commerceGraph, { unguarded: true });
-    expect(kovoExplainScopeAuditAssertionFact(unguardedExplain)).toEqual({
+    expect(kovoExplainScopeAuditAssertionFact(kovoExplain(commerceGraph, { unguarded: true }))).toEqual({
       exitCode: 0,
       records: [],
       subject: 'UNGUARDED',
       summary: { total: '0' },
       version: 'kovo-explain/v1',
     });
-
-    const endpointsExplain = kovoExplain(commerceGraph, { endpoints: true });
-    expect(kovoExplainEndpointAssertionFact(endpointsExplain)).toEqual({
-      endpoints: [
-        {
-          auth: 'authed',
-          csrf: 'checked',
-          endpoint: 'attachments/download',
-          method: 'GET',
-          mount: 'exact',
-          path: '/attachments/:id',
-          writes: [],
-        },
-        {
-          auth: 'authed',
-          csrf: 'checked',
-          endpoint: 'orders/export',
-          method: 'GET',
-          mount: 'exact',
-          path: '/exports/orders.csv',
-          writes: [],
-        },
-        {
-          auth: 'verifier:stripe:v1:hmac-sha256',
-          csrf: 'exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256',
-          endpoint: 'payment/stripe',
-          method: 'POST',
-          mount: 'exact',
-          path: '/webhooks/stripe',
-          writes: ['order'],
-        },
-      ],
+    expect(kovoExplainEndpointAssertionFact(kovoExplain(commerceGraph, { endpoints: true }))).toEqual({
+      endpoints: [],
       exitCode: 0,
       subject: 'ENDPOINTS',
-      summary: { total: '3' },
+      summary: { total: '0' },
       version: 'kovo-explain/v1',
     });
-
-    const unscopedExplain = kovoExplain(commerceGraph, { unscoped: true });
-    expect(kovoExplainScopeAuditAssertionFact(unscopedExplain)).toEqual({
+    expect(kovoExplainScopeAuditAssertionFact(kovoExplain(commerceGraph, { unscoped: true }))).toEqual({
       exitCode: 0,
       records: [],
       subject: 'UNSCOPED',
       summary: { total: '0' },
-      version: 'kovo-explain/v1',
-    });
-
-    const unscopedAuditExplain = kovoExplain(
-      {
-        ...commerceGraph,
-        scopeAudits: commerceGraph.scopeAudits.map((fact, index) =>
-          index === 0
-            ? {
-                ...fact,
-                scope: 'unscoped',
-                site: 'examples/commerce/src/app.ts:deliberately-unscoped-download',
-              }
-            : fact,
-        ),
-      },
-      { unscoped: true },
-    );
-    expect(kovoExplainScopeAuditAssertionFact(unscopedAuditExplain)).toEqual({
-      exitCode: 0,
-      records: [
-        {
-          domain: 'attachment',
-          reason: 'attachment download filters id plus session user',
-          scope: 'unscoped',
-          site: 'examples/commerce/src/app.ts:deliberately-unscoped-download',
-          target: 'attachments/download',
-          targetKind: 'QUERY',
-        },
-      ],
-      subject: 'UNSCOPED',
-      summary: { total: '1' },
       version: 'kovo-explain/v1',
     });
   });
@@ -390,8 +289,6 @@ describe('commerce source-truth graph acceptance', () => {
       graph: commerceGraph,
     });
 
-    // SPEC.md §10.4 and rules/v1-acceptance.md: every mutation/query cell either has an explicit
-    // optimistic status or is proven not to be invalidated by that mutation.
     expect(fact.matrix.staticInvalidationMismatches).toEqual([]);
     expect(fact.matrix.unhandledMutations).toEqual([]);
     expect(fact.matrix.matrix).toEqual({
@@ -404,11 +301,6 @@ describe('commerce source-truth graph acceptance', () => {
         cart: 'derived',
         orderHistory: 'derived',
         productGrid: 'derived',
-      },
-      'order/receipt': {
-        cart: 'no-invalidation',
-        orderHistory: 'no-invalidation',
-        productGrid: 'no-invalidation',
       },
     });
     expect(fact.matrix.matrix).toEqual(graphOptimisticStatusMatrix(commerceGraph));
@@ -423,37 +315,19 @@ describe('commerce source-truth graph acceptance', () => {
       createDb: createCommerceDb,
       kovoExplain,
       graph: commerceGraph,
-      receiptFile: commerceFixtureFile('receipt.pdf', 'application/pdf', 2048),
       submitAddToCart,
-      uploadReceipt,
     });
 
-    // SPEC.md §10.4/§11.2: every invalidated query pair must have an explicit
-    // optimistic status, and executed writes must stay within the static graph.
     expect(fact.optimisticStatuses).toEqual({
       cart: 'derived',
       orderHistory: 'derived',
       productGrid: 'derived',
     });
-    expect(fact.uploadReceipt.updateQueries).toEqual([]);
-    expect(fact.uploadReceipt.invalidates).toEqual([]);
-    expect(fact.uploadReceipt.updateConsumers).toEqual([]);
     expect(fact.addToCart.result).toMatchObject({ ok: true });
     expect(fact.fragmentResponse.queryNames).toEqual(
       expect.arrayContaining(fact.addToCart.updateQueries),
     );
     expect(fact.addToCart.diagnostics).toEqual([]);
-    expect(fact.uploadReceipt.result).toMatchObject({
-      ok: true,
-      value: {
-        attachmentId: 'attachment-1',
-        fileName: 'receipt.pdf',
-        orderId: 'order-1',
-        size: 2048,
-        uploadedBy: 'u1',
-      },
-    });
-    expect(fact.uploadReceipt.diagnostics).toEqual([]);
     expect(fact.fragmentResponse).toMatchObject({
       headers: {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',

@@ -46,17 +46,3 @@ export const orders = pgTable(
   },
   kovo({ domain: 'order', key: 'id' }),
 );
-
-export const attachments = pgTable(
-  'attachments',
-  {
-    id: text('id').primaryKey(),
-    orderId: text('order_id').notNull(),
-    userId: text('user_id').notNull(),
-    contentType: text('content_type').notNull(),
-    filename: text('filename').notNull(),
-    size: integer('size').notNull(),
-    storageKey: text('storage_key').notNull(),
-  },
-  kovo({ domain: 'attachment', key: 'id' }),
-);

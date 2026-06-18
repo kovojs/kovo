@@ -19,8 +19,6 @@ import { eq } from 'drizzle-orm';
 
 import {
   addToCart,
-  attachmentDownloadRoute,
-  commerceAdminRoute,
   commerceAuthCsrf,
   commerceMessages,
   commerceSessionProvider,
@@ -28,13 +26,10 @@ import {
   commerceSignOut,
   commerceStylesheets,
   createCommerceDb,
-  orderCsvRoute,
-  paymentWebhook,
   renderAddToCartMutationFailureError,
   renderAddToCartMutationFailureForm,
   renderCartPage,
   renderCommerceLoginForm,
-  renderReceiptUploadForm,
   type CommerceAuthRequest,
   type CommerceDb,
   type CommerceRequest,
@@ -110,7 +105,6 @@ export const commerceHomeRoute = route('/', {
         ) : (
           OrderHistory.definition.render({ orderHistory: { items: [] } })
         )}
-        {renderReceiptUploadForm()}
       </>
     );
   }),
@@ -134,7 +128,6 @@ export const commerceCartRoute = route('/cart', {
         ) : (
           OrderHistory.definition.render({ orderHistory: { items: [] } })
         )}
-        {renderReceiptUploadForm()}
       </>
     );
   }),
@@ -159,7 +152,6 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
     clientModules,
     db: () => db,
     document: { lang: 'en-US' },
-    endpoints: [paymentWebhook],
     mutationResponses: {
       [commerceSignIn.key]: ({ rawInput, request }) => {
         return {
@@ -203,18 +195,10 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
     },
     mutations: [addToCart, commerceSignIn, commerceSignOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
-    renderRoute(value, context) {
-      if (context.route === commerceAdminRoute) return `<main>${routeValueToHtml(value)}</main>`;
+    renderRoute(value) {
       return routeValueToHtml(value);
     },
-    routes: [
-      commerceHomeRoute,
-      commerceCartRoute,
-      commerceLoginRoute,
-      commerceAdminRoute,
-      orderCsvRoute,
-      attachmentDownloadRoute,
-    ],
+    routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
     sessionProvider: (request) => commerceSessionProvider(request as CommerceShellRequest),
   });
   const requestHandler = createRequestHandler(app);

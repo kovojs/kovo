@@ -30,13 +30,11 @@ export interface CommerceMutationQueryAcceptanceOptions<Db, Graph extends KovoGr
     options: { kind: 'mutation'; optimistic?: boolean; target: string },
   ) => KovoExplainResultLike;
   graph: Graph;
-  receiptFile?: CommerceFixtureFile;
   submitAddToCart: (
     input: unknown,
     request: any,
     headers: any,
   ) => Promise<{ body: string; headers: Record<string, unknown>; status: number }>;
-  uploadReceipt: unknown;
 }
 
 export interface CommerceMutationQueryAcceptanceFact {
@@ -54,13 +52,6 @@ export interface CommerceMutationQueryAcceptanceFact {
     status: number;
   };
   optimisticStatuses: Record<string, string>;
-  uploadReceipt: {
-    diagnostics: readonly DbVerificationDiagnostic[];
-    invalidates: string[];
-    result: Record<string, unknown>;
-    updateConsumers: KovoExplainUpdateConsumerFact[];
-    updateQueries: string[];
-  };
 }
 
 export interface CommerceUpdateIntentOptions<Graph> {
@@ -247,16 +238,8 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Kovo
     optimistic: true,
     target: 'cart/add',
   });
-  const uploadReceiptExplanation = options.kovoExplain(options.graph, {
-    kind: 'mutation',
-    optimistic: true,
-    target: 'order/receipt',
-  });
   const addToCartUpdateQueries = [
     ...kovoExplainUpdateConsumerMap(addToCartExplanation.output).keys(),
-  ];
-  const uploadReceiptUpdateQueries = [
-    ...kovoExplainUpdateConsumerMap(uploadReceiptExplanation.output).keys(),
   ];
   const optimisticStatuses = kovoExplainOptimisticStatuses(addToCartExplanation.output);
 
@@ -280,24 +263,6 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Kovo
   };
   verifiedDb.transaction = (run) => run(verifiedDb);
 
-  const receiptHarness = createKovoTestHarness({
-    db: options.createDb(),
-    request: {
-      session: { id: 's-commerce-receipt', user: { id: 'u1' } },
-    },
-    touchGraph: { 'order.receipt': options.commerceTouchGraph['order.receipt'] } as never,
-    verification: {
-      domainByTable: {
-        attachments: 'attachment',
-        cart_items: 'cart',
-        orders: 'order',
-        products: 'product',
-      },
-    },
-  });
-  const receiptFile =
-    options.receiptFile ?? commerceFixtureFile('receipt.pdf', 'application/pdf', 2048);
-
   const addToCartResult = await harness.exec(
     options.addToCart as never,
     options.commerceCsrfInput(
@@ -305,20 +270,6 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Kovo
       { db: verifiedDb, session: { id: 's-commerce-acceptance', user: { id: 'u1' } } },
     ),
     { touchGraphKey: 'cart.addItem' },
-  );
-  const uploadReceiptResult = await receiptHarness.exec(
-    options.uploadReceipt as never,
-    options.commerceCsrfInput(
-      {
-        orderId: 'order-1',
-        receipt: receiptFile,
-      },
-      {
-        db: receiptHarness.dbHandle(),
-        session: { id: 's-commerce-receipt', user: { id: 'u1' } },
-      },
-    ),
-    { csrf: options.commerceCsrf as never, touchGraphKey: 'order.receipt' },
   );
   const response = await options.submitAddToCart(
     { productId: 'p2', quantity: 1 },
@@ -357,13 +308,6 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Kovo
       status: response.status,
     },
     optimisticStatuses,
-    uploadReceipt: {
-      diagnostics: receiptHarness.verificationDiagnostics(),
-      invalidates: kovoExplainListField(uploadReceiptExplanation.output, 'invalidates'),
-      result: uploadReceiptResult as unknown as Record<string, unknown>,
-      updateConsumers: kovoExplainUpdateConsumers(uploadReceiptExplanation.output),
-      updateQueries: uploadReceiptUpdateQueries,
-    },
   };
 }
 

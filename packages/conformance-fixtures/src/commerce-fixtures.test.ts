@@ -33,7 +33,6 @@ const graph = {
 
 const cart = domain('cart');
 const product = domain('product');
-const attachment = domain('attachment');
 const cartQuery = query('cart', {
   load: () => ({ count: 1 }),
   reads: [cart],
@@ -69,26 +68,6 @@ const addToCart = mutation('cart/add', {
     queries: [cartQuery, productGridQuery],
     touches: [cart, product],
   },
-});
-
-const uploadReceipt = mutation('order/receipt', {
-  csrf: false,
-  handler(
-    input: { orderId: string; receipt: { name: string; size: number } },
-    request: { db: FixtureDb },
-  ) {
-    request.db.write('attachments', {
-      fileName: input.receipt.name,
-      orderId: input.orderId,
-      size: input.receipt.size,
-    });
-    return { attachmentId: 'attachment-1', orderId: input.orderId };
-  },
-  input: s.object({
-    orderId: s.string(),
-    receipt: s.object({ name: s.string(), size: s.number().int().min(0) }),
-  }),
-  registry: { touches: [attachment] },
 });
 
 const kovoExplain = (
@@ -138,16 +117,7 @@ const kovoExplain = (
     };
   }
 
-  return {
-    exitCode: 0,
-    output: [
-      'kovo-explain/v1',
-      'MUTATION order/receipt',
-      'invalidates: -',
-      'updates: -',
-      'OPTIMISTIC-SUMMARY total=0 derived=0 hand-written=0 await-fragment=0 UNHANDLED=0 PUNTED=0',
-    ].join('\n'),
-  };
+  throw new Error(`Unexpected explain target: ${options.target}`);
 };
 
 describe('@kovojs/test commerce fixture facts', () => {
@@ -256,11 +226,6 @@ describe('@kovojs/test commerce fixture facts', () => {
           ],
           unresolved: [],
         },
-        'order.receipt': {
-          reads: [],
-          touches: [{ domain: 'attachment', site: 'fixture.ts:3', via: 'attachments' }],
-          unresolved: [],
-        },
       },
       createDb,
       kovoExplain,
@@ -275,7 +240,6 @@ describe('@kovojs/test commerce fixture facts', () => {
         headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
         status: 200,
       }),
-      uploadReceipt,
     });
 
     expect(fact.optimisticStatuses).toEqual({
@@ -284,9 +248,6 @@ describe('@kovojs/test commerce fixture facts', () => {
     });
     expect(fact.addToCart.updateQueries).toEqual(['cart', 'productGrid']);
     expect(fact.addToCart.diagnostics).toEqual([]);
-    expect(fact.uploadReceipt.updateQueries).toEqual([]);
-    expect(fact.uploadReceipt.invalidates).toEqual([]);
-    expect(fact.uploadReceipt.diagnostics).toEqual([]);
     expect(fact.fragmentResponse).toEqual({
       expectedFragmentTargets: ['cart-badge', 'product-grid'],
       fragmentTargets: ['cart-badge', 'product-grid'],

@@ -33,31 +33,7 @@ export function commerceGraphDeclarations(
         queries: ['orderHistory'],
       },
     ],
-    endpoints: [
-      {
-        auth: 'verifier:stripe:v1:hmac-sha256',
-        csrf: 'exempt',
-        csrfJustification: 'payment/stripe webhook verifier stripe:v1:hmac-sha256',
-        method: 'POST',
-        name: 'payment/stripe',
-        path: '/webhooks/stripe',
-        writes: ['order'],
-      },
-      {
-        auth: 'authed',
-        csrf: 'checked',
-        method: 'GET',
-        name: 'orders/export',
-        path: '/exports/orders.csv',
-      },
-      {
-        auth: 'authed',
-        csrf: 'checked',
-        method: 'GET',
-        name: 'attachments/download',
-        path: '/attachments/:id',
-      },
-    ],
+    endpoints: [],
     mutations: [
       {
         guards: ['authed', 'rateLimit:session'],
@@ -66,15 +42,6 @@ export function commerceGraphDeclarations(
         key: 'cart/add',
         session: 'commerceSession',
         writes: ['cart', 'product', 'order'],
-      },
-      {
-        enctype: 'multipart/form-data',
-        fileFields: ['receipt'],
-        guards: ['authed', 'rateLimit:session'],
-        inputFields: ['orderId', 'receipt'],
-        key: 'order/receipt',
-        session: 'commerceSession',
-        writes: ['attachment'],
       },
       {
         guards: ['authed'],
@@ -102,16 +69,8 @@ export function commerceGraphDeclarations(
         status: 'derived',
       },
     ],
-    ownerDomains: [{ domain: 'attachment', owner: 'userId' }],
+    ownerDomains: [],
     pages: [
-      {
-        guards: ['role:admin'],
-        modulepreloads: [],
-        prefetch: false,
-        queries: [],
-        route: '/admin',
-        stylesheets: [...commerceStylesheets],
-      },
       {
         i18n: ['en-US:cartLabel,productStock'],
         meta: commerceCartPageMeta(cart),
@@ -123,16 +82,7 @@ export function commerceGraphDeclarations(
       },
     ],
     queries,
-    scopeAudits: [
-      {
-        detail: 'attachment download filters id plus session user',
-        domain: 'attachment',
-        kind: 'query',
-        name: 'attachments/download',
-        scope: 'session',
-        site: 'examples/commerce/src/app.ts:attachmentDownloadRoute',
-      },
-    ],
+    scopeAudits: [],
   } satisfies Omit<KovoExplainInput, 'touchGraph'>;
 }
 

@@ -224,7 +224,6 @@ export interface CommerceGraphBehaviorFact {
   };
   kovoCheck: KovoCheckOkAssertionFact;
   matrix: KovoExplainMutationQueryMatrixFact;
-  orderReceiptExplain: KovoExplainMutationAssertionFact;
   registryFacts: unknown;
   staticBehavior: GraphStaticBehaviorFact;
   touchGraphKeys: string[];
@@ -436,11 +435,6 @@ export function commerceGraphBehaviorFact<T extends ProjectGraphFixture>(
     optimistic: true,
     target: 'cart/add',
   });
-  const orderReceiptExplain = options.kovoExplain(options.graph, {
-    kind: 'mutation',
-    optimistic: true,
-    target: 'order/receipt',
-  });
   const invalidatedBy = graphInvalidatedByQueries(options.graph);
   const coverageCheck = options.kovoCheck(
     {
@@ -506,14 +500,9 @@ export const CartBadge = component({
       graph: options.graph,
       invalidatedBy,
     }),
-    orderReceiptExplain: kovoExplainMutationAssertionFact(orderReceiptExplain),
     registryFacts: registry.registryFacts,
     staticBehavior: graphStaticBehaviorFact(options.graph),
-    touchGraphKeys: graphTouchGraphKeys(options.graph, [
-      'cart.addItem',
-      'order.receipt',
-      'payment.webhook',
-    ]),
+    touchGraphKeys: graphTouchGraphKeys(options.graph, ['cart.addItem']),
   };
 }
 

@@ -24,28 +24,38 @@ Example source should prioritize the app-author mental model:
 
 ## Phase 1: Commerce
 
-- [ ] Reduce `examples/commerce/src/app.ts` from a kitchen-sink app into a readable
+- [x] Reduce `examples/commerce/src/app.ts` from a kitchen-sink app into a readable
   cart demo.
   - Keep: product grid, cart badge, order history, add-to-cart mutation, simple
     session/auth shape if needed for guarded form behavior.
   - Remove or move to framework fixtures: receipt uploads, attachment downloads,
     signed payment webhook, CSV export, spreadsheet formula hardening, static
     export read-only variants, admin route/security edge cases.
-  - Evidence: static-export/read-only variants were removed from Commerce along
-    with the static scripts/tasks/tests; the broader production-hardening surfaces
-    remain open.
-- [ ] Collapse Commerce tests into readable scenario groups.
+  - Evidence: `wc -l examples/commerce/src/app.ts` reports 698 lines after
+    removing receipt uploads, attachment downloads, signed payment webhook, CSV
+    export, admin route, and login production-hardening guards.
+  - Evidence: `rg -n "attachments|attachment|uploadReceipt|paymentWebhook|commercePayment|orderCsv|Receipt|Webhook|csv|runWebhook|StoredFileUpload|createMemoryStorage|stripeSignature|renderReceiptUploadForm|commerceAdminRoute|renderCommerceAdminRoute|/admin|role:admin|order/receipt|payment\\.webhook|orders\\.csv|commerceStaticExport|exportCommerceStatic|readOnly|static export|static-export|export-static" examples/commerce --glob '!**/node_modules/**'` returned no matches.
+- [x] Collapse Commerce tests into readable scenario groups.
   - Keep app-level smoke/interaction tests for browsing, add-to-cart, validation,
     and auth/session if still present.
   - Move source-truth graph/verifier/security-hardening assertions out of the
     example test suite or delete them after equivalent package coverage exists.
-  - Evidence: `examples/commerce/src/app-shell.test.ts` no longer includes the
-    static-export output/command matrix assertions; broader test simplification
-    remains open.
-- [ ] Update Commerce graph and emit scripts to match the simplified feature set.
-- [ ] Verification: Commerce generated artifacts check, focused Commerce tests,
+  - Evidence: deleted `examples/commerce/src/app.uploads-webhooks.test.ts`;
+    `examples/commerce/src/app.auth.test.ts` is 137 lines and covers normal
+    session/login/logout behavior only.
+  - Evidence: `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.auth.test.ts app.queries.test.ts app.rendering.test.ts app.add-to-cart.test.ts source-truth.test.ts` passed 6 files / 37 tests.
+- [x] Update Commerce graph and emit scripts to match the simplified feature set.
+  - Evidence: `examples/commerce/src/generated/graph.json` now has
+    `endpoints: []`, one page (`/cart`), mutations `cart/add` and
+    `auth/sign-out`, and touch graph key `cart.addItem`.
+  - Evidence: `pnpm --filter @kovojs/example-commerce run emit-components -- --check`
+    and `pnpm --filter @kovojs/example-commerce run emit-graph -- --check` passed.
+- [x] Verification: Commerce generated artifacts check, focused Commerce tests,
   root typecheck, API surface gate, and no-match checks for removed hardening
   surfaces in authored Commerce source.
+  - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/commerce-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts packages/conformance-fixtures/src/graph-fixtures.test.ts` passed 3 files / 17 tests.
+  - Evidence: `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, `node scripts/api-surface-gate.mjs`, `pnpm run check:build`, and `git diff --check` passed.
+  - Evidence: `pnpm exec vp run kovo-check` is blocked before assertions by missing publish-layout artifact `dist/compiler/src/internal.mjs`; `pnpm run check:build` reproduced the root `dist/` layout but still only emitted `dist/compiler/src/index.mjs`.
 
 ## Phase 2: CRM
 
@@ -70,6 +80,10 @@ Example source should prioritize the app-author mental model:
   - Evidence: static export coverage now lives in `docs/static-export.md` and
     passed via `pnpm exec vitest --run packages/conformance-fixtures/src/kovo-export-fixtures.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-endpoints.test.ts`
     plus `pnpm exec vitest --run examples/reference/src/app-shell.test.ts examples/gallery/src/interactive-gallery.static-export.test.ts`.
+  - Evidence: upload/storage behavior remains covered by package-level server
+    fixtures (`packages/conformance-fixtures/src/server-fixtures.ts`) and
+    webhook verification remains covered by core/server tests; this session did
+    not run the full webhook/storage suites, so this risk stays open.
 - [x] `plans/app-authoring-ergonomics.md` item 7 already tracks retiring static
   export from interactive examples; do not double-implement that work without
   updating both ledgers.
