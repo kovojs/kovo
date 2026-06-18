@@ -118,9 +118,9 @@ export const orderHistoryQuery = query('orderHistory', {
   },
   // SPEC §9.1.1: the `items` collection is keyed by order `id` and scoped by the
   // `order` domain, so an `order`-touching mutation that carries the changed
-  // order id (e.g. the payment webhook's `keys: [paid.id]`) ships only the new
-  // order row instead of the whole history. (Compiler-derived delta meta is the
-  // deferred zero-config piece; this declares it explicitly today.)
+  // order id ships only the new order row instead of the whole history.
+  // (Compiler-derived delta meta is the deferred zero-config piece; this
+  // declares it explicitly today.)
   delta: [{ domain: 'order', key: 'id', path: 'items' }],
   reads: [order],
 });

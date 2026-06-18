@@ -4,8 +4,9 @@ import { pathToFileURL } from 'node:url';
 
 /**
  * Embed runnable example apps in the docs site (plan: examples-in-docs-site).
- * Examples can be dynamic services or self-contained static exports served from
- * a stable base path and shown in a sandboxed <iframe> next to authored source.
+ * Examples are usually dynamic demo services shown in a sandboxed <iframe> next
+ * to authored source. Static export support remains available for future
+ * L0/L1-safe examples.
  *
  * Manifest-driven: every example declares its dir, export bridge, and the source
  * files to surface; build/render is one generic path (commerce, crm, so all run
@@ -84,7 +85,7 @@ export const EXAMPLES = [
   },
 ];
 
-/** The docs-site base path the example's static export is served from. */
+/** The docs-site base path used when an example opts into a static export. */
 export function exampleAppBase(name) {
   return `/examples/${name}/app/`;
 }
@@ -132,9 +133,8 @@ async function htmlFilesUnder(directory) {
 }
 
 /**
- * Build one example's static export straight into the docs `dist/` under its
- * app base, then re-root its absolute refs so it runs from there. Reuses the
- * example's own export bridge (`vp run export`) as the producer.
+ * Build one static example into the docs `dist/` under its app base, then
+ * re-root absolute refs so it runs from there.
  */
 export async function buildExampleEmbed(manifest, { outDir, repoRootPath }) {
   if (manifest.embed !== 'static') {
@@ -181,8 +181,8 @@ export async function loadExampleSources(manifest, { repoRootPath }) {
 }
 
 /**
- * Two-pane example page: a sandboxed <iframe> running the export on the left,
- * a zero-JS tabbed source viewer on the right. Tabs are CSS-only (radio inputs
+ * Two-pane example page: a sandboxed <iframe> running the demo on the left, a
+ * zero-JS tabbed source viewer on the right. Tabs are CSS-only (radio inputs
  * + `:checked` sibling rules), so the page works with JavaScript disabled —
  * the docs degradation contract (SPEC §8). `files` carry pre-highlighted code
  * windows (rendered through the shared Shiki pipeline by the caller).

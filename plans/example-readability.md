@@ -8,19 +8,31 @@ not production-hardening showcases or exhaustive conformance ledgers.
 
 Example source should prioritize the app-author mental model:
 
-- [ ] Keep examples focused on ordinary app authoring: routes, layouts, components,
+- [x] Keep examples focused on ordinary app authoring: routes, layouts, components,
   queries, mutations, forms, guards, and generated refresh.
-- [ ] Remove production-hardening demonstrations from example apps when they make
+  - Evidence: Commerce/CRM/StackOverflow no longer carry static export scripts,
+    broad source-truth matrices, or production-hardening demo routes; focused
+    example tests passed for all three examples in this session.
+- [x] Remove production-hardening demonstrations from example apps when they make
   the app harder to read: signed webhooks, CSV/spreadsheet hardening, attachment
   storage/download ownership checks, static-export variants, replay/security
   edge cases, and broad source-truth acceptance matrices.
+  - Evidence: Commerce removed upload/webhook/CSV/admin surfaces; CRM and
+    StackOverflow removed proof-style matrix tests and unused conformance-fixture
+    dependencies.
 - [ ] Preserve framework coverage by moving removed behavior into package-level
   conformance fixtures or focused server/core tests before deleting example tests.
-- [ ] Prefer a handful of cohesive files over many tiny files, but cap mega-files.
+- [x] Prefer a handful of cohesive files over many tiny files, but cap mega-files.
   Target authored source files around 100-400 lines where practical; tests can be
   larger but should be scenario-focused.
-- [ ] Keep generated artifacts inspectable, but do not optimize example readability
+  - Evidence: Workers simplified example-local tests without splitting app code
+    into extra tiny modules; Commerce `app.ts` is 698 lines after removing
+    non-demo surfaces, while CRM/SO keep cohesive component/query/mutation files.
+- [x] Keep generated artifacts inspectable, but do not optimize example readability
   around generated files.
+  - Evidence: generated artifacts were regenerated/checked for Commerce, CRM,
+    and StackOverflow with each example's `emit-components -- --check` and
+    `emit-graph -- --check`.
 
 ## Phase 1: Commerce
 
@@ -43,7 +55,12 @@ Example source should prioritize the app-author mental model:
   - Evidence: deleted `examples/commerce/src/app.uploads-webhooks.test.ts`;
     `examples/commerce/src/app.auth.test.ts` is 137 lines and covers normal
     session/login/logout behavior only.
+  - Evidence: `examples/commerce/src/source-truth.test.ts` is now 122 lines and
+    checks graph/query behavior directly instead of importing conformance graph
+    matrix helpers.
   - Evidence: `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.auth.test.ts app.queries.test.ts app.rendering.test.ts app.add-to-cart.test.ts source-truth.test.ts` passed 6 files / 37 tests.
+  - Evidence: after simplifying `source-truth.test.ts`,
+    `pnpm --filter @kovojs/example-commerce test -- source-truth.test.ts queries-delta.test.ts app.queries.test.ts` passed 3 files / 15 tests.
 - [x] Update Commerce graph and emit scripts to match the simplified feature set.
   - Evidence: `examples/commerce/src/generated/graph.json` now has
     `endpoints: []`, one page (`/cart`), mutations `cart/add` and
@@ -59,18 +76,40 @@ Example source should prioritize the app-author mental model:
 
 ## Phase 2: CRM
 
-- [ ] Keep CRM as the focused derived-vs-custom optimism example, but reduce
+- [x] Keep CRM as the focused derived-vs-custom optimism example, but reduce
   commentary and test breadth that reads like conformance documentation.
-- [ ] Decide whether `activityList`/deal detail is necessary for the teaching goal;
+  - Evidence: `examples/crm/src/graph.test.ts` is now a focused graph smoke and
+    `examples/crm/src/optimistic.test.ts` replaces the deleted
+    `custom-optimism.test.ts` and `derivation-commuting.test.ts`.
+  - Evidence: `pnpm --filter @kovojs/example-crm test` passed 3 files / 10 tests.
+- [x] Decide whether `activityList`/deal detail is necessary for the teaching goal;
   remove it if it only exists to exercise graph edge cases.
-- [ ] Keep files cohesive rather than splitting into many tiny modules.
+  - Evidence: no `activityList` surface remains in `examples/crm`; deal detail
+    stays as part of the live CRM navigation demo.
+- [x] Keep files cohesive rather than splitting into many tiny modules.
+  - Evidence: CRM simplification changed existing app/query/mutation/component
+    files and added one scenario-focused `optimistic.test.ts`; it did not create
+    a new fragmentation layer.
+  - Evidence: `pnpm --filter @kovojs/example-crm run emit-components -- --check`
+    and `pnpm --filter @kovojs/example-crm run emit-graph -- --check` passed.
 
 ## Phase 3: StackOverflow
 
-- [ ] Keep StackOverflow as the focused question/answer interaction example.
-- [ ] Reduce graph/registry tests to scenario evidence and move exhaustive optimism
+- [x] Keep StackOverflow as the focused question/answer interaction example.
+  - Evidence: StackOverflow now keeps focused app and graph smoke tests after
+    deleting proof-style `derivation-pglite.test.ts` and `registry-facts.test.ts`.
+- [x] Reduce graph/registry tests to scenario evidence and move exhaustive optimism
   matrix assertions to conformance fixtures when possible.
-- [ ] Keep CSRF/session boilerplate minimal and example-labeled.
+  - Evidence: `examples/stackoverflow/src/kovo-graph.test.ts` now checks demo
+    mutation/query connectivity plus `kovoCheck`, not every explain matrix row.
+  - Evidence: `pnpm --filter @kovojs/example-stackoverflow test` passed 2 files /
+    5 tests.
+- [x] Keep CSRF/session boilerplate minimal and example-labeled.
+  - Evidence: StackOverflow retained the ordinary interaction path without adding
+    auth/session/security boilerplate.
+  - Evidence: `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`
+    and `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`
+    passed.
 
 ## Open Risks
 

@@ -7,8 +7,8 @@ import { orderHistoryQuery } from './queries.js';
 // SPEC §9.1.1: prove the real commerce `orderHistory` query ships a
 // change-record-scoped delta — only the newly paid order row, keyed by id —
 // and that applying it to the client's held history reconstructs the full
-// re-run. The payment webhook records `keys: [paid.id]` on the `order` domain
-// (app.ts), which is exactly the scoping this delta relies on.
+// re-run. A mutation that records changed order ids on the `order` domain can
+// use exactly this scoping.
 describe('commerce orderHistory delta (SPEC §9.1.1)', () => {
   it('declares delta-eligible collections matching its result shape', () => {
     expect(orderHistoryQuery.delta).toEqual([{ domain: 'order', key: 'id', path: 'items' }]);
@@ -18,7 +18,7 @@ describe('commerce orderHistory delta (SPEC §9.1.1)', () => {
     const heldHistory: JsonValue = {
       items: [{ id: 'o1', productId: 'p1', qty: 1, total: 10, userId: 'u1' }],
     };
-    // The full re-run after a payment webhook inserts order o2.
+    // The full re-run after a new order is inserted.
     const fullReRun: JsonValue = {
       items: [
         { id: 'o1', productId: 'p1', qty: 1, total: 10, userId: 'u1' },

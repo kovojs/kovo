@@ -80,7 +80,7 @@ const queryFacts = extractQueryFactsFromProject({ files: extractionFiles });
 const commerceQueryDomains = queryDomainsFromFacts(queryFacts);
 const shapeByQuery = new Map(algebraicShapes.map((shape) => [shape.query, shape]));
 
-// Map each exported mutation/webhook variable to the line span of its
+// Map each exported handler variable to the line span of its
 // definition, so extracted write sites can be attributed to the right handler.
 const appSourceFile = ts.createSourceFile('app.ts', source, ts.ScriptTarget.Latest, true);
 const handlerSpans = new Map();
