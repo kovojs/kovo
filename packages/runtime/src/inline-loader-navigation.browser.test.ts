@@ -28,6 +28,16 @@ function dispatchAnchorLikeClick(href: string): MouseEvent {
   return event;
 }
 
+function comparableBodyMarkup(source: Document | string): string {
+  const doc =
+    typeof source === 'string' ? new DOMParser().parseFromString(source, 'text/html') : source;
+  const clone = doc.body.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('[tabindex="-1"]').forEach((element) => {
+    element.removeAttribute('tabindex');
+  });
+  return clone.innerHTML;
+}
+
 afterEach(() => {
   document.head.innerHTML = '';
   document.body.replaceChildren();
@@ -52,20 +62,21 @@ describe('browser inline loader enhanced navigation', () => {
     const layout = document.querySelector('main');
     const scrollTo = vi.fn();
     const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+    const targetHtml = [
+      '<!doctype html><html><head>',
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Cart</title>',
+      '</head><body>',
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<a id="to-cart" href="/cart">Cart</a>',
+      '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page" kovo-nav-components="CartView">Cart ready</section>',
+      '</main>',
+      '</body></html>',
+    ].join('');
     const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
       headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
       async text() {
-        return [
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Cart</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<a id="to-cart" href="/cart">Cart</a>',
-          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page" kovo-nav-components="CartView">Cart ready</section>',
-          '</main>',
-          '</body></html>',
-        ].join('');
+        return targetHtml;
       },
       url: new URL('/cart', location.href).href,
     }));
@@ -93,6 +104,7 @@ describe('browser inline loader enhanced navigation', () => {
       expect(document.querySelector('[kovo-nav-segment="page:/cart"]')?.textContent).toBe(
         'Cart ready',
       );
+      expect(comparableBodyMarkup(document)).toBe(comparableBodyMarkup(targetHtml));
       expect(pushState).toHaveBeenCalledWith({}, '', new URL('/cart', initialUrl).href);
       expect(navigated).toHaveBeenCalledWith(
         expect.objectContaining({

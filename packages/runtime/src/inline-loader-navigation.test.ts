@@ -539,6 +539,41 @@ describe('inline loader enhanced navigation fallback', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'falls back when target documents cannot prove navigation segments through %s',
+    async (_name, installSource) => {
+      const currentLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Shop',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Shop',
+        },
+        '<main><section>Products</section></main>',
+      );
+      const currentDocument = createTestShell({ segments: [currentLayout] });
+      const targetDocument = createTestShell({ segments: [] });
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument,
+        documents: [targetDocument],
+        fetch: vi.fn(async () => ({
+          headers: { get: () => 'text/html' },
+          text: async () => '<!doctype html><html></html>',
+          url: 'http://app.test/cart',
+        })),
+        async assert({ assign, preventDefault, pushState }) {
+          await vi.waitFor(() => {
+            expect(assign).toHaveBeenCalledWith('http://app.test/cart');
+          });
+          expect(preventDefault).toHaveBeenCalledTimes(1);
+          expect(pushState).not.toHaveBeenCalled();
+        },
+      });
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'uses final same-origin HTML redirect documents through %s',
     async (_name, installSource) => {
       const replaceWith = vi.fn();

@@ -331,6 +331,27 @@ describe('commerce app shell HTTP entry', () => {
     await expect(clientModule.text()).resolves.toContain('Commerce$markReady');
   });
 
+  it('serves every commerce route as no-JS full HTML documents', async () => {
+    const shell = createCommerceAppShell();
+
+    server = createServer(shell.nodeHandler);
+    await listen(server);
+    const origin = serverOrigin(server);
+
+    for (const route of ['/', '/cart', '/login?next=%2Fcart']) {
+      const response = await fetch(`${origin}${route}`, {
+        headers: { Accept: 'text/html' },
+      });
+      const html = await response.text();
+
+      expect(response.status, html).toBe(200);
+      expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+      expect(html).toContain('<!doctype html>');
+      expect(html).toContain('<main');
+      expect(html).not.toContain('<kovo-fragment');
+    }
+  });
+
   it('dispatches enhanced and no-JS cart mutations through the shared app shell over HTTP', async () => {
     const shell = createCommerceAppShell();
     const sessionCookie = await signInCookie(shell.db);

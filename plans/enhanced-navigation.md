@@ -50,13 +50,14 @@ through client navigation.
 
 ## Load-Bearing Invariants
 
-- [ ] **`<Link>` and `href()` still lower to real `<a href>`.**
+- [x] **`<Link>` and `href()` still lower to real `<a href>`.**
   - JS-off, modified clicks, context-menu open, copy-link, crawlers, and external
     tools all see the canonical URL.
-  - Evidence so far: `packages/core/src/index.test.ts` and
+  - Evidence: `packages/core/src/index.test.ts` and
     `packages/compiler/src/navigation-lowering.test.ts` prove `href()` and
-    `<Link>` produce real URL/anchor output. Remaining gap: JS-off browser route
-    walk.
+    `<Link>` produce real URL/anchor output; `examples/commerce/src/app-shell.test.ts`
+    proves Commerce `/`, `/cart`, and `/login` routes serve no-JS full HTML
+    documents over the app-shell HTTP entry.
 - [x] **Full-document GET is the oracle, not just the fallback.**
   - Phase 1 enhanced navigation fetches the full target document, parses it, and
     morphs from that document. Partial responses are forbidden until the
@@ -284,7 +285,12 @@ through client navigation.
   - Extend the §5.2/§9.2 gates so no-JS full load and JS-on enhanced navigation
     produce equivalent DOM over the corpus, after normalizing intentionally
     persisted browser state.
-  - Evidence: pending.
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves enhanced navigation body markup matches the fetched full target
+    document after normalizing the loader-added focus tabindex; `examples/commerce/src/app-shell.test.ts`
+    proves Commerce `/`, `/cart`, and `/login` serve no-JS full HTML documents.
+    Remaining gap: corpus-level no-JS/full-load versus enhanced-navigation
+    equivalence gate.
 - [ ] **6. Partial response optimization, after MVP proof.**
   - Only after phases 0-5 pass, introduce a cache-safe navigation fragment
     variant if it is still worth the complexity. Define request/response headers,
@@ -301,7 +307,9 @@ through client navigation.
 ## Verification Targets
 
 - [ ] **JS-off route walk:** every app route loads and navigates as full documents.
-  - Evidence: pending.
+  - Evidence so far: `examples/commerce/src/app-shell.test.ts` proves Commerce
+    `/`, `/cart`, and `/login` routes serve full HTML documents with no fragment
+    response markers. Remaining gap: broader example/app corpus route walk.
 - [x] **Anchor semantics:** `<Link>` emits `<a href>` and modified/external/hash/
       download navigations remain native.
   - Evidence: `packages/core/src/index.test.ts` and
@@ -309,13 +317,13 @@ through client navigation.
     `<Link>` lower to real URL/anchor output; `packages/runtime/src/inline-loader-navigation.test.ts`
     proves modified, cross-origin, hash-only, target, and download anchor clicks
     are not intercepted.
-- [ ] **Full-document MVP:** JS-on fetches canonical HTML, morphs compatible
+- [x] **Full-document MVP:** JS-on fetches canonical HTML, morphs compatible
       segments, and falls back on unsupported document-shell drift.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    proves full-document fetch, compatible leaf morphing, and document shell
-    updates; `packages/runtime/src/inline-loader-navigation.test.ts` proves
-    build-token, non-HTML, and duplicate-id morph fallback. Remaining gap:
-    unsupported shell drift.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves full-document fetch, compatible leaf morphing, document shell updates,
+    and body render-equivalence to the fetched target document; `packages/runtime/src/inline-loader-navigation.test.ts`
+    proves build-token, non-HTML, duplicate-id morph, and missing navigation
+    segment fallback across all inline installer artifacts.
 - [x] **Segment persistence:** unchanged layout island/media state survives;
       changed layout or leaf segments morph from server-rendered target HTML.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
@@ -325,7 +333,10 @@ through client navigation.
     divergent layout body replacement.
 - [ ] **Render-equivalence:** enhanced navigation DOM matches fresh full-load DOM
       after allowed browser-state normalization.
-  - Evidence: pending.
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves body markup equivalence to the fetched full target document after
+    normalizing the loader-added focus tabindex. Remaining gap: corpus-level
+    render-equivalence over real examples.
 - [ ] **Version and guard safety:** build-token mismatch, auth redirect, 403/404,
       and morph failure fall back to full GET or morph the correct server shell.
   - Evidence so far: `packages/runtime/src/inline-loader-navigation.test.ts`
