@@ -40,6 +40,29 @@ describe('server app mutation request boundary', () => {
     expect(seen).toEqual(['policy:true', 'handler:p1']);
   });
 
+  it('uses mutation-level defaultRedirectTo without an app-authored response switch', async () => {
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      defaultRedirectTo: '/cart',
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        return input;
+      },
+    });
+    const app = createApp({ mutations: [addToCart] });
+    const form = new FormData();
+    form.set('productId', 'p1');
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: form,
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/cart');
+  });
+
   it('resolves the app session once before mutation response options and guarded handlers', async () => {
     const seen: string[] = [];
     let sessionReads = 0;

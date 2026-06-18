@@ -159,6 +159,8 @@ export interface MutationDefinition<
   GuardedRequest extends Request = Request,
 > {
   csrf?: CsrfValidationOptions<Request> | false;
+  /** Static/common POST-redirect-GET target for successful no-JS submissions (SPEC §9.1). */
+  defaultRedirectTo?: string;
   errors?: Errors;
   guard?: Guard<Request, GuardedRequest>;
   handler: (
@@ -215,7 +217,7 @@ export interface MutationFactory<Request = unknown> {
 /**
  * Declare a typed write. A mutation couples a stable key, an input `Schema`, a
  * `handler` that performs the write, optional typed `errors`, an optional
- * `guard`, and an optional `transaction` wrapper. The input schema doubles as
+ * `guard`, an optional static `defaultRedirectTo`, and an optional `transaction` wrapper. The input schema doubles as
  * `FormData` coercion; `context.fail(code, payload)` returns a typed failure;
  * `context.invalidate(domain)` records what the write touched so dependent
  * queries rerun (SPEC §10.3). CSRF is default-on — supply `csrf` or set it to
@@ -699,6 +701,7 @@ export async function renderMutationEndpointResponse<
   const wireRequest = mutationWireRequestFromHeaders({
     ...endpointRequest,
     liveTargetRenderers,
+    mutationKey: definition.key,
   });
   if (wireRequest.fragment) return renderMutationResponse(endpointDefinition, wireRequest);
 
@@ -754,7 +757,7 @@ function mergeMutationRegistryQueries(
   }
 
   return {
-    ...(registry ?? {}),
+    ...registry,
     queries: [...queriesByKey.values()],
   };
 }
@@ -1266,13 +1269,39 @@ async function renderFailureFragment<Request>(
   const target = mutationFailureTarget(wireRequest);
   const html = wireRequest.renderFailureFragment
     ? await wireRequest.renderFailureFragment(failure, wireRequest.rawInput)
-    : renderDefaultFailureFragmentContent(failure);
+    : await renderDefaultFailureFragment(failure, wireRequest, target);
 
   return renderFragmentWireHtml({
     html,
     stylesheets: wireRequest.failureStylesheets,
     target,
   });
+}
+
+async function renderDefaultFailureFragment<Request>(
+  failure: MutationFail,
+  wireRequest: MutationWireRequest<Request>,
+  target: string,
+): Promise<string> {
+  const descriptor = wireRequest.liveTargetDescriptors?.find((entry) => entry.target === target);
+  const renderer =
+    descriptor === undefined
+      ? undefined
+      : wireRequest.liveTargetRenderers?.find(
+          (candidate) => candidate.component === descriptor.component,
+        );
+  if (descriptor && renderer) {
+    return renderer.render({
+      failure,
+      input: wireRequest.rawInput,
+      ...(wireRequest.mutationKey === undefined ? {} : { mutationKey: wireRequest.mutationKey }),
+      props: descriptor.props,
+      request: wireRequest.request,
+      target,
+    });
+  }
+
+  return renderDefaultFailureFragmentContent(failure);
 }
 
 function renderMutationRenderErrorFragment<Request>(

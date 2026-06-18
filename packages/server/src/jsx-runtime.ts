@@ -1,8 +1,15 @@
-import type { Component, ComponentDefinitionInput, ComponentRenderSlots, JsonValue } from '@kovojs/core';
+import type {
+  Component,
+  ComponentDefinitionInput,
+  ComponentRenderSlots,
+  JsonValue,
+} from '@kovojs/core';
 import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/runtime';
 
+import { componentMutationFailureSlots } from './component-render.js';
+import { csrfField } from './csrf.js';
 import { escapeAttribute } from './html.js';
-import { currentJsxRequestContext } from './jsx-context.js';
+import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
 
 // Server-side JSX runtime. Components author JSX sugar (SPEC.md section 4.1)
@@ -35,14 +42,7 @@ const voidElements = new Set([
   'wbr',
 ]);
 
-export type JsxNode =
-  | JsxNode[]
-  | boolean
-  | null
-  | number
-  | Promise<JsxNode>
-  | string
-  | undefined;
+export type JsxNode = JsxNode[] | boolean | null | number | Promise<JsxNode> | string | undefined;
 
 export interface JsxProps {
   children?: JsxNode;
@@ -71,9 +71,10 @@ export function jsx(
   if (voidElements.has(type)) return `<${type}${attributes}>`;
 
   const children = renderJsxChildren(renderJsxContent(props));
+  const csrf = type === 'form' ? renderFormCsrfContent(props) : '';
   return isPromiseLike(children)
-    ? children.then((html) => `<${type}${attributes}>${html}</${type}>`)
-    : `<${type}${attributes}>${children}</${type}>`;
+    ? children.then((html) => `<${type}${attributes}>${html}${csrf}</${type}>`)
+    : `<${type}${attributes}>${children}${csrf}</${type}>`;
 }
 
 export const jsxs = jsx;
@@ -123,7 +124,15 @@ function renderMutationFormAttributes(key: string, props: JsxProps): string {
   ].join('');
 }
 
-function isMutationDefinitionLike(value: unknown): value is { key: string } {
+function renderFormCsrfContent(props: JsxProps): string {
+  if (!isMutationDefinitionLike(props.mutation)) return '';
+  if (props.mutation.csrf === false) return '';
+  const context = currentJsxFrameworkContext();
+  if (!context?.csrf) return '';
+  return csrfField(context.request, context.csrf);
+}
+
+function isMutationDefinitionLike(value: unknown): value is { csrf?: false; key: string } {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -189,10 +198,7 @@ function renderJsxChildren(children: JsxNode): MaybePromise<string> {
   return String(children);
 }
 
-async function renderKovoComponent(
-  component: KovoJsxComponent,
-  props: JsxProps,
-): Promise<string> {
+async function renderKovoComponent(component: KovoJsxComponent, props: JsxProps): Promise<string> {
   const request = currentJsxRequestContext();
   const queries = await loadComponentQueries(component, props, request);
   const state = component.definition.state?.() as JsonValue | undefined;
@@ -246,15 +252,28 @@ function componentRenderSlots(
   request: unknown,
 ): ComponentRenderSlots {
   const forms = isRecord(component.definition.mutations)
-    ? Object.fromEntries(Object.keys(component.definition.mutations).map((key) => [key, { failure: null }]))
+    ? Object.fromEntries(
+        Object.keys(component.definition.mutations).map((key) => [key, { failure: null }]),
+      )
     : undefined;
 
-  return {
+  let slots: ComponentRenderSlots = {
     ...(props.children === undefined ? {} : { children: props.children }),
     ...(forms === undefined ? {} : { forms }),
     ...jsxPropsToSlots(props),
     ...(request === undefined ? {} : { request }),
   };
+
+  const failureContext = currentJsxFrameworkContext()?.mutationFailure;
+  if (!failureContext || !isRecord(component.definition.mutations)) return slots;
+
+  for (const [name, mutation] of Object.entries(component.definition.mutations)) {
+    if (isMutationDefinitionLike(mutation) && mutation.key === failureContext.mutationKey) {
+      slots = componentMutationFailureSlots(name, failureContext.failure, slots);
+    }
+  }
+
+  return slots;
 }
 
 function jsxPropsToSlots(props: JsxProps): ComponentRenderSlots {
@@ -263,9 +282,7 @@ function jsxPropsToSlots(props: JsxProps): ComponentRenderSlots {
 
 function isKovoComponent(value: unknown): value is KovoJsxComponent {
   return (
-    isRecord(value) &&
-    isRecord(value.definition) &&
-    typeof value.definition.render === 'function'
+    isRecord(value) && isRecord(value.definition) && typeof value.definition.render === 'function'
   );
 }
 
@@ -276,11 +293,7 @@ function isQueryDefinition(value: unknown): value is QueryDefinition {
 function isQueryArgsBinding(
   value: unknown,
 ): value is { args: (props: JsxProps) => unknown; query: QueryDefinition } {
-  return (
-    isRecord(value) &&
-    typeof value.args === 'function' &&
-    isQueryDefinition(value.query)
-  );
+  return isRecord(value) && typeof value.args === 'function' && isQueryDefinition(value.query);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

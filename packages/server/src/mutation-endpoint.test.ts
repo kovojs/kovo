@@ -160,6 +160,47 @@ describe('server mutation endpoint routing', () => {
     });
   });
 
+  it('defaults enhanced failures to the submitted generated live target renderer', async () => {
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({ productId: s.string() }),
+      handler(_input, _request, context) {
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 2 });
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(addToCart, {
+        headers: {
+          'Kovo-Form-Target': 'add-to-cart:p1',
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': 'add-to-cart:p1#components/add-to-cart-form:{"productId":"p1"}',
+        },
+        liveTargetRenderers: [
+          {
+            component: 'components/add-to-cart-form',
+            render: ({ failure, mutationKey, props }) => {
+              if (!failure) throw new Error('expected mutation failure context');
+              const payload = failure.error.payload as { availableQuantity: number };
+              return `<form data-product="${String(props.productId)}" data-mutation="${mutationKey ?? ''}"><output role="alert" data-error-code="${failure.error.code}">${payload.availableQuantity}</output></form>`;
+            },
+          },
+        ],
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<kovo-fragment target="add-to-cart:p1"><form data-product="p1" data-mutation="cart/add"><output role="alert" data-error-code="OUT_OF_STOCK">2</output></form></kovo-fragment>',
+      headers: {
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      },
+      status: 422,
+    });
+  });
+
   it('renders structurally recognized input schema failures as field-scoped 422 fragments', async () => {
     const reserve = mutation('inventory/reserve', {
       input: alienValidationSchema<{ quantity: number }>('Expected number >= 1', ['quantity']),

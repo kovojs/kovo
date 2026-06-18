@@ -13,6 +13,8 @@ import {
 } from './guards.js';
 import type { PageHintOptions } from './hints.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
+import type { CsrfValidationOptions } from './csrf.js';
+import type { MutationFail } from './mutation.js';
 import { runQuery, type QueryDefinition } from './query.js';
 import {
   htmlServerErrorResponse,
@@ -120,10 +122,7 @@ export interface LayoutDeclaration<
 
 /** App-scoped layout factory whose guards and render slots see the configured request shape. */
 export interface LayoutFactory<Request = unknown> {
-  <
-    const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
-    Page = unknown,
-  >(
+  <const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>, Page = unknown>(
     definition: LayoutDefinition<Request, Queries, Page>,
   ): LayoutDeclaration<Request, Queries, Page>;
 }
@@ -188,11 +187,11 @@ export function layout<
   Request = unknown,
   const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
   Page = unknown,
->(
-  definition: LayoutDefinition<Request, Queries, Page>,
-): LayoutDeclaration<Request, Queries, Page> {
+>(definition: LayoutDefinition<Request, Queries, Page>): LayoutDeclaration<Request, Queries, Page> {
   const declaration = { ...definition };
-  const deps = Object.values(definition.queries ?? {}).map((queryDefinition) => queryDefinition.key);
+  const deps = Object.values(definition.queries ?? {}).map(
+    (queryDefinition) => queryDefinition.key,
+  );
   if (deps.length > 0) {
     nextLayoutLiveTargetId += 1;
     layoutLiveTargetMetadata.set(declaration, {
@@ -296,6 +295,14 @@ export function notFound(): NotFound {
   return { notFound: true, status: 404 };
 }
 
+export interface RouteJsxContextOptions<Request> {
+  csrf?: CsrfValidationOptions<Request>;
+  mutationFailure?: {
+    failure: MutationFail;
+    mutationKey: string;
+  };
+}
+
 export async function runRoutePage<
   const Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>>,
@@ -325,7 +332,7 @@ async function runRoutePageInternal<
   definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
   input: RouteRequestInput,
   request: Request,
-  options: RequestLifecycleOptions<Request> = {},
+  options: RequestLifecycleOptions<Request> & RouteJsxContextOptions<Request> = {},
 ): Promise<RoutePageInternalResult<Page>> {
   const routeRequest = parseRouteRequest(definition, input);
 
@@ -354,22 +361,26 @@ async function runRoutePageInternal<
 
   let value: unknown;
   try {
-    value = await runWithJsxRequestContext(lifecycleRequest, async () => {
-      let pageValue: unknown;
-      try {
-        pageValue = await definition.page?.(routeRequest, lifecycleRequest as GuardedRequest);
-      } catch (error) {
-        throw new RouteBoundaryRenderError(error, routeBoundaryFor('error', definition, layouts));
-      }
-      if (isNotFound(pageValue) || isRouteResponseOutcome(pageValue)) return pageValue;
-      const metadata = routePageMetadata.get(definition);
-      return renderLayoutChain(
-        layouts,
-        stampRoutePageSegment(metadata, pageValue),
-        lifecycleRequest,
-        metadata,
-      );
-    });
+    value = await runWithJsxRequestContext(
+      lifecycleRequest,
+      routeJsxContextOptions(options),
+      async () => {
+        let pageValue: unknown;
+        try {
+          pageValue = await definition.page?.(routeRequest, lifecycleRequest as GuardedRequest);
+        } catch (error) {
+          throw new RouteBoundaryRenderError(error, routeBoundaryFor('error', definition, layouts));
+        }
+        if (isNotFound(pageValue) || isRouteResponseOutcome(pageValue)) return pageValue;
+        const metadata = routePageMetadata.get(definition);
+        return renderLayoutChain(
+          layouts,
+          stampRoutePageSegment(metadata, pageValue),
+          lifecycleRequest,
+          metadata,
+        );
+      },
+    );
   } catch (error) {
     if (error instanceof RouteBoundaryRenderError && error.boundary) {
       return {
@@ -403,7 +414,7 @@ function routeGuardFailure(failure: ResolvedGuardFailure): RoutePageFailure {
   };
 }
 
-function routeLayoutChain<Request>(
+function routeLayoutChain(
   layoutDeclaration: LayoutDeclaration<any, any, any> | undefined,
 ): LayoutDeclaration<any, any, any>[] {
   const chain: LayoutDeclaration<any, any, any>[] = [];
@@ -677,9 +688,7 @@ function withRouteBoundaryFailure(
 
 function routeBoundaryFor<Request, Page>(
   kind: RouteBoundaryKind,
-  routeDefinition:
-    | RouteDeclaration<any, any, any, Request, Page, any>
-    | undefined,
+  routeDefinition: RouteDeclaration<any, any, any, Request, Page, any> | undefined,
   layouts: readonly LayoutDeclaration<any, any, any>[],
 ): ResolvedRouteBoundary | undefined {
   const routeBoundary = routeDefinition?.boundaries?.[kind];
@@ -733,13 +742,18 @@ export async function renderRoutePageResponse<
   input: RouteRequestInput,
   request: Request,
   render: (value: Page) => string | Promise<string> = (value) => String(value ?? ''),
-  options: GuardFailureResponseOptions<Request> = {},
+  options: GuardFailureResponseOptions<Request> & RouteJsxContextOptions<Request> = {},
 ): Promise<RoutePageResponse> {
   let result: RoutePageInternalResult<Page>;
   let lifecycleRequest: Request = request;
   try {
     lifecycleRequest = await resolveLifecycleRequest(request, options);
-    result = await runRoutePageInternal(definition, input, lifecycleRequest);
+    result = await runRoutePageInternal(
+      definition,
+      input,
+      lifecycleRequest,
+      routeJsxContextOptions(options),
+    );
   } catch (error) {
     reportServerError(options.onError, error, {
       operation: 'route-page',
@@ -758,9 +772,13 @@ export async function renderRoutePageResponse<
           routePath: definition.path,
         });
       }
-      return renderRouteBoundaryResponse(result.boundary, result.status, lifecycleRequest, render, {
-        ...(result.thrown === undefined ? {} : { error: result.thrown }),
-      });
+      return renderRouteBoundaryResponse(
+        result.boundary,
+        result.status,
+        lifecycleRequest,
+        render,
+        result.thrown === undefined ? {} : { error: result.thrown },
+      );
     }
 
     const onUnauthenticated = definition.onUnauthenticated ?? options.onUnauthenticated;
@@ -807,6 +825,15 @@ export async function renderRoutePageResponse<
     });
     return htmlServerErrorResponse();
   }
+}
+
+function routeJsxContextOptions<Request>(
+  options: GuardFailureResponseOptions<Request> & RouteJsxContextOptions<Request>,
+): RouteJsxContextOptions<Request> {
+  return {
+    ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
+    ...(options.mutationFailure === undefined ? {} : { mutationFailure: options.mutationFailure }),
+  };
 }
 
 async function renderRouteBoundaryResponse<Page, Request>(

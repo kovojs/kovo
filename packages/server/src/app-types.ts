@@ -12,7 +12,12 @@ import type { EndpointDeclaration } from './endpoint.js';
 import type { DbProvider, LifecycleRequest, SessionProvider } from './guards.js';
 import type { Guard } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
-import type { MutationContext, MutationFactory, MutationFail, MutationSuccess } from './mutation.js';
+import type {
+  MutationContext,
+  MutationFactory,
+  MutationFail,
+  MutationSuccess,
+} from './mutation.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryDeclarationDefinition, QueryFactory } from './query.js';
 import type { MutationReplayStore } from './replay.js';
@@ -152,6 +157,7 @@ export type RequestHandler = (request: Request) => Promise<Response>;
 
 export interface AppMutationDeclaration<AppRequest = unknown> {
   csrf?: CsrfValidationOptions<any> | false;
+  defaultRedirectTo?: string;
   guard?: Guard<any, any>;
   handler?: (
     input: any,
@@ -161,7 +167,10 @@ export interface AppMutationDeclaration<AppRequest = unknown> {
   input?: Schema<unknown>;
   key: string;
   registry?: unknown;
-  transaction?: <Result>(request: any, run: (transactionRequest: any) => Promise<Result>) => Promise<Result>;
+  transaction?: <Result>(
+    request: any,
+    run: (transactionRequest: any) => Promise<Result>,
+  ) => Promise<Result>;
 }
 
 export interface AppMutationResponseContext {
@@ -182,9 +191,7 @@ export interface AppMutationResponseOptions {
   renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
 }
 
-export type AppMutationResponsePolicy =
-  | AppMutationResponseOptions
-  | AppMutationResponseResolver;
+export type AppMutationResponsePolicy = AppMutationResponseOptions | AppMutationResponseResolver;
 
 export type AppMutationResponses = Readonly<Record<string, AppMutationResponsePolicy>>;
 

@@ -4,6 +4,7 @@ import { routeResponseToDocumentResponse, type RoutePageResponse } from './respo
 import {
   renderRoutePageResponse,
   routeHasBoundary,
+  type RouteJsxContextOptions,
   type RouteDeclaration,
   type RouteRequestInput,
 } from './route.js';
@@ -13,6 +14,7 @@ type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 
 export interface AppRouteDocumentOptions {
   app: KovoApp;
+  jsxContext?: RouteJsxContextOptions<Request>;
   params: Record<string, string>;
   request: Request;
   route: AnyRouteDeclaration;
@@ -21,6 +23,7 @@ export interface AppRouteDocumentOptions {
 
 export async function renderAppRouteDocumentResponse({
   app,
+  jsxContext,
   params,
   request,
   route,
@@ -46,6 +49,10 @@ export async function renderAppRouteDocumentResponse({
         : renderDefaultRouteValue(value),
     {
       currentUrl: appRequestUrl(url),
+      ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
+      ...(jsxContext?.mutationFailure === undefined
+        ? {}
+        : { mutationFailure: jsxContext.mutationFailure }),
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       renderForbidden: async () =>

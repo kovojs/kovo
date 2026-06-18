@@ -4,7 +4,11 @@ import type {
   ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
-import { renderComponent, type ComponentRenderOptions } from './component-render.js';
+import {
+  componentMutationFailureSlots,
+  renderComponent,
+  type ComponentRenderOptions,
+} from './component-render.js';
 import { runQuery, type QueryDefinition } from './query.js';
 import type { LiveTargetRenderContext, LiveTargetRenderer } from './mutation-wire.js';
 
@@ -86,9 +90,7 @@ function componentQueryBinding<Request>(
   return undefined;
 }
 
-function isQueryArgsBinding<Request>(
-  value: unknown,
-): value is {
+function isQueryArgsBinding<Request>(value: unknown): value is {
   args: (props: Record<string, unknown>) => unknown;
   query: QueryDefinition<string, unknown, unknown, Request>;
 } {
@@ -133,27 +135,45 @@ async function componentLiveTargetRenderOptions<
   return {
     ...renderOptions,
     slots: {
-      ...componentLiveTargetDefaultSlots(options.component, context.request),
-      ...(renderOptions.slots ?? {}),
-      ...(slots ?? {}),
+      ...componentLiveTargetDefaultSlots(options.component, context),
+      ...renderOptions.slots,
+      ...slots,
     },
   };
 }
 
 function componentLiveTargetDefaultSlots(
   component: Component<ComponentDefinitionInput>,
-  request: unknown,
+  context: LiveTargetRenderContext<unknown>,
 ): ComponentRenderSlots {
   const forms = isRecord(component.definition.mutations)
-    ? Object.fromEntries(Object.keys(component.definition.mutations).map((key) => [key, { failure: null }]))
+    ? Object.fromEntries(
+        Object.keys(component.definition.mutations).map((key) => [key, { failure: null }]),
+      )
     : undefined;
 
-  return {
+  let slots: ComponentRenderSlots = {
     ...(forms === undefined ? {} : { forms }),
-    ...(request === undefined ? {} : { request }),
+    ...(context.request === undefined ? {} : { request: context.request }),
   };
+
+  if (!context.failure || !context.mutationKey || !isRecord(component.definition.mutations)) {
+    return slots;
+  }
+
+  for (const [name, mutation] of Object.entries(component.definition.mutations)) {
+    if (isMutationDefinitionLike(mutation) && mutation.key === context.mutationKey) {
+      slots = componentMutationFailureSlots(name, context.failure, slots);
+    }
+  }
+
+  return slots;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isMutationDefinitionLike(value: unknown): value is { key: string } {
+  return isRecord(value) && typeof value.key === 'string';
 }

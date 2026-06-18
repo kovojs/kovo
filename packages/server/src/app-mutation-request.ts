@@ -2,6 +2,7 @@ import { resolveLifecycleRequest } from './guards.js';
 import {
   renderMutationEndpointResponse,
   type MutationDefinition,
+  type MutationFail,
   type MutationRegistry,
 } from './mutation.js';
 import type { RegisteredQueryDefinition } from './query.js';
@@ -13,7 +14,12 @@ import type {
   AppMutationResponsePolicy,
   KovoApp,
 } from './app-types.js';
-import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
+import {
+  appRequestUrl,
+  renderAppErrorDocumentResponse,
+  renderAppRouteDocumentResponse,
+} from './app-document.js';
+import { matchShellDispatch } from './shell.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -33,15 +39,13 @@ export async function handleAppMutationRequest(
     );
   }
 
-  const mutationRequest = await resolveLifecycleRequest(
-    request,
-    {
-      ...(app.db === undefined ? {} : { db: app.db }),
-      ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
-    },
-  );
+  const mutationRequest = await resolveLifecycleRequest(request, {
+    ...(app.db === undefined ? {} : { db: app.db }),
+    ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
+  });
   const rawInput = await readMutationRequestBody(mutationRequest);
   const currentUrl = appRequestUrl(url);
+  const sourceUrl = mutationSourceUrl(request, url);
   const mutationResponseOptions = await resolveAppMutationResponsePolicy(app, {
     currentUrl,
     key: mutation.key,
@@ -50,6 +54,12 @@ export async function handleAppMutationRequest(
     request: mutationRequest,
     url: new URL(url),
   });
+  const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
+    app,
+    mutationRequest,
+    sourceUrl,
+    mutation.key,
+  );
   const requestMutation = mutationWithAppQueries(
     mutation as unknown as MutationDefinition<
       string,
@@ -79,13 +89,17 @@ export async function handleAppMutationRequest(
     liveTargetRenderers: app.liveTargetRenderers,
     rawInput,
     redirectTo:
-      mutationResponseOptions?.redirectTo ?? defaultMutationRedirectTo(mutationRequest, currentUrl),
+      mutationResponseOptions?.redirectTo ??
+      mutation.defaultRedirectTo ??
+      defaultMutationRedirectTo(mutationRequest, appRequestUrl(sourceUrl)),
     ...(mutationResponseOptions?.renderFailureFragment === undefined
       ? {}
       : { renderFailureFragment: mutationResponseOptions.renderFailureFragment }),
-    ...(mutationResponseOptions?.renderFailurePage === undefined
-      ? {}
-      : { renderFailurePage: mutationResponseOptions.renderFailurePage }),
+    ...(mutationResponseOptions?.renderFailurePage !== undefined
+      ? { renderFailurePage: mutationResponseOptions.renderFailurePage }
+      : defaultFailurePageRenderer === undefined
+        ? {}
+        : { renderFailurePage: defaultFailurePageRenderer }),
     request: mutationRequest,
   });
 
@@ -133,7 +147,7 @@ function mergeMutationRegistryQueries(
   }
 
   return {
-    ...(registry ?? {}),
+    ...registry,
     queries: [...queriesByKey.values()],
   };
 }
@@ -156,4 +170,46 @@ function defaultMutationRedirectTo(request: Request, currentUrl: string): string
   }
 
   return currentUrl.startsWith('/_m/') ? '/' : currentUrl;
+}
+
+function mutationSourceUrl(request: Request, mutationUrl: URL): URL {
+  const referer = request.headers.get('referer');
+  if (!referer) return mutationUrl;
+  try {
+    const url = new URL(referer, mutationUrl);
+    return url.origin === mutationUrl.origin ? url : mutationUrl;
+  } catch {
+    return mutationUrl;
+  }
+}
+
+function defaultAppMutationFailurePageRenderer(
+  app: KovoApp,
+  request: Request,
+  sourceUrl: URL,
+  mutationKey: string,
+): ((failure: MutationFail) => Promise<string>) | undefined {
+  const match = matchShellDispatch({
+    endpoints: app.endpoints,
+    method: 'GET',
+    pathname: sourceUrl.pathname,
+    routes: app.routes,
+  });
+
+  if (match.kind !== 'route' || !match.methodAllowed) {
+    return undefined;
+  }
+
+  return async (failure) => {
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      jsxContext: { mutationFailure: { failure, mutationKey } },
+      params: match.params,
+      request,
+      route: match.route,
+      url: sourceUrl,
+    });
+
+    return typeof response.body === 'string' ? response.body : '';
+  };
 }

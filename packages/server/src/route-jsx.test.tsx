@@ -1,10 +1,13 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, FieldError, form, FormError } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
+import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { defineCompiledRoutePage } from './route-ir.js';
+import { jsx } from './jsx-runtime.js';
 import { layout, notFound, renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
 
@@ -19,9 +22,7 @@ describe('route JSX pages', () => {
     });
     const CartBadge = component({
       queries: { cart: cartQuery },
-      render: ({ cart }: { cart: { count: number } }) => (
-        <cart-badge>{cart.count}</cart-badge>
-      ),
+      render: ({ cart }: { cart: { count: number } }) => <cart-badge>{cart.count}</cart-badge>,
     });
     const cartRoute = route('/cart', {
       page: () => <CartBadge />,
@@ -96,6 +97,62 @@ describe('route JSX pages', () => {
     });
   });
 
+  it('injects CSRF and submitted mutation failure state into route JSX forms', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
+      errors: { OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }) },
+      handler(input) {
+        return input;
+      },
+    });
+    const addToCartForm = form<
+      'cart/add',
+      { productId: string; quantity: number },
+      { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } }
+    >('cart/add');
+    const AddToCartForm = component({
+      mutations: { addToCart: addToCartForm },
+      render: (_queries, _state, { forms }) => (
+        <form enhance mutation={addToCart}>
+          <input type="hidden" name="productId" value="p1" />
+          <input name="quantity" value="1" />
+          {FieldError({ name: 'quantity', failure: forms.addToCart.failure })}
+          {FormError({
+            code: 'OUT_OF_STOCK',
+            failure: forms.addToCart.failure,
+            message: (failure: { payload: { availableQuantity: number } }) =>
+              `Only ${failure.payload.availableQuantity} left.`,
+          })}
+        </form>
+      ),
+    });
+    const productRoute = route('/products/p1', {
+      page: () => jsx(AddToCartForm, {}),
+    });
+    const request = { session: { id: 's1' } };
+    const csrf = {
+      secret: 'test-secret',
+      sessionId: (value: typeof request) => value.session.id,
+    };
+
+    await expect(
+      renderRoutePageResponse(productRoute as any, {}, request, undefined, {
+        csrf,
+        mutationFailure: {
+          failure: {
+            error: { code: 'OUT_OF_STOCK', payload: { availableQuantity: 3 } },
+            ok: false,
+            status: 422,
+          },
+          mutationKey: 'cart/add',
+        },
+      }),
+    ).resolves.toMatchObject({
+      body: `<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add"><input type="hidden" name="productId" value="p1"><input name="quantity" value="1"><output role="alert" data-error-code="OUT_OF_STOCK">Only 3 left.</output><input type="hidden" name="kovo-csrf" value="${csrfToken(request, csrf)}"></form>`,
+      status: 200,
+    });
+  });
+
   it('stamps compiler-derived page navigation segment metadata on route JSX roots', async () => {
     const productRoute = route('/products', {
       page: defineCompiledRoutePage(
@@ -139,9 +196,7 @@ describe('route JSX pages', () => {
     });
     const AppLayout = layout({
       queries: { viewer: viewerQuery },
-      render: ({ viewer }, _state, { children }) => (
-        <main data-viewer={viewer.id}>{children}</main>
-      ),
+      render: ({ viewer }, _state, { children }) => <main data-viewer={viewer.id}>{children}</main>,
     });
     const AdminLayout = layout({
       parent: AppLayout,
@@ -171,9 +226,7 @@ describe('route JSX pages', () => {
     });
     const AppLayout = layout({
       queries: { viewer: viewerQuery },
-      render: ({ viewer }, _state, { children }) => (
-        <main data-viewer={viewer.id}>{children}</main>
-      ),
+      render: ({ viewer }, _state, { children }) => <main data-viewer={viewer.id}>{children}</main>,
     });
     const AdminLayout = layout({
       parent: AppLayout,
@@ -318,12 +371,12 @@ describe('route JSX pages', () => {
       page: () => <h1>Admin</h1>,
     });
 
-    await expect(renderRoutePageResponse(adminRoute, {}, {}, String, { onError })).resolves.toMatchObject(
-      {
-        body: '<main data-layout-boundary="error">failed:500</main>',
-        status: 500,
-      },
-    );
+    await expect(
+      renderRoutePageResponse(adminRoute, {}, {}, String, { onError }),
+    ).resolves.toMatchObject({
+      body: '<main data-layout-boundary="error">failed:500</main>',
+      status: 500,
+    });
     expect(onError).toHaveBeenCalledWith(renderError, {
       operation: 'route-page',
       request: {},

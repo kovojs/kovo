@@ -60,6 +60,7 @@ export interface MutationWireRequest<
   liveTargetDescriptors?: readonly MutationLiveTargetDescriptor[];
   liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
   liveTargets?: readonly MutationLiveTarget[];
+  mutationKey?: string;
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   replayStore?: MutationReplayStore<MutationWireResponse>;
   rawInput: unknown;
@@ -104,7 +105,9 @@ export interface LiveTargetRenderer<Request = unknown> {
 
 /** @internal Context passed to a generated live-target renderer (SPEC §9.1). */
 export interface LiveTargetRenderContext<Request = unknown> {
+  failure?: MutationFail;
   input: unknown;
+  mutationKey?: string;
   props: Record<string, unknown>;
   request: Request;
   target: string;
@@ -148,6 +151,7 @@ export interface MutationWireRequestOptions<
   fragmentRenderers?: readonly FragmentRenderer[];
   headers: MutationWireHeaderSource;
   liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
+  mutationKey?: string;
   rawInput: unknown;
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   replayStore?: MutationReplayStore<MutationWireResponse>;
@@ -269,6 +273,7 @@ export function mutationWireRequestFromHeaders<Request>(
     ...(options.liveTargetRenderers === undefined
       ? {}
       : { liveTargetRenderers: options.liveTargetRenderers }),
+    ...(options.mutationKey === undefined ? {} : { mutationKey: options.mutationKey }),
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(headers.idem === undefined ? {} : { idem: headers.idem }),
     liveTargetDescriptors: headers.liveTargetDescriptors,
