@@ -10,6 +10,8 @@ import {
 } from '@kovojs/headless-ui/alert-dialog';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface AlertDialogStyleOverrides {
   action?: style.StyleInput;
   cancel?: style.StyleInput;
@@ -64,13 +66,13 @@ export const alertDialogStyles = style.create(
   {
     action: {
       alignItems: 'center',
-      backgroundColor: '#0a0a0a',
+      backgroundColor: uiTheme.color.backgroundInverse,
       borderColor: 'transparent',
-      borderRadius: 6,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#ffffff',
+      color: uiTheme.color.foregroundInverse,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -83,30 +85,33 @@ export const alertDialogStyles = style.create(
         pointerEvents: 'none',
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       ':hover': {
-        backgroundColor: '#262626',
+        backgroundColor: uiTheme.color.accentHover,
+        color: uiTheme.color.foreground,
       },
       '[data-intent=destructive]': {
-        backgroundColor: '#dc2626',
+        backgroundColor: uiTheme.color.danger.border,
+        color: uiTheme.color.foregroundInverse,
       },
       '[data-intent=destructive]:hover': {
-        backgroundColor: '#b91c1c',
+        backgroundColor: uiTheme.color.danger.background,
+        color: uiTheme.color.danger.foreground,
       },
     },
     cancel: {
       alignItems: 'center',
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.borderStrong,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -119,23 +124,23 @@ export const alertDialogStyles = style.create(
         pointerEvents: 'none',
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       ':hover': {
-        backgroundColor: '#fafafa',
+        backgroundColor: uiTheme.color.backgroundRaised,
       },
     },
     content: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 8,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.lg,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       margin: 'auto',
       maxWidth: 448,
       padding: 24,
@@ -147,7 +152,7 @@ export const alertDialogStyles = style.create(
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'contents',
       '[data-disabled]': {
         opacity: 0.5,
@@ -155,13 +160,13 @@ export const alertDialogStyles = style.create(
     },
     trigger: {
       alignItems: 'center',
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.borderStrong,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -174,13 +179,13 @@ export const alertDialogStyles = style.create(
         pointerEvents: 'none',
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       ':hover': {
-        backgroundColor: '#fafafa',
+        backgroundColor: uiTheme.color.backgroundRaised,
       },
     },
   },

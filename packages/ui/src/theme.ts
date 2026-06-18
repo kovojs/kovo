@@ -10,11 +10,13 @@ export const uiTheme = Object.freeze({
     accentHover: color.primaryContainer,
     accentForeground: color.onPrimary,
     background: color.surface,
+    backgroundInverse: color.inverseSurface,
     backgroundRaised: color.surfaceContainerLow,
     backgroundSubtle: color.surfaceContainer,
     backgroundSubtleHigh: color.surfaceContainerHigh,
     border: color.outlineVariant,
     borderStrong: color.outline,
+    foregroundInverse: color.inverseOnSurface,
     foreground: color.onSurface,
     foregroundMuted: color.onSurfaceVariant,
     danger: {

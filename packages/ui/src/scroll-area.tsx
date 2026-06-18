@@ -13,6 +13,8 @@ import {
 import type { TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface ScrollAreaStyleOverrides {
   corner?: style.StyleInput;
   root?: style.StyleInput;
@@ -66,7 +68,7 @@ export interface ScrollAreaCornerProps extends ScrollAreaStateProps {
 export const scrollAreaStyles = style.create(
   {
     corner: {
-      backgroundColor: '#f5f5f5',
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
       bottom: 0,
       height: 10,
       position: 'absolute',
@@ -77,12 +79,12 @@ export const scrollAreaStyles = style.create(
       },
     },
     root: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       fontSize: 14,
       overflow: 'hidden',
       position: 'relative',
@@ -91,7 +93,7 @@ export const scrollAreaStyles = style.create(
       },
     },
     scrollbar: {
-      backgroundColor: '#f5f5f5',
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
       display: 'flex',
       padding: 2,
       position: 'absolute',
@@ -115,8 +117,8 @@ export const scrollAreaStyles = style.create(
       },
     },
     thumb: {
-      backgroundColor: '#a3a3a3',
-      borderRadius: 9999,
+      backgroundColor: uiTheme.color.borderStrong,
+      borderRadius: uiTheme.radius.full,
       flex: 1,
       position: 'relative',
       '[data-orientation=horizontal]': {
@@ -138,7 +140,7 @@ export const scrollAreaStyles = style.create(
         cursor: 'not-allowed',
       },
       ':focus-visible': {
-        boxShadow: 'inset 0 0 0 2px #0a0a0a',
+        boxShadow: `inset 0 0 0 2px ${uiTheme.color.borderStrong}`,
       },
     },
   },

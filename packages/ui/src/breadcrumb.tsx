@@ -4,6 +4,8 @@ import { separatorRootAttributes } from '@kovojs/headless-ui/separator';
 import { safeUrl } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface BreadcrumbStyleOverrides {
   current?: style.StyleInput;
   item?: style.StyleInput;
@@ -32,7 +34,7 @@ export interface BreadcrumbLinkProps extends BreadcrumbPartProps {
 export const breadcrumbStyles = style.create(
   {
     current: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       fontWeight: 500,
     },
     item: {
@@ -41,11 +43,11 @@ export const breadcrumbStyles = style.create(
       display: 'inline-flex',
     },
     link: {
-      color: '#525252',
+      color: uiTheme.color.foregroundMuted,
       fontWeight: 500,
       transitionProperty: 'color',
       ':hover': {
-        color: '#0a0a0a',
+        color: uiTheme.color.foreground,
       },
     },
     list: {
@@ -56,14 +58,14 @@ export const breadcrumbStyles = style.create(
     },
     root: {
       alignItems: 'center',
-      color: '#737373',
+      color: uiTheme.color.foregroundMuted,
       columnGap: 6,
       display: 'flex',
       flexWrap: 'wrap',
       fontSize: 14,
     },
     separator: {
-      color: '#a3a3a3',
+      color: uiTheme.color.borderStrong,
     },
   },
   { namespace: 'breadcrumb', source: 'breadcrumb.tsx' },

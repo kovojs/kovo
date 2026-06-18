@@ -14,6 +14,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface NavigationMenuStyleOverrides {
   content?: style.StyleInput;
   indicator?: style.StyleInput;
@@ -90,13 +92,13 @@ function escapeHtml(value: string): string {
 export const navigationMenuStyles = style.create(
   {
     content: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
       marginTop: 8,
       outlineStyle: 'none',
@@ -106,8 +108,8 @@ export const navigationMenuStyles = style.create(
       },
     },
     indicator: {
-      backgroundColor: '#0a0a0a',
-      borderRadius: 9999,
+      backgroundColor: uiTheme.color.foreground,
+      borderRadius: uiTheme.radius.full,
       height: 4,
       width: 32,
       '[data-state=closed]': {
@@ -122,8 +124,8 @@ export const navigationMenuStyles = style.create(
     },
     link: {
       alignItems: 'center',
-      borderRadius: 4,
-      color: '#404040',
+      borderRadius: uiTheme.radius.sm,
+      color: uiTheme.color.foregroundMuted,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -136,23 +138,23 @@ export const navigationMenuStyles = style.create(
         pointerEvents: 'none',
       },
       '[data-highlighted]': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       ':hover': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
       },
     },
     list: {
       alignItems: 'center',
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
@@ -166,7 +168,7 @@ export const navigationMenuStyles = style.create(
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       fontSize: 14,
       position: 'relative',
       '[data-disabled]': {
@@ -178,8 +180,8 @@ export const navigationMenuStyles = style.create(
     },
     trigger: {
       alignItems: 'center',
-      borderRadius: 4,
-      color: '#404040',
+      borderRadius: uiTheme.radius.sm,
+      color: uiTheme.color.foregroundMuted,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -192,25 +194,25 @@ export const navigationMenuStyles = style.create(
         pointerEvents: 'none',
       },
       '[data-highlighted]': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
       },
       '[data-state=open]': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       ':hover': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
       },
     },
     viewport: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',

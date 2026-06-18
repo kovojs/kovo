@@ -2,6 +2,8 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface TableStyleOverrides {
   body?: style.StyleInput;
   caption?: style.StyleInput;
@@ -47,23 +49,23 @@ export const tableStyles = style.create(
       },
     },
     caption: {
-      color: '#737373',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
       marginTop: 12,
     },
     cell: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       padding: 12,
       verticalAlign: 'middle',
     },
     head: {
-      backgroundColor: '#fafafa',
-      borderBottomColor: '#e5e5e5',
+      backgroundColor: uiTheme.color.backgroundRaised,
+      borderBottomColor: uiTheme.color.border,
       borderBottomStyle: 'solid',
       borderBottomWidth: 1,
     },
     headerCell: {
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
       fontWeight: 500,
       height: 40,
@@ -72,12 +74,12 @@ export const tableStyles = style.create(
       verticalAlign: 'middle',
     },
     row: {
-      borderBottomColor: '#e5e5e5',
+      borderBottomColor: uiTheme.color.border,
       borderBottomStyle: 'solid',
       borderBottomWidth: 1,
       transitionProperty: 'background-color',
       ':hover': {
-        backgroundColor: '#fafafa',
+        backgroundColor: uiTheme.color.backgroundRaised,
       },
     },
     table: {

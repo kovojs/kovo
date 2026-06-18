@@ -7,6 +7,8 @@ import {
 } from '@kovojs/headless-ui/popover';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface PopoverStyleOverrides {
   content?: style.StyleInput;
   root?: style.StyleInput;
@@ -40,12 +42,12 @@ export interface PopoverContentProps extends PopoverStateProps {
 export const popoverStyles = style.create(
   {
     content: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
       marginTop: 8,
       padding: 12,
@@ -56,7 +58,7 @@ export const popoverStyles = style.create(
       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'inline-block',
       fontSize: 14,
       position: 'relative',
@@ -66,13 +68,13 @@ export const popoverStyles = style.create(
     },
     trigger: {
       alignItems: 'center',
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.borderStrong,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -81,20 +83,20 @@ export const popoverStyles = style.create(
       paddingInline: 12,
       transitionProperty: 'background-color',
       '[data-state=open]': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
       },
       ':disabled': {
         opacity: 0.5,
         pointerEvents: 'none',
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       ':hover': {
-        backgroundColor: '#fafafa',
+        backgroundColor: uiTheme.color.backgroundRaised,
       },
     },
   },

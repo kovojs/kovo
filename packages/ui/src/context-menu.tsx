@@ -12,6 +12,8 @@ import {
 } from '@kovojs/headless-ui/context-menu';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface ContextMenuStyleOverrides {
   content?: style.StyleInput;
   group?: style.StyleInput;
@@ -74,13 +76,13 @@ export interface ContextMenuSeparatorProps {
 export const contextMenuStyles = style.create(
   {
     content: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       fontSize: 14,
       minWidth: 160,
       outlineStyle: 'none',
@@ -100,8 +102,8 @@ export const contextMenuStyles = style.create(
     },
     item: {
       alignItems: 'center',
-      borderRadius: 4,
-      color: '#404040',
+      borderRadius: uiTheme.radius.sm,
+      color: uiTheme.color.foregroundMuted,
       display: 'flex',
       fontSize: 14,
       outlineStyle: 'none',
@@ -114,29 +116,29 @@ export const contextMenuStyles = style.create(
         pointerEvents: 'none',
       },
       '[data-highlighted]': {
-        backgroundColor: '#f5f5f5',
-        color: '#0a0a0a',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
+        color: uiTheme.color.foreground,
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       fontSize: 14,
       '[data-disabled]': {
         opacity: 0.5,
       },
     },
     separator: {
-      backgroundColor: '#e5e5e5',
+      backgroundColor: uiTheme.color.border,
       height: 1,
       marginBlock: 4,
     },
     trigger: {
-      backgroundColor: '#fafafa',
-      borderColor: '#d4d4d4',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.backgroundRaised,
+      borderColor: uiTheme.color.borderStrong,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'dashed',
       borderWidth: 1,
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
       outlineStyle: 'none',
       paddingBlock: 12,
@@ -146,10 +148,10 @@ export const contextMenuStyles = style.create(
         pointerEvents: 'none',
       },
       '[data-state=open]': {
-        borderColor: '#0a0a0a',
+        borderColor: uiTheme.color.borderStrong,
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,

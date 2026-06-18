@@ -8,6 +8,8 @@ import {
 } from '@kovojs/headless-ui/avatar';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface AvatarStyleOverrides {
   fallback?: style.StyleInput;
   image?: style.StyleInput;
@@ -46,8 +48,8 @@ export const avatarStyles = style.create(
   {
     fallback: {
       alignItems: 'center',
-      backgroundColor: '#f5f5f5',
-      borderRadius: 9999,
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      borderRadius: uiTheme.radius.full,
       display: 'flex',
       height: '100%',
       justifyContent: 'center',
@@ -66,9 +68,9 @@ export const avatarStyles = style.create(
       },
     },
     root: {
-      backgroundColor: '#f5f5f5',
-      borderRadius: 9999,
-      color: '#404040',
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      borderRadius: uiTheme.radius.full,
+      color: uiTheme.color.foregroundMuted,
       display: 'inline-flex',
       flexShrink: 0,
       fontSize: 14,

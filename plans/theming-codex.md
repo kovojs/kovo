@@ -235,14 +235,27 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
     packages/ui/src/slider.stylex.test.tsx packages/ui/src/otp-field.stylex.test.tsx
     packages/ui/src/meter.stylex.test.tsx packages/ui/src/checkbox-group.stylex.test.tsx -u`
     updated 24 snapshots and passed.
-- [ ] **C4. Migrate overlays/navigation.** Convert Dialog, AlertDialog, Drawer, Sheet, Popover,
+- [x] **C4. Migrate overlays/navigation.** Convert Dialog, AlertDialog, Drawer, Sheet, Popover,
       HoverCard, Tooltip, DropdownMenu, ContextMenu, Menubar, NavigationMenu, Command, Tabs,
       Toolbar, Accordion, Collapsible, Disclosure, Toast, Table, Avatar, Breadcrumb, ScrollArea.
-- [x] **C5. Keep override props author-last.** Verify all `style`/`styles` override surfaces still
+  - Evidence: `packages/ui/src/{dialog,alert-dialog,drawer,sheet,popover,hover-card,tooltip,dropdown-menu,context-menu,menubar,navigation-menu,command,tabs,toolbar,accordion,collapsible,disclosure,toast,table,avatar,breadcrumb,scroll-area}.tsx`
+    now use `uiTheme` semantic tokens instead of hard-coded component surface/foreground/border/status
+    colors; `corepack pnpm exec vitest run packages/ui/src/dialog.stylex.test.tsx
+    packages/ui/src/alert-dialog.stylex.test.tsx packages/ui/src/drawer.stylex.test.tsx
+    packages/ui/src/sheet.stylex.test.tsx packages/ui/src/popover.stylex.test.tsx
+    packages/ui/src/hover-card.stylex.test.tsx packages/ui/src/tooltip.stylex.test.tsx
+    packages/ui/src/dropdown-menu.stylex.test.tsx packages/ui/src/context-menu.stylex.test.tsx
+    packages/ui/src/menubar.stylex.test.tsx packages/ui/src/navigation-menu.stylex.test.tsx
+    packages/ui/src/command.stylex.test.tsx packages/ui/src/tabs.stylex.test.tsx
+    packages/ui/src/toolbar.stylex.test.tsx packages/ui/src/accordion.stylex.test.tsx
+    packages/ui/src/collapsible.stylex.test.tsx packages/ui/src/disclosure.stylex.test.tsx
+    packages/ui/src/toast.stylex.test.tsx packages/ui/src/table.stylex.test.tsx
+    packages/ui/src/avatar.stylex.test.tsx packages/ui/src/breadcrumb.stylex.test.tsx
+    packages/ui/src/navigation-menu.test.tsx packages/ui/src/hover-card.test.tsx
+    packages/ui/src/breadcrumb.test.tsx -u`, `corepack pnpm exec tsc -p tsconfig.json --noEmit
+    --pretty false`, and `git diff --check` all pass.
+- [ ] **C5. Keep override props author-last.** Verify all `style`/`styles` override surfaces still
       win by StyleX property merge order after token migration.
-  - Evidence: the same focused StyleX tests above cover override slots for each migrated component
-    family, while `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false` and
-    `git diff --check` both pass in this slice.
 - [ ] **C6. Snapshot and visual smoke tests.** Refresh StyleX snapshots intentionally and add a
       small example/theme smoke proving one seed changes multiple component families.
 - [ ] **C7. Add a hex-literal migration gate.** After the UI migration, add or document a grep/lint

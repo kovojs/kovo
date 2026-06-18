@@ -12,6 +12,8 @@ import {
 import type { CollectionOrientation } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface AccordionStyleOverrides {
   content?: style.StyleInput;
   header?: style.StyleInput;
@@ -58,7 +60,7 @@ export interface AccordionContentProps extends AccordionItemProps {
 export const accordionStyles = style.create(
   {
     content: {
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
       paddingBottom: 12,
       paddingInline: 12,
@@ -73,9 +75,9 @@ export const accordionStyles = style.create(
       margin: 0,
     },
     item: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       '[data-disabled]': {
@@ -83,7 +85,7 @@ export const accordionStyles = style.create(
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
       rowGap: 8,
@@ -94,8 +96,8 @@ export const accordionStyles = style.create(
     },
     trigger: {
       alignItems: 'center',
-      borderRadius: 6,
-      color: '#0a0a0a',
+      borderRadius: uiTheme.radius.md,
+      color: uiTheme.color.foreground,
       display: 'flex',
       fontSize: 14,
       fontWeight: 500,
@@ -109,19 +111,19 @@ export const accordionStyles = style.create(
         opacity: 0.5,
       },
       '[data-state=open]': {
-        backgroundColor: '#fafafa',
+        backgroundColor: uiTheme.color.backgroundRaised,
       },
       ':disabled': {
         pointerEvents: 'none',
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       ':hover': {
-        backgroundColor: '#fafafa',
+        backgroundColor: uiTheme.color.backgroundRaised,
       },
     },
   },

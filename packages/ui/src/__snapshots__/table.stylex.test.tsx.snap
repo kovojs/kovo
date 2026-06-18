@@ -25,7 +25,7 @@ exports[`@kovojs/ui Table StyleX slots > exports StyleX slot objects instead of 
 }
 `;
 
-exports[`@kovojs/ui Table StyleX slots > matches author-last slot override output 1`] = `"<div class="kv-table-overflow-1frfff kv-table-w-1tdux0 kv-app-table-bg-vcgq6n" data-style-src="table.tsx#wrapper; app-table.tsx#wrapper"><table class="kv-table-bd-fz858s kv-table-caption-8lgut2 kv-table-w-1tdux0 kv-app-table-font-1qthjq" data-style-src="table.tsx#table; app-table.tsx#table"><caption class="kv-table-font-1swbvq kv-table-m-e76uzi kv-app-table-fg-6uk5ox" data-style-src="table.tsx#caption; app-table.tsx#caption">Custom invoices</caption><thead class="kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-app-table-bg-vt2won" data-style-src="table.tsx#head; app-table.tsx#head"><tr class="kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-app-table-bg-118x5e kv-app-table-bg-128qq2" data-style-src="table.tsx#row; app-table.tsx#row"><th class="kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi kv-app-table-fg-iqgnyf" data-style-src="table.tsx#headerCell; app-table.tsx#headerCell" scope="col">Invoice</th></tr></thead><tbody class="kv-table-bd-193zij kv-app-table-bg-vcgq6n" data-style-src="table.tsx#body; app-table.tsx#body"><tr class="kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-app-table-bg-118x5e kv-app-table-bg-128qq2" data-style-src="table.tsx#row; app-table.tsx#row"><td class="kv-table-pad-6rt7tb kv-table-vertical-7ub3oi kv-app-table-fg-4ajyu2" data-style-src="table.tsx#cell; app-table.tsx#cell">INV-1000</td></tr></tbody></table></div>"`;
+exports[`@kovojs/ui Table StyleX slots > matches author-last slot override output 1`] = `"<div class="kv-table-overflow-1frfff kv-table-w-1tdux0 kv-app-table-bg-vcgq6n" data-style-src="table.tsx#wrapper; app-table.tsx#wrapper"><table class="kv-table-bd-fz858s kv-table-caption-8lgut2 kv-table-w-1tdux0 kv-app-table-font-1qthjq" data-style-src="table.tsx#table; app-table.tsx#table"><caption class="kv-table-font-1swbvq kv-table-m-e76uzi kv-app-table-fg-6uk5ox" data-style-src="table.tsx#caption; app-table.tsx#caption">Custom invoices</caption><thead class="kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-app-table-bg-vt2won" data-style-src="table.tsx#head; app-table.tsx#head"><tr class="kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-app-table-bg-118x5e kv-app-table-bg-128qq2" data-style-src="table.tsx#row; app-table.tsx#row"><th class="kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi kv-app-table-fg-iqgnyf" data-style-src="table.tsx#headerCell; app-table.tsx#headerCell" scope="col">Invoice</th></tr></thead><tbody class="kv-table-bd-193zij kv-app-table-bg-vcgq6n" data-style-src="table.tsx#body; app-table.tsx#body"><tr class="kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-app-table-bg-118x5e kv-app-table-bg-128qq2" data-style-src="table.tsx#row; app-table.tsx#row"><td class="kv-table-pad-6rt7tb kv-table-vertical-7ub3oi kv-app-table-fg-4ajyu2" data-style-src="table.tsx#cell; app-table.tsx#cell">INV-1000</td></tr></tbody></table></div>"`;
 
 exports[`@kovojs/ui Table StyleX slots > renders semantic table markup with StyleX slot classes 1`] = `
 {
@@ -33,33 +33,33 @@ exports[`@kovojs/ui Table StyleX slots > renders semantic table markup with Styl
     "kv-table-bd-193zij",
   ],
   "captionClasses": [
-    "kv-table-fg-ofc2lx kv-table-font-1swbvq kv-table-m-e76uzi",
+    "kv-table-fg-1ra5l7 kv-table-font-1swbvq kv-table-m-e76uzi",
   ],
   "cellClasses": [
-    "kv-table-fg-abuz00 kv-table-pad-6rt7tb kv-table-vertical-7ub3oi",
+    "kv-table-fg-1mmaay kv-table-pad-6rt7tb kv-table-vertical-7ub3oi",
   ],
   "classes": [
     "kv-table-overflow-1frfff kv-table-w-1tdux0",
     "kv-table-bd-fz858s kv-table-caption-8lgut2 kv-table-font-1swbvq kv-table-w-1tdux0",
-    "kv-table-bg-1ewjwv kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5",
+    "kv-table-bg-17di5j kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5",
     "kv-table-bd-193zij",
-    "kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-nj6crr",
-    "kv-table-fg-1p816c kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi",
-    "kv-table-fg-abuz00 kv-table-pad-6rt7tb kv-table-vertical-7ub3oi",
-    "kv-table-fg-ofc2lx kv-table-font-1swbvq kv-table-m-e76uzi",
+    "kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-ddleab",
+    "kv-table-fg-1ra5l7 kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi",
+    "kv-table-fg-1mmaay kv-table-pad-6rt7tb kv-table-vertical-7ub3oi",
+    "kv-table-fg-1ra5l7 kv-table-font-1swbvq kv-table-m-e76uzi",
   ],
   "headClasses": [
-    "kv-table-bg-1ewjwv kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5",
+    "kv-table-bg-17di5j kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5",
   ],
   "headerCellClasses": [
-    "kv-table-fg-1p816c kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi",
+    "kv-table-fg-1ra5l7 kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi",
   ],
-  "rendered": "<div class="kv-table-overflow-1frfff kv-table-w-1tdux0" data-style-src="table.tsx#wrapper"><table class="kv-table-bd-fz858s kv-table-caption-8lgut2 kv-table-font-1swbvq kv-table-w-1tdux0" data-style-src="table.tsx#table"><caption class="kv-table-fg-ofc2lx kv-table-font-1swbvq kv-table-m-e76uzi" data-style-src="table.tsx#caption">Invoices for the current billing period</caption><thead class="kv-table-bg-1ewjwv kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5" data-style-src="table.tsx#head"><tr class="kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-nj6crr" data-style-src="table.tsx#row"><th class="kv-table-fg-1p816c kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi" data-style-src="table.tsx#headerCell" scope="col">Invoice</th><th class="kv-table-fg-1p816c kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi" data-style-src="table.tsx#headerCell" scope="col">Status</th><th class="kv-table-fg-1p816c kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi" data-style-src="table.tsx#headerCell" scope="col">Amount</th></tr></thead><tbody class="kv-table-bd-193zij" data-style-src="table.tsx#body"><tr class="kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-nj6crr" data-style-src="table.tsx#row"><th class="kv-table-fg-1p816c kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi" data-style-src="table.tsx#headerCell" scope="row">INV-0042</th><td class="kv-table-fg-abuz00 kv-table-pad-6rt7tb kv-table-vertical-7ub3oi" data-style-src="table.tsx#cell">Paid</td><td class="kv-table-fg-abuz00 kv-table-pad-6rt7tb kv-table-vertical-7ub3oi" data-style-src="table.tsx#cell">$250.00</td></tr><tr class="kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-nj6crr" data-style-src="table.tsx#row"><td class="kv-table-fg-abuz00 kv-table-pad-6rt7tb kv-table-vertical-7ub3oi" data-style-src="table.tsx#cell" colspan="3">Two pending invoices omitted</td></tr></tbody></table></div>",
+  "rendered": "<div class="kv-table-overflow-1frfff kv-table-w-1tdux0" data-style-src="table.tsx#wrapper"><table class="kv-table-bd-fz858s kv-table-caption-8lgut2 kv-table-font-1swbvq kv-table-w-1tdux0" data-style-src="table.tsx#table"><caption class="kv-table-fg-1ra5l7 kv-table-font-1swbvq kv-table-m-e76uzi" data-style-src="table.tsx#caption">Invoices for the current billing period</caption><thead class="kv-table-bg-17di5j kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5" data-style-src="table.tsx#head"><tr class="kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-ddleab" data-style-src="table.tsx#row"><th class="kv-table-fg-1ra5l7 kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi" data-style-src="table.tsx#headerCell" scope="col">Invoice</th><th class="kv-table-fg-1ra5l7 kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi" data-style-src="table.tsx#headerCell" scope="col">Status</th><th class="kv-table-fg-1ra5l7 kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi" data-style-src="table.tsx#headerCell" scope="col">Amount</th></tr></thead><tbody class="kv-table-bd-193zij" data-style-src="table.tsx#body"><tr class="kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-ddleab" data-style-src="table.tsx#row"><th class="kv-table-fg-1ra5l7 kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi" data-style-src="table.tsx#headerCell" scope="row">INV-0042</th><td class="kv-table-fg-1mmaay kv-table-pad-6rt7tb kv-table-vertical-7ub3oi" data-style-src="table.tsx#cell">Paid</td><td class="kv-table-fg-1mmaay kv-table-pad-6rt7tb kv-table-vertical-7ub3oi" data-style-src="table.tsx#cell">$250.00</td></tr><tr class="kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-ddleab" data-style-src="table.tsx#row"><td class="kv-table-fg-1mmaay kv-table-pad-6rt7tb kv-table-vertical-7ub3oi" data-style-src="table.tsx#cell" colspan="3">Two pending invoices omitted</td></tr></tbody></table></div>",
   "rootClasses": [
     "kv-table-bd-fz858s kv-table-caption-8lgut2 kv-table-font-1swbvq kv-table-w-1tdux0",
   ],
   "rowClasses": [
-    "kv-table-bd-1nntof kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-nj6crr",
+    "kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-ddleab",
   ],
   "wrapperClasses": [
     "kv-table-overflow-1frfff kv-table-w-1tdux0",

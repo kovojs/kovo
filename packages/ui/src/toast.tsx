@@ -13,6 +13,8 @@ import {
 } from '@kovojs/headless-ui/toast';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface ToastStyleOverrides {
   action?: style.StyleInput;
   close?: style.StyleInput;
@@ -66,12 +68,12 @@ export const toastStyles = style.create(
   {
     action: {
       alignItems: 'center',
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.borderStrong,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -84,19 +86,19 @@ export const toastStyles = style.create(
         opacity: 0.5,
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       ':hover': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
       },
     },
     close: {
       alignItems: 'center',
-      borderRadius: 6,
-      color: '#737373',
+      borderRadius: uiTheme.radius.md,
+      color: uiTheme.color.foregroundMuted,
       display: 'inline-flex',
       height: 32,
       justifyContent: 'center',
@@ -107,27 +109,27 @@ export const toastStyles = style.create(
         opacity: 0.5,
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       ':hover': {
-        backgroundColor: '#f5f5f5',
-        color: '#0a0a0a',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
+        color: uiTheme.color.foreground,
       },
     },
     description: {
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
     },
     root: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
       padding: 16,
@@ -139,24 +141,24 @@ export const toastStyles = style.create(
         display: 'none',
       },
       '[data-variant=error]': {
-        backgroundColor: '#fef2f2',
-        borderColor: '#fecaca',
+        backgroundColor: uiTheme.color.danger.background,
+        borderColor: uiTheme.color.danger.border,
       },
       '[data-variant=info]': {
-        backgroundColor: '#f0f9ff',
-        borderColor: '#bae6fd',
+        backgroundColor: uiTheme.color.info.background,
+        borderColor: uiTheme.color.info.border,
       },
       '[data-variant=success]': {
-        backgroundColor: '#ecfdf5',
-        borderColor: '#a7f3d0',
+        backgroundColor: uiTheme.color.success.background,
+        borderColor: uiTheme.color.success.border,
       },
       '[data-variant=warning]': {
-        backgroundColor: '#fffbeb',
-        borderColor: '#fde68a',
+        backgroundColor: uiTheme.color.warning.background,
+        borderColor: uiTheme.color.warning.border,
       },
     },
     title: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       fontWeight: 500,
     },
     viewport: {

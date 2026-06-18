@@ -11,6 +11,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface MenubarStyleOverrides {
   group?: style.StyleInput;
   item?: style.StyleInput;
@@ -86,8 +88,8 @@ export const menubarStyles = style.create(
     },
     item: {
       alignItems: 'center',
-      borderRadius: 4,
-      color: '#404040',
+      borderRadius: uiTheme.radius.sm,
+      color: uiTheme.color.foregroundMuted,
       display: 'inline-flex',
       fontSize: 14,
       height: 32,
@@ -98,21 +100,21 @@ export const menubarStyles = style.create(
         pointerEvents: 'none',
       },
       '[data-highlighted]': {
-        backgroundColor: '#f5f5f5',
-        color: '#0a0a0a',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
+        color: uiTheme.color.foreground,
       },
       '[data-state=open]': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
       },
     },
     root: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'inline-flex',
       fontSize: 14,
       padding: 4,
@@ -124,18 +126,18 @@ export const menubarStyles = style.create(
       },
     },
     separator: {
-      backgroundColor: '#e5e5e5',
+      backgroundColor: uiTheme.color.border,
       height: 1,
       marginBlock: 4,
     },
     submenu: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       fontSize: 14,
       minWidth: 160,
       outlineStyle: 'none',

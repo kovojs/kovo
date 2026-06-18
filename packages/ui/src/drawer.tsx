@@ -8,6 +8,8 @@ import {
 } from '@kovojs/headless-ui/dialog';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export type DrawerSide = 'top' | 'right' | 'bottom' | 'left';
 
 export interface DrawerStyleOverrides {
@@ -46,13 +48,13 @@ export const drawerStyles = style.create(
     },
     close: {
       alignItems: 'center',
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.borderStrong,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -66,16 +68,16 @@ export const drawerStyles = style.create(
         pointerEvents: 'none',
       },
       ':hover': {
-        backgroundColor: '#fafafa',
+        backgroundColor: uiTheme.color.backgroundRaised,
       },
     },
     content: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
       borderStyle: 'solid',
       borderWidth: 0,
       boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'flex',
       flexDirection: 'column',
       gap: 16,
@@ -84,12 +86,12 @@ export const drawerStyles = style.create(
       zIndex: 50,
     },
     description: {
-      color: '#525252',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
     },
     handle: {
-      backgroundColor: '#d4d4d4',
-      borderRadius: 9999,
+      backgroundColor: uiTheme.color.borderStrong,
+      borderRadius: uiTheme.radius.full,
       height: 6,
       marginInline: 'auto',
       width: 48,
@@ -107,13 +109,13 @@ export const drawerStyles = style.create(
     },
     trigger: {
       alignItems: 'center',
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.borderStrong,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -126,7 +128,7 @@ export const drawerStyles = style.create(
         pointerEvents: 'none',
       },
       ':hover': {
-        backgroundColor: '#fafafa',
+        backgroundColor: uiTheme.color.backgroundRaised,
       },
     },
   },

@@ -11,6 +11,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface TabsStyleOverrides {
   list?: style.StyleInput;
   panel?: style.StyleInput;
@@ -66,9 +68,9 @@ export const tabsStyles = style.create(
   {
     list: {
       alignItems: 'center',
-      backgroundColor: '#f5f5f5',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       columnGap: 4,
@@ -85,12 +87,12 @@ export const tabsStyles = style.create(
       },
     },
     panel: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
       marginTop: 12,
       padding: 16,
@@ -98,14 +100,14 @@ export const tabsStyles = style.create(
         display: 'none',
       },
       ':focus-visible': {
-        outlineColor: '#a3a3a3',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       width: '100%',
       '[data-disabled]': {
         opacity: 0.5,
@@ -114,8 +116,8 @@ export const tabsStyles = style.create(
     trigger: {
       alignItems: 'center',
       backgroundColor: 'transparent',
-      borderRadius: 4,
-      color: '#525252',
+      borderRadius: uiTheme.radius.sm,
+      color: uiTheme.color.foregroundMuted,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -127,15 +129,15 @@ export const tabsStyles = style.create(
         opacity: 0.5,
       },
       '[data-state=active]': {
-        backgroundColor: '#ffffff',
+        backgroundColor: uiTheme.color.background,
         boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-        color: '#0a0a0a',
+        color: uiTheme.color.foreground,
       },
       ':disabled': {
         pointerEvents: 'none',
       },
       ':focus-visible': {
-        outlineColor: '#a3a3a3',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
