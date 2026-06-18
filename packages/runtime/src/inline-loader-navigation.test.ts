@@ -6,12 +6,18 @@ class TestNavSegment {
   constructor(
     private readonly attributes: Record<string, string>,
     readonly outerHTML: string,
+    private readonly descendants: TestNavSegment[] = [],
   ) {}
 
-  cloneNode(): { outerHTML: string; querySelectorAll(): never[] } {
+  cloneNode(): {
+    getAttribute(name: string): string | null;
+    outerHTML: string;
+    querySelectorAll(selector: string): TestNavSegment[];
+  } {
     return {
+      getAttribute: (name: string) => this.getAttribute(name),
       outerHTML: this.outerHTML,
-      querySelectorAll: () => [],
+      querySelectorAll: (selector: string) => this.querySelectorAll(selector),
     };
   }
 
@@ -21,7 +27,12 @@ class TestNavSegment {
     return this.attributes[name] ?? null;
   }
 
-  querySelectorAll(): never[] {
+  get id(): string | undefined {
+    return this.attributes.id;
+  }
+
+  querySelectorAll(selector: string): TestNavSegment[] {
+    if (selector === '[id]') return this.descendants.filter((child) => child.id);
     return [];
   }
 
@@ -840,6 +851,78 @@ describe('inline loader enhanced navigation fallback', () => {
           globalRecord.__kovoInlineImport = originals.importModule;
         }
       }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'falls back when a morphed segment would duplicate preserved ids through %s',
+    async (_name, installSource) => {
+      const replaceWith = vi.fn();
+      const layoutAttributes = {
+        'kovo-nav-components': '',
+        'kovo-nav-kind': 'layout',
+        'kovo-nav-name': 'Shop',
+        'kovo-nav-queries': '',
+        'kovo-nav-segment': 'layout:Shop',
+      };
+      const currentLayout = new TestNavSegment(
+        layoutAttributes,
+        '<main><h1 id="cart-title">Shop</h1></main>',
+        [new TestNavSegment({ id: 'cart-title' }, '<h1 id="cart-title">Shop</h1>')],
+      );
+      const currentPage = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'page',
+          'kovo-nav-name': 'page',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'page:/products',
+        },
+        '<section>Products</section>',
+      );
+      const targetLayout = new TestNavSegment(
+        layoutAttributes,
+        '<main><h1 id="cart-title">Shop</h1></main>',
+        [new TestNavSegment({ id: 'cart-title' }, '<h1 id="cart-title">Shop</h1>')],
+      );
+      const targetPage = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'page',
+          'kovo-nav-name': 'page',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'page:/cart',
+        },
+        '<section><h2 id="cart-title">Cart</h2></section>',
+        [new TestNavSegment({ id: 'cart-title' }, '<h2 id="cart-title">Cart</h2>')],
+      );
+      let currentDocument: ReturnType<typeof createTestShell>;
+      currentDocument = createTestShell({
+        replaceWith: (nextBody) => {
+          replaceWith(nextBody);
+          currentDocument.body = nextBody as typeof currentDocument.body;
+        },
+        segments: [currentLayout, currentPage],
+      });
+      const targetDocument = createTestShell({ segments: [targetLayout, targetPage] });
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument,
+        documents: [targetDocument],
+        fetch: vi.fn(async () => ({
+          headers: { get: () => 'text/html' },
+          text: async () => '<!doctype html><html></html>',
+          url: 'http://app.test/cart',
+        })),
+        async assert({ assign: harnessAssign, preventDefault, pushState }) {
+          await vi.waitFor(() => {
+            expect(harnessAssign).toHaveBeenCalledWith('http://app.test/cart');
+          });
+          expect(preventDefault).toHaveBeenCalledTimes(1);
+          expect(pushState).not.toHaveBeenCalled();
+          expect(replaceWith).not.toHaveBeenCalled();
+        },
+      });
     },
   );
 });

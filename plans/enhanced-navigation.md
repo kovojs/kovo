@@ -165,11 +165,18 @@ through client navigation.
     packages/runtime/src/delegated-loader-lifecycle.test.ts` is included in the
     106-test runtime gate and proves the underlying ctx.signal reuse/disposal
     contract.
-- [ ] **Duplicate IDREF and parser-stability guarantees remain intact.**
+- [x] **Duplicate IDREF and parser-stability guarantees remain intact.**
   - The enhanced path must not create duplicate ids between a persisted segment
     and a morphed segment, and it must preserve the KV225 parser-stability
     assumptions that fragment morphing relies on.
-  - Evidence: pending IDREF and malformed-nesting negative fixtures.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/id-content-model.test.ts
+    packages/runtime/src/inline-loader-navigation.test.ts
+    packages/runtime/src/inline-loader-build.test.ts
+    packages/runtime/src/inline-loader-artifact-minifier.test.ts` passed 64
+    tests and proves compiler KV224 duplicate-id/IDREF rejection, compiler KV225
+    parser-reparenting rejection, and enhanced-navigation fallback when a morphed
+    segment would duplicate an id from preserved layout chrome across all inline
+    installer artifacts.
 
 ## Runtime State Contract
 
@@ -195,7 +202,7 @@ through client navigation.
     SPEC must deliberately change that budget with acceptance evidence.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
     `node --experimental-strip-types - <<'NODE' ...` reported
-    `inline-loader-gzip=5427/8192`.
+    `inline-loader-gzip=5583/8192`.
 
 ## Implementation Plan
 
@@ -287,7 +294,8 @@ through client navigation.
   - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves full-document fetch, compatible leaf morphing, and document shell
     updates; `packages/runtime/src/inline-loader-navigation.test.ts` proves
-    build-token and non-HTML fallback. Remaining gap: unsupported shell drift.
+    build-token, non-HTML, and duplicate-id morph fallback. Remaining gap:
+    unsupported shell drift.
 - [x] **Segment persistence:** unchanged layout island/media state survives;
       changed layout or leaf segments morph from server-rendered target HTML.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
@@ -303,7 +311,7 @@ through client navigation.
   - Evidence so far: `packages/runtime/src/inline-loader-navigation.test.ts`
     proves build-token mismatch, non-HTML fallback, final same-origin HTML
     redirects, and 403/404/500 shell morphing across inline artifacts.
-    Remaining gap: morph-failure fallback fixture.
+    It also proves duplicate-id morph failure falls back to full GET.
 - [ ] **Mutation/live after navigation:** preserved and inserted targets refresh
       correctly with no stale-target or double-morph races.
   - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
@@ -316,4 +324,4 @@ through client navigation.
 - [x] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
       budget change is explicitly accepted.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
-    the measured shipped source was `inline-loader-gzip=5427/8192`.
+    the measured shipped source was `inline-loader-gzip=5583/8192`.

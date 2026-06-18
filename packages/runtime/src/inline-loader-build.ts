@@ -257,6 +257,29 @@ function installInlineKovoLoader(im) {
     for (const child of qa(copy, '[kovo-nav-segment]')) child.remove();
     return copy.outerHTML;
   };
+  const di = (root) => {
+    const ids = new Set();
+    const add = (el) => {
+      const id = el.id || el.getAttribute?.('id');
+      if (id) ids.add(id);
+    };
+    add(root);
+    for (const el of qa(root, '[id]')) add(el);
+    return ids;
+  };
+  const pi = (segments, end) => {
+    const ids = new Set();
+    for (let i = 0; i < end; i += 1) {
+      const copy = segments[i].cloneNode(true);
+      for (const child of qa(copy, '[kovo-nav-segment]')) child.remove();
+      for (const id of di(copy)) ids.add(id);
+    }
+    return ids;
+  };
+  const dc = (preserved, next) => {
+    for (const id of di(next)) if (preserved.has(id)) return true;
+    return false;
+  };
   const ng = (href) => {
     if (location.assign) location.assign(href);
     else location.href = href;
@@ -294,6 +317,7 @@ function installInlineKovoLoader(im) {
         doc.body.replaceWith(nextDoc.body);
         triggerRoot = doc.body;
       } else if (index < currentSegments.length && index < nextSegments.length) {
+        if (dc(pi(currentSegments, index), nextSegments[index])) throw Error();
         for (const el of qa(currentSegments[index], '[kovo-c]')) el.a?.abort();
         m(currentSegments[index], nextSegments[index]);
         triggerRoot = currentSegments[index];
