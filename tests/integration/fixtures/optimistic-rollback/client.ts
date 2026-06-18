@@ -9,7 +9,7 @@ import {
   keyedDomMorph,
   OptimisticRebaser,
   submitOptimisticEnhancedMutation,
-} from '@kovojs/runtime';
+} from '@kovojs/runtime/client';
 
 type CartSummary = Record<string, unknown> & {
   count: number;

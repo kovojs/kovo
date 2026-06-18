@@ -108,7 +108,7 @@ import {
   applyDeferredStreamResponseToRuntime,
   createQueryStore,
   installKovoLoader,
-} from '@kovojs/runtime';
+} from '@kovojs/runtime/client';
 
 const store = createQueryStore();
 installKovoLoader({ importModule: (s) => import(s), root: document, queryStore: store });

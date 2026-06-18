@@ -148,7 +148,7 @@ describe('@kovojs/test starter template fixtures', () => {
 
   it('executes the starter browser client template and records loader behavior', async () => {
     const fixture = await executeStarterClientTemplate(`
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime/client';
 
 const store = createQueryStore();
 const queryPlans = {};
@@ -222,7 +222,7 @@ export function applyKovoDeferredStreamResponse(body) {
   it('projects starter browser client behavior into kovo-check facts', async () => {
     await expect(
       starterClientTemplateBehaviorFact(`
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime/client';
 
 const store = createQueryStore();
 const queryPlans = {};
@@ -379,7 +379,7 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
     };
     const appSource = 'export const App = component({ render: () => <main /> });';
     const clientSource = `
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime/client';
 
 const store = createQueryStore();
 const queryPlans = {};

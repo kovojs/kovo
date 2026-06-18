@@ -747,7 +747,7 @@ tsconfig.json --noEmit --pretty false`.
     `packages/cli/src/index.ts` still imports compiler internals. The remaining
     work is to bundle or otherwise internalize the CLI/compiler relationship
     before the package itself can become fully private.
-- [ ] **Shrink `@kovojs/runtime` root to hand-authored app APIs.**
+- [x] **Shrink `@kovojs/runtime` root to hand-authored app APIs.**
   - Move generated/runtime machinery behind `@kovojs/runtime/generated` or an
     internal subpath: deferred stream apply, compiled query update plan apply,
     query/state binding apply, fragment/morph apply, inline query hydration,
@@ -759,12 +759,27 @@ tsconfig.json --noEmit --pretty false`.
     `tempId`, optimistic authoring helpers/types, and `trustedHtml`/`TrustedHtml`
     if their public use case is documented.
   - Evidence:
-    - Audit 2026-06-18: implementation is broader than a low-conflict
-      runtime-only slice. `packages/runtime/package.json` already exports
-      `./generated`, and compiler emitters already target
-      `@kovojs/runtime/generated`, but `packages/runtime/src/index.ts` still
-      root-exports loader/query/morph/mutation machinery that app-facing starter
-      and fixture clients import from `@kovojs/runtime`.
+    - Slice 2026-06-18: `packages/runtime/src/index.ts` root-exports only
+      value primitives `derive`, `handler`, `tempId`, and `trustedHtml`, plus
+      their public type closure (`DeriveDefinition`, `ClientHandler`,
+      `ImportHandlerModule`, `HandlerContext`, `ElementParamValue`,
+      `TrustedHtml`, `BrowserTrustedHTML`, and optimistic authoring types).
+      `packages/runtime/src/index-exports.test.ts` pins the root value key set
+      and negative checks for `installKovoLoader`, `createQueryStore`,
+      `applyCompiledQueryUpdatePlan`, `applyDeferredStreamResponseToRuntime`,
+      inline-loader helpers, and generated `kovo*` output helpers.
+    - Long-term subpath decision: app-owned browser entry files import loader,
+      query-store, morph, mutation-submit, query-binding, pending, and client
+      lifecycle machinery from the public `@kovojs/runtime/client` subpath.
+      Generated modules continue to import the emitted ABI from
+      `@kovojs/runtime/generated`, while server/framework-only support imports
+      use narrow internal subpaths:
+      `@kovojs/runtime/internal/inline-loader`,
+      `@kovojs/runtime/internal/output`,
+      `@kovojs/runtime/internal/mutation`, and
+      `@kovojs/runtime/internal/delegation`. This avoids making app-authored
+      starter clients depend on generated/internal subpaths, which
+      `scripts/import-boundary.mjs` correctly treats as non-public.
     - Proposed root allow-list: `derive`, `DeriveDefinition`, `handler`,
       `ClientHandler`, `HandlerContext`, `ElementParamValue`, `trustedHtml`,
       `TrustedHtml`, `BrowserTrustedHTML`, `tempId`, `OptimisticFor`,
@@ -772,26 +787,33 @@ tsconfig.json --noEmit --pretty false`.
       `OptimisticQueryKey`, `OptimisticChange`, and `MutationChangeRecord`.
       `OptimisticPlan` needs the listed optimistic helper types to keep the
       transitive public type closure valid under `rules/api-surface.md`.
-    - Consumer blockers to resolve in the implementation slice:
-      `packages/create-kovo/templates/src/client.ts` imports
-      `applyDeferredStreamResponseToRuntime`, `createQueryStore`,
-      `DomMorphTarget`, `installKovoLoader`, `EnhancedMutationFetch`,
-      `MorphRoot`, and `TargetCollectorRoot` from the root; integration fixtures
-      under `tests/integration/fixtures/*/client.ts` import loader/query/binding
-      runtime helpers from the root; `packages/conformance-fixtures` tests embed
-      root imports for generated-module and starter-template fixtures;
-      `packages/server/src/document-core.ts` imports `kovoLoaderSource` from the
-      root; `packages/server/src/jsx-runtime.ts` imports `kovoStyleProperty` and
-      `kovoTrustedHtmlContent` from the root; docs currently show root imports
-      for loader internals in `site/content/guides/streaming.md`,
-      `site/content/guides/optimistic.md`, and `docs/integration-testing.md`.
-    - Risk: moving starter/template imports to `@kovojs/runtime/generated` may
-      conflict with `SPEC.md` §1.1 public import expectations and
-      `scripts/import-boundary.mjs`, which treats generated subpaths as
-      non-public in app-facing source. The next slice should first choose
-      whether starter client setup remains an app-authored public runtime
-      surface, becomes compiler-emitted, or gets a narrowly documented public
-      loader subpath distinct from the generated ABI.
+    - Consumer migration evidence: `packages/create-kovo/templates/src/client.ts`,
+      `tests/integration/fixtures/*/client.ts`,
+      `packages/conformance-fixtures` generated/starter fixtures,
+      `examples/gallery/src/interactive-gallery-browser-fixtures.ts`,
+      `examples/commerce/src/app-test-helpers.ts`,
+      `packages/server/src/document-core.ts`,
+      `packages/server/src/jsx-runtime.ts`, `site/content/guides/streaming.md`,
+      `site/content/guides/optimistic.md`, and `docs/integration-testing.md`
+      no longer import loader/query/morph/mutation machinery from the root.
+      `rg -n "from ['\"]@kovojs/runtime['\"]" packages examples site docs tests`
+      now reports only authoring primitives (`trustedHtml`, `tempId`) and
+      optimistic authoring types/import strings.
+    - Verification: `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `corepack pnpm exec vitest --run packages/runtime/src` (76 files,
+      421 tests); `corepack pnpm exec vitest --config vitest.browser.config.ts
+      --run packages/runtime/src --api 63383` (24 files, 108 browser tests);
+      `corepack pnpm exec vitest --run
+      packages/conformance-fixtures/src/generated-module-fixtures.test.ts
+      packages/conformance-fixtures/src/starter-template-fixtures.test.ts
+      packages/conformance-fixtures/src/server-fixtures.test.ts`;
+      `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs
+      site/scripts/api-examples-check.test.mjs scripts/public-packages.test.mjs
+      scripts/exported-symbols.test.mjs`; `corepack pnpm run check:imports`;
+      `node scripts/api-surface-gate.mjs`; `corepack pnpm run check:exports`;
+      `node site/scripts/api-ref.mjs && node site/scripts/api-examples-check.mjs`
+      (`api-ref/v1 packages=8 exports=644 documented=445`,
+      `api-examples/v1 examples=42 OK`); `node scripts/build-publish.mjs`.
 - [x] **Shrink `@kovojs/core` to app declaration primitives.**
   - Review and likely internalize diagnostics metadata, registry types, query
     delta helpers/types, and fragment-target helpers if they are compiler/server

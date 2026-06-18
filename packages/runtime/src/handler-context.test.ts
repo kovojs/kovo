@@ -12,7 +12,7 @@ import {
   readElementParams as readElementParamsFromBarrel,
   readElementState as readElementStateFromBarrel,
   writeElementState as writeElementStateFromBarrel,
-} from './index.js';
+} from './client.js';
 import type { EventElementLike } from './events.js';
 
 class FakeElement implements EventElementLike {

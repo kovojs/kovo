@@ -28,7 +28,7 @@ export type QuerySnapshot = Map<string, unknown>;
  *
  * @returns A fresh `QueryStore`.
  * @example
- * import { createQueryStore } from '@kovojs/runtime';
+ * import { createQueryStore } from '@kovojs/runtime/client';
  *
  * const store = createQueryStore();
  * store.set('cart', { count: 1 });

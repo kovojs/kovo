@@ -5,7 +5,7 @@ import {
   createQueryStore,
   DomMorphRoot,
   keyedDomMorph,
-} from './index.js';
+} from './client.js';
 
 afterEach(() => {
   document.body.replaceChildren();

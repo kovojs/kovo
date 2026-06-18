@@ -15,6 +15,7 @@ export const inlineSourceInstallCases: readonly [string, InlineSourceInstall][] 
   [
     'readable build source',
     (importModule, globalRecord) => {
+      installDefaultLocation(globalRecord);
       globalRecord.__kovoInlineImport = importModule;
       runInThisContext(
         `(${inlineKovoLoaderInstallerReadableSource})(globalThis.__kovoInlineImport);`,
@@ -24,6 +25,7 @@ export const inlineSourceInstallCases: readonly [string, InlineSourceInstall][] 
   [
     'freshly minified build source',
     (importModule, globalRecord) => {
+      installDefaultLocation(globalRecord);
       globalRecord.__kovoInlineImport = importModule;
       runInThisContext(
         `(${buildInlineKovoLoaderInstallerSource()})(globalThis.__kovoInlineImport);`,
@@ -33,12 +35,31 @@ export const inlineSourceInstallCases: readonly [string, InlineSourceInstall][] 
   [
     'generated bootstrap source',
     (importModule, globalRecord) => {
+      installDefaultLocation(globalRecord);
       globalRecord.__kovoInlineImport = importModule;
       runInThisContext(createInlineKovoLoaderSource('globalThis.__kovoInlineImport'));
     },
   ],
-  ['extracted installer source', (importModule) => installInlineKovoLoader(importModule)],
+  [
+    'extracted installer source',
+    (importModule, globalRecord) => {
+      installDefaultLocation(globalRecord);
+      installInlineKovoLoader(importModule);
+    },
+  ],
 ] as const;
+
+function installDefaultLocation(globalRecord: Record<string, unknown>): void {
+  if (globalRecord.location !== undefined) return;
+
+  globalRecord.location = {
+    hash: '',
+    href: 'https://kovo.test/',
+    origin: 'https://kovo.test',
+    pathname: '/',
+    search: '',
+  };
+}
 
 export async function dispatchInlineDelegatedClick(
   element: unknown,

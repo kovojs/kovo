@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { installKovoLoader as installKovoLoaderFromBarrel } from './index.js';
+import { installKovoLoader as installKovoLoaderFromBarrel } from './client.js';
 import { installKovoLoader } from './loader.js';
 import { FakeElement, FakeRoot } from './runtime-test-fakes.js';
 

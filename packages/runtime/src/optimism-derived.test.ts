@@ -1,7 +1,7 @@
 import { applyPatchProgram, type PatchProgram } from '@kovojs/core/internal/derivation';
 import { describe, expect, it } from 'vitest';
 
-import { createQueryStore } from './index.js';
+import { createQueryStore } from './client.js';
 import { OptimisticRebaser, type OptimisticTransform } from './optimism.js';
 
 // SPEC.md §10.4/§10.5 Phase 4: derived transforms are plain OptimisticTransforms

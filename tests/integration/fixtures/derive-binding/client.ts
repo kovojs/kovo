@@ -2,7 +2,7 @@ import {
   applyInlineQueryEventToRuntime,
   createQueryStore,
   type InlineQueryEvent,
-} from '@kovojs/runtime';
+} from '@kovojs/runtime/client';
 
 declare global {
   interface Window {

@@ -4,7 +4,7 @@ import {
   createQueryStore,
   submitEnhancedMutation,
   type EnhancedMutationFetchOptions,
-} from './index.js';
+} from './client.js';
 import { inlineSourceInstallCases, InlineParityRoot } from './inline-loader-test-utils.js';
 
 describe('inline loader enhanced submit source', () => {

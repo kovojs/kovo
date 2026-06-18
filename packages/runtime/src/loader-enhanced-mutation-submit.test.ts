@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installKovoLoader, type EnhancedMutationFetchOptions } from './index.js';
+import { createQueryStore, installKovoLoader, type EnhancedMutationFetchOptions } from './client.js';
 import {
   FakeElement,
   FakeFormElement,

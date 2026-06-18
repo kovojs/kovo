@@ -5,7 +5,7 @@ import {
   installMutationBroadcast,
   submitEnhancedMutation,
   type EnhancedMutationFetchOptions,
-} from './index.js';
+} from './client.js';
 import {
   FakeBroadcastChannel,
   FakeMorphRoot,

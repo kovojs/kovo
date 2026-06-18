@@ -6,7 +6,7 @@ import {
   type EnhancedMutationFetch,
   type MorphRoot,
   type TargetCollectorRoot,
-} from '@kovojs/runtime';
+} from '@kovojs/runtime/client';
 
 declare global {
   interface Window {

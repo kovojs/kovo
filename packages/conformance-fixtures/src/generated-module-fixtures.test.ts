@@ -220,7 +220,7 @@ describe('@kovojs/test generated module fixtures', () => {
   it('executes generated client modules through explicit runtime bindings', () => {
     const exports = executeGeneratedClientModule(
       `
-import { derive, handler } from '@kovojs/runtime';
+import { derive, handler } from '@kovojs/runtime/generated';
 export const Cart$isEmpty = derive(['cart'], (cart) => cart.count === 0);
 export const Cart$click = handler((event, ctx) => ctx.value + event.delta);
 `,
@@ -252,7 +252,7 @@ export const Cart$click = handler((event, ctx) => ctx.value + event.delta);
         {
           kind: 'client',
           source: `
-import { handler } from '@kovojs/runtime';
+import { handler } from '@kovojs/runtime/generated';
 export const Cart$click = handler((_event, ctx) => ctx.value);
 `,
         },
@@ -803,7 +803,7 @@ export function renderSource() {
         {
           emitQueryPlanBootstrapModule: () => ({
             source: `
-import { installKovoLoader, createQueryStore, applyDeferredStreamResponseToRuntime } from '@kovojs/runtime';
+import { installKovoLoader, createQueryStore, applyDeferredStreamResponseToRuntime } from '@kovojs/runtime/generated';
 import { CartBadge$queryUpdatePlans } from '../components/cart-badge.client.js';
 const queryStore = createQueryStore();
 installKovoLoader({ queryStore, enhancedMutations: { queryPlans: CartBadge$queryUpdatePlans, store: queryStore } });
@@ -1016,7 +1016,7 @@ export function applyKovoDeferredStreamResponse(body, options) {
     };
     const fixture = executeGeneratedBootstrapModule(
       `
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime/generated';
 import { Cart$queryUpdatePlans } from '../components/cart.client.js';
 const queryStore = createQueryStore();
 installKovoLoader({ enhancedMutations: { queryPlans: Cart$queryUpdatePlans, store: queryStore }, queryStore });

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { applyDeferredStreamResponseToRuntime as applyDeferredStreamResponseToRuntimeFromDeferredModule } from './apply-deferred-stream.js';
-import { applyDeferredStreamResponseToRuntime, createQueryStore } from './index.js';
+import { applyDeferredStreamResponseToRuntime, createQueryStore } from './client.js';
 import {
   FakeMorphRoot,
   FakeMorphTarget,

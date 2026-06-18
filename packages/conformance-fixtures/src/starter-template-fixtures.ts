@@ -707,7 +707,7 @@ export async function executeStarterClientTemplate(
     },
     module,
     require(specifier: string) {
-      if (specifier === '@kovojs/runtime') return runtime;
+      if (specifier === '@kovojs/runtime/client') return runtime;
       assert.fail(`unexpected starter client import ${specifier}`);
     },
   });

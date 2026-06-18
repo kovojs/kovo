@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { stampPendingQueries as stampPendingQueriesFromIndex } from './index.js';
+import { stampPendingQueries as stampPendingQueriesFromIndex } from './client.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import { FakePendingElement, FakePendingRoot } from './runtime-test-fakes.js';
 

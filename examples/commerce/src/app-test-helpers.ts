@@ -1,5 +1,5 @@
 import { enhancedMutationHeaders, headerValues, setCookieValues } from '@kovojs/test/headers';
-import { type StructuralMorphNode } from '@kovojs/runtime';
+import { type StructuralMorphNode } from '@kovojs/runtime/client';
 import { csrfToken } from '@kovojs/server';
 import { htmlFormFacts, htmlFormFieldsByName } from '@kovojs/test/html-fragment';
 import { eq } from 'drizzle-orm';

@@ -133,15 +133,10 @@ in flight, the runtime morphs the authoritative value in, then re-applies the st
 transforms in order. This rebase is safe because transforms are pure `(data, input)` functions:
 
 ```ts
-// what the loader does, in @kovojs/runtime terms
-import { OptimisticRebaser, createQueryStore } from '@kovojs/runtime';
-
-const store = createQueryStore();
-const rebaser = new OptimisticRebaser(store);
-
-rebaser.add('m1', { productId: 'p1', quantity: 2 }, addToCartOptimistic); // predict
-rebaser.applyServerTruth('cart', { count: 7 }); // morph truth in, re-apply pending
-rebaser.settle('m1'); // m1's response landed
+// Conceptually, the loader keeps a per-query pending-transform log.
+pending.add('m1', { productId: 'p1', quantity: 2 }, addToCartOptimistic); // predict
+pending.applyServerTruth('cart', { count: 7 }); // morph truth in, re-apply pending
+pending.settle('m1'); // m1's response landed
 ```
 
 Navigation reconciles for free: in-flight mutations complete via `keepalive`, and the pending log

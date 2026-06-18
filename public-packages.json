@@ -75,14 +75,31 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": ["."],
+        "public": [".", "./client"],
         "generated": ["./generated"],
-        "internal": []
+        "internal": [
+          "./internal/delegation",
+          "./internal/inline-loader",
+          "./internal/mutation",
+          "./internal/output"
+        ]
       },
       "apiRef": {
         "order": 3,
         "slug": "runtime",
-        "description": "Client runtime: the Kovo loader, delegated events, island signals, morphing, the query store, and optimistic mutations."
+        "description": "Client runtime: app-authored derives, handlers, trusted HTML, and optimistic authoring helpers.",
+        "entries": [
+          {
+            "path": ".",
+            "slug": "runtime",
+            "description": "App-authored derives, handlers, trusted HTML, and optimistic authoring helpers."
+          },
+          {
+            "path": "./client",
+            "slug": "runtime-client",
+            "description": "Browser bootstrap helpers for installing Kovo's client loader in app-owned entry files."
+          }
+        ]
       }
     },
     {

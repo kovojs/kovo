@@ -3,7 +3,7 @@ import {
   createQueryStore,
   DomMorphRoot,
   keyedDomMorph,
-} from '@kovojs/runtime';
+} from '@kovojs/runtime/client';
 
 const store = createQueryStore();
 const fixtureGlobal = globalThis as typeof globalThis & {

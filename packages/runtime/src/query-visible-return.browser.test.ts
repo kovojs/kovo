@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installKovoLoader } from './index.js';
+import { createQueryStore, installKovoLoader } from './client.js';
 
 afterEach(() => {
   document.body.replaceChildren();

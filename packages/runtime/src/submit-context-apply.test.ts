@@ -5,7 +5,7 @@ import {
   createQueryStore,
   createSubmitContext,
   type EnhancedMutationFetchOptions,
-} from './index.js';
+} from './client.js';
 import { createSubmitContext as createSubmitContextFromSubmitContextModule } from './submit-context.js';
 import {
   FakeMorphRoot,

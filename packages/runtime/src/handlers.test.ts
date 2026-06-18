@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import * as runtime from './index.js';
+import * as runtime from './client.js';
 import { dispatchDelegatedEvent } from './handlers.js';
 import { FakeElement, FakeStatefulBindingElement } from './runtime-test-fakes.js';
 

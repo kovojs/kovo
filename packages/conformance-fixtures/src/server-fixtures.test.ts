@@ -25,7 +25,8 @@ import {
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
 } from '@kovojs/server/internal/wire';
-import { createQueryStore, submitEnhancedMutation } from '@kovojs/runtime';
+import { createQueryStore } from '@kovojs/runtime/client';
+import { submitEnhancedMutation } from '@kovojs/runtime/internal/mutation';
 
 import {
   serverCommerceAdoptDontInventBehaviorFact,

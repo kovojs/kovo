@@ -8,7 +8,7 @@ import type {
   JsonValue,
 } from '@kovojs/core';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
-import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/runtime';
+import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/runtime/internal/output';
 
 import { componentMutationFailureSlots } from './component-render.js';
 import { csrfField, type CsrfValidationOptions } from './csrf.js';

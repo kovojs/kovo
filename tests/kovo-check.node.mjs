@@ -39,12 +39,9 @@ import {
   applyCompiledQueryUpdatePlan,
   applyDeferredStreamResponseToRuntime,
   createQueryStore,
-  derive,
   DomMorphTarget,
   installPagehideOptimismCleanup,
   installKovoLoader,
-  kovoEscapeHtml,
-  kovoLoaderSource,
   morphStructuralTree,
   OptimisticRebaser,
   readElementParams,
@@ -52,7 +49,10 @@ import {
   stampPendingQueries,
   submitEnhancedMutation,
   submitOptimisticEnhancedMutation,
-} from '../dist/runtime/src/index.mjs';
+} from '../dist/runtime/src/client.mjs';
+import { derive } from '../dist/runtime/src/index.mjs';
+import { kovoEscapeHtml } from '../dist/runtime/src/generated.mjs';
+import { kovoLoaderSource } from '../dist/runtime/src/internal/inline-loader.mjs';
 import { createDbVerifier, createKovoTestHarness } from '../dist/test/src/index.mjs';
 import {
   browserSuiteAcceptanceProjectFact,

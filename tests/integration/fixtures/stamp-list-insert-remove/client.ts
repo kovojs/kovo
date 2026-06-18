@@ -2,7 +2,7 @@ import {
   createQueryStore,
   installInlineQueryEventHydration,
   type CompiledQueryUpdatePlans,
-} from '@kovojs/runtime';
+} from '@kovojs/runtime/client';
 
 interface CartItem {
   id: string;

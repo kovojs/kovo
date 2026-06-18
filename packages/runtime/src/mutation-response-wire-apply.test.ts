@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
-import { createQueryStore } from './index.js';
+import { createQueryStore } from './client.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 describe('parsed mutation response wire apply', () => {

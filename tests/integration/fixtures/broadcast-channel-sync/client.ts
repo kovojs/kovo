@@ -9,7 +9,7 @@ import {
   type MorphRoot,
   submitEnhancedMutation,
   type TargetCollectorRoot,
-} from '@kovojs/runtime';
+} from '@kovojs/runtime/client';
 
 declare global {
   interface Window {

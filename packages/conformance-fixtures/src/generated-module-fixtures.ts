@@ -620,7 +620,7 @@ export function generatedHandlerReferenceSummaryFact(
 
 const rewriteGeneratedRuntimeImports = (source: string): string =>
   source.replace(
-    /import\s+\{([^}]+)\}\s+from\s+['"]@kovojs\/runtime['"];\n?/g,
+    /import\s+\{([^}]+)\}\s+from\s+['"]@kovojs\/runtime(?:\/generated)?['"];\n?/g,
     (_match, names: string) => {
       const bindings = names
         .split(',')

@@ -384,7 +384,7 @@ function manyRoutesRegistriesCorpus(): CompilerPerfCorpus {
         registryFacts: { routes },
         source: `
 import { component } from '@kovojs/core';
-import { Link } from '@kovojs/runtime';
+import { Link } from '@kovojs/core';
 
 export const RouteCard${index} = component({
   render: () => (
@@ -483,7 +483,7 @@ function mixedRealAppCorpus(): CompilerPerfCorpus {
       registryFacts: { queries: { account: 'AccountQuery', report: 'ReportQuery' }, routes },
       source: `
 import { component } from '@kovojs/core';
-import { Link } from '@kovojs/runtime';
+import { Link } from '@kovojs/core';
 
 export const Dashboard${index} = component({
   disableServerRefresh: ${index % 2 !== 0},

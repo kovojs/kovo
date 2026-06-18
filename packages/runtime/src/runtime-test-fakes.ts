@@ -1,4 +1,4 @@
-import type { DelegatedEvent, EventElementLike } from './index.js';
+import type { DelegatedEvent, EventElementLike } from './client.js';
 
 export class FakeRoot {
   bindings: FakeQueryBindingElement[] = [];

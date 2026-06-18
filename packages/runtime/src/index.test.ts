@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { installKovoLoader } from './index.js';
+import { installKovoLoader } from './client.js';
 import { FakeRoot } from './runtime-test-fakes.js';
 
 describe('runtime barrel loader smoke', () => {

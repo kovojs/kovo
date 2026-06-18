@@ -7,7 +7,7 @@ import {
   inlineKovoLoaderGzipByteBudget,
 } from './inline-loader-build.js';
 import { inlineKovoLoaderInstallerSource, kovoLoaderSource } from './inline-loader.js';
-import { createInlineKovoLoaderSource as createPublicInlineKovoLoaderSource } from './index.js';
+import { createInlineKovoLoaderSource as createPublicInlineKovoLoaderSource } from './internal/inline-loader.js';
 
 describe('inline loader minified artifact', () => {
   it('wraps the extracted installer source as the public bootstrap source', () => {

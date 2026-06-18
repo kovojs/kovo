@@ -3,7 +3,7 @@ import { gzipSync } from 'node:zlib';
 
 import { compileComponentModule } from '../../dist/compiler/src/index.mjs';
 import { kovoExplain } from '../../dist/cli/src/index.mjs';
-import { kovoLoaderSource } from '../../dist/runtime/src/index.mjs';
+import { kovoLoaderSource } from '../../dist/runtime/src/internal/inline-loader.mjs';
 
 /**
  * Artifact-capture harness (plan W3). Every landing/docs visual is regenerated

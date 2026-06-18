@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { kovoLoaderSource } from '@kovojs/runtime';
+import { kovoLoaderSource } from '@kovojs/runtime/internal/inline-loader';
 
 import { cspSha256, renderContentSecurityPolicy } from './csp.js';
 import {

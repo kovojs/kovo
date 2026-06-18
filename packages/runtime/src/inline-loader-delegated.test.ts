@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { dispatchDelegatedEvent } from './index.js';
+import { dispatchDelegatedEvent } from './client.js';
 import {
   dispatchInlineDelegatedClick,
   inlineSourceInstallCases,

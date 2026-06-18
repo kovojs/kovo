@@ -4,7 +4,7 @@ import {
   applyMutationResponseBodyToRuntime,
   applyMutationResponseChunksToRuntime,
 } from './apply-mutation-response.js';
-import { createQueryStore } from './index.js';
+import { createQueryStore } from './client.js';
 import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 

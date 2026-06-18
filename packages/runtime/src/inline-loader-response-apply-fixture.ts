@@ -1,5 +1,5 @@
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
-import { createQueryStore } from './index.js';
+import { createQueryStore } from './client.js';
 import type { InlineSourceInstall } from './inline-loader-test-utils.js';
 import { applyInlineQueryEventToRuntime } from './query-events.js';
 import type { InlineQueryEvent } from './query-events.js';

@@ -10,7 +10,7 @@ import {
   OptimisticRebaser,
   stampPendingQueries,
   submitOptimisticEnhancedMutation,
-} from '@kovojs/runtime';
+} from '@kovojs/runtime/client';
 
 type NavCounter = Record<string, unknown> & {
   value: number;
