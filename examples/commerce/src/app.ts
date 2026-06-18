@@ -441,7 +441,6 @@ export const addToCart = mutation('cart/add', {
   ),
   registry: {
     inferredTouches: commerceTouchGraph['cart.addItem'].touches,
-    queries: [cartQuery, productGridQuery, orderHistoryQuery],
   },
   transaction(request: CommerceRequest, run) {
     return request.db.transaction((tx) => run({ ...request, db: tx as unknown as CommerceDb }));
@@ -531,7 +530,6 @@ export const uploadReceipt = mutation('order/receipt', {
   ),
   registry: {
     inferredTouches: commerceTouchGraph['order.receipt'].touches,
-    queries: [cartQuery, productGridQuery, orderHistoryQuery],
   },
   async handler(input: UploadReceiptInput, request: CommerceRequest) {
     const currentSession = commerceSession.parse(request);

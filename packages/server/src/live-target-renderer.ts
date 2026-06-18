@@ -50,6 +50,7 @@ export function componentLiveTargetRenderer<
   return {
     component: options.componentId,
     queries: options.queries.map((binding) => binding.query.key),
+    queryDefinitions: options.queries.map((binding) => binding.query),
     async render(context) {
       const queries = await loadLiveTargetQueries(options.queries, context);
       const renderOptions = await componentLiveTargetRenderOptions(options, context);

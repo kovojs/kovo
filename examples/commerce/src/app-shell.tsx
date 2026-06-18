@@ -18,7 +18,6 @@ import { eq } from 'drizzle-orm';
 import {
   addToCart,
   attachmentDownloadRoute,
-  cartQuery,
   commerceAdminRoute,
   commerceAuthCsrf,
   commerceMessages,
@@ -28,9 +27,7 @@ import {
   commerceStylesheets,
   createCommerceDb,
   orderCsvRoute,
-  orderHistoryQuery,
   paymentWebhook,
-  productGridQuery,
   renderAddToCartMutationFailureError,
   renderAddToCartMutationFailureForm,
   renderCartPage,
@@ -269,7 +266,6 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
     },
     mutations: [addToCart, commerceSignIn, commerceSignOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
-    queries: [cartQuery, productGridQuery, orderHistoryQuery],
     renderRoute(value, context) {
       if (context.route === commerceAdminRoute) return `<main>${routeValueToHtml(value)}</main>`;
       return routeValueToHtml(value);

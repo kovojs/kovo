@@ -693,14 +693,16 @@ export async function renderMutationEndpointResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   endpointRequest: MutationEndpointRequest<Request, Value>,
 ): Promise<MutationEndpointResponse> {
+  const liveTargetRenderers =
+    endpointRequest.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers<Request>();
+  const endpointDefinition = mutationWithLiveTargetQueries(definition, liveTargetRenderers);
   const wireRequest = mutationWireRequestFromHeaders({
     ...endpointRequest,
-    liveTargetRenderers:
-      endpointRequest.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers(),
+    liveTargetRenderers,
   });
-  if (wireRequest.fragment) return renderMutationResponse(definition, wireRequest);
+  if (wireRequest.fragment) return renderMutationResponse(endpointDefinition, wireRequest);
 
-  return renderNoJsMutationResponse(definition, {
+  return renderNoJsMutationResponse(endpointDefinition, {
     ...(endpointRequest.csrf === undefined ? {} : { csrf: endpointRequest.csrf }),
     rawInput: endpointRequest.rawInput,
     redirectTo: endpointRequest.redirectTo,
@@ -714,6 +716,47 @@ export async function renderMutationEndpointResponse<
       ? {}
       : { sessionProvider: endpointRequest.sessionProvider }),
   });
+}
+
+function mutationWithLiveTargetQueries<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  renderers: readonly LiveTargetRenderer<Request>[],
+): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> {
+  const queries = renderers.flatMap((renderer) => renderer.queryDefinitions ?? []);
+  if (queries.length === 0) return definition;
+
+  return {
+    ...definition,
+    registry: mergeMutationRegistryQueries(definition.registry, queries),
+  };
+}
+
+function mergeMutationRegistryQueries(
+  registry: MutationRegistry | undefined,
+  queries: readonly RegisteredQueryDefinition[],
+): MutationRegistry {
+  const queriesByKey = new Map<string, RegisteredQueryDefinition>();
+
+  for (const queryDefinition of registry?.queries ?? []) {
+    queriesByKey.set(queryDefinition.key, queryDefinition);
+  }
+  for (const queryDefinition of queries) {
+    if (!queriesByKey.has(queryDefinition.key)) {
+      queriesByKey.set(queryDefinition.key, queryDefinition);
+    }
+  }
+
+  return {
+    ...(registry ?? {}),
+    queries: [...queriesByKey.values()],
+  };
 }
 
 /**

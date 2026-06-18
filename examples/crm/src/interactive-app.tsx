@@ -11,7 +11,7 @@ import { CrmShell } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
 import { addContact, closeDeal, createDeal, moveDeal, type CrmRequest } from './mutations.js';
-import { contactListQuery, crmQueries } from './queries.js';
+import { contactListQuery } from './queries.js';
 
 // SPEC.md §9.1/§9.5: the CRM example as a FULLY INTERACTIVE Kovo app. It
 // registers the addContact / createDeal / moveDeal / closeDeal mutations and
@@ -113,7 +113,6 @@ export async function buildCrmInteractiveApp(
           ),
       }),
     },
-    queries: crmQueries,
     routes: [
       route('/', {
         meta: {

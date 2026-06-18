@@ -27,6 +27,9 @@ export type {
   KovoApp,
   RequestHandler,
 } from './app-types.js';
+import type { LiveTargetRenderer } from './mutation-wire.js';
+import type { QueryDefinition } from './query.js';
+import type { LayoutDeclaration } from './route.js';
 import type {
   AppAuthoringContext,
   AppAuthoringDeclarations,
@@ -67,7 +70,12 @@ export function createApp<
 > {
   const authoringContext = appAuthoringContext<AppRequest>();
   const routes = resolveAppAuthoringDeclarations(options.routes, authoringContext);
-  const queries = resolveAppAuthoringDeclarations(options.queries, authoringContext);
+  const liveTargetRenderers = options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers();
+  const queries = appQueryRegistry(
+    resolveAppAuthoringDeclarations(options.queries, authoringContext),
+    liveTargetRendererQueries(liveTargetRenderers),
+    routeLayoutQueries(routes),
+  );
   const mutations = resolveAppAuthoringDeclarations(options.mutations, authoringContext);
 
   return {
@@ -76,7 +84,7 @@ export function createApp<
     document: options.document ?? {},
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},
-    liveTargetRenderers: options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers(),
+    liveTargetRenderers,
     mutations,
     queries,
     routes,
@@ -127,4 +135,64 @@ function resolveAppAuthoringDeclarations<Declaration, AppRequest>(
   return typeof declarations === 'function'
     ? (declarations(context) as readonly Declaration[])
     : declarations;
+}
+
+function appQueryRegistry<Request>(
+  ...groups: readonly (readonly QueryDefinition<string, unknown, unknown, Request>[])[]
+): readonly QueryDefinition<string, unknown, unknown, Request>[] {
+  const queries = new Map<string, QueryDefinition<string, unknown, unknown, Request>>();
+
+  for (const group of groups) {
+    for (const queryDefinition of group) {
+      if (!queries.has(queryDefinition.key)) {
+        queries.set(queryDefinition.key, queryDefinition);
+      }
+    }
+  }
+
+  return [...queries.values()];
+}
+
+function liveTargetRendererQueries<Request>(
+  renderers: readonly LiveTargetRenderer<Request>[],
+): readonly QueryDefinition<string, unknown, unknown, Request>[] {
+  return renderers.flatMap((renderer) => renderer.queryDefinitions ?? []);
+}
+
+function routeLayoutQueries<Request>(
+  routes: readonly { layout?: LayoutDeclaration<any, any, any> }[],
+): readonly QueryDefinition<string, unknown, unknown, Request>[] {
+  const queries: QueryDefinition<string, unknown, unknown, Request>[] = [];
+
+  for (const routeDeclaration of routes) {
+    for (const layoutDeclaration of layoutChain(routeDeclaration.layout)) {
+      queries.push(
+        ...Object.values(layoutDeclaration.queries ?? {}).map(
+          (queryDefinition) =>
+            queryDefinition as QueryDefinition<string, unknown, unknown, Request>,
+        ),
+      );
+    }
+  }
+
+  return queries;
+}
+
+function layoutChain(
+  layoutDeclaration: LayoutDeclaration<any, any, any> | undefined,
+): LayoutDeclaration<any, any, any>[] {
+  const chain: LayoutDeclaration<any, any, any>[] = [];
+  const seen = new Set<LayoutDeclaration<any, any, any>>();
+  let current = layoutDeclaration;
+
+  while (current) {
+    if (seen.has(current)) {
+      throw new Error('Cyclic route layout parent chain.');
+    }
+    seen.add(current);
+    chain.unshift(current);
+    current = current.parent;
+  }
+
+  return chain;
 }

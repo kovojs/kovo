@@ -368,11 +368,36 @@ item inherits from rather than re-deciding it:
     the derived registry (e.g. behind a dead branch) is reported by `kovo explain`,
     so "renders but won't refresh" is never silent.
   - Acceptance evidence:
-    - App shells, mutation registries, and `graph.ts` no longer carry manual query
-      arrays for route/component/layout queries.
-    - Enhanced mutation tests prove generated-registry queries are available for
-      affected-target selection; query-endpoint tests prove public query routes
-      still resolve.
+    - [x] Runtime app/query registry is derived from live-target renderer query
+      definitions and route layout query declarations. Evidence:
+      `packages/server/src/app.test.ts` covers explicit-query precedence plus
+      renderer/layout-derived query inclusion; `packages/server/src/live-target-renderer.test.tsx`
+      proves compiler-owned live-target renderers expose query definitions.
+    - [x] Standalone mutation endpoint rendering derives rerun query metadata from
+      live-target renderer query definitions, so direct helper paths no longer
+      need mutation-local query arrays. Evidence:
+      `packages/server/src/mutation.ts` merges live-target query definitions before
+      fragment/no-JS rendering; `pnpm exec vitest --run packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts`
+      passes.
+    - [x] Focused examples no longer hand-register app query arrays or Commerce
+      mutation `registry.queries` arrays. Evidence:
+      `rg -n "queries:\s*\[(cartQuery|questionList|questionScore|questionDetail|questionAnswers)|queries:\s*crmQueries|queries:\s*\[cartQuery|queries:\s*\[productGridQuery|queries:\s*\[orderHistoryQuery" examples/commerce/src examples/crm/src examples/stackoverflow/src --glob '!**/graph.ts'`
+      exits 1 with no hits; regenerated route artifacts also have no `queries: [...]`
+      app registry entries.
+    - [x] Enhanced mutation and public query endpoints still work without the
+      removed app-authored arrays. Evidence:
+      `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.add-to-cart.test.ts app.rendering.test.ts app.auth.test.ts`;
+      `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
+      `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`.
+    - [ ] App shells, mutation registries, and `graph.ts` no longer carry manual
+      query arrays for route/component/layout queries.
+      - Gap: runtime app-shell and mutation registry arrays are removed; `graph.ts`
+        and emit-script query-domain maps still need a compiler-derived graph
+        registry slice.
+    - [ ] Per-component generated live-target query key arrays are inferred from
+      component declarations rather than emitted as explicit generated metadata.
+      - Gap: `componentLiveTargetRenderer()` now exposes query definitions, but
+        generated artifacts still pass explicit query bindings into the helper.
 
 - [ ] **7. Retire static export from interactive examples (+ keep a fixture).**
   - Remove static export scripts/tests/docs refs and static-only page helpers from

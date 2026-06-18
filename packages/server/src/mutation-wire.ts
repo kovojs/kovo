@@ -2,6 +2,7 @@ import type { CsrfValidationOptions } from './csrf.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
+import type { RegisteredQueryDefinition } from './query.js';
 import type { MutationReplayStore } from './replay.js';
 import {
   readHeader,
@@ -96,6 +97,7 @@ export interface LiveTargetRenderer<Request = unknown> {
   component: string;
   errorBoundary?: ErrorBoundaryRenderer;
   queries?: readonly string[];
+  queryDefinitions?: readonly RegisteredQueryDefinition[];
   render(context: LiveTargetRenderContext<Request>): string | Promise<string>;
   stylesheets?: readonly (string | StylesheetAsset)[];
 }

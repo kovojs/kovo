@@ -56,6 +56,51 @@ describe('server createApp request shell', () => {
     expect(createApp({ liveTargetRenderers: [] }).liveTargetRenderers).toEqual([]);
   });
 
+  it('derives the app query registry from generated live target renderers and layouts', () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: () => ({ count: 1 }),
+      reads: [cart],
+    });
+    const explicitCartQuery = query('cart', {
+      load: () => ({ count: 2 }),
+      reads: [cart],
+    });
+    const productQuery = query('product', {
+      load: () => ({ id: 'p1' }),
+      reads: [],
+    });
+    const profileQuery = query('profile', {
+      load: () => ({ name: 'Ada' }),
+      reads: [],
+    });
+    const accountLayout = layout({
+      queries: { profile: profileQuery },
+      render: ({ profile }, _state, { children }) =>
+        `<main data-profile="${profile.name}">${children}</main>`,
+    });
+
+    const app = createApp({
+      liveTargetRenderers: [
+        {
+          component: 'components/cart/badge',
+          queries: ['cart', 'product'],
+          queryDefinitions: [cartQuery, productQuery],
+          render: () => '<cart-badge>1</cart-badge>',
+        },
+      ],
+      queries: [explicitCartQuery],
+      routes: [
+        route('/account', {
+          layout: accountLayout,
+          page: () => '<section>Account</section>',
+        }),
+      ],
+    });
+
+    expect(app.queries).toEqual([explicitCartQuery, productQuery, profileQuery]);
+  });
+
   it('rejects malformed compatibility shells before request dispatch', () => {
     const app = createApp({ routes: [route('/products/:id', {})] });
     const rawHandler = async () => new Response('<main>compat</main>');
@@ -553,7 +598,6 @@ describe('server createApp request shell', () => {
       csrf: false,
       input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
       registry: {
-        queries: [cartQuery],
         touches: [cart],
       },
       handler(input) {
@@ -566,6 +610,7 @@ describe('server createApp request shell', () => {
           {
             component: 'components/cart/badge',
             queries: ['cart'],
+            queryDefinitions: [cartQuery],
             render: () => '<cart-badge>1</cart-badge>',
           },
         ],

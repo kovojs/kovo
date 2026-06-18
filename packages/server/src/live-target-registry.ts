@@ -76,6 +76,9 @@ function isLiveTargetRenderer<Request>(value: unknown): value is LiveTargetRende
     typeof candidate.render === 'function' &&
     (candidate.queries === undefined ||
       (Array.isArray(candidate.queries) &&
-        candidate.queries.every((query) => typeof query === 'string')))
+        candidate.queries.every((query) => typeof query === 'string'))) &&
+    (candidate.queryDefinitions === undefined ||
+      (Array.isArray(candidate.queryDefinitions) &&
+        candidate.queryDefinitions.every((query) => typeof query?.key === 'string')))
   );
 }
