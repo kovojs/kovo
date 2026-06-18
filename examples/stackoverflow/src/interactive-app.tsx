@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { layout, renderComponentMutationFailure, route, s } from '@kovojs/server';
+import { layout, route, s } from '@kovojs/server';
 import {
   createApp,
   createRequestHandler,
@@ -13,8 +13,6 @@ import { SoShell } from './components/chrome.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';
-import type { SoRequest } from './model.js';
-import { questionList, questionScore } from './queries.js';
 
 // SPEC.md §9.1: the Stack Overflow example as a fully interactive Kovo app. It
 // registers the postQuestion / postAnswer / voteUp mutations and lets generated
@@ -84,28 +82,6 @@ export async function buildSoInteractiveApp(
     db: () => database,
     document: { lang: 'en-US' },
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
-    mutationResponses: {
-      [postQuestionMutation.key]: ({ request }) => ({
-        failureTarget: 'question-list-region',
-        renderFailureFragment: async (failure) =>
-          renderComponentMutationFailure(
-            QuestionListRegion,
-            {
-              questionList: await questionList.load(undefined, {
-                request: request as SoRequest,
-              }),
-              questionScore: await questionScore.load(undefined, {
-                request: request as SoRequest,
-              }),
-            },
-            failure,
-            {
-              formName: 'postQuestion',
-              slots: { request: request as SoRequest },
-            },
-          ),
-      }),
-    },
     routes: [
       route('/', {
         meta: {
