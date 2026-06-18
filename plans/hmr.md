@@ -231,8 +231,10 @@ render-plan version skew checks.
     Diagnostics and unsafe classes currently reload. Verification:
     `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts
     packages/server/src/vite-dev-middleware.test.ts packages/compiler/src/vite.test.ts
-    packages/compiler/src/hmr-impact.test.ts`; `corepack pnpm exec tsc -p
-    tsconfig.json --noEmit --pretty false`; `git diff --check`.
+    packages/compiler/src/hmr-impact.test.ts`; `corepack pnpm --filter
+    @kovojs/integration-tests exec playwright test specs/hmr-dev-client.spec.ts
+    --project=chromium`; `corepack pnpm exec tsc -p tsconfig.json --noEmit
+    --pretty false`; `git diff --check`.
 - [ ] **6. Dev refresh endpoints.**
   - Add dev-only shell endpoints for current-route refresh and live-target
     refresh. They should be available only in Vite dev middleware, not production
@@ -265,7 +267,11 @@ render-plan version skew checks.
     items 5 and 6. `corepack pnpm --filter @kovojs/site run build` passes
     (with the pre-existing Vite websocket port warning), and `rg -n
     "@kovo/hmr|Kovo-HMR-Refresh" site/dist site/dist-css` finds no production
-    HMR endpoint/client strings. Browser fixture coverage remains open.
+    HMR endpoint/client strings. `tests/integration/specs/hmr-dev-client.spec.ts`
+    covers the browser dev client applying a server-rendered live-target fragment,
+    sending current `Kovo-Live-Targets`/`Kovo-Targets` headers, preserving focused
+    input state, and avoiding full navigation. Source-edit, diagnostic, route-table,
+    and query-bound browser scenarios remain open.
 
 ## First Milestone Slice
 
