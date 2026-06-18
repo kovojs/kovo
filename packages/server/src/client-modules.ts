@@ -33,6 +33,12 @@ export interface VersionedClientModuleRegistry {
    * Returns an empty string when no modules are registered.
    */
   buildToken(): string;
+  /**
+   * Return the registered immutable modules for build/static artifact emission.
+   * Entries are normalized to same-origin `/c/` paths and sorted
+   * deterministically by path + version.
+   */
+  entries(): readonly VersionedClientModuleInput[];
   put(module: VersionedClientModuleInput): string;
   resolve(href: string): ServerResponseBase<string, Record<string, string>, 200 | 404>;
 }
@@ -94,6 +100,14 @@ export function createMemoryVersionedClientModuleRegistry(
       cachedBuildToken = token;
       lastTokenGeneration = buildTokenGeneration;
       return token;
+    },
+    entries() {
+      return [...modules.values()]
+        .map((module) => ({ ...module }))
+        .sort((left, right) => {
+          const pathOrder = left.path.localeCompare(right.path);
+          return pathOrder === 0 ? left.version.localeCompare(right.version) : pathOrder;
+        });
     },
     put(module) {
       const url = clientModuleUrl(module.path);

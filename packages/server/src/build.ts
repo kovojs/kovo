@@ -167,18 +167,19 @@ export async function writeKovoNeutralBuild(
     options.manifestFile === undefined ? undefined : resolvedFileSystemPath(options.manifestFile);
   const manifestDistDir =
     manifestFilePath === undefined ? undefined : path.dirname(path.dirname(manifestFilePath));
+  const clientModules = options.clientModules ?? options.app.clientModules.entries();
   const appShellBuild =
     manifestFilePath === undefined
       ? createKovoAppShellViteBuild({
           app: options.app,
           ...(options.base === undefined ? {} : { base: options.base }),
-          ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
+          clientModules,
           ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
         })
       : await createKovoAppShellViteBuildFromManifestFile({
           app: options.app,
           ...(options.base === undefined ? {} : { base: options.base }),
-          ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
+          clientModules,
           manifestFile: manifestFilePath,
           ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
         });

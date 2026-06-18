@@ -2379,8 +2379,13 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
     const app = appFromModule(appModule, options.appModulePath);
     const serverHandlerSource = await bundleKovoServerHandler(resolvedAppModulePath);
     const outDir = resolve(options.outDir);
+    const clientManifestFile = await buildKovoClientManifest(
+      join(outDir, '.kovo-client'),
+      kovoClientBuildRoot(resolvedAppModulePath),
+    );
     const neutralBuild = await writeKovoNeutralBuild({
       app,
+      manifestFile: clientManifestFile,
       outDir: join(outDir, '.kovo'),
       serverHandlerSource,
     });
@@ -2529,6 +2534,30 @@ function isKovoPreset(value: unknown): value is KovoPreset {
     (value.emit === undefined || typeof value.emit === 'function') &&
     (value.inspect === undefined || typeof value.inspect === 'function')
   );
+}
+
+async function buildKovoClientManifest(outDir: string, root: string): Promise<string> {
+  const { build } = await import('vite-plus');
+  await build({
+    appType: 'custom',
+    build: {
+      emptyOutDir: true,
+      manifest: true,
+      outDir,
+    },
+    logLevel: 'silent',
+    root,
+  });
+
+  return join(outDir, '.vite/manifest.json');
+}
+
+function kovoClientBuildRoot(appModulePath: string): string {
+  for (let current = dirname(appModulePath); ; current = dirname(current)) {
+    if (existsSync(join(current, 'index.html'))) return current;
+    const parent = dirname(current);
+    if (parent === current) return process.cwd();
+  }
 }
 
 async function bundleKovoServerHandler(appModulePath: string): Promise<string> {

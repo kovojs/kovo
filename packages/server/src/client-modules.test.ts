@@ -61,6 +61,41 @@ describe('versioned client modules', () => {
     expect(registry.resolve(newHref)).toMatchObject({ body: 'export const version = "new";' });
   });
 
+  it('enumerates normalized client modules deterministically without exposing registry state', () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    registry.put({
+      path: 'https://kovo.local/c/z.client.js',
+      source: 'export const z = true;',
+      version: 'z-v1',
+    });
+    registry.put({
+      contentType: 'application/javascript',
+      path: '/c/a.client.js',
+      source: 'export const a = true;',
+      version: 'a-v1',
+    });
+
+    const entries = registry.entries();
+    expect(entries).toEqual([
+      {
+        contentType: 'application/javascript',
+        path: '/c/a.client.js',
+        source: 'export const a = true;',
+        version: 'a-v1',
+      },
+      {
+        path: '/c/z.client.js',
+        source: 'export const z = true;',
+        version: 'z-v1',
+      },
+    ]);
+
+    (entries[0] as { source: string }).source = 'mutated';
+    expect(registry.resolve('/c/a.client.js?v=a-v1')).toMatchObject({
+      body: 'export const a = true;',
+    });
+  });
+
   it('serves versioned client module requests through the immutable registry', () => {
     const registry = createMemoryVersionedClientModuleRegistry();
     const href = registry.put({

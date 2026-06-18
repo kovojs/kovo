@@ -111,6 +111,7 @@ function isVersionedClientModuleRegistry(value: unknown): value is KovoApp['clie
   return (
     isRecord(value) &&
     typeof value.buildToken === 'function' &&
+    typeof value.entries === 'function' &&
     typeof value.put === 'function' &&
     typeof value.resolve === 'function'
   );

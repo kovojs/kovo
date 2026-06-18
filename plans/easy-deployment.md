@@ -91,19 +91,26 @@ adapter-*` packages. Selection is host **auto-detection** (`VERCEL` / `CF_PAGES`
 
 **The gap (what this plan builds):**
 
-- [ ] **No self-contained production server.** Every "serve" path today is Vite
-      `middlewareMode` from source — the Docker image even keeps dev deps on purpose.
-      Evidence: `examples/commerce/scripts/serve.mjs` (`createViteServer`),
-      `Dockerfile` ("the runtime is Vite SSR … we do NOT prune to production deps").
-- [ ] **No app-author build command.** `kovo` CLI has `add/explain/check/audit/
-export/mcp` but no `build`. Evidence: `packages/cli/src/index.ts:123`.
-- [ ] **No preset interface and no presets.** Nothing reads `kovo.config`
-      `preset:` / detects the host / emits Vercel/Cloudflare/Node output. `kovo.config`
-      currently only carries `packagePrefixes` / `mergeClientModules` (`SPEC.md` §5.2,
-      §6.1.1).
-- [ ] **Server-module bundling for serverless is unaddressed.** Client asset
-      bundling is solved; bundling the _server_ entry (app-shell + user server
-      modules + deps) into one deployable function/worker is not.
+- [ ] **Production serve path is not yet fully switched over.** `kovo build`
+      emits a self-contained Node output, but examples/docs still present Vite
+      `middlewareMode` from source as the production story and the Docker path has
+      not been validated with pruned production dependencies. Evidence gap:
+      `examples/commerce/scripts/serve.mjs` still uses `createViteServer`, and
+      Phase 1 container proof remains open.
+- [x] **App-author build command exists for the Node preset.** `packages/cli/src/
+index.ts` dispatches `kovo build`, loads `.mjs` and `.ts` app modules through
+      build-time Vite SSR, runs the client manifest build, writes the neutral
+      build, and emits `node()` output. Evidence: `packages/cli/src/
+index.kovo-build.test.ts`.
+- [x] **Preset interface exists for build-time Node output.** `packages/server/src/
+build.ts` exposes `KovoPreset`, `PresetContext`, `PresetDiagnostic`,
+      `defineConfig()`, and `node()` through `@kovojs/server/build`; `kovo build`
+      reads `kovo.config.ts`, `KOVO_PRESET`, and host env before selecting a
+      preset. Evidence: `packages/server/src/build.test.ts` and
+      `packages/cli/src/index.kovo-build.test.ts`.
+- [ ] **Serverless platform bundling remains unaddressed.** Client asset bundling
+      and the Node server bundle are solved; bundling/placing the server entry
+      into Vercel functions or Cloudflare Workers/Containers is still Phase 2/3.
 
 ---
 
@@ -253,49 +260,58 @@ Design decisions to lock in code review:
     against a small app + Vite manifest fixture. The full item remains open because
     `kovo build` and the production server bundler do not yet own the app-shell
     build end to end.
-- [ ] Add server-bundle step: `src/app-shell.ts` → `server/handler.mjs`
+- [x] Add server-bundle step: `src/app-shell.ts` → `server/handler.mjs`
       (`Request → Response`), no Vite at runtime. Verify a bundled handler serves a
       route + a `/_m/` mutation + a `/c/` module with **zero dev deps installed**.
-  - Partial evidence: `packages/cli/src/index.ts` now bundles the supplied app
+  - Evidence: `packages/cli/src/index.ts` bundles the supplied app
     module into a `server/handler.mjs` source using `vite-plus` SSR build, with
     `@kovojs/*` packages externalized so framework runtime remains a production
     dependency instead of being inlined. `packages/cli/src/index.kovo-build.test.ts`
     runs `kovo build <app-module> --out <dir>`, boots the emitted
     `dist/server/server.mjs`, and verifies a route, `/_m/` mutation, and `/_q/`
-    query response without Vite in the request path. The full item remains open
-    because `kovo build` does not yet run the client build/manifest pipeline, so
-    `/c/` modules from the CLI build path are not proven.
+    query response without Vite in the request path.
   - Additional evidence: `packages/cli/src/index.kovo-build.test.ts` boots the
     emitted node preset output copied into a runtime root with only production
     Kovo package roots (`@kovojs/core`, `@kovojs/runtime`, `@kovojs/server`) plus
     throwing `vite`/`vite-plus` guard packages, then verifies a route, a `/_m/`
-    mutation, and an immutable `/assets/*` response. The `/c/` modules from the
-    CLI build path remain unproven until `kovo build` owns the client
-    build/manifest pipeline.
-- [ ] Wire `kovo build` into `packages/cli` (a thin wrapper, exactly like
+    mutation, an immutable `/c/cart.client.js?v=cart-v1` response, and an
+    immutable Vite-built `/assets/*.css` response. Verification: `corepack pnpm
+exec vitest --run packages/server/src/client-modules.test.ts
+packages/server/src/build.test.ts packages/server/src/api/app.test.ts
+packages/server/src/static-export-client-module-refs.test.ts
+packages/cli/src/index.kovo-build.test.ts
+packages/cli/src/index.kovo-export.test.ts`; `corepack pnpm exec tsc -p
+tsconfig.json --noEmit --pretty false`; `corepack pnpm run
+check:api-surface`; `corepack pnpm run check:exports`; `corepack pnpm run
+check:imports`; `corepack pnpm run check:publish`; `git diff --check`.
+- [x] Wire `kovo build` into `packages/cli` (a thin wrapper, exactly like
       `kovo export` over `exportStaticApp`); it reads `kovo.config.ts` + host env,
       runs client build → server bundle → neutral emit → preset.
-  - Partial evidence: `packages/cli/src/index.ts` dispatches async `kovo build`,
+  - Evidence: `packages/cli/src/index.ts` dispatches async `kovo build`,
     parses `<app-module>`, `--out`, and `--preset <name>`, writes the neutral
-    artifact with the bundled handler, loads `kovo.config.ts` through Vite SSR,
-    selects the preset from explicit CLI flag → `KOVO_PRESET` → `kovo.config.ts`
-    `preset:` → host env (`VERCEL`, `CF_PAGES`/`CLOUDFLARE`) → `node`, preserves
-    configured `node()` options, and emits the built-in `node()` preset.
-    `vercel`/`cloudflare` selection fails loudly until their emitters land instead
-    of silently producing Node output.
-    The app aggregate is now loaded through a build-time Vite SSR server, so
-    TypeScript app entries such as `src/app-shell.ts` work without requiring
-    app authors to precompile or hand-author `.mjs` fixtures.
+    artifact with the bundled handler plus a Vite client manifest, loads
+    `kovo.config.ts` through Vite SSR, selects the preset from explicit CLI flag
+    → `KOVO_PRESET` → `kovo.config.ts` `preset:` → host env (`VERCEL`,
+    `CF_PAGES`/`CLOUDFLARE`) → `node`, preserves configured `node()` options,
+    and emits the built-in `node()` preset. `vercel`/`cloudflare` selection fails
+    loudly until their Phase 2/3 emitters land instead of silently producing Node
+    output. The app aggregate is loaded through a build-time Vite SSR server, so
+    TypeScript app entries such as `src/app-shell.ts` work without requiring app
+    authors to precompile or hand-author `.mjs` fixtures. `packages/server/src/
+build.ts` defaults neutral-build client modules to
+    `app.clientModules.entries()`, so app-registered `/c/*` modules are emitted
+    without a parallel hand-authored build list.
     `packages/cli/src/commands-manifest.ts` / `commands-manifest.test.ts` pin the
     CLI docs/usage surface, and `packages/cli/package.json` declares the runtime
-    `vite-plus` dependency needed by the build command. The full item remains open
-    because client build/manifest orchestration and non-node presets are not
-    implemented. Verification: `corepack pnpm exec vitest --run
-packages/cli/src/index.kovo-build.test.ts packages/server/src/build.test.ts`
-    covers `.mjs` and `.ts` app modules, config preset selection, and node output;
-    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
-    `corepack pnpm run check:api-surface`; `corepack pnpm run check:exports`;
-    `corepack pnpm run check:publish`; `corepack pnpm exec vp check --fix`.
+    `vite-plus` dependency needed by the build command. Verification: `corepack
+pnpm exec vitest --run packages/server/src/client-modules.test.ts
+packages/server/src/build.test.ts packages/server/src/api/app.test.ts
+packages/server/src/static-export-client-module-refs.test.ts
+packages/cli/src/index.kovo-build.test.ts
+packages/cli/src/index.kovo-export.test.ts`; `corepack pnpm exec tsc -p
+tsconfig.json --noEmit --pretty false`; `corepack pnpm run
+check:api-surface`; `corepack pnpm run check:exports`; `corepack pnpm run
+check:imports`; `corepack pnpm run check:publish`; `git diff --check`.
 - [x] Evidence target: a test that boots `server/handler.mjs` in a clean
       `node_modules` (prod deps only) and asserts route/mutation/asset responses.
   - Evidence: `corepack pnpm exec vitest --run

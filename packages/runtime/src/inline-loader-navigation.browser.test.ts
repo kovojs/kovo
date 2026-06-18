@@ -1249,7 +1249,8 @@ describe('browser inline loader enhanced navigation', () => {
 
   it('enhances same-path hash navigations when the query string changes', async () => {
     history.replaceState({}, '', new URL('/api?view=summary', initialUrl).href);
-    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>API summary</title>';
+    document.head.innerHTML =
+      '<meta name="kovo-build" content="build-a"><title>API summary</title>';
     document.body.innerHTML = [
       '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
       '<a id="to-details" href="/api?view=details#symbols%2Fdetails">Details</a>',

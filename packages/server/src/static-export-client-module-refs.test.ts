@@ -145,6 +145,9 @@ describe('server static export', () => {
           buildToken() {
             return '';
           },
+          entries() {
+            return [];
+          },
           put() {
             throw new Error('unused');
           },
@@ -191,6 +194,9 @@ describe('server static export', () => {
         clientModules: {
           buildToken() {
             return '';
+          },
+          entries() {
+            return [];
           },
           put() {
             throw new Error('unused');

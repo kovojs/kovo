@@ -29,6 +29,7 @@ describe('kovo build', () => {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(appPath, appModuleSource(), 'utf8');
+      writeClientEntry(root);
 
       const exitCode = await withEnv({ VERCEL: '1' }, () =>
         mainAsync(['build', appPath, '--out', outDir, '--preset', 'node']),
@@ -67,6 +68,25 @@ describe('kovo build', () => {
         await expect(queryResponse.text()).resolves.toBe(
           '<kovo-query name="cart">{"count":2}</kovo-query>',
         );
+
+        const clientModuleResponse = await fetch(`${origin}/c/cart.client.js?v=cart-v1`);
+        await expect(clientModuleResponse.text()).resolves.toBe('export const cartClient = true;');
+        expect(clientModuleResponse.status).toBe(200);
+        expect(clientModuleResponse.headers.get('cache-control')).toBe(
+          'public, max-age=31536000, immutable',
+        );
+        expect(clientModuleResponse.headers.get('content-type')).toBe(
+          'text/javascript; charset=utf-8',
+        );
+
+        const stylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
+        const stylesheetResponse = await fetch(`${origin}${stylesheetPath}`);
+        await expect(stylesheetResponse.text()).resolves.toContain('color:#639');
+        expect(stylesheetResponse.status).toBe(200);
+        expect(stylesheetResponse.headers.get('cache-control')).toBe(
+          'public, max-age=31536000, immutable',
+        );
+        expect(stylesheetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
       } finally {
         await close(server);
       }
@@ -88,6 +108,7 @@ describe('kovo build', () => {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(appPath, typescriptAppModuleSource(), 'utf8');
+      writeClientEntry(root);
 
       const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -128,6 +149,7 @@ describe('kovo build', () => {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(appPath, appModuleSource(), 'utf8');
+      writeClientEntry(root);
 
       const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -136,8 +158,6 @@ describe('kovo build', () => {
 
       cpSync(join(outDir, 'server'), runtimeDir, { recursive: true });
       writeProductionOnlyRuntimeNodeModules(runtimeDir);
-      mkdirSync(join(runtimeDir, 'client/assets'), { recursive: true });
-      writeFileSync(join(runtimeDir, 'client/assets/prod-proof.txt'), 'asset:prod\n', 'utf8');
 
       const handlerSource = readFileSync(join(runtimeDir, 'server/handler.mjs'), 'utf8');
       expect(handlerSource).not.toContain('vite');
@@ -167,13 +187,21 @@ describe('kovo build', () => {
         await expect(updatedDocument.text()).resolves.toContain('<main>Cart 3</main>');
         expect(updatedDocument.status).toBe(200);
 
-        const assetResponse = await fetch(`${origin}/assets/prod-proof.txt`);
-        await expect(assetResponse.text()).resolves.toBe('asset:prod\n');
+        const clientModuleResponse = await fetch(`${origin}/c/cart.client.js?v=cart-v1`);
+        await expect(clientModuleResponse.text()).resolves.toBe('export const cartClient = true;');
+        expect(clientModuleResponse.status).toBe(200);
+        expect(clientModuleResponse.headers.get('cache-control')).toBe(
+          'public, max-age=31536000, immutable',
+        );
+
+        const stylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
+        const assetResponse = await fetch(`${origin}${stylesheetPath}`);
+        await expect(assetResponse.text()).resolves.toContain('color:#639');
         expect(assetResponse.status).toBe(200);
         expect(assetResponse.headers.get('cache-control')).toBe(
           'public, max-age=31536000, immutable',
         );
-        expect(assetResponse.headers.get('content-type')).toBe('application/octet-stream');
+        expect(assetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
       } finally {
         await close(server);
       }
@@ -194,6 +222,7 @@ describe('kovo build', () => {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(join(root, 'app.mjs'), appModuleSource(), 'utf8');
+      writeClientEntry(root);
       writeFileSync(
         join(root, 'kovo.config.ts'),
         [
@@ -268,6 +297,7 @@ function appModuleSource(): string {
   return `
 import {
   createApp,
+  createMemoryVersionedClientModuleRegistry,
   domain,
   mutation,
   query,
@@ -277,6 +307,12 @@ import {
 
 const cart = domain('cart');
 const db = { count: 0 };
+const clientModules = createMemoryVersionedClientModuleRegistry();
+clientModules.put({
+  path: '/c/cart.client.js',
+  source: 'export const cartClient = true;',
+  version: 'cart-v1',
+});
 const cartQuery = query('cart', {
   load: () => ({ count: db.count }),
   reads: [cart],
@@ -295,6 +331,7 @@ const addToCart = mutation('cart/add', {
 });
 
 export default createApp({
+  clientModules,
   mutations: [addToCart],
   queries: [cartQuery],
   routes: [
@@ -304,6 +341,30 @@ export default createApp({
   ],
 });
 `;
+}
+
+function writeClientEntry(root: string): void {
+  mkdirSync(join(root, 'src'), { recursive: true });
+  writeFileSync(
+    join(root, 'index.html'),
+    '<!doctype html><html><body><script type="module" src="/src/client.ts"></script></body></html>',
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/client.ts'),
+    "import './style.css';\nexport const client = true;\n",
+    'utf8',
+  );
+  writeFileSync(join(root, 'src/style.css'), 'main { color: rebeccapurple; }\n', 'utf8');
+}
+
+function builtAssetPath(outDir: string, predicate: (path: string) => boolean): string {
+  const manifest = JSON.parse(readFileSync(join(outDir, '.kovo/manifest.json'), 'utf8')) as {
+    assets?: readonly { path: string }[];
+  };
+  const asset = manifest.assets?.find((entry) => predicate(entry.path));
+  if (!asset) throw new Error(`Expected built asset in ${outDir}`);
+  return asset.path;
 }
 
 function typescriptAppModuleSource(): string {

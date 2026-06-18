@@ -1340,8 +1340,8 @@ scripts/exported-symbols.mjs --duplicates --check` fails on added/removed
     `@kovojs/cli` command facade instead. Current deployment build work is
     isolated behind `@kovojs/server/build` and remains tracked by
     `plans/easy-deployment.md`. Verification: `corepack pnpm run
-    check:imports`; `corepack pnpm run check:exports`; `node
-    scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`.
+check:imports`; `corepack pnpm run check:exports`; `node
+scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`.
 - [x] **Starter templates use SSR dynamic loading.**
   - Existing starter code calls `server.ssrLoadModule('@kovojs/server/app-shell/vite')`.
     Any rename or removal must update templates, example configs, and tests in the
@@ -1350,7 +1350,7 @@ scripts/exported-symbols.mjs --duplicates --check` fails on added/removed
     `site/scripts/export-static.mjs` SSR-load `@kovojs/cli` and call
     `runKovoCommand(['export', ..., '--vite', ...])`; starter tests assert the
     removed app-shell Vite import is absent. Verification: `corepack pnpm run
-    check:imports`; `node scripts/build-publish.mjs`.
+check:imports`; `node scripts/build-publish.mjs`.
 - [x] **Published `publishConfig.exports` must not drift.**
   - `package.json` top-level source exports and `publishConfig.exports` must stay
     in sync through `scripts/build-publish.mjs`.
@@ -1387,32 +1387,32 @@ scripts/exported-symbols.mjs --duplicates --check` fails on added/removed
     package slices.
   - Evidence: `scripts/exported-symbol-duplicates.baseline.json` now ratchets the
     remaining JSX runtime mirrors, and `node scripts/exported-symbols.mjs
-    --duplicates --check` passes through `corepack pnpm run check:exports`.
+--duplicates --check` passes through `corepack pnpm run check:exports`.
 - [x] **Renaming the CLI package can confuse command-vs-package docs.**
   - Docs must consistently distinguish package name `@kovojs/cli` from executable
     name `kovo`.
   - Evidence: package manifests, starter dependencies, stability docs, and API
     docs use package name `@kovojs/cli` while command examples keep the `kovo`
     executable. Verification: `corepack pnpm run check:imports`; `corepack pnpm
-    run check:exports`; `node scripts/api-surface-gate.mjs`.
+run check:exports`; `node scripts/api-surface-gate.mjs`.
 - [x] **Making `@kovojs/ui` public will expand API-surface debt.**
   - The package has many component exports. Use the duplicate-symbol detector,
     API-surface baseline, and focused documentation slices so publicizing it does
     not silently bless accidental root exports.
   - Evidence: `@kovojs/ui` is public, root component duplicates are removed, API
     surface and duplicate-export ratchets are in place, and `node
-    scripts/api-surface-gate.mjs` plus `corepack pnpm run check:exports` pass.
+scripts/api-surface-gate.mjs` plus `corepack pnpm run check:exports` pass.
 - [x] **Internalizing server helpers may require app-owned script rewrites.**
   - Prefer local example/starter helper code or `kovo` commands over keeping
     framework support helpers public just because current examples import them.
   - Evidence: starter/site export scripts use the CLI facade, static-export
     formatting helpers are local where needed, and app/example imports no longer
     require public server support-helper aliases. Verification: `corepack pnpm
-    run check:imports`; `node scripts/api-surface-gate.mjs`.
+run check:imports`; `node scripts/api-surface-gate.mjs`.
 - [x] **Examples may still need realistic webhook integrations.**
   - Keep provider-specific code local to examples so recipes stay useful without
     promoting vendor names into framework package APIs.
   - Evidence: Stripe-specific framework exports were removed, example/conformance
     provider verification is local code over generic webhook primitives, and
     public symbol checks reject provider-specific leaks. Verification: `node
-    scripts/api-surface-gate.mjs`; `corepack pnpm run check:exports`.
+scripts/api-surface-gate.mjs`; `corepack pnpm run check:exports`.

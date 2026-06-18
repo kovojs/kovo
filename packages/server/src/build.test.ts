@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as packageBuildApi from '@kovojs/server/build';
 import { createApp } from './app.js';
+import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import { node, writeKovoNeutralBuild } from './build.js';
 
@@ -118,6 +119,60 @@ describe('server build-time deployment API', () => {
         serverHandlerPath: join(outDir, 'server/handler.mjs'),
         version: 'kovo-neutral-build/v1',
       });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('emits app-registered client modules by default in neutral builds', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-default-modules-'));
+    const clientModules = createMemoryVersionedClientModuleRegistry();
+    clientModules.put({
+      path: '/c/app.client.js',
+      source: 'export const appClient = true;',
+      version: 'app-v1',
+    });
+
+    try {
+      const outDir = join(root, '.kovo');
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          clientModules,
+          routes: [
+            route('/app', {
+              page() {
+                return '<main>App</main>';
+              },
+            }),
+          ],
+        }),
+        outDir,
+        serverHandlerSource:
+          'export default async function handler() { return new Response("ok"); }\n',
+      });
+
+      await expect(readFile(join(outDir, 'client/c/app.client.js'), 'utf8')).resolves.toBe(
+        'export const appClient = true;',
+      );
+      await expect(readJson(join(outDir, 'manifest.json'))).resolves.toMatchObject({
+        clientModules: [
+          {
+            file: 'c/app.client.js',
+            href: '/c/app.client.js?v=app-v1',
+            path: '/c/app.client.js',
+            version: 'app-v1',
+          },
+        ],
+      });
+      expect(build.clientModules).toEqual([
+        {
+          file: 'c/app.client.js',
+          href: '/c/app.client.js?v=app-v1',
+          path: '/c/app.client.js',
+          source: 'export const appClient = true;',
+          version: 'app-v1',
+        },
+      ]);
     } finally {
       await rm(root, { force: true, recursive: true });
     }

@@ -16,6 +16,7 @@ function appModuleSource(options: {
     options.exportKind === 'named' ? 'export const app = {' : 'export default {',
     '  clientModules: {',
     "    buildToken() { return 'test'; },",
+    '    entries() { return []; },',
     "    put() { throw new Error('unused'); },",
     "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
     '  },',
