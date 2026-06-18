@@ -1,4 +1,4 @@
-import type { TouchGraph } from '@kovojs/core/internal/graph';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
 import {
   assertObservedReadsCovered,
   assertObservedWritesCovered,
@@ -52,7 +52,10 @@ export interface DbVerifier {
  * @param config - Verification configuration (which tables/domains to observe).
  * @returns A `DbVerifier`.
  */
-export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationConfig): DbVerifier {
+export function createDbVerifier(
+  touchGraph: CoreGraph.TouchGraph,
+  config: DbVerificationConfig,
+): DbVerifier {
   const recorder = createObservationRecorder();
   const rootProxyCache = new WeakMap<object, object>();
   const sqlHandleProxyCache = new WeakMap<object, object>();

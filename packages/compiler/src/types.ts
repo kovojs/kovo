@@ -1,5 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core';
-import type { ComponentExplain, KovoExplainInput } from '@kovojs/core/internal/graph';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import type { ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
@@ -29,7 +29,7 @@ export interface CompileComponentOptions {
  * and {@link deriveAppGraph} merges. Lowered-IR fact shape; in-repo use only (SPEC.md §5.2).
  */
 export type ComponentGraphFact = Pick<
-  ComponentExplain,
+  CoreGraph.ComponentExplain,
   'disambiguatedDomName' | 'domName' | 'fragments' | 'name' | 'queries' | 'styleRules'
 >;
 
@@ -114,14 +114,16 @@ export interface MutationInputFieldFact {
 export type MutationInputFieldCoercion = 'boolean' | 'number' | 'string' | 'unknown';
 
 /** @internal Registry-level field facts keyed by mutation key. */
-export type RegistryMutationInputFacts = Readonly<Record<string, readonly MutationInputFieldFact[]>>;
+export type RegistryMutationInputFacts = Readonly<
+  Record<string, readonly MutationInputFieldFact[]>
+>;
 
 /**
  * @internal The graph slice {@link deriveRegistryFactsFromGraph} reads from a Kovo explain
  * input. Lowered-IR shape; in-repo use only (SPEC.md §5.2).
  */
 export type RegistryGraphInput = Pick<
-  KovoExplainInput,
+  CoreGraph.KovoExplainInput,
   'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
 >;
 

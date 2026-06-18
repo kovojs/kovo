@@ -1,4 +1,4 @@
-import type { TouchGraph } from '@kovojs/core/internal/graph';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { MutationDefinition, MutationResult, QueryDefinition, Schema } from '@kovojs/server';
 import {
   executeHarnessMutation,
@@ -39,7 +39,7 @@ export interface KovoTestHarnessOptions<Db> {
   db: Db;
   pages?: Record<string, string | (() => string | Promise<string>)>;
   request?: Record<string, unknown>;
-  touchGraph?: TouchGraph;
+  touchGraph?: CoreGraph.TouchGraph;
   verification?: DbVerificationConfig;
 }
 

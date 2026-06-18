@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { CompileComponentOptions } from '@kovojs/compiler';
-import type { QueryShape, QueryShapeFact } from '@kovojs/compiler/internal';
+import type * as CompilerInternal from '@kovojs/compiler/internal';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
@@ -16,28 +16,8 @@ import {
   type DiagnosticSeverity,
 } from '@kovojs/core';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
-import {
-  validateKovoExplainInput,
-  type ComponentExplain,
-  type EndpointExplain,
-  type EventPayloadFact,
-  type FixpointCheck,
-  type KovoCheckInput,
-  type KovoExplainInput,
-  type GraphInputValidationError,
-  type MutationExplain,
-  type OptimisticCoverage,
-  type PackageComponentPrefixExplain,
-  type QueryReadSet,
-  type QueryDataFact,
-  type RenderEquivalenceCheck,
-  type ScopeAuditFact,
-  type SemanticLint,
-  type StaticDiagnosticFact,
-  type TouchGraph,
-  type UpdateCoverageFact,
-  type VerificationDiagnosticFact,
-} from '@kovojs/core/internal/graph';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
+import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import type { KovoApp, StaticExportCompileDiagnostic } from '@kovojs/server';
 
 import {
@@ -154,8 +134,8 @@ export interface CompileComponentV1Input {
   fileName: string;
   packageComponentPrefixes?: CompileComponentOptions['packageComponentPrefixes'];
   packagePrefixDiscoveryRoot?: CompileComponentOptions['packagePrefixDiscoveryRoot'];
-  queryShapeFacts?: readonly QueryShapeFact[];
-  queryShapes?: Record<string, QueryShape>;
+  queryShapeFacts?: readonly CompilerInternal.QueryShapeFact[];
+  queryShapes?: Record<string, CompilerInternal.QueryShape>;
   registryFacts?: CompileComponentOptions['registryFacts'];
   source: string;
   sourceProvenance?: CompileComponentOptions['sourceProvenance'];
@@ -321,7 +301,7 @@ export async function handleKovoMcpRequest(request: unknown): Promise<KovoMcpRes
 
 function runGraphCommand(
   inputPath: string | undefined,
-  run: (input: KovoExplainInput) => KovoCheckResult,
+  run: (input: CoreGraph.KovoExplainInput) => KovoCheckResult,
 ): CliCommandResult {
   const input = readGraphInput(inputPath);
   if (!input.ok) return { error: inputErrorMessage(input.error), exitCode: 1 };
@@ -554,7 +534,7 @@ function runKovoExplainTool(
   return { ...result, version: explainOutputVersion };
 }
 
-function graphToolInput(args: Record<string, unknown>): KovoExplainInput {
+function graphToolInput(args: Record<string, unknown>): CoreGraph.KovoExplainInput {
   if ('graph' in args && 'graphPath' in args) {
     throw new Error('graph tools accept graph or graphPath, not both');
   }
@@ -571,7 +551,7 @@ function graphToolInput(args: Record<string, unknown>): KovoExplainInput {
     const validationErrors = validateKovoExplainInput(args.graph);
     if (validationErrors.length > 0)
       throw new Error(validationErrors[0]?.message ?? 'invalid graph');
-    return args.graph as KovoExplainInput;
+    return args.graph as CoreGraph.KovoExplainInput;
   }
 
   return {};
@@ -603,10 +583,10 @@ function assertCompileComponentV1Input(args: unknown): CompileComponentV1Input {
     input.packagePrefixDiscoveryRoot = args.packagePrefixDiscoveryRoot;
   }
   if (Array.isArray(args.queryShapeFacts)) {
-    input.queryShapeFacts = args.queryShapeFacts as readonly QueryShapeFact[];
+    input.queryShapeFacts = args.queryShapeFacts as readonly CompilerInternal.QueryShapeFact[];
   }
   if (isRecord(args.queryShapes)) {
-    input.queryShapes = args.queryShapes as Record<string, QueryShape>;
+    input.queryShapes = args.queryShapes as Record<string, CompilerInternal.QueryShape>;
   }
   if (isRecord(args.registryFacts)) {
     input.registryFacts = args.registryFacts as CompileComponentV1Input['registryFacts'];
@@ -785,11 +765,7 @@ function parseAddArgs(args: readonly string[]): AddArgParseResult {
 }
 
 function addUsage(): string {
-  return [
-    ADD_USAGE,
-    `available: ${availableAddComponents()}`,
-    '',
-  ].join('\n');
+  return [ADD_USAGE, `available: ${availableAddComponents()}`, ''].join('\n');
 }
 
 function runAddCommand(options: AddComponentOptions): CliCommandResult {
@@ -906,10 +882,7 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
 }
 
 function exportUsage(): string {
-  return [
-    EXPORT_USAGE,
-    '',
-  ].join('\n');
+  return [EXPORT_USAGE, ''].join('\n');
 }
 
 async function runExportCommand(options: KovoExportOptions): Promise<CliCommandResult> {
@@ -1055,7 +1028,9 @@ interface InputReadError {
   path: string;
 }
 
-type InputReadResult = { ok: true; value: KovoExplainInput } | { error: InputReadError; ok: false };
+type InputReadResult =
+  | { ok: true; value: CoreGraph.KovoExplainInput }
+  | { error: InputReadError; ok: false };
 
 function readGraphInput(path: string | undefined): InputReadResult {
   if (!path) return { ok: true, value: {} };
@@ -1089,7 +1064,7 @@ function readGraphInput(path: string | undefined): InputReadResult {
     }
   }
 
-  return { ok: true, value: parsed as KovoExplainInput };
+  return { ok: true, value: parsed as CoreGraph.KovoExplainInput };
 }
 
 function inputErrorMessage(error: InputReadError): string {
@@ -1110,7 +1085,7 @@ function writeUsageError(message: string): 1 {
 }
 
 function graphInputValidationReadError(
-  error: GraphInputValidationError,
+  error: CoreGraph.GraphInputValidationError,
   path: string,
 ): InputReadError {
   const arrayShape = /^([A-Za-z]+) must be an array$/.exec(error.message);
@@ -1203,7 +1178,10 @@ export interface KovoUnscopedExplainOptions {
  * code that is non-zero only when an audit ran with `failOnFindings` and findings
  * were present.
  */
-export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions): KovoCheckResult {
+export function kovoExplain(
+  input: CoreGraph.KovoExplainInput,
+  options: KovoExplainOptions,
+): KovoCheckResult {
   const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0)
     return invalidGraphInputResult(explainOutputVersion, validationErrors);
@@ -1413,7 +1391,9 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     for (const layout of page.layouts ?? []) {
       lines.push(`layout: ${layout.name} queries=${list(layout.queries)}`);
     }
-    lines.push(`navigation-segments: ${list(page.navigationSegments?.map((segment) => segment.id))}`);
+    lines.push(
+      `navigation-segments: ${list(page.navigationSegments?.map((segment) => segment.id))}`,
+    );
     for (const segment of page.navigationSegments ?? []) {
       lines.push(
         [
@@ -1437,7 +1417,7 @@ export interface KovoAuditOptions {
 
 /** @internal Backs the internal `kovo audit` command; not a public API. */
 export function kovoAudit(
-  input: KovoExplainInput,
+  input: CoreGraph.KovoExplainInput,
   options: KovoAuditOptions = {},
 ): KovoCheckResult {
   const validationErrors = validateKovoExplainInput(input);
@@ -1492,7 +1472,7 @@ export function kovoAudit(
  * any error-severity finding is present (SPEC.md §1.1 proof claims).
  */
 export function kovoCheck(
-  input: KovoCheckInput,
+  input: CoreGraph.KovoCheckInput,
   options: { family?: KovoCheckFamily } = {},
 ): KovoCheckResult {
   const validationErrors = validateKovoExplainInput(input);
@@ -1609,7 +1589,7 @@ export function kovoCheck(
 
 function invalidGraphInputResult(
   version: string,
-  errors: readonly GraphInputValidationError[],
+  errors: readonly CoreGraph.GraphInputValidationError[],
 ): KovoCheckResult {
   const lines = [version, ...errors.map((error) => `ERROR INPUT ${error.path} ${error.message}`)];
   return {
@@ -1619,7 +1599,7 @@ function invalidGraphInputResult(
 }
 
 function diagnosticSeverity(
-  diagnostic: Pick<StaticDiagnosticFact, 'code' | 'severity'>,
+  diagnostic: Pick<CoreGraph.StaticDiagnosticFact, 'code' | 'severity'>,
 ): DiagnosticSeverity {
   return diagnostic.severity ?? diagnosticDefinitions[diagnostic.code].severity;
 }
@@ -1719,7 +1699,12 @@ function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
   return {
     inputPath,
     ok: true,
-    options: { kind, layouts: flags.has('--layouts'), optimistic: flags.has('--optimistic'), target },
+    options: {
+      kind,
+      layouts: flags.has('--layouts'),
+      optimistic: flags.has('--optimistic'),
+      target,
+    },
   };
 }
 
@@ -1773,7 +1758,7 @@ function explainAuditResult(
   };
 }
 
-function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnosticFact[] {
+function diagnosticsForTouchGraph(graph: CoreGraph.TouchGraph): TouchGraphDiagnosticFact[] {
   return Object.values(graph).flatMap((entry) => [
     ...entry.unresolved.map((unresolved) => ({
       code: unresolved.code,
@@ -1800,7 +1785,7 @@ function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnosticFact[]
   ]);
 }
 
-function verificationDiagnosticLine(diagnostic: VerificationDiagnosticFact): string {
+function verificationDiagnosticLine(diagnostic: CoreGraph.VerificationDiagnosticFact): string {
   const definition = diagnosticDefinitions[diagnostic.code];
   const severity = diagnostic.severity ?? definition.severity;
   const site = diagnostic.site ?? (diagnostic.domain ? `domain:${diagnostic.domain}` : '-');
@@ -1814,13 +1799,13 @@ function verificationDiagnosticLine(diagnostic: VerificationDiagnosticFact): str
   return `${severity.toUpperCase()} ${diagnostic.code} ${site} ${diagnostic.message ?? definition.message}${suffix}`;
 }
 
-function staticDiagnosticLine(diagnostic: StaticDiagnosticFact): string {
+function staticDiagnosticLine(diagnostic: CoreGraph.StaticDiagnosticFact): string {
   const definition = diagnosticDefinitions[diagnostic.code];
   const severity = diagnostic.severity ?? definition.severity;
   return `${severity.toUpperCase()} ${diagnostic.code} ${diagnosticSite(diagnostic)} ${diagnostic.message ?? definition.message}`;
 }
 
-function diagnosticSite(diagnostic: StaticDiagnosticFact): string {
+function diagnosticSite(diagnostic: CoreGraph.StaticDiagnosticFact): string {
   return diagnostic.start
     ? `${diagnostic.site}:${diagnostic.start.line}:${diagnostic.start.column}`
     : diagnostic.site;
@@ -1838,9 +1823,9 @@ function list(values: readonly string[] | undefined): string {
 }
 
 function findComponentExplain(
-  components: readonly ComponentExplain[] | undefined,
+  components: readonly CoreGraph.ComponentExplain[] | undefined,
   target: string,
-): ComponentExplain | undefined {
+): CoreGraph.ComponentExplain | undefined {
   return components?.find(
     (component) =>
       component.name === target ||
@@ -1851,9 +1836,9 @@ function findComponentExplain(
 }
 
 function componentPrefixProvenance(
-  component: ComponentExplain,
+  component: CoreGraph.ComponentExplain,
   target: string,
-  input: KovoExplainInput,
+  input: CoreGraph.KovoExplainInput,
 ): string | null {
   const wireName = target.includes('-') ? target : componentWireName(component.name);
   const owner = packagePrefixOwner(input.packageComponentPrefixes, wireName);
@@ -1872,9 +1857,9 @@ function componentPrefixProvenance(
 }
 
 function packagePrefixOwner(
-  facts: readonly PackageComponentPrefixExplain[] | undefined,
+  facts: readonly CoreGraph.PackageComponentPrefixExplain[] | undefined,
   wireName: string,
-): PackageComponentPrefixExplain | null {
+): CoreGraph.PackageComponentPrefixExplain | null {
   const candidates = (facts ?? [])
     .filter((fact) => {
       const effectivePrefix = fact.effectivePrefix ?? fact.prefix;
@@ -1903,7 +1888,7 @@ function isExplainKind(value: string | undefined): value is ExplainKind {
   return value === 'component' || value === 'mutation' || value === 'page' || value === 'query';
 }
 
-function invalidatedBy(query: QueryReadSet, input: KovoExplainInput): string[] {
+function invalidatedBy(query: CoreGraph.QueryReadSet, input: CoreGraph.KovoExplainInput): string[] {
   const invalidators = new Set<string>();
 
   for (const mutation of input.mutations ?? []) {
@@ -1917,7 +1902,10 @@ function invalidatedBy(query: QueryReadSet, input: KovoExplainInput): string[] {
   return [...invalidators].sort();
 }
 
-function domainWritesFor(query: QueryReadSet, input: KovoExplainInput): string[] {
+function domainWritesFor(
+  query: CoreGraph.QueryReadSet,
+  input: CoreGraph.KovoExplainInput,
+): string[] {
   const writes = new Set<string>();
 
   for (const [writeName, entry] of Object.entries(input.touchGraph ?? {})) {
@@ -1929,7 +1917,7 @@ function domainWritesFor(query: QueryReadSet, input: KovoExplainInput): string[]
   return [...writes].sort();
 }
 
-function queryConsumers(queryName: string, input: KovoExplainInput): string[] {
+function queryConsumers(queryName: string, input: CoreGraph.KovoExplainInput): string[] {
   const components =
     input.components
       ?.filter((component) => component.queries?.includes(queryName))
@@ -1943,8 +1931,8 @@ function queryConsumers(queryName: string, input: KovoExplainInput): string[] {
 }
 
 function mutationUpdates(
-  mutation: MutationExplain,
-  input: KovoExplainInput,
+  mutation: CoreGraph.MutationExplain,
+  input: CoreGraph.KovoExplainInput,
 ): Array<{ consumers: string[]; query: string }> {
   const domains = mutationAffectedDomains(mutation);
   if (domains.size === 0) return [];
@@ -1967,7 +1955,7 @@ function listMutationUpdates(
   return updates.map((update) => `${update.query}->${list(update.consumers)}`).join('; ');
 }
 
-function unguardedAccesses(input: KovoExplainInput): UnguardedAccessFact[] {
+function unguardedAccesses(input: CoreGraph.KovoExplainInput): UnguardedAccessFact[] {
   return [
     ...(input.endpoints ?? [])
       .filter((endpoint) => !hasEndpointAuth(endpoint))
@@ -2018,7 +2006,7 @@ function unguardedLine(access: UnguardedAccessFact): string {
   return `${access.kind.toUpperCase()} ${access.name} ${access.detail}`;
 }
 
-function endpointExplainLine(endpoint: EndpointExplain): string {
+function endpointExplainLine(endpoint: CoreGraph.EndpointExplain): string {
   return [
     `ENDPOINT ${endpointName(endpoint)}`,
     `method=${endpoint.method ?? 'ANY'}`,
@@ -2050,16 +2038,16 @@ function hasAuthGuard(guards: readonly string[]): boolean {
   return guards.some((guard) => guard === 'authed' || guard.startsWith('role:'));
 }
 
-function hasMutationAuth(mutation: MutationExplain): boolean {
+function hasMutationAuth(mutation: CoreGraph.MutationExplain): boolean {
   if (hasAuthGuard(mutation.guards ?? [])) return true;
   return mutationAuth(mutation) !== 'none';
 }
 
-function mutationAuth(mutation: MutationExplain): string {
+function mutationAuth(mutation: CoreGraph.MutationExplain): string {
   return mutation.auth ?? 'none';
 }
 
-function hasEndpointAuth(endpoint: EndpointExplain): boolean {
+function hasEndpointAuth(endpoint: CoreGraph.EndpointExplain): boolean {
   if (hasAuthGuard(endpoint.guards ?? [])) return true;
   if (!endpoint.auth) return false;
 
@@ -2071,28 +2059,31 @@ function hasEndpointAuth(endpoint: EndpointExplain): boolean {
   );
 }
 
-function endpointName(endpoint: EndpointExplain): string {
+function endpointName(endpoint: CoreGraph.EndpointExplain): string {
   return endpoint.name ?? endpoint.path;
 }
 
-function compareEndpointExplain(left: EndpointExplain, right: EndpointExplain): number {
+function compareEndpointExplain(
+  left: CoreGraph.EndpointExplain,
+  right: CoreGraph.EndpointExplain,
+): number {
   return endpointName(left).localeCompare(endpointName(right));
 }
 
-function endpointAuth(endpoint: EndpointExplain): string {
+function endpointAuth(endpoint: CoreGraph.EndpointExplain): string {
   return endpoint.auth ?? list(endpoint.guards);
 }
 
-function endpointCsrf(endpoint: EndpointExplain): string {
+function endpointCsrf(endpoint: CoreGraph.EndpointExplain): string {
   if (endpoint.csrf !== 'exempt') return endpoint.csrf ?? 'checked';
   return `exempt:${endpoint.csrfJustification ?? '-'}`;
 }
 
-function optimisticSummary(coverages: readonly OptimisticCoverage[]): string {
+function optimisticSummary(coverages: readonly CoreGraph.OptimisticCoverage[]): string {
   // SPEC.md §10.6: v2 adds `derived` to the status partition. PUNTED is a separate
   // dimension (derivation metadata that never counts as coverage), reported
   // alongside the status counts.
-  const counts: Record<OptimisticCoverage['status'], number> = {
+  const counts: Record<CoreGraph.OptimisticCoverage['status'], number> = {
     UNHANDLED: 0,
     'await-fragment': 0,
     derived: 0,
@@ -2117,9 +2108,9 @@ function optimisticSummary(coverages: readonly OptimisticCoverage[]): string {
 }
 
 function optimisticCoverageWarnings(
-  mutations: readonly MutationExplain[],
-  queries: readonly QueryReadSet[],
-  coverages: readonly OptimisticCoverage[],
+  mutations: readonly CoreGraph.MutationExplain[],
+  queries: readonly CoreGraph.QueryReadSet[],
+  coverages: readonly CoreGraph.OptimisticCoverage[],
 ): string[] {
   const covered = new Map(
     coverages.map((coverage) => [`${coverage.mutation}\0${coverage.query}`, coverage.status]),
@@ -2151,11 +2142,13 @@ function optimisticCoverageWarning(mutation: string, query: string): string {
   return `WARN KV310 ${mutation} -> ${query} ${diagnosticDefinitions.KV310.message}`;
 }
 
-function sortedUpdateCoverage(coverage: readonly UpdateCoverageFact[]): UpdateCoverageFact[] {
+function sortedUpdateCoverage(
+  coverage: readonly CoreGraph.UpdateCoverageFact[],
+): CoreGraph.UpdateCoverageFact[] {
   return [...coverage].sort(compareUpdateCoverage);
 }
 
-function updateCoverageLine(fact: UpdateCoverageFact): string {
+function updateCoverageLine(fact: CoreGraph.UpdateCoverageFact): string {
   if (fact.status === 'UNHANDLED') {
     return [
       'WARN KV311',
@@ -2183,7 +2176,7 @@ function updateCoverageLine(fact: UpdateCoverageFact): string {
     .join(' ');
 }
 
-function unscopedAccesses(input: KovoCheckInput): ScopeAuditFact[] {
+function unscopedAccesses(input: CoreGraph.KovoCheckInput): CoreGraph.ScopeAuditFact[] {
   const ownerDomains = new Set((input.ownerDomains ?? []).map((owner) => owner.domain));
 
   return (input.scopeAudits ?? [])
@@ -2192,7 +2185,7 @@ function unscopedAccesses(input: KovoCheckInput): ScopeAuditFact[] {
     .sort(compareScopeAudit);
 }
 
-function unscopedLine(fact: ScopeAuditFact): string {
+function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {
   return [
     'UNSCOPED',
     fact.kind.toUpperCase(),
@@ -2206,7 +2199,10 @@ function unscopedLine(fact: ScopeAuditFact): string {
     .join(' ');
 }
 
-function compareScopeAudit(left: ScopeAuditFact, right: ScopeAuditFact): number {
+function compareScopeAudit(
+  left: CoreGraph.ScopeAuditFact,
+  right: CoreGraph.ScopeAuditFact,
+): number {
   return (
     left.kind.localeCompare(right.kind) ||
     left.name.localeCompare(right.name) ||
@@ -2216,7 +2212,10 @@ function compareScopeAudit(left: ScopeAuditFact, right: ScopeAuditFact): number 
   );
 }
 
-function compareUpdateCoverage(left: UpdateCoverageFact, right: UpdateCoverageFact): number {
+function compareUpdateCoverage(
+  left: CoreGraph.UpdateCoverageFact,
+  right: CoreGraph.UpdateCoverageFact,
+): number {
   return (
     left.component.localeCompare(right.component) ||
     left.query.localeCompare(right.query) ||
@@ -2231,9 +2230,9 @@ function optimisticUnhandledFixLine(): string {
 }
 
 function optimisticCoverageForMutation(
-  mutation: MutationExplain,
-  input: KovoExplainInput,
-): OptimisticCoverage[] {
+  mutation: CoreGraph.MutationExplain,
+  input: CoreGraph.KovoExplainInput,
+): CoreGraph.OptimisticCoverage[] {
   const affectedQueries = new Set(
     mutationAffectedQueries(mutation, input).map((query) => query.query),
   );
@@ -2255,9 +2254,9 @@ function optimisticCoverageForMutation(
 }
 
 function mutationAffectedQueries(
-  mutation: MutationExplain,
-  input: KovoExplainInput,
-): readonly QueryReadSet[] {
+  mutation: CoreGraph.MutationExplain,
+  input: CoreGraph.KovoExplainInput,
+): readonly CoreGraph.QueryReadSet[] {
   const domains = mutationAffectedDomains(mutation);
   if (domains.size === 0) return [];
 
@@ -2266,7 +2265,7 @@ function mutationAffectedQueries(
   );
 }
 
-function mutationAffectedDomains(mutation: MutationExplain): Set<string> {
+function mutationAffectedDomains(mutation: CoreGraph.MutationExplain): Set<string> {
   return new Set([
     ...(mutation.writes ?? []),
     ...(mutation.invalidates ?? []),
@@ -2274,13 +2273,13 @@ function mutationAffectedDomains(mutation: MutationExplain): Set<string> {
   ]);
 }
 
-function fixpointFailures(checks: readonly FixpointCheck[]): FixpointCheck[] {
+function fixpointFailures(checks: readonly CoreGraph.FixpointCheck[]): CoreGraph.FixpointCheck[] {
   return checks
     .filter((check) => !check.ok)
     .sort((left, right) => left.artifact.localeCompare(right.artifact));
 }
 
-function fixpointFailureLine(check: FixpointCheck): string {
+function fixpointFailureLine(check: CoreGraph.FixpointCheck): string {
   const detail = stableText(check.detail ?? 'Generated output must compile to itself.');
   const diff =
     check.expected === undefined && check.actual === undefined
@@ -2291,14 +2290,14 @@ function fixpointFailureLine(check: FixpointCheck): string {
 }
 
 function renderEquivalenceFailures(
-  checks: readonly RenderEquivalenceCheck[],
-): RenderEquivalenceCheck[] {
+  checks: readonly CoreGraph.RenderEquivalenceCheck[],
+): CoreGraph.RenderEquivalenceCheck[] {
   return checks
     .filter((check) => !check.ok)
     .sort((left, right) => left.artifact.localeCompare(right.artifact));
 }
 
-function renderEquivalenceFailureLine(check: RenderEquivalenceCheck): string {
+function renderEquivalenceFailureLine(check: CoreGraph.RenderEquivalenceCheck): string {
   const detail = stableText(
     check.detail ?? 'Authored and lowered render output must match byte-for-byte.',
   );
@@ -2318,16 +2317,16 @@ function stableText(value: string): string {
   return value.split(/\s+/).filter(Boolean).join(' ');
 }
 
-function lintMessage(lint: SemanticLint): string {
+function lintMessage(lint: CoreGraph.SemanticLint): string {
   const base = diagnosticDefinitions[lint.code].message;
 
   return lint.detail ? `${base} ${lint.detail}` : base;
 }
 
 function missedQueryInvalidations(
-  queries: readonly QueryReadSet[],
-  touchGraph: TouchGraph,
-  mutations: readonly MutationExplain[],
+  queries: readonly CoreGraph.QueryReadSet[],
+  touchGraph: CoreGraph.TouchGraph,
+  mutations: readonly CoreGraph.MutationExplain[],
 ): { domain: string; query: string }[] {
   const touchedDomains = new Set(
     Object.values(touchGraph).flatMap((entry) => entry.touches.map((touch) => touch.domain)),
@@ -2344,9 +2343,9 @@ function missedQueryInvalidations(
 }
 
 function eventPayloadQueryLints(
-  events: readonly EventPayloadFact[],
-  queries: readonly QueryDataFact[],
-): SemanticLint[] {
+  events: readonly CoreGraph.EventPayloadFact[],
+  queries: readonly CoreGraph.QueryDataFact[],
+): CoreGraph.SemanticLint[] {
   const queryFields = new Map<string, string[]>();
 
   for (const query of queries) {
@@ -2373,7 +2372,7 @@ function eventPayloadQueryLints(
             .join(',')}.`,
           site: event.site,
         },
-      ] satisfies SemanticLint[];
+      ] satisfies CoreGraph.SemanticLint[];
     }),
   );
 }

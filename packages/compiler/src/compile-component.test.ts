@@ -58,7 +58,8 @@ describe('compileComponentModule', () => {
     expect(result.loweredSource).toContain(
       "import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
     );
-    expect(result.loweredSource).toContain(`export const CartBadge$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
+    expect(result.loweredSource)
+      .toContain(`export const CartBadge$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: CartBadge,
   componentId: "components/cart/cart-badge/cart-badge",
   queries: [

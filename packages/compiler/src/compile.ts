@@ -10,7 +10,11 @@ import {
   semanticRenderEquivalenceCheck,
   serverRenderLowering,
 } from './emit/server.js';
-import { componentGraphFact, findFragmentTargetFacts, findLiveTargetFacts } from './internal-graph.js';
+import {
+  componentGraphFact,
+  findFragmentTargetFacts,
+  findLiveTargetFacts,
+} from './internal-graph.js';
 import { cssIrHeader } from './ir.js';
 import {
   clientModuleUrl,

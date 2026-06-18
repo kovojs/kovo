@@ -1,5 +1,5 @@
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
-import type { TouchGraph, TouchSite } from '@kovojs/core/internal/graph';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 
 export type { DiagnosticCode } from '@kovojs/core';
@@ -15,7 +15,7 @@ export interface DbVerificationDiagnostic {
 
 export function diagnosticsForObservations(
   observed: readonly ObservedDbOperation[],
-  touchGraph: TouchGraph,
+  touchGraph: CoreGraph.TouchGraph,
 ): DbVerificationDiagnostic[] {
   const observedWrites = new Set(
     observed
@@ -64,7 +64,7 @@ export function diagnosticsForObservations(
 
 export function assertObservedWritesCovered(
   observed: readonly ObservedDbOperation[],
-  touchGraph: TouchGraph,
+  touchGraph: CoreGraph.TouchGraph,
   config: DbVerificationConfig,
   touchGraphKey?: string,
 ): void {
@@ -146,7 +146,7 @@ export function diagnosticMessage(code: DiagnosticCode, detail: string): string 
 
 function assertKeyedWritesObserved(
   observed: readonly ObservedDbOperation[],
-  touchGraph: TouchGraph,
+  touchGraph: CoreGraph.TouchGraph,
   config: DbVerificationConfig,
 ): void {
   const entries = Object.values(touchGraph).filter((entry) => entry !== undefined);
@@ -181,7 +181,10 @@ function assertKeyedWritesObserved(
   throw new Error(diagnosticMessage('KV408', details));
 }
 
-function selectTouchGraph(touchGraph: TouchGraph, touchGraphKey: string | undefined): TouchGraph {
+function selectTouchGraph(
+  touchGraph: CoreGraph.TouchGraph,
+  touchGraphKey: string | undefined,
+): CoreGraph.TouchGraph {
   if (touchGraphKey === undefined) return touchGraph;
 
   const entry = touchGraph[touchGraphKey];
@@ -218,7 +221,7 @@ function observedRowKeys(operation: ObservedDbOperation): ReadonlySet<string> {
 
 function assertMutationReadsCovered(
   observed: readonly ObservedDbOperation[],
-  touchGraph: TouchGraph,
+  touchGraph: CoreGraph.TouchGraph,
   config: DbVerificationConfig,
 ): void {
   assertNoExemptReads(observed, config);
@@ -278,8 +281,8 @@ function trimDiagnosticSentence(message: string): string {
 }
 
 function hasUnobservedBranch(
-  touch: TouchSite,
+  touch: CoreGraph.TouchSite,
   observedBranches: ReadonlySet<string>,
-): touch is TouchSite & { branch: string } {
+): touch is CoreGraph.TouchSite & { branch: string } {
   return touch.branch !== undefined && !observedBranches.has(touch.branch);
 }
