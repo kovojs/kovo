@@ -171,6 +171,24 @@
       "domName": "product-grid",
       "exportName": "ProductGrid",
       "fragments": ["components/product-grid/product-grid"],
+      "mutationForms": [
+        {
+          "fieldErrors": [
+            {
+              "id": "{`add-to-cart-quantity-error-${item.id}`}",
+              "name": "quantity"
+            }
+          ],
+          "fields": ["productId", "quantity"],
+          "formErrors": [
+            {
+              "code": "OUT_OF_STOCK"
+            }
+          ],
+          "mutation": "cart/add",
+          "slot": "addToCart"
+        }
+      ],
       "name": "components/product-grid/product-grid",
       "queries": ["productGrid"]
     }

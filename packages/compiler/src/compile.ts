@@ -7,6 +7,7 @@ import { appendLiveTargetRendererExports } from './emit/live-target-renderers.js
 import { emitRegistryModule } from './emit/registry.js';
 import {
   emitServerModule,
+  mutationFormExplainFacts,
   semanticRenderEquivalenceCheck,
   serverRenderLowering,
 } from './emit/server.js';
@@ -170,6 +171,13 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       fragmentTargets,
       styleExtraction.ruleUsages,
       firstComponentModel(originalModel)?.localName,
+      mutationFormExplainFacts(model, {
+        fileName: options.fileName,
+        ...(compileOptions.registryFacts
+          ? { registryFacts: compileOptions.registryFacts }
+          : {}),
+        source,
+      }),
     ),
   ];
   const cssAssets = cssSource

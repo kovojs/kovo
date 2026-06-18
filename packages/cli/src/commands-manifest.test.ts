@@ -61,7 +61,9 @@ describe('commands manifest', () => {
       'usage: kovo export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]',
     );
     expect(MCP_USAGE).toBe('usage: kovo mcp');
-    expect(EXPLAIN_USAGE_LINE).toContain('kovo explain component|mutation|query|page <target>');
+    expect(EXPLAIN_USAGE_LINE).toContain(
+      'kovo explain component|mutation|query|page|context <target>',
+    );
   });
 
   it('each manifest usage is consistent with the bin imports', () => {

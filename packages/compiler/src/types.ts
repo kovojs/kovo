@@ -35,6 +35,7 @@ export type ComponentGraphFact = Pick<
   | 'exportName'
   | 'fragments'
   | 'name'
+  | 'mutationForms'
   | 'queries'
   | 'styleRules'
 >;

@@ -753,6 +753,74 @@ describe('kovo explain', () => {
     });
   });
 
+  it('explains component mutation form error bindings', () => {
+    expect(
+      kovoExplain(
+        {
+          components: [
+            {
+              mutationForms: [
+                {
+                  fieldErrors: [{ id: 'add-to-cart-quantity-error-p1', name: 'quantity' }],
+                  fields: ['productId', 'quantity'],
+                  formErrors: [{ code: 'OUT_OF_STOCK' }],
+                  mutation: 'cart/add',
+                  slot: 'addToCart',
+                },
+              ],
+              name: 'ProductGrid',
+            },
+          ],
+        },
+        { kind: 'component', target: 'ProductGrid' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'COMPONENT ProductGrid',
+        'queries: -',
+        'fragments: -',
+        'FORM addToCart mutation=cart/add fields=productId,quantity field-errors=quantity:add-to-cart-quantity-error-p1 form-errors=OUT_OF_STOCK',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('explains request provider fields and consumers', () => {
+    expect(
+      kovoExplain(
+        {
+          requestProviders: [
+            {
+              consumers: ['query:cart', 'layout:CartLayout', 'mutation:cart/add'],
+              fields: ['cart', 'stock'],
+              kind: 'db',
+              source: 'createApp.db',
+            },
+            {
+              consumers: ['guard:authed', 'layout:CartLayout'],
+              fields: ['user.id', 'user.roles'],
+              kind: 'session',
+              source: 'createApp.sessionProvider',
+            },
+          ],
+        },
+        { kind: 'context', target: 'db' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'CONTEXT db',
+        'fields: cart,stock',
+        'consumers: query:cart,layout:CartLayout,mutation:cart/add',
+        'source: createApp.db',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('explains mutation updates from writes when invalidates are absent', () => {
     expect(
       kovoExplain(

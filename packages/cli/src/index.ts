@@ -1112,9 +1112,9 @@ function isNodeErrorCode(error: unknown, code: string): boolean {
 
 /**
  * The kind of graph subject a targeted `kovo explain` describes — a component,
- * mutation, query, or page (SPEC.md §5.3).
+ * request context, mutation, query, or page (SPEC.md §5.3).
  */
-export type ExplainKind = 'component' | 'mutation' | 'page' | 'query';
+export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query';
 
 /**
  * Options selecting which `kovo explain` view `kovoExplain` produces: a targeted
@@ -1224,6 +1224,17 @@ export function kovoExplain(
     return ok(lines);
   }
 
+  if (options.kind === 'context') {
+    const provider = input.requestProviders?.find((item) => item.kind === options.target);
+    if (!provider) return notFound(options);
+
+    lines.push(`CONTEXT ${provider.kind}`);
+    lines.push(`fields: ${list(provider.fields)}`);
+    lines.push(`consumers: ${list(provider.consumers)}`);
+    lines.push(`source: ${provider.source ?? '-'}`);
+    return ok(lines);
+  }
+
   if (options.kind === 'component') {
     const component = findComponentExplain(input.components, options.target);
     if (!component) return notFound(options);
@@ -1305,6 +1316,18 @@ export function kovoExplain(
           `rule=${merge.rule}`,
           `decision=${merge.decision}`,
           `diagnostics=${list(merge.diagnostics)}`,
+        ].join(' '),
+      );
+    }
+
+    for (const form of component.mutationForms ?? []) {
+      lines.push(
+        [
+          `FORM ${form.slot}`,
+          `mutation=${form.mutation}`,
+          `fields=${list(form.fields)}`,
+          `field-errors=${list(form.fieldErrors?.map((field) => `${field.name}:${field.id ?? '-'}`))}`,
+          `form-errors=${list(form.formErrors?.map((error) => error.code ?? '-'))}`,
         ].join(' '),
       );
     }
@@ -1695,6 +1718,7 @@ function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
   const [kind, target, inputPath, extra] = positional;
   if (!isExplainKind(kind) || !target || extra) return explainUsage();
   if (flags.has('--layouts') && kind !== 'page') return explainUsage();
+  if (flags.has('--optimistic') && kind !== 'mutation') return explainUsage();
 
   return {
     inputPath,
@@ -1885,7 +1909,13 @@ function componentWireName(name: string): string {
 }
 
 function isExplainKind(value: string | undefined): value is ExplainKind {
-  return value === 'component' || value === 'mutation' || value === 'page' || value === 'query';
+  return (
+    value === 'component' ||
+    value === 'context' ||
+    value === 'mutation' ||
+    value === 'page' ||
+    value === 'query'
+  );
 }
 
 function invalidatedBy(query: CoreGraph.QueryReadSet, input: CoreGraph.KovoExplainInput): string[] {

@@ -1,6 +1,7 @@
 import { runInNewContext } from 'node:vm';
 
 import { diagnosticDefinitions } from '@kovojs/core';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { compilerIrHeader } from '../ir.js';
@@ -744,6 +745,81 @@ function componentMutationSlotName(
 
   if (entries.length === 1) return entries[0]?.key ?? null;
   return mutationLocalName;
+}
+
+export function mutationFormExplainFacts(
+  model: ComponentModuleModel,
+  options: { fileName: string; registryFacts?: RegistryFacts; source: string },
+): CoreGraph.MutationFormExplain[] {
+  const forms: CoreGraph.MutationFormExplain[] = [];
+
+  for (const form of model.jsxElements) {
+    if (form.tag !== 'form') continue;
+    const binding = enhancedMutationFormBinding(form);
+    if (!binding) continue;
+
+    const mutationKey = localMutationKey(model, binding.localName, options.registryFacts);
+    const mutationInput = mutationInputFactForForm(model, binding.localName, options);
+    if (!mutationKey && !mutationInput) continue;
+
+    const slot = componentMutationSlotName(model, binding.localName) ?? binding.localName;
+    const fieldErrors = mutationFormFieldErrorFacts(model, form, slot);
+    const formErrors = mutationFormErrorFacts(model, form);
+
+    forms.push({
+      ...(fieldErrors.length === 0 ? {} : { fieldErrors }),
+      ...(mutationInput === null
+        ? {}
+        : { fields: mutationInput.fields.map((field) => field.name) }),
+      ...(formErrors.length === 0 ? {} : { formErrors }),
+      mutation: mutationInput?.key ?? mutationKey ?? binding.localName,
+      slot,
+    });
+  }
+
+  return forms;
+}
+
+function mutationFormFieldErrorFacts(
+  model: ComponentModuleModel,
+  form: JsxElementModel,
+  slot: string,
+): CoreGraph.MutationFormFieldErrorExplain[] {
+  return model.jsxElements
+    .filter(
+      (element) =>
+        element.tag === 'FieldError' && enclosingEnhancedMutationForm(model, element) === form,
+    )
+    .flatMap((element) => {
+      const name = staticStringAttributeValue(
+        element.attributes.find((attribute) => attribute.name === 'name'),
+      );
+      if (!name) return [];
+      const authoredId = staticStringAttributeValue(
+        element.attributes.find((attribute) => attribute.name === 'id'),
+      );
+      const generatedId = mutationFormErrorIdExpression(form, slot, name).source;
+      const id = authoredId ?? generatedId.replace(/^"|"$/g, '');
+
+      return [{ id, name }];
+    });
+}
+
+function mutationFormErrorFacts(
+  model: ComponentModuleModel,
+  form: JsxElementModel,
+): CoreGraph.MutationFormErrorExplain[] {
+  return model.jsxElements
+    .filter(
+      (element) =>
+        element.tag === 'FormError' && enclosingEnhancedMutationForm(model, element) === form,
+    )
+    .map((element) => {
+      const code = staticStringAttributeValue(
+        element.attributes.find((attribute) => attribute.name === 'code'),
+      );
+      return code ? { code } : {};
+    });
 }
 
 function enclosingEnhancedMutationForm(

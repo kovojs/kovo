@@ -25,7 +25,7 @@ export const AUDIT_USAGE = 'usage: kovo audit [--fail-on-findings] [graph.json]'
 
 /** @internal Usage forms emitted for `kovo explain` (see `explainUsage`). */
 export const EXPLAIN_USAGE = [
-  'usage: kovo explain component|mutation|query|page <target> [--optimistic] [--layouts] [graph.json]',
+  'usage: kovo explain component|mutation|query|page|context <target> [--optimistic] [--layouts] [graph.json]',
   '       kovo explain --endpoints [graph.json]',
   '       kovo explain --unguarded [--fail-on-findings] [graph.json]',
   '       kovo explain --unscoped [--fail-on-findings] [graph.json]',
@@ -37,7 +37,7 @@ export const EXPLAIN_USAGE = [
  * literal here so the drift guard can compare against `explainUsage()`.
  */
 export const EXPLAIN_USAGE_LINE =
-  'kovo explain component|mutation|query|page <target> [--optimistic] [--layouts] [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
+  'kovo explain component|mutation|query|page|context <target> [--optimistic] [--layouts] [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
 
 /** @internal Usage line emitted for `kovo add` (see `addUsage`). */
 export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';

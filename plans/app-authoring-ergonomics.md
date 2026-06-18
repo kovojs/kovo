@@ -486,13 +486,29 @@ item inherits from rather than re-deciding it:
       exits 1 with no hits; `node scripts/api-surface-gate.mjs` and
       `git diff --check` pass.
 
-- [ ] **9. Extend `kovo explain` to the new seams.**
+- [x] **9. Extend `kovo explain` to the new seams.**
   - Cover request provisioning (which `db`/session fields a query sees), layout
     composition chains, query-registry membership, and `<FieldError>` ⇄ schema
     binding, so the "why did this happen?" loop matches the existing
     `kovo explain` surfaces (§ verification table).
   - Acceptance evidence: `kovo explain` output snapshots for a layout-nested route
     and a form's resolved field-error bindings.
+  - Evidence:
+    - `kovo explain page <route> --layouts` already prints layout chains,
+      per-layout queries, navigation segments, and page query membership; covered by
+      `packages/cli/src/index.kovo-explain.test.ts`.
+    - `kovo explain component <name>` now prints compiler-derived mutation form
+      bindings (`FORM <slot> mutation=... fields=... field-errors=... form-errors=...`).
+      The compiler emits those from the same form lowering path that resolves
+      `<FieldError>` IDs and `<FormError>` codes.
+    - `kovo explain context db|session` prints optional request provider graph
+      facts (`fields`, `consumers`, `source`) for provider visibility without
+      introspecting runtime closures.
+    - Verification: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts packages/core/src/graph.test.ts packages/compiler/src/registry.test.ts`;
+      `pnpm exec vitest --run packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/route-pages.test.ts packages/core/src/graph.test.ts`;
+      `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`;
+      `pnpm --filter @kovojs/example-commerce test -- source-truth.test.ts`;
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 
 - [ ] **10. Naming + inference consistency pass.**
   - One vocabulary pass across `<FieldError>`/`<FormError>`, error boundaries,

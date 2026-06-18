@@ -54,6 +54,7 @@ export interface KovoCheckInput {
   pages?: readonly PageExplain[];
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
+  requestProviders?: readonly RequestProviderExplain[];
   renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
   scopeAudits?: readonly ScopeAuditFact[];
   touchGraph?: TouchGraph;
@@ -77,6 +78,14 @@ export interface PackageComponentPrefixExplain {
 }
 
 /** @internal */
+export interface RequestProviderExplain {
+  consumers?: readonly string[];
+  fields?: readonly string[];
+  kind: 'db' | 'session';
+  source?: string;
+}
+
+/** @internal */
 export interface ComponentExplain {
   attributeMerges?: readonly AttributeMergeExplain[];
   derives?: readonly DeriveExplain[];
@@ -85,11 +94,32 @@ export interface ComponentExplain {
   exportName?: string;
   fragments?: readonly string[];
   handlers?: readonly HandlerExplain[];
+  mutationForms?: readonly MutationFormExplain[];
   name: string;
   platformSubstitutions?: readonly PlatformSubstitutionExplain[];
   queries?: readonly string[];
   styleRules?: readonly StyleRuleExplain[];
   triggers?: readonly TriggerExplain[];
+}
+
+/** @internal */
+export interface MutationFormExplain {
+  fieldErrors?: readonly MutationFormFieldErrorExplain[];
+  fields?: readonly string[];
+  formErrors?: readonly MutationFormErrorExplain[];
+  mutation: string;
+  slot: string;
+}
+
+/** @internal */
+export interface MutationFormFieldErrorExplain {
+  id?: string;
+  name: string;
+}
+
+/** @internal */
+export interface MutationFormErrorExplain {
+  code?: string;
 }
 
 /** @internal */
@@ -341,6 +371,7 @@ const arrayFields = [
   'pages',
   'queryData',
   'queries',
+  'requestProviders',
   'renderEquivalenceChecks',
   'scopeAudits',
   'updateCoverage',

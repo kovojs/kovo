@@ -121,6 +121,7 @@ export function componentGraphFact(
   fragmentTargets: readonly string[],
   styleRuleUsages: readonly StyleRuleUsage[] = [],
   exportName?: string,
+  mutationForms: readonly CoreGraph.MutationFormExplain[] = [],
 ): ComponentGraphFact {
   const queries = componentQueryNames(model);
 
@@ -128,6 +129,7 @@ export function componentGraphFact(
     domName,
     ...(exportName === undefined ? {} : { exportName }),
     ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
+    ...(mutationForms.length === 0 ? {} : { mutationForms }),
     name: componentName,
     ...(queries.length === 0 ? {} : { queries }),
     ...(styleRuleUsages.length === 0

@@ -521,6 +521,48 @@ export const cart = route('/cart', {
     ]);
   });
 
+  it('emits mutation form error binding facts for component explain', () => {
+    const result = compileComponentModule({
+      fileName: 'components/products/product-grid.tsx',
+      source: `
+import { component, FieldError, FormError } from '@kovojs/core';
+import { mutation, s } from '@kovojs/server';
+
+export const addToCart = mutation('cart/add', {
+  input: s.object({
+    productId: s.string(),
+    quantity: s.number(),
+  }),
+  handler() {
+    return null;
+  },
+});
+
+export const ProductGrid = component({
+  mutations: { addToCart },
+  render: (_queries, _state, slots) => (
+    <form enhance mutation={addToCart} key="p1">
+      <input name="productId" value="p1" />
+      <input name="quantity" />
+      <FieldError name="quantity" />
+      <FormError code="OUT_OF_STOCK">Unable to add this item.</FormError>
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.componentGraphFacts[0]?.mutationForms).toEqual([
+      {
+        fieldErrors: [{ id: 'add-to-cart-quantity-error-p1', name: 'quantity' }],
+        fields: ['productId', 'quantity'],
+        formErrors: [{ code: 'OUT_OF_STOCK' }],
+        mutation: 'cart/add',
+        slot: 'addToCart',
+      },
+    ]);
+  });
+
   it('marks duplicate DOM leaves with stable registry-key disambiguation facts', () => {
     const derived = deriveAppGraph({
       graph: {
