@@ -140,7 +140,7 @@ export const scrollAreaStyles = style.create(
         cursor: 'not-allowed',
       },
       ':focus-visible': {
-        boxShadow: `inset 0 0 0 2px ${uiTheme.color.borderStrong}`,
+        boxShadow: uiTheme.shadow.focusRingInset,
       },
     },
   },

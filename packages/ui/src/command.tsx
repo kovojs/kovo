@@ -189,7 +189,7 @@ export const commandStyles = style.create(
         cursor: 'not-allowed',
       },
       ':focus-visible': {
-        boxShadow: `0 0 0 2px ${uiTheme.color.borderStrong}`,
+        boxShadow: uiTheme.shadow.focusRing,
       },
     },
     item: {

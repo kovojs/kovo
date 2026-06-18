@@ -1238,7 +1238,9 @@
           "component"
         ]
       },
-      "uiComponents": []
+      "uiComponents": [
+        "theme"
+      ]
     },
     {
       "name": "toggle",
@@ -1260,7 +1262,9 @@
           "component"
         ]
       },
-      "uiComponents": []
+      "uiComponents": [
+        "theme"
+      ]
     },
     {
       "name": "toolbar",

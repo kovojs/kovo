@@ -3,6 +3,8 @@ import { component } from '@kovojs/core';
 import { toggleRootAttributes } from '@kovojs/headless-ui/toggle';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export type ToggleVariant = 'outline' | 'subtle';
 
 export interface ToggleProps {
@@ -37,8 +39,8 @@ const base = style.create(
         outlineWidth: 2,
       },
       '[data-state=pressed]': {
-        backgroundColor: '#0a0a0a',
-        color: '#ffffff',
+        backgroundColor: uiTheme.color.accent,
+        color: uiTheme.color.accentForeground,
       },
     },
   },
@@ -48,26 +50,26 @@ const base = style.create(
 const variants = style.create(
   {
     outline: {
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       ':focus-visible': {
-        outlineColor: '#a3a3a3',
+        outlineColor: uiTheme.color.borderStrong,
       },
       ':hover': {
-        backgroundColor: '#fafafa',
+        backgroundColor: uiTheme.color.backgroundRaised,
       },
     },
     subtle: {
-      backgroundColor: '#f5f5f5',
+      backgroundColor: uiTheme.color.backgroundSubtle,
       borderColor: 'transparent',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       ':focus-visible': {
-        outlineColor: '#a3a3a3',
+        outlineColor: uiTheme.color.borderStrong,
       },
       ':hover': {
-        backgroundColor: '#e5e5e5',
+        backgroundColor: uiTheme.color.backgroundSubtleHigh,
       },
     },
   },

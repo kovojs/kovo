@@ -46,4 +46,8 @@ export const uiTheme = Object.freeze({
     lg: shape.cornerLarge,
     full: shape.cornerFull,
   },
+  shadow: {
+    focusRing: '0 0 0 2px var(--kovo-theme-sys-color-outline)',
+    focusRingInset: 'inset 0 0 0 2px var(--kovo-theme-sys-color-outline)',
+  },
 } as const);

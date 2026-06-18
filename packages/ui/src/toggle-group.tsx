@@ -11,6 +11,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface ToggleGroupStyleOverrides {
   button?: style.StyleInput;
   item?: style.StyleInput;
@@ -58,7 +60,7 @@ export const toggleGroupStyles = style.create(
     button: {
       alignItems: 'center',
       borderRadius: 4,
-      color: '#525252',
+      color: uiTheme.color.foregroundMuted,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -71,15 +73,15 @@ export const toggleGroupStyles = style.create(
         opacity: 0.5,
       },
       '[data-state=pressed]': {
-        backgroundColor: '#ffffff',
+        backgroundColor: uiTheme.color.background,
         boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-        color: '#0a0a0a',
+        color: uiTheme.color.foreground,
       },
       ':disabled': {
         pointerEvents: 'none',
       },
       ':focus-visible': {
-        outlineColor: '#a3a3a3',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
@@ -94,12 +96,12 @@ export const toggleGroupStyles = style.create(
     },
     root: {
       alignItems: 'center',
-      backgroundColor: '#f5f5f5',
-      borderColor: '#e5e5e5',
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      borderColor: uiTheme.color.border,
       borderRadius: 6,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       columnGap: 4,
       display: 'inline-flex',
       padding: 4,

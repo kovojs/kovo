@@ -235,6 +235,10 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
     packages/ui/src/slider.stylex.test.tsx packages/ui/src/otp-field.stylex.test.tsx
     packages/ui/src/meter.stylex.test.tsx packages/ui/src/checkbox-group.stylex.test.tsx -u`
     updated 24 snapshots and passed.
+  - Follow-up evidence: `packages/ui/src/{toggle,toggle-group}.tsx` now also
+    import `./theme.js`; `corepack pnpm exec vitest --run
+    packages/ui/src/toggle.stylex.test.tsx packages/ui/src/toggle-group.stylex.test.tsx
+    packages/ui/src/theme-contract.test.tsx` passed.
 - [x] **C4. Migrate overlays/navigation.** Convert Dialog, AlertDialog, Drawer, Sheet, Popover,
       HoverCard, Tooltip, DropdownMenu, ContextMenu, Menubar, NavigationMenu, Command, Tabs,
       Toolbar, Accordion, Collapsible, Disclosure, Toast, Table, Avatar, Breadcrumb, ScrollArea.
@@ -254,13 +258,36 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
     packages/ui/src/navigation-menu.test.tsx packages/ui/src/hover-card.test.tsx
     packages/ui/src/breadcrumb.test.tsx -u`, `corepack pnpm exec tsc -p tsconfig.json --noEmit
     --pretty false`, and `git diff --check` all pass.
-- [ ] **C5. Keep override props author-last.** Verify all `style`/`styles` override surfaces still
+  - Follow-up evidence: `packages/ui/src/theme.ts` exposes static focus-ring
+    shadow token aliases used by `packages/ui/src/{command,scroll-area}.tsx`,
+    keeping package CSS extraction static. Verification: `corepack pnpm exec
+    vitest --run packages/compiler/src/style.test.ts
+    packages/compiler/src/package-styles.test.ts
+    packages/headless-ui/src/lib/token-sheet.test.ts` passed.
+- [x] **C5. Keep override props author-last.** Verify all `style`/`styles` override surfaces still
       win by StyleX property merge order after token migration.
-- [ ] **C6. Snapshot and visual smoke tests.** Refresh StyleX snapshots intentionally and add a
+  - Evidence: `packages/ui/src/theme-contract.test.tsx` parses UI TSX source
+    with TypeScript and proves every `style.attrs(...)` call that accepts
+    `props.style`/`props.styles` passes the app override as the final StyleX
+    merge argument; focused StyleX override snapshot tests for migrated families
+    pass in the C3/C4/toggle suites.
+- [x] **C6. Snapshot and visual smoke tests.** Refresh StyleX snapshots intentionally and add a
       small example/theme smoke proving one seed changes multiple component families.
-- [ ] **C7. Add a hex-literal migration gate.** After the UI migration, add or document a grep/lint
+  - Evidence: C2/C3/C4/toggle StyleX snapshots were refreshed in focused
+    component-family slices. `packages/ui/src/theme-contract.test.tsx` proves
+    two seed themes emit different system token values and that Button, Field,
+    and Dialog styles consume `--kovo-theme-sys-*` variables across display,
+    form, and overlay families. Verification: `corepack pnpm exec vitest --run
+    packages/ui/src -u` updated the remaining package snapshots, and `corepack
+    pnpm exec vitest --run packages/ui/src` passed 55 files / 186 tests.
+- [x] **C7. Add a hex-literal migration gate.** After the UI migration, add or document a grep/lint
       gate proving no component color hex literals remain except intentional non-color values or
       test fixtures.
+  - Evidence: `packages/ui/src/theme-contract.test.tsx` recursively scans
+    non-test UI TSX sources and fails on raw `#[0-9a-fA-F]` color literals.
+    Verification: `corepack pnpm exec vitest --run packages/ui/src/theme-contract.test.tsx`;
+    `rg -n "#[0-9a-fA-F]{3,8}\\b" packages/ui/src --glob "*.tsx" --glob
+    "!*.test.tsx"` returns no matches.
 
 ## Part D — Copy-in and app ergonomics
 

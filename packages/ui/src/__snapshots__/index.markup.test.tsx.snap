@@ -3,76 +3,76 @@
 exports[`@kovojs/ui styled package foundation > exports pure-markup button, badge, and card TSX components 1`] = `
 {
   "alertDialogActionClasses": [
-    "kv-alert-dialog-align-bzhsxc kv-alert-dialog-bg-8pj119 kv-alert-dialog-bd-nue1z kv-alert-dialog-bd-4e1zgu kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-bgznwm kv-alert-dialog-fg-suyvud kv-alert-dialog-d-4hu2a kv-alert-dialog-font-1h16nm kv-alert-dialog-font-11473q kv-alert-dialog-h-jrdi27 kv-alert-dialog-justify-jgpub0 kv-alert-dialog-pad-o183h5 kv-alert-dialog-transition-13klud kv-alert-dialog-opacity-1tcty7 kv-alert-dialog-pointer-kie594 kv-alert-dialog-outline-1y6lij kv-alert-dialog-outline-h73cxm kv-alert-dialog-outline-1olu66 kv-alert-dialog-outline-1ksugu kv-alert-dialog-bg-80a07q kv-alert-dialog-bg-3ipozj kv-alert-dialog-bg-kmkfwv",
+    "kv-alert-dialog-align-bzhsxc kv-alert-dialog-bg-n17iar kv-alert-dialog-bd-nue1z kv-alert-dialog-bd-12jlys kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-bgznwm kv-alert-dialog-fg-3nec04 kv-alert-dialog-d-4hu2a kv-alert-dialog-font-1h16nm kv-alert-dialog-font-11473q kv-alert-dialog-h-jrdi27 kv-alert-dialog-justify-jgpub0 kv-alert-dialog-pad-o183h5 kv-alert-dialog-transition-13klud kv-alert-dialog-opacity-1tcty7 kv-alert-dialog-pointer-kie594 kv-alert-dialog-outline-61tn6w kv-alert-dialog-outline-h73cxm kv-alert-dialog-outline-1olu66 kv-alert-dialog-outline-1ksugu kv-alert-dialog-bg-1xe0rz kv-alert-dialog-fg-2v0h kv-alert-dialog-bg-1mcmyd kv-alert-dialog-fg-1gc1x7 kv-alert-dialog-bg-gj5n5h kv-alert-dialog-fg-1kzbux",
   ],
   "alertDialogClasses": [
-    "kv-alert-dialog-fg-5q0b5u kv-alert-dialog-d-1578mh kv-alert-dialog-opacity-1wmp2v",
+    "kv-alert-dialog-fg-1xoz2m kv-alert-dialog-d-1578mh kv-alert-dialog-opacity-1wmp2v",
   ],
   "alertDialogContentClasses": [
-    "kv-alert-dialog-bg-1pd64c kv-alert-dialog-bd-8qgrmx kv-alert-dialog-bd-1luezx kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-5bneq7 kv-alert-dialog-fg-5q0b5u kv-alert-dialog-m-17m6m7 kv-alert-dialog-max-kcc8f5 kv-alert-dialog-pad-1kfxum kv-alert-dialog-d-1que9w kv-alert-dialog-bg-hvkiv5",
+    "kv-alert-dialog-bg-to660c kv-alert-dialog-bd-jllngq kv-alert-dialog-bd-1o6h6q kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-5bneq7 kv-alert-dialog-fg-1xoz2m kv-alert-dialog-m-17m6m7 kv-alert-dialog-max-kcc8f5 kv-alert-dialog-pad-1kfxum kv-alert-dialog-d-1que9w kv-alert-dialog-bg-hvkiv5",
   ],
   "autocompleteClasses": [
-    "kv-autocomplete-fg-1qpiwv kv-autocomplete-d-1mghfj kv-autocomplete-font-1rygq8 kv-autocomplete-row-1m16zq kv-autocomplete-opacity-1wmp2v kv-autocomplete-fg-84gjdm",
+    "kv-autocomplete-fg-ndg53x kv-autocomplete-d-1mghfj kv-autocomplete-font-1rygq8 kv-autocomplete-row-1m16zq kv-autocomplete-opacity-1wmp2v kv-autocomplete-fg-1j04p9",
   ],
   "autocompleteInputClasses": [
-    "kv-autocomplete-bg-1r5soy kv-autocomplete-bd-1q3pu6 kv-autocomplete-bd-1dgij3 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-1qpiwv kv-autocomplete-font-1rygq8 kv-autocomplete-h-1crj27 kv-autocomplete-outline-1ipo24 kv-autocomplete-pad-13ileu kv-autocomplete-transition-1nf16q kv-autocomplete-w-lhhf6b kv-autocomplete-fg-exm43b kv-autocomplete-bd-anjfiu kv-autocomplete-bg-1nj58e kv-autocomplete-fg-1k3no8 kv-autocomplete-cursor-1puzf0 kv-autocomplete-outline-nj20g6 kv-autocomplete-outline-1ag1xs kv-autocomplete-outline-piwjfh kv-autocomplete-outline-1y03xn",
+    "kv-autocomplete-bg-1e8vv7 kv-autocomplete-bd-xuygo5 kv-autocomplete-bd-1oyuq7 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-ndg53x kv-autocomplete-font-1rygq8 kv-autocomplete-h-1crj27 kv-autocomplete-outline-1ipo24 kv-autocomplete-pad-13ileu kv-autocomplete-transition-1nf16q kv-autocomplete-w-lhhf6b kv-autocomplete-fg-1haook kv-autocomplete-bd-1l3qua kv-autocomplete-bg-19mu96 kv-autocomplete-fg-1m99ep kv-autocomplete-cursor-1puzf0 kv-autocomplete-outline-10m2j4 kv-autocomplete-outline-1ag1xs kv-autocomplete-outline-piwjfh kv-autocomplete-outline-1y03xn",
   ],
   "checkboxGroupClasses": [
-    "kv-checkbox-group-fg-8bc8sj kv-checkbox-group-d-1mghfj kv-checkbox-group-font-ms8kpd kv-checkbox-group-row-1m16zq kv-checkbox-group-opacity-1icjyx kv-checkbox-group-fg-84gjdm kv-checkbox-group-align-1p65i1 kv-checkbox-group-d-1b87tr kv-checkbox-group-flex-1m4ool",
+    "kv-checkbox-group-fg-tkbfam kv-checkbox-group-d-1mghfj kv-checkbox-group-font-ms8kpd kv-checkbox-group-row-1m16zq kv-checkbox-group-opacity-1icjyx kv-checkbox-group-fg-1j04p9 kv-checkbox-group-align-1p65i1 kv-checkbox-group-d-1b87tr kv-checkbox-group-flex-1m4ool",
   ],
   "comboboxClasses": [
-    "kv-combobox-fg-1qpiwv kv-combobox-d-1mghfj kv-combobox-font-1rygq8 kv-combobox-row-1m16zq kv-combobox-opacity-uz1kyp kv-combobox-fg-84gjdm",
+    "kv-combobox-fg-ndg53x kv-combobox-d-1mghfj kv-combobox-font-1rygq8 kv-combobox-row-1m16zq kv-combobox-opacity-uz1kyp kv-combobox-fg-1j04p9",
   ],
   "comboboxInputClasses": [
-    "kv-combobox-bg-1r5soy kv-combobox-bd-1q3pu6 kv-combobox-bd-1dgij3 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-1ti0zz kv-combobox-fg-1qpiwv kv-combobox-font-1rygq8 kv-combobox-h-1crj27 kv-combobox-outline-1ipo24 kv-combobox-pad-13ileu kv-combobox-transition-1nf16q kv-combobox-w-lhhf6b kv-combobox-fg-exm43b kv-combobox-bd-anjfiu kv-combobox-bg-1nj58e kv-combobox-fg-1k3no8 kv-combobox-cursor-1puzf0 kv-combobox-outline-nj20g6 kv-combobox-outline-1ag1xs kv-combobox-outline-piwjfh kv-combobox-outline-1y03xn",
+    "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-1ti0zz kv-combobox-fg-ndg53x kv-combobox-font-1rygq8 kv-combobox-h-1crj27 kv-combobox-outline-1ipo24 kv-combobox-pad-13ileu kv-combobox-transition-1nf16q kv-combobox-w-lhhf6b kv-combobox-fg-1haook kv-combobox-bd-1l3qua kv-combobox-bg-19mu96 kv-combobox-fg-1m99ep kv-combobox-cursor-1puzf0 kv-combobox-outline-10m2j4 kv-combobox-outline-1ag1xs kv-combobox-outline-piwjfh kv-combobox-outline-1y03xn",
   ],
   "comboboxListboxClasses": [
-    "kv-combobox-bg-1r5soy kv-combobox-bd-37irmt kv-combobox-bd-1dgij3 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-1ti0zz kv-combobox-max-1ajqiv kv-combobox-overflow-1grxml kv-combobox-pad-spfybb kv-combobox-d-dphzaj",
+    "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-1ti0zz kv-combobox-max-1ajqiv kv-combobox-overflow-1grxml kv-combobox-pad-spfybb kv-combobox-d-dphzaj",
   ],
   "commandClasses": [
-    "kv-command-fg-1kcq42 kv-command-d-1mghfj kv-command-font-kvxk8f kv-command-row-1m16zq kv-command-opacity-1icjyx",
+    "kv-command-fg-1f1he7 kv-command-d-1mghfj kv-command-font-kvxk8f kv-command-row-1m16zq kv-command-opacity-1icjyx",
   ],
   "contextMenuClasses": [
-    "kv-context-menu-fg-v6e79r kv-context-menu-font-1cumtw kv-context-menu-opacity-1ctby9",
+    "kv-context-menu-fg-16p8sm kv-context-menu-font-1cumtw kv-context-menu-opacity-1ctby9",
   ],
   "dialogClasses": [
-    "kv-dialog-fg-1kcq42 kv-dialog-d-1578mh kv-dialog-opacity-1wmp2v",
+    "kv-dialog-fg-1f1he7 kv-dialog-d-1578mh kv-dialog-opacity-1wmp2v",
   ],
   "dialogContentClasses": [
-    "kv-dialog-bg-wpm5im kv-dialog-bd-8qgrmx kv-dialog-bd-1luezx kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-5bneq7 kv-dialog-fg-1kcq42 kv-dialog-m-17m6m7 kv-dialog-max-rbx48h kv-dialog-pad-1kfxum kv-dialog-d-1que9w kv-dialog-bg-qyhm2q",
+    "kv-dialog-bg-1noq3u kv-dialog-bd-jllngq kv-dialog-bd-1o6h6q kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-5bneq7 kv-dialog-fg-1f1he7 kv-dialog-m-17m6m7 kv-dialog-max-rbx48h kv-dialog-pad-1kfxum kv-dialog-d-1que9w kv-dialog-bg-qyhm2q",
   ],
   "dropdownMenuClasses": [
-    "kv-dropdown-menu-fg-v6e79r kv-dropdown-menu-d-14glvo kv-dropdown-menu-font-1cumtw kv-dropdown-menu-position-ojetho kv-dropdown-menu-opacity-1ctby9",
+    "kv-dropdown-menu-fg-16p8sm kv-dropdown-menu-d-14glvo kv-dropdown-menu-font-1cumtw kv-dropdown-menu-position-ojetho kv-dropdown-menu-opacity-1ctby9",
   ],
   "fieldClasses": [
-    "kv-field-fg-8bc8sj kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-row-1m16zq kv-field-opacity-r0fqdm kv-field-fg-84gjdm kv-field-font-tcmj2u",
+    "kv-field-fg-tkbfam kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-row-1m16zq kv-field-opacity-r0fqdm kv-field-fg-1j04p9 kv-field-font-tcmj2u",
   ],
   "menubarClasses": [
-    "kv-menubar-bg-1e9h7l kv-menubar-bd-1nros8 kv-menubar-bd-135gc1 kv-menubar-bd-17dppo kv-menubar-bd-5grtwb kv-menubar-box-7xa7r0 kv-menubar-fg-1vjxc5 kv-menubar-d-1ks6ev kv-menubar-font-xjds0k kv-menubar-pad-1ky1bx kv-menubar-opacity-1ctby9 kv-menubar-flex-1m6qig",
+    "kv-menubar-bg-gz0aiu kv-menubar-bd-1gezg0 kv-menubar-bd-36tqtr kv-menubar-bd-17dppo kv-menubar-bd-5grtwb kv-menubar-box-7xa7r0 kv-menubar-fg-18y7qo kv-menubar-d-1ks6ev kv-menubar-font-xjds0k kv-menubar-pad-1ky1bx kv-menubar-opacity-1ctby9 kv-menubar-flex-1m6qig",
   ],
   "navigationMenuClasses": [
-    "kv-navigation-menu-fg-1vjxc5 kv-navigation-menu-font-1cumtw kv-navigation-menu-position-gf7e5z kv-navigation-menu-opacity-1icjyx kv-navigation-menu-w-143m2o",
+    "kv-navigation-menu-fg-18y7qo kv-navigation-menu-font-1cumtw kv-navigation-menu-position-gf7e5z kv-navigation-menu-opacity-1icjyx kv-navigation-menu-w-143m2o",
   ],
   "numberFieldClasses": [
-    "kv-number-field-fg-1qpiwv kv-number-field-d-1mghfj kv-number-field-font-1rwqzl kv-number-field-row-1m16zq kv-number-field-opacity-1wmp2v kv-number-field-fg-84gjdm",
+    "kv-number-field-fg-ndg53x kv-number-field-d-1mghfj kv-number-field-font-1rwqzl kv-number-field-row-1m16zq kv-number-field-opacity-1wmp2v kv-number-field-fg-1j04p9",
   ],
   "otpFieldClasses": [
-    "kv-otp-field-fg-1qpiwv kv-otp-field-d-1mghfj kv-otp-field-font-ms8kpd kv-otp-field-row-1m16zq kv-otp-field-opacity-1wmp2v kv-otp-field-fg-84gjdm",
+    "kv-otp-field-fg-ndg53x kv-otp-field-d-1mghfj kv-otp-field-font-ms8kpd kv-otp-field-row-1m16zq kv-otp-field-opacity-1wmp2v kv-otp-field-fg-1j04p9",
   ],
   "selectClasses": [
-    "kv-select-fg-v6e79r kv-select-d-1mghfj kv-select-font-1cumtw kv-select-row-1m16zq kv-select-opacity-1wmp2v kv-select-fg-84gjdm",
+    "kv-select-fg-16p8sm kv-select-d-1mghfj kv-select-font-1cumtw kv-select-row-1m16zq kv-select-opacity-1wmp2v kv-select-fg-1j04p9",
   ],
   "selectTriggerClasses": [
-    "kv-select-bg-dy7ce1 kv-select-bd-rie3sg kv-select-bd-1dtulr kv-select-bd-1vad9u kv-select-bd-115o9z kv-select-box-kdtwje kv-select-fg-v6e79r kv-select-font-1cumtw kv-select-h-ln0fuf kv-select-outline-19nyy6 kv-select-pad-raz2zz kv-select-transition-1icn30 kv-select-w-1ca06y kv-select-fg-1xku2b kv-select-bd-ougfxq kv-select-bg-1se1yc kv-select-fg-nzlu2n kv-select-cursor-1eaeoz kv-select-outline-1yt6dx kv-select-outline-1iz9f5 kv-select-outline-iee2jp kv-select-outline-1bfidg",
+    "kv-select-bg-clz9dn kv-select-bd-4k01u5 kv-select-bd-1u9xv6 kv-select-bd-1vad9u kv-select-bd-115o9z kv-select-box-kdtwje kv-select-fg-16p8sm kv-select-font-1cumtw kv-select-h-ln0fuf kv-select-outline-19nyy6 kv-select-pad-raz2zz kv-select-transition-1icn30 kv-select-w-1ca06y kv-select-fg-j0urq1 kv-select-bd-5mwy53 kv-select-bg-174e8a kv-select-fg-1xegkn kv-select-cursor-1eaeoz kv-select-outline-1l8onk kv-select-outline-1iz9f5 kv-select-outline-iee2jp kv-select-outline-1bfidg",
   ],
   "sliderClasses": [
-    "kv-slider-fg-1vjxc5 kv-slider-d-1mghfj kv-slider-font-ms8kpd kv-slider-row-1m16zq kv-slider-opacity-1wmp2v kv-slider-fg-84gjdm kv-slider-d-13ld8m",
+    "kv-slider-fg-18y7qo kv-slider-d-1mghfj kv-slider-font-ms8kpd kv-slider-row-1m16zq kv-slider-opacity-1wmp2v kv-slider-fg-1j04p9 kv-slider-d-13ld8m",
   ],
   "sliderInputClasses": [
-    "kv-slider-accent-1ykl6o kv-slider-h-1tqmpk kv-slider-w-lhhf6b kv-slider-h-k3ojn kv-slider-w-1gi3rz kv-slider-cursor-1puzf0 kv-slider-opacity-6caix7",
+    "kv-slider-accent-1koklt kv-slider-h-1tqmpk kv-slider-w-lhhf6b kv-slider-h-k3ojn kv-slider-w-1gi3rz kv-slider-cursor-1puzf0 kv-slider-opacity-6caix7",
   ],
   "toastClasses": [
-    "kv-toast-bg-ht8ju kv-toast-bd-1nros8 kv-toast-bd-4e1zgu kv-toast-bd-1c10d2 kv-toast-bd-9vb0yd kv-toast-box-16dxlr kv-toast-fg-ypb60u kv-toast-d-1mghfj kv-toast-font-1h16nm kv-toast-pad-1uhz8j kv-toast-row-1m16zq kv-toast-opacity-1wmp2v kv-toast-d-kgigk0 kv-toast-bg-ju7hbm kv-toast-bd-2ylm3k kv-toast-bg-1q9tkl kv-toast-bd-87h6yr kv-toast-bg-w0tyut kv-toast-bd-18jihk kv-toast-bg-1gaqvy kv-toast-bd-1rjssi",
+    "kv-toast-bg-1wqigr kv-toast-bd-1gezg0 kv-toast-bd-12jlys kv-toast-bd-1c10d2 kv-toast-bd-9vb0yd kv-toast-box-16dxlr kv-toast-fg-nxulax kv-toast-d-1mghfj kv-toast-font-1h16nm kv-toast-pad-1uhz8j kv-toast-row-1m16zq kv-toast-opacity-1wmp2v kv-toast-d-kgigk0 kv-toast-bg-1cg7x5 kv-toast-bd-hcmn8o kv-toast-bg-1onn1h kv-toast-bd-1ry346 kv-toast-bg-tietjt kv-toast-bd-gf5zgh kv-toast-bg-e66ch2 kv-toast-bd-1lfh1v",
   ],
   "toastViewportClasses": [
     "kv-toast-d-1mghfj kv-toast-max-deaxyh kv-toast-outline-x8cs7p kv-toast-pad-1uhz8j kv-toast-position-1lh6gn kv-toast-row-1m16zq kv-toast-w-1nzatp kv-toast-z-1q40g6 kv-toast-opacity-1wmp2v kv-toast-bottom-1p0zhn kv-toast-left-m8ec8w kv-toast-bottom-1mp0ju kv-toast-right-ty8wwr kv-toast-bottom-tbzdsb kv-toast-left-i46tzl kv-toast-left-1c220h kv-toast-top-s7hg34 kv-toast-right-ifx2pt kv-toast-top-4qyn5k kv-toast-left-14yl8z kv-toast-top-1bkjkp",
