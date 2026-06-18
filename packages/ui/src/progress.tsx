@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
-import { progressRootAttributes } from '@kovojs/headless-ui';
+import { progressRootAttributes } from '@kovojs/headless-ui/progress';
 
 export interface ProgressProps {
   children?: string;

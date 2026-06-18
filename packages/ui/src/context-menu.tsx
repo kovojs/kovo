@@ -9,7 +9,7 @@ import {
   contextMenuTriggerAttributes,
   type ContextMenuItem as HeadlessContextMenuItem,
   type ContextMenuPoint,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/context-menu';
 import * as style from '@kovojs/style';
 
 export interface ContextMenuStyleOverrides {

@@ -10,7 +10,7 @@ import {
   alertDialogRootAttributes,
   alertDialogTriggerClick as _alertDialogTriggerClick,
   alertDialogTriggerAttributes,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/alert-dialog';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/alert-dialog.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

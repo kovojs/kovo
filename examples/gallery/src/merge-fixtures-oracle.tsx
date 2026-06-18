@@ -4,7 +4,7 @@ import {
   type MergeableAttribute,
   type MergeableAttributeValue,
 } from '@kovojs/compiler';
-import * as primitiveExports from '@kovojs/headless-ui/primitives';
+import * as primitiveExports from '@kovojs/headless-ui';
 
 export { primitiveExports };
 

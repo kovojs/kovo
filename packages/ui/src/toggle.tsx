@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { toggleRootAttributes } from '@kovojs/headless-ui';
+import { toggleRootAttributes } from '@kovojs/headless-ui/toggle';
 import * as style from '@kovojs/style';
 
 export type ToggleVariant = 'outline' | 'subtle';

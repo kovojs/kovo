@@ -6,7 +6,7 @@ import {
   alertDialogCancel as _alertDialogCancel,
   alertDialogCancelClick as _alertDialogCancelClick,
   alertDialogTriggerClick as _alertDialogTriggerClick,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/alert-dialog';
 
 export const GalleryAlertDialogDemo$button_click = handler((event, ctx) => {
   const result = _alertDialogTriggerClick(Object(event), { open: ctx.state.open });

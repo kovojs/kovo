@@ -6,10 +6,9 @@ import {
   menubarRootAttributes,
   menubarSeparatorAttributes,
   menubarSubmenuAttributes,
-  type CollectionOrientation,
   type MenubarItem as HeadlessMenubarItem,
-  type TextDirection,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/menubar';
+import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface MenubarStyleOverrides {

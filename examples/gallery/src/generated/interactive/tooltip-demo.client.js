@@ -7,7 +7,7 @@ import {
   tooltipTriggerFocus as _tooltipTriggerFocus,
   tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter,
   tooltipTriggerPointerLeave as _tooltipTriggerPointerLeave,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/tooltip';
 
 export const GalleryTooltipDemo$button_blur = handler((event, ctx) => {
   const result = _tooltipTriggerBlur(Object(event), { open: ctx.state.open });

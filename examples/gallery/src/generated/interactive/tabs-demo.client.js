@@ -4,7 +4,7 @@ import { derive, handler } from '@kovojs/runtime/generated';
 import {
   tabsKeyDown as _tabsKeyDown,
   tabsTriggerClick as _tabsTriggerClick,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/tabs';
 
 export const GalleryTabsDemo$section_keydown = handler((event, ctx) => {
   const result = _tabsKeyDown(Object(event), {

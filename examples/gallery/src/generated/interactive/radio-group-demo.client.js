@@ -4,7 +4,7 @@ import { derive, handler } from '@kovojs/runtime/generated';
 import {
   radioGroupItemClick as _radioGroupItemClick,
   radioGroupKeyDown as _radioGroupKeyDown,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/radio-group';
 
 export const GalleryRadioGroupDemo$div_keydown = handler((event, ctx) => {
   const result = _radioGroupKeyDown(Object(event), {

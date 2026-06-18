@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { safeUrl, separatorRootAttributes } from '@kovojs/headless-ui';
+import { separatorRootAttributes } from '@kovojs/headless-ui/separator';
+import { safeUrl } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface BreadcrumbStyleOverrides {

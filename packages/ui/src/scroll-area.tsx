@@ -9,8 +9,8 @@ import {
   type ScrollAreaOrientation,
   type ScrollAreaScrollPosition,
   type ScrollAreaScrollbars,
-  type TextDirection,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/scroll-area';
+import type { TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface ScrollAreaStyleOverrides {

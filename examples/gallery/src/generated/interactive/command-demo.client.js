@@ -8,7 +8,7 @@ import {
   commandItemClick as _commandItemClick,
   commandKeyDown as _commandKeyDown,
   commandTriggerClick as _commandTriggerClick,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/command';
 
 export const GalleryCommandDemo$button_click = handler((event, ctx) => {
   const result = _commandTriggerClick(Object(event), { open: ctx.state.open });

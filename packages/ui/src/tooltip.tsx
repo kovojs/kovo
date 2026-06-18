@@ -4,7 +4,7 @@ import {
   tooltipContentAttributes,
   tooltipRootAttributes,
   tooltipTriggerAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/tooltip';
 import * as style from '@kovojs/style';
 
 export interface TooltipStyleOverrides {

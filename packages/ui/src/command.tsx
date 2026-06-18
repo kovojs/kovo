@@ -11,7 +11,7 @@ import {
   commandTriggerAttributes,
   commandValueText,
   type CommandItem as HeadlessCommandItem,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/command';
 import * as style from '@kovojs/style';
 
 export interface CommandStyleOverrides {

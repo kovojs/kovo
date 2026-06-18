@@ -9,10 +9,9 @@ import {
   navigationMenuRootAttributes,
   navigationMenuTriggerAttributes,
   navigationMenuViewportAttributes,
-  type CollectionOrientation,
   type NavigationMenuItem as HeadlessNavigationMenuItem,
-  type TextDirection,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/navigation-menu';
+import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface NavigationMenuStyleOverrides {

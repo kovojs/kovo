@@ -4,7 +4,7 @@ import { derive, handler } from '@kovojs/runtime/generated';
 import {
   toggleGroupItemClick as _toggleGroupItemClick,
   toggleGroupKeyDown as _toggleGroupKeyDown,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/toggle-group';
 
 export const GalleryToggleGroupDemo$section_keydown = handler((event, ctx) => {
   const result = _toggleGroupKeyDown(Object(event), {

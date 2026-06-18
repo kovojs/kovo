@@ -10,7 +10,7 @@ import {
   contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu,
   contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown,
   contextMenuTypeahead as _contextMenuTypeahead,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/context-menu';
 
 export const GalleryContextMenuDemo$div_contextmenu = handler((event, ctx) => {
   const result = _contextMenuTriggerContextMenu(Object(event), {

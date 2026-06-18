@@ -5,10 +5,9 @@ import {
   radioGroupLabelAttributes,
   radioGroupRadioAttributes,
   radioGroupRootAttributes,
-  type CollectionOrientation,
   type RadioGroupItem as HeadlessRadioGroupItem,
-  type TextDirection,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/radio-group';
+import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface RadioGroupStyleOverrides {

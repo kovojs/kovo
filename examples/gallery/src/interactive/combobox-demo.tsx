@@ -11,7 +11,7 @@ import {
   comboboxRootAttributes,
   comboboxValueAttributes,
   type ComboboxItem,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/combobox';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/combobox.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

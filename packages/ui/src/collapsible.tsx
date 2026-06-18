@@ -4,7 +4,7 @@ import {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
   collapsibleTriggerAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/collapsible';
 import * as style from '@kovojs/style';
 
 export interface CollapsibleStateProps {

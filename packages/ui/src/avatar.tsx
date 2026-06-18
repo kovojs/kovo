@@ -5,7 +5,7 @@ import {
   avatarImageAttributes,
   avatarRootAttributes,
   type AvatarImageStatus,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/avatar';
 import * as style from '@kovojs/style';
 
 export interface AvatarStyleOverrides {

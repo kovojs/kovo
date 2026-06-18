@@ -1,6 +1,6 @@
 import axe from 'axe-core';
 import { installKovoLoader, type KovoLoader } from '@kovojs/runtime';
-import { applyCheckboxIndeterminate } from '@kovojs/headless-ui/primitives';
+import { applyCheckboxIndeterminate } from '@kovojs/headless-ui/checkbox';
 import { expect, vi } from 'vitest';
 import { page } from 'vitest/browser';
 

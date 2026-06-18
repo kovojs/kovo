@@ -635,9 +635,9 @@ tsconfig.json --noEmit --pretty false`.
 
 ## Headless UI Subpath Cleanup
 
-- [ ] **Add direct family subpaths to `@kovojs/headless-ui`.**
+- [x] **Add direct family subpaths to existing `@kovojs/headless-ui` primitive families.**
   - Add package exports such as `./accordion`, `./alert-dialog`,
-    `./autocomplete`, `./avatar`, `./button`, `./checkbox`, `./checkbox-group`,
+    `./autocomplete`, `./avatar`, `./checkbox`, `./checkbox-group`,
     `./combobox`, `./command`, `./collapsible`, `./context-menu`, `./dialog`,
     `./disclosure`, `./dropdown-menu`, `./field`, `./hover-card`, `./menubar`,
     `./meter`, `./navigation-menu`, `./number-field`, `./otp-field`, `./popover`,
@@ -646,35 +646,57 @@ tsconfig.json --noEmit --pretty false`.
     `./toolbar`, and `./tooltip`.
   - Map each direct subpath to the existing `src/primitives/<family>.ts` file, or
     create thin source barrels only when a family needs a more app-facing name.
-  - Evidence:
-- [ ] **Decide whether `./primitives/*` remains as compatibility or becomes internal/deprecated.**
-  - If kept, document it as a compatibility namespace and keep both export maps in
-    sync.
-  - If deprecated, add migration docs and update all repo imports before removing
-    it from public docs.
-  - Evidence:
-- [ ] **Update `public-packages.json` for the new headless-ui public subpaths.**
+  - Evidence: `packages/headless-ui/package.json` exports root plus the 34
+    existing primitive family subpaths directly to `src/primitives/<family>.ts`.
+    There is no `src/primitives/button.ts`; `@kovojs/ui/button` is currently
+    pure markup, so no empty or misleading `@kovojs/headless-ui/button` subpath
+    was added.
+- [x] **Remove `./primitives/*` instead of keeping compatibility aliases.**
+  - Pre-release policy: direct family subpaths are canonical; `./primitives` and
+    `./primitives/<family>` are removed from the package export map and from
+    `public-packages.json` instead of being kept as duplicate public aliases.
+  - Evidence: `rg '@kovojs/headless-ui/primitives' packages examples site docs
+    public-packages.json packages/headless-ui/package.json packages/ui/package.json`
+    finds no stale import/export sites outside the parity test string.
+- [x] **Update `public-packages.json` for the new headless-ui public subpaths.**
   - Add the direct family subpaths to `@kovojs/headless-ui.apiBoundary.public`.
   - Remove or reclassify `./primitives/*` only after the compatibility decision is
     implemented and verified.
-  - Evidence:
-- [ ] **Update `@kovojs/ui` and generated/copy-in examples to import direct headless-ui subpaths.**
+  - Evidence: `public-packages.json` lists `.` and the direct headless-ui family
+    subpaths under `@kovojs/headless-ui.apiBoundary.public`; `corepack pnpm exec
+    vitest --run scripts/public-packages.test.mjs packages/ui/src/headless-subpath-parity.test.ts
+    packages/ui/src/copy-in.test.ts` passes.
+- [x] **Update `@kovojs/ui` and generated/copy-in examples to import direct headless-ui subpaths.**
   - Replace imports from `@kovojs/headless-ui/primitives` or
     `@kovojs/headless-ui/primitives/<family>` with direct family subpaths where
     applicable.
   - Ensure copied `@kovojs/ui` source remains buildable against public packages
     only.
-  - Evidence:
-- [ ] **Regenerate/check publish metadata and API docs for headless-ui.**
+  - Evidence: `packages/ui/src/*.tsx`, `examples/gallery/src/interactive/*`, and
+    `examples/gallery/src/generated/interactive/*` import direct headless-ui
+    family subpaths; `packages/ui/scripts/build-registry.mjs` accepts those
+    subpaths as public `@kovojs/headless-ui` dependencies and `node
+    packages/ui/scripts/build-registry.mjs` reports the registry is up to date.
+- [x] **Regenerate/check publish metadata and API docs for headless-ui.**
   - Run `node scripts/build-publish.mjs --write` after export-map changes.
   - Update generated API reference coverage if headless-ui direct family subpaths
     are documented.
-  - Evidence:
-- [ ] **Verify headless-ui subpath parity.**
+  - Evidence: `node scripts/build-publish.mjs --write` regenerated
+    `packages/headless-ui/package.json` publish metadata with 35 entries; `node
+    scripts/build-publish.mjs` passes. `node scripts/api-surface-gate.mjs
+    --write` refreshed the API ratchet for the new public subpaths and `node
+    scripts/api-surface-gate.mjs` passes with
+    `public-exports-needing-attention=2007`.
+- [x] **Verify headless-ui subpath parity.**
   - Add or update a package-exports test asserting each `@kovojs/ui/<family>` that
     depends on headless behavior has a matching `@kovojs/headless-ui/<family>`
     public subpath.
-  - Evidence:
+  - Evidence: `packages/ui/src/headless-subpath-parity.test.ts` asserts every
+    direct headless subpath imported by `@kovojs/ui` exists in
+    `packages/headless-ui/package.json` and is public in `public-packages.json`;
+    `corepack pnpm exec vitest --run packages/ui/src/headless-subpath-parity.test.ts`
+    passes. Broader verification: `corepack pnpm exec tsc -p tsconfig.json
+    --noEmit --pretty false` and `git diff --check` pass.
 
 ## UI Public Package Cleanup
 

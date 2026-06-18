@@ -8,8 +8,8 @@ import {
   accordionTriggerAttributes,
   type AccordionType,
   type AccordionValue,
-  type CollectionOrientation,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/accordion';
+import type { CollectionOrientation } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface AccordionStyleOverrides {

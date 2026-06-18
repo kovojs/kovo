@@ -12,7 +12,7 @@ import {
   selectTriggerAttributes,
   selectValueAttributes,
   type SelectItem,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/select';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/select.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

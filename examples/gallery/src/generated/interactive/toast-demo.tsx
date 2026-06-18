@@ -41,7 +41,7 @@ import {
   toastRootAttributes,
   toastTitleAttributes,
   toastViewportAttributes,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/toast';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/toast.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

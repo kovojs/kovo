@@ -5,7 +5,7 @@ import {
   dialogCancel as _dialogCancel,
   dialogCloseClick as _dialogCloseClick,
   dialogTriggerClick as _dialogTriggerClick,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/dialog';
 
 export const GalleryDrawerDemo$button_click = handler((event, ctx) => {
   const result = _dialogTriggerClick(Object(event), { open: ctx.state.open });

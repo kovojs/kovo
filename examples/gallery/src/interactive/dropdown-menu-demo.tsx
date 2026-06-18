@@ -14,7 +14,7 @@ import {
   dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown,
   dropdownMenuTypeahead as _dropdownMenuTypeahead,
   type DropdownMenuItem,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/dropdown-menu';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/dropdown-menu.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

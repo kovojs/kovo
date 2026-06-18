@@ -1,7 +1,7 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { popoverBeforeToggle as _popoverBeforeToggle } from '@kovojs/headless-ui/primitives';
+import { popoverBeforeToggle as _popoverBeforeToggle } from '@kovojs/headless-ui/popover';
 
 export const GalleryPopoverDemo$div_beforetoggle = handler((event, ctx) => {
   const result = _popoverBeforeToggle(Object(event), { open: ctx.state.open });

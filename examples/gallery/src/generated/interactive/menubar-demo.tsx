@@ -53,7 +53,7 @@ import {
   menubarRootAttributes,
   menubarSubmenuAttributes,
   type MenubarItem,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/menubar';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/menubar.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

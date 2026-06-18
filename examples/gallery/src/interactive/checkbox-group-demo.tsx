@@ -7,7 +7,7 @@ import {
   checkboxGroupLabelAttributes,
   checkboxGroupRootAttributes,
   checkboxTriggerClick as _checkboxTriggerClick,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/checkbox-group';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/checkbox-group.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

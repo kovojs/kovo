@@ -7,7 +7,7 @@ import {
   toastCloseClick as _toastCloseClick,
   toastEscapeKeyDown as _toastEscapeKeyDown,
   toastViewportKeyDown as _toastViewportKeyDown,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/toast';
 
 export const GalleryToastDemo$section_keydown = handler((event, ctx) => {
   if (_toastViewportKeyDown(Object(event))) return;

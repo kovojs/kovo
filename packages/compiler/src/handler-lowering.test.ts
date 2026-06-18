@@ -420,7 +420,7 @@ export const CartActions = component({
       fileName: 'components/tabs/tabs-demo.tsx',
       source: `
 import { component } from '@kovojs/core';
-import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/primitives';
+import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/tabs';
 
 export const TabsDemo = component({
   state: () => ({ activeValue: 'overview', value: 'overview' }),
@@ -456,7 +456,7 @@ export const TabsDemo = component({
     const clientSource = result.files[1]?.source ?? '';
 
     expect(clientSource).toContain(
-      'import { tabsKeyDown as keyDown, tabsTriggerClick } from "@kovojs/headless-ui/primitives";',
+      'import { tabsKeyDown as keyDown, tabsTriggerClick } from "@kovojs/headless-ui/tabs";',
     );
     expect(clientSource).toContain('const result = keyDown(event, {');
     expect(clientSource).toContain('activeValue: ctx.state.activeValue,');

@@ -6,9 +6,8 @@ import {
   checkboxGroupLabelAttributes,
   checkboxGroupRootAttributes,
   type CheckboxGroupItem as HeadlessCheckboxGroupItem,
-  type CollectionOrientation,
-  type TextDirection,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/checkbox-group';
+import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface CheckboxGroupStyleOverrides {

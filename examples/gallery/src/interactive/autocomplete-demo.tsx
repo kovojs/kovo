@@ -11,7 +11,7 @@ import {
   autocompleteSuggestions as _autocompleteSuggestions,
   autocompleteValueAttributes,
   type AutocompleteItem,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/autocomplete';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/autocomplete.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

@@ -4,8 +4,8 @@ import {
   hoverCardContentAttributes,
   hoverCardRootAttributes,
   hoverCardTriggerAttributes,
-  safeUrl,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/hover-card';
+import { safeUrl } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface HoverCardStyleOverrides {

@@ -7,7 +7,7 @@ import {
   scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
   scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown,
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/scroll-area';
 
 export const GalleryScrollAreaDemo$section_pointerenter = handler((_event, ctx) => {
   ctx.state.hovering = true;

@@ -5,7 +5,7 @@ import {
   otpFieldInputAttributes,
   otpFieldRootAttributes,
   type OtpFieldInputMode,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/otp-field';
 import * as style from '@kovojs/style';
 
 export interface OtpFieldStyleOverrides {

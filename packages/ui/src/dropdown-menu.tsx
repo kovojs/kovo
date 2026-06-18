@@ -8,7 +8,7 @@ import {
   dropdownMenuSeparatorAttributes,
   dropdownMenuTriggerAttributes,
   type DropdownMenuItem as HeadlessDropdownMenuItem,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/dropdown-menu';
 import * as style from '@kovojs/style';
 
 export interface DropdownMenuStyleOverrides {

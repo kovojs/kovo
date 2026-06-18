@@ -4,7 +4,7 @@ import {
   popoverContentAttributes,
   popoverRootAttributes,
   popoverTriggerAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/popover';
 import * as style from '@kovojs/style';
 
 export interface PopoverStyleOverrides {

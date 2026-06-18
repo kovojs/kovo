@@ -36,19 +36,19 @@ const loader = () => import('@acme/lazy/panel');
 
   it('records aliased named imports for client handler dependency emission', () => {
     const source = `
-import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/primitives';
+import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/tabs';
 `;
 
     expect(parseComponentModule('imports.tsx', source).namedImports).toEqual([
       {
         importedName: 'tabsKeyDown',
         localName: 'keyDown',
-        moduleSpecifier: '@kovojs/headless-ui/primitives',
+        moduleSpecifier: '@kovojs/headless-ui/tabs',
       },
       {
         importedName: 'tabsTriggerClick',
         localName: 'tabsTriggerClick',
-        moduleSpecifier: '@kovojs/headless-ui/primitives',
+        moduleSpecifier: '@kovojs/headless-ui/tabs',
       },
     ]);
   });

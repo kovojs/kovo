@@ -6,7 +6,7 @@ import {
   numberFieldInputAttributes,
   numberFieldRootAttributes,
   type NumberFieldValue,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/number-field';
 import * as style from '@kovojs/style';
 
 export interface NumberFieldStyleOverrides {

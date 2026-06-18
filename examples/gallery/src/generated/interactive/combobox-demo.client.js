@@ -6,7 +6,7 @@ import {
   comboboxInput as _comboboxInput,
   comboboxKeyDown as _comboboxKeyDown,
   comboboxOptionClick as _comboboxOptionClick,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/combobox';
 
 export const GalleryComboboxDemo$input_input = handler((event, ctx) => {
   const result = _comboboxInput(Object(event), { value: ctx.state.inputValue });

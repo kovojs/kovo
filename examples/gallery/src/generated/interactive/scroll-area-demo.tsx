@@ -95,7 +95,7 @@ import {
   scrollAreaScrollbarAttributes,
   scrollAreaThumbAttributes,
   scrollAreaViewportAttributes,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/scroll-area';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/scroll-area.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

@@ -84,7 +84,7 @@ import {
   meterRootAttributes,
   meterValueState as _meterValueState,
   type MeterDataState,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/meter';
 
 export interface GalleryMeterDemoState {
   dataState: MeterDataState;

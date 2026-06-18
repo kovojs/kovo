@@ -6,7 +6,7 @@ import {
   autocompleteKeyDown as _autocompleteKeyDown,
   autocompleteOptionClick as _autocompleteOptionClick,
   autocompleteSuggestions as _autocompleteSuggestions,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/autocomplete';
 
 export const GalleryAutocompleteDemo$input_input = handler((event, ctx) => {
   const result = _autocompleteInput(Object(event), {

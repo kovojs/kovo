@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
 
-import * as headlessPrimitives from '@kovojs/headless-ui/primitives';
+import * as headlessPrimitives from '@kovojs/headless-ui';
 
 export const galleryRoot = resolve(import.meta.dirname, '..');
 

@@ -19,7 +19,7 @@ export const GalleryProgressDemo$output_text_derive = derive(['state'], (state: 
 );
 
 import { component } from '@kovojs/core';
-import { progressRootAttributes } from '@kovojs/headless-ui/primitives';
+import { progressRootAttributes } from '@kovojs/headless-ui/progress';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/progress.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

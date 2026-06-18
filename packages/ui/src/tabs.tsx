@@ -5,11 +5,10 @@ import {
   tabsPanelAttributes,
   tabsRootAttributes,
   tabsTriggerAttributes,
-  type CollectionOrientation,
   type TabsActivationMode,
   type TabsItem,
-  type TextDirection,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/tabs';
+import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface TabsStyleOverrides {

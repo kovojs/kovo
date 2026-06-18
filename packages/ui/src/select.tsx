@@ -9,7 +9,7 @@ import {
   selectValueAttributes,
   selectValueText,
   type SelectItem as HeadlessSelectItem,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/select';
 import * as style from '@kovojs/style';
 
 export interface SelectStyleOverrides {

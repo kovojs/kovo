@@ -7,7 +7,7 @@ import {
   sliderThumbAttributes,
   sliderTrackAttributes,
   type SliderOrientation,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/slider';
 import * as style from '@kovojs/style';
 
 export interface SliderStyleOverrides {

@@ -1,7 +1,7 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { toolbarKeyDown as _toolbarKeyDown } from '@kovojs/headless-ui/primitives';
+import { toolbarKeyDown as _toolbarKeyDown } from '@kovojs/headless-ui/toolbar';
 
 export const GalleryToolbarDemo$div_keydown = handler((event, ctx) => {
   const result = _toolbarKeyDown(Object(event), {

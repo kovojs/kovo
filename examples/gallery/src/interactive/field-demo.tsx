@@ -8,7 +8,7 @@ import {
   fieldRootAttributes,
   fieldsetLegendAttributes,
   fieldsetRootAttributes,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/field';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/field.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

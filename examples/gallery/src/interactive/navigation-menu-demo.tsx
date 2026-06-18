@@ -17,7 +17,7 @@ import {
   navigationMenuTypeahead as _navigationMenuTypeahead,
   navigationMenuViewportAttributes,
   type NavigationMenuItem,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/navigation-menu';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/navigation-menu.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

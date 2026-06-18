@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/headless-ui/primitives';
+import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/headless-ui/toggle';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/toggle.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

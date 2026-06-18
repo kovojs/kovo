@@ -10,7 +10,7 @@ import {
   type ToastPlacement,
   type ToastPoliteness,
   type ToastVariant,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/toast';
 import * as style from '@kovojs/style';
 
 export interface ToastStyleOverrides {

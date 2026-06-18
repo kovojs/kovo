@@ -8,7 +8,7 @@ import {
   autocompleteValueAttributes,
   autocompleteValueText,
   type AutocompleteItem as HeadlessAutocompleteItem,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/autocomplete';
 import * as style from '@kovojs/style';
 
 export interface AutocompleteStyleOverrides {

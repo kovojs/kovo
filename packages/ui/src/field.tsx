@@ -8,7 +8,7 @@ import {
   fieldRootAttributes,
   fieldsetLegendAttributes,
   fieldsetRootAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/field';
 import * as style from '@kovojs/style';
 
 export interface FieldStyleOverrides {

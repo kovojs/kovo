@@ -1,7 +1,7 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/headless-ui/primitives';
+import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/headless-ui/disclosure';
 
 export const GalleryDisclosureDemo$button_click = handler((event, ctx) => {
   const result = _disclosureTriggerClick(Object(event), { open: ctx.state.open });

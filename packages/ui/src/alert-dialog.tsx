@@ -7,7 +7,7 @@ import {
   alertDialogRootAttributes,
   alertDialogTriggerAttributes,
   type AlertDialogActionIntent,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/alert-dialog';
 import * as style from '@kovojs/style';
 
 export interface AlertDialogStyleOverrides {

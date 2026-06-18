@@ -4,12 +4,11 @@ import {
   toggleGroupButtonAttributes,
   toggleGroupItemAttributes,
   toggleGroupRootAttributes,
-  type CollectionOrientation,
-  type TextDirection,
   type ToggleGroupItem as HeadlessToggleGroupItem,
   type ToggleGroupType,
-  type ToggleGroupValue,
-} from '@kovojs/headless-ui';
+  type ToggleGroupValue,,
+} from '@kovojs/headless-ui/toggle-group';
+import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface ToggleGroupStyleOverrides {

@@ -11,7 +11,7 @@ import {
   hoverCardTriggerAttributes,
   hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
   hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/hover-card';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/hover-card.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

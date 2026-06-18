@@ -20,7 +20,7 @@ export const GalleryCheckboxDemo$output_text_derive = derive(['state'], (state: 
 );
 
 import { component } from '@kovojs/core';
-import { type CheckboxCheckedState } from '@kovojs/headless-ui/primitives';
+import { type CheckboxCheckedState } from '@kovojs/headless-ui/checkbox';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/checkbox.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

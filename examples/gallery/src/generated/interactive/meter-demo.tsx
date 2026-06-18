@@ -19,7 +19,7 @@ export const GalleryMeterDemo$output_text_derive = derive(['state'], (state: any
 );
 
 import { component } from '@kovojs/core';
-import { meterRootAttributes, type MeterDataState } from '@kovojs/headless-ui/primitives';
+import { meterRootAttributes, type MeterDataState } from '@kovojs/headless-ui/meter';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/meter.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

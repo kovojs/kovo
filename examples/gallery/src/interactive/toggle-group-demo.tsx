@@ -6,7 +6,7 @@ import {
   toggleGroupItemClick as _toggleGroupItemClick,
   toggleGroupKeyDown as _toggleGroupKeyDown,
   toggleGroupRootAttributes,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/toggle-group';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/toggle-group.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

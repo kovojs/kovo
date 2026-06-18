@@ -4,10 +4,10 @@ import {
   toolbarButtonAttributes,
   toolbarItemAttributes,
   toolbarRootAttributes,
-  type TextDirection,
   type ToolbarItem as HeadlessToolbarItem,
-  type ToolbarOrientation,
-} from '@kovojs/headless-ui';
+  type ToolbarOrientation,,
+} from '@kovojs/headless-ui/toolbar';
+import type { TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 export interface ToolbarStyleOverrides {

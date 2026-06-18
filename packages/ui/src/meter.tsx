@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
-import { meterRootAttributes } from '@kovojs/headless-ui';
+import { meterRootAttributes } from '@kovojs/headless-ui/meter';
 
 export interface MeterProps {
   children?: string;

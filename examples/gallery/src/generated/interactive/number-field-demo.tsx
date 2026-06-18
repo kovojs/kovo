@@ -29,7 +29,7 @@ import {
   numberFieldIncrementAttributes,
   numberFieldInputAttributes,
   numberFieldRootAttributes,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/number-field';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/number-field.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

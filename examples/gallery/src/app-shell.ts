@@ -163,12 +163,24 @@ function rewriteGalleryClientImports(source: string): string {
     .replaceAll("from '@kovojs/runtime/generated';", `from '${galleryRuntimeModuleHref}';`)
     .replaceAll("from '@kovojs/runtime';", `from '${galleryRuntimeModuleHref}';`)
     .replaceAll(
-      'from "@kovojs/headless-ui/primitives";',
+      'from "@kovojs/headless-ui";',
       `from '${galleryHeadlessPrimitivesModuleHref}';`,
     )
     .replaceAll(
-      "from '@kovojs/headless-ui/primitives';",
+      "from '@kovojs/headless-ui';",
       `from '${galleryHeadlessPrimitivesModuleHref}';`,
+    )
+    .replace(
+      /from (["'])@kovojs\/headless-ui\/([a-z0-9-]+)\1;/g,
+      (_match, _quote: string, family: string) => {
+        const href = galleryHeadlessUiClientModuleHrefMap.get(
+          `/c/packages/headless-ui/src/primitives/${family}.js`,
+        );
+        if (href === undefined) {
+          throw new Error(`Missing gallery headless UI client module for ${family}.`);
+        }
+        return `from '${href}';`;
+      },
     );
 }
 

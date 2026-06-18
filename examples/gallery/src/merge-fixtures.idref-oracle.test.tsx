@@ -9,7 +9,7 @@ import {
   tabsPanelAttributes,
   tabsTriggerAttributes,
   tooltipTriggerAttributes,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui';
 import {
   type AttributeRecord,
   authorStressAttrs,

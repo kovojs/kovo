@@ -33,7 +33,7 @@ import {
   navigationMenuRootAttributes,
   navigationMenuTriggerAttributes,
   navigationMenuViewportAttributes,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui';
 import { mergeCompilerPrimitiveAttrs } from './merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {

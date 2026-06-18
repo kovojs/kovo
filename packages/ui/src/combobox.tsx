@@ -8,7 +8,7 @@ import {
   comboboxValueAttributes,
   comboboxValueText,
   type ComboboxItem as HeadlessComboboxItem,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/combobox';
 import * as style from '@kovojs/style';
 
 export interface ComboboxStyleOverrides {

@@ -5,7 +5,7 @@ import {
   dialogContentAttributes,
   dialogRootAttributes,
   dialogTriggerAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/dialog';
 import * as style from '@kovojs/style';
 
 export type SheetSide = 'top' | 'right' | 'bottom' | 'left';

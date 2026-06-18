@@ -7,7 +7,7 @@ import {
   radioGroupKeyDown as _radioGroupKeyDown,
   radioGroupRadioAttributes,
   radioGroupRootAttributes,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/radio-group';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/radio-group.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { tabsRootAttributes } from '@kovojs/headless-ui/primitives';
+import { tabsRootAttributes } from '@kovojs/headless-ui/tabs';
 import * as style from '@kovojs/style';
 import {
   Alert,

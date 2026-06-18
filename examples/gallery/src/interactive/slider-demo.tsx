@@ -10,7 +10,7 @@ import {
   sliderThumbAttributes,
   sliderTrackPointerDown as _sliderTrackPointerDown,
   sliderTrackAttributes,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/slider';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/slider.tsx)
 // so this interactive demo matches the component-gallery look. Importing @kovojs/ui

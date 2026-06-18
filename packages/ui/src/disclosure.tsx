@@ -4,7 +4,7 @@ import {
   disclosureContentAttributes,
   disclosureRootAttributes,
   disclosureTriggerAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/disclosure';
 import * as style from '@kovojs/style';
 
 export interface DisclosureStateProps {

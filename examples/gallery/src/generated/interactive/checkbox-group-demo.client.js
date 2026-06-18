@@ -4,7 +4,7 @@ import { derive, handler } from '@kovojs/runtime/generated';
 import {
   checkboxGroupItemClick as _checkboxGroupItemClick,
   checkboxTriggerClick as _checkboxTriggerClick,
-} from '@kovojs/headless-ui/primitives';
+} from '@kovojs/headless-ui/checkbox-group';
 
 export const GalleryCheckboxGroupDemo$input_click = handler((event, ctx) => {
   const result = _checkboxTriggerClick(Object(event), {
