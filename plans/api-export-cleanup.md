@@ -183,12 +183,15 @@ integration. Framework packages should expose only generic webhook primitives.
 
 ## Implementation Plan
 
-- [ ] **Classify `./app-shell/vite` as public in `public-packages.json`.**
+- [x] **Classify `./app-shell/vite` as public in `public-packages.json`.**
   - Move `@kovojs/server` `apiBoundary` entry `./app-shell/vite` from `internal`
     to `public`.
   - Keep `./internal/app-shell-vite` classified as internal.
-  - Evidence:
-- [ ] **Define the curated `@kovojs/server/app-shell/vite` symbol set.**
+  - Evidence: `public-packages.json` lists `./app-shell/vite` under
+    `@kovojs/server.apiBoundary.public` and `./internal/app-shell-vite` under
+    `apiBoundary.internal`; `pnpm exec vitest --run scripts/public-packages.test.mjs`
+    passes and asserts this split.
+- [x] **Define the curated `@kovojs/server/app-shell/vite` symbol set.**
   - Keep the app-author dev/export helpers used by starters and examples:
     `kovoAppShellViteDevPlugin`,
     `exportKovoAppShellViteBuildWithManifestFromManifestFile`,
@@ -198,29 +201,49 @@ integration. Framework packages should expose only generic webhook primitives.
     `exportKovoAppShellViteBuild*`, and `staticExport*ForKovoAppShellViteBuild*`
     are first-class public build helpers now, or deferred until
     `plans/easy-deployment.md` promotes a full `kovo build` surface.
-  - Evidence:
-- [ ] **Move non-curated symbols off the public Vite subpath.**
+  - Evidence: `packages/server/src/api/app-shell/vite.ts` exports the curated
+    public values `kovoAppShellViteDevPlugin`,
+    `exportKovoAppShellViteBuildWithManifestFromManifestFile`, and
+    `kovoAppShellViteManifestStylesheetHrefFromFile`, plus their public type
+    closures. `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+    passes and pins the runtime value export names.
+- [x] **Move non-curated symbols off the public Vite subpath.**
   - Remove raw/low-level symbols from `packages/server/src/api/app-shell/vite.ts`
     when they are not part of the app-author contract.
   - Ensure removed symbols remain reachable, if needed, from
     `packages/server/src/internal/app-shell-vite.ts`.
-  - Evidence:
-- [ ] **Update docs/API reference for the public app-shell Vite API.**
+  - Evidence: `packages/server/src/internal/app-shell-vite.ts` owns the raw Vite
+    plugin, build-output, client-module, manifest, static-asset, and dev
+    diagnostic internals. `pnpm exec vitest --run packages/server/src/api/app.test.ts
+    packages/server/src/vite-plugin-boundary.test.ts` passes, including negative
+    assertions that raw build/plugin/manifest helpers are not exported from
+    `@kovojs/server/app-shell/vite`.
+- [x] **Update docs/API reference for the public app-shell Vite API.**
   - Ensure `site/scripts/api-ref.mjs` includes the newly public server subpath or
     otherwise records why this build-time API is documented outside generated API
     pages.
   - Add or update docs that show starter Vite config/static export imports from
     `@kovojs/server/app-shell/vite`.
-  - Evidence:
-- [ ] **Add boundary tests for the curated split.**
+  - Evidence: `public-packages.json` declares the `server-app-shell-vite` API ref
+    entry; `site/scripts/api-ref.test.mjs` now expects
+    `server-app-shell-vite.md` and the generated entry reports 8 documented
+    exports. Starter docs and scripts reference
+    `@kovojs/server/app-shell/vite`. Verification:
+    `pnpm exec vitest --run site/scripts/api-ref.test.mjs packages/create-kovo/src/index.test.ts`.
+- [x] **Add boundary tests for the curated split.**
   - Add a test that pins the public `@kovojs/server/app-shell/vite` export names.
   - Add a test that pins representative internal-only names behind
     `@kovojs/server/internal/app-shell-vite`.
-  - Evidence:
-- [ ] **Regenerate/check publish metadata after export-map changes.**
+  - Evidence: `packages/server/src/api/app.test.ts` pins the public
+    `@kovojs/server/app-shell/vite` value exports and asserts raw Vite helpers are
+    absent; `packages/server/src/vite-plugin-boundary.test.ts` proves the raw
+    plugin remains available from `./internal/app-shell-vite`.
+- [x] **Regenerate/check publish metadata after export-map changes.**
   - If package exports or entry files change, run
     `node scripts/build-publish.mjs --write` before verification.
-  - Evidence:
+  - Evidence: no export-map rewrite was needed in this slice; `node
+    scripts/build-publish.mjs` passes and confirms every `publishConfig` target
+    exists for the current export maps.
 - [ ] **Run focused verification, then broad gates.**
   - Focused: `pnpm --filter @kovojs/server exec vitest run` plus tests for
     `packages/create-kovo` template expectations.

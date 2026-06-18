@@ -84,6 +84,7 @@ describe('api-ref generator', () => {
     expect(result.packages.map((pkg) => pkg.file)).toEqual([
       'core.md',
       'server.md',
+      'server-app-shell-vite.md',
       'runtime.md',
       'test.md',
       'drizzle.md',
@@ -253,6 +254,7 @@ describe('api-ref generator', () => {
       '@kovojs/drizzle': 4,
       '@kovojs/runtime': 15,
       '@kovojs/server': 70,
+      '@kovojs/server/app-shell/vite': 8,
       '@kovojs/style': 20,
       '@kovojs/test': 12,
       '@kovojs/better-auth': 30,
