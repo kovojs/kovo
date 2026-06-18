@@ -59,6 +59,10 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Scope: fail on `from './generated/*'`, `from '../generated/*'`, or dynamic
     generated imports outside `src/generated/**`, `scripts/**`, compiler-owned
     build helpers, and explicit artifact tests.
+  - Current progress: `scripts/import-boundary.mjs` now allows generated reads
+    only for emit/check scripts and explicitly named artifact/generated/graph
+    tests or fixtures; ordinary tests no longer receive a blanket generated-read
+    exemption.
 - [ ] Keep generated artifacts committed and inspectable without making ordinary
       scenario tests import them.
   - Acceptance: `emit-components -- --check`, `emit-graph -- --check`, compiler
@@ -219,6 +223,9 @@ internals, emit/check scripts, and narrowly named artifact tests.
     violations were removed from Commerce/CRM/StackOverflow. Keep open until the
     remaining reported backlog is removed or narrowed by an explicit artifact-test
     policy.
+  - Current guard-policy evidence: `pnpm exec vitest --run
+    scripts/import-boundary.test.mjs` passed after narrowing explicit artifact
+    allowances and renaming gallery artifact consumers.
 - [ ] Run focused Commerce tests after removing generated imports and deleting
       `source-truth.test.ts`.
 - [ ] Run focused CRM and StackOverflow tests after applying the same boundary.
