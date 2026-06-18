@@ -6,20 +6,20 @@ export const commerceTouchGraph = {
       {
         "domain": "cart",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:284",
+        "site": "examples/commerce/src/app.ts:271",
         "via": "cart_items"
       },
       {
         "domain": "order",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:289",
+        "site": "examples/commerce/src/app.ts:276",
         "via": "orders"
       },
       {
         "domain": "product",
         "keys": "arg:productId",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:297",
+        "site": "examples/commerce/src/app.ts:284",
         "via": "products"
       }
     ],
