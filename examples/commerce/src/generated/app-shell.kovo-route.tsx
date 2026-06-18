@@ -141,20 +141,10 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
     db: () => db,
     document: { lang: 'en-US' },
     mutationResponses: {
-      [commerceSignIn.key]: ({ rawInput, request }) => {
+      [commerceSignIn.key]: () => {
         return {
           csrf: shellCommerceAuthCsrf,
           redirectTo: (result) => authRedirectTo(result.value),
-          renderFailurePage: (failure) =>
-            `<!doctype html><html><body><main class="mx-auto max-w-md p-6">${renderCommerceLoginForm(
-              request as CommerceShellRequest,
-              {
-                ...(failure.error.code === 'INVALID_CREDENTIALS'
-                  ? { failure: { code: 'INVALID_CREDENTIALS' as const } }
-                  : {}),
-                next: nextFromRawInput(rawInput) ?? '/cart',
-              },
-            )}</main></body></html>`,
         };
       },
       [commerceSignOut.key]: () => {
@@ -186,20 +176,6 @@ function routeValueToHtml(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === undefined || value === null) return '';
   return JSON.stringify(value);
-}
-
-function nextFromRawInput(rawInput: unknown): string | undefined {
-  if (rawInput instanceof FormData) {
-    const value = rawInput.get('next');
-    return typeof value === 'string' ? value : undefined;
-  }
-
-  if (typeof rawInput !== 'object' || rawInput === null || !('next' in rawInput)) {
-    return undefined;
-  }
-
-  const value = rawInput.next;
-  return typeof value === 'string' ? value : undefined;
 }
 
 function authRedirectTo(value: unknown): string {

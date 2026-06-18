@@ -461,6 +461,7 @@ describe('commerce app shell HTTP entry', () => {
       // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        referer: `${origin}/login?next=%2Fcart`,
         'x-forwarded-for': '203.0.113.31',
       },
       method: 'POST',

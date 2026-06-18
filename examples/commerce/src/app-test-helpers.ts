@@ -307,6 +307,7 @@ export function createCommerceScenarioClient(
       },
       {
         headers: {
+          referer: `${commerceOrigin}/login?next=${encodeURIComponent(next)}`,
           'x-forwarded-for': options.remoteAddress ?? '203.0.113.60',
         },
       },

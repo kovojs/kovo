@@ -74,7 +74,7 @@ that still make the simplified Commerce example feel like a test fixture.
     `rg -n "ComponentRenderSlots|componentMutationFailureSlots|MutationFail|csrfField|ProductGridRenderSlots" examples/commerce/src/components/product-grid.tsx`
     exiting 1. Focused Commerce and server form-context tests pass as recorded
     in Latest verification.
-- [ ] Replace string-built login/logout forms with authored TSX form components.
+- [x] Replace string-built login/logout forms with authored JSX form components.
   - Current friction: `renderCommerceLoginForm()` and
     `renderCommerceLogoutForm()` manually call `renderMutationFormAttributes`,
     `csrfField`, and `FormError`.
@@ -82,8 +82,13 @@ that still make the simplified Commerce example feel like a test fixture.
     `mutation={commerceSignIn}` / `mutation={commerceSignOut}` and
     `<FormError>`; the compiler lowers the mutation URL, CSRF field, and error
     binding.
-  - Evidence to add: no app-authored `renderMutationFormAttributes` or
-    hand-assembled login form strings in `examples/commerce/src`.
+  - Evidence: `renderCommerceLoginForm()` and `renderCommerceLogoutForm()` now
+    use `jsx`/`jsxs` with `mutation={commerceSignIn}` /
+    `mutation={commerceSignOut}`; app-authored code no longer imports
+    `renderMutationFormAttributes` or calls `csrfField`. Verified with
+    `rg -n "renderMutationFormAttributes|csrfField|<form \\$\\{|FormError\\(" examples/commerce/src/app.ts examples/commerce/src/app-shell.tsx`
+    exiting 1, and the focused Commerce auth/shell tests passing in Latest
+    verification.
 - [ ] Keep generated artifacts inspectable but out of app-authored control flow.
   - Current friction: `app.ts` imports generated component modules,
     `generated/optimistic/cart-add`, and `generated/touch-graph`; scripts splice
@@ -443,9 +448,7 @@ Latest verification:
   passed after the framework form-context and Commerce ProductGrid cleanup.
 - [x] `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`
   passed after regenerating graph/touch artifacts.
-- [x] `pnpm exec vitest --run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/source-truth.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.rendering.test.ts`
-  passed.
-- [x] `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/registry.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/mutation-endpoint.test.ts packages/server/src/live-target-renderer.test.tsx`
+- [x] `pnpm exec vitest --run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/source-truth.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.rendering.test.ts examples/commerce/src/app.auth.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/registry.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/mutation-endpoint.test.ts packages/server/src/live-target-renderer.test.tsx`
   passed.
 - [x] `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` passed.
 - [x] `node scripts/api-surface-gate.mjs` passed with

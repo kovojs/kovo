@@ -1,13 +1,11 @@
 import { form, FormError, type FormInput } from '@kovojs/core';
 import {
-  csrfField,
   guards,
   i18n,
   metaFromQuery,
   mutation,
   renderComponent,
   renderDeferredStream,
-  renderMutationFormAttributes,
   renderPageHints,
   renderRoutePageResponse,
   route,
@@ -15,7 +13,6 @@ import {
   session,
 } from '@kovojs/server';
 import { Fragment, jsx, jsxs } from '@kovojs/server/jsx-runtime';
-import { escapeAttribute } from '@kovojs/server/internal/html';
 import {
   authed as betterAuthAuthed,
   betterAuthSession,
@@ -426,37 +423,67 @@ function commerceCartPageRequest(db: CommerceDb, request?: CommerceRequest): Com
 }
 
 export function renderCommerceLoginForm(
-  request: CommerceAuthRequest,
+  _request: CommerceAuthRequest,
   options: { failure?: CommerceLoginFailureState; next?: string } = {},
 ): string {
-  return [
-    `<form ${renderMutationFormAttributes(commerceSignIn)} class="grid gap-4 rounded border border-slate-200 bg-white p-6">`,
-    csrfField(request, commerceAuthCsrf),
-    `<input type="hidden" name="next" value="${escapeAttribute(options.next ?? '/cart')}">`,
-    '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Email</span>',
-    '<input class="rounded border border-slate-300 px-3 py-2" name="email" type="email" autocomplete="email" required>',
-    '</label>',
-    '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Password</span>',
-    '<input class="rounded border border-slate-300 px-3 py-2" name="password" type="password" autocomplete="current-password" required>',
-    '</label>',
-    FormError({
-      class: 'text-sm text-red-700',
-      code: 'INVALID_CREDENTIALS',
-      failure: options.failure ?? null,
-      message: 'Invalid email or password.',
-    }),
-    '<button class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white" type="submit">Sign in</button>',
-    '</form>',
-  ].join('');
+  return jsxs('form', {
+    class: 'grid gap-4 rounded border border-slate-200 bg-white p-6',
+    mutation: commerceSignIn,
+    children: [
+      jsx('input', { type: 'hidden', name: 'next', value: options.next ?? '/cart' }),
+      jsxs('label', {
+        class: 'grid gap-1 text-sm font-medium text-slate-700',
+        children: [
+          jsx('span', { children: 'Email' }),
+          jsx('input', {
+            autocomplete: 'email',
+            class: 'rounded border border-slate-300 px-3 py-2',
+            name: 'email',
+            required: true,
+            type: 'email',
+          }),
+        ],
+      }),
+      jsxs('label', {
+        class: 'grid gap-1 text-sm font-medium text-slate-700',
+        children: [
+          jsx('span', { children: 'Password' }),
+          jsx('input', {
+            autocomplete: 'current-password',
+            class: 'rounded border border-slate-300 px-3 py-2',
+            name: 'password',
+            required: true,
+            type: 'password',
+          }),
+        ],
+      }),
+      jsx(FormError, {
+        class: 'text-sm text-red-700',
+        code: 'INVALID_CREDENTIALS',
+        failure: options.failure,
+        message: 'Invalid email or password.',
+      }),
+      jsx('button', {
+        class: 'rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white',
+        type: 'submit',
+        children: 'Sign in',
+      }),
+    ],
+  });
 }
 
-export function renderCommerceLogoutForm(request: CommerceAuthRequest): string {
-  return [
-    `<form ${renderMutationFormAttributes(commerceSignOut)} class="inline">`,
-    csrfField(request, commerceAuthCsrf),
-    '<button class="text-sm font-medium text-slate-900" type="submit">Sign out</button>',
-    '</form>',
-  ].join('');
+export function renderCommerceLogoutForm(_request: CommerceAuthRequest): string {
+  return jsxs('form', {
+    class: 'inline',
+    mutation: commerceSignOut,
+    children: [
+      jsx('button', {
+        class: 'text-sm font-medium text-slate-900',
+        type: 'submit',
+        children: 'Sign out',
+      }),
+    ],
+  });
 }
 
 function readCookie(headers: Headers, name: string): string | undefined {
