@@ -17,9 +17,13 @@ the invalidation graph trades in, so they come first:
 
 {{snippet:03-queries/src/domains.ts#domains}}
 
-In the `@kovojs/drizzle` path, domains come from schema annotations on real tables, and the read
-sets below are extracted from the query ASTs — the JOIN is the declaration. The tutorial uses a
-plain in-memory store so every moving part stays visible:
+> **The production path.** The tutorial uses a plain in-memory store so every moving part stays
+> visible. With [`@kovojs/drizzle`](/guides/data-layer/), this is derived from real tables instead
+> of declared by hand — here, domains come from schema annotations and read sets are extracted from
+> the query ASTs (the JOIN is the declaration). The [data-layer guide](/guides/data-layer/) is the
+> home for that story.
+
+The tutorial keeps a plain store:
 
 {{snippet:03-queries/src/db.ts#db}}
 
@@ -27,6 +31,10 @@ plain in-memory store so every moving part stays visible:
 
 A query couples a key, a loader, and the domains it reads. That read set is the entire
 registration: no query subscribes to mutations, and no mutation enumerates queries.
+
+> **Where the primitives live.** `query`, `route`, `mutation`, `s`, `domain`, `guards`, and
+> `session` import from `@kovojs/server`; `component` and `form` import from `@kovojs/core`. Server
+> facts in `@kovojs/server`, the component/form model in `@kovojs/core` — that's the whole split.
 
 {{snippet:03-queries/src/queries.ts#loaders}}
 

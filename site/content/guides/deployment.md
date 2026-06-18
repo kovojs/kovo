@@ -97,6 +97,59 @@ Firefox, and no-JS visitors get a working website rather than a blank screen.
 The `/c/*` retention rule applies to both shapes. On a static host it just means not deleting old
 module files when you re-upload.
 
+### A node-server entrypoint
+
+The server is the `createApp()` aggregate (SPEC §9.3): your routes, mutations, queries, the `db`
+provider, and the §6.5 `sessionProvider`. `toNodeHandler()` adapts its Web-standard `Request ->
+Response` handler to a `node:http` listener, so the entrypoint is small:
+
+```ts
+// server.ts — production entrypoint
+import { createServer } from 'node:http';
+import { createApp, createRequestHandler, toNodeHandler } from '@kovojs/server';
+
+import { routes, mutations, queries } from './app.js';
+import { connectDb } from './db.js';
+import { sessionProvider } from './session.js';
+
+const db = await connectDb(process.env.DATABASE_URL!);
+
+const app = createApp({
+  db: () => db,
+  routes,
+  mutations,
+  queries,
+  // Runs once before route/query/mutation guards; return null for anonymous (SPEC §6.5).
+  sessionProvider,
+  csrf: { secret: process.env.CSRF_SECRET! },
+});
+
+const handler = toNodeHandler(createRequestHandler(app), { earlyHints: true });
+const port = Number(process.env.PORT ?? 3000);
+createServer(handler).listen(port, () => console.log(`listening on :${port}`));
+```
+
+The instance pins nothing per-request: `sessionProvider` reads whatever your auth layer stored (a
+signed cookie, a session row), so any instance answers any request and you scale by adding instances.
+
+A minimal container, with `/c/*` artifacts baked into the image so they're served immutably:
+
+```dockerfile
+FROM node:22-slim
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --prod --frozen-lockfile
+COPY dist ./dist           # output of `vp build`, including /c/* client modules
+ENV PORT=3000
+EXPOSE 3000
+CMD ["node", "dist/server.js"]
+```
+
+The container needs three things from the environment: `DATABASE_URL` (your `db` provider's
+connection), `CSRF_SECRET` (the session-bound token secret behind §9.1 `kovo-csrf`), and whatever
+secret your `sessionProvider` validates against. None of these is instance-specific — the same image
+runs behind a load balancer unchanged.
+
 ## Liveness without a socket tier
 
 v1 ships liveness only where the server stays stateless:
@@ -119,14 +172,16 @@ The verification surface is browser-free by design, so the full behavioral gate 
 ahead of any deploy:
 
 ```sh
-vp check                  # typecheck + lint — wiring proofs (handlers, forms, links, bindings)
-vp test                   # vitest suites, including wire-level and pglite-backed tests
-vp run build              # production build
-vp run kovo-check           # graph checks: KV310 optimistic coverage, KV311 update coverage, audits
-vp run graph-assertions   # your app's behavior rules, as graph queries
+vp check                  # vp toolchain: typecheck + lint — wiring proofs (handlers, forms, links, bindings)
+vp test                   # vp toolchain: vitest suites, including wire-level and pglite-backed tests
+vp build                  # vp toolchain: production build
+vp run kovo-check         # runs the framework's `kovo check`: KV310 optimistic coverage, KV311 update coverage, audits
+vp run graph-assertions   # runs your app's graph-query behavior rules
 ```
 
-The starter's CI workflow runs exactly this list. If a deploy passes these, the things that usually
+`vp check` and `vp build` are the toolchain's own commands (typecheck/lint and bundle); they are
+distinct from the framework's `kovo check`, which runs the graph/coverage gates and is invoked here
+through the `kovo-check` npm script via `vp run`. The starter's CI workflow runs exactly this list. If a deploy passes these, the things that usually
 need a staging click-through — does this button do anything, does that mutation refresh the badge —
 are already proven. See [reading kovo check & kovo explain](/guides/kovo-explain/).
 
@@ -137,7 +192,8 @@ are already proven. See [reading kovo check & kovo explain](/guides/kovo-explain
 - [ ] HTML responses are not cached as immutable (documents change per deploy; modules don't).
 - [ ] 103 Early Hints / preload wired from route page hints if your edge supports it.
 - [ ] Speculation Rules prefetch only on routes that opted in — it is per-route, default off.
-- [ ] CI runs `vp check`, `vp test`, `vp run kovo-check`, and graph assertions before deploy.
+- [ ] CI runs `vp check`, `vp test`, `vp build`, `vp run kovo-check` (the framework's `kovo check`),
+      and graph assertions before deploy.
 
 ## Next
 

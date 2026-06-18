@@ -44,8 +44,10 @@ Three things to notice:
 - **`'await-fragment'` is a real answer.** It says "considered; the 1-RTT latency is fine here" — the
   product grid re-renders from the server fragment instead of being predicted. A deliberate deferral
   and a forgotten transform are different states, and only the second one is a diagnostic.
-- **`queue: 'cart'`** serializes this mutation's submissions through a named FIFO when ordering
-  matters.
+- **`queue: 'cart'`** names a FIFO queue. Submissions sharing a queue name run strictly in
+  submit order — each waits for the previous to settle before its transform and request fire — so
+  two quick "add" clicks can't land out of order or race to a wrong predicted count. Mutations with
+  different queue names (or none) stay concurrent.
 
 Transforms are typed against the query's inferred result, so a column rename breaks the transform in
 the editor instead of in production.
@@ -75,27 +77,9 @@ OPTIMISTIC cart UNHANDLED
 OPTIMISTIC-SUMMARY total=3 hand-written=0 await-fragment=2 UNHANDLED=1
 ```
 
-With the transform in place, the same command reports clean coverage:
-
-```sh
-kovo explain mutation cart/add --optimistic graph.json
-```
-
-```txt
-kovo-explain/v1
-MUTATION cart/add
-guards: authed,rateLimit:session
-session: commerceSession
-input-fields: productId,quantity
-writes: cart,product,order
-invalidates: cart,product,order
-manual-invalidates: -
-updates: cart->component:CartBadge,page:/cart; orderHistory->component:OrderHistory,page:/cart; productGrid->component:ProductGrid,page:/cart
-OPTIMISTIC cart hand-written
-OPTIMISTIC productGrid await-fragment
-OPTIMISTIC orderHistory await-fragment
-OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=2 UNHANDLED=0
-```
+With the transform in place, the same command reports clean coverage —
+`OPTIMISTIC-SUMMARY … UNHANDLED=0`, with one `OPTIMISTIC` line per invalidated query. The full
+annotated artifact lives in [reading kovo check & kovo explain](/guides/kovo-explain/#read-the-output).
 
 A forgotten optimistic update is a visible, suppressible diagnostic with the suppression recorded in
 source. The same check runs one hop further down: every query-dependent DOM position needs a
@@ -144,26 +128,18 @@ dies with the document, so stale optimism can't outlive its mutation.
 
 ## Test the prediction
 
-A transform is a pure function, so you can unit-test it directly. You can also property-test that
-the prediction is contained in eventual truth over generated states:
+A transform is a pure function, so you can unit-test it directly:
 
 ```ts
-import { propertyTest } from '@kovojs/test/assertions';
-
 expect(addToCartOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 })).toEqual(
   { count: 3 },
 );
-
-// prediction ⊆ eventual truth: patch(shape(s), input) ≡ shape(apply(effect, s, input))
-propertyTest({
-  apply: (state, input) => applyAddToCartEffect(state, input), // server-side effect
-  shape: (state) => shapeCartQuery(state), // what the query ships
-  predict: (state, input) => addToCartOptimistic.transforms.cart(shapeCartQuery(state), input),
-  cases: generatedCartStates(),
-});
 ```
 
-See the [testing guide](/guides/testing/) for the harness this runs in.
+Beyond a point check, you can property-test that the prediction is *contained in eventual truth* over
+generated states — the commuting diagram `patch(shape(s), input) ≡ shape(apply(effect, s, input))`.
+That's `propertyTest`, and it lives in the
+[testing guide](/guides/testing/#property-test-optimistic-transforms) along with the harness it runs in.
 
 ## Hand-written now, derived later
 

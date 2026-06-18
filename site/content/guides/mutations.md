@@ -42,7 +42,8 @@ export const addToCart = mutation('cart/add', {
     if (!found || found.stock < input.quantity) {
       return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });
     }
-    // writes go through the domain layer — direct db access in handlers is a lint error
+    // writes go through the domain layer (db.<domain>.<write>) — direct db access here is KV330.
+    // See queries.md "Where invalidation comes from" and /guides/data-layer/ for write() authoring.
     return { productId: input.productId, quantity: input.quantity };
   },
 });
@@ -106,7 +107,7 @@ you render the field:
 ```ts
 import { csrfField } from '@kovojs/server';
 
-const csrf = csrfField(request, commerceCsrf); // → <input type="hidden" name="csrf" value="…">
+const csrf = csrfField(request, commerceCsrf); // → <input type="hidden" name="kovo-csrf" value="…">
 ```
 
 CSRF stays on for server-rendered mutation endpoints unless you set `csrf: false` on a mutation,
@@ -203,6 +204,14 @@ export const addToCart = mutation('cart/add', {
 The app declares the page, mutation, input schema, and affected queries. Kovo's request shell owns
 the endpoint response: PRG for no-JS success, typed 422 pages for failures, and fragment/query
 chunks for enhanced submissions.
+
+`registry.queries` isn't a refresh-target list — that contradiction is only apparent. *Which*
+queries go stale is still derived from the touch graph (SPEC §10.3); `registry.queries` just hands
+the runtime the query *definitions* it needs to actually re-run after commit. In a fully compiled
+app the build wires this for you (it merges the derived query set into `registry`), so you only spell
+it out in hand-authored or partially-wired modules where the analyzer can't reach the definitions.
+You never enumerate components or DOM targets here — those stay derived from the live `kovo-deps`
+stamps at request time.
 
 ## Handle a failure: the 422 path
 

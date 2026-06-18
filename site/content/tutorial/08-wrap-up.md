@@ -33,6 +33,18 @@ workspace packages, every component compiles through `@kovojs/compiler` with zer
 fixpoint and render-equivalence asserts, committed lowered IR is checked for staleness, and every
 step's tests run. An API change that breaks a chapter turns this tutorial red in the same PR.
 
+### Parity with the reference app
+
+The final step of [chapter 7](/tutorial/07-verification/#assert-parity-with-the-reference-app) does
+one more thing: it pins the tutorial app to `examples/commerce`, the v1 acceptance target. The
+parity test asserts the two apps agree on the things that matter — same mutation key and named POST,
+same input fields and write set, same optimistic statuses per (mutation × query) pair, same fragment
+wire and failure code — by comparing against `examples/commerce`'s committed graph artifact. The
+mechanism is the point: because both apps reduce to a comparable graph value, "are these the same
+behavior?" is a set comparison, not a manual audit. If the reference app changes shape, that test —
+run by `run-steps.mjs` alongside every other step — turns this tutorial red in the same PR, so the
+chapters can never silently drift from the framework they teach.
+
 ## Deploy a Kovo app
 
 A Kovo app is a server-rendered MPA with a stateless v1 server: any Node host that can run the

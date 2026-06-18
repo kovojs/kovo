@@ -82,14 +82,9 @@ If you internalize one command, make it `vp check`.
 
 ## The commands you'll use daily
 
-| Command                   | What it does                                         |
-| ------------------------- | ---------------------------------------------------- |
-| `vp dev`                  | Dev server with the Kovo compile step                |
-| `vp check`                | Typecheck + lint — where wiring errors surface       |
-| `vp test`                 | Vitest suites                                        |
-| `vp run build`            | Production build                                     |
-| `vp run kovo-check`       | Framework semantic checks over the emitted app graph |
-| `vp run graph-assertions` | Your app's own behavior assertions, as graph queries |
+`vp` is the toolchain runner (`vp dev`, `vp check`, `vp test`, `vp build`) and `kovo` is the
+framework CLI (`kovo check`, `kovo explain`, `kovo add`). The full table — and the rule for which
+binary does what — lives in [Installation → The everyday commands](/docs/installation/#the-everyday-commands).
 
 ## Next steps
 

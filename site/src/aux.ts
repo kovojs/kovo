@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { createRequestHandler } from '@kovojs/server';
 
@@ -15,18 +16,28 @@ import { loadSiteContent } from './content.js';
 //   - 404.html           the app's own themed not-found document
 // All come from the one content pass, so they cannot drift from the human pages.
 
+import { buildExamplesLlmsSection } from '../scripts/examples.mjs';
 import { buildLlmsFull, buildLlmsIndex } from '../scripts/llms.mjs';
 
 const SITE_ORIGIN = 'https://kovo.sh';
 
+// scripts/examples.mjs lives at site/scripts/; the repo root is two levels up
+// (matching src/examples.ts and build.mjs).
+const repoRootPath = fileURLToPath(new URL('../../', import.meta.url));
+
 export async function emitAuxOutputs(outDir: string): Promise<void> {
   const content = await loadSiteContent();
+
+  // Synthetic Examples section so the agent layer surfaces the runnable example
+  // apps (otherwise a bespoke human-only route family invisible to llms.txt).
+  const examplesSection = await buildExamplesLlmsSection({ repoRootPath });
+  const sections = [...content.sections, examplesSection];
 
   // Search index.
   await writeFile(path.join(outDir, 'search-index.json'), JSON.stringify(content.search), 'utf8');
 
   // Raw markdown mirrors (the agent surface llms.txt links to).
-  for (const section of content.sections) {
+  for (const section of sections) {
     for (const page of section.pages) {
       const target = path.join(outDir, page.mirror.replace(/^\//, ''));
       await mkdir(path.dirname(target), { recursive: true });
@@ -38,12 +49,12 @@ export async function emitAuxOutputs(outDir: string): Promise<void> {
   // llms.txt + llms-full.txt — one source feeds both and the human pages.
   await writeFile(
     path.join(outDir, 'llms.txt'),
-    buildLlmsIndex(content.sections, { origin: SITE_ORIGIN, specMirror: '/spec.md' }),
+    buildLlmsIndex(sections, { origin: SITE_ORIGIN, specMirror: '/spec.md' }),
     'utf8',
   );
   await writeFile(
     path.join(outDir, 'llms-full.txt'),
-    buildLlmsFull(content.sections, {
+    buildLlmsFull(sections, {
       origin: SITE_ORIGIN,
       renderBody: (page: { markdown: string }) => page.markdown,
       spec: { body: content.spec.source, title: 'Kovo Specification', url: '/spec/' },

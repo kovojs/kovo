@@ -93,7 +93,32 @@ domains             →  invalidated queries  (each query's reads list)
 invalidated queries →  components           (every element that declared that query)
 ```
 
-You annotate each table's domain once:
+The write body at the top of that chain is a `write()` — a named operation plus the exact domains it
+touches. Mutations call writes instead of touching `db` directly (direct db access in a handler is
+**KV330**), which is what makes the touch set auditable:
+
+```ts
+import { domain, write } from '@kovojs/server';
+
+export const cart = domain('cart');
+export const product = domain('product');
+
+// One named write; its `touches` are the domains this operation can dirty.
+export const addItem = write({
+  key: 'cart/add-item',
+  touches: [cart, product],
+  run: (db: CommerceDb, productId: string, quantity: number) => {
+    db.cart.insert({ productId, quantity });
+    db.product.decrementStock(productId, quantity);
+  },
+});
+```
+
+A mutation handler then calls `db.<domain>.<write>` rather than issuing SQL inline, so every write
+goes through a declared, touch-annotated path. On the Drizzle-on-Postgres path the analyzer reads the
+touched tables straight from the write body and most writes need no explicit `touches` at all (see
+the [data layer guide](/guides/data-layer/) for the full authoring surface). You annotate each
+table's domain once:
 
 ```ts
 export const cartItems = pgTable(

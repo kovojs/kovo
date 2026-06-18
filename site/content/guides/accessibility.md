@@ -63,6 +63,41 @@ held to the axe-clean-across-states bar by the framework's suite. Your accessibi
 only you can know: meaningful labels and copy, correct heading order in your own layouts, and the
 semantics of content you author around the primitives.
 
+That part is plain HTML. A primitive can be flawless and the surrounding region still fail an audit
+if the labels are missing or the heading levels skip. Concretely — give the form region an
+accessible name, wire each control to a real `<label>`, and nest headings without gaps:
+
+```tsx
+/** @jsxImportSource @kovojs/server */
+import { Select } from '@kovojs/ui/select';
+
+export function ShippingSection() {
+  return (
+    <section aria-labelledby="shipping-heading">
+      <h2 id="shipping-heading">Shipping</h2>
+
+      {/* h2 → h3, no skipped level */}
+      <h3 id="speed-label">Delivery speed</h3>
+      <Select
+        labelledBy="speed-label"
+        items={[
+          { value: 'standard', label: 'Standard (5–7 days)' },
+          { value: 'express', label: 'Express (1–2 days)' },
+        ]}
+      />
+
+      <label for="zip">ZIP code</label>
+      <input id="zip" name="zip" inputmode="numeric" autocomplete="postal-code" />
+    </section>
+  );
+}
+```
+
+The framework proves `Select` emits a correct listbox contract; only you can know that it labels
+*delivery speed*, sits under a *Shipping* heading, and that the heading order around it is `h2 → h3`
+rather than `h2 → h4`. axe can't infer that intent, and the gallery suite never sees your layout — so
+this is the slice that stays yours.
+
 <details>
 <summary>Spec & evidence</summary>
 

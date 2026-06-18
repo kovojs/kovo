@@ -15,9 +15,12 @@ property-tested optimistic transform. Step state: `site/tutorial/steps/05-optimi
 
 There is no `invalidate()` call in the happy path. A write's touch set — which domains it writes,
 keyed how — meets each query's read set from chapter 3, and the intersection is the invalidation
-graph. With `@kovojs/drizzle`, touch sites are extracted from the write ASTs and committed as a
-reviewable graph; the tutorial's plain store has no ASTs, so you declare the touches — the floor
-every adapter shares:
+graph. The tutorial's plain store has no ASTs, so you declare the touches by hand — the floor every
+adapter shares:
+
+> **The production path.** With [`@kovojs/drizzle`](/guides/data-layer/), touch sites are extracted
+> from the write ASTs and committed as a reviewable graph instead of declared by hand. See the
+> [data-layer guide](/guides/data-layer/).
 
 {{snippet:05-optimistic/src/app.ts#touches}}
 

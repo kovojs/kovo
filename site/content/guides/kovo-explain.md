@@ -98,6 +98,36 @@ queries: cart,productGrid,orderHistory
 view-transitions: -
 ```
 
+**A component** — its queries, fragment targets, DOM identity, and the wiring the compiler extracted
+from its TSX: handlers (with their capture channels and platform substitutions), derives, and
+mount triggers:
+
+```sh
+kovo explain component CartBadge graph.json
+```
+
+```txt
+kovo-explain/v1
+COMPONENT CartBadge
+queries: cart
+fragments: cart-badge
+dom-name: cart-badge
+effective-dom-name: components/cart/cart-badge/cart-badge
+STYLE class=kv-button-bg-a1b2c3 source=button.tsx#root style-ref=base.root
+HANDLER click export=CartBadge$button_click ref=/c/cart-badge.client.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-
+SUBSTITUTION dialog tag=button event=click target=cart-drawer action=show-modal
+DERIVE CartBadge$isEmpty inputs=cart ref=/c/cart-badge.client.js#CartBadge$isEmpty target=button[data-bind:disabled]
+TRIGGER visible export=CartBadge$mountChart ref=/c/cart-badge.client.js#CartBadge$mountChart deps=cart justification=chart boots when visible
+MERGE button attr=aria-expanded rule=aria-author-override decision=author-wins diagnostics=KV232
+```
+
+Each `HANDLER` line names the extracted client handler, the `/c/*` module ref the served `on:*`
+attribute points at, its capture channels (`ctx`, `element-params`), and any platform `substitution`;
+`SUBSTITUTION` lines record where the compiler swapped an author event for a native platform behavior
+(here, `show-modal` on a `<dialog>`); `DERIVE` lines are the computed bindings and their DOM targets.
+This is how `on:*` refs, captures, and substitutions become inspectable without reading the lowered IR
+(SPEC §5.3, §4.x).
+
 The grammar is consistent: `key: value` lines, `-` for empty, comma-separated sets, `;`-separated
 `a->b` edges. You parse it with `grep` and `awk`; that's the intent.
 

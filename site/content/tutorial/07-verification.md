@@ -12,7 +12,15 @@ the app graph, `kovo explain` as a queryable dependency graph, and harness tests
 observed writes against declared touches. Step state:
 `site/tutorial/steps/07-verification/`.
 
-## Add a typed session and a guard chain
+This chapter has two halves. **Guards** (sessions, the guard chain, the new domain) lock down who
+can do what. **Verification** (the app graph, `kovo check`, `kovo explain`, write verification)
+proves the whole behavior surface mechanically. The *mechanics* of how this tutorial keeps itself
+honest against the reference app — run-steps gating and parity — live in the
+[wrap-up](/tutorial/08-wrap-up/); this chapter shows the assertion and moves on.
+
+## Guards: lock down who can do what
+
+### Add a typed session and a guard chain
 
 `req.session` is a declared schema, not an `any` bag. Guard refinements and the order's `userId`
 rest on typed fields; an untyped session would be a hole directly under the proof surface:
@@ -20,6 +28,11 @@ rest on typed fields; an untyped session would be a hole directly under the proo
 {{snippet:07-verification/src/app.ts#session}}
 
 {{snippet:07-verification/src/db.ts#request-shell}}
+
+> **The production path.** The tutorial keeps a plain in-memory store and a hand-declared touch
+> set. With [`@kovojs/drizzle`](/guides/data-layer/), the per-request database is real, touches are
+> extracted from the write ASTs, and write verification runs against actual table writes. The
+> [data-layer guide](/guides/data-layer/) is the home for the production story.
 
 The mutation now runs behind `authed` plus a rate limit, writes a third domain (`order`), and
 keeps everything else from chapter 5 — schema, errors, CSRF, declared touches:
@@ -32,7 +45,9 @@ it, because optimism and invalidation are keyed to queries, not call sites:
 
 {{snippet:07-verification/src/components/order-history.tsx#order-history}}
 
-## Check the app graph
+## Verification: prove the behavior surface
+
+### Check the app graph
 
 Everything the app has declared — components and their queries, the mutation's guards and writes,
 optimistic statuses, the page's query set, the touch graph (write sites mapped to touched
@@ -46,7 +61,7 @@ in one stable, diffable output:
 
 {{snippet:07-verification/src/app.test.ts#kovo-check-test}}
 
-## Query the graph with kovo explain
+### Query the graph with kovo explain
 
 `kovo explain` prints the compiler's and data plane's decisions as stable text, so agents consume
 the same artifact humans read. The step pins the cart/add explanation, including the optimistic
@@ -62,7 +77,7 @@ Here is the acceptance question — "what updates when cart/add commits?" — an
 The unguarded audit rides the same surface: `kovo explain --unguarded` lists every mutation, route,
 and query reachable without `authed`. This app's answer is zero.
 
-## Verify writes in harness tests
+### Verify writes in harness tests
 
 `@kovojs/test` executes mutations as functions, with write verification on: every observed write
 must fall inside the declared touch set, or the test fails. If the handler someday writes a table
@@ -74,17 +89,19 @@ Because application wiring is proof-carrying, the app needs few or no browser te
 The framework keeps morph survival and L0 behaviors under its own browser suites; what it removes
 is the testing SPAs need to compensate for unverifiable wiring.
 
-## Assert parity with the reference app
+### Assert parity with the reference app
 
-Finally, the tutorial keeps itself honest. `examples/commerce` is the acceptance target, and this
-step asserts behavior parity with its committed graph artifact: same mutation key and named POST,
-same input fields and write set, same optimistic statuses per pair, same fragment wire and
-failure code. If the reference app changes shape, this tutorial fails in the same PR:
+The last verification step pins this app to the reference: `examples/commerce` is the acceptance
+target, and this step asserts behavior parity with its committed graph artifact — same mutation key
+and named POST, same input fields and write set, same optimistic statuses per pair, same fragment
+wire and failure code:
 
 {{snippet:07-verification/src/app.test.ts#parity-test}}
 
-The [testing guide](/guides/testing/) covers pglite-backed harnesses and HTTP-level assertions;
-the [kovo explain guide](/guides/kovo-explain/) tours the full command surface.
+*How* this parity (and every code block in the tutorial) stays true in CI — the `run-steps` gate
+and what it enforces — is explained in the [wrap-up](/tutorial/08-wrap-up/#how-this-tutorial-stays-true).
+The [testing guide](/guides/testing/) covers pglite-backed harnesses and HTTP-level assertions; the
+[kovo explain guide](/guides/kovo-explain/) tours the full command surface.
 
 Guarded, session-typed, and provable without a browser. One short chapter remains: shipping it.
 

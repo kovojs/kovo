@@ -11,6 +11,10 @@ make a cart badge — the little "Cart: 3" counter in a header — that updates 
 without you writing any code to connect the two. By the end you'll know how Kovo thinks, and the
 rest of the docs will read like footnotes.
 
+> This is the 5-minute version. The [Tutorial](/tutorial/) builds each of these steps for real —
+> against the live compiler, with checked-in code and tests — using the same cart example. Read
+> this page for the shape of the idea; follow the tutorial when you want to type it out.
+
 ## Step 1: declare the data once
 
 A query is a named read. You say what it loads and which parts of your data it depends on:
@@ -28,6 +32,10 @@ export const cartQuery = query('cart', {
 That `reads: [cart]` is the important part. It's not a tag you have to remember to update — it's the
 whole dependency declaration. Anything that writes to the `cart` domain will refresh this query, and
 you'll never write the code that makes that happen.
+
+> **Where these come from.** `query`, `route`, `mutation`, `s`, `domain`, `guards`, and `session`
+> import from `@kovojs/server`; `component` and `form` import from `@kovojs/core`. That's the whole
+> split — server facts in `@kovojs/server`, the component/form model in `@kovojs/core`.
 
 ## Step 2: a component declares what it reads
 
@@ -60,17 +68,13 @@ Here's what that component becomes when it renders:
 </script>
 ```
 
-The compiler derived two things and stamped them into the HTML:
-
-- `kovo-deps="cart"` says this element depends on the `cart` query. When a mutation changes the cart,
-  this is what asks for fresh data.
-- `data-bind="cart.count"` says this element shows `cart.count`. When the value changes, the loader
-  writes the new number here.
-
-The query value ships once, as JSON in a `<script>` tag. Open View Source on any Kovo page and you
-can read its entire data story — what data is on the page, and which elements depend on it. You
-didn't write any of these attributes; the compiler did, and if one ever drifted out of sync with
-your code, the build would fail before a user saw it.
+The compiler derived two stamps: `kovo-deps="cart"` (this element depends on the `cart` query) and
+`data-bind="cart.count"` (it shows `cart.count`). The query value ships once, as JSON in a
+`<script>` tag. Open View Source on any Kovo page and you can read its entire data story — what data
+is on the page, and which elements depend on it. You didn't write any of these attributes; the
+compiler did, and if one ever drifted out of sync with your code, the build would fail before a user
+saw it. The [Queries chapter](/tutorial/03-queries/) walks each stamp from authored TSX to rendered
+HTML and pins it with a test — that's the version to read when you want the detail.
 
 ## Step 4: a write updates the badge — automatically
 
@@ -141,7 +145,9 @@ job:
 | L3    | Optimistic: predict the result before the server confirms | a small transform module         |
 
 A size-guide popover that the platform can do natively ships no JavaScript at all. You don't pick
-the layer; the compiler proves which one applies.
+the layer; the compiler proves which one applies. The tutorial builds one example at each layer —
+[islands (L1)](/tutorial/02-islands/), [mutations (L2)](/tutorial/04-mutations/), and
+[optimistic (L3)](/tutorial/05-optimistic/) — if you want to see each one wired up for real.
 
 ### The server is always right
 

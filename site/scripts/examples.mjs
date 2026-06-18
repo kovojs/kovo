@@ -85,6 +85,94 @@ export const EXAMPLES = [
   },
 ];
 
+/**
+ * Examples that are surfaced in the agent layer (llms.txt / llms-full.txt) but
+ * NOT in the human `/examples/` two-pane route. The route renders every EXAMPLES
+ * entry as a live-iframe + source split; devtool (agent-facing MCP example) and
+ * reference (auth/security example) have no live demo service to embed, so they
+ * stay out of EXAMPLES (keeping the human route working) and are listed here so
+ * agents still get their authored source. Same ExampleManifest shape, minus the
+ * embed/service fields the human route needs. `gallery` is intentionally omitted
+ * (it has its own pipeline).
+ *
+ * @type {Array<{ name: string, title: string, blurb: string, dir: string, sources: string[] }>}
+ */
+export const LLMS_ONLY_EXAMPLES = [
+  {
+    name: 'devtool',
+    title: 'Dataflow Devtools',
+    blurb:
+      "A devtool that visualizes a Kovo app's dataflow graph — select any node and trace the queries in and mutations out — and serves the same graph cards to agents over MCP. It is itself a Kovo app, dogfooding the framework on its own tooling (SPEC §5.3: agents consume the same artifact humans read).",
+    dir: 'examples/devtool',
+    sources: [
+      'src/app-shell.ts',
+      'src/graph-model.mjs',
+      'src/cards.mjs',
+      'src/render.ts',
+      'src/client.ts',
+    ],
+  },
+  {
+    name: 'reference',
+    title: 'Reference (Auth & Security)',
+    blurb:
+      'A minimal reference app showing Kovo authentication and authorization: better-auth session providers, sign-in/sign-out mutations with CSRF protection, role and authed guards on routes, and the explain graph the compiler proves scope audits against.',
+    dir: 'examples/reference',
+    sources: ['src/app.ts', 'src/app-shell.ts'],
+  },
+];
+
+/**
+ * Build a synthetic content-style `DocSection` for the example apps so the agent
+ * layer (llms.txt / llms-full.txt) surfaces them alongside the markdown sections.
+ * Examples are otherwise a bespoke route family fed only to the human pages, so
+ * without this they are invisible to agents. The section is shaped exactly like a
+ * `DocSection` (title + pages with title/description/mirror/url/markdown/source)
+ * so it can be passed straight into `buildLlmsIndex` / `buildLlmsFull`.
+ *
+ * Each page's markdown body = the blurb + a one-line "what it demonstrates" + each
+ * authored source file (from `loadExampleSources`) rendered as a fenced code block
+ * labeled with its repo-relative path. The `.md` mirror lives at
+ * `/examples/<name>.md` (a sibling of the content-section mirrors), so the URL the
+ * index emits resolves to a real raw markdown file that check-links can verify.
+ *
+ * @returns {Promise<{ key: string, title: string, pages: Array<{ title: string,
+ *   description: string, mirror: string, url: string, markdown: string, source: string }> }>}
+ */
+export async function buildExamplesLlmsSection({ repoRootPath }) {
+  const manifests = [...EXAMPLES, ...LLMS_ONLY_EXAMPLES];
+  const pages = [];
+  for (const manifest of manifests) {
+    const sources = await loadExampleSources(manifest, { repoRootPath });
+    const blocks = sources.map((file) => {
+      const lang = file.name.endsWith('.tsx')
+        ? 'tsx'
+        : file.name.endsWith('.mjs')
+          ? 'js'
+          : 'ts';
+      return `\`\`\`${lang} title="${manifest.dir}/${file.name}"\n${file.code.trimEnd()}\n\`\`\``;
+    });
+    const body = [
+      manifest.blurb,
+      '',
+      `Runnable Kovo example app under \`${manifest.dir}\`. The authored source below shows what it demonstrates — the components, queries, mutations, and derived optimism that drive it (lowered IR / generated components are artifacts, not authored; SPEC §5.2).`,
+      '',
+      ...blocks,
+    ].join('\n');
+
+    pages.push({
+      title: manifest.title,
+      description: manifest.blurb,
+      mirror: `/examples/${manifest.name}.md`,
+      url: `/examples/${manifest.name}/`,
+      markdown: body,
+      source: body,
+    });
+  }
+
+  return { key: 'examples', title: 'Examples', pages };
+}
+
 /** The docs-site base path used when an example opts into a static export. */
 export function exampleAppBase(name) {
   return `/examples/${name}/app/`;

@@ -102,6 +102,13 @@ export const ProductCard = component({
 });
 ```
 
+Two token families appear here. `tokens.sys.*` are the Material *system roles* every theme defines —
+`surface`, `onSurface`, `outlineVariant`, `primary`, and so on — derived from the seed so a theme
+change re-skins them everywhere. `tokens.customColor('warning')` reads one of the *named extra colors*
+you declared under `defineTheme({ colors: { warning } })`; it returns a group (`.color`, `.onColor`,
+`.colorContainer`, …) for palette entries that aren't part of the system role set. Reach for `sys.*` for
+ordinary surfaces and text, and `customColor(name)` for app-specific accents like a low-stock warning.
+
 Style objects can be selected with normal TypeScript conditionals. The compiler sees every referenced
 object and compiler-known token, extracts the CSS at build time, and routes state/query-driven style
 toggles through the same attribute update plan as other Kovo bindings. That means late mutation

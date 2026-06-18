@@ -29,17 +29,15 @@ npm install @kovojs/ui @kovojs/style @kovojs/headless-ui @kovojs/core @kovojs/se
 ```
 
 ```tsx
-import * as style from '@kovojs/style';
 import { Button } from '@kovojs/ui/button';
 
-const toolbarStyles = style.create({
-  saveButton: { minWidth: 112 },
-});
-
 export function Toolbar() {
-  return <Button style={toolbarStyles.saveButton}>Save</Button>;
+  return <Button variant="primary">Save</Button>;
 }
 ```
+
+Every styled component takes a typed `style` (or `styles`) override prop; the mechanics live in
+[Styling → Overrides](/guides/styling/#overrides).
 
 Use this mode when the versioned package behavior and styling are close to what your app needs. The
 root `@kovojs/ui` entry is reserved for package-wide helpers; component symbols live on component
@@ -49,21 +47,10 @@ state colors without editing each component.
 
 ## Copy-in components
 
-Copy a component when you want to own the component source. Customize it with typed StyleX objects
-instead of string class overrides:
-
-```tsx
-import * as style from '@kovojs/style';
-import { Button } from './components/ui/button.js';
-
-const toolbarStyles = style.create({
-  saveButton: { minWidth: 112 },
-});
-
-export function Toolbar() {
-  return <Button style={toolbarStyles.saveButton}>Save</Button>;
-}
-```
+Copy a component when you want to own the component source. The only thing that changes from the
+direct-import case is where you import the component from — `./components/ui/button.js` instead of
+`@kovojs/ui/button`. It still takes the same typed StyleX override prop (see
+[Styling → Overrides](/guides/styling/#overrides)).
 
 A copied component depends only on public, versioned packages:
 
@@ -172,10 +159,55 @@ state machine by hand:
 ```tsx
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { selectTriggerAttributes } from '@kovojs/headless-ui/select';
+import {
+  selectTriggerAttributes,
+  type SelectTriggerAttributeOptions,
+} from '@kovojs/headless-ui/select';
 import * as style from '@kovojs/style';
-import { escapeHtml } from '@kovojs/server/internal/html';
+
+const selectStyles = style.create({
+  trigger: { alignItems: 'center', display: 'inline-flex', gap: 8 },
+});
+
+export interface SelectTriggerProps extends SelectTriggerAttributeOptions {
+  label: string;
+  styles?: { trigger?: style.StyleInput };
+}
+
+export const SelectTrigger = component({
+  render(props: SelectTriggerProps) {
+    // The builder returns the ARIA + data-* attributes for the trigger's current state.
+    const attrs = selectTriggerAttributes({
+      id: props.id,
+      labelledBy: props.labelledBy,
+      listboxId: props.listboxId,
+      open: props.open,
+      value: props.value,
+      items: props.items,
+    });
+
+    return (
+      <button
+        {...style.attrs(selectStyles.trigger, props.styles?.trigger)}
+        id={attrs.id}
+        aria-controls={attrs['aria-controls']}
+        aria-expanded={attrs['aria-expanded']}
+        aria-haspopup={attrs['aria-haspopup']}
+        aria-labelledby={attrs['aria-labelledby']}
+        data-state={attrs['data-state']}
+        data-placeholder={attrs['data-placeholder']}
+      >
+        {props.label}
+      </button>
+    );
+  },
+});
 ```
+
+You spread the builder's output onto the host element rather than hand-writing the ARIA contract;
+the compiler wires the interactive `on:*` handlers and `data-bind` updates onto the same element when
+the component is enhanced. (Components that interpolate untrusted text into markup also import
+`escapeHtml` from `@kovojs/server/internal/html`.)
 
 Because the behavior lives in `@kovojs/headless-ui`, your copy stays small: it owns markup and
 StyleX objects, the public package owns correctness.
