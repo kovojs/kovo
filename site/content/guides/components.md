@@ -141,9 +141,7 @@ export interface ButtonProps {
 export const Button = component({
   render(props: ButtonProps) {
     return (
-      <button
-        {...style.attrs(buttonStyles.root, buttonStyles[props.variant ?? 'primary'], props.style)}
-      >
+      <button style={[buttonStyles.root, buttonStyles[props.variant ?? 'primary'], props.style]}>
         {props.children}
       </button>
     );
@@ -188,7 +186,7 @@ export const SelectTrigger = component({
 
     return (
       <button
-        {...style.attrs(selectStyles.trigger, props.styles?.trigger)}
+        style={[selectStyles.trigger, props.styles?.trigger]}
         id={attrs.id}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}

@@ -251,6 +251,12 @@ internals, emit/check scripts, and narrowly named artifact tests.
     `handler` from the public `@kovojs/runtime` root in its snippet. `pnpm
     --filter @kovojs/site test`, `pnpm --filter @kovojs/site exec node
     scripts/export-static.mjs`, and `node scripts/import-boundary.mjs` passed.
+  - Current progress: docs prose examples now teach `style={...}` /
+    `style={[...]}` instead of `style.attrs(...)`; `rg -n "style\\.attrs"
+    site/content site/src site/tutorial --glob '!**/generated/**' -S`, `pnpm
+    --filter @kovojs/site test`, and `git diff --check` passed. Keep open for
+    remaining class-based docs components, especially `chrome.tsx` and
+    `landing.tsx`.
 
 ## Verification
 
