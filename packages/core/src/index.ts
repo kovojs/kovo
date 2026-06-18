@@ -773,36 +773,6 @@ function escapeHtmlAttribute(value: string): string {
     .replaceAll('>', '&gt;');
 }
 
-/** A fragment-target patch: the target name plus the props to re-render it with. */
-export interface FragmentTargetPatch<Target extends string, Props> {
-  props: Props;
-  target: Target;
-}
-
-/**
- * Address a server-rendered fragment target for a wire patch, pairing the
- * target name with its typed props. The mutation wire replaces the live
- * `<kovo-fragment target="…">` with freshly rendered HTML (SPEC §9.1).
- *
- * @param target - A registered fragment-target name.
- * @param props - The props that target's renderer expects.
- * @returns A `FragmentTargetPatch` carrying the target and props.
- * @example
- * import { fragmentTarget } from '@kovojs/core';
- *
- * const patch = fragmentTarget('product-form', {});
- * // patch.target === 'product-form'
- */
-export function fragmentTarget<const Target extends RegistryKey<FragmentTargets>>(
-  target: Target,
-  props: Target extends keyof FragmentTargets ? FragmentTargets[Target] : Record<string, never>,
-): FragmentTargetPatch<
-  Target,
-  Target extends keyof FragmentTargets ? FragmentTargets[Target] : Record<string, never>
-> {
-  return { props, target };
-}
-
 /** A typed event descriptor: its name, payload type, and server-populated payload keys. */
 export interface EventDefinition<Name extends string, Payload extends JsonValue = JsonValue> {
   name: Name;

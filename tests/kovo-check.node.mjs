@@ -208,7 +208,8 @@ import {
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
 } from '../dist/server/src/internal/wire.mjs';
-import { fragmentTarget, href, Link, redirect, route } from '../dist/core/src/index.mjs';
+import { href, Link, redirect, route } from '../dist/core/src/index.mjs';
+import { fragmentTarget } from '../dist/core/src/internal/fragment-target.mjs';
 
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const loadProjectWireFixtureSources = () =>
@@ -3332,7 +3333,7 @@ export const CartRow = component({
   await assertGeneratedRegistryConsumerTypes(
     result.files,
     `
-import { fragmentTarget } from '@kovojs/core';
+import { fragmentTarget } from '@kovojs/core/internal/fragment-target';
 
 const cartRow = fragmentTarget('cart-row/cart-row', { rowId: 'row-1' });
 cartRow.props.rowId.toUpperCase();

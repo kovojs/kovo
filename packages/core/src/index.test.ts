@@ -7,7 +7,6 @@ import {
   form,
   formFields,
   FormError,
-  fragmentTarget,
   href,
   Link,
   query,
@@ -23,6 +22,7 @@ import {
   type JsonValue,
 } from './index.js';
 import * as coreRoot from './index.js';
+import { fragmentTarget } from './internal/fragment-target.js';
 import * as internalQueryDelta from './internal/query-delta.js';
 
 interface TestSchema<Value> {
@@ -83,6 +83,7 @@ describe('core authoring APIs', () => {
     expect('derived' in coreRoot).toBe(false);
     expect('packageComponentPrefixFactFromPackageManifest' in coreRoot).toBe(false);
     expect('validateKovoExplainInput' in coreRoot).toBe(false);
+    expect('fragmentTarget' in coreRoot).toBe(false);
   });
 
   it('keeps query-delta wire helpers off the root surface', () => {

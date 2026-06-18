@@ -792,7 +792,7 @@ tsconfig.json --noEmit --pretty false`.
       whether starter client setup remains an app-authored public runtime
       surface, becomes compiler-emitted, or gets a narrowly documented public
       loader subpath distinct from the generated ABI.
-- [ ] **Shrink `@kovojs/core` to app declaration primitives.**
+- [x] **Shrink `@kovojs/core` to app declaration primitives.**
   - Review and likely internalize diagnostics metadata, registry types, query
     delta helpers/types, and fragment-target helpers if they are compiler/server
     implementation details rather than normal app-authored APIs.
@@ -845,7 +845,34 @@ tsconfig.json --noEmit --pretty false`.
       `rg -n "diagnosticDefinitions|diagnosticDefinitionText|isDiagnosticCode|DiagnosticDefinition|DiagnosticTextOptions" packages/core/src/index.ts site/gen/api/core.md`;
       `rg -n "@kovojs/core.*(diagnosticDefinitions|diagnosticDefinitionText|isDiagnosticCode)|import \{[^}]*\b(diagnosticDefinitions|diagnosticDefinitionText|isDiagnosticCode)\b[^}]*\} from '@kovojs/core'|import \{[^}]*\b(diagnosticDefinitions|diagnosticDefinitionText|isDiagnosticCode)\b[^}]*\} from \"@kovojs/core\"" packages site examples docs --glob '!**/dist/**' --glob '!**/node_modules/**'`;
       `git diff --check`.
-  - Evidence:
+  - [x] Move manual fragment-target wire helpers off the root.
+    - Evidence: `@kovojs/core` no longer root-exports `fragmentTarget` or
+      `FragmentTargetPatch`; `@kovojs/core/internal/fragment-target` owns the
+      legacy helper for framework conformance checks. The root still declares
+      the generated `FragmentTargets` registry interface so compiler-emitted
+      registries can declaration-merge into `@kovojs/core`, matching
+      `SPEC.md` §9.1's rule that app authors never construct live-target
+      headers or route mutations to fragments by hand. Verification:
+      `corepack pnpm exec vitest --run packages/core/src/index.test.ts packages/conformance-fixtures/src/package-exports.test.ts scripts/public-packages.test.mjs`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `node site/scripts/api-ref.mjs`; `node site/scripts/api-examples-check.mjs`;
+      `node scripts/api-surface-gate.mjs`; `corepack pnpm run check:imports`;
+      `corepack pnpm run check:exports`; `node scripts/build-publish.mjs`;
+      `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs site/scripts/api-examples-check.test.mjs scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs packages/conformance-fixtures/src/package-exports.test.ts packages/core/src/index.test.ts`;
+      `rg -n "import \{[^}]*\bfragmentTarget\b[^}]*\} from ['\"]@kovojs/core['\"]|\bFragmentTargetPatch\b" packages examples site docs tests --glob '!**/dist/**' --glob '!**/node_modules/**' --glob '!**/generated/**'`;
+      `rg -n "fragmentTarget|FragmentTargetPatch" packages/core/src/index.ts site/gen/api/core.md`.
+  - Evidence: the root `@kovojs/core` symbol list now contains app declaration
+    primitives, generated declaration-merge registries, storage helpers, generic
+    webhook/HMAC primitives, and public diagnostic code/severity types only.
+    Previously-public wire/build/framework helpers now live on internal subpaths:
+    query delta helpers under `@kovojs/core/internal/query-delta`, diagnostics
+    registry values under `@kovojs/core/internal/diagnostics`, fragment target
+    patch helpers under `@kovojs/core/internal/fragment-target`, derivation under
+    `@kovojs/core/internal/derivation`, graph explain types under
+    `@kovojs/core/internal/graph`, and package-prefix helpers under
+    `@kovojs/core/internal/package-prefix`. Verification:
+    `node -e "import { execFileSync } from 'node:child_process'; const data = JSON.parse(execFileSync('node', ['scripts/exported-symbols.mjs','--json'], { encoding: 'utf8' })); const core = data.packages.find(p => p.name === '@kovojs/core'); for (const exp of core.exports) { console.log(exp.importPath); console.log(exp.symbols.map(s => s.name).join('\\n')); }"`;
+    `rg -n "applyQueryDelta|buildQueryDelta|QueryDelta|EndpointRegistry|EndpointMethod|EndpointMount|EndpointCsrfExemption|EndpointAuthDeclaration|diagnosticDefinitions|diagnosticDefinitionText|isDiagnosticCode|DiagnosticDefinition|DiagnosticTextOptions|fragmentTarget|FragmentTargetPatch|stripeSignature|StripeSignatureOptions" site/gen/api/core.md packages/core/src/index.ts`.
 - [x] **Cull vendor-specific `@kovojs/core` symbols.**
   - Remove `stripeSignature` and `StripeSignatureOptions`; inline Stripe logic in
     examples that need it.

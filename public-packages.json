@@ -12,6 +12,7 @@
         "internal": [
           "./internal/derivation",
           "./internal/diagnostics",
+          "./internal/fragment-target",
           "./internal/graph",
           "./internal/package-prefix",
           "./internal/query-delta"
