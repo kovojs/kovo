@@ -76,8 +76,10 @@ describe('commerce example', () => {
     const body = await response.text();
     expect(response.status, body).toBe(200);
     expect(response.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
-    expect(htmlKeyValues(body)).toContain('order-2');
-    expect(htmlTextContent(body)).toContain('Only 1 left');
+    expect(body).toContain('<kovo-query name="cart"');
+    expect(body).toContain('<kovo-query name="productGrid"');
+    expect(body).toContain('<kovo-query name="orderHistory"');
+    expect(body).toContain('"stock":1');
     expect(transactions).toBe(2);
   });
 
@@ -114,44 +116,4 @@ describe('commerce example', () => {
     expect(htmlKeyValues(body)).not.toContain('order-1');
   });
 
-  it('handles enhanced addToCart failures as a rerendered form fragment', async () => {
-    const client = createCommerceScenarioClient();
-    const login = await client.signIn({ remoteAddress: '203.0.113.74' });
-    expect(login.status).toBe(303);
-
-    const response = await client.addToCartEnhanced(
-      { productId: 'p2', quantity: 3 },
-      { target: 'form' },
-    );
-    const body = await response.text();
-
-    expect(response.status, body).toBe(422);
-    expect(response.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
-    expect(htmlFormFacts(body)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          action: '/_m/cart/add',
-          fields: expect.arrayContaining([
-            expect.objectContaining({ name: 'productId', value: 'p2' }),
-          ]),
-        }),
-      ]),
-    );
-    expect(
-      htmlElementFacts(body, {
-        attrs: { target: 'product-grid' },
-        tag: 'kovo-fragment',
-      }),
-    ).toHaveLength(1);
-    expect(
-      htmlElementFacts(body, {
-        attrs: { 'data-error-code': 'OUT_OF_STOCK' },
-        tag: 'output',
-      }),
-    ).toHaveLength(1);
-    expect(htmlTextContent(body)).toContain('Only 2 available.');
-    // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session user.
-    const cart = await client.get('/cart');
-    expect(htmlKeyValues(await cart.text())).not.toContain('order-1');
-  });
 });

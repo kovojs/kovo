@@ -15,11 +15,14 @@ import {
 
 import {
   addToCart,
+  cartQuery,
   commerceMessages,
   commerceSessionProvider,
   commerceSignIn,
   commerceSignOut,
   createCommerceDb,
+  orderHistoryQuery,
+  productGridQuery,
   type CommerceAuthRequest,
   type CommerceDb,
   type CommerceSession,
@@ -160,6 +163,7 @@ export function createCommerceApp(options: CommerceAppOptions = {}): CommerceApp
     document: { lang: 'en-US' },
     mutations: [addToCart, commerceSignIn, commerceSignOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
+    queries: [cartQuery, productGridQuery, orderHistoryQuery],
     renderRoute(value) {
       return routeValueToHtml(value);
     },

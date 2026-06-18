@@ -5,7 +5,7 @@ import { chromium, type Browser } from 'playwright';
 import { afterEach, describe, expect, it } from 'vitest';
 import axe from 'axe-core';
 
-import { createCommerceApp } from './app.generated-fixtures.js';
+import { createCommerceApp } from './app.js';
 
 let browser: Browser | undefined;
 let server: Server | undefined;

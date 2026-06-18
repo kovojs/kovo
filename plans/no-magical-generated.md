@@ -78,16 +78,20 @@ internals, emit/check scripts, and narrowly named artifact tests.
 
 ## Commerce
 
-- [ ] Change Commerce scenario tests and helpers to import the authored app entry
+- [x] Change Commerce scenario tests and helpers to import the authored app entry
       (`./app.js`) instead of `./generated/app.kovo-route.js`.
-  - Current generated imports are in `examples/commerce/src/app-test-helpers.ts`,
+  - Evidence: `examples/commerce/src/app-test-helpers.ts`,
     `examples/commerce/src/app.test.ts`, and
-    `examples/commerce/src/enhanced-navigation.test.ts`.
-  - Current progress: those scenario files no longer import
-    `./generated/app.kovo-route.js` directly; they use
-    `examples/commerce/src/app.generated-fixtures.ts` while the public authored
-    loader gap is closed. `pnpm --filter @kovojs/example-commerce exec vitest
-    --run src/app.test.ts src/enhanced-navigation.test.ts` passed.
+    `examples/commerce/src/enhanced-navigation.test.ts` import `./app.js`.
+    Generated live-target coverage moved to the explicit
+    `examples/commerce/src/app.generated-artifacts.test.ts`, which imports
+    `examples/commerce/src/app.generated-fixtures.ts`. `pnpm --filter
+    @kovojs/example-commerce exec vitest --run src/app.test.ts
+    src/app.add-to-cart.test.ts src/app.generated-artifacts.test.ts
+    src/enhanced-navigation.test.ts src/app.rendering.test.ts`, `pnpm --filter
+    @kovojs/server exec vitest --run src/route-jsx.test.tsx`, `pnpm exec vitest
+    --run scripts/import-boundary.test.mjs`, `node scripts/import-boundary.mjs`,
+    and `git diff --check` passed.
 - [x] Delete `examples/commerce/src/source-truth.test.ts`.
   - Rationale: reading `src/generated/graph.json` from an example test is not a
     useful app-author DevX signal. Graph correctness should live in compiler/CLI
@@ -298,12 +302,13 @@ internals, emit/check scripts, and narrowly named artifact tests.
     scripts/import-boundary.test.mjs` passed and covers static imports,
     re-exports, dynamic imports, explicit artifact tests, explicit generated
     fixtures, and ordinary-test rejection.
-- [ ] Run focused Commerce tests after removing generated imports and deleting
+- [x] Run focused Commerce tests after removing generated imports and deleting
       `source-truth.test.ts`.
-  - Current progress: `pnpm --filter @kovojs/example-commerce exec vitest --run
-    src/app.test.ts src/enhanced-navigation.test.ts` passed after route-module
-    imports moved behind generated fixtures and generated route artifacts were
-    refreshed for `stylesheet(...)` declarations.
+  - Evidence: `pnpm --filter @kovojs/example-commerce exec vitest --run
+    src/app.test.ts src/app.add-to-cart.test.ts src/app.generated-artifacts.test.ts
+    src/enhanced-navigation.test.ts src/app.rendering.test.ts` passed after
+    ordinary Commerce helpers/tests switched to `./app.js` and generated
+    live-target assertions moved to an explicit generated-artifacts test.
 - [ ] Run focused CRM and StackOverflow tests after applying the same boundary.
   - Current progress: `pnpm --filter @kovojs/example-crm exec vitest --run
     src/optimistic.test.ts src/interactive-app.test.ts src/graph.test.ts` and
