@@ -295,32 +295,59 @@ describe('browser inline loader enhanced navigation', () => {
     }
   });
 
-  it('collects mutation live targets from the post-navigation DOM', async () => {
-    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Cart</title>';
+  it('collects mutation live targets after enhanced navigation', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Products</title>';
     document.body.innerHTML = [
       '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-deps="viewer">',
-      '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
-      '<form id="cart-form" enhance action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
-      '<button type="submit">Save</button>',
-      '</form>',
-      '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-deps="cart">Cart</section>',
+      '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">',
+      '<section kovo-fragment-target="old-target" kovo-deps="old">Old</section>',
       '</section>',
       '</main>',
     ].join('');
-    const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
-      async text() {
-        return [
-          '<kovo-fragment target="cart-badge">',
-          '<section kovo-fragment-target="cart-badge" kovo-deps="cart">Updated cart</section>',
-          '</kovo-fragment>',
-        ].join('');
-      },
-    }));
+    const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return {
+          async text() {
+            return [
+              '<kovo-fragment target="cart-badge">',
+              '<section kovo-fragment-target="cart-badge" kovo-deps="cart">Updated cart</section>',
+              '</kovo-fragment>',
+            ].join('');
+          },
+        };
+      }
+
+      return {
+        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        async text() {
+          return [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-deps="viewer">',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<form id="cart-form" enhance action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
+            '<button type="submit">Save</button>',
+            '</form>',
+            '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-deps="cart">Cart</section>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join('');
+        },
+        url: new URL('/cart', location.href).href,
+      };
+    });
     vi.stubGlobal('fetch', fetch);
     vi.stubGlobal('scrollTo', vi.fn());
     vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
 
     installNavigationLoader();
+    dispatchAnchorLikeClick('/cart');
+    await vi.waitFor(() =>
+      expect(document.querySelector('[kovo-nav-segment="page:/cart"]')).not.toBeNull(),
+    );
     document.querySelector('form')?.addEventListener('submit', (event) => event.preventDefault());
 
     document.querySelector('form')?.dispatchEvent(

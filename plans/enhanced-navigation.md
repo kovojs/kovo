@@ -270,15 +270,16 @@ through client navigation.
     `packages/runtime/src/mutation-optimistic-pagehide.test.ts`, and
     `packages/conformance-fixtures/src/runtime-fixtures.test.ts` prove bfcache
     hygiene. Remaining gap: pending mutation reconciliation.
-- [ ] **4. Mutation/live composition after enhanced navigation.**
+- [x] **4. Mutation/live composition after enhanced navigation.**
   - Prove `Kovo-Targets`/`Kovo-Live-Targets` snapshots include preserved layout
     targets after navigation, inserted leaf targets are discoverable, and stale
     targets do not double-morph.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    proves mutation snapshots from post-navigation DOM send preserved layout and
-    inserted leaf entries in `Kovo-Targets`/`Kovo-Live-Targets` and apply the
-    inserted leaf fragment once. Remaining gap: integrated enhanced navigation
-    followed by mutation without test-harness body replacement.
+  - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
+    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63359`
+    passed and proves an integrated enhanced navigation followed by an enhanced
+    mutation sends preserved layout and inserted leaf entries in
+    `Kovo-Targets`/`Kovo-Live-Targets`, excludes the stale pre-navigation target,
+    and applies the inserted leaf fragment once.
 - [ ] **5. Render-equivalence and no-JS gates.**
   - Extend the §5.2/§9.2 gates so no-JS full load and JS-on enhanced navigation
     produce equivalent DOM over the corpus, after normalizing intentionally
@@ -331,12 +332,12 @@ through client navigation.
     proves build-token mismatch, non-HTML fallback, final same-origin HTML
     redirects, and 403/404/500 shell morphing across inline artifacts.
     It also proves duplicate-id morph failure falls back to full GET.
-- [ ] **Mutation/live after navigation:** preserved and inserted targets refresh
+- [x] **Mutation/live after navigation:** preserved and inserted targets refresh
       correctly with no stale-target or double-morph races.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    covers preserved layout target `layout-shell`, inserted target `cart-badge`,
-    and single fragment application from post-navigation DOM. Remaining gap:
-    integrated navigation-plus-mutation and stale-target exclusion.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    covers enhanced navigation followed by mutation, preserved layout target
+    `layout-shell`, inserted target `cart-badge`, stale target exclusion, and
+    single fragment application after navigation.
 - [ ] **History/scroll/focus/a11y/bfcache:** back/forward, restoration,
       route-change announcement, axe, and bfcache hygiene pass.
   - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
