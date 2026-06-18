@@ -77,6 +77,45 @@ describe('kovo build', () => {
     }
   });
 
+  it('loads TypeScript app modules through the build-time Vite SSR path', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-ts-app-'));
+    const appPath = join(root, 'app.ts');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(appPath, typescriptAppModuleSource(), 'utf8');
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const origin = await listen(server);
+
+      try {
+        const document = await fetch(`${origin}/typed`);
+        await expect(document.text()).resolves.toContain('<main>Typed Cart 4</main>');
+        expect(document.status).toBe(200);
+      } finally {
+        await close(server);
+      }
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('boots emitted node preset output from production dependencies with dev-package guards', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-prod-deps-'));
     const appPath = join(root, 'app.mjs');
@@ -261,6 +300,22 @@ export default createApp({
   routes: [
     route('/cart', {
       page: () => '<main>Cart ' + db.count + '</main>',
+    }),
+  ],
+});
+`;
+}
+
+function typescriptAppModuleSource(): string {
+  return `
+import { createApp, route } from '@kovojs/server';
+
+const db: { count: number } = { count: 4 };
+
+export default createApp({
+  routes: [
+    route('/typed', {
+      page: () => '<main>Typed Cart ' + db.count + '</main>',
     }),
   ],
 });

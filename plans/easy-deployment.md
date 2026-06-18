@@ -283,12 +283,16 @@ Design decisions to lock in code review:
     configured `node()` options, and emits the built-in `node()` preset.
     `vercel`/`cloudflare` selection fails loudly until their emitters land instead
     of silently producing Node output.
+    The app aggregate is now loaded through a build-time Vite SSR server, so
+    TypeScript app entries such as `src/app-shell.ts` work without requiring
+    app authors to precompile or hand-author `.mjs` fixtures.
     `packages/cli/src/commands-manifest.ts` / `commands-manifest.test.ts` pin the
     CLI docs/usage surface, and `packages/cli/package.json` declares the runtime
     `vite-plus` dependency needed by the build command. The full item remains open
     because client build/manifest orchestration and non-node presets are not
     implemented. Verification: `corepack pnpm exec vitest --run
-packages/cli/src/index.kovo-build.test.ts packages/server/src/build.test.ts`;
+packages/cli/src/index.kovo-build.test.ts packages/server/src/build.test.ts`
+    covers `.mjs` and `.ts` app modules, config preset selection, and node output;
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
     `corepack pnpm run check:api-surface`; `corepack pnpm run check:exports`;
     `corepack pnpm run check:publish`; `corepack pnpm exec vp check --fix`.

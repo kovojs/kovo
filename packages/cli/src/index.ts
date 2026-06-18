@@ -3,7 +3,7 @@ export type { DiagnosticCode } from '@kovojs/core';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type {
@@ -2374,7 +2374,7 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
     const resolvedAppModulePath = resolve(options.appModulePath);
     const [{ node, writeKovoNeutralBuild }, appModule] = await Promise.all([
       import('@kovojs/server/build'),
-      import(pathToFileURL(resolvedAppModulePath).href),
+      loadBuildAppModule(resolvedAppModulePath, process.cwd()),
     ]);
     const app = appFromModule(appModule, options.appModulePath);
     const serverHandlerSource = await bundleKovoServerHandler(resolvedAppModulePath);
@@ -2459,6 +2459,35 @@ async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig>
   } finally {
     await server.close();
   }
+}
+
+async function loadBuildAppModule(appModulePath: string, root: string): Promise<unknown> {
+  const { createServer } = await import('vite-plus');
+  const server = await createServer({
+    appType: 'custom',
+    configFile: false,
+    logLevel: 'error',
+    root,
+    server: { middlewareMode: true },
+  });
+  try {
+    return await server.ssrLoadModule(viteSsrModuleId(appModulePath, root));
+  } finally {
+    await server.close();
+  }
+}
+
+function viteSsrModuleId(filePath: string, root: string): string {
+  const relativePath = relative(root, filePath);
+  if (
+    relativePath !== '' &&
+    !relativePath.startsWith('..') &&
+    !relativePath.startsWith('/') &&
+    !/^[A-Za-z]:/.test(relativePath)
+  ) {
+    return `/${relativePath.split(/[\\/]/).join('/')}`;
+  }
+  return pathToFileURL(filePath).href;
 }
 
 function findKovoBuildConfig(root: string): string | undefined {
