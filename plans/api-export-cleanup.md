@@ -471,11 +471,22 @@ integration. Framework packages should expose only generic webhook primitives.
     `event`, `href`, `redirect`), storage APIs, and generic webhook/HMAC
     primitives whose full signature type closure is public.
   - Evidence:
-- [ ] **Cull vendor-specific `@kovojs/core` symbols.**
+- [x] **Cull vendor-specific `@kovojs/core` symbols.**
   - Remove `stripeSignature` and `StripeSignatureOptions`; inline Stripe logic in
     examples that need it.
   - Add a package-surface guard against new provider-specific framework exports.
-  - Evidence:
+  - Evidence: `packages/core/src/index.ts` no longer exports
+    `stripeSignature` or `StripeSignatureOptions`; `SPEC.md` §9.1 and
+    `packages/server/src/webhook.ts` describe provider-specific HMAC recipes as
+    app-owned code layered on `hmacSignature`. `packages/core/src/verifier.test.ts`
+    keeps timestamped multi-signature provider coverage via a local helper built
+    from `hmacSignature`, and `scripts/exported-symbols.test.mjs` fails if public
+    package symbols contain `stripe`. Verification:
+    `pnpm exec vitest --run packages/core/src/verifier.test.ts scripts/exported-symbols.test.mjs`;
+    `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
+    `node scripts/exported-symbols.mjs --json` plus a no-`stripe` symbol scan;
+    `git diff --check`.
 - [ ] **Shrink `@kovojs/drizzle/derive` and `@kovojs/drizzle/static`.**
   - Keep only app-facing runtime/build APIs with documented use cases, such as
     `deriveOptimistic` if apps directly author optimistic transforms.
@@ -626,31 +637,44 @@ integration. Framework packages should expose only generic webhook primitives.
 
 ## Vendor-Specific Export Cleanup
 
-- [ ] **Remove Stripe-specific exports from `@kovojs/core`.**
+- [x] **Remove Stripe-specific exports from `@kovojs/core`.**
   - Remove `stripeSignature` and `StripeSignatureOptions` from public exports.
   - Keep generic webhook/HMAC primitives such as `hmacSignature`,
     `standardWebhooks`, and shared webhook request/header types where they remain
     provider-agnostic.
-  - Evidence:
-- [ ] **Inline Stripe verification in examples that need it.**
+  - Evidence: `packages/core/src/index.ts` exports `customVerifier`,
+    `hmacSignature`, and `standardWebhooks`, but not `stripeSignature` or
+    `StripeSignatureOptions`. Verification:
+    `pnpm exec vitest --run packages/core/src/verifier.test.ts scripts/exported-symbols.test.mjs`;
+    `node scripts/exported-symbols.mjs --json` plus a no-`stripe` symbol scan.
+- [x] **Inline Stripe verification in examples that need it.**
   - Move Stripe-specific signing/verification logic into example app code or
     example-local helpers.
   - Ensure examples import only generic Kovo webhook primitives from framework
     packages.
-  - Evidence:
-- [ ] **Update docs away from Stripe framework API.**
+  - Evidence: no example currently needs a Stripe webhook recipe. Verification:
+    `rg -n "stripeSignature|StripeSignatureOptions|stripeSignature\\(|Stripe preset|blessed presets" SPEC.md packages docs site examples scripts --glob '!**/node_modules/**' --glob '!**/dist/**'`
+    exits 1 after the public export removal.
+- [x] **Update docs away from Stripe framework API.**
   - Remove or rewrite references that present Stripe as a first-class Kovo export.
   - If Stripe remains in docs, show it as app-owned code built from generic
     webhook primitives.
-  - Evidence:
-- [ ] **Add a package-surface guard against vendor-specific exports.**
+  - Evidence: `SPEC.md` §9.1 now states provider-specific HMAC recipes live in
+    app/example code on top of `hmacSignature`, and
+    `packages/server/src/webhook.ts` points readers to generic helpers instead
+    of a provider-named preset. The `rg` command above finds no remaining public
+    Stripe API references outside this plan.
+- [x] **Add a package-surface guard against vendor-specific exports.**
   - Extend API/export checks to flag framework package symbols with provider names
     that should live in examples, starting with `Stripe`.
-  - Evidence:
-- [ ] **Verify no public package exports Stripe-specific symbols.**
+  - Evidence: `scripts/exported-symbols.test.mjs` now checks public package
+    symbols for `/stripe/i` and expects no leaks. Verification:
+    `pnpm exec vitest --run scripts/exported-symbols.test.mjs`.
+- [x] **Verify no public package exports Stripe-specific symbols.**
   - Run `pnpm symbols --json` and assert no public package symbol name contains
     `Stripe` or `stripe` unless a future plan explicitly whitelists it.
-  - Evidence:
+  - Evidence: `node scripts/exported-symbols.mjs --json > /tmp/kovo-symbols.json`
+    followed by a no-`stripe` symbol scan prints `no stripe public symbols`.
 
 ## Export Uniqueness Enforcement
 

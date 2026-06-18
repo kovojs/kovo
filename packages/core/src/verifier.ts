@@ -101,11 +101,6 @@ export interface HmacSignatureVerifier {
   verify(request: WebhookVerificationRequest): Promise<boolean>;
 }
 
-/** Options for the Stripe-signature preset: the signing secret(s). */
-export interface StripeSignatureOptions {
-  secret: HmacSecret | readonly HmacSecret[];
-}
-
 /** Options for the Standard Webhooks preset: the signing secret(s). */
 export interface StandardWebhooksOptions {
   secret: HmacSecret | readonly HmacSecret[];
@@ -117,7 +112,8 @@ const textEncoder = new TextEncoder();
 /**
  * Build an HMAC webhook verifier that checks a signature header against the raw
  * payload bytes before any parsing — the default for machine endpoints (SPEC §9.1).
- * `stripeSignature` and `standardWebhooks` are presets layered on this.
+ * Provider-specific recipes can be written locally on top of this helper;
+ * `standardWebhooks` remains the shared non-vendor preset.
  *
  * @param options - Secret(s), header name, encoding, payload derivation, and tolerance.
  * @returns An `HmacSignatureVerifier` with an async `verify`.
@@ -194,37 +190,6 @@ export function customVerifier(
 }
 
 /**
- * Preset HMAC verifier for Stripe's `stripe-signature` header (timestamped,
- * multi-signature, 5-minute tolerance).
- *
- * @param options - The Stripe webhook signing secret(s).
- * @returns An `HmacSignatureVerifier` configured for Stripe.
- * @example
- * import { stripeSignature } from '@kovojs/core';
- *
- * export const verifier = stripeSignature({ secret: 'whsec_test' });
- */
-export function stripeSignature(options: StripeSignatureOptions): HmacSignatureVerifier {
-  // D6 E3 / SPEC §9.1: machine endpoints verify raw payload bytes before parsing.
-  return hmacSignature({
-    encoding: 'hex',
-    header: 'stripe-signature',
-    multiSig: stripeV1Signatures,
-    name: 'stripe',
-    payload: (request, context) => {
-      const timestamp = parseStripeSignature(context.signatureHeader).timestamp;
-      return `${timestamp}.${payloadToString(request.payload)}`;
-    },
-    scheme: 'stripe:v1:hmac-sha256',
-    secret: options.secret,
-    tolerance: {
-      seconds: defaultWebhookToleranceSeconds,
-      timestamp: (_request, context) => parseStripeSignature(context.signatureHeader).timestamp,
-    },
-  });
-}
-
-/**
  * Preset HMAC verifier for the Standard Webhooks spec (`webhook-id`,
  * `webhook-timestamp`, `webhook-signature` headers).
  *
@@ -298,26 +263,6 @@ function parseSignatures(
   if (typeof multiSig === 'function') return multiSig(header);
   if (multiSig === true) return header.split(/[,\s]+/u).filter(Boolean);
   return [header];
-}
-
-function stripeV1Signatures(header: string): readonly string[] {
-  return parseStripeSignature(header).signatures;
-}
-
-function parseStripeSignature(header: string): { signatures: string[]; timestamp: string } {
-  const signatures: string[] = [];
-  let timestamp = '';
-
-  for (const part of header.split(',')) {
-    const separatorIndex = part.indexOf('=');
-    if (separatorIndex === -1) continue;
-    const key = part.slice(0, separatorIndex).trim();
-    const value = part.slice(separatorIndex + 1).trim();
-    if (key === 't') timestamp = value;
-    if (key === 'v1' && value.length > 0) signatures.push(value);
-  }
-
-  return { signatures, timestamp };
 }
 
 function standardV1Signatures(header: string): readonly string[] {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { exportedSymbolsReport, formatSymbolsText, packageExportEntries } from './exported-symbols.mjs';
+import { publicPackages } from './public-packages.mjs';
 
 describe('exported-symbols script', () => {
   it('discovers package export paths backed by TS/TSX source', () => {
@@ -33,6 +34,21 @@ describe('exported-symbols script', () => {
         expect.objectContaining({ name: 'route' }),
       ]),
     );
+  });
+
+  it('keeps provider-specific names out of public package exports', () => {
+    const publicPackageNames = new Set(publicPackages().map((pkg) => pkg.name));
+    const providerNamePattern = /stripe/iu;
+    const leakedSymbols = exportedSymbolsReport().packages.flatMap((pkg) => {
+      if (!publicPackageNames.has(pkg.name)) return [];
+      return pkg.exports.flatMap((entry) =>
+        entry.symbols
+          .filter((symbol) => providerNamePattern.test(symbol.name))
+          .map((symbol) => `${entry.importPath}#${symbol.name}`),
+      );
+    });
+
+    expect(leakedSymbols).toEqual([]);
   });
 
   it('formats a compact text view', () => {

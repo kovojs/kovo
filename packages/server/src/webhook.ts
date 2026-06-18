@@ -132,7 +132,8 @@ export interface WebhookRunResult<Input = unknown, Value = unknown> {
  * Declare a webhook endpoint: a named POST receiver that verifies the raw
  * payload signature before parsing input, then runs a handler that can record
  * domain changes and is idempotent by construction. Pass a `WebhookVerifier`
- * (e.g. `stripeSignature`) or `verify: 'none'` with a justification (SPEC §9.1).
+ * built from generic helpers such as `hmacSignature`, or `verify: 'none'` with
+ * a justification (SPEC §9.1).
  *
  * @param name - The webhook's identifier.
  * @param definition - The `path`, `verify`, `input` schema, and `handler` (plus optional idempotency/transaction).

@@ -54,14 +54,13 @@ export type {
   HmacSignatureVerifier,
   ResolvedHmacSignatureConfig,
   StandardWebhooksOptions,
-  StripeSignatureOptions,
   WebhookHeaders,
   WebhookHeaderValue,
   WebhookPayload,
   WebhookVerificationRequest,
   WebhookVerifier,
 } from './verifier.js';
-export { customVerifier, hmacSignature, standardWebhooks, stripeSignature } from './verifier.js';
+export { customVerifier, hmacSignature, standardWebhooks } from './verifier.js';
 
 /** Any value that survives a JSON round-trip; the boundary type for island state and wire payloads (SPEC §4.1). */
 export type JsonValue =

@@ -4,14 +4,16 @@ import {
   customVerifier,
   hmacSignature,
   standardWebhooks,
-  stripeSignature,
+  type HmacSecret,
+  type HmacSignatureVerifier,
+  type WebhookPayload,
   type WebhookVerificationRequest,
 } from './index.js';
 
-const stripePayload = '{"id":"evt_test_webhook","object":"event"}';
-const stripeTimestamp = 1674087231;
-const stripeNow = stripeTimestamp * 1000;
-const stripeSignatureHeader =
+const providerPayload = '{"id":"evt_test_webhook","object":"event"}';
+const providerTimestamp = 1674087231;
+const providerNow = providerTimestamp * 1000;
+const providerSignatureHeader =
   't=1674087231,v1=413e6d5ee0846b0726a98c703e7195bb2ff47e561b7de4a663cfc050fec40796';
 
 const standardPayload =
@@ -56,59 +58,61 @@ describe('webhook verifier kit', () => {
     ).resolves.toBe(false);
   });
 
-  it('uses the Stripe preset over raw payload bytes with default timestamp tolerance', async () => {
-    const verifier = stripeSignature({ secret: 'whsec_test_secret' });
+  it('supports app-owned timestamped multi-signature HMAC recipes', async () => {
+    const verifier = timestampedProviderSignature({ secret: 'whsec_test_secret' });
 
     expect(verifier.resolved).toEqual({
       encoding: 'hex',
-      header: 'stripe-signature',
+      header: 'x-provider-signature',
       kind: 'hmac',
       multiSig: true,
-      name: 'stripe',
-      scheme: 'stripe:v1:hmac-sha256',
+      name: 'timestamped-provider',
+      scheme: 'timestamped-provider:v1:hmac-sha256',
       toleranceSeconds: 300,
     });
     await expect(
       verifier.verify({
         headers: {
-          'stripe-signature': stripeSignatureHeader,
+          'x-provider-signature': providerSignatureHeader,
         },
-        now: stripeNow,
-        payload: stripePayload,
+        now: providerNow,
+        payload: providerPayload,
       }),
     ).resolves.toBe(true);
   });
 
-  it('rejects tampered payloads and stale Stripe timestamps', async () => {
-    const verifier = stripeSignature({ secret: 'whsec_test_secret' });
+  it('rejects tampered payloads and stale timestamped provider signatures', async () => {
+    const verifier = timestampedProviderSignature({ secret: 'whsec_test_secret' });
     const request = {
       headers: {
-        'stripe-signature': stripeSignatureHeader,
+        'x-provider-signature': providerSignatureHeader,
       },
-      now: stripeNow,
-      payload: stripePayload,
+      now: providerNow,
+      payload: providerPayload,
     } satisfies WebhookVerificationRequest;
 
     await expect(verifier.verify({ ...request, payload: '{"id":"evt_tampered"}' })).resolves.toBe(
       false,
     );
-    await expect(verifier.verify({ ...request, now: stripeNow + 301_000 })).resolves.toBe(false);
+    await expect(verifier.verify({ ...request, now: providerNow + 301_000 })).resolves.toBe(false);
   });
 
-  it('accepts Stripe rotated secrets and multiple v1 signatures', async () => {
-    const verifier = stripeSignature({ secret: ['whsec_current_secret', 'whsec_old_secret'] });
+  it('accepts rotated secrets and multiple v1 signatures in app-owned recipes', async () => {
+    const verifier = timestampedProviderSignature({
+      secret: ['whsec_current_secret', 'whsec_old_secret'],
+    });
 
     await expect(
       verifier.verify({
         headers: {
-          'stripe-signature': [
+          'x-provider-signature': [
             't=1674087231',
             'v1=0000000000000000000000000000000000000000000000000000000000000000',
             'v1=9cdda4392bf620067d218f36a1a74bba6f181ea440c8e81ac4e847807976f5d3',
           ].join(','),
         },
-        now: stripeNow,
-        payload: stripePayload,
+        now: providerNow,
+        payload: providerPayload,
       }),
     ).resolves.toBe(true);
   });
@@ -128,7 +132,7 @@ describe('webhook verifier kit', () => {
     await expect(
       verifier.verify({
         headers: standardHeaders,
-        now: stripeNow,
+        now: providerNow,
         payload: standardPayload,
       }),
     ).resolves.toBe(true);
@@ -138,7 +142,7 @@ describe('webhook verifier kit', () => {
     const verifier = standardWebhooks({ secret: standardSecret });
     const request = {
       headers: standardHeaders,
-      now: stripeNow,
+      now: providerNow,
       payload: standardPayload,
     } satisfies WebhookVerificationRequest;
 
@@ -151,7 +155,7 @@ describe('webhook verifier kit', () => {
         },
       }),
     ).resolves.toBe(false);
-    await expect(verifier.verify({ ...request, now: stripeNow - 301_000 })).resolves.toBe(false);
+    await expect(verifier.verify({ ...request, now: providerNow - 301_000 })).resolves.toBe(false);
   });
 
   it('supports custom verifier escapes for non-HMAC schemes', async () => {
@@ -169,3 +173,48 @@ describe('webhook verifier kit', () => {
     ).resolves.toBe(true);
   });
 });
+
+function timestampedProviderSignature(options: {
+  secret: HmacSecret | readonly HmacSecret[];
+}): HmacSignatureVerifier {
+  return hmacSignature({
+    encoding: 'hex',
+    header: 'x-provider-signature',
+    multiSig: providerV1Signatures,
+    name: 'timestamped-provider',
+    payload: (request, context) => {
+      const timestamp = parseProviderSignature(context.signatureHeader).timestamp;
+      return `${timestamp}.${payloadToString(request.payload)}`;
+    },
+    scheme: 'timestamped-provider:v1:hmac-sha256',
+    secret: options.secret,
+    tolerance: {
+      seconds: 300,
+      timestamp: (_request, context) => parseProviderSignature(context.signatureHeader).timestamp,
+    },
+  });
+}
+
+function providerV1Signatures(header: string): readonly string[] {
+  return parseProviderSignature(header).signatures;
+}
+
+function parseProviderSignature(header: string): { signatures: string[]; timestamp: string } {
+  const signatures: string[] = [];
+  let timestamp = '';
+
+  for (const part of header.split(',')) {
+    const separatorIndex = part.indexOf('=');
+    if (separatorIndex === -1) continue;
+    const key = part.slice(0, separatorIndex).trim();
+    const value = part.slice(separatorIndex + 1).trim();
+    if (key === 't') timestamp = value;
+    if (key === 'v1' && value.length > 0) signatures.push(value);
+  }
+
+  return { signatures, timestamp };
+}
+
+function payloadToString(payload: WebhookPayload): string {
+  return typeof payload === 'string' ? payload : new TextDecoder().decode(payload as BufferSource);
+}
