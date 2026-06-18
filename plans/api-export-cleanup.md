@@ -324,14 +324,30 @@ integration. Framework packages should expose only generic webhook primitives.
     `internal/*`, and JSX runtime exports off the root.
   - Move client-module response/href helpers and static-export manifest/assertion
     helpers to internal subpaths instead of keeping them public subpath APIs.
-  - Evidence:
-- [ ] **Move client-module support helpers behind an internal server subpath.**
+  - [x] Client-module response/href helper portion is internal-only.
+    - Evidence: `packages/server/src/api/app-shell/client-modules.ts` exports only
+      `createMemoryVersionedClientModuleRegistry`; `packages/server/src/internal/client-modules.ts`
+      exports `renderVersionedClientModuleResponse`, `versionedClientModuleHref`,
+      `VersionedClientModuleRequest`, and `VersionedClientModuleResponse`.
+      Verification: `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+      `node scripts/api-surface-gate.mjs`.
+  - [ ] Static-export support helper portion remains with the static-export
+    internalization items below.
+- [x] **Move client-module support helpers behind an internal server subpath.**
   - Remove `renderVersionedClientModuleResponse`, `versionedClientModuleHref`,
     `VersionedClientModuleRequest`, and `VersionedClientModuleResponse` from
     `@kovojs/server/app-shell/client-modules`.
   - Keep them available only to server internals/tests, for example via a new or
     existing internal client-module subpath.
-  - Evidence:
+  - Evidence: `@kovojs/server/internal/client-modules` is declared in
+    `packages/server/package.json` and `public-packages.json`; `packages/server/src/api/app.test.ts`
+    asserts the public subpath lacks the moved value/type exports and the internal
+    subpath exposes the helper values/types. Verification:
+    `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+    `corepack pnpm exec vitest --run scripts/public-packages.test.mjs`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
+    `git diff --check`.
 - [ ] **Move static-export manifest/assertion helpers behind an internal server subpath.**
   - Remove `staticExportManifest`, `staticExportInventory`,
     `staticExportOutputPlan`, `assertStaticExportManifestMatchesResult`, and
@@ -358,7 +374,17 @@ integration. Framework packages should expose only generic webhook primitives.
     exported from public app-shell subpaths.
   - Assert any internal replacement subpath exports them only when framework tests
     require direct access.
-  - Evidence:
+  - [x] Client-module helper negative assertions are covered in
+    `packages/server/src/api/app.test.ts`.
+    - Evidence: the test asserts `@kovojs/server/app-shell/client-modules` lacks
+      `renderVersionedClientModuleResponse` and `versionedClientModuleHref`, uses
+      `@ts-expect-error` for `VersionedClientModuleRequest` and
+      `VersionedClientModuleResponse`, and asserts the internal client-module
+      subpath exposes the helper values/types. Verification:
+      `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
+  - [ ] Static-export support helper negative assertions remain with the
+    static-export internalization items.
 - [ ] **Move request-shell execution helpers internal-only.**
   - Remove these from public `@kovojs/server` exports unless a concrete app-authored
     use case is documented: `runEndpoint`, `runMutation`, `runQuery`,

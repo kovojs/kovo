@@ -5,10 +5,12 @@ import * as packageCoreApi from '@kovojs/server/app-shell/core';
 import * as packageNodeApi from '@kovojs/server/app-shell/node';
 import * as packageStaticExportApi from '@kovojs/server/app-shell/static-export';
 import * as packageViteApi from '@kovojs/server/app-shell/vite';
+import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as publicApi from '../index.js';
 import * as clientModulesApi from './app-shell/client-modules.js';
 import * as coreApi from './app-shell/core.js';
+import * as internalClientModulesApi from '../internal/client-modules.js';
 import * as nodeApi from './app-shell/node.js';
 import * as staticExportApi from './app-shell/static-export.js';
 import * as viteApi from './app-shell/vite.js';
@@ -117,6 +119,22 @@ type RemovedFocusedVersionedClientModuleInput =
   // @ts-expect-error SPEC.md §9.5: versioned client-module input types now have
   // the root @kovojs/server canonical home.
   import('./app-shell/client-modules.js').VersionedClientModuleInput;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedVersionedClientModuleRequest =
+  // @ts-expect-error SPEC.md §9.5: client-module request helpers are framework
+  // support internals, not public app-shell/client-modules API.
+  import('./app-shell/client-modules.js').VersionedClientModuleRequest;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedVersionedClientModuleResponse =
+  // @ts-expect-error SPEC.md §9.5: client-module response helpers are framework
+  // support internals, not public app-shell/client-modules API.
+  import('./app-shell/client-modules.js').VersionedClientModuleResponse;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalVersionedClientModuleRequest =
+  import('@kovojs/server/internal/client-modules').VersionedClientModuleRequest;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalVersionedClientModuleResponse =
+  import('@kovojs/server/internal/client-modules').VersionedClientModuleResponse;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedNodeHandlerOptions =
   // @ts-expect-error SPEC.md §9.5: Node adapter companion types now have the root
@@ -305,6 +323,8 @@ describe('server app-shell public API barrels', () => {
     // regain an aggregate compatibility surface by accident.
     expect(moduleValueKeys(packageClientModulesApi)).toEqual([
       'createMemoryVersionedClientModuleRegistry',
+    ]);
+    expect(moduleValueKeys(packageInternalClientModulesApi)).toEqual([
       'renderVersionedClientModuleResponse',
       'versionedClientModuleHref',
     ]);
@@ -340,8 +360,13 @@ describe('server app-shell public API barrels', () => {
     expect(packageCoreApi.layout).toBe(coreApi.layout);
     expect(packageCoreApi.route).toBe(routeApi.route);
     expect(packageCoreApi.respond).toBe(responseApi.respond);
-    expect(packageClientModulesApi.versionedClientModuleHref).toBe(
-      clientModulesApi.versionedClientModuleHref,
+    expect(packageClientModulesApi).not.toHaveProperty('renderVersionedClientModuleResponse');
+    expect(packageClientModulesApi).not.toHaveProperty('versionedClientModuleHref');
+    expect(packageInternalClientModulesApi.renderVersionedClientModuleResponse).toBe(
+      internalClientModulesApi.renderVersionedClientModuleResponse,
+    );
+    expect(packageInternalClientModulesApi.versionedClientModuleHref).toBe(
+      internalClientModulesApi.versionedClientModuleHref,
     );
     expect(packageNodeApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(packageNodeApi).not.toHaveProperty('nodeRequestToWebRequest');
@@ -417,6 +442,9 @@ describe('server app-shell public API barrels', () => {
       './app-shell/node': './src/api/app-shell/node.ts',
       './app-shell/static-export': './src/api/app-shell/static-export.ts',
       './app-shell/vite': './src/api/app-shell/vite.ts',
+    });
+    expect(serverPackage.exports as Record<string, string>).toMatchObject({
+      './internal/client-modules': './src/internal/client-modules.ts',
     });
   });
 

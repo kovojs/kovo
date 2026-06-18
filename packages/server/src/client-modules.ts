@@ -13,6 +13,7 @@ export interface VersionedClientModuleInput {
   version: string;
 }
 
+/** @internal Response envelope produced by the server-owned client-module request path. */
 export interface VersionedClientModuleResponse extends ServerResponseBase<
   string,
   Record<string, string>,
@@ -33,9 +34,10 @@ export interface VersionedClientModuleRegistry {
    */
   buildToken(): string;
   put(module: VersionedClientModuleInput): string;
-  resolve(href: string): VersionedClientModuleResponse;
+  resolve(href: string): ServerResponseBase<string, Record<string, string>, 200 | 404>;
 }
 
+/** @internal Request context accepted by the server-owned client-module request path. */
 export interface VersionedClientModuleRequest {
   onError?: ServerErrorHandler;
   url?: string | null;
@@ -46,6 +48,7 @@ export interface MemoryVersionedClientModuleRegistryOptions {
   maxVersionsPerPath?: number;
 }
 
+/** @internal Construct a version-stamped client-module href for framework request-shell output. */
 export function versionedClientModuleHref(href: string, version: string): string {
   const url = clientModuleUrl(href);
   url.searchParams.set('v', version);
@@ -125,6 +128,7 @@ export function createMemoryVersionedClientModuleRegistry(
   };
 }
 
+/** @internal Render a versioned client-module response for the framework request shell. */
 export function renderVersionedClientModuleResponse(
   registry: VersionedClientModuleRegistry,
   request: string | VersionedClientModuleRequest,
