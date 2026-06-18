@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -500,6 +500,20 @@ export default async function handler(request) {
         ],
         version: 3,
       });
+      await assertVercelBuildOutput(vercelOutDir, {
+        function: {
+          config: {
+            handler: 'index.cjs',
+            launcherType: 'Nodejs',
+            maxDuration: 8,
+            regions: ['iad1'],
+            runtime: 'nodejs22.x',
+            shouldAddHelpers: true,
+          },
+          name: 'kovo',
+        },
+        staticFiles: ['assets/cart.css', 'c/__v/cart-v1/cart.client.js'],
+      });
 
       const functionModule = (await import(
         `${pathToFileURL(join(vercelOutDir, 'functions/kovo.func/index.cjs')).href}?t=${Date.now()}`
@@ -583,6 +597,10 @@ export default async function handler(request) {
         readFile(join(vercelOutDir, 'functions/kovo.func/index.cjs'), 'utf8'),
       ).rejects.toThrow();
       await expect(readJson(join(vercelOutDir, 'config.json'))).resolves.toEqual({ version: 3 });
+      await assertVercelBuildOutput(vercelOutDir, {
+        function: false,
+        staticFiles: ['index.html'],
+      });
 
       const cloudflareOutDir = join(root, 'cloudflare-static');
       await cloudflare().emit(build, {
@@ -726,6 +744,18 @@ export default async function handler(request) {
           { dest: '/kovo', src: '/(.*)' },
         ],
         version: 3,
+      });
+      await assertVercelBuildOutput(vercelOutDir, {
+        function: {
+          config: {
+            handler: 'index.cjs',
+            launcherType: 'Nodejs',
+            runtime: 'nodejs22.x',
+            shouldAddHelpers: true,
+          },
+          name: 'kovo',
+        },
+        staticFiles: ['static/index.html'],
       });
 
       const cloudflareOutDir = join(root, 'cloudflare-mixed');
@@ -943,6 +973,76 @@ export default async function handler() {
 
 async function readJson(filePath: string): Promise<unknown> {
   return JSON.parse(await readFile(filePath, 'utf8'));
+}
+
+type VercelFunctionExpectation =
+  | false
+  | {
+      config: Record<string, unknown>;
+      name: string;
+    };
+
+async function assertVercelBuildOutput(
+  outDir: string,
+  expected: {
+    function: VercelFunctionExpectation;
+    staticFiles: readonly string[];
+  },
+): Promise<void> {
+  expect(await sortedDirNames(outDir)).toEqual(
+    expected.function === false
+      ? ['config.json', 'static']
+      : ['config.json', 'functions', 'static'],
+  );
+
+  const config = await readJson(join(outDir, 'config.json'));
+  expectVercelConfig(config);
+
+  const staticDir = join(outDir, 'static');
+  expect((await stat(staticDir)).isDirectory()).toBe(true);
+  for (const filePath of expected.staticFiles) {
+    const file = await stat(join(staticDir, filePath));
+    expect(file.isFile(), filePath).toBe(true);
+  }
+
+  if (expected.function === false) {
+    await expect(stat(join(outDir, 'functions'))).rejects.toThrow();
+    return;
+  }
+
+  const functionDir = join(outDir, 'functions', `${expected.function.name}.func`);
+  expect((await stat(functionDir)).isDirectory()).toBe(true);
+  await expect(readJson(join(functionDir, '.vc-config.json'))).resolves.toEqual(
+    expected.function.config,
+  );
+
+  const functionConfig = expected.function.config;
+  expect(functionConfig).toMatchObject({
+    handler: expect.any(String),
+    launcherType: 'Nodejs',
+    runtime: expect.stringMatching(/^nodejs\d+\.x$/),
+  });
+  expect((await stat(join(functionDir, String(functionConfig.handler)))).isFile()).toBe(true);
+}
+
+function expectVercelConfig(config: unknown): void {
+  expect(config).toMatchObject({ version: 3 });
+  if (!isRecord(config) || config.routes === undefined) return;
+  expect(Array.isArray(config.routes)).toBe(true);
+  for (const routeEntry of config.routes as unknown[]) {
+    expect(isRecord(routeEntry), JSON.stringify(routeEntry)).toBe(true);
+    const hasSource = typeof (routeEntry as Record<string, unknown>).src === 'string';
+    const hasHandler = typeof (routeEntry as Record<string, unknown>).handle === 'string';
+    expect(hasSource || hasHandler, JSON.stringify(routeEntry)).toBe(true);
+  }
+}
+
+async function sortedDirNames(dir: string): Promise<string[]> {
+  return (await readdir(dir)).sort();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function clientModuleRetentionWarning(presetName: string) {

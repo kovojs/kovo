@@ -501,18 +501,28 @@ packages/cli/src/index.kovo-build.test.ts`.
     `packages/server/src/build.test.ts` verifies `vercel().emit()` prefers
     `KovoNeutralBuild.staticOutput` and omits the Vercel function for a proven
     static-only neutral build.
-- [ ] Evidence: `vercel build`/`--prebuilt` dry-run validates the output dir;
-      golden-file test on `config.json` + function manifest.
-  - Partial evidence: golden-file coverage exists in `packages/server/src/
-build.test.ts` and `packages/cli/src/index.kovo-build.test.ts` for
-    `config.json`, `.vc-config.json`, copied static assets, and the generated
-    Node function wrapper. `corepack pnpm dlx vercel --version` succeeded with
-    Vercel CLI 54.14.2 in this session. Gap: `corepack pnpm dlx vercel deploy
-    --prebuilt --no-wait --token dummy --cwd <generated dist> --yes --debug`
-    checks token validity before local prebuilt-output validation and exits with
-    `The token provided via --token argument is not valid`; this still needs a
-    real Vercel token/project or another local validator before the item can be
-    checked off.
+- [x] Evidence: a credential-free Build Output API conformance test validates the
+      output dir; golden-file test on `config.json` + function manifest.
+  - Evidence: `packages/server/src/build.test.ts` now runs
+    `assertVercelBuildOutput()` against dynamic, static-only, and mixed Vercel
+    preset output. The validator checks the `.vercel/output` top-level layout,
+    requires `config.json` `version: 3`, validates route entries as Build Output
+    API `Source | Handler` records, asserts static files are under `static/`,
+    and checks Node function directories include `<name>.func/.vc-config.json`
+    plus the declared handler file.
+  - Evidence: golden-file coverage in `packages/server/src/build.test.ts` and
+    `packages/cli/src/index.kovo-build.test.ts` verifies `config.json`,
+    `.vc-config.json`, copied static assets, static-only output without a
+    function, mixed static-plus-function output, and the generated Node function
+    wrapper. Verification: `corepack pnpm exec vitest --run
+packages/server/src/build.test.ts` passed with 11 tests.
+  - Evidence: a Vercel CLI probe found no credential-free local dry-run validator:
+    `corepack pnpm dlx vercel deploy --prebuilt --no-wait --cwd <generated
+dist> --yes --debug` enters device login, while the same command with
+    `--token dummy` fails token validation before inspecting `.vercel/output`.
+    Vercel CLI 54.14.2 help exposes no `--dry-run`/`validate` mode for
+    `vercel build` or `vercel deploy`, and the CLI source calls project linking
+    before the prebuilt-output branch.
 
 ### Phase 3 — `cloudflare` preset
 
