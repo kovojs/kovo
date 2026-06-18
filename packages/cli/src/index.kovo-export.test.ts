@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -23,7 +23,9 @@ function appModuleSource(options: {
     '  document: {},',
     '  endpoints: [],',
     '  errorShells: {},',
+    '  liveTargetRenderers: [],',
     '  mutations: [],',
+    '  mutationResponses: {},',
     '  queries: [],',
     `  routes: [${options.route}],`,
     '};',
@@ -54,7 +56,7 @@ describe('kovo export', () => {
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('kovo-export/v1\nHTML /index.html status=200 bytes=');
       expect(output).toContain(
-        `SUMMARY html=1 clientModules=0 diagnostics=0 outDir=${JSON.stringify(outDir)}\n`,
+        `SUMMARY html=1 clientModules=0 assets=0 diagnostics=0 outDir=${JSON.stringify(outDir)}\n`,
       );
       expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
         '<main data-export-cli>CLI export</main>',
@@ -160,6 +162,189 @@ describe('kovo export', () => {
       expect(output).toContain('Static export refused error diagnostic KV201 at src/cart.tsx:4:12');
       expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
     } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('copies Vite manifest assets through the export command facade', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const distDir = join(root, 'vite-dist');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(distDir, '.vite'), { recursive: true });
+      mkdirSync(join(distDir, 'assets'), { recursive: true });
+      writeFileSync(join(distDir, 'assets', 'app.css'), 'body{color:red}', 'utf8');
+      writeFileSync(join(distDir, 'assets', 'app.js'), 'console.log("app")', 'utf8');
+      writeFileSync(
+        join(distDir, '.vite', 'manifest.json'),
+        JSON.stringify({
+          'src/main.ts': {
+            css: ['assets/app.css'],
+            file: 'assets/app.js',
+          },
+        }),
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route: "{ path: '/', page: () => '<main data-export-cli>CLI export</main>' }",
+        }),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'export',
+          appPath,
+          '--out',
+          outDir,
+          '--manifest',
+          join(distDir, '.vite', 'manifest.json'),
+          '--dist',
+          distDir,
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('ASSET /assets/app.css status=200 bytes=');
+      expect(output).toContain('ASSET /assets/app.js status=200 bytes=');
+      expect(output).toContain('SUMMARY html=1 clientModules=0 assets=2 diagnostics=0');
+      expect(readFileSync(join(outDir, 'assets', 'app.css'), 'utf8')).toBe('body{color:red}');
+      expect(readFileSync(join(outDir, 'assets', 'app.js'), 'utf8')).toBe('console.log("app")');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('sets a stylesheet env var from exactly one manifest stylesheet before loading the app', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const distDir = join(root, 'vite-dist');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(distDir, '.vite'), { recursive: true });
+      mkdirSync(join(distDir, 'assets'), { recursive: true });
+      writeFileSync(join(distDir, 'assets', 'site.css'), 'html{display:block}', 'utf8');
+      writeFileSync(
+        join(distDir, '.vite', 'manifest.json'),
+        JSON.stringify({
+          'src/site.ts': {
+            css: ['assets/site.css'],
+          },
+        }),
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route:
+            "{ path: '/', page: () => `<link href=\"${process.env.KOVO_TEST_STYLESHEET_HREF}\"><main>Home</main>` }",
+        }),
+        'utf8',
+      );
+      delete process.env.KOVO_TEST_STYLESHEET_HREF;
+
+      await expect(
+        mainAsync([
+          'export',
+          appPath,
+          '--out',
+          outDir,
+          '--manifest',
+          join(distDir, '.vite', 'manifest.json'),
+          '--dist',
+          distDir,
+          '--stylesheet-env',
+          'KOVO_TEST_STYLESHEET_HREF',
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(process.env.KOVO_TEST_STYLESHEET_HREF).toBe('/assets/site.css');
+      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
+        '<link href="/assets/site.css">',
+      );
+    } finally {
+      delete process.env.KOVO_TEST_STYLESHEET_HREF;
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('loads TS app modules through Vite after resolving manifest stylesheet env', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const srcDir = join(root, 'src');
+    const appPath = join(srcDir, 'app.ts');
+    const distDir = join(root, 'vite-dist');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(srcDir, { recursive: true });
+      mkdirSync(join(distDir, '.vite'), { recursive: true });
+      mkdirSync(join(distDir, 'assets'), { recursive: true });
+      writeFileSync(join(distDir, 'assets', 'vite.css'), 'main{display:block}', 'utf8');
+      writeFileSync(
+        join(distDir, '.vite', 'manifest.json'),
+        JSON.stringify({
+          'src/app.ts': {
+            css: ['assets/vite.css'],
+          },
+        }),
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route:
+            "{ path: '/', page: () => `<main data-vite-export>${process.env.KOVO_TEST_VITE_STYLESHEET}</main>` }",
+        }),
+        'utf8',
+      );
+      delete process.env.KOVO_TEST_VITE_STYLESHEET;
+
+      await expect(
+        mainAsync([
+          'export',
+          '/src/app.ts',
+          '--vite',
+          '--root',
+          root,
+          '--out',
+          outDir,
+          '--manifest',
+          join(distDir, '.vite', 'manifest.json'),
+          '--dist',
+          distDir,
+          '--stylesheet-env',
+          'KOVO_TEST_VITE_STYLESHEET',
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
+        '<main data-vite-export>/assets/vite.css</main>',
+      );
+      expect(readFileSync(join(outDir, 'assets', 'vite.css'), 'utf8')).toBe(
+        'main{display:block}',
+      );
+    } finally {
+      delete process.env.KOVO_TEST_VITE_STYLESHEET;
       stdout.mockRestore();
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });

@@ -151,6 +151,16 @@ export async function mainAsync(args: readonly string[] = process.argv.slice(2))
   return writeCommandResult(await runExportCommand(parsed.options));
 }
 
+/**
+ * Run the same command dispatcher as the `kovo` executable and return its exit
+ * code. Generated app maintenance scripts use this when they need the command
+ * facade in-process, for example to run `kovo export --vite` after loading the
+ * CLI through Vite SSR.
+ */
+export async function runKovoCommand(args: readonly string[]): Promise<number> {
+  return await mainAsync(args);
+}
+
 /** @internal Input shape for the internal `compile_component` MCP tool. */
 export interface CompileComponentV1Input {
   fileName: string;
@@ -718,9 +728,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 interface KovoExportOptions {
   appModulePath: string;
+  assetBase?: string;
+  distDir?: string;
+  manifestFile?: string;
   onNonExportable?: 'error' | 'skip';
   origin?: string;
   outDir: string;
+  root?: string;
+  stylesheetEnv?: string;
+  vite?: boolean;
 }
 
 type ExportArgParseResult =
@@ -2096,9 +2112,15 @@ function buildUsage(): string {
 
 function parseExportArgs(args: readonly string[]): ExportArgParseResult {
   let appModulePath: string | undefined;
+  let assetBase: string | undefined;
+  let distDir: string | undefined;
+  let manifestFile: string | undefined;
   let origin: string | undefined;
   let outDir = 'dist';
   let onNonExportable: 'error' | 'skip' | undefined;
+  let root: string | undefined;
+  let stylesheetEnv: string | undefined;
+  let vite = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -2122,11 +2144,88 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
       continue;
     }
 
+    if (arg === '--dist') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: export --dist requires a directory.\n', ok: false };
+      distDir = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--dist=')) {
+      distDir = arg.slice('--dist='.length);
+      if (!distDir) return { message: 'kovo: export --dist requires a directory.\n', ok: false };
+      continue;
+    }
+
+    if (arg === '--manifest') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: export --manifest requires a file.\n', ok: false };
+      manifestFile = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--manifest=')) {
+      manifestFile = arg.slice('--manifest='.length);
+      if (!manifestFile) return { message: 'kovo: export --manifest requires a file.\n', ok: false };
+      continue;
+    }
+
+    if (arg === '--asset-base') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: export --asset-base requires a URL path.\n', ok: false };
+      assetBase = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--asset-base=')) {
+      assetBase = arg.slice('--asset-base='.length);
+      if (!assetBase)
+        return { message: 'kovo: export --asset-base requires a URL path.\n', ok: false };
+      continue;
+    }
+
+    if (arg === '--stylesheet-env') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: export --stylesheet-env requires a name.\n', ok: false };
+      stylesheetEnv = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--stylesheet-env=')) {
+      stylesheetEnv = arg.slice('--stylesheet-env='.length);
+      if (!stylesheetEnv)
+        return { message: 'kovo: export --stylesheet-env requires a name.\n', ok: false };
+      continue;
+    }
+
     if (arg === '--origin') {
       const value = args[index + 1];
       if (!value) return { message: 'kovo: export --origin requires a URL.\n', ok: false };
       origin = value;
       index += 1;
+      continue;
+    }
+
+    if (arg === '--root') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: export --root requires a directory.\n', ok: false };
+      root = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--root=')) {
+      root = arg.slice('--root='.length);
+      if (!root) return { message: 'kovo: export --root requires a directory.\n', ok: false };
+      continue;
+    }
+
+    if (arg === '--vite') {
+      vite = true;
       continue;
     }
 
@@ -2162,9 +2261,15 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
     ok: true,
     options: {
       appModulePath,
+      ...(assetBase === undefined ? {} : { assetBase }),
+      ...(distDir === undefined ? {} : { distDir }),
+      ...(manifestFile === undefined ? {} : { manifestFile }),
       ...(onNonExportable === undefined ? {} : { onNonExportable }),
       ...(origin === undefined ? {} : { origin }),
       outDir,
+      ...(root === undefined ? {} : { root }),
+      ...(stylesheetEnv === undefined ? {} : { stylesheetEnv }),
+      ...(vite ? { vite } : {}),
     },
   };
 }
@@ -2272,12 +2377,12 @@ function kovoServerHandlerEntrySource(appModulePath: string): string {
 
 async function runExportCommand(options: KovoExportOptions): Promise<CliCommandResult> {
   try {
-    const [{ exportStaticApp }, appModule] = await Promise.all([
-      import('@kovojs/server'),
-      import(pathToFileURL(resolve(options.appModulePath)).href),
-    ]);
+    const manifestPlan = await staticExportManifestPlan(options);
+    const { exportStaticApp } = await import('@kovojs/server');
+    const appModule = await loadExportAppModule(options);
     const app = appFromModule(appModule, options.appModulePath);
     const result = await exportStaticApp(app, {
+      ...(manifestPlan.assets.length === 0 ? {} : { assets: manifestPlan.assets }),
       ...(options.onNonExportable === undefined
         ? {}
         : { onNonExportable: options.onNonExportable }),
@@ -2290,6 +2395,120 @@ async function runExportCommand(options: KovoExportOptions): Promise<CliCommandR
   } catch (error) {
     return exportErrorResult(error);
   }
+}
+
+async function loadExportAppModule(options: KovoExportOptions): Promise<unknown> {
+  if (!options.vite) return await import(pathToFileURL(resolve(options.appModulePath)).href);
+
+  const { createServer } = await import('vite-plus');
+  const server = await createServer({
+    appType: 'custom',
+    logLevel: 'error',
+    root: resolve(options.root ?? process.cwd()),
+    server: { middlewareMode: true },
+  });
+  try {
+    return await server.ssrLoadModule(options.appModulePath);
+  } finally {
+    await server.close();
+  }
+}
+
+interface ExportManifestPlan {
+  assets: readonly {
+    path: string;
+    source: string;
+  }[];
+  stylesheetHref?: string;
+}
+
+async function staticExportManifestPlan(options: KovoExportOptions): Promise<ExportManifestPlan> {
+  if (options.manifestFile === undefined) return { assets: [] };
+
+  const manifestFile = resolve(options.manifestFile);
+  const distDir = resolve(options.distDir ?? dirname(manifestFile));
+  const manifest = exportManifestFromUnknown(JSON.parse(await readFile(manifestFile, 'utf8')));
+  const assets = new Map<string, { path: string; source: string }>();
+  let stylesheetHref: string | undefined;
+  let stylesheetCount = 0;
+
+  for (const chunk of Object.values(manifest)) {
+    const fileAsset = addExportManifestAsset(assets, chunk.file, distDir, options.assetBase);
+    if (fileAsset && chunk.file?.replace(/[?#].*$/, '').endsWith('.css')) {
+      stylesheetHref = fileAsset.path;
+      stylesheetCount += 1;
+    }
+    for (const stylesheet of chunk.css ?? []) {
+      const asset = addExportManifestAsset(assets, stylesheet, distDir, options.assetBase);
+      if (asset) {
+        stylesheetHref = asset.path;
+        stylesheetCount += 1;
+      }
+    }
+  }
+
+  if (options.stylesheetEnv !== undefined) {
+    if (stylesheetCount !== 1 || stylesheetHref === undefined) {
+      throw new Error(
+        `kovo export --stylesheet-env requires exactly one stylesheet asset in --manifest; found ${stylesheetCount}.`,
+      );
+    }
+    process.env[options.stylesheetEnv] = stylesheetHref;
+  }
+
+  return { assets: [...assets.values()], ...(stylesheetHref === undefined ? {} : { stylesheetHref }) };
+}
+
+interface ExportManifestChunk {
+  css?: readonly string[];
+  file?: string;
+}
+
+function exportManifestFromUnknown(value: unknown): Record<string, ExportManifestChunk> {
+  if (!isRecord(value)) throw new Error('kovo export --manifest must be a JSON object.');
+  const manifest: Record<string, ExportManifestChunk> = {};
+  for (const [key, rawChunk] of Object.entries(value)) {
+    if (!isRecord(rawChunk)) continue;
+    const chunk: ExportManifestChunk = {};
+    if (typeof rawChunk.file === 'string') chunk.file = rawChunk.file;
+    if (Array.isArray(rawChunk.css)) {
+      chunk.css = rawChunk.css.filter((entry): entry is string => typeof entry === 'string');
+    }
+    manifest[key] = chunk;
+  }
+  return manifest;
+}
+
+function addExportManifestAsset(
+  assets: Map<string, { path: string; source: string }>,
+  file: string | undefined,
+  distDir: string,
+  base: string | undefined,
+): { path: string; source: string } | undefined {
+  if (!file || /^[a-z][a-z0-9+.-]*:/i.test(file) || file.startsWith('//')) return undefined;
+  const normalizedFile = normalizedExportManifestFile(file);
+  if (assets.has(normalizedFile)) return assets.get(normalizedFile);
+  const href = exportManifestAssetHref(normalizedFile, base);
+  const asset = {
+    path: new URL(href, 'https://kovo.local').pathname,
+    source: resolve(distDir, normalizedFile),
+  };
+  assets.set(normalizedFile, asset);
+  return asset;
+}
+
+function normalizedExportManifestFile(file: string): string {
+  const pathname = file.replace(/[?#].*$/, '').replace(/^\/+/, '');
+  const segments = pathname.split('/');
+  if (segments.length === 0 || segments.some((segment) => !/^[A-Za-z0-9._-]+$/.test(segment))) {
+    throw new Error(`kovo export --manifest asset must stay within --dist: ${file}`);
+  }
+  return segments.join('/');
+}
+
+function exportManifestAssetHref(file: string, base: string | undefined): string {
+  const normalizedBase = base === undefined ? '/' : `/${base.replace(/^\/+|\/+$/g, '')}/`;
+  return `${normalizedBase}${file}`;
 }
 
 function appFromModule(module: unknown, source: string): KovoApp {
@@ -2352,6 +2571,12 @@ function kovoExportResult(
     );
   }
 
+  for (const artifact of result.assets) {
+    lines.push(
+      `ASSET ${artifact.path} status=${artifact.status} bytes=${readFileSync(artifact.source).byteLength}`,
+    );
+  }
+
   for (const diagnostic of result.diagnostics) {
     lines.push(
       `WARN ${diagnostic.code} route=${diagnostic.routePath} ${stableText(diagnostic.message)}`,
@@ -2359,7 +2584,7 @@ function kovoExportResult(
   }
 
   lines.push(
-    `SUMMARY html=${result.artifacts.length} clientModules=${result.clientModules.length} diagnostics=${result.diagnostics.length} outDir=${JSON.stringify(options.outDir)}`,
+    `SUMMARY html=${result.artifacts.length} clientModules=${result.clientModules.length} assets=${result.assets.length} diagnostics=${result.diagnostics.length} outDir=${JSON.stringify(options.outDir)}`,
   );
 
   return { exitCode: result.diagnostics.length > 0 ? 1 : 0, output: `${lines.join('\n')}\n` };

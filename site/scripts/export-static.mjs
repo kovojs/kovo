@@ -8,10 +8,9 @@ import { createServer } from 'vite-plus';
 import { runContentPipeline } from './content-pipeline.mjs';
 import { emitSiteRoutes } from './emit-routes.mjs';
 
-// SPEC §9.5: the docs site's public static-export bridge. The site is now a real
-// Kovo app (src/app.ts); this replays its declared route documents, copies the
-// versioned /c/ client modules, and copies the Vite CSS manifest assets through
-// the public app-shell export bridge — mirroring examples/*/scripts/export-static.mjs.
+// SPEC §9.5: the docs site's static export uses the command facade for route
+// replay, /c/ client modules, and Vite manifest assets. This script only owns
+// site-specific content generation and extra static files.
 
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const cssDistDir = path.join(siteRoot, 'dist-css');
@@ -38,48 +37,99 @@ export async function exportSiteStaticApp({
     root: siteRoot,
     server: { middlewareMode: true },
   });
-
+  let exportOutput;
+  let auxModule;
+  let examplesModule;
   try {
-    const [appModule, auxModule, examplesModule, coreModule, viteModule] = await Promise.all([
-      viteServer.ssrLoadModule('/src/generated/app.kovo-route.tsx'),
+    const [{ runKovoCommand }, loadedAuxModule, loadedExamplesModule] = await Promise.all([
+      viteServer.ssrLoadModule('@kovojs/cli'),
       viteServer.ssrLoadModule('/src/aux.ts'),
       viteServer.ssrLoadModule('/src/examples.ts'),
-      viteServer.ssrLoadModule('@kovojs/server'),
-      viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
     ]);
-    const { isKovoApp } = coreModule;
-    const {
-      exportKovoAppShellViteBuildWithManifestFromManifestFile,
-      kovoAppShellViteManifestStylesheetHrefFromFile,
-    } = viteModule;
-
-    const app = appModule.siteStaticExportApp;
-    if (!isKovoApp(app)) {
-      throw new Error('src/generated/app.kovo-route.tsx must export siteStaticExportApp for public export.');
+    auxModule = loadedAuxModule;
+    examplesModule = loadedExamplesModule;
+    const exportResult = await captureKovoCommandOutput(() =>
+      runKovoCommand([
+        'export',
+        '/src/generated/app.kovo-route.tsx',
+        '--vite',
+        '--root',
+        siteRoot,
+        '--out',
+        outDir,
+        '--manifest',
+        manifestFile,
+        '--dist',
+        cssDistDir,
+      ]),
+    );
+    if (exportResult.exitCode !== 0) {
+      throw new Error(exportResult.stderr || exportResult.stdout || 'kovo export failed');
     }
-
-    await kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
-
-    const { manifest, result } = await exportKovoAppShellViteBuildWithManifestFromManifestFile({
-      app,
-      distDir: cssDistDir,
-      manifestFile,
-      outDir,
-    });
-
-    // public/ (fonts + the gallery runtime shim) is verbatim static hosting,
-    // outside the manifest; copy it alongside the replayed documents.
-    await cp(publicDir, outDir, { recursive: true });
-
-    // Agent/static-host surface (search index, llms.txt, raw .md mirrors, 404)
-    // and the embedded example apps the iframes point at.
-    await auxModule.emitAuxOutputs(outDir);
-    await examplesModule.exportExampleApps(outDir);
-
-    return { ...result, manifest };
+    exportOutput = exportResult.stdout;
   } finally {
     await viteServer.close();
   }
+
+  // public/ (fonts + the gallery runtime shim) is verbatim static hosting,
+  // outside the manifest; copy it alongside the replayed documents.
+  await cp(publicDir, outDir, { recursive: true });
+
+  // Agent/static-host surface (search index, llms.txt, raw .md mirrors, 404)
+  // and the embedded example apps the iframes point at.
+  await auxModule.emitAuxOutputs(outDir);
+  await examplesModule.exportExampleApps(outDir);
+
+  return siteExportResultFromKovoOutput(exportOutput);
+}
+
+async function captureKovoCommandOutput(run) {
+  const stdoutChunks = [];
+  const stderrChunks = [];
+  const stdoutWrite = process.stdout.write;
+  const stderrWrite = process.stderr.write;
+
+  try {
+    process.stdout.write = (chunk) => {
+      stdoutChunks.push(String(chunk));
+      return true;
+    };
+    process.stderr.write = (chunk) => {
+      stderrChunks.push(String(chunk));
+      return true;
+    };
+
+    return {
+      exitCode: await run(),
+      stderr: stderrChunks.join(''),
+      stdout: stdoutChunks.join(''),
+    };
+  } finally {
+    process.stdout.write = stdoutWrite;
+    process.stderr.write = stderrWrite;
+  }
+}
+
+function siteExportResultFromKovoOutput(output) {
+  const count = (prefix) =>
+    output
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith(prefix))
+      .length;
+  const diagnostics = output
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('WARN '))
+    .map((line) => ({ code: line.split(/\s+/)[1] ?? 'KV229', message: line, routePath: 'app' }));
+
+  const htmlCount = count('HTML ');
+
+  return {
+    artifacts: Array.from({ length: htmlCount }),
+    assets: Array.from({ length: count('ASSET ') }),
+    clientModules: Array.from({ length: count('CLIENT-MODULE ') }),
+    diagnostics,
+    manifest: { routeDocuments: Array.from({ length: htmlCount }) },
+  };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -2,14 +2,12 @@
  * Public API of the `@kovojs/cli` package.
  *
  * The `kovo` CLI is primarily a bin (`kovo check`, `kovo explain`, `kovo audit`,
- * `kovo export`, `kovo add`, `kovo mcp`). This module exposes only the small,
- * documented library surface for the two verifiers — `kovoCheck` and
- * `kovoExplain` — so callers can run them in-process against an extracted graph
- * (SPEC.md §11.4 verification surface; §1.1 proof claims). Everything else (the
- * argv dispatcher, MCP transport, compile facts, audit) is internal and reachable
- * only through the bin or the explicitly-internal `@kovojs/cli/internal` subpath.
+ * `kovo export`, `kovo add`, `kovo mcp`). This module exposes the small
+ * documented library surface for verifiers plus `runKovoCommand`, the
+ * command-equivalent facade used by generated app maintenance scripts that need
+ * to run the same export/build path in process.
  */
-export { kovoCheck, kovoExplain } from './index.js';
+export { kovoCheck, kovoExplain, runKovoCommand } from './index.js';
 
 export type { DiagnosticCode } from '@kovojs/core';
 import type {

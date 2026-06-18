@@ -151,7 +151,7 @@ describe('public-packages manifest', () => {
   it('classifies the server app-shell Vite bridge as public and raw Vite internals as internal', () => {
     const server = manifest.find((pkg) => pkg.name === '@kovojs/server');
     expect(server).toBeDefined();
-    expect(publicEntrySubpaths(server)).toContain('./app-shell/vite');
+    expect(publicEntrySubpaths(server)).not.toContain('./app-shell/vite');
     expect(internalEntrySubpaths(server)).toContain('./internal/app-shell-vite');
     expect(internalEntrySubpaths(server)).not.toContain('./app-shell/vite');
     expect(publicEntrySubpaths(server)).not.toContain('./internal/app-shell-vite');

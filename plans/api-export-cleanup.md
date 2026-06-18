@@ -10,16 +10,16 @@ while continuing to install a `kovo` binary.
 
 ## Goal
 
-`@kovojs/server/app-shell/vite` should be an intentional app-author build-time API,
-not an accidental public-looking path classified as internal. The curated subpath
-should expose only the Vite dev plugin and static-export/build helpers that starter
-templates, examples, and app-owned scripts need. Lower-level raw plugin wiring,
-output planning, manifest parsing, staging, and dev diagnostic internals should stay
-behind `@kovojs/server/internal/app-shell-vite`.
+Vite build/export replay should be hidden behind app-author command facades, not
+hand-authored imports from `@kovojs/server/app-shell/vite`. The former public-looking
+subpath is removed; generated app maintenance scripts and site export scripts use
+`kovo export --vite` through the public `@kovojs/cli` facade, while lower-level raw
+plugin wiring, output planning, manifest parsing, staging, and dev diagnostic
+internals stay behind `@kovojs/server/internal/app-shell-vite`.
 
 This follows `SPEC.md` §9.5: app-shell dev/build/export replay starts from the
-framework request shell and `createApp()` aggregate; the public API should name that
-contract directly instead of forcing app authors through an `internal` import.
+framework request shell and `createApp()` aggregate. App authors should name that
+workflow as a command-level operation, not import framework replay helpers directly.
 
 The same cleanup pass should remove app-author imports of `@kovojs/compiler`.
 Compiler APIs may remain framework-internal build machinery, but generated starter
@@ -126,10 +126,11 @@ fixed-this-run=0)`.
 
 ## Decisions
 
-- [x] **Use option 2: make `@kovojs/server/app-shell/vite` public, but curated.**
-  - Rationale: starter apps and app Vite configs are app-author code. Moving their
-    imports to `@kovojs/server/internal/app-shell-vite` would make generated apps
-    depend on an explicitly internal contract.
+- [x] **Use the CLI facade for Vite static-export replay; remove the public Vite replay subpath.**
+  - Rationale: starter apps and app-owned export scripts should not import
+    generated-target or framework replay helpers by hand. `kovo export --vite`
+    gives them a durable app-author operation while keeping Vite manifest/build
+    machinery internal.
 - [x] **Keep low-level host/build machinery internal.**
   - Rationale: `rules/api-surface.md` says internal subpaths expose repo-internal
     contracts and should use the narrowest subsystem path. Raw Vite plugin hooks,
@@ -183,61 +184,44 @@ fixed-this-run=0)`.
 
 ## Implementation Plan
 
-- [x] **Classify `./app-shell/vite` as public in `public-packages.json`.**
-  - Move `@kovojs/server` `apiBoundary` entry `./app-shell/vite` from `internal`
-    to `public`.
-  - Keep `./internal/app-shell-vite` classified as internal.
-  - Evidence: `public-packages.json` lists `./app-shell/vite` under
-    `@kovojs/server.apiBoundary.public` and `./internal/app-shell-vite` under
-    `apiBoundary.internal`; `pnpm exec vitest --run scripts/public-packages.test.mjs`
-    passes and asserts this split.
-- [x] **Define the curated `@kovojs/server/app-shell/vite` symbol set.**
-  - Keep the app-author dev/export helpers used by starters and examples:
-    `kovoAppShellViteDevPlugin`,
-    `exportKovoAppShellViteBuildWithManifestFromManifestFile`,
-    `kovoAppShellViteManifestStylesheetHrefFromFile`, and the direct build/export
-    helpers needed by app-owned build scripts.
-  - Decide whether `createKovoAppShellViteBuild*`,
-    `exportKovoAppShellViteBuild*`, and `staticExport*ForKovoAppShellViteBuild*`
-    are first-class public build helpers now, or deferred until
-    `plans/easy-deployment.md` promotes a full `kovo build` surface.
-  - Evidence: `packages/server/src/api/app-shell/vite.ts` exports the curated
-    public values `kovoAppShellViteDevPlugin`,
-    `exportKovoAppShellViteBuildWithManifestFromManifestFile`, and
-    `kovoAppShellViteManifestStylesheetHrefFromFile`, plus their public type
-    closures. `pnpm exec vitest --run packages/server/src/api/app.test.ts`
-    passes and pins the runtime value export names.
-- [x] **Move non-curated symbols off the public Vite subpath.**
-  - Remove raw/low-level symbols from `packages/server/src/api/app-shell/vite.ts`
-    when they are not part of the app-author contract.
-  - Ensure removed symbols remain reachable, if needed, from
-    `packages/server/src/internal/app-shell-vite.ts`.
-  - Evidence: `packages/server/src/internal/app-shell-vite.ts` owns the raw Vite
-    plugin, build-output, client-module, manifest, static-asset, and dev
-    diagnostic internals. `pnpm exec vitest --run packages/server/src/api/app.test.ts
-packages/server/src/vite-plugin-boundary.test.ts` passes, including negative
-    assertions that raw build/plugin/manifest helpers are not exported from
-    `@kovojs/server/app-shell/vite`.
-- [x] **Update docs/API reference for the public app-shell Vite API.**
-  - Ensure `site/scripts/api-ref.mjs` includes the newly public server subpath or
-    otherwise records why this build-time API is documented outside generated API
-    pages.
-  - Add or update docs that show starter Vite config/static export imports from
-    `@kovojs/server/app-shell/vite`.
-  - Evidence: `public-packages.json` declares the `server-app-shell-vite` API ref
-    entry; `site/scripts/api-ref.test.mjs` now expects
-    `server-app-shell-vite.md` and the generated entry reports 8 documented
-    exports. Starter docs and scripts reference
-    `@kovojs/server/app-shell/vite`. Verification:
-    `pnpm exec vitest --run site/scripts/api-ref.test.mjs packages/create-kovo/src/index.test.ts`.
-- [x] **Add boundary tests for the curated split.**
-  - Add a test that pins the public `@kovojs/server/app-shell/vite` export names.
-  - Add a test that pins representative internal-only names behind
-    `@kovojs/server/internal/app-shell-vite`.
-  - Evidence: `packages/server/src/api/app.test.ts` pins the public
-    `@kovojs/server/app-shell/vite` value exports and asserts raw Vite helpers are
-    absent; `packages/server/src/vite-plugin-boundary.test.ts` proves the raw
-    plugin remains available from `./internal/app-shell-vite`.
+- [x] **Remove `./app-shell/vite` from the public server export map.**
+  - Keep `./internal/app-shell-vite` classified as internal for framework-owned
+    Vite plugin/replay machinery.
+  - Evidence: `packages/server/package.json` no longer exports
+    `./app-shell/vite`, `public-packages.json` no longer lists the subpath or
+    `server-app-shell-vite` API reference entry, and
+    `packages/server/src/api/app-shell/vite.ts` is deleted. Verification:
+    `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts
+scripts/public-packages.test.mjs site/scripts/api-ref.test.mjs`;
+    `corepack pnpm run check:publish`.
+- [x] **Route Vite static-export replay through `kovo export --vite`.**
+  - Add CLI manifest loading, asset copying, stylesheet environment resolution,
+    Vite SSR module loading, and an in-process `runKovoCommand` facade for
+    generated maintenance scripts.
+  - Evidence: `packages/cli/src/index.ts` supports `--vite`, `--root`,
+    `--manifest`, `--dist`, `--asset-base`, and `--stylesheet-env`, and
+    `packages/cli/src/api.ts` exports public `runKovoCommand`. Verification:
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-export.test.ts
+packages/cli/src/commands-manifest.test.ts`; `corepack pnpm run check:api-surface`.
+- [x] **Update generated starter and docs-site export scripts to use the command facade.**
+  - Remove app-authored imports of Vite replay helpers from the starter and docs
+    site; those scripts now load `@kovojs/cli` through Vite SSR and call
+    `runKovoCommand(['export', ..., '--vite', ...])`.
+  - Evidence: `packages/create-kovo/templates/scripts/export-static.mjs` and
+    `site/scripts/export-static.mjs` no longer import
+    `@kovojs/server/app-shell/vite`; starter docs describe `kovo export --vite`.
+    Verification: `corepack pnpm exec vitest --run
+packages/create-kovo/src/index.test.ts`; `corepack pnpm --filter @kovojs/site
+run build`.
+- [x] **Add boundary tests for the removed public subpath and internal Vite home.**
+  - Assert the removed public subpath is absent from server package exports and
+    package manifests, while framework tests use internal/local Vite helpers.
+  - Evidence: `packages/server/src/api/app.test.ts` has a compile-time
+    `@ts-expect-error` import assertion for `@kovojs/server/app-shell/vite` and
+    checks `serverPackage.exports` does not contain `./app-shell/vite`;
+    `packages/server/src/vite-plugin-boundary.test.ts` imports manifest helpers
+    from local/internal modules. Verification: `corepack pnpm exec vitest --run
+packages/server/src/api/app.test.ts packages/server/src/vite-plugin-boundary.test.ts`.
 - [x] **Regenerate/check publish metadata after export-map changes.**
   - If package exports or entry files change, run
     `node scripts/build-publish.mjs --write` before verification.
@@ -253,11 +237,11 @@ packages/server/src/vite-plugin-boundary.test.ts` passes, including negative
     with 67 files / 442 tests after updating stale assertions for keyed mutation
     form output and Vite diagnostic middleware fallback detection.
     `corepack pnpm exec vitest --run packages/create-kovo/src/index.test.ts
-    scripts/exported-symbols.test.mjs scripts/public-packages.test.mjs
-    site/scripts/api-ref.test.mjs`, `corepack pnpm run check:api-surface`,
+scripts/exported-symbols.test.mjs scripts/public-packages.test.mjs
+site/scripts/api-ref.test.mjs`, `corepack pnpm run check:api-surface`,
     `corepack pnpm run check:publish`, `corepack pnpm run check:exports`,
     `corepack pnpm run check:imports`, and `corepack pnpm exec tsc -p
-    tsconfig.json --noEmit --pretty false` pass for the current checkpoint.
+tsconfig.json --noEmit --pretty false` pass for the current checkpoint.
     Full `corepack pnpm run check` remains open: it gets through
     `check:imports` but fails in repo-wide `vp check` with formatting plus
     unrelated lint/type findings outside this export-surface slice.
@@ -350,20 +334,18 @@ packages/server/src/vite-plugin-boundary.test.ts` passes, including negative
     `internal/*`, and JSX runtime exports off the root.
   - Move client-module response/href helpers and static-export manifest/assertion
     helpers to internal subpaths instead of keeping them public subpath APIs.
-  - [x] Client-module response/href helper portion is internal-only.
-    - Evidence: `packages/server/src/api/app-shell/client-modules.ts` exports no
-      public values; `packages/server/src/internal/client-modules.ts` exports
-      `renderVersionedClientModuleResponse`, `versionedClientModuleHref`,
-      `VersionedClientModuleRequest`, and `VersionedClientModuleResponse`.
-      Verification: `corepack pnpm exec vitest --run
+  - [x] Client-module response/href helper portion is internal-only. - Evidence: `packages/server/src/api/app-shell/client-modules.ts` exports no
+        public values; `packages/server/src/internal/client-modules.ts` exports
+        `renderVersionedClientModuleResponse`, `versionedClientModuleHref`,
+        `VersionedClientModuleRequest`, and `VersionedClientModuleResponse`.
+        Verification: `corepack pnpm exec vitest --run
 packages/server/src/api/app.test.ts`; `node scripts/api-surface-gate.mjs`.
-  - [x] Static-export support helper portion is internal-only.
-    - Evidence: `packages/server/src/api/app-shell/static-export.ts` exports no
-      public values; `packages/server/src/internal/static-export.ts` exports the
-      manifest/assertion/output-plan and diagnostic formatter/guard helpers.
-      Verification: `corepack pnpm exec vitest --run
+  - [x] Static-export support helper portion is internal-only. - Evidence: `packages/server/src/api/app-shell/static-export.ts` exports no
+        public values; `packages/server/src/internal/static-export.ts` exports the
+        manifest/assertion/output-plan and diagnostic formatter/guard helpers.
+        Verification: `corepack pnpm exec vitest --run
 packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
-      `node scripts/api-surface-gate.mjs`.
+        `node scripts/api-surface-gate.mjs`.
 - [x] **Move client-module support helpers behind an internal server subpath.**
   - Remove `renderVersionedClientModuleResponse`, `versionedClientModuleHref`,
     `VersionedClientModuleRequest`, and `VersionedClientModuleResponse` from
@@ -548,19 +530,27 @@ packages/create-kovo/src/index.test.ts`.
     - Verification: `rg -n "from ['\\\"]@kovojs/server['\\\"][^;]*(renderComponent|readHeader)|import \\{[^}]*\\b(renderComponent|readHeader)\\b[^}]*\\} from ['\\\"]@kovojs/server['\\\"]" . --glob '!**/node_modules/**' --glob '!**/dist/**' --glob '!**/generated/**'`
       exits 1; `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/component-render.test.tsx packages/server/src/response.test.ts`;
       `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
-- [ ] **Make Vite build/export replay helpers internal once a higher-level command exists.**
+- [x] **Make Vite build/export replay helpers internal once a higher-level command exists.**
   - Keep `kovoAppShellViteDevPlugin` as the likely public/root dev setup API.
   - Move Vite build/export replay helpers internal-only when `kovo build` or
     another public facade owns app export/build workflows.
-  - Evidence:
-    - Gap: leave open. `packages/create-kovo/templates/scripts/export-static.mjs`
-      and `site/scripts/export-static.mjs` still load
-      `@kovojs/server/app-shell/vite` for
-      `exportKovoAppShellViteBuildWithManifestFromManifestFile` and
-      `kovoAppShellViteManifestStylesheetHrefFromFile`; `kovo export` exists
-      for app-module static export but does not yet own the Vite build/manifest
-      replay flow. Verification:
-      `rg -n "@kovojs/server/app-shell/vite|exportKovoAppShellViteBuildWithManifestFromManifestFile|kovoAppShellViteManifestStylesheetHrefFromFile" packages/create-kovo/templates site/scripts packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts`.
+  - Evidence: `packages/create-kovo/templates/scripts/export-static.mjs` and
+    `site/scripts/export-static.mjs` now load `@kovojs/cli` through Vite SSR
+    and call `runKovoCommand(['export', ..., '--vite', ...])` instead of
+    importing `@kovojs/server/app-shell/vite`; `packages/server/package.json`,
+    `public-packages.json`, and `site/scripts/api-ref.test.mjs` remove the
+    public `@kovojs/server/app-shell/vite` subpath/API reference; framework-only
+    Vite replay helpers remain behind internal/local modules. Verification:
+    `rg -n "@kovojs/server/app-shell/vite|server-app-shell-vite|./app-shell/vite|src/api/app-shell/vite" packages site scripts public-packages.json --glob '!**/dist/**' --glob '!**/node_modules/**'`
+    returns only negative assertions; `corepack pnpm exec vitest --run
+packages/cli/src/index.kovo-export.test.ts packages/cli/src/commands-manifest.test.ts
+packages/create-kovo/src/index.test.ts packages/server/src/api/app.test.ts
+packages/server/src/vite-plugin-boundary.test.ts scripts/public-packages.test.mjs
+site/scripts/api-ref.test.mjs`; `corepack pnpm --filter @kovojs/site run build`;
+    `corepack pnpm run check:api-surface`; `corepack pnpm run check:publish`;
+    `corepack pnpm run check:exports`; `corepack pnpm run check:imports`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `git diff --check`.
 - [x] **Add server export canonical-home tests.**
   - Assert moved symbols are exported from `@kovojs/server`.
   - Assert moved symbols are not exported from their former public subpaths.
@@ -759,15 +749,15 @@ tsconfig.json --noEmit --pretty false`.
     `kovo compile component` for docs lowering/diagnostic captures, and
     `site/package.json` no longer depends on `@kovojs/compiler`.
     `packages/cli/src/index.ts` added `kovo compile component
-    --query-shape-facts <json>` so query-shape-backed diagnostics are reachable
+--query-shape-facts <json>` so query-shape-backed diagnostics are reachable
     through the CLI facade instead of the compiler API. `scripts/import-boundary.mjs`
     now treats `@kovojs/compiler`, `@kovojs/compiler/graph`, and
     `@kovojs/compiler/package-styles` as non-public for app-facing roots and
     scans `site/scripts`.
   - Verified with `corepack pnpm --filter @kovojs/site run emit-routes -- --check`,
     `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts
-    packages/cli/src/commands-manifest.test.ts scripts/import-boundary.test.mjs
-    scripts/public-packages.test.mjs`, `node scripts/import-boundary.mjs`, and
+packages/cli/src/commands-manifest.test.ts scripts/import-boundary.test.mjs
+scripts/public-packages.test.mjs`, `node scripts/import-boundary.mjs`, and
     `rg -n "from ['\"]@kovojs/compiler|import\([^)]*['\"]@kovojs/compiler|import .*@kovojs/compiler" examples packages/create-kovo/templates site/tutorial site/content site/src site/scripts --glob '!**/generated/**' --glob '!**/dist/**' --glob '!**/node_modules/**' --glob '!**/*.test.*'`
     returning no matches.
 - [x] **Shrink `@kovojs/runtime` root to hand-authored app APIs.**
@@ -781,62 +771,57 @@ tsconfig.json --noEmit --pretty false`.
   - Keep only deliberately app-authored APIs such as `derive`, `handler`,
     `tempId`, optimistic authoring helpers/types, and `trustedHtml`/`TrustedHtml`
     if their public use case is documented.
-  - Evidence:
-    - Slice 2026-06-18: `packages/runtime/src/index.ts` root-exports only
-      value primitives `derive`, `handler`, `tempId`, and `trustedHtml`, plus
-      their public type closure (`DeriveDefinition`, `ClientHandler`,
-      `ImportHandlerModule`, `HandlerContext`, `ElementParamValue`,
-      `TrustedHtml`, `BrowserTrustedHTML`, and optimistic authoring types).
-      `packages/runtime/src/index-exports.test.ts` pins the root value key set
-      and negative checks for `installKovoLoader`, `createQueryStore`,
-      `applyCompiledQueryUpdatePlan`, `applyDeferredStreamResponseToRuntime`,
-      inline-loader helpers, and generated `kovo*` output helpers.
-    - Long-term subpath decision: app-owned browser entry files import loader,
-      query-store, morph, mutation-submit, query-binding, pending, and client
-      lifecycle machinery from the public `@kovojs/runtime/client` subpath.
-      Generated modules continue to import the emitted ABI from
-      `@kovojs/runtime/generated`, while server/framework-only support imports
-      use narrow internal subpaths:
-      `@kovojs/runtime/internal/inline-loader`,
-      `@kovojs/runtime/internal/output`,
-      `@kovojs/runtime/internal/mutation`, and
-      `@kovojs/runtime/internal/delegation`. This avoids making app-authored
-      starter clients depend on generated/internal subpaths, which
-      `scripts/import-boundary.mjs` correctly treats as non-public.
-    - Proposed root allow-list: `derive`, `DeriveDefinition`, `handler`,
-      `ClientHandler`, `HandlerContext`, `ElementParamValue`, `trustedHtml`,
-      `TrustedHtml`, `BrowserTrustedHTML`, `tempId`, `OptimisticFor`,
-      `OptimisticPlan`, `OptimisticEntry`, `OptimisticTransform`,
-      `OptimisticQueryKey`, `OptimisticChange`, and `MutationChangeRecord`.
-      `OptimisticPlan` needs the listed optimistic helper types to keep the
-      transitive public type closure valid under `rules/api-surface.md`.
-    - Consumer migration evidence: `packages/create-kovo/templates/src/client.ts`,
-      `tests/integration/fixtures/*/client.ts`,
-      `packages/conformance-fixtures` generated/starter fixtures,
-      `examples/gallery/src/interactive-gallery-browser-fixtures.ts`,
-      `examples/commerce/src/app-test-helpers.ts`,
-      `packages/server/src/document-core.ts`,
-      `packages/server/src/jsx-runtime.ts`, `site/content/guides/streaming.md`,
-      `site/content/guides/optimistic.md`, and `docs/integration-testing.md`
-      no longer import loader/query/morph/mutation machinery from the root.
-      `rg -n "from ['\"]@kovojs/runtime['\"]" packages examples site docs tests`
-      now reports only authoring primitives (`trustedHtml`, `tempId`) and
-      optimistic authoring types/import strings.
-    - Verification: `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
-      `corepack pnpm exec vitest --run packages/runtime/src` (76 files,
-      421 tests); `corepack pnpm exec vitest --config vitest.browser.config.ts
-      --run packages/runtime/src --api 63383` (24 files, 108 browser tests);
-      `corepack pnpm exec vitest --run
-      packages/conformance-fixtures/src/generated-module-fixtures.test.ts
-      packages/conformance-fixtures/src/starter-template-fixtures.test.ts
-      packages/conformance-fixtures/src/server-fixtures.test.ts`;
-      `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs
-      site/scripts/api-examples-check.test.mjs scripts/public-packages.test.mjs
-      scripts/exported-symbols.test.mjs`; `corepack pnpm run check:imports`;
-      `node scripts/api-surface-gate.mjs`; `corepack pnpm run check:exports`;
-      `node site/scripts/api-ref.mjs && node site/scripts/api-examples-check.mjs`
-      (`api-ref/v1 packages=8 exports=644 documented=445`,
-      `api-examples/v1 examples=42 OK`); `node scripts/build-publish.mjs`.
+  - Evidence: - Slice 2026-06-18: `packages/runtime/src/index.ts` root-exports only
+    value primitives `derive`, `handler`, `tempId`, and `trustedHtml`, plus
+    their public type closure (`DeriveDefinition`, `ClientHandler`,
+    `ImportHandlerModule`, `HandlerContext`, `ElementParamValue`,
+    `TrustedHtml`, `BrowserTrustedHTML`, and optimistic authoring types).
+    `packages/runtime/src/index-exports.test.ts` pins the root value key set
+    and negative checks for `installKovoLoader`, `createQueryStore`,
+    `applyCompiledQueryUpdatePlan`, `applyDeferredStreamResponseToRuntime`,
+    inline-loader helpers, and generated `kovo*` output helpers. - Long-term subpath decision: app-owned browser entry files import loader,
+    query-store, morph, mutation-submit, query-binding, pending, and client
+    lifecycle machinery from the public `@kovojs/runtime/client` subpath.
+    Generated modules continue to import the emitted ABI from
+    `@kovojs/runtime/generated`, while server/framework-only support imports
+    use narrow internal subpaths:
+    `@kovojs/runtime/internal/inline-loader`,
+    `@kovojs/runtime/internal/output`,
+    `@kovojs/runtime/internal/mutation`, and
+    `@kovojs/runtime/internal/delegation`. This avoids making app-authored
+    starter clients depend on generated/internal subpaths, which
+    `scripts/import-boundary.mjs` correctly treats as non-public. - Proposed root allow-list: `derive`, `DeriveDefinition`, `handler`,
+    `ClientHandler`, `HandlerContext`, `ElementParamValue`, `trustedHtml`,
+    `TrustedHtml`, `BrowserTrustedHTML`, `tempId`, `OptimisticFor`,
+    `OptimisticPlan`, `OptimisticEntry`, `OptimisticTransform`,
+    `OptimisticQueryKey`, `OptimisticChange`, and `MutationChangeRecord`.
+    `OptimisticPlan` needs the listed optimistic helper types to keep the
+    transitive public type closure valid under `rules/api-surface.md`. - Consumer migration evidence: `packages/create-kovo/templates/src/client.ts`,
+    `tests/integration/fixtures/*/client.ts`,
+    `packages/conformance-fixtures` generated/starter fixtures,
+    `examples/gallery/src/interactive-gallery-browser-fixtures.ts`,
+    `examples/commerce/src/app-test-helpers.ts`,
+    `packages/server/src/document-core.ts`,
+    `packages/server/src/jsx-runtime.ts`, `site/content/guides/streaming.md`,
+    `site/content/guides/optimistic.md`, and `docs/integration-testing.md`
+    no longer import loader/query/morph/mutation machinery from the root.
+    `rg -n "from ['\"]@kovojs/runtime['\"]" packages examples site docs tests`
+    now reports only authoring primitives (`trustedHtml`, `tempId`) and
+    optimistic authoring types/import strings. - Verification: `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `corepack pnpm exec vitest --run packages/runtime/src` (76 files,
+    421 tests); `corepack pnpm exec vitest --config vitest.browser.config.ts
+--run packages/runtime/src --api 63383` (24 files, 108 browser tests);
+    `corepack pnpm exec vitest --run
+packages/conformance-fixtures/src/generated-module-fixtures.test.ts
+packages/conformance-fixtures/src/starter-template-fixtures.test.ts
+packages/conformance-fixtures/src/server-fixtures.test.ts`;
+    `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs
+site/scripts/api-examples-check.test.mjs scripts/public-packages.test.mjs
+scripts/exported-symbols.test.mjs`; `corepack pnpm run check:imports`;
+    `node scripts/api-surface-gate.mjs`; `corepack pnpm run check:exports`;
+    `node site/scripts/api-ref.mjs && node site/scripts/api-examples-check.mjs`
+    (`api-ref/v1 packages=8 exports=644 documented=445`,
+    `api-examples/v1 examples=42 OK`); `node scripts/build-publish.mjs`.
 - [x] **Shrink `@kovojs/core` to app declaration primitives.**
   - Review and likely internalize diagnostics metadata, registry types, query
     delta helpers/types, and fragment-target helpers if they are compiler/server
@@ -970,27 +955,26 @@ tsconfig.json --noEmit --pretty false`.
       `corepack pnpm exec vitest --run scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs packages/conformance-fixtures/src/package-exports.test.ts`;
       `rg -n "@kovojs/drizzle/derive|serializeDerivedOptimistic|lowerTransform" examples packages/create-kovo/templates site/tutorial site/content site/src --glob '!**/generated/**' --glob '!**/dist/**' --glob '!**/node_modules/**'`
       returned no matches.
-  - [x] Move static extraction and serialization off `@kovojs/drizzle/static`.
-    - Evidence: `@kovojs/drizzle` now exposes only `.` and `./derive` as public
-      Drizzle subpaths; `@kovojs/drizzle/static` was removed from the package
-      export map and `@kovojs/drizzle/internal/static` is the manifest-declared
-      internal home for extraction, query/effect/shape facts, diagnostics,
-      touch-graph serializers, and invalidation serializers. Example graph
-      scripts in commerce, CRM, and Stack Overflow call `kovo compile
-      drizzle-static` instead of importing low-level static helpers, and
-      `rg -n "@kovojs/drizzle/static" packages examples site docs
-      public-packages.json --glob '!**/dist/**' --glob '!**/node_modules/**'`
-      returned no matches. Verification:
-      `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/index.serialization.test.ts packages/conformance-fixtures/src/package-exports.test.ts`;
-      `corepack pnpm --filter @kovojs/example-commerce run emit-graph -- --check`;
-      `corepack pnpm --filter @kovojs/example-crm run emit-graph -- --check`;
-      `corepack pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`;
-      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
-      `corepack pnpm run check:imports`; `corepack pnpm run check:exports`;
-      `node scripts/api-surface-gate.mjs`;
-      `node site/scripts/api-ref.mjs`; `node site/scripts/api-examples-check.mjs`;
-      `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs site/scripts/api-examples-check.test.mjs`;
-      `node scripts/build-publish.mjs`.
+  - [x] Move static extraction and serialization off `@kovojs/drizzle/static`. - Evidence: `@kovojs/drizzle` now exposes only `.` and `./derive` as public
+        Drizzle subpaths; `@kovojs/drizzle/static` was removed from the package
+        export map and `@kovojs/drizzle/internal/static` is the manifest-declared
+        internal home for extraction, query/effect/shape facts, diagnostics,
+        touch-graph serializers, and invalidation serializers. Example graph
+        scripts in commerce, CRM, and Stack Overflow call `kovo compile
+drizzle-static` instead of importing low-level static helpers, and
+        `rg -n "@kovojs/drizzle/static" packages examples site docs
+public-packages.json --glob '!**/dist/**' --glob '!**/node_modules/**'`
+        returned no matches. Verification:
+        `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/index.serialization.test.ts packages/conformance-fixtures/src/package-exports.test.ts`;
+        `corepack pnpm --filter @kovojs/example-commerce run emit-graph -- --check`;
+        `corepack pnpm --filter @kovojs/example-crm run emit-graph -- --check`;
+        `corepack pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`;
+        `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+        `corepack pnpm run check:imports`; `corepack pnpm run check:exports`;
+        `node scripts/api-surface-gate.mjs`;
+        `node site/scripts/api-ref.mjs`; `node site/scripts/api-examples-check.mjs`;
+        `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs site/scripts/api-examples-check.test.mjs`;
+        `node scripts/build-publish.mjs`.
 - [x] **Shrink `@kovojs/headless-ui` root.**
   - After direct family subpaths exist, remove primitive-family exports from the
     root so family symbols have one canonical home.
@@ -1004,14 +988,14 @@ tsconfig.json --noEmit --pretty false`.
     longer re-exports `src/primitives/index.ts` or platform-audit tooling.
     Compiler merge fixtures, gallery harness import aggregation, and docs now
     use direct family subpaths for primitive APIs. Current `node
-    scripts/exported-symbols.mjs --duplicates --json` reports 8 total
+scripts/exported-symbols.mjs --duplicates --json` reports 8 total
     duplicate public symbols and 0 for `@kovojs/headless-ui`; `node
-    scripts/api-surface-gate.mjs` reports
+scripts/api-surface-gate.mjs` reports
     `public-exports-needing-attention=1737` after removing the headless root
     baseline entries. `corepack pnpm exec vitest --run packages/headless-ui/src
-    packages/compiler/src/gallery-merge-fixtures*.test.tsx
-    packages/ui/src/index.markup.test.tsx` passed; `corepack pnpm exec tsc -p
-    tsconfig.json --noEmit --pretty false` passed.
+packages/compiler/src/gallery-merge-fixtures*.test.tsx
+packages/ui/src/index.markup.test.tsx` passed; `corepack pnpm exec tsc -p
+tsconfig.json --noEmit --pretty false` passed.
 - [x] **Make `@kovojs/test` root curated or subpath-only.**
   - Move duplicated root symbols to their canonical subpaths:
     assertions/property helpers to `@kovojs/test/assertions`, harness helpers to
@@ -1032,7 +1016,7 @@ tsconfig.json --noEmit --pretty false`.
     re-exports `DbVerificationDiagnostic` or `diagnosticMessage`; their only
     public home is `@kovojs/test/verifier-diagnostics`. Verification:
     `corepack pnpm exec vitest --run packages/conformance-fixtures/src/package-exports.test.ts
-    packages/test/src/verifier.test.ts packages/test/src/verifier-diagnostics.test.ts`;
+packages/test/src/verifier.test.ts packages/test/src/verifier-diagnostics.test.ts`;
     `corepack pnpm run check:exports`; `node scripts/api-surface-gate.mjs`.
 - [x] **Shrink `@kovojs/better-auth` to app-facing adapter APIs.**
   - Keep app-facing helpers such as `mount`, `betterAuthSession`, `authed`, and
@@ -1055,7 +1039,7 @@ tsconfig.json --noEmit --pretty false`.
     instead of importing those mirrors. Verification:
     `node scripts/exported-symbols.mjs --json` reports 13 public
     `@kovojs/better-auth` root symbols; `corepack pnpm exec vitest --run
-    packages/better-auth/src/index.session.test.ts packages/better-auth/src/index.credential-mutations.test.ts conformance/better-auth-pin/src/index.api-table.test.ts conformance/better-auth-pin/src/index.session-credentials.test.ts packages/create-kovo/src/index.test.ts examples/commerce/src/app.auth.test.ts examples/reference/src/app-shell.test.ts`;
+packages/better-auth/src/index.session.test.ts packages/better-auth/src/index.credential-mutations.test.ts conformance/better-auth-pin/src/index.api-table.test.ts conformance/better-auth-pin/src/index.session-credentials.test.ts packages/create-kovo/src/index.test.ts examples/commerce/src/app.auth.test.ts examples/reference/src/app-shell.test.ts`;
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
     `node site/scripts/api-ref.mjs`; `node scripts/build-publish.mjs`.
 - [x] **Review `@kovojs/style` compiler-level result types.**
@@ -1097,7 +1081,7 @@ tsconfig.json --noEmit --pretty false`.
     `./primitives/<family>` are removed from the package export map and from
     `public-packages.json` instead of being kept as duplicate public aliases.
   - Evidence: `rg '@kovojs/headless-ui/primitives' packages examples site docs
-    public-packages.json packages/headless-ui/package.json packages/ui/package.json`
+public-packages.json packages/headless-ui/package.json packages/ui/package.json`
     finds no stale import/export sites outside the parity test string.
 - [x] **Update `public-packages.json` for the new headless-ui public subpaths.**
   - Add the direct family subpaths to `@kovojs/headless-ui.apiBoundary.public`.
@@ -1105,8 +1089,8 @@ tsconfig.json --noEmit --pretty false`.
     implemented and verified.
   - Evidence: `public-packages.json` lists `.` and the direct headless-ui family
     subpaths under `@kovojs/headless-ui.apiBoundary.public`; `corepack pnpm exec
-    vitest --run scripts/public-packages.test.mjs packages/ui/src/headless-subpath-parity.test.ts
-    packages/ui/src/copy-in.test.ts` passes.
+vitest --run scripts/public-packages.test.mjs packages/ui/src/headless-subpath-parity.test.ts
+packages/ui/src/copy-in.test.ts` passes.
 - [x] **Update `@kovojs/ui` and generated/copy-in examples to import direct headless-ui subpaths.**
   - Replace imports from `@kovojs/headless-ui/primitives` or
     `@kovojs/headless-ui/primitives/<family>` with direct family subpaths where
@@ -1117,16 +1101,16 @@ tsconfig.json --noEmit --pretty false`.
     `examples/gallery/src/generated/interactive/*` import direct headless-ui
     family subpaths; `packages/ui/scripts/build-registry.mjs` accepts those
     subpaths as public `@kovojs/headless-ui` dependencies and `node
-    packages/ui/scripts/build-registry.mjs` reports the registry is up to date.
+packages/ui/scripts/build-registry.mjs` reports the registry is up to date.
 - [x] **Regenerate/check publish metadata and API docs for headless-ui.**
   - Run `node scripts/build-publish.mjs --write` after export-map changes.
   - Update generated API reference coverage if headless-ui direct family subpaths
     are documented.
   - Evidence: `node scripts/build-publish.mjs --write` regenerated
     `packages/headless-ui/package.json` publish metadata with 35 entries; `node
-    scripts/build-publish.mjs` passes. `node scripts/api-surface-gate.mjs
-    --write` refreshed the API ratchet for the new public subpaths and `node
-    scripts/api-surface-gate.mjs` passes with
+scripts/build-publish.mjs` passes. `node scripts/api-surface-gate.mjs
+--write` refreshed the API ratchet for the new public subpaths and `node
+scripts/api-surface-gate.mjs` passes with
     `public-exports-needing-attention=2007`.
 - [x] **Verify headless-ui subpath parity.**
   - Add or update a package-exports test asserting each `@kovojs/ui/<family>` that
@@ -1137,7 +1121,7 @@ tsconfig.json --noEmit --pretty false`.
     `packages/headless-ui/package.json` and is public in `public-packages.json`;
     `corepack pnpm exec vitest --run packages/ui/src/headless-subpath-parity.test.ts`
     passes. Broader verification: `corepack pnpm exec tsc -p tsconfig.json
-    --noEmit --pretty false` and `git diff --check` pass.
+--noEmit --pretty false` and `git diff --check` pass.
 
 ## UI Public Package Cleanup
 
@@ -1149,9 +1133,9 @@ tsconfig.json --noEmit --pretty false`.
     baseline due to the large component surface.
   - Evidence: `public-packages.json` marks `@kovojs/ui` public/library and lists
     root plus all 44 component subpaths in `apiBoundary.public`; `corepack pnpm
-    exec vitest --run scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs`
+exec vitest --run scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs`
     passed. API reference pages are staged; `node scripts/api-surface-gate.mjs
-    --write` regenerated the ratchet baseline and `node scripts/api-surface-gate.mjs`
+--write` regenerated the ratchet baseline and `node scripts/api-surface-gate.mjs`
     passes with `public-exports-needing-attention=2591`.
 - [x] **Remove `private: true` from `packages/ui/package.json`.**
   - Set a publishable version line consistent with other public packages.
@@ -1183,11 +1167,11 @@ tsconfig.json --noEmit --pretty false`.
     smoke test that imports from `@kovojs/ui/button` plus a behavior-backed
     matching pair such as `@kovojs/ui/select` / `@kovojs/headless-ui/select`.
   - Evidence: `corepack pnpm exec vitest --run scripts/public-packages.test.mjs
-    scripts/exported-symbols.test.mjs scripts/api-surface-gate.test.mjs
-    packages/ui/src/sheet.stylex.test.tsx packages/ui/src/xss-escaping.test.tsx`
+scripts/exported-symbols.test.mjs scripts/api-surface-gate.test.mjs
+packages/ui/src/sheet.stylex.test.tsx packages/ui/src/xss-escaping.test.tsx`
     passed; `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`
     passed; `corepack pnpm run check:imports` passed; `corepack pnpm run
-    check:exports` passed; `node scripts/build-publish.mjs` passed.
+check:exports` passed; `node scripts/build-publish.mjs` passed.
 
 ## CLI Package Rename
 
@@ -1308,7 +1292,7 @@ scripts/exported-symbols.mjs --duplicates --check` passes against the
     current 8 duplicate public symbols with a migration reason and removal
     target; all are the `@kovojs/server/jsx-runtime` /
     `@kovojs/server/jsx-dev-runtime` TypeScript JSX runtime mirrors. `node
-    scripts/exported-symbols.mjs --duplicates --check` fails on added/removed
+scripts/exported-symbols.mjs --duplicates --check` fails on added/removed
     duplicate homes unless the baseline is updated deliberately.
 - [x] **Prefer subpath ownership for family/component symbols.**
   - For `@kovojs/headless-ui` and `@kovojs/ui`, component/family symbols should

@@ -69,11 +69,11 @@ export async function createDemoServeServer({
   });
 
   try {
-    const serverModule = await vite.ssrLoadModule('@kovojs/server/app-shell/vite');
+    const serverModule = await vite.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
     const shouldHandle = serverModule.shouldHandleKovoAppShellViteRequest;
     if (typeof shouldHandle !== 'function') {
       throw new Error(
-        '@kovojs/server/app-shell/vite must export shouldHandleKovoAppShellViteRequest.',
+        '@kovojs/server/internal/app-shell-vite must export shouldHandleKovoAppShellViteRequest.',
       );
     }
 

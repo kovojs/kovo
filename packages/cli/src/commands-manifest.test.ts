@@ -75,7 +75,7 @@ describe('commands manifest', () => {
     );
     expect(COMPILE_USAGE_LINE).toContain('kovo compile component <source.tsx>');
     expect(EXPORT_USAGE).toBe(
-      'usage: kovo export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]',
+      'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--stylesheet-env <name>] [--skip-non-exportable]',
     );
     expect(MCP_USAGE).toBe('usage: kovo mcp');
     expect(EXPLAIN_USAGE_LINE).toContain(

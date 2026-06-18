@@ -5,7 +5,6 @@ import * as packageClientModulesApi from '@kovojs/server/app-shell/client-module
 import * as packageCoreApi from '@kovojs/server/app-shell/core';
 import * as packageNodeApi from '@kovojs/server/app-shell/node';
 import * as packageStaticExportApi from '@kovojs/server/app-shell/static-export';
-import * as packageViteApi from '@kovojs/server/app-shell/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
 import * as packageInternalExecutionApi from '@kovojs/server/internal/execution';
 import * as packageInternalHtmlApi from '@kovojs/server/internal/html';
@@ -31,8 +30,6 @@ import * as nodeApi from './app-shell/node.js';
 import * as nodeSourceApi from '../node.js';
 import * as queryApi from '../query.js';
 import * as staticExportApi from './app-shell/static-export.js';
-import * as viteApi from './app-shell/vite.js';
-import type * as vt from './app-shell/vite.js';
 import * as dataApi from './data.js';
 import * as documentCoreApi from '../document-core.js';
 import * as documentDiagnosticsApi from '../document-diagnostics.js';
@@ -46,7 +43,6 @@ import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
-import * as viteStaticExportManifestFileApi from '../vite-static-export-manifest-file.js';
 import * as viteDevApi from '../vite-dev.js';
 import * as internalWireApi from '../internal/wire.js';
 import * as wireHtmlApi from '../wire-html.js';
@@ -304,78 +300,11 @@ type RemovedFocusedWriteWebResponseToNodeOptions =
   // implementation; public app-shell/node consumers receive only the closed adapter entrypoint.
   import('./app-shell/node.js').WriteWebResponseToNodeOptions;
 
-// @ts-expect-error SPEC.md §9.5: plugin build-output client-module planning stays internal to the
-// Vite output writer, not a public app-shell/Vite consumer alias.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteClientModuleOutputPlanItem = vt.KovoAppShellViteClientModuleOutputPlanItem;
-
-// @ts-expect-error SPEC.md §9.5: plugin/build-output static-export option projection is an
-// internal Vite write boundary, not an outside static-export task alias.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteBuildOutputStaticExportOptions = vt.KovoAppShellViteBuildOutputStaticExportOptions;
-
-// @ts-expect-error SPEC.md §9.5: plugin-hook build contexts stay internal to the Vite plugin
-// bridge, not an outside app-shell/Vite consumer alias.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedVitePluginBuildContext = vt.KovoAppShellVitePluginBuildContext;
-
-// @ts-expect-error SPEC.md §9.5: plugin-hook build results stay internal to the Vite plugin
-// bridge, not an outside app-shell/Vite consumer alias.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedVitePluginBuildResult = vt.KovoAppShellVitePluginBuildResult;
-
-// @ts-expect-error SPEC.md §9.5: Vite hook output-option plumbing stays internal to the plugin
-// writer; outside app-shell/Vite consumers use the build/export bridge.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteBuildOutputOptions = vt.KovoAppShellViteBuildOutputOptions;
-
-// @ts-expect-error SPEC.md §9.5: raw Vite output.dir/file projection is plugin hook plumbing,
-// not a public app-shell/Vite consumer contract.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteOutputOptions = vt.KovoAppShellViteOutputOptions;
-
-// @ts-expect-error SPEC.md §9.5: raw route-entry arrays belong to the internal Vite build owner;
-// outside app-shell/Vite consumers pass routeEntryMap to the build/export bridge.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteRouteBuildEntry = vt.KovoAppShellRouteBuildEntry;
-
-// @ts-expect-error SPEC.md §9.5: direct manifest route-entry helper options are internal Vite
-// build plumbing, not an outside app-shell/Vite consumer alias.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteRouteEntryOptions = vt.KovoAppShellViteRouteEntryOptions;
-
-// @ts-expect-error SPEC.md §9.5: low-level Vite asset projection options stay inside the
-// build/export bridge instead of the focused public app-shell/Vite subpath.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteStaticExportAssetOptions = vt.KovoAppShellViteStaticExportAssetOptions;
-
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteManifestFileStaticExportAssetOptions =
-  // @ts-expect-error SPEC.md §9.5: manifest-file asset projection options stay inside the
-  // build/export bridge instead of the focused public app-shell/Vite subpath.
-  vt.KovoAppShellViteManifestFileStaticExportAssetOptions;
-
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteBuildStaticExportAssetOptions =
-  // @ts-expect-error SPEC.md §9.5: build asset projection options stay inside the build/export
-  // bridge instead of the focused public app-shell/Vite subpath.
-  vt.KovoAppShellViteBuildStaticExportAssetOptions;
-
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedViteDevPluginFactory =
-  // @ts-expect-error SPEC.md §9.5: the app-shell Vite dev setup API now has the root
-  // @kovojs/server canonical home, not the app-shell/vite subpath.
-  typeof import('@kovojs/server/app-shell/vite').kovoAppShellViteDevPlugin;
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteDevPlugin =
-  // @ts-expect-error SPEC.md §9.5: the app-shell Vite dev setup API now has the root
-  // @kovojs/server canonical home, not the app-shell/vite subpath.
-  import('@kovojs/server/app-shell/vite').KovoAppShellViteDevPlugin;
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedViteDevPluginOptions =
-  // @ts-expect-error SPEC.md §9.5: the app-shell Vite dev setup API now has the root
-  // @kovojs/server canonical home, not the app-shell/vite subpath.
-  import('@kovojs/server/app-shell/vite').KovoAppShellViteDevPluginOptions;
+  // @ts-expect-error SPEC.md §9.5: Vite build/export replay helpers moved behind
+  // `kovo export --vite`; the former public subpath is removed.
+  typeof import('@kovojs/server/app-shell/vite');
 
 function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): string[] {
   return [...new Set(modules.flatMap((module) => Object.keys(module)))].sort();
@@ -434,7 +363,6 @@ describe('server app-shell public API barrels', () => {
       coreApi,
       nodeApi,
       staticExportApi,
-      viteApi,
     );
     for (const key of splitAppShellValues) {
       if (rootAppShellEntrypoints.has(key)) {
@@ -583,10 +511,7 @@ describe('server app-shell public API barrels', () => {
     expect(moduleValueKeys(packageCoreApi)).toEqual([]);
     expect(moduleValueKeys(packageNodeApi)).toEqual([]);
     expect(moduleValueKeys(packageStaticExportApi)).toEqual([]);
-    expect(moduleValueKeys(packageViteApi)).toEqual([
-      'exportKovoAppShellViteBuildWithManifestFromManifestFile',
-      'kovoAppShellViteManifestStylesheetHrefFromFile',
-    ]);
+    expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell/vite');
 
     expect(packageRootApi.createApp).toBe(appApi.createApp);
     expect(packageRootApi.createMemoryVersionedClientModuleRegistry).toBe(
@@ -654,43 +579,6 @@ describe('server app-shell public API barrels', () => {
     expect(packageInternalStaticExportApi.staticExportManifest).toBe(
       internalStaticExportApi.staticExportManifest,
     );
-    expect(packageViteApi.exportKovoAppShellViteBuildWithManifestFromManifestFile).toBe(
-      viteStaticExportManifestFileApi.exportKovoAppShellViteBuildWithManifestFromManifestFile,
-    );
-    expect(packageViteApi.kovoAppShellViteManifestStylesheetHrefFromFile).toBe(
-      viteApi.kovoAppShellViteManifestStylesheetHrefFromFile,
-    );
-    expect(packageViteApi).not.toHaveProperty('createKovoAppShellViteBuild');
-    expect(packageViteApi).not.toHaveProperty('createKovoAppShellViteBuildFromBundle');
-    expect(packageViteApi).not.toHaveProperty('createKovoAppShellViteBuildFromManifestFile');
-    expect(packageViteApi).not.toHaveProperty('createKovoAppShellBuild');
-    expect(packageViteApi).not.toHaveProperty('KovoAppShellViteInput');
-    expect(packageViteApi).not.toHaveProperty('exportKovoAppShellViteBuild');
-    expect(packageViteApi).not.toHaveProperty('exportKovoAppShellViteBuildFromManifestFile');
-    expect(packageViteApi).not.toHaveProperty('exportKovoAppShellViteBuildWithManifest');
-    expect(packageViteApi).not.toHaveProperty('writeKovoAppShellViteBuildOutput');
-    expect(packageViteApi).not.toHaveProperty('writeKovoAppShellVitePluginBuild');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteOutputDir');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestFile');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteBuildStaticExportAssets');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestAssets');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestAssetsFromFile');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestFromBundle');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestFromFile');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestHints');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestStylesheetHref');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestStylesheetHrefs');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteManifestStylesheetHrefsFromFile');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellVitePlugin');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteRouteEntries');
-    expect(packageViteApi).not.toHaveProperty('renderKovoAppShellViteDevDiagnosticResponse');
-    expect(packageViteApi).not.toHaveProperty('shouldHandleKovoAppShellViteRequest');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteDevPlugin');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteStaticExportAssets');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteStaticExportAssetsFromManifestFile');
-    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteSsrDevPlugin');
-    expect(packageViteApi).not.toHaveProperty('shouldHandleKovoAppShellViteSsrRequest');
-
     const appShellPackageExports = Object.fromEntries(
       Object.entries(serverPackage.exports as Record<string, string>).filter(([subpath]) =>
         subpath.startsWith('./app-shell'),
@@ -701,7 +589,6 @@ describe('server app-shell public API barrels', () => {
       './app-shell/core': './src/api/app-shell/core.ts',
       './app-shell/node': './src/api/app-shell/node.ts',
       './app-shell/static-export': './src/api/app-shell/static-export.ts',
-      './app-shell/vite': './src/api/app-shell/vite.ts',
     });
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
       './internal/client-modules': './src/internal/client-modules.ts',

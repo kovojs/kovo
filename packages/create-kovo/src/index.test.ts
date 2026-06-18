@@ -314,29 +314,26 @@ describe('create-kovo starter', () => {
       expect(viteConfig).not.toContain("pathname.startsWith('/c/')");
       const exportStaticScript = readFileSync(join(root, 'scripts/export-static.mjs'), 'utf8');
       expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
-      expect(exportStaticScript).toContain("server.ssrLoadModule('@kovojs/server')");
-      expect(exportStaticScript).toContain("server.ssrLoadModule('@kovojs/server/app-shell/vite')");
+      expect(exportStaticScript).toContain("ssrLoadModule('@kovojs/cli')");
+      expect(exportStaticScript).toContain('runKovoCommand');
+      expect(exportStaticScript).toContain("'export'");
+      expect(exportStaticScript).toContain("'--vite'");
+      expect(exportStaticScript).toContain("'/src/app-shell.ts'");
+      expect(exportStaticScript).not.toContain("server.ssrLoadModule('@kovojs/server')");
+      expect(exportStaticScript).not.toContain("@kovojs/server/app-shell/vite");
       expect(exportStaticScript).not.toContain('@kovojs/server/app-shell/core');
       expect(exportStaticScript).not.toContain('@kovojs/server/app-shell/static-export');
-      expect(exportStaticScript).toContain(
-        'kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile)',
-      );
-      expect(exportStaticScript).toContain('formatStaticExportDiagnostic');
-      expect(exportStaticScript).toContain('formatStaticExportDiagnostics');
-      expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
-      expect(exportStaticScript).toContain(
+      expect(exportStaticScript).not.toContain('kovoAppShellViteManifestStylesheetHrefFromFile');
+      expect(exportStaticScript).not.toContain('formatStaticExportDiagnostic');
+      expect(exportStaticScript).not.toContain('formatStaticExportDiagnostics');
+      expect(exportStaticScript).not.toContain(
         'exportKovoAppShellViteBuildWithManifestFromManifestFile',
       );
-      expect(exportStaticScript).toContain(
-        'dry-run manifest that was checked against the written result',
-      );
       expect(exportStaticScript).toContain('KOVO_STARTER_STYLESHEET_HREF');
-      expect(exportStaticScript).toContain('isKovoApp');
-      expect(exportStaticScript).toContain('const app = appModule.default;');
-      expect(exportStaticScript).toContain('isStaticExportDiagnosticError');
+      expect(exportStaticScript).not.toContain('isKovoApp');
+      expect(exportStaticScript).not.toContain('const app = appModule.default;');
+      expect(exportStaticScript).not.toContain('isStaticExportDiagnosticError');
       expect(exportStaticScript).toContain('starter-export/v1');
-      expect(exportStaticScript).toContain('function formatStaticExportDiagnostic');
-      expect(exportStaticScript).toContain('function isStaticExportDiagnostic');
       expect(exportStaticScript).not.toContain('function isKovoApp');
       expect(exportStaticScript).not.toContain('appModule.default ?? appModule.app');
       expect(exportStaticScript).not.toContain('htmlPathStyle');
@@ -634,8 +631,12 @@ describe('create-kovo starter', () => {
         );
 
         expect(cssFile).toBeTypeOf('string');
-        expect(output).toContain('starter-export/v1\nhtml=1\nclient-modules=1\nassets=1\n');
-        expect(output).toContain('manifest-html=1\nmanifest-client-modules=1\nmanifest-assets=1\n');
+        expect(output).toContain('starter-export/v1\nHTML /index.html status=200 bytes=');
+        expect(output).toContain(
+          'CLIENT-MODULE /c/starter.client.js href="/c/starter.client.js?v=starter-r7" status=200 bytes=',
+        );
+        expect(output).toContain(`ASSET /assets/${cssFile} status=200 bytes=`);
+        expect(output).toContain('SUMMARY html=1 clientModules=1 assets=1 diagnostics=0');
         expect(distIndex).toContain(`href="/assets/${cssFile}"`);
         expect(distIndex).toContain('<style data-kovo-critical-href="/assets/');
         expect(distIndex).toContain('--kovo-theme-sys-color-primary');
@@ -861,6 +862,7 @@ function linkStarterBuildDependencies(root: string): void {
   symlinkSync(resolveDependencyRoot('@kovojs/runtime'), join(nodeModules, '@kovojs/runtime'));
   symlinkSync(resolveDependencyRoot('@kovojs/server'), join(nodeModules, '@kovojs/server'));
   symlinkSync(resolveDependencyRoot('@kovojs/style'), join(nodeModules, '@kovojs/style'));
+  symlinkSync(resolveDependencyRoot('@kovojs/cli'), join(nodeModules, '@kovojs/cli'));
   symlinkSync(resolveDependencyRoot('kovo'), join(nodeModules, 'kovo'));
   symlinkSync(resolveDependencyRoot('vite'), join(nodeModules, 'vite'));
   symlinkSync(resolveDependencyRoot('vitest'), join(nodeModules, 'vitest'));

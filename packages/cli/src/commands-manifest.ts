@@ -62,7 +62,7 @@ export const COMPILE_USAGE_LINE =
 
 /** @internal Usage line emitted for `kovo export` (see `exportUsage`). */
 export const EXPORT_USAGE =
-  'usage: kovo export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]';
+  'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--stylesheet-env <name>] [--skip-non-exportable]';
 
 /** @internal Usage line emitted for `kovo mcp` (see `mcpUsage`). */
 export const MCP_USAGE = 'usage: kovo mcp';
@@ -239,14 +239,40 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
     usage: EXPORT_USAGE,
     async: true,
     flags: [
+      { flag: '--vite', description: 'Load the app module through Vite SSR for TS/TSX app files.' },
+      {
+        flag: '--root <dir>',
+        description: 'Project root for --vite module loading; defaults to the current directory.',
+      },
       { flag: '--out <dir>', description: 'Output directory for the exported site.' },
       { flag: '--origin <url>', description: 'Absolute origin used for canonical URLs.' },
+      {
+        flag: '--manifest <file>',
+        description: 'Copy static assets referenced by a Vite manifest into the export output.',
+      },
+      {
+        flag: '--dist <dir>',
+        description: 'Vite output directory used as the source root for manifest assets.',
+      },
+      {
+        flag: '--asset-base <path>',
+        description: 'URL path prefix for manifest asset hrefs; defaults to /.',
+      },
+      {
+        flag: '--stylesheet-env <name>',
+        description: 'Set an environment variable to the manifest stylesheet href before loading the app.',
+      },
       {
         flag: '--skip-non-exportable',
         description: 'Skip routes that cannot be statically exported instead of failing.',
       },
     ],
-    examples: ['kovo export ./src/app.ts --out dist', 'kovo export ./src/app.ts --origin https://example.com'],
+    examples: [
+      'kovo export ./src/app.ts --out dist',
+      'kovo export ./src/app.ts --origin https://example.com',
+      'kovo export /src/app-shell.ts --vite --root . --out dist',
+      'kovo export ./src/app.ts --manifest dist/.vite/manifest.json --dist dist',
+    ],
   },
   {
     name: 'mcp',

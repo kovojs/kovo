@@ -92,7 +92,7 @@ describe('api-ref generator', () => {
       'cli.md',
     ]);
     expect(result.packages.find((pkg) => pkg.name === '@kovojs/server').subpaths).toContain(
-      '@kovojs/server/app-shell/vite',
+      '@kovojs/server/build',
     );
     expect(result.packages.find((pkg) => pkg.name === '@kovojs/test').subpaths).toContain(
       '@kovojs/test/verifier-sql',
