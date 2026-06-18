@@ -2,12 +2,20 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { createApp, createRequestHandler, route } from '@kovojs/server';
+import { createApp, createMemoryVersionedClientModuleRegistry, createRequestHandler, route } from '@kovojs/server';
 
 import { renderPage } from './render.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA = join(HERE, '..', 'data');
+
+// Pan/zoom/hover enhancement island, registered as a versioned /c/ client module.
+const clientModules = createMemoryVersionedClientModuleRegistry();
+const pzHref = clientModules.put({
+  path: '/c/devtool-pz.client.js',
+  source: readFileSync(join(HERE, 'devtool-pz.client.js'), 'utf8'),
+  version: 'pz-r1',
+});
 
 const manifest: { id: string; label: string; blurb: string }[] = JSON.parse(
   readFileSync(join(DATA, 'manifest.json'), 'utf8'),
@@ -43,12 +51,14 @@ export const homeRoute = route('/', {
       ? str(context.search.app)!
       : manifest[0]?.id ?? 'commerce';
     const bundle = loadBundle(app);
-    return renderPage({ manifest, bundle, app, sel: str(context.search.sel), q: str(context.search.q) });
+    return renderPage({ manifest, bundle, app, sel: str(context.search.sel), q: str(context.search.q), pzHref });
   },
+  modulepreloads: [pzHref],
   stylesheets: [{ href: '/src/styles.css', criticalCss }],
 });
 
 export const app = createApp({
+  clientModules,
   db: () => ({}),
   document: { lang: 'en' },
   routes: [homeRoute],

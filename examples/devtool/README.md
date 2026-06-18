@@ -52,13 +52,21 @@ is server-rendered and works with JS off — the Kovo MPA thesis (SPEC §8).
 The graph edges are not invented: the `invalidates` relation is the SPEC §11.1
 touch-set ⋈ §10.2 read-set join the compiler already proves.
 
-## Status / next
+## Interactivity
 
-Core "select → trace → preview" is fully server-rendered (works JS-off). The
-planned follow-ons (see `plans/devtools.md`):
+Core "select → trace → preview" is fully **server-rendered** (works JS-off —
+selection is real `<a href>` navigation). On top of that, a **pan / zoom / hover
+enhancement island** (`src/devtool-pz.client.js`) loads via `on:visible` (SPEC
+§4.7) as a versioned `/c/` client module:
 
-- A progressive-enhancement island for smooth pan/zoom + hover (the sanctioned
-  `isomorphic`/L1 escape hatch, SPEC §4.8) — interaction polish only; the graph is
-  already complete without it.
-- Wiring the matching MCP `kovo_explain` query mode over the same cards.
-- Mounting at `/__kovo` on an existing app's dev server (vs. its own server here).
+- scroll to zoom (toward cursor), drag the background to pan, fit/＋/－ controls;
+- hover a node to peek its 1-hop neighborhood (connected nodes + edges glow);
+- arrow keys pan, `+`/`-` zoom, `0` fits; listeners clean up on `ctx.signal`.
+
+It is pure progressive enhancement: with the island absent, the graph is fully
+usable and selection still works.
+
+## Next (see `plans/devtools.md`)
+
+- Wire the matching MCP `kovo_explain` query mode over the same cards.
+- Mount at `/__kovo` on an existing app's dev server (vs. its own server here).

@@ -213,7 +213,8 @@ surface ships before the MCP tools, which then drop onto the same model.
 - [x] Devtool stood up as a Kovo app (`examples/devtool/`); runs on its own `vp dev`. **Open:** mount at `/__kovo` on an existing app's dev server via `shouldHandleRequest` (`packages/server` vite-dev.ts).
 - [x] Layered swimlane render (barycenter ordering, SVG edges + HTML node cards) over the static graph (`src/render.ts`).
 - [x] Select-and-trace + inspector with code previews. Refresh coverage shows optimistic §10.6 status (`derived`/`hand-written`/`await-fragment`/`punted`). **Open:** KV311 update-coverage gaps inline (those facts are absent from current `graph.json` exports).
-- [ ] Browser suite for render/interaction (Playwright screenshots captured; no committed assertion suite yet).
+- [x] Pan / zoom / hover enhancement island (`src/devtool-pz.client.js`), registered as a versioned `/c/` client module and bootstrapped via `on:visible` (SPEC §4.7), cleanup on `ctx.signal`. Pure progressive enhancement — selection stays real `<a href>` navigation with the island absent. Verified in-browser (fit-on-load, wheel-zoom-to-cursor, drag-pan, 1-hop hover highlight; no console errors).
+- [ ] Browser suite for render/interaction (Playwright drives `scratch/devtool-interact.mjs` green; no committed assertion suite yet).
 
 ### Phase 3 — MCP: BM25 retrieval over graph cards (agent parity over the same model)
 - [ ] Render each Phase-0 node to a self-contained "card" (traced neighborhood + source slice) as stable text + structured facts.

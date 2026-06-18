@@ -107,8 +107,9 @@ export function renderPage(opts: {
   app: string;
   sel?: string;
   q?: string;
+  pzHref: string;
 }): string {
-  const { manifest, bundle, app, sel, q } = opts;
+  const { manifest, bundle, app, sel, q, pzHref } = opts;
   const byId = new Map(bundle.nodes.map((n) => [n.id, n]));
   const { activeLanes, width, height } = layout(bundle);
 
@@ -150,7 +151,7 @@ export function renderPage(opts: {
       const col = accent(a.kind);
       const active = tr?.edges.has(e.id);
       const cls = ['edge', tr ? (active ? 'active animated' : 'dim') : ''].filter(Boolean).join(' ');
-      return `<path class="${cls}" d="${edgePath(a, b)}" stroke="${col}" stroke-opacity="0.32" style="color:${col}" marker-end="url(#ar-${a.kind})"/>`;
+      return `<path class="${cls}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" d="${edgePath(a, b)}" stroke="${col}" stroke-opacity="0.32" style="color:${col}" marker-end="url(#ar-${a.kind})"/>`;
     })
     .join('');
 
@@ -167,7 +168,7 @@ export function renderPage(opts: {
       const sub = nodeSub(n);
       const href = `?app=${app}&sel=${encodeURIComponent(n.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
       return (
-        `<a class="${cls.join(' ')}" href="${href}" style="left:${n.x}px;top:${n.y}px;width:${W}px;min-height:${H}px">` +
+        `<a class="${cls.join(' ')}" data-node-id="${esc(n.id)}" href="${href}" style="left:${n.x}px;top:${n.y}px;width:${W}px;min-height:${H}px">` +
         `<span class="label"><span class="glyph">${glyph(n.kind)}</span>${esc(n.label)}</span>` +
         (sub ? `<span class="sub">${esc(sub)}</span>` : '') +
         `</a>`
@@ -209,13 +210,17 @@ export function renderPage(opts: {
     `</header>` +
     `<div class="stage">` +
     `<div class="canvas-wrap">` +
-    `<div class="canvas" style="width:${width}px;height:${height}px">` +
+    `<div class="canvas" data-pz-root kovo-c="dataflow-canvas" kovo-state="{}" on:visible="${pzHref}#Devtool$init" style="width:${width}px;height:${height}px">` +
+    `<div class="pz" data-pz>` +
     `<div class="lane-headers">${laneHeads}</div>` +
     `<svg class="edges" width="${width}" height="${height}"><defs>${markers}</defs>${paths}</svg>` +
     cards +
-    (selNode ? '' : `<div class="hint">Select a <b>component</b> to trace its <b>queries in</b> and <b>mutations out</b></div>`) +
+    `</div>` +
+    `</div>` +
+    (selNode ? '' : `<div class="hint">Select a <b>component</b> to trace its <b>queries in</b> and <b>mutations out</b> · scroll to zoom · drag to pan</div>`) +
     `<div class="legend">${legend}</div>` +
-    `</div></div>` +
+    `<div class="zoom"><button type="button" data-zoom="out" title="Zoom out (−)">−</button><button type="button" data-zoom="fit" title="Fit (0)">⤢</button><button type="button" data-zoom="in" title="Zoom in (+)">+</button></div>` +
+    `</div>` +
     `<aside class="inspector">${renderInspector(bundle, byId, selNode)}</aside>` +
     `</div></div>`
   );
