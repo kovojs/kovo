@@ -228,14 +228,19 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Current gap: authored example CSS no longer imports `src/generated/kovo-ui.css`,
     but the framework-owned Vite/build aggregation hook still needs to materialize
     package UI CSS into the emitted `/assets/styles.css` asset.
-- [ ] Allow app-wide and route-level stylesheet declarations.
+- [x] Allow app-wide and route-level stylesheet declarations.
   - App-level stylesheets are inherited by routes; route-level stylesheets can
     add page-specific CSS while remaining visible to page hints, fragments,
     static export, and `kovo explain page`.
-  - Current progress: app-wide stylesheets are stored on `KovoApp`, merged into
-    route documents before route-level stylesheets, applied to framework-owned
-    error documents, and replayed through static export. Keep open until
-    fragment/explain visibility is verified or implemented.
+  - Evidence: app-wide stylesheets are stored on `KovoApp`, merged into route
+    documents before route-level stylesheets, applied to framework-owned error
+    documents, replayed through static export, inherited into enhanced mutation
+    success/failure fragments from the source route, and printed by `kovo
+    explain page`. `pnpm --filter @kovojs/server exec vitest --run
+    src/app-mutation-request.test.ts src/app-document.test.ts
+    src/static-export-assets.test.ts src/wire-html.test.ts`, `pnpm --filter
+    @kovojs/cli exec vitest --run src/index.kovo-explain.test.ts`, and `git
+    diff --check` passed.
 
 ## Docs Site
 

@@ -917,6 +917,26 @@ describe('kovo explain', () => {
     });
   });
 
+  it('explains inherited app and route stylesheet hrefs in page order', () => {
+    expect(
+      kovoExplain(
+        {
+          pages: [
+            {
+              route: '/cart',
+              stylesheets: ['/assets/app.css', '/assets/cart.css'],
+            },
+          ],
+        },
+        { kind: 'page', target: '/cart' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output:
+        'kovo-explain/v1\nPAGE /cart\nprefetch: false\nmodulepreloads: -\nstylesheets: /assets/app.css,/assets/cart.css\nqueries: -\nview-transitions: -\n',
+    });
+  });
+
   it('explains route layout chains and per-layout queries on request', () => {
     expect(
       kovoExplain(
