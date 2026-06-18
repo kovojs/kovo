@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
+import { parseComponentModule } from './scan/parse.js';
+import { extractKovoStyles } from './style.js';
 
 describe('Kovo Style extraction', () => {
   it('lowers static style.create references to readable classes and atomic CSS', () => {
@@ -182,6 +184,53 @@ export const Button = component({
     expect(cssSource).toContain('background-color:var(--kovo-theme-sys-color-primary)');
     expect(cssSource).toContain('border-radius:var(--kovo-theme-sys-shape-corner-medium)');
     expect(cssSource).toContain('color:var(--kovo-theme-sys-color-on-primary)');
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('resolves bounded same-package static token adapters', () => {
+    const source = `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+import { uiTheme } from './theme.js';
+
+const base = style.create({
+  root: {
+    backgroundColor: uiTheme.color.accent,
+    borderRadius: uiTheme.radius.md,
+    color: uiTheme.color.accentForeground,
+  },
+}, { namespace: 'button', source: 'button.tsx' });
+
+export const Button = component({
+  render: () => <button style={base.root}>Buy</button>,
+});
+`;
+    const model = parseComponentModule('components/button.tsx', source);
+    const result = extractKovoStyles('components/button.tsx', source, model, 'Button', {
+      resolveStaticImport: (_fromFileName, specifier) =>
+        specifier === './theme.js'
+          ? `
+import { tokens } from '@kovojs/style';
+
+const color = tokens.sys.color;
+const shape = tokens.sys.shape;
+
+export const uiTheme = Object.freeze({
+  color: {
+    accent: color.primary,
+    accentForeground: color.onPrimary,
+  },
+  radius: {
+    md: shape.cornerMedium,
+  },
+} as const);
+`
+          : null,
+    });
+
+    expect(result.css).toContain('background-color:var(--kovo-theme-sys-color-primary)');
+    expect(result.css).toContain('border-radius:var(--kovo-theme-sys-shape-corner-medium)');
+    expect(result.css).toContain('color:var(--kovo-theme-sys-color-on-primary)');
     expect(result.diagnostics).toEqual([]);
   });
 

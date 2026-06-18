@@ -44,6 +44,9 @@ export interface KovoStyleExtraction {
   updateCoverage: readonly QueryUpdateCoverageFact[];
 }
 
+/** Optional resolver for static same-package style token imports. */
+export type StyleStaticImportResolver = (fromFileName: string, specifier: string) => string | null;
+
 interface StyleBinding {
   readonly style: CompiledStyle;
   readonly styleRef: string;
@@ -54,6 +57,12 @@ interface StyleEnvironment {
   readonly rules: readonly AtomicRule[];
   readonly usages: readonly StyleRuleUsage[];
   readonly bindings: ReadonlyMap<string, StyleBinding>;
+}
+
+interface ImportedStaticValue {
+  readonly importName: string;
+  readonly localName: string;
+  readonly moduleSpecifier: string;
 }
 
 interface ParsedExpression {
@@ -84,14 +93,21 @@ export function extractKovoStyles(
   source: string,
   model: ComponentModuleModel,
   componentName = 'Component',
-  options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'> = {},
+  options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'> & {
+    readonly resolveStaticImport?: StyleStaticImportResolver;
+  } = {},
 ): KovoStyleExtraction {
   const styleImports = styleImportsFromSource(source, fileName);
-  if (styleImports.namespaces.size === 0 && styleImports.publicTokenNames.size === 0) {
+  const importedStaticValues = collectImportedStaticValues(fileName, source, options);
+  if (
+    styleImports.namespaces.size === 0 &&
+    styleImports.publicTokenNames.size === 0 &&
+    importedStaticValues.size === 0
+  ) {
     return emptyStyleExtraction();
   }
 
-  const environment = collectStyleEnvironment(fileName, source, styleImports);
+  const environment = collectStyleEnvironment(fileName, source, styleImports, importedStaticValues);
   if (environment.bindings.size === 0 && environment.rules.length === 0) {
     return emptyStyleExtraction();
   }
@@ -178,6 +194,7 @@ function collectStyleEnvironment(
   fileName: string,
   source: string,
   styleImports: StyleImports,
+  importedStaticValues: ReadonlyMap<string, unknown> = new Map(),
 ): StyleEnvironment {
   const sourceFile = ts.createSourceFile(
     fileName,
@@ -190,7 +207,7 @@ function collectStyleEnvironment(
   const diagnostics: CompilerDiagnostic[] = [];
   const rules: AtomicRule[] = [];
   const usages: StyleRuleUsage[] = [];
-  const staticValues = new Map<string, unknown>();
+  const staticValues = new Map<string, unknown>(importedStaticValues);
   // Module-local `const x = { ... }` objects, so static `{ ...x }` spreads inside
   // a style object resolve (e.g. @kovojs/ui field.tsx shares `nativeControlStyle`).
   const localObjects = collectLocalObjectLiterals(sourceFile);
@@ -267,6 +284,159 @@ function collectStyleEnvironment(
   }
 
   return { bindings, diagnostics, rules, usages };
+}
+
+function collectImportedStaticValues(
+  fileName: string,
+  source: string,
+  options: { readonly resolveStaticImport?: StyleStaticImportResolver },
+): ReadonlyMap<string, unknown> {
+  if (!options.resolveStaticImport) return new Map();
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const imports = importedStaticValueRequests(sourceFile);
+  if (imports.length === 0) return new Map();
+
+  const byModule = new Map<string, ImportedStaticValue[]>();
+  for (const entry of imports) {
+    const bucket = byModule.get(entry.moduleSpecifier) ?? [];
+    bucket.push(entry);
+    byModule.set(entry.moduleSpecifier, bucket);
+  }
+
+  const result = new Map<string, unknown>();
+  for (const [specifier, entries] of byModule) {
+    const importedSource = options.resolveStaticImport(fileName, specifier);
+    if (importedSource === null) continue;
+    const importedValues = evaluateExportedStaticValues(
+      `${fileName}#${specifier}`,
+      importedSource,
+      styleImportsFromSource(importedSource, `${fileName}#${specifier}`),
+    );
+    for (const entry of entries) {
+      if (!importedValues.has(entry.importName)) continue;
+      result.set(entry.localName, importedValues.get(entry.importName));
+    }
+  }
+  return result;
+}
+
+function importedStaticValueRequests(sourceFile: ts.SourceFile): ImportedStaticValue[] {
+  const imports: ImportedStaticValue[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const moduleSpecifier = statement.moduleSpecifier.text;
+    if (!moduleSpecifier.startsWith('.')) continue;
+    const namedBindings = statement.importClause?.namedBindings;
+    if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+    for (const element of namedBindings.elements) {
+      imports.push({
+        importName: (element.propertyName ?? element.name).text,
+        localName: element.name.text,
+        moduleSpecifier,
+      });
+    }
+  }
+  return imports;
+}
+
+function evaluateExportedStaticValues(
+  fileName: string,
+  source: string,
+  styleImports: StyleImports,
+): ReadonlyMap<string, unknown> {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const staticValues = new Map<string, unknown>();
+  const exportedNames = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    const exported = statement.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+    );
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+      const value = staticValueFromExpression(declaration.initializer, staticValues, styleImports);
+      if (value === undefined) continue;
+      staticValues.set(declaration.name.text, value);
+      if (exported) exportedNames.add(declaration.name.text);
+    }
+  }
+  return new Map([...staticValues].filter(([name]) => exportedNames.has(name)));
+}
+
+function staticValueFromExpression(
+  node: ts.Expression,
+  staticValues: ReadonlyMap<string, unknown>,
+  styleImports: StyleImports,
+): unknown {
+  const expression = unwrapStaticExpression(node);
+  const primitive = primitiveValue(expression);
+  if (primitive !== undefined) return primitive;
+
+  if (expression.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (expression.kind === ts.SyntaxKind.FalseKeyword) return false;
+  if (expression.kind === ts.SyntaxKind.NullKeyword) return null;
+
+  if (ts.isIdentifier(expression)) {
+    return staticValues.get(expression.text);
+  }
+
+  const propertyAccess = staticPropertyAccessValue(expression, staticValues, styleImports);
+  if (propertyAccess !== undefined) return propertyAccess;
+
+  if (ts.isObjectLiteralExpression(expression)) {
+    const object: Record<string, unknown> = {};
+    for (const property of expression.properties) {
+      if (!ts.isPropertyAssignment(property)) return undefined;
+      const key = propertyNameText(property.name);
+      if (!key) return undefined;
+      const value = staticValueFromExpression(property.initializer, staticValues, styleImports);
+      if (value === undefined) return undefined;
+      object[key] = value;
+    }
+    return object;
+  }
+
+  if (isObjectFreezeCall(expression)) {
+    const [value] = expression.arguments;
+    return value ? staticValueFromExpression(value, staticValues, styleImports) : undefined;
+  }
+
+  return undefined;
+}
+
+function unwrapStaticExpression(node: ts.Expression): ts.Expression {
+  let current = node;
+  while (
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isParenthesizedExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function isObjectFreezeCall(node: ts.Expression): node is ts.CallExpression {
+  return (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === 'freeze' &&
+    ts.isIdentifier(node.expression.expression) &&
+    node.expression.expression.text === 'Object'
+  );
 }
 
 function styleCreateCall(

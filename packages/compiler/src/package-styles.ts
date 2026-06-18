@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 import { dedupeCss } from './css.js';
 import { cssIrHeader } from './ir.js';
@@ -77,7 +77,9 @@ export function extractPackageComponentCss(
     if (!source.includes('@kovojs/style') || !source.includes('style.create')) continue;
 
     const model = parseComponentModule(fileName, source);
-    const extraction = extractKovoStyles(fileName, source, model);
+    const extraction = extractKovoStyles(fileName, source, model, 'Component', {
+      resolveStaticImport: resolvePackageStaticImport(resolved.packageDir),
+    });
     if (extraction.css) {
       chunks.push(extraction.css);
     } else {
@@ -99,6 +101,42 @@ export function extractPackageComponentCss(
     diagnostics,
     sourceFiles,
   };
+}
+
+function resolvePackageStaticImport(
+  packageDir: string,
+): (fromFileName: string, specifier: string) => string | null {
+  return (fromFileName, specifier) => {
+    if (!specifier.startsWith('.')) return null;
+    const absolute = resolve(dirname(fromFileName), specifier);
+    if (!isInsideDirectory(packageDir, absolute)) return null;
+    for (const candidate of staticImportCandidates(absolute)) {
+      if (!isInsideDirectory(packageDir, candidate)) continue;
+      if (existsSync(candidate)) return readFileSync(candidate, 'utf8');
+    }
+    return null;
+  };
+}
+
+function staticImportCandidates(absoluteSpecifier: string): string[] {
+  const withoutJs = absoluteSpecifier.endsWith('.js')
+    ? absoluteSpecifier.slice(0, -'.js'.length)
+    : absoluteSpecifier;
+  return [
+    absoluteSpecifier,
+    `${withoutJs}.ts`,
+    `${withoutJs}.tsx`,
+    resolve(withoutJs, 'index.ts'),
+    resolve(withoutJs, 'index.tsx'),
+  ];
+}
+
+function isInsideDirectory(root: string, target: string): boolean {
+  const relativeTarget = relative(root, target);
+  return (
+    relativeTarget === '' ||
+    (!relativeTarget.startsWith('..') && !isAbsolute(relativeTarget))
+  );
 }
 
 /**
