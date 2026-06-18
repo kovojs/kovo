@@ -277,18 +277,21 @@ Design decisions to lock in code review:
       runs client build → server bundle → neutral emit → preset.
   - Partial evidence: `packages/cli/src/index.ts` dispatches async `kovo build`,
     parses `<app-module>`, `--out`, and `--preset <name>`, writes the neutral
-    artifact with the bundled handler, selects the preset from explicit CLI flag
-    → `KOVO_PRESET` → host env (`VERCEL`, `CF_PAGES`/`CLOUDFLARE`) → `node`, and
-    emits the built-in `node()` preset. `vercel`/`cloudflare` selection fails
-    loudly until their emitters land instead of silently producing Node output.
+    artifact with the bundled handler, loads `kovo.config.ts` through Vite SSR,
+    selects the preset from explicit CLI flag → `KOVO_PRESET` → `kovo.config.ts`
+    `preset:` → host env (`VERCEL`, `CF_PAGES`/`CLOUDFLARE`) → `node`, preserves
+    configured `node()` options, and emits the built-in `node()` preset.
+    `vercel`/`cloudflare` selection fails loudly until their emitters land instead
+    of silently producing Node output.
     `packages/cli/src/commands-manifest.ts` / `commands-manifest.test.ts` pin the
     CLI docs/usage surface, and `packages/cli/package.json` declares the runtime
     `vite-plus` dependency needed by the build command. The full item remains open
-    because `kovo.config.ts` loading, client build/manifest orchestration, and
-    non-node presets are not implemented. Verification: `corepack pnpm exec
-vitest --run packages/cli/src/index.kovo-build.test.ts
-packages/cli/src/commands-manifest.test.ts`; `corepack pnpm exec tsc -p
-tsconfig.json --noEmit --pretty false`; `git diff --check`.
+    because client build/manifest orchestration and non-node presets are not
+    implemented. Verification: `corepack pnpm exec vitest --run
+packages/cli/src/index.kovo-build.test.ts packages/server/src/build.test.ts`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `corepack pnpm run check:api-surface`; `corepack pnpm run check:exports`;
+    `corepack pnpm run check:publish`; `corepack pnpm exec vp check --fix`.
 - [x] Evidence target: a test that boots `server/handler.mjs` in a clean
       `node_modules` (prod deps only) and asserts route/mutation/asset responses.
   - Evidence: `corepack pnpm exec vitest --run
@@ -299,16 +302,24 @@ packages/cli/src/index.kovo-build.test.ts` covers the emitted node preset
 
 ### Phase 1 — Preset interface + `node` preset (in `@kovojs/server/build`)
 
-- [ ] `KovoPreset` / `PresetContext` types + the build-time subpath export on
-      `@kovojs/server`; preset **selection** (host auto-detect → `KOVO_PRESET` →
-      `kovo.config` `preset:`). No separate package.
-  - Partial evidence: `packages/server/package.json` now exports `./build`;
+- [x] `KovoPreset` / `PresetContext` types + the build-time subpath export on
+      `@kovojs/server`; preset **selection** (`--preset` → `KOVO_PRESET` →
+      `kovo.config.ts` `preset:` → host auto-detect). No separate package.
+  - Evidence: `packages/server/package.json` exports `./build`;
     `public-packages.json` classifies it as a public API reference surface; and
-    `packages/server/src/build.ts` exposes the typed preset descriptor plus the
-    built-in `node()` preset value. `packages/cli/src/index.ts` now implements
-    the host auto-detect/`KOVO_PRESET`/CLI-flag selection ladder for known preset
-    names, with explicit failure for known presets that do not yet have emitters.
-    `kovo.config.ts` `preset:` loading remains open.
+    `packages/server/src/build.ts` exposes `KovoPreset`, `PresetContext`,
+    `PresetDiagnostic`, `KovoConfig`, `defineConfig()`, and `node()`.
+    `packages/cli/src/index.ts` loads `kovo.config.ts` through Vite SSR, validates
+    `preset:` as a Kovo preset value, preserves configured `node()` options, and
+    implements the `--preset` → `KOVO_PRESET` → config → host → default selection
+    ladder for known preset names. `packages/cli/src/index.kovo-build.test.ts`
+    verifies `kovo.config.ts` `node({ dockerfile: false })` beats `VERCEL=1` host
+    auto-detection and suppresses the node preset Dockerfile, while existing tests
+    keep CLI flag and `KOVO_PRESET` precedence. Verification: `corepack pnpm exec
+vitest --run packages/cli/src/index.kovo-build.test.ts packages/server/src/build.test.ts`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `corepack pnpm run check:api-surface`; `corepack pnpm run check:exports`;
+    `corepack pnpm run check:publish`; `corepack pnpm exec vp check --fix`.
 - [ ] `node` preset: standalone server + asset serving + cache headers + prod-only
       `Dockerfile`. Replace the example/demo Vite-from-source serve story with this as
       the recommended prod path (keep Vite serve for dev only).

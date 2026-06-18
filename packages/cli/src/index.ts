@@ -3,7 +3,7 @@ export type { DiagnosticCode } from '@kovojs/core';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type {
@@ -25,6 +25,7 @@ import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import type { KovoApp, StaticExportCompileDiagnostic } from '@kovojs/server';
+import type { KovoConfig, KovoPreset } from '@kovojs/server/build';
 
 import {
   availableAddComponents,
@@ -752,6 +753,16 @@ interface KovoBuildOptions {
 }
 
 type BuildArgParseResult = { ok: true; options: KovoBuildOptions } | { message: string; ok: false };
+
+interface LoadedKovoBuildConfig {
+  config?: KovoConfig;
+  path?: string;
+}
+
+interface SelectedKovoBuildPreset {
+  name: KovoBuildPresetName;
+  preset?: KovoPreset;
+}
 
 interface AddComponentOptions {
   components: readonly AddComponentName[];
@@ -2353,10 +2364,11 @@ function exportUsage(): string {
 
 async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandResult> {
   try {
-    const presetName = selectedKovoBuildPreset(options);
-    if (presetName !== 'node') {
+    const loadedConfig = await loadKovoBuildConfig(process.cwd());
+    const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
+    if (selectedPreset.name !== 'node') {
       throw new Error(
-        `kovo build preset ${presetName} is not implemented yet; use --preset node for the current Node/VPS output.`,
+        `kovo build preset ${selectedPreset.name} is not implemented yet; use --preset node for the current Node/VPS output.`,
       );
     }
     const resolvedAppModulePath = resolve(options.appModulePath);
@@ -2372,8 +2384,11 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       outDir: join(outDir, '.kovo'),
       serverHandlerSource,
     });
-    const preset = node();
+    const preset = selectedPreset.preset ?? node();
     const presetLogs: string[] = [];
+    if (typeof preset.emit !== 'function') {
+      throw new Error(`kovo build preset ${selectedPreset.name} cannot emit build output.`);
+    }
 
     await preset.emit(neutralBuild, {
       declaredEnv: [],
@@ -2390,7 +2405,7 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       appModulePath: resolvedAppModulePath,
       neutralOutDir: neutralBuild.outDir,
       outDir,
-      preset: presetName,
+      preset: selectedPreset.name,
       presetLogs,
       serverOutDir: join(outDir, 'server'),
     });
@@ -2399,19 +2414,92 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
   }
 }
 
-function selectedKovoBuildPreset(options: KovoBuildOptions): KovoBuildPresetName {
-  if (options.preset !== undefined) return options.preset;
+function selectedKovoBuildPreset(
+  options: KovoBuildOptions,
+  config: KovoConfig | undefined,
+): SelectedKovoBuildPreset {
+  if (options.preset !== undefined) return { name: options.preset };
 
   const envPreset = process.env.KOVO_PRESET;
   if (envPreset) {
     const parsedPreset = parseKovoBuildPresetName(envPreset);
     if (!parsedPreset) throw new Error(`unsupported KOVO_PRESET ${stableValue(envPreset)}`);
-    return parsedPreset;
+    return { name: parsedPreset };
   }
 
-  if (process.env.VERCEL) return 'vercel';
-  if (process.env.CF_PAGES || process.env.CLOUDFLARE) return 'cloudflare';
-  return 'node';
+  if (config?.preset !== undefined) return selectedConfiguredKovoBuildPreset(config.preset);
+
+  if (process.env.VERCEL) return { name: 'vercel' };
+  if (process.env.CF_PAGES || process.env.CLOUDFLARE) return { name: 'cloudflare' };
+  return { name: 'node' };
+}
+
+function selectedConfiguredKovoBuildPreset(preset: KovoPreset): SelectedKovoBuildPreset {
+  const name = parseKovoBuildPresetName(preset.name);
+  if (!name) throw new Error(`unsupported kovo.config preset ${stableValue(preset.name)}`);
+  return { name, preset };
+}
+
+async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig> {
+  const configPath = findKovoBuildConfig(root);
+  if (configPath === undefined) return {};
+
+  const { createServer } = await import('vite-plus');
+  const server = await createServer({
+    appType: 'custom',
+    configFile: false,
+    logLevel: 'error',
+    root,
+    server: { middlewareMode: true },
+  });
+  try {
+    const configModule = await server.ssrLoadModule(`/${basename(configPath)}`);
+    const config = kovoBuildConfigFromModule(configModule, configPath);
+    return { config, path: configPath };
+  } finally {
+    await server.close();
+  }
+}
+
+function findKovoBuildConfig(root: string): string | undefined {
+  for (const fileName of [
+    'kovo.config.ts',
+    'kovo.config.mts',
+    'kovo.config.js',
+    'kovo.config.mjs',
+  ]) {
+    const configPath = resolve(root, fileName);
+    if (existsSync(configPath)) return configPath;
+  }
+  return undefined;
+}
+
+function kovoBuildConfigFromModule(module: unknown, configPath: string): KovoConfig {
+  const value =
+    typeof module === 'object' && module !== null
+      ? ((module as { default?: unknown }).default ?? module)
+      : module;
+  if (value === undefined || value === null) return {};
+  if (!isRecord(value)) throw new Error(`${configPath} must export a config object.`);
+
+  const config: KovoConfig = {};
+  if ('preset' in value) {
+    const preset = value.preset;
+    if (!isKovoPreset(preset)) {
+      throw new Error(`${configPath} preset must be a Kovo preset value such as node().`);
+    }
+    config.preset = preset;
+  }
+  return config;
+}
+
+function isKovoPreset(value: unknown): value is KovoPreset {
+  return (
+    isRecord(value) &&
+    typeof value.name === 'string' &&
+    (value.emit === undefined || typeof value.emit === 'function') &&
+    (value.inspect === undefined || typeof value.inspect === 'function')
+  );
 }
 
 async function bundleKovoServerHandler(appModulePath: string): Promise<string> {

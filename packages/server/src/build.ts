@@ -63,6 +63,17 @@ export interface NodePreset extends KovoPreset {
   options: NodePresetOptions;
 }
 
+/** Build-time project configuration loaded from `kovo.config.ts`. */
+export interface KovoConfig {
+  /** Platform preset used by `kovo build` when CLI/env overrides are absent. */
+  preset?: KovoPreset;
+}
+
+/** Type helper for authoring `kovo.config.ts` without changing runtime behavior. */
+export function defineConfig(config: KovoConfig): KovoConfig {
+  return config;
+}
+
 /**
  * Create the built-in Node/VPS preset descriptor.
  *

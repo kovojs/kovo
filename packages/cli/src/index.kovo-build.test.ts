@@ -15,6 +15,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { mainAsync } from './index.js';
 
+const repoRoot = process.cwd();
+
 describe('kovo build', () => {
   it('bundles an app module and emits node preset output without Vite at request time', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cli-'));
@@ -25,10 +27,7 @@ describe('kovo build', () => {
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
-      symlinkSync(
-        join(process.cwd(), 'packages/server'),
-        join(root, 'node_modules/@kovojs/server'),
-      );
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(appPath, appModuleSource(), 'utf8');
 
       const exitCode = await withEnv({ VERCEL: '1' }, () =>
@@ -88,10 +87,7 @@ describe('kovo build', () => {
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
-      symlinkSync(
-        join(process.cwd(), 'packages/server'),
-        join(root, 'node_modules/@kovojs/server'),
-      );
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(appPath, appModuleSource(), 'utf8');
 
       const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
@@ -142,6 +138,45 @@ describe('kovo build', () => {
       } finally {
         await close(server);
       }
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('loads kovo.config.ts preset before host auto-detection', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-'));
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(join(root, 'app.mjs'), appModuleSource(), 'utf8');
+      writeFileSync(
+        join(root, 'kovo.config.ts'),
+        [
+          "import { defineConfig, node } from '@kovojs/server/build';",
+          'export default defineConfig({',
+          '  preset: node({ dockerfile: false }),',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        withEnv({ VERCEL: '1' }, () => mainAsync(['build', './app.mjs', '--out', './dist'])),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'SUMMARY preset=node',
+      );
+      expect(() => readFileSync(join(outDir, 'server/Dockerfile'), 'utf8')).toThrow();
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -256,7 +291,7 @@ function writeProductionOnlyRuntimeNodeModules(runtimeDir: string): void {
   mkdirSync(kovoRoot, { recursive: true });
 
   for (const name of ['core', 'runtime', 'server']) {
-    cpSync(join(process.cwd(), 'packages', name), join(kovoRoot, name), {
+    cpSync(join(repoRoot, 'packages', name), join(kovoRoot, name), {
       recursive: true,
     });
   }
@@ -308,5 +343,15 @@ async function withEnv<T>(
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
+  }
+}
+
+async function withCwd<T>(cwd: string, run: () => Promise<T>): Promise<T> {
+  const previous = process.cwd();
+  try {
+    process.chdir(cwd);
+    return await run();
+  } finally {
+    process.chdir(previous);
   }
 }
