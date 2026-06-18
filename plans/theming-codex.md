@@ -138,10 +138,16 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
   - Evidence: `packages/style/src/theme.ts` implements the `base` form, and
     `packages/style/src/index.test.ts` derives `outline`, `cornerSmall`, and a
     component border token from `base.sys.color.primary`.
-- [ ] **A8. Decide current token-sheet alias compatibility.** Inspect
+- [x] **A8. Decide current token-sheet alias compatibility.** Inspect
       `packages/headless-ui/src/lib/token-sheet.ts` and decide whether the M3 sheet preserves
       existing document aliases such as `--color-*` / `@theme inline`, replaces them, or emits both
       during a migration window. Evidence: token-sheet test updates.
+  - Evidence: `packages/headless-ui/src/lib/token-sheet.ts` now preserves
+    `@theme inline`, `--color-*`, and `--radius-*` aliases while remapping
+    legacy `--kovo-*` tokens to `--kovo-theme-sys-*`. Verification:
+    `corepack pnpm exec vitest run packages/headless-ui/src/lib/token-sheet.test.ts`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `git diff --check`.
 - [x] **A9. Type-level and unit tests.** Assert token names, generated CSS variable names,
       light/dark role presence, custom-color groups, deterministic output, and exact known outputs
       for a canonical seed such as `#6750A4`.

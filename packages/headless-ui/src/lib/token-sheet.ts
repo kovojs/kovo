@@ -11,6 +11,7 @@ export interface KovoUiTokenDefinition {
   readonly category: KovoUiTokenCategory;
   readonly dark: string;
   readonly light: string;
+  readonly themeTokenProperty: `--kovo-theme-${string}`;
   readonly name: string;
   readonly property: KovoUiTokenProperty;
   readonly documentTokenProperty?: KovoUiDocumentTokenProperty;
@@ -23,28 +24,28 @@ interface KovoUiDocumentTokenDefinition extends KovoUiTokenDefinition {
 }
 
 export const kovoUiTokenSheet = [
-  colorToken('background', '0 0% 100%', '222.2 84% 4.9%'),
-  colorToken('foreground', '222.2 84% 4.9%', '210 40% 98%'),
-  colorToken('card', '0 0% 100%', '222.2 84% 4.9%'),
-  colorToken('card-foreground', '222.2 84% 4.9%', '210 40% 98%'),
-  colorToken('popover', '0 0% 100%', '222.2 84% 4.9%'),
-  colorToken('popover-foreground', '222.2 84% 4.9%', '210 40% 98%'),
-  colorToken('primary', '221.2 83.2% 53.3%', '217.2 91.2% 59.8%'),
-  colorToken('primary-foreground', '210 40% 98%', '222.2 47.4% 11.2%'),
-  colorToken('secondary', '210 40% 96.1%', '217.2 32.6% 17.5%'),
-  colorToken('secondary-foreground', '222.2 47.4% 11.2%', '210 40% 98%'),
-  colorToken('muted', '210 40% 96.1%', '217.2 32.6% 17.5%'),
-  colorToken('muted-foreground', '215.4 16.3% 46.9%', '215 20.2% 65.1%'),
-  colorToken('accent', '210 40% 96.1%', '217.2 32.6% 17.5%'),
-  colorToken('accent-foreground', '222.2 47.4% 11.2%', '210 40% 98%'),
-  colorToken('destructive', '0 84.2% 60.2%', '0 62.8% 30.6%'),
-  colorToken('destructive-foreground', '210 40% 98%', '210 40% 98%'),
-  colorToken('border', '214.3 31.8% 91.4%', '217.2 32.6% 17.5%'),
-  colorToken('input', '214.3 31.8% 91.4%', '217.2 32.6% 17.5%'),
-  colorToken('ring', '221.2 83.2% 53.3%', '224.3 76.3% 48%'),
-  radiusToken('sm', '0.375rem'),
-  radiusToken('md', '0.5rem'),
-  radiusToken('lg', '0.75rem'),
+  colorToken('background', '--kovo-theme-sys-color-background'),
+  colorToken('foreground', '--kovo-theme-sys-color-on-background'),
+  colorToken('card', '--kovo-theme-sys-color-surface-container-low'),
+  colorToken('card-foreground', '--kovo-theme-sys-color-on-surface'),
+  colorToken('popover', '--kovo-theme-sys-color-surface-container-high'),
+  colorToken('popover-foreground', '--kovo-theme-sys-color-on-surface'),
+  colorToken('primary', '--kovo-theme-sys-color-primary'),
+  colorToken('primary-foreground', '--kovo-theme-sys-color-on-primary'),
+  colorToken('secondary', '--kovo-theme-sys-color-secondary-container'),
+  colorToken('secondary-foreground', '--kovo-theme-sys-color-on-secondary-container'),
+  colorToken('muted', '--kovo-theme-sys-color-surface-container'),
+  colorToken('muted-foreground', '--kovo-theme-sys-color-on-surface-variant'),
+  colorToken('accent', '--kovo-theme-sys-color-surface-container-high'),
+  colorToken('accent-foreground', '--kovo-theme-sys-color-on-surface'),
+  colorToken('destructive', '--kovo-theme-sys-color-error'),
+  colorToken('destructive-foreground', '--kovo-theme-sys-color-on-error'),
+  colorToken('border', '--kovo-theme-sys-color-outline-variant'),
+  colorToken('input', '--kovo-theme-sys-color-outline'),
+  colorToken('ring', '--kovo-theme-sys-color-primary'),
+  radiusToken('sm', '--kovo-theme-sys-shape-corner-small'),
+  radiusToken('md', '--kovo-theme-sys-shape-corner-medium'),
+  radiusToken('lg', '--kovo-theme-sys-shape-corner-large'),
 ] as const satisfies readonly KovoUiTokenDefinition[];
 
 export type KovoUiTokenName = (typeof kovoUiTokenSheet)[number]['name'];
@@ -58,27 +59,37 @@ export const kovoUiTokenSheetCss = `${kovoUiDocumentTokenCss}\n\n${renderTokenBl
   'light',
 )}\n\n${renderTokenBlock(':root[data-theme="dark"]', 'dark')}\n`;
 
-function colorToken<const Name extends string>(name: Name, light: string, dark: string) {
+function colorToken<const Name extends string>(
+  name: Name,
+  themeTokenProperty: `--kovo-theme-sys-color-${string}`,
+) {
   const property = `--kovo-color-${name}` as const;
+  const value = `var(${themeTokenProperty})`;
 
   return {
     category: 'color',
-    dark,
-    light,
+    dark: value,
+    light: value,
+    themeTokenProperty,
     name,
     property,
     documentTokenProperty: `--color-${name}`,
-    documentTokenValue: `hsl(var(${property}))`,
+    documentTokenValue: `var(${property})`,
   } satisfies KovoUiTokenDefinition;
 }
 
-function radiusToken<const Name extends string>(name: Name, value: string) {
+function radiusToken<const Name extends string>(
+  name: Name,
+  themeTokenProperty: `--kovo-theme-sys-shape-${string}`,
+) {
   const property = `--kovo-radius-${name}` as const;
+  const value = `var(${themeTokenProperty})`;
 
   return {
     category: 'radius',
     dark: value,
     light: value,
+    themeTokenProperty,
     name: `radius-${name}` as const,
     property,
     documentTokenProperty: `--radius-${name}`,
