@@ -63,6 +63,12 @@ internals, emit/check scripts, and narrowly named artifact tests.
     only for emit/check scripts and explicitly named artifact/generated/graph
     tests or fixtures; ordinary tests no longer receive a blanket generated-read
     exemption.
+  - Current progress: Gallery interactive docs now keep generated demo imports
+    inside `examples/gallery/src/interactive-docs.generated-fixtures.tsx`; the
+    authored route shell imports the fixture instead of `src/generated/*`.
+    `pnpm --filter @kovojs/example-gallery exec vitest --run
+    src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts`
+    passed.
 - [ ] Keep generated artifacts committed and inspectable without making ordinary
       scenario tests import them.
   - Acceptance: `emit-components -- --check`, `emit-graph -- --check`, compiler
@@ -244,12 +250,12 @@ internals, emit/check scripts, and narrowly named artifact tests.
 - [ ] Add/extend a guard command that proves authored example source has no
       generated imports.
   - Current evidence gap: `node scripts/import-boundary.mjs` now reports
-    app-local generated imports, but it still fails on Gallery, site, and
-    tutorial files; CSS generated-import violations, CRM optimistic generated
-    imports, and Commerce/CRM/StackOverflow direct generated route imports were
-    removed from ordinary app source/tests/app shells. Keep open until the
-    remaining reported backlog is removed or narrowed by an explicit
-    artifact-test policy.
+    app-local generated imports, but it still fails on site and tutorial files;
+    CSS generated-import violations, CRM optimistic generated imports,
+    Commerce/CRM/StackOverflow direct generated route imports, and Gallery
+    interactive-docs generated imports were removed from ordinary app
+    source/tests/app shells. Keep open until the remaining reported backlog is
+    removed or narrowed by an explicit artifact-test policy.
   - Current guard-policy evidence: `pnpm exec vitest --run
     scripts/import-boundary.test.mjs` passed after narrowing explicit artifact
     allowances and renaming gallery artifact consumers.
