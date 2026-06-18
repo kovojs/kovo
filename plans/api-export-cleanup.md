@@ -1331,39 +1331,75 @@ scripts/exported-symbols.mjs --duplicates --check` fails on added/removed
 
 ## Open Risks
 
-- [ ] **The public Vite surface may overlap with the future deployment API.**
+- [x] **The public Vite surface may overlap with the future deployment API.**
   - `plans/easy-deployment.md` tracks `kovo build` and presets. Do not freeze
     low-level build helpers prematurely if a future higher-level command will
     replace them.
-- [ ] **Starter templates use SSR dynamic loading.**
+  - Evidence: the former public `@kovojs/server/app-shell/vite` subpath is gone,
+    Vite replay helpers stay internal, and app-authored export scripts call the
+    `@kovojs/cli` command facade instead. Current deployment build work is
+    isolated behind `@kovojs/server/build` and remains tracked by
+    `plans/easy-deployment.md`. Verification: `corepack pnpm run
+    check:imports`; `corepack pnpm run check:exports`; `node
+    scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`.
+- [x] **Starter templates use SSR dynamic loading.**
   - Existing starter code calls `server.ssrLoadModule('@kovojs/server/app-shell/vite')`.
     Any rename or removal must update templates, example configs, and tests in the
     same slice.
-- [ ] **Published `publishConfig.exports` must not drift.**
+  - Evidence: `packages/create-kovo/templates/scripts/export-static.mjs` and
+    `site/scripts/export-static.mjs` SSR-load `@kovojs/cli` and call
+    `runKovoCommand(['export', ..., '--vite', ...])`; starter tests assert the
+    removed app-shell Vite import is absent. Verification: `corepack pnpm run
+    check:imports`; `node scripts/build-publish.mjs`.
+- [x] **Published `publishConfig.exports` must not drift.**
   - `package.json` top-level source exports and `publishConfig.exports` must stay
     in sync through `scripts/build-publish.mjs`.
+  - Evidence: `node scripts/build-publish.mjs` built all public packages and
+    verified every `publishConfig` target file for the current export maps.
 - [ ] **The `kovo` CLI currently imports `@kovojs/compiler`.**
   - Making `@kovojs/compiler` fully private/unpublished may require bundling the
     compiler into `@kovojs/cli` or moving compiler internals behind a package that
     only framework packages consume.
-- [ ] **Headless-ui subpath migration can duplicate API reference debt.**
+- [x] **Headless-ui subpath migration can duplicate API reference debt.**
   - Adding direct subpaths before deciding `./primitives/*` compatibility may
     temporarily double the documented/exported headless-ui surface. Keep the
     compatibility window explicit and bounded.
-- [ ] **Compatibility aliases may be needed during migration.**
+  - Evidence: `./primitives` and `./primitives/*` were removed rather than kept
+    as compatibility aliases; `public-packages.json` documents only root plus
+    direct family subpaths. Verification: `corepack pnpm run check:exports`;
+    `node scripts/build-publish.mjs`.
+- [x] **Compatibility aliases may be needed during migration.**
   - If root barrels currently re-export symbols app code imports directly, enforce
     the rule with a ratchet/baseline first, then remove duplicates in scoped
     package slices.
-- [ ] **Renaming the CLI package can confuse command-vs-package docs.**
+  - Evidence: `scripts/exported-symbol-duplicates.baseline.json` now ratchets the
+    remaining JSX runtime mirrors, and `node scripts/exported-symbols.mjs
+    --duplicates --check` passes through `corepack pnpm run check:exports`.
+- [x] **Renaming the CLI package can confuse command-vs-package docs.**
   - Docs must consistently distinguish package name `@kovojs/cli` from executable
     name `kovo`.
-- [ ] **Making `@kovojs/ui` public will expand API-surface debt.**
+  - Evidence: package manifests, starter dependencies, stability docs, and API
+    docs use package name `@kovojs/cli` while command examples keep the `kovo`
+    executable. Verification: `corepack pnpm run check:imports`; `corepack pnpm
+    run check:exports`; `node scripts/api-surface-gate.mjs`.
+- [x] **Making `@kovojs/ui` public will expand API-surface debt.**
   - The package has many component exports. Use the duplicate-symbol detector,
     API-surface baseline, and focused documentation slices so publicizing it does
     not silently bless accidental root exports.
-- [ ] **Internalizing server helpers may require app-owned script rewrites.**
+  - Evidence: `@kovojs/ui` is public, root component duplicates are removed, API
+    surface and duplicate-export ratchets are in place, and `node
+    scripts/api-surface-gate.mjs` plus `corepack pnpm run check:exports` pass.
+- [x] **Internalizing server helpers may require app-owned script rewrites.**
   - Prefer local example/starter helper code or `kovo` commands over keeping
     framework support helpers public just because current examples import them.
-- [ ] **Examples may still need realistic webhook integrations.**
+  - Evidence: starter/site export scripts use the CLI facade, static-export
+    formatting helpers are local where needed, and app/example imports no longer
+    require public server support-helper aliases. Verification: `corepack pnpm
+    run check:imports`; `node scripts/api-surface-gate.mjs`.
+- [x] **Examples may still need realistic webhook integrations.**
   - Keep provider-specific code local to examples so recipes stay useful without
     promoting vendor names into framework package APIs.
+  - Evidence: Stripe-specific framework exports were removed, example/conformance
+    provider verification is local code over generic webhook primitives, and
+    public symbol checks reject provider-specific leaks. Verification: `node
+    scripts/api-surface-gate.mjs`; `corepack pnpm run check:exports`.
