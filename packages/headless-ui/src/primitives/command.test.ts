@@ -26,7 +26,7 @@ import {
   setCommandOpen as exportedSetCommandOpen,
   setCommandValue as exportedSetCommandValue,
   toggleCommand as exportedToggleCommand,
-} from '../index.js';
+} from './command.js';
 import {
   commandBeforeToggle,
   commandCancel,

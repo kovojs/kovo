@@ -15,7 +15,7 @@ import {
   sliderTrackAttributes as exportedSliderTrackAttributes,
   sliderValueFromString as exportedSliderValueFromString,
   sliderValueState as exportedSliderValueState,
-} from '../index.js';
+} from './slider.js';
 import {
   setSliderValue as primitiveSetSliderValue,
   sliderHiddenInputAttributes as primitiveSliderHiddenInputAttributes,

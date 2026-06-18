@@ -10,21 +10,29 @@ import {
   commandListboxAttributes,
   commandRootAttributes,
   commandTriggerAttributes,
+} from '@kovojs/headless-ui/command';
+import {
   contextMenuContentAttributes,
   contextMenuGroupAttributes,
   contextMenuItemAttributes,
   contextMenuSeparatorAttributes,
   contextMenuTriggerAttributes,
+} from '@kovojs/headless-ui/context-menu';
+import {
   dropdownMenuContentAttributes,
   dropdownMenuGroupAttributes,
   dropdownMenuItemAttributes,
   dropdownMenuSeparatorAttributes,
   dropdownMenuTriggerAttributes,
+} from '@kovojs/headless-ui/dropdown-menu';
+import {
   menubarGroupAttributes,
   menubarItemAttributes,
   menubarRootAttributes,
   menubarSeparatorAttributes,
   menubarSubmenuAttributes,
+} from '@kovojs/headless-ui/menubar';
+import {
   navigationMenuContentAttributes,
   navigationMenuIndicatorAttributes,
   navigationMenuItemAttributes,
@@ -33,7 +41,7 @@ import {
   navigationMenuRootAttributes,
   navigationMenuTriggerAttributes,
   navigationMenuViewportAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/navigation-menu';
 import { mergeCompilerPrimitiveAttrs } from './gallery-merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {

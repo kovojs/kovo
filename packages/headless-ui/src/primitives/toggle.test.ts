@@ -5,7 +5,7 @@ import {
   togglePressed as exportedTogglePressed,
   toggleRootAttributes as exportedToggleRootAttributes,
   toggleTriggerClick as exportedToggleTriggerClick,
-} from '../index.js';
+} from './toggle.js';
 import {
   setTogglePressed,
   togglePressed,

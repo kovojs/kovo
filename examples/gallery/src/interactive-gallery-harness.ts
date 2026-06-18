@@ -2,10 +2,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
 
-import * as headlessPrimitives from '@kovojs/headless-ui';
 import * as accordionPrimitives from '@kovojs/headless-ui/accordion';
 import * as alertDialogPrimitives from '@kovojs/headless-ui/alert-dialog';
 import * as autocompletePrimitives from '@kovojs/headless-ui/autocomplete';
+import * as avatarPrimitives from '@kovojs/headless-ui/avatar';
 import * as checkboxPrimitives from '@kovojs/headless-ui/checkbox';
 import * as checkboxGroupPrimitives from '@kovojs/headless-ui/checkbox-group';
 import * as collapsiblePrimitives from '@kovojs/headless-ui/collapsible';
@@ -15,6 +15,7 @@ import * as contextMenuPrimitives from '@kovojs/headless-ui/context-menu';
 import * as dialogPrimitives from '@kovojs/headless-ui/dialog';
 import * as disclosurePrimitives from '@kovojs/headless-ui/disclosure';
 import * as dropdownMenuPrimitives from '@kovojs/headless-ui/dropdown-menu';
+import * as fieldPrimitives from '@kovojs/headless-ui/field';
 import * as hoverCardPrimitives from '@kovojs/headless-ui/hover-card';
 import * as menubarPrimitives from '@kovojs/headless-ui/menubar';
 import * as meterPrimitives from '@kovojs/headless-ui/meter';
@@ -22,9 +23,11 @@ import * as navigationMenuPrimitives from '@kovojs/headless-ui/navigation-menu';
 import * as numberFieldPrimitives from '@kovojs/headless-ui/number-field';
 import * as otpFieldPrimitives from '@kovojs/headless-ui/otp-field';
 import * as popoverPrimitives from '@kovojs/headless-ui/popover';
+import * as progressPrimitives from '@kovojs/headless-ui/progress';
 import * as radioGroupPrimitives from '@kovojs/headless-ui/radio-group';
 import * as scrollAreaPrimitives from '@kovojs/headless-ui/scroll-area';
 import * as selectPrimitives from '@kovojs/headless-ui/select';
+import * as separatorPrimitives from '@kovojs/headless-ui/separator';
 import * as sliderPrimitives from '@kovojs/headless-ui/slider';
 import * as switchPrimitives from '@kovojs/headless-ui/switch';
 import * as tabsPrimitives from '@kovojs/headless-ui/tabs';
@@ -36,10 +39,10 @@ import * as tooltipPrimitives from '@kovojs/headless-ui/tooltip';
 
 export const galleryRoot = resolve(import.meta.dirname, '..');
 const primitiveActions = {
-  ...headlessPrimitives,
   ...accordionPrimitives,
   ...alertDialogPrimitives,
   ...autocompletePrimitives,
+  ...avatarPrimitives,
   ...checkboxPrimitives,
   ...checkboxGroupPrimitives,
   ...collapsiblePrimitives,
@@ -49,6 +52,7 @@ const primitiveActions = {
   ...dialogPrimitives,
   ...disclosurePrimitives,
   ...dropdownMenuPrimitives,
+  ...fieldPrimitives,
   ...hoverCardPrimitives,
   ...menubarPrimitives,
   ...meterPrimitives,
@@ -56,9 +60,11 @@ const primitiveActions = {
   ...numberFieldPrimitives,
   ...otpFieldPrimitives,
   ...popoverPrimitives,
+  ...progressPrimitives,
   ...radioGroupPrimitives,
   ...scrollAreaPrimitives,
   ...selectPrimitives,
+  ...separatorPrimitives,
   ...sliderPrimitives,
   ...switchPrimitives,
   ...tabsPrimitives,

@@ -5,7 +5,7 @@ import {
   avatarImageAttributes as exportedAvatarImageAttributes,
   avatarImageState as exportedAvatarImageState,
   avatarRootAttributes as exportedAvatarRootAttributes,
-} from '../index.js';
+} from './avatar.js';
 import {
   avatarFallbackAttributes,
   avatarImageAttributes,

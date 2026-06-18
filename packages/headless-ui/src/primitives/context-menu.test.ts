@@ -20,7 +20,7 @@ import {
   selectContextMenuItem as exportedSelectContextMenuItem,
   setContextMenuOpen as exportedSetContextMenuOpen,
   toggleContextMenu as exportedToggleContextMenu,
-} from '../index.js';
+} from './context-menu.js';
 import {
   contextMenuContentAttributes,
   contextMenuFocusElement,

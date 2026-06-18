@@ -6,42 +6,60 @@ import {
   autocompleteListAttributes,
   autocompleteOptionAttributes,
   autocompleteValueAttributes,
+} from '@kovojs/headless-ui/autocomplete';
+import {
   checkboxGroupControlAttributes,
   checkboxGroupItemAttributes,
   checkboxGroupLabelAttributes,
   checkboxGroupRootAttributes,
-  checkboxRootAttributes,
+} from '@kovojs/headless-ui/checkbox-group';
+import { checkboxRootAttributes } from '@kovojs/headless-ui/checkbox';
+import {
   comboboxInputAttributes,
   comboboxListboxAttributes,
   comboboxOptionAttributes,
+} from '@kovojs/headless-ui/combobox';
+import {
   fieldControlAttributes,
   fieldLabelAttributes,
   fieldRootAttributes,
   fieldsetLegendAttributes,
   fieldsetRootAttributes,
+} from '@kovojs/headless-ui/field';
+import {
   numberFieldIncrementAttributes,
   numberFieldInputAttributes,
+} from '@kovojs/headless-ui/number-field';
+import {
   otpFieldHiddenInputAttributes,
   otpFieldInputAttributes,
   otpFieldRootAttributes,
+} from '@kovojs/headless-ui/otp-field';
+import {
   selectContentAttributes,
   selectItemAttributes,
   selectRootAttributes,
   selectTriggerAttributes,
   selectValueAttributes,
+} from '@kovojs/headless-ui/select';
+import {
   sliderHiddenInputAttributes,
   sliderInputAttributes,
   sliderThumbAttributes,
   sliderTrackAttributes,
-  switchRootAttributes,
+} from '@kovojs/headless-ui/slider';
+import { switchRootAttributes } from '@kovojs/headless-ui/switch';
+import {
   toggleGroupButtonAttributes,
   toggleGroupItemAttributes,
   toggleGroupRootAttributes,
-  toggleRootAttributes,
+} from '@kovojs/headless-ui/toggle-group';
+import { toggleRootAttributes } from '@kovojs/headless-ui/toggle';
+import {
   toolbarButtonAttributes,
   toolbarItemAttributes,
   toolbarRootAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/toolbar';
 import { mergeCompilerPrimitiveAttrs, rewriteIdrefs } from './gallery-merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {

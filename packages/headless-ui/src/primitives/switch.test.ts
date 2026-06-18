@@ -5,7 +5,7 @@ import {
   switchRootAttributes as exportedSwitchRootAttributes,
   switchTriggerClick as exportedSwitchTriggerClick,
   toggleSwitch as exportedToggleSwitch,
-} from '../index.js';
+} from './switch.js';
 import {
   setSwitchChecked,
   switchRootAttributes,

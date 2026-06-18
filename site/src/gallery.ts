@@ -94,7 +94,6 @@ async function loadGalleryData(): Promise<GalleryData> {
 
 interface SupportRegistration {
   headlessUiModuleHrefs: ReadonlyMap<string, string>;
-  primitivesHref: string;
   runtimeHref: string;
 }
 
@@ -144,12 +143,7 @@ function registerGalleryInteractiveSupportClientModules(
     }
   }
 
-  const primitivesHref = moduleHrefs.get('/c/packages/headless-ui/src/primitives/index.js');
-  if (primitivesHref === undefined) {
-    throw new Error('site app shell: missing gallery headless UI primitives client module.');
-  }
-
-  return { headlessUiModuleHrefs: moduleHrefs, primitivesHref, runtimeHref };
+  return { headlessUiModuleHrefs: moduleHrefs, runtimeHref };
 }
 
 /** Register the compiled interactive-gallery client modules with the same path +
@@ -185,8 +179,6 @@ function rewriteGalleryClientImports(source: string, support: SupportRegistratio
   return source
     .replaceAll("from '@kovojs/runtime/generated';", `from '${support.runtimeHref}';`)
     .replaceAll("from '@kovojs/runtime';", `from '${support.runtimeHref}';`)
-    .replaceAll('from "@kovojs/headless-ui";', `from '${support.primitivesHref}';`)
-    .replaceAll("from '@kovojs/headless-ui';", `from '${support.primitivesHref}';`)
     .replace(
       /from (["'])@kovojs\/headless-ui\/([a-z0-9-]+)\1;/g,
       (_match, _quote: string, family: string) => {

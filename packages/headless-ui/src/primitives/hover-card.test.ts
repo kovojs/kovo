@@ -14,7 +14,7 @@ import {
   hoverCardTriggerPointerEnter as exportedHoverCardTriggerPointerEnter,
   hoverCardTriggerPointerLeave as exportedHoverCardTriggerPointerLeave,
   setHoverCardOpen as exportedSetHoverCardOpen,
-} from '../index.js';
+} from './hover-card.js';
 import {
   hoverCardContentAttributes,
   hoverCardContentBlur,

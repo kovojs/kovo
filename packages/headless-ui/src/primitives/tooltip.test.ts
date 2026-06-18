@@ -10,7 +10,7 @@ import {
   tooltipTriggerFocus as exportedTooltipTriggerFocus,
   tooltipTriggerPointerEnter as exportedTooltipTriggerPointerEnter,
   tooltipTriggerPointerLeave as exportedTooltipTriggerPointerLeave,
-} from '../index.js';
+} from './tooltip.js';
 import {
   setTooltipOpen,
   tooltipContentAttributes,

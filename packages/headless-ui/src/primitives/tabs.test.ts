@@ -11,7 +11,7 @@ import {
   tabsRovingIndex as exportedTabsRovingIndex,
   tabsTriggerAttributes as exportedTabsTriggerAttributes,
   tabsTriggerClick as exportedTabsTriggerClick,
-} from '../index.js';
+} from './tabs.js';
 import {
   setTabsValue,
   tabsItemSelected,

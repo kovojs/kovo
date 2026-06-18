@@ -35,7 +35,6 @@ const galleryRuntimeModuleHref = galleryInteractiveClientModules.put({
   source: galleryRuntimeModuleSource,
   version: createHash('sha256').update(galleryRuntimeModuleSource).digest('hex').slice(0, 8),
 });
-const galleryHeadlessPrimitivesModulePath = '/c/packages/headless-ui/src/primitives/index.js';
 const galleryHeadlessUiClientModuleHrefMap = registerHeadlessUiClientModules();
 export const galleryHeadlessUiClientModuleHrefs = Object.freeze([
   ...galleryHeadlessUiClientModuleHrefMap.values(),
@@ -44,12 +43,6 @@ export const galleryInteractiveSupportClientModuleHrefs = Object.freeze([
   galleryRuntimeModuleHref,
   ...galleryHeadlessUiClientModuleHrefs,
 ]);
-const galleryHeadlessPrimitivesModuleHref = galleryHeadlessUiClientModuleHrefMap.get(
-  galleryHeadlessPrimitivesModulePath,
-);
-if (galleryHeadlessPrimitivesModuleHref === undefined) {
-  throw new Error('Missing gallery headless UI primitives client module.');
-}
 
 export const galleryInteractiveClientModuleHrefs = Object.freeze(
   interactiveGalleryDemos.map((demo) => registerGalleryInteractiveClientModule(demo.name)),
@@ -162,14 +155,6 @@ function rewriteGalleryClientImports(source: string): string {
   return source
     .replaceAll("from '@kovojs/runtime/generated';", `from '${galleryRuntimeModuleHref}';`)
     .replaceAll("from '@kovojs/runtime';", `from '${galleryRuntimeModuleHref}';`)
-    .replaceAll(
-      'from "@kovojs/headless-ui";',
-      `from '${galleryHeadlessPrimitivesModuleHref}';`,
-    )
-    .replaceAll(
-      "from '@kovojs/headless-ui';",
-      `from '${galleryHeadlessPrimitivesModuleHref}';`,
-    )
     .replace(
       /from (["'])@kovojs\/headless-ui\/([a-z0-9-]+)\1;/g,
       (_match, _quote: string, family: string) => {

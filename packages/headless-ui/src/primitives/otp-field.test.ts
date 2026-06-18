@@ -13,7 +13,7 @@ import {
   otpFieldValueFromString as exportedOtpFieldValueFromString,
   setOtpFieldSlotValue as exportedSetOtpFieldSlotValue,
   setOtpFieldValue as exportedSetOtpFieldValue,
-} from '../index.js';
+} from './otp-field.js';
 import {
   otpFieldComplete as primitiveOtpFieldComplete,
   otpFieldHiddenInputAttributes as primitiveOtpFieldHiddenInputAttributes,

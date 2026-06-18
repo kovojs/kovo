@@ -7,7 +7,7 @@ import {
   toolbarMoveFocus as exportedToolbarMoveFocus,
   toolbarRootAttributes as exportedToolbarRootAttributes,
   toolbarRovingIndex as exportedToolbarRovingIndex,
-} from '../index.js';
+} from './toolbar.js';
 import {
   toolbarButtonAttributes,
   toolbarItemAttributes,

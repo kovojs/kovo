@@ -6,7 +6,7 @@ import {
   checkboxTriggerClick as exportedCheckboxTriggerClick,
   setCheckboxChecked as exportedSetCheckboxChecked,
   toggleCheckbox as exportedToggleCheckbox,
-} from '../index.js';
+} from './checkbox.js';
 import {
   applyCheckboxIndeterminate,
   checkboxRootAttributes,

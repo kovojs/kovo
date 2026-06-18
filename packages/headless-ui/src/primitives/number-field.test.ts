@@ -13,7 +13,7 @@ import {
   numberFieldRootAttributes as exportedNumberFieldRootAttributes,
   numberFieldValueFromString as exportedNumberFieldValueFromString,
   setNumberFieldValue as exportedSetNumberFieldValue,
-} from '../index.js';
+} from './number-field.js';
 import {
   decrementNumberFieldValue as primitiveDecrementNumberFieldValue,
   incrementNumberFieldValue as primitiveIncrementNumberFieldValue,

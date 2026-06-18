@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   progressRootAttributes as exportedProgressRootAttributes,
   progressValueState as exportedProgressValueState,
-} from '../index.js';
+} from './progress.js';
 import { progressRootAttributes, progressValueState } from './progress.js';
 
 describe('headless-ui progress primitive', () => {

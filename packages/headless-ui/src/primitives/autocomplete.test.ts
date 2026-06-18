@@ -19,7 +19,7 @@ import {
   setAutocompleteInputValue as exportedSetAutocompleteInputValue,
   setAutocompleteOpen as exportedSetAutocompleteOpen,
   setAutocompleteValue as exportedSetAutocompleteValue,
-} from '../index.js';
+} from './autocomplete.js';
 import {
   autocompleteInput,
   autocompleteInputAttributes,

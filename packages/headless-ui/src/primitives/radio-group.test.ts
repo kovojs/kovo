@@ -10,7 +10,7 @@ import {
   radioGroupRootAttributes as exportedRadioGroupRootAttributes,
   radioGroupRovingIndex as exportedRadioGroupRovingIndex,
   setRadioGroupValue as exportedSetRadioGroupValue,
-} from '../index.js';
+} from './radio-group.js';
 import {
   radioGroupItemAttributes,
   radioGroupItemChecked,

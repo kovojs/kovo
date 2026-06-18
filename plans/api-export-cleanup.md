@@ -794,7 +794,7 @@ tsconfig.json --noEmit --pretty false`.
     diagnostics helpers, serializers, `createTouchGraphEntry`, and fact/input
     wrapper types.
   - Evidence:
-- [ ] **Shrink `@kovojs/headless-ui` root.**
+- [x] **Shrink `@kovojs/headless-ui` root.**
   - After direct family subpaths exist, remove primitive-family exports from the
     root so family symbols have one canonical home.
   - Review and likely internalize platform audit exports, floating/typeahead/
@@ -802,7 +802,19 @@ tsconfig.json --noEmit --pretty false`.
     other root utilities unless they have a documented app-authored use case.
   - Keep only package-wide helpers/tokens that are intended public API, such as
     `cn` and token CSS exports if confirmed.
-  - Evidence:
+  - Evidence: `packages/headless-ui/src/index.ts` now exports only foundation
+    helpers/types from `src/lib/index.ts` plus `kovoHeadlessUiPrefix`; it no
+    longer re-exports `src/primitives/index.ts` or platform-audit tooling.
+    Compiler merge fixtures, gallery harness import aggregation, and docs now
+    use direct family subpaths for primitive APIs. `node
+    scripts/exported-symbols.mjs --duplicates --json` reports 15 total
+    duplicate public symbols and 0 for `@kovojs/headless-ui`; `node
+    scripts/api-surface-gate.mjs` reports
+    `public-exports-needing-attention=1739` after removing 852 headless root
+    baseline entries. `corepack pnpm exec vitest --run packages/headless-ui/src
+    packages/compiler/src/gallery-merge-fixtures*.test.tsx
+    packages/ui/src/index.markup.test.tsx` passed; `corepack pnpm exec tsc -p
+    tsconfig.json --noEmit --pretty false` passed.
 - [x] **Make `@kovojs/test` root curated or subpath-only.**
   - Move duplicated root symbols to their canonical subpaths:
     assertions/property helpers to `@kovojs/test/assertions`, harness helpers to
@@ -1096,12 +1108,16 @@ scripts/exported-symbols.mjs --duplicates --check` passes against the
     current 858 duplicate public symbols with a migration reason and removal
     target; `node scripts/exported-symbols.mjs --duplicates --check` fails on
     added/removed duplicate homes unless the baseline is updated deliberately.
-- [ ] **Prefer subpath ownership for family/component symbols.**
+- [x] **Prefer subpath ownership for family/component symbols.**
   - For `@kovojs/headless-ui` and `@kovojs/ui`, component/family symbols should
     live on their direct family subpath. The root can export package-wide tokens,
     metadata, or explicitly curated aggregate helpers, but should not duplicate
     every family member.
-  - Evidence:
+  - Evidence: `@kovojs/ui` root has no component exports and
+    `@kovojs/headless-ui` root has no primitive-family exports. `scripts/exported-symbols.test.mjs`
+    proves `@kovojs/ui/button` and `@kovojs/ui/select` own component symbols,
+    and `node scripts/exported-symbols.mjs --duplicates --json` reports zero
+    duplicates for both `@kovojs/ui` and `@kovojs/headless-ui`.
 - [ ] **Update API docs to reflect canonical import paths.**
   - Generated or hand-authored docs should show the canonical home for each symbol
     and avoid listing duplicate aliases as equal public entry points.

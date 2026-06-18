@@ -12,7 +12,7 @@ import {
   checkboxGroupRovingIndex as exportedCheckboxGroupRovingIndex,
   setCheckboxGroupValue as exportedSetCheckboxGroupValue,
   toggleCheckboxGroupItem as exportedToggleCheckboxGroupItem,
-} from '../index.js';
+} from './checkbox-group.js';
 import {
   checkboxGroupControlAttributes,
   checkboxGroupItemAttributes,

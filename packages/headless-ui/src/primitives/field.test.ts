@@ -8,7 +8,7 @@ import {
   fieldRootAttributes as exportedFieldRootAttributes,
   fieldsetLegendAttributes as exportedFieldsetLegendAttributes,
   fieldsetRootAttributes as exportedFieldsetRootAttributes,
-} from '../index.js';
+} from './field.js';
 import {
   fieldControlAttributes,
   fieldDescriptionAttributes,

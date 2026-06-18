@@ -158,7 +158,7 @@ state machine by hand:
 ```tsx
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { selectTriggerAttributes } from '@kovojs/headless-ui';
+import { selectTriggerAttributes } from '@kovojs/headless-ui/select';
 import * as style from '@kovojs/style';
 import { escapeHtml } from '@kovojs/server/internal/html';
 ```

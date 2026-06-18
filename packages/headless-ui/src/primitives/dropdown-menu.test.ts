@@ -19,7 +19,7 @@ import {
   selectDropdownMenuItem as exportedSelectDropdownMenuItem,
   setDropdownMenuOpen as exportedSetDropdownMenuOpen,
   toggleDropdownMenu as exportedToggleDropdownMenu,
-} from '../index.js';
+} from './dropdown-menu.js';
 import {
   dropdownMenuContentAttributes,
   dropdownMenuFocusElement,

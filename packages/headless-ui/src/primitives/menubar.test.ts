@@ -19,7 +19,7 @@ import {
   selectMenubarItem as exportedSelectMenubarItem,
   setMenubarOpenValue as exportedSetMenubarOpenValue,
   toggleMenubarOpenValue as exportedToggleMenubarOpenValue,
-} from '../index.js';
+} from './menubar.js';
 import {
   menubarFocusElement,
   menubarGroupAttributes,

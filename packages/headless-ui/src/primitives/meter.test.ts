@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   meterRootAttributes as exportedMeterRootAttributes,
   meterValueState as exportedMeterValueState,
-} from '../index.js';
+} from './meter.js';
 import { meterRootAttributes, meterValueState } from './meter.js';
 
 describe('headless-ui meter primitive', () => {

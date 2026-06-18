@@ -18,7 +18,7 @@ import {
   selectValueText as exportedSelectValueText,
   setSelectOpen as exportedSetSelectOpen,
   setSelectValue as exportedSetSelectValue,
-} from '../index.js';
+} from './select.js';
 import {
   selectContentAttributes,
   selectHiddenInputAttributes,

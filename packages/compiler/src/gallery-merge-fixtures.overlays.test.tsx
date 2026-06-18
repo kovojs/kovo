@@ -6,19 +6,21 @@ import {
   alertDialogCancelAttributes,
   alertDialogContentAttributes,
   alertDialogTriggerAttributes,
-  dialogCloseAttributes,
-  dialogRootAttributes,
+} from '@kovojs/headless-ui/alert-dialog';
+import { dialogCloseAttributes, dialogRootAttributes } from '@kovojs/headless-ui/dialog';
+import {
   hoverCardContentAttributes,
   hoverCardTriggerAttributes,
-  popoverContentAttributes,
-  popoverTriggerAttributes,
+} from '@kovojs/headless-ui/hover-card';
+import { popoverContentAttributes, popoverTriggerAttributes } from '@kovojs/headless-ui/popover';
+import {
   toastActionAttributes,
   toastCloseAttributes,
   toastDescriptionAttributes,
   toastRootAttributes,
   toastTitleAttributes,
   toastViewportAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/toast';
 import { mergeCompilerPrimitiveAttrs } from './gallery-merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {

@@ -18,7 +18,7 @@ import {
   selectComboboxOption as exportedSelectComboboxOption,
   setComboboxOpen as exportedSetComboboxOpen,
   setComboboxValue as exportedSetComboboxValue,
-} from '../index.js';
+} from './combobox.js';
 import {
   comboboxInput,
   comboboxFilteredItems,

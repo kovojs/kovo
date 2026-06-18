@@ -14,7 +14,7 @@ import {
   scrollAreaViewportAttributes as exportedScrollAreaViewportAttributes,
   scrollAreaViewportScroll as exportedScrollAreaViewportScroll,
   scrollAreaViewportState as exportedScrollAreaViewportState,
-} from '../index.js';
+} from './scroll-area.js';
 import {
   scrollAreaCornerAttributes as primitiveScrollAreaCornerAttributes,
   scrollAreaCornerState as primitiveScrollAreaCornerState,

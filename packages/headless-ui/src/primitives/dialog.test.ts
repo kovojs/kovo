@@ -11,7 +11,7 @@ import {
   dialogTriggerClick as exportedDialogTriggerClick,
   setDialogOpen as exportedSetDialogOpen,
   toggleDialog as exportedToggleDialog,
-} from '../index.js';
+} from './dialog.js';
 import {
   dialogBeforeToggle,
   dialogCancel,

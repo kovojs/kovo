@@ -4,24 +4,32 @@ import { describe, expect, it } from 'vitest';
 import {
   accordionContentAttributes,
   accordionTriggerAttributes,
+} from '@kovojs/headless-ui/accordion';
+import {
   avatarFallbackAttributes,
   avatarImageAttributes,
   avatarRootAttributes,
+} from '@kovojs/headless-ui/avatar';
+import {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
   collapsibleTriggerAttributes,
+} from '@kovojs/headless-ui/collapsible';
+import {
   disclosureContentAttributes,
   disclosureRootAttributes,
   disclosureTriggerAttributes,
-  meterRootAttributes,
-  progressRootAttributes,
+} from '@kovojs/headless-ui/disclosure';
+import { meterRootAttributes } from '@kovojs/headless-ui/meter';
+import { progressRootAttributes } from '@kovojs/headless-ui/progress';
+import {
   scrollAreaCornerAttributes,
   scrollAreaRootAttributes,
   scrollAreaScrollbarAttributes,
   scrollAreaThumbAttributes,
   scrollAreaViewportAttributes,
-  separatorRootAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/scroll-area';
+import { separatorRootAttributes } from '@kovojs/headless-ui/separator';
 import { mergeCompilerPrimitiveAttrs } from './gallery-merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {

@@ -1,15 +1,13 @@
 /** @jsxImportSource @kovojs/server */
 import { describe, expect, it } from 'vitest';
 
+import { dialogContentAttributes, dialogTriggerAttributes } from '@kovojs/headless-ui/dialog';
 import {
-  dialogContentAttributes,
-  dialogTriggerAttributes,
   radioGroupLabelAttributes,
   radioGroupRadioAttributes,
-  tabsPanelAttributes,
-  tabsTriggerAttributes,
-  tooltipTriggerAttributes,
-} from '@kovojs/headless-ui';
+} from '@kovojs/headless-ui/radio-group';
+import { tabsPanelAttributes, tabsTriggerAttributes } from '@kovojs/headless-ui/tabs';
+import { tooltipTriggerAttributes } from '@kovojs/headless-ui/tooltip';
 import {
   type AttributeRecord,
   authorStressAttrs,

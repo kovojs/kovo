@@ -22,7 +22,7 @@ import {
   selectNavigationMenuLink as exportedSelectNavigationMenuLink,
   setNavigationMenuOpenValue as exportedSetNavigationMenuOpenValue,
   toggleNavigationMenuOpenValue as exportedToggleNavigationMenuOpenValue,
-} from '../index.js';
+} from './navigation-menu.js';
 import {
   navigationMenuContentAttributes,
   navigationMenuFocusElement,

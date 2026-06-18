@@ -9,7 +9,7 @@ import {
   popoverTriggerClick as exportedPopoverTriggerClick,
   setPopoverOpen as exportedSetPopoverOpen,
   togglePopover as exportedTogglePopover,
-} from '../index.js';
+} from './popover.js';
 import {
   popoverBeforeToggle,
   popoverContentAttributes,

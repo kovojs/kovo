@@ -11,7 +11,7 @@ import {
   toggleGroupMoveFocus as exportedToggleGroupMoveFocus,
   toggleGroupRootAttributes as exportedToggleGroupRootAttributes,
   toggleGroupRovingIndex as exportedToggleGroupRovingIndex,
-} from '../index.js';
+} from './toggle-group.js';
 import {
   setToggleGroupValue,
   toggleGroupButtonAttributes,

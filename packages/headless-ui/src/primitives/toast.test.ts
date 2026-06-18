@@ -22,7 +22,7 @@ import {
   toastTitleAttributes as exportedToastTitleAttributes,
   toastViewportAttributes as exportedToastViewportAttributes,
   toastViewportKeyDown as exportedToastViewportKeyDown,
-} from '../index.js';
+} from './toast.js';
 import {
   dismissToast as primitiveDismissToast,
   normalizeToastDuration as primitiveNormalizeToastDuration,

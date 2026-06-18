@@ -13,7 +13,7 @@ import {
   alertDialogTriggerClick as exportedAlertDialogTriggerClick,
   setAlertDialogOpen as exportedSetAlertDialogOpen,
   toggleAlertDialog as exportedToggleAlertDialog,
-} from '../index.js';
+} from './alert-dialog.js';
 import {
   alertDialogActionAttributes,
   alertDialogActionClick,
