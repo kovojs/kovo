@@ -5,6 +5,7 @@ import * as packageClientModulesApi from '@kovojs/server/app-shell/client-module
 import * as packageCoreApi from '@kovojs/server/app-shell/core';
 import * as packageNodeApi from '@kovojs/server/app-shell/node';
 import * as packageStaticExportApi from '@kovojs/server/app-shell/static-export';
+import * as packageViteApi from '@kovojs/server/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
 import * as packageInternalExecutionApi from '@kovojs/server/internal/execution';
 import * as packageInternalHtmlApi from '@kovojs/server/internal/html';
@@ -44,6 +45,7 @@ import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
 import * as viteDevApi from '../vite-dev.js';
+import * as viteApi from '../vite.js';
 import * as internalWireApi from '../internal/wire.js';
 import * as wireHtmlApi from '../wire-html.js';
 
@@ -510,6 +512,12 @@ describe('server app-shell public API barrels', () => {
     expect(moduleValueKeys(packageCoreApi)).toEqual([]);
     expect(moduleValueKeys(packageNodeApi)).toEqual([]);
     expect(moduleValueKeys(packageStaticExportApi)).toEqual([]);
+    expect(moduleValueKeys(packageViteApi)).toEqual(['createKovoViteIntegration', 'kovo']);
+    expect(packageViteApi.kovo).toBe(viteApi.kovo);
+    expect(packageViteApi.createKovoViteIntegration).toBe(viteApi.createKovoViteIntegration);
+    expect(serverPackage.exports as Record<string, string>).toMatchObject({
+      './vite': './src/vite.ts',
+    });
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell/vite');
 
     expect(packageRootApi.createApp).toBe(appApi.createApp);

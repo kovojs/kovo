@@ -14,25 +14,35 @@ internals, emit/check scripts, and narrowly named artifact tests.
 
 ## Target Shape
 
-- [ ] Update `SPEC.md` §5.2 to strongly discourage direct imports from generated
+- [x] Update `SPEC.md` §5.2 to strongly discourage direct imports from generated
       app artifacts, especially from app-authored modules.
+  - Evidence: `SPEC.md` §5.2 rule 8 now states generated app artifacts are
+    reviewable outputs, not app dependencies, and reserves direct generated reads
+    for compiler/build internals, emit freshness checks, and explicitly named
+    artifact tests.
   - Proposed wording: "Generated artifacts are reviewable outputs, not app
     dependencies. App-authored modules MUST NOT import app-local generated
     modules such as `src/generated/*`; tests and scripts SHOULD prefer authored
     entry points and public explain/check APIs. Direct generated reads are
     reserved for compiler/build internals, emit freshness checks, and explicitly
     named artifact tests."
-- [ ] Clarify `SPEC.md` §9.5 so app-facing dev/build config points at an authored
+- [x] Clarify `SPEC.md` §9.5 so app-facing dev/build config points at an authored
       app entry, not a lowered route artifact.
+  - Evidence: `SPEC.md` §9.5 documents `kovo({ app: '/src/app.tsx' })` from
+    `@kovojs/server/vite`, requires an authored default-exported `KovoApp`, and
+    forbids `src/generated/*` app entries.
   - Proposed behavior: Vite/dev integration loads `/src/app.tsx` or the configured
     authored entry; compiler-owned plugins resolve route IR, live-target
     registries, and generated client modules internally.
-- [ ] Add a public Vite plugin API with an explicit authored app entry.
+- [x] Add a public Vite plugin API with an explicit authored app entry.
   - Target API:
     `plugins: [kovo({ app: '/src/app.tsx' })]` from `@kovojs/server/vite`.
   - `app` is required, must not point into `src/generated/*`, and the module must
     default-export a `KovoApp`. Do not add `exportName`, `moduleId`, or
     `nodeHandlerExportName` to the app-facing API.
+  - Evidence: `packages/server/src/vite.ts` exports `kovo({ app })`; `pnpm
+    --filter @kovojs/server exec vitest --run src/vite.test.ts src/api/app.test.ts`
+    passed and covers generated-entry rejection plus `@kovojs/server/vite`.
 - [ ] Add an app/route-level stylesheet declaration API so styles are render
       metadata, not Vite config.
   - Target API: `stylesheet('./styles.css', { theme })`,
@@ -63,11 +73,14 @@ internals, emit/check scripts, and narrowly named artifact tests.
 - [ ] Move any remaining Commerce graph-smoke value into package-level coverage
       or a CLI/explain test that does not require app tests to know the generated
       file path.
-- [ ] Update Commerce Vite config to reference the authored entry only.
+- [x] Update Commerce Vite config to reference the authored entry only.
   - Target authoring shape:
     `plugins: [kovo({ app: '/src/app.tsx' })]`, with any demo-only conditional
     outside the `kovo()` API. No `moduleId: '/src/generated/app.kovo-route.tsx'`
     in `examples/commerce/vite.config.ts`.
+  - Evidence: `examples/commerce/vite.config.ts` uses
+    `kovo({ app: '/src/app.tsx' })`; `pnpm --filter @kovojs/example-commerce exec
+    vitest --run src/app.test.ts src/enhanced-navigation.test.ts` passed.
 - [ ] Remove authored CSS imports of app-local generated CSS.
   - Target authoring shape: no `@import './generated/kovo-ui.css'` in
     `examples/commerce/src/styles.css`; the build/dev pipeline injects or
@@ -78,8 +91,11 @@ internals, emit/check scripts, and narrowly named artifact tests.
 - [ ] Apply the same test/helper boundary to CRM and StackOverflow.
   - Scenario tests import authored entries or public helper factories, not
     `src/generated/*`.
-- [ ] Update CRM and StackOverflow Vite configs to reference authored app entries
+- [x] Update CRM and StackOverflow Vite configs to reference authored app entries
       only.
+  - Evidence: `examples/crm/vite.config.ts` and
+    `examples/stackoverflow/vite.config.ts` use `kovo({ app: '/src/app-shell.ts' })`;
+    focused interactive-app tests for both packages passed.
 - [ ] Remove authored CSS imports of app-local generated CSS from CRM and
       StackOverflow.
 - [ ] Audit public demo modules that export generated graph/optimistic artifacts.
@@ -89,24 +105,38 @@ internals, emit/check scripts, and narrowly named artifact tests.
 
 ## Vite Config Simplification
 
-- [ ] Add an app-facing Kovo Vite plugin so example configs do not manually
+- [x] Add an app-facing Kovo Vite plugin so example configs do not manually
       `ssrLoadModule('@kovojs/server')`.
   - Candidate API:
     `kovo({ app: '/src/app.tsx' })`.
-- [ ] Keep `kovo()` explicit: no default app discovery.
+  - Evidence: `packages/server/src/vite.ts` exposes `kovo({ app })`; Commerce,
+    CRM, and StackOverflow configs import `@kovojs/server/vite` directly with no
+    local `ssrLoadModule('@kovojs/server')` wrappers.
+- [x] Keep `kovo()` explicit: no default app discovery.
   - The app entry is required so the config remains readable and there is no
     hidden convention around `src/app.tsx`.
-- [ ] Enforce default-export-only app modules for the public Vite plugin.
+  - Evidence: `packages/server/src/vite.ts` requires `options.app` and has no
+    fallback discovery branch; `src/vite.test.ts` covers generated-entry
+    rejection.
+- [x] Enforce default-export-only app modules for the public Vite plugin.
   - If the app module does not default-export a `KovoApp`, fail with a teaching
     diagnostic. Do not add an `exportName` option.
-- [ ] Keep demo-only plugin disabling outside the public Kovo plugin API.
+  - Evidence: `packages/server/src/vite.ts` exposes no `exportName` option and
+    delegates to the existing default export app-shell loader; server Vite tests
+    passed.
+- [x] Keep demo-only plugin disabling outside the public Kovo plugin API.
   - Example shape:
     `plugins: process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app.tsx' })]`.
+  - Evidence: Commerce, CRM, and StackOverflow configs keep
+    `process.env.KOVO_DEMO_MULTITENANT ? [] : [...]` outside `kovo()`.
 - [ ] Keep styles out of Vite config.
   - Styles are app/route render metadata declared through `stylesheet(...)`;
     Vite materializes declared assets but does not own style semantics.
-- [ ] Move repeated Vite dev server type aliases and plugin-loader wrappers into
+- [x] Move repeated Vite dev server type aliases and plugin-loader wrappers into
       framework code or a shared examples helper.
+  - Evidence: the repeated local dev-server interfaces and loader wrappers were
+    removed from the three example Vite configs in favor of
+    `@kovojs/server/vite`.
 - [ ] Preserve `vite-plus` task inputs without hand-maintaining broad boilerplate
       in every example config.
   - Do not overload `kovo()` with `serve`/task options unless a separate
@@ -144,6 +174,10 @@ internals, emit/check scripts, and narrowly named artifact tests.
 
 - [ ] Add/extend a guard command that proves authored example source has no
       generated imports.
+  - Current evidence gap: `node scripts/import-boundary.mjs` now reports
+    app-local generated imports, but it still fails on Commerce/CRM/StackOverflow
+    tests/app shells plus Gallery, site, and tutorial files; keep open until the
+    reported backlog is removed or narrowed by an explicit artifact-test policy.
 - [ ] Run focused Commerce tests after removing generated imports and deleting
       `source-truth.test.ts`.
 - [ ] Run focused CRM and StackOverflow tests after applying the same boundary.

@@ -42,6 +42,18 @@ const explicitlyAllowedGeneratedImports = new Set([
   'site/src/gallery.ts -> @kovojs/runtime/generated',
 ]);
 
+const explicitlyAllowedAppLocalGeneratedImports = new Set([
+  'examples/crm/src/mutations.ts -> ./generated/optimistic/add-contact.js',
+  'examples/crm/src/mutations.ts -> ./generated/optimistic/create-deal.js',
+  'examples/crm/src/mutations.ts -> ./generated/optimistic/move-deal.js',
+  'examples/crm/src/mutations.ts -> ./generated/optimistic/close-deal.js',
+  'examples/crm/src/index.ts -> ./generated/touch-graph.js',
+  'examples/stackoverflow/src/app.ts -> ./generated/touch-graph.js',
+  'examples/stackoverflow/src/app.ts -> ./generated/optimistic/post-answer.js',
+  'examples/stackoverflow/src/app.ts -> ./generated/optimistic/post-question.js',
+  'examples/stackoverflow/src/app.ts -> ./generated/optimistic/vote-up.js',
+]);
+
 export async function collectImportBoundaryViolations({
   rootDir = repoRootFromScript(),
   roots = appFacingRoots,
@@ -61,14 +73,12 @@ export async function collectImportBoundaryViolations({
     if (isGeneratedArtifact(relativePath, source)) continue;
 
     for (const specifier of importSpecifiers(source)) {
-      const tier = nonPublicKovoImportTier(specifier);
+      const tier = importBoundaryTier(specifier);
       if (tier === null) continue;
+      if (tier !== 'app-local-generated' && isTestFile(relativePath)) continue;
 
       const allowKey = `${relativePath} -> ${specifier}`;
-      const allowed =
-        tier === 'internal'
-          ? explicitlyAllowedInternalImports.has(allowKey)
-          : explicitlyAllowedGeneratedImports.has(allowKey);
+      const allowed = allowedImportBoundaryException(tier, allowKey);
       if (!allowed) {
         violations.push({
           fileName: relativePath,
@@ -79,7 +89,12 @@ export async function collectImportBoundaryViolations({
     }
   }
 
-  return violations;
+  return violations.sort(
+    (left, right) =>
+      left.fileName.localeCompare(right.fileName) ||
+      left.specifier.localeCompare(right.specifier) ||
+      left.tier.localeCompare(right.tier),
+  );
 }
 
 export function nonPublicKovoImportTier(specifier) {
@@ -89,6 +104,23 @@ export function nonPublicKovoImportTier(specifier) {
   if (/^@kovojs\/[^/]+\/internal(?:\/|$)/.test(specifier)) return 'internal';
   if (/^@kovojs\/[^/]+\/generated(?:\/|$)/.test(specifier)) return 'generated';
   return null;
+}
+
+export function appLocalGeneratedImportTier(specifier) {
+  return /^\.{1,2}\/(?:.*\/)?generated\//.test(specifier) ? 'app-local-generated' : null;
+}
+
+function importBoundaryTier(specifier) {
+  return nonPublicKovoImportTier(specifier) ?? appLocalGeneratedImportTier(specifier);
+}
+
+function allowedImportBoundaryException(tier, allowKey) {
+  if (tier === 'internal') return explicitlyAllowedInternalImports.has(allowKey);
+  if (tier === 'generated') return explicitlyAllowedGeneratedImports.has(allowKey);
+  if (tier === 'app-local-generated') {
+    return explicitlyAllowedAppLocalGeneratedImports.has(allowKey);
+  }
+  return false;
 }
 
 export function importSpecifiers(source) {
@@ -108,9 +140,19 @@ export function importSpecifiers(source) {
 
 function shouldCheckFile(relativePath) {
   if (relativePath.includes('/node_modules/')) return false;
-  if (/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(relativePath)) return false;
+  if (relativePath.includes('/dist/')) return false;
+  if (isExplicitArtifactTest(relativePath)) return false;
 
   return checkedExtensions.has(path.extname(relativePath));
+}
+
+function isExplicitArtifactTest(relativePath) {
+  if (!isTestFile(relativePath)) return false;
+  return /(?:artifact|generated|graph)\.(?:test|spec)\.[cm]?[jt]sx?$/.test(relativePath);
+}
+
+function isTestFile(relativePath) {
+  return /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(relativePath);
 }
 
 function isGeneratedArtifact(relativePath, source) {
