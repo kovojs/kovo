@@ -1,5 +1,3 @@
-export { renderDeferredStream } from '../deferred-stream.js';
-export { renderContentSecurityPolicy } from '../csp.js';
 export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
 export { renderComponent, renderComponentMutationFailure } from '../component-render.js';
 /** Build component render slots with one SPEC §6.3 mutation-form failure state. */
@@ -15,13 +13,6 @@ export type {
   DeferredStreamOptions,
   DeferredStreamResponse,
 } from '../deferred-stream.js';
-export {
-  renderDeferredDocument,
-  renderDocument,
-  renderDocumentQueryScript,
-  renderErrorDocument,
-} from '../document-core.js';
-export { renderDiagnosticDocument } from '../document-diagnostics.js';
 export type {
   DeferredDocumentAssemblyOptions,
   DeferredDocumentFrame,
@@ -43,7 +34,7 @@ export type {
   DiagnosticDocumentOptions,
   DiagnosticDocumentSource,
 } from '../document-diagnostics.js';
-export { renderPageHints, stylesheetsForTargets } from '../hints.js';
+export { stylesheetsForTargets } from '../hints.js';
 export type {
   I18nCatalog,
   PageHintOptions,

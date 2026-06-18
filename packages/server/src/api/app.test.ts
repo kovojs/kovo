@@ -16,6 +16,8 @@ import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
 import * as clientModulesSourceApi from '../client-modules.js';
+import * as cspApi from '../csp.js';
+import * as deferredStreamApi from '../deferred-stream.js';
 import * as publicApi from '../index.js';
 import * as clientModulesApi from './app-shell/client-modules.js';
 import * as coreApi from './app-shell/core.js';
@@ -33,6 +35,7 @@ import type * as vt from './app-shell/vite.js';
 import * as dataApi from './data.js';
 import * as documentCoreApi from '../document-core.js';
 import * as documentDiagnosticsApi from '../document-diagnostics.js';
+import * as hintsApi from '../hints.js';
 import * as internalStaticExportApi from '../internal/static-export.js';
 import * as renderingApi from './rendering.js';
 import * as routingApi from './routing.js';
@@ -432,19 +435,6 @@ describe('server app-shell public API barrels', () => {
       }
     }
 
-    expect(publicApi.renderDocument).toBe(documentCoreApi.renderDocument);
-    expect(publicApi.renderDeferredDocument).toBe(documentCoreApi.renderDeferredDocument);
-    expect(publicApi.renderDiagnosticDocument).toBe(
-      documentDiagnosticsApi.renderDiagnosticDocument,
-    );
-    expect(renderingApi.renderDocument).toBe(documentCoreApi.renderDocument);
-    expect(renderingApi.renderDiagnosticDocument).toBe(
-      documentDiagnosticsApi.renderDiagnosticDocument,
-    );
-    expect(dataApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
-    expect(renderingApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
-    expect(publicApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
-    expect(publicApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(publicApi.createApp).toBe(appApi.createApp);
     expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
       clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
@@ -468,6 +458,15 @@ describe('server app-shell public API barrels', () => {
     expect(publicValues).not.toHaveProperty('renderNoJsMutationResponse');
     expect(publicValues).not.toHaveProperty('renderQueryEndpointResponse');
     expect(publicValues).not.toHaveProperty('renderQueryRegistryEndpointResponse');
+    expect(publicValues).not.toHaveProperty('renderContentSecurityPolicy');
+    expect(publicValues).not.toHaveProperty('renderDeferredDocument');
+    expect(publicValues).not.toHaveProperty('renderDeferredStream');
+    expect(publicValues).not.toHaveProperty('renderDiagnosticDocument');
+    expect(publicValues).not.toHaveProperty('renderDocument');
+    expect(publicValues).not.toHaveProperty('renderDocumentQueryScript');
+    expect(publicValues).not.toHaveProperty('renderErrorDocument');
+    expect(publicValues).not.toHaveProperty('renderPageHints');
+    expect(publicValues).not.toHaveProperty('renderQueryScript');
     expect(publicValues).not.toHaveProperty('renderRouteDocumentResponse');
     expect(publicValues).not.toHaveProperty('renderRoutePageResponse');
     expect(dataApi).not.toHaveProperty('renderMutationEndpointResponse');
@@ -475,8 +474,17 @@ describe('server app-shell public API barrels', () => {
     expect(dataApi).not.toHaveProperty('renderNoJsMutationResponse');
     expect(dataApi).not.toHaveProperty('renderQueryEndpointResponse');
     expect(dataApi).not.toHaveProperty('renderQueryRegistryEndpointResponse');
+    expect(dataApi).not.toHaveProperty('renderQueryScript');
     expect(dataApi).not.toHaveProperty('runMutation');
     expect(dataApi).not.toHaveProperty('runQuery');
+    expect(renderingApi).not.toHaveProperty('renderContentSecurityPolicy');
+    expect(renderingApi).not.toHaveProperty('renderDeferredDocument');
+    expect(renderingApi).not.toHaveProperty('renderDeferredStream');
+    expect(renderingApi).not.toHaveProperty('renderDiagnosticDocument');
+    expect(renderingApi).not.toHaveProperty('renderDocument');
+    expect(renderingApi).not.toHaveProperty('renderDocumentQueryScript');
+    expect(renderingApi).not.toHaveProperty('renderErrorDocument');
+    expect(renderingApi).not.toHaveProperty('renderPageHints');
     expect(renderingApi).not.toHaveProperty('renderRouteDocumentResponse');
     expect(routingApi).not.toHaveProperty('endpointMatches');
     expect(routingApi).not.toHaveProperty('parseRouteRequest');
@@ -488,6 +496,23 @@ describe('server app-shell public API barrels', () => {
     expect(packageInternalHtmlApi.renderRouteDocumentResponse).toBe(
       documentCoreApi.renderRouteDocumentResponse,
     );
+    expect(packageInternalHtmlApi.renderContentSecurityPolicy).toBe(
+      cspApi.renderContentSecurityPolicy,
+    );
+    expect(packageInternalHtmlApi.renderDeferredDocument).toBe(
+      documentCoreApi.renderDeferredDocument,
+    );
+    expect(packageInternalHtmlApi.renderDeferredStream).toBe(
+      deferredStreamApi.renderDeferredStream,
+    );
+    expect(packageInternalHtmlApi.renderDiagnosticDocument).toBe(
+      documentDiagnosticsApi.renderDiagnosticDocument,
+    );
+    expect(packageInternalHtmlApi.renderDocument).toBe(documentCoreApi.renderDocument);
+    expect(packageInternalHtmlApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
+    expect(packageInternalHtmlApi.renderErrorDocument).toBe(documentCoreApi.renderErrorDocument);
+    expect(packageInternalHtmlApi.renderPageHints).toBe(hintsApi.renderPageHints);
+    expect(packageInternalHtmlApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(packageInternalRouteApi.renderRoutePageResponse).toBe(routeApi.renderRoutePageResponse);
     expect(packageInternalWireApi.renderMutationEndpointResponse).toBe(
       mutationApi.renderMutationEndpointResponse,

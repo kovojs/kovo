@@ -97,6 +97,11 @@ const fallbackTitles = {
   500: 'Server Error',
 } as const;
 
+/**
+ * Assemble a complete Kovo document for framework-owned response rendering.
+ *
+ * @internal
+ */
 export function renderDocument(options: DocumentAssemblyOptions): DocumentRenderResult {
   const assembled = assembleDocumentParts(options);
   const template = options.template ?? defaultDocumentTemplate;
@@ -109,6 +114,11 @@ export function renderDocument(options: DocumentAssemblyOptions): DocumentRender
   };
 }
 
+/**
+ * Assemble a deferred Kovo document response for framework-owned streaming.
+ *
+ * @internal
+ */
 export function renderDeferredDocument(
   options: DeferredDocumentAssemblyOptions,
 ): DeferredDocumentRenderResult {
@@ -197,9 +207,15 @@ export function renderRouteDocumentResponse(
   };
 }
 
+/** @internal */
 export { renderQueryScript as renderDocumentQueryScript };
 export type { QueryScriptRenderOptions };
 
+/**
+ * Render a framework-owned error document.
+ *
+ * @internal
+ */
 export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRoutePageResponse {
   const title = options.title ?? fallbackTitles[options.status];
   const message = options.message ?? title;

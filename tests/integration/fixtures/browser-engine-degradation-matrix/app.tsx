@@ -1,6 +1,7 @@
 // SPEC.md §8: the cross-engine degradation contract keeps L0 documents, L1
 // forms, and L2 loader enhancements usable outside Chromium.
-import { createApp, mutation, renderQueryScript, route, s } from '@kovojs/server';
+import { createApp, mutation, route, s } from '@kovojs/server';
+import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { EngineMatrixCard } from './engine-card';

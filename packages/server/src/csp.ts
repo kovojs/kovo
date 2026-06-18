@@ -50,6 +50,8 @@ export function hasCspInlineMetadata(metadata: CspInlineMetadata): boolean {
  * Kovo emits deterministic hashes for generated inline scripts/styles rather than per-request
  * nonces, so apps can opt into CSP by passing `document.csp` here and setting the resulting
  * value as their `Content-Security-Policy` header.
+ *
+ * @internal
  */
 export function renderContentSecurityPolicy(
   metadata: CspInlineMetadata,

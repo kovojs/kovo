@@ -182,11 +182,6 @@ import {
   mutation,
   notFound,
   query,
-  renderDeferredStream,
-  renderDocument,
-  renderDocumentQueryScript,
-  renderPageHints,
-  renderQueryScript,
   route as serverRoute,
   session,
   s,
@@ -199,6 +194,13 @@ import {
   runQuery,
   runRoutePage,
 } from '../dist/server/src/internal/execution.mjs';
+import {
+  renderDeferredStream,
+  renderDocument,
+  renderDocumentQueryScript,
+  renderPageHints,
+  renderQueryScript,
+} from '../dist/server/src/internal/html.mjs';
 import { renderRoutePageResponse } from '../dist/server/src/internal/route.mjs';
 import {
   renderMutationEndpointResponse,

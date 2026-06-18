@@ -12,7 +12,6 @@ export {
 export { mutationFormAttributes } from '../mutation.js';
 /** Render string-template attributes for a SPEC §6.3 enhanced mutation form. */
 export { renderMutationFormAttributes } from '../mutation.js';
-export { renderQueryScript } from '../wire-html.js';
 export type {
   ChangeRecord,
   InvalidateOptions,

@@ -77,6 +77,11 @@ export function stylesheetsForTargets(
   );
 }
 
+/**
+ * Render framework document hints, preload tags, and speculation metadata.
+ *
+ * @internal
+ */
 export function renderPageHints(
   options: PageHintOptions,
   context: PageHintRenderContext = {},

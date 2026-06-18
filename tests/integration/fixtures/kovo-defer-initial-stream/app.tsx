@@ -1,4 +1,5 @@
-import { createApp, endpoint, renderDeferredDocument } from '@kovojs/server';
+import { createApp, endpoint } from '@kovojs/server';
+import { renderDeferredDocument } from '@kovojs/server/internal/html';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const deferredHome = endpoint('/', {

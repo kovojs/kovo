@@ -42,6 +42,11 @@ const deferredChunkApplyScript =
 const deferredCloseCleanupScript =
   '<script>for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()</script>';
 
+/**
+ * Render the framework's deferred fragment stream payload.
+ *
+ * @internal
+ */
 export function renderDeferredStream(options: DeferredStreamOptions): DeferredStreamResponse {
   const boundary = options.boundary ?? 'kovo-boundary';
   const chunks = sortDeferredChunks(options.chunks).map((chunk) =>

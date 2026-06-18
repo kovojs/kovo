@@ -31,6 +31,11 @@ export interface DiagnosticDocumentOptions {
   template?: DocumentTemplate;
 }
 
+/**
+ * Render a framework-owned diagnostic document.
+ *
+ * @internal
+ */
 export function renderDiagnosticDocument(
   diagnostics: readonly DiagnosticDocumentDiagnostic[],
   source?: DiagnosticDocumentSource | string,

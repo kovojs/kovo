@@ -48,8 +48,9 @@ export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
  *
  * @param options - The query `name`, its `value`, and optional instance `key`.
  * @returns The query-script HTML string.
+ * @internal
  * @example
- * import { renderQueryScript } from '@kovojs/server';
+ * import { renderQueryScript } from '@kovojs/server/internal/html';
  *
  * const html: string = renderQueryScript({ name: 'cart', value: { count: 2 } });
  */

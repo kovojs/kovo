@@ -493,7 +493,7 @@ packages/create-kovo/src/index.test.ts`.
       before assertions by missing repo-level publish-layout artifact
       `dist/compiler/src/internal.mjs` (same known blocker recorded in
       `plans/example-readability.md`).
-- [ ] **Move document/deferred/page-hint rendering internals off the public root.**
+- [x] **Move document/deferred/page-hint rendering internals off the public root.**
   - Review and likely internalize `renderDocument`, `renderDeferredDocument`,
     `renderDeferredStream`, `renderDocumentQueryScript`, `renderQueryScript`,
     `renderPageHints`, `renderContentSecurityPolicy`, `renderErrorDocument`, and
@@ -502,6 +502,26 @@ packages/create-kovo/src/index.test.ts`.
     cannot be expressed through `createApp`, layouts, route options, or documented
     shell hooks.
   - Evidence:
+    - `packages/server/src/api/data.ts` no longer public-exports
+      `renderQueryScript`; `packages/server/src/api/rendering.ts` no longer
+      public-exports the listed document/deferred/page-hint renderer values.
+      `packages/server/src/internal/html.ts` is the internal home for those
+      framework/test harness renderers.
+    - App-authored commerce/tutorial/docs examples no longer present these
+      helpers as public app APIs; direct fixture/harness execution imports them
+      from `@kovojs/server/internal/html`.
+    - Verification: public-root scan
+      `rg -n "from ['\\\"]@kovojs/server['\\\"][^;]*(renderDocument|renderDeferredDocument|renderDeferredStream|renderDocumentQueryScript|renderQueryScript|renderPageHints|renderContentSecurityPolicy|renderErrorDocument|renderDiagnosticDocument)|import \\{[^}]*\\b(renderDocument|renderDeferredDocument|renderDeferredStream|renderDocumentQueryScript|renderQueryScript|renderPageHints|renderContentSecurityPolicy|renderErrorDocument|renderDiagnosticDocument)\\b[^}]*\\} from ['\\\"]@kovojs/server['\\\"]" . --glob '!**/node_modules/**' --glob '!**/dist/**' --glob '!**/generated/**'`
+      exits 1; `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/conformance-fixtures/src/server-fixtures.test.ts examples/commerce/src/app.rendering.test.ts examples/commerce/src/source-truth.test.ts site/tutorial/steps/03-queries/src/app.test.ts site/tutorial/steps/04-mutations/src/app.test.ts site/tutorial/steps/05-optimistic/src/app.test.ts site/tutorial/steps/06-streaming/src/app.test.ts site/tutorial/steps/07-verification/src/app.test.ts`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
+      `corepack pnpm run check:imports`; `corepack pnpm run check:exports`;
+      `corepack pnpm exec vitest --run scripts/public-packages.test.mjs`;
+      `git diff --check`.
+    - Remaining smoke gap: `node tests/kovo-check.node.mjs` is still blocked
+      before assertions by missing repo-level publish-layout artifact
+      `dist/compiler/src/internal.mjs` (same known blocker recorded in
+      `plans/example-readability.md`).
 - [ ] **Review low-level helpers before keeping them public.**
   - Deliberately decide whether `renderComponent`,
     `renderMutationFormAttributes`, `mutationFormAttributes`, `csrfField`,

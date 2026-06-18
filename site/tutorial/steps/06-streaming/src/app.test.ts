@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken, renderDeferredStream } from '@kovojs/server';
+import { csrfToken } from '@kovojs/server';
+import { renderDeferredStream } from '@kovojs/server/internal/html';
 import {
   renderMutationEndpointResponse,
   type MutationWireHeaderSource,

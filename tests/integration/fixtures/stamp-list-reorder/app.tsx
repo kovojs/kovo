@@ -1,5 +1,12 @@
-import { createApp, domain, mutation, query, renderQueryScript, route, s } from '@kovojs/server';
-import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
+import {
+  createApp,
+  domain,
+  mutation,
+  query,
+  route,
+  s,
+} from '@kovojs/server';
+import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const boardDomain = domain('board');

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { htmlDocumentFacts, htmlElementFacts } from '@kovojs/test/html-fragment';
-import { renderPageHints } from '@kovojs/server';
+import { renderPageHints } from '@kovojs/server/internal/html';
 
 import {
   commerceMessages,

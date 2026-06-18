@@ -3,12 +3,11 @@ import {
   domain,
   mutation,
   query,
-  renderQueryScript,
   route,
   s,
 } from '@kovojs/server';
 import { runQuery } from '@kovojs/server/internal/execution';
-import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
+import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const productDomain = domain('product');

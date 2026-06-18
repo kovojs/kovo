@@ -1,5 +1,5 @@
-import { createApp, mutation, renderQueryScript, route, s } from '@kovojs/server';
-import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
+import { createApp, mutation, route, s } from '@kovojs/server';
+import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { dealDomain, dealQuery, readDeal, type DealResult } from './shared';

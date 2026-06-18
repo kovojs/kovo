@@ -8,9 +8,9 @@ const {
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   endpoint,
-  renderPageHints,
   toNodeHandler,
 } = await import('../dist/server/src/index.mjs');
+const { renderPageHints } = await import('../dist/server/src/internal/html.mjs');
 const { kovoLoaderSource } = await import('../dist/runtime/src/index.mjs');
 
 export const p10PerfAcceptance = {

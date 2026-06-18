@@ -3,11 +3,11 @@ import {
   domain,
   mutation,
   query,
-  renderQueryScript,
   route,
   s,
   type QueryLoadContext,
 } from '@kovojs/server';
+import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type NavCounter = Record<string, unknown> & {
