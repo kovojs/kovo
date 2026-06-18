@@ -1,0 +1,25 @@
+{
+  "name": "@kovojs/example-devtool",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:bundle": "node scripts/build-bundle.mjs",
+    "check": "vp check",
+    "dev": "node scripts/build-bundle.mjs && vp dev",
+    "test": "vp test"
+  },
+  "dependencies": {
+    "@kovojs/core": "workspace:*",
+    "@kovojs/runtime": "workspace:*",
+    "@kovojs/server": "workspace:*",
+    "@kovojs/style": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "kovo": "workspace:*",
+    "typescript": "^6.0.0",
+    "vite": "^8.0.16",
+    "vite-plus": "^0.1.24",
+    "vitest": "^4.1.8"
+  }
+}
