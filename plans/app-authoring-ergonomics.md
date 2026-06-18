@@ -72,9 +72,12 @@ item inherits from rather than re-deciding it:
     Commerce shell/read-only grid mode, and stale static-export exports/comments
     from the interactive examples while `docs/static-export.md` points at the
     package-level fixture and static-output coverage.
-- [ ] **Do not regress archived automatic enhanced refresh behavior.** This
+- [x] **Do not regress archived automatic enhanced refresh behavior.** This
   follow-up starts after AER and must preserve its generated live-target path.
-- [ ] **Nested layouts target authoring parity, not runtime persistence (v1).**
+  - Evidence: enhanced mutation/live-target regression checks pass:
+    `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app.rendering.test.ts app-shell.test.ts`;
+    `pnpm exec vitest --run packages/server/src/mutation-endpoint.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/app.test.ts`.
+- [x] **Nested layouts target authoring parity, not runtime persistence (v1).**
   - Decision 2026-06-17: each navigation still renders a full server document;
     `SPEC.md` §13.4 (no persistent cross-navigation elements) stays intact. The
     layout authoring surface must leave a seam so a later enhanced-navigation /
@@ -84,6 +87,9 @@ item inherits from rather than re-deciding it:
     `plans/enhanced-navigation.md`, which depends on this item's `layout()`
     composition and must keep `<Link>`→`<a href>`, full-document GET as canonical
     + fallback, and no-JS↔enhanced render-equivalence.
+  - Evidence: `SPEC.md` §4.5 now states first-class `layout()` is route chrome
+    while every navigation still renders a full document; `plans/enhanced-navigation.md`
+    keeps persistence work separate; `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/app.test.ts` passes.
 
 ## Plan
 
@@ -510,7 +516,7 @@ item inherits from rather than re-deciding it:
       `pnpm --filter @kovojs/example-commerce test -- source-truth.test.ts`;
       `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 
-- [ ] **10. Naming + inference consistency pass.**
+- [x] **10. Naming + inference consistency pass.**
   - One vocabulary pass across `<FieldError>`/`<FormError>`, error boundaries,
     `documentTemplate`, `layout`, and `sessionProvider`/`db` so "failure" vs "error"
     and "shell" vs "layout" vs "document" are used consistently in API, SPEC, and
@@ -518,6 +524,15 @@ item inherits from rather than re-deciding it:
   - End-to-end inference is asserted with `tsc` type-tests for each new surface
     (item 2 providers, item 3 layout queries, item 5 field names), not just runtime
     behavior.
+  - Evidence:
+    - `SPEC.md` now matches the implemented first-class `layout()` route-chrome
+      surface, reserves `document.template` for document assembly, names `db` and
+      `sessionProvider` as request-shell providers, and separates expected mutation
+      failures (`<FieldError>/<FormError>` or `forms`) from unexpected-error shells.
+    - Verification: `rg -n "no nested-layout|v1 has no nested-layout|failure template|createApp\(\{ context|context\.session|documentTemplate|forms\.addToCart\.failure\?\.code === 'OUT_OF_STOCK'" SPEC.md docs packages/create-kovo/templates -S`
+      exits 1 with no hits.
+    - Verification: `pnpm exec vitest --run packages/server/src/app-authoring-context.test.ts packages/server/src/route-jsx.test.tsx packages/compiler/src/stamps.test.ts packages/core/src/index.test.ts packages/server/src/document.test.ts`;
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 
 ## Verification Targets
 
@@ -530,4 +545,4 @@ item inherits from rather than re-deciding it:
 - [x] **Expected failures render via `<FieldError>/<FormError>` (KV242-checked); unexpected via error boundaries; no `formFailure({ message })`.** Evidence: item 5 evidence.
 - [x] **No manual query-registry duplication across shells, mutation registries, generated files, or `graph.ts`.** Evidence: item 6 app/query registry derivation, generated-file no-match, example graph checks, Commerce compiler graph join, focused compiler/CLI/example tests, root `tsc`, API gate, and `git diff --check` above.
 - [x] **No static-export surface in interactive examples; capability covered by a standalone fixture.** Evidence: item 7 no-match, docs pointer, example checks, static-export fixture/server/reference/gallery checks, root `tsc`, API gate, and `git diff --check` above.
-- [ ] **Starter template teaches the model; `kovo explain` covers the new seams; inference type-tests pass.** Evidence pending.
+- [x] **Starter template teaches the model; `kovo explain` covers the new seams; inference type-tests pass.** Evidence: items 8, 9, and 10 source/test evidence plus root `tsc`.

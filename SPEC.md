@@ -228,17 +228,28 @@ refetches full, §9.1.1). The server's _capability_ to refresh any region is unc
 rejection of slot holes stands: a prod delta still accounts for the entire target subtree, just
 incrementally.
 
-**Layouts are function composition.** v1 has no nested-layout convention. A layout is a component with children, applied directly in `route().page` as JSX:
+**Layouts are first-class route chrome.** v1 has explicit `layout()` declarations,
+not a file-system route-tree convention. A layout is still render-time function
+composition over `children`, but authors attach it to routes instead of wrapping
+every page by hand:
 
 ```tsx
+const ShellLayout = layout({
+  render: (_queries, _state, { children }) => <Shell>{children}</Shell>,
+});
+
 route('/', {
-  page: () => (
-    <Shell>
-      <ProductPage />
-    </Shell>
-  ),
+  layout: ShellLayout,
+  page: () => <ProductPage />,
 });
 ```
+
+Layouts may be nested with an explicit `parent`, may declare `queries`, `guard`,
+and per-segment `boundaries`, and are shown by `kovo explain page <path>
+--layouts`. They are page chrome, not document assembly; documents are owned by
+the request shell (§9.5). Runtime persistence is not part of v1: every navigation
+still renders a full document, so later enhanced-navigation layers must preserve
+the same authored layout declarations.
 
 Route pages that return JSX are **compiler-processed Kovo source**, not opaque runtime JSX. The
 compiler lowers the route page into authorable server IR, records the component calls and
@@ -573,11 +584,11 @@ export const AddToCartForm = component({
     <form enhance mutation={addToCart} key={productId}>
       <input type="hidden" name="productId" value={productId} />
       <input name="quantity" type="number" min={1} defaultValue={1} />
-      {forms.addToCart.failure?.code === 'OUT_OF_STOCK' ? (
-        <output role="alert" data-error-code="OUT_OF_STOCK">
-          Only {forms.addToCart.failure.payload.availableQuantity} left.
-        </output>
-      ) : null}
+      <FieldError name="quantity" />
+      <FormError
+        code="OUT_OF_STOCK"
+        message={(failure) => `Only ${failure.payload.availableQuantity} left.`}
+      />
       <button disabled={product.stock <= 0}>Add to cart</button>
     </form>
   ),
@@ -601,8 +612,11 @@ emits the concrete `action="/_m/cart/add"`, mutation key metadata, input coercio
 and submitted-form target. The string-keyed `form('cart/add')` helper survives for sites that cannot
 import the value, but author TSX should not hard-code mutation URLs.
 
-Enhanced form failures use the same render function as the no-JS full-page path. The third render
-argument carries typed form state, with each bound mutation exposing
+Enhanced form failures use the same render function as the no-JS full-page path. Expected failures
+are typed mutation results: schema validation maps to `<FieldError name="...">`, declared
+application codes map to `<FormError code="...">`, and both helpers are compiler-bound to the
+enclosing enhanced mutation form. The third render argument still carries typed form state as the
+escape hatch for custom UI, with each bound mutation exposing
 `forms.<mutation>.failure: null | { code; payload; fieldErrors? }`. The failure value is scoped to
 the submitted form instance for that render and is cleared by the next successful render of that
 instance. Repeated forms must provide stable identity through authored `key` or serializable keyed
@@ -780,9 +794,9 @@ Validation failures (schema, with field paths) and declared error codes return H
 path infers the submitted form instance from the request's compiler-emitted form target and returns a
 `<kovo-fragment>` for that form only; the no-JS path re-renders the full page. Both paths call the
 same component render function with the same typed failure state in `forms.<mutation>.failure`, so
-error UI is normal TSX rather than a separate failure template. `ctx.submit`'s `onError` receives the
-same typed union. Failure responses never use committed invalidation or `Kovo-Targets` success
-selection.
+expected failure UI is normal TSX (`<FieldError>`, `<FormError>`, or direct `forms` reads) rather
+than a separate response template. `ctx.submit`'s `onError` receives the same typed union. Expected
+failure responses never use committed invalidation or `Kovo-Targets` success selection.
 
 Unexpected server failures are not part of the typed union and must not leak internals. The typed query endpoint (§9.4) returns HTTP 500 with JSON `{"code":"SERVER_ERROR","payload":{}}`. Full-page route rendering returns HTTP 500 with the app's stable error shell or the fallback body `Internal Server Error`. Enhanced mutation responses that fail while rendering post-commit queries/fragments return a render-error fragment with HTTP 500 and `data-error-code="RENDER_ERROR"`; any `Kovo-Changes` header on that response remains sanitized to `{domain, keys}` for writes that already committed.
 
@@ -816,15 +830,15 @@ Args arrive as search params through the query's `args` schema (§10.2) — the 
 
 ### 9.5 Request shell
 
-The request shell is the server-owned composition point for routing, document assembly, dev serving, and export. Apps declare a closed `createApp()` aggregate: routes, mutations, queries, endpoints, the client-module registry, document options, error shells, CSRF config, and the §6.5 `sessionProvider`. Generated route IR and live-target registry artifacts are wired by the compiler/build integration, not by app-authored `createApp({ generated, refresh })` options. The public handler currency is web-standard `Request -> Response`; adapters such as `node:http` convert at the edge.
+The request shell is the server-owned composition point for routing, document assembly, dev serving, and export. Apps declare a closed `createApp()` aggregate: routes, mutations, queries, endpoints, the client-module registry, document options, unexpected-error shells, CSRF config, the `db` provider, and the §6.5 `sessionProvider`. Generated route IR and live-target registry artifacts are wired by the compiler/build integration, not by app-authored `createApp({ generated, refresh })` options. The public handler currency is web-standard `Request -> Response`; adapters such as `node:http` convert at the edge.
 
 Dispatch order is normative and printable: `/_m/<mutation-key>` mutations, `/_q/<query-key>` typed reads, `/c/<module>?v=` immutable client modules, declared `endpoint()` exact/prefix mounts, route table, then the 404 shell. There is no user middleware chain in v1. Extension points that can affect control flow are declared surfaces — `sessionProvider`, guards, `endpoint()`, `webhook()` — so audits can print them and no request behavior is registered from a distance.
 
 Route matching is static-first at each path segment, and ambiguity is a compile error **KV228** rather than a runtime precedence footnote. Trailing slashes normalize to one canonical path with a 308 redirect before matching. Page routes answer GET and HEAD; other methods on a page path are 405 because mutations own POST via `/_m/`.
 
-The shell owns document assembly. The default document contains the doctype, `<html lang>`, route/query meta, page hints (stylesheet links, modulepreloads, optional speculation rules), initial `<kovo-query>` scripts before consumers, the page body, and the inline loader. Apps may provide a document template, but the template receives assembled parts rather than a blank canvas, so it cannot silently drop loader or hydration contracts. Deferred streams use the same assembled shell parts; partials must not drift from full documents.
+The shell owns document assembly. The default document contains the doctype, `<html lang>`, route/query meta, page hints (stylesheet links, modulepreloads, optional speculation rules), initial `<kovo-query>` scripts before consumers, the page body, and the inline loader. Apps may provide `createApp({ document: { template } })`, but the template receives assembled parts rather than a blank canvas, so it cannot silently drop loader or hydration contracts. Deferred streams use the same assembled shell parts; partials must not drift from full documents.
 
-Error shells are app config with safe defaults: 404, 403, and 500 documents may be supplied by the app, while unexpected failures still use the stable no-internals bodies from §9.2 when no shell is provided. The shell resolves `sessionProvider` once before route, query, or mutation guards; route/query guard failures use the §6.5 unauthenticated redirect and 403 contract.
+Unexpected-error shells are app config with safe defaults: 404, 403, and 500 documents may be supplied by the app, while unexpected failures still use the stable no-internals bodies from §9.2 when no shell is provided. The shell resolves `db` and `sessionProvider` once before route, query, or mutation guards; route/query guard failures use the §6.5 unauthenticated redirect and 403 contract.
 
 Static export replays synthetic GET `Request`s through the same handler. An exportable route writes `.html`, referenced immutable `/c/` modules, and static assets; there is no second render path. Export is L0/L1 only: a route with a guard, unproven session dependence, mutation-only interaction, or a param path without explicit static-path enumeration fails or skips loudly with **KV229** according to the configured export policy. Exported documents disable server refetch assumptions; the no-JS document is the artifact.
 
