@@ -1,10 +1,14 @@
 import {
   attrs,
   createAtomicStyles,
+  createTheme,
+  defineVars,
   emitAtomicCss,
+  tokens as publicThemeTokens,
   type AtomicRule,
   type CompiledStyle,
   type CreateOptions,
+  type CssValue,
   type StyleObject,
 } from '@kovojs/style';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
@@ -46,6 +50,7 @@ interface StyleBinding {
 }
 
 interface StyleEnvironment {
+  readonly diagnostics: readonly CompilerDiagnostic[];
   readonly rules: readonly AtomicRule[];
   readonly usages: readonly StyleRuleUsage[];
   readonly bindings: ReadonlyMap<string, StyleBinding>;
@@ -81,13 +86,13 @@ export function extractKovoStyles(
   componentName = 'Component',
   options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'> = {},
 ): KovoStyleExtraction {
-  const styleNamespaces = styleNamespaceImports(source, fileName);
-  if (styleNamespaces.size === 0) {
+  const styleImports = styleImportsFromSource(source, fileName);
+  if (styleImports.namespaces.size === 0 && styleImports.publicTokenNames.size === 0) {
     return emptyStyleExtraction();
   }
 
-  const environment = collectStyleEnvironment(fileName, source, styleNamespaces);
-  if (environment.bindings.size === 0) {
+  const environment = collectStyleEnvironment(fileName, source, styleImports);
+  if (environment.bindings.size === 0 && environment.rules.length === 0) {
     return emptyStyleExtraction();
   }
 
@@ -100,7 +105,7 @@ export function extractKovoStyles(
 
   return {
     css,
-    diagnostics: lowered.diagnostics,
+    diagnostics: [...environment.diagnostics, ...lowered.diagnostics],
     handledSpans: lowered.handledSpans,
     outputContexts: css
       ? [
@@ -134,7 +139,12 @@ function emptyStyleExtraction(): KovoStyleExtraction {
   };
 }
 
-function styleNamespaceImports(source: string, fileName: string): Set<string> {
+interface StyleImports {
+  readonly namespaces: ReadonlySet<string>;
+  readonly publicTokenNames: ReadonlySet<string>;
+}
+
+function styleImportsFromSource(source: string, fileName: string): StyleImports {
   const sourceFile = ts.createSourceFile(
     fileName,
     source,
@@ -143,6 +153,7 @@ function styleNamespaceImports(source: string, fileName: string): Set<string> {
     ts.ScriptKind.TSX,
   );
   const namespaces = new Set<string>();
+  const publicTokenNames = new Set<string>();
 
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement)) continue;
@@ -151,15 +162,22 @@ function styleNamespaceImports(source: string, fileName: string): Set<string> {
     const namedBindings = statement.importClause?.namedBindings;
     if (namedBindings && ts.isNamespaceImport(namedBindings))
       namespaces.add(namedBindings.name.text);
+    if (namedBindings && ts.isNamedImports(namedBindings)) {
+      for (const element of namedBindings.elements) {
+        if ((element.propertyName ?? element.name).text === 'tokens') {
+          publicTokenNames.add(element.name.text);
+        }
+      }
+    }
   }
 
-  return namespaces;
+  return { namespaces, publicTokenNames };
 }
 
 function collectStyleEnvironment(
   fileName: string,
   source: string,
-  styleNamespaces: ReadonlySet<string>,
+  styleImports: StyleImports,
 ): StyleEnvironment {
   const sourceFile = ts.createSourceFile(
     fileName,
@@ -169,15 +187,60 @@ function collectStyleEnvironment(
     ts.ScriptKind.TSX,
   );
   const bindings = new Map<string, StyleBinding>();
+  const diagnostics: CompilerDiagnostic[] = [];
   const rules: AtomicRule[] = [];
   const usages: StyleRuleUsage[] = [];
+  const staticValues = new Map<string, unknown>();
   // Module-local `const x = { ... }` objects, so static `{ ...x }` spreads inside
   // a style object resolve (e.g. @kovojs/ui field.tsx shares `nativeControlStyle`).
   const localObjects = collectLocalObjectLiterals(sourceFile);
 
-  const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const created = styleCreateCall(sourceFile, node.initializer, styleNamespaces, localObjects);
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const node of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(node.name)) continue;
+
+      const vars = styleDefineVarsCall(node.initializer, styleImports.namespaces);
+      if (vars) {
+        const tokens = tokenValuesFromObject(vars.tokens, staticValues, styleImports);
+        if (!tokens) {
+          diagnostics.push(staticStyleDiagnostic(fileName, source, node, 'style.defineVars'));
+          continue;
+        }
+        const result = defineVars(tokens, vars.options);
+        staticValues.set(node.name.text, result);
+        rules.push(...(result.__rules ?? []));
+        pushRuleUsages(usages, fileName, node.name.text, result.__rules ?? []);
+        continue;
+      }
+
+      const theme = styleCreateThemeCall(node.initializer, styleImports.namespaces);
+      if (theme) {
+        const baseTokens = ts.isIdentifier(theme.baseTokens)
+          ? staticValues.get(theme.baseTokens.text)
+          : undefined;
+        const overrides = tokenValuesFromObject(theme.overrides, staticValues, styleImports);
+        if (!baseTokens || !overrides) {
+          diagnostics.push(staticStyleDiagnostic(fileName, source, node, 'style.createTheme'));
+          continue;
+        }
+        const result = createTheme(
+          baseTokens as Parameters<typeof createTheme>[0],
+          overrides,
+          theme.options,
+        );
+        staticValues.set(node.name.text, result);
+        rules.push(...(result.__rules ?? []));
+        pushRuleUsages(usages, fileName, node.name.text, result.__rules ?? []);
+        continue;
+      }
+
+      const created = styleCreateCall(
+        node.initializer,
+        styleImports,
+        localObjects,
+        staticValues,
+      );
       if (created) {
         const result = createAtomicStyles(created.styles, {
           namespace: created.options.namespace ?? node.name.text,
@@ -197,32 +260,27 @@ function collectStyleEnvironment(
             });
           }
         }
+      } else if (isStyleCreateCall(node.initializer, styleImports.namespaces)) {
+        diagnostics.push(staticStyleDiagnostic(fileName, source, node, 'style.create'));
       }
     }
-    ts.forEachChild(node, visit);
-  };
+  }
 
-  visit(sourceFile);
-
-  return { bindings, rules, usages };
+  return { bindings, diagnostics, rules, usages };
 }
 
 function styleCreateCall(
-  sourceFile: ts.SourceFile,
   initializer: ts.Expression | undefined,
-  styleNamespaces: ReadonlySet<string>,
+  styleImports: StyleImports,
   localObjects: LocalObjectLiterals,
+  staticValues: ReadonlyMap<string, unknown>,
 ): { readonly options: CreateOptions; readonly styles: Record<string, StyleObject> } | null {
-  if (!initializer || !ts.isCallExpression(initializer)) return null;
-  if (!ts.isPropertyAccessExpression(initializer.expression)) return null;
-  if (initializer.expression.name.text !== 'create') return null;
-  if (!ts.isIdentifier(initializer.expression.expression)) return null;
-  if (!styleNamespaces.has(initializer.expression.expression.text)) return null;
+  if (!isStyleCreateCall(initializer, styleImports.namespaces)) return null;
 
   const [stylesArgument, optionsArgument] = initializer.arguments;
   if (!stylesArgument || !ts.isObjectLiteralExpression(stylesArgument)) return null;
 
-  const styles = styleNamespacesFromObject(stylesArgument, localObjects);
+  const styles = styleNamespacesFromObject(stylesArgument, localObjects, staticValues, styleImports);
   if (!styles) return null;
 
   return {
@@ -231,9 +289,67 @@ function styleCreateCall(
   };
 }
 
+function isStyleCreateCall(
+  initializer: ts.Expression | undefined,
+  styleNamespaces: ReadonlySet<string>,
+): initializer is ts.CallExpression {
+  if (!initializer || !ts.isCallExpression(initializer)) return false;
+  if (!ts.isPropertyAccessExpression(initializer.expression)) return false;
+  if (initializer.expression.name.text !== 'create') return false;
+  if (!ts.isIdentifier(initializer.expression.expression)) return false;
+  return styleNamespaces.has(initializer.expression.expression.text);
+}
+
+function styleDefineVarsCall(
+  initializer: ts.Expression | undefined,
+  styleNamespaces: ReadonlySet<string>,
+):
+  | {
+      readonly options: CreateOptions;
+      readonly tokens: ts.ObjectLiteralExpression;
+    }
+  | null {
+  if (!initializer || !ts.isCallExpression(initializer)) return null;
+  if (!ts.isPropertyAccessExpression(initializer.expression)) return null;
+  if (initializer.expression.name.text !== 'defineVars') return null;
+  if (!ts.isIdentifier(initializer.expression.expression)) return null;
+  if (!styleNamespaces.has(initializer.expression.expression.text)) return null;
+  const [tokensArgument, optionsArgument] = initializer.arguments;
+  if (!tokensArgument || !ts.isObjectLiteralExpression(tokensArgument)) return null;
+  return { options: createOptionsFromObject(optionsArgument), tokens: tokensArgument };
+}
+
+function styleCreateThemeCall(
+  initializer: ts.Expression | undefined,
+  styleNamespaces: ReadonlySet<string>,
+):
+  | {
+      readonly baseTokens: ts.Expression;
+      readonly options: CreateOptions;
+      readonly overrides: ts.ObjectLiteralExpression;
+    }
+  | null {
+  if (!initializer || !ts.isCallExpression(initializer)) return null;
+  if (!ts.isPropertyAccessExpression(initializer.expression)) return null;
+  if (initializer.expression.name.text !== 'createTheme') return null;
+  if (!ts.isIdentifier(initializer.expression.expression)) return null;
+  if (!styleNamespaces.has(initializer.expression.expression.text)) return null;
+  const [baseTokens, overridesArgument, optionsArgument] = initializer.arguments;
+  if (!baseTokens || !overridesArgument || !ts.isObjectLiteralExpression(overridesArgument)) {
+    return null;
+  }
+  return {
+    baseTokens,
+    options: createOptionsFromObject(optionsArgument),
+    overrides: overridesArgument,
+  };
+}
+
 function styleNamespacesFromObject(
   node: ts.ObjectLiteralExpression,
   localObjects: LocalObjectLiterals,
+  staticValues: ReadonlyMap<string, unknown>,
+  styleImports: StyleImports,
 ): Record<string, StyleObject> | null {
   const styles: Record<string, StyleObject> = {};
 
@@ -241,7 +357,7 @@ function styleNamespacesFromObject(
     if (!ts.isPropertyAssignment(property)) return null;
     const key = propertyNameText(property.name);
     if (!key || !ts.isObjectLiteralExpression(property.initializer)) return null;
-    const value = styleObjectFromObject(property.initializer, localObjects);
+    const value = styleObjectFromObject(property.initializer, localObjects, staticValues, styleImports);
     if (!value) return null;
     styles[key] = value;
   }
@@ -252,6 +368,8 @@ function styleNamespacesFromObject(
 function styleObjectFromObject(
   node: ts.ObjectLiteralExpression,
   localObjects: LocalObjectLiterals,
+  staticValues: ReadonlyMap<string, unknown>,
+  styleImports: StyleImports,
 ): StyleObject | null {
   const style: Record<string, string | number | StyleObject> = {};
 
@@ -262,7 +380,7 @@ function styleObjectFromObject(
       if (!ts.isIdentifier(property.expression)) return null;
       const target = localObjects.get(property.expression.text);
       if (!target) return null;
-      const spread = styleObjectFromObject(target, localObjects);
+      const spread = styleObjectFromObject(target, localObjects, staticValues, styleImports);
       if (!spread) return null;
       Object.assign(style, spread);
       continue;
@@ -272,17 +390,34 @@ function styleObjectFromObject(
     if (!key) return null;
     const value = property.initializer;
     if (ts.isObjectLiteralExpression(value)) {
-      const nested = styleObjectFromObject(value, localObjects);
+      const nested = styleObjectFromObject(value, localObjects, staticValues, styleImports);
       if (!nested) return null;
       style[key] = nested;
       continue;
     }
-    const primitive = primitiveValue(value);
+    const primitive = staticPrimitiveValue(value, staticValues, styleImports);
     if (primitive === undefined) return null;
     style[key] = primitive;
   }
 
   return style;
+}
+
+function tokenValuesFromObject(
+  node: ts.ObjectLiteralExpression,
+  staticValues: ReadonlyMap<string, unknown>,
+  styleImports: StyleImports,
+): Record<string, CssValue> | null {
+  const result: Record<string, CssValue> = {};
+  for (const property of node.properties) {
+    if (!ts.isPropertyAssignment(property)) return null;
+    const key = propertyNameText(property.name);
+    if (!key) return null;
+    const value = staticCssValue(property.initializer, staticValues, styleImports);
+    if (value === undefined) return null;
+    result[key] = value;
+  }
+  return result;
 }
 
 type LocalObjectLiterals = ReadonlyMap<string, ts.ObjectLiteralExpression>;
@@ -750,6 +885,117 @@ function propertyNameText(name: ts.PropertyName): string | null {
   if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name))
     return name.text;
   return null;
+}
+
+function pushRuleUsages(
+  usages: StyleRuleUsage[],
+  fileName: string,
+  styleRefRoot: string,
+  rules: readonly AtomicRule[],
+): void {
+  for (const rule of rules) {
+    usages.push({
+      className: rule.className,
+      moduleFileName: fileName,
+      source: rule.source,
+      styleRef: `${styleRefRoot}.${rule.property}`,
+    });
+  }
+}
+
+function staticStyleDiagnostic(
+  fileName: string,
+  source: string,
+  node: ts.Node,
+  api: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'KV236', source, node.getStart(), node.getWidth()),
+    help: [
+      `Would lower to: static CSS rules extracted from ${api}.`,
+      'Blocked reason: the style extractor only accepts literals, same-file defineVars/createTheme values, and public @kovojs/style theme token references.',
+      'Fixes: move the value into a static object literal, import the public tokens object from @kovojs/style, or keep dynamic styling behind an explicit raw style escape.',
+      'SPEC §5.2 requires post-parse compiler decisions to use typed facts; SPEC §13.1 requires StyleX-authored component styles to extract into CSS assets.',
+    ].join('\n'),
+    message: `Static style extraction could not prove ${api} values.`,
+  };
+}
+
+function staticCssValue(
+  node: ts.Expression,
+  staticValues: ReadonlyMap<string, unknown>,
+  styleImports: StyleImports,
+): CssValue | undefined {
+  if (node.kind === ts.SyntaxKind.NullKeyword) return null;
+  if (ts.isIdentifier(node) && node.text === 'undefined') return undefined;
+  return staticPrimitiveValue(node, staticValues, styleImports);
+}
+
+function staticPrimitiveValue(
+  node: ts.Expression,
+  staticValues: ReadonlyMap<string, unknown>,
+  styleImports: StyleImports,
+): string | number | undefined {
+  const primitive = primitiveValue(node);
+  if (primitive !== undefined) return primitive;
+
+  if (ts.isIdentifier(node)) {
+    const value = staticValues.get(node.text);
+    return typeof value === 'string' || typeof value === 'number' ? value : undefined;
+  }
+
+  const referenced = staticPropertyAccessValue(node, staticValues, styleImports);
+  return typeof referenced === 'string' || typeof referenced === 'number' ? referenced : undefined;
+}
+
+function staticPropertyAccessValue(
+  node: ts.Expression,
+  staticValues: ReadonlyMap<string, unknown>,
+  styleImports: StyleImports,
+): unknown {
+  const path = propertyAccessPath(node);
+  if (!path || path.length === 0) return undefined;
+  const [root, ...segments] = path;
+  if (!root) return undefined;
+
+  if (styleImports.publicTokenNames.has(root)) {
+    return valueAtPath(publicThemeTokens, segments);
+  }
+
+  if (styleImports.namespaces.has(root) && segments[0] === 'tokens') {
+    return valueAtPath(publicThemeTokens, segments.slice(1));
+  }
+
+  if (!staticValues.has(root)) return undefined;
+  return valueAtPath(staticValues.get(root), segments);
+}
+
+function propertyAccessPath(node: ts.Expression): string[] | null {
+  if (ts.isIdentifier(node)) return [node.text];
+  if (ts.isPropertyAccessExpression(node)) {
+    const prefix = propertyAccessPath(node.expression);
+    return prefix ? [...prefix, node.name.text] : null;
+  }
+  if (ts.isElementAccessExpression(node)) {
+    const prefix = propertyAccessPath(node.expression);
+    const argument = node.argumentExpression;
+    if (!prefix || !argument) return null;
+    if (ts.isStringLiteral(argument) || ts.isNumericLiteral(argument)) {
+      return [...prefix, argument.text];
+    }
+  }
+  return null;
+}
+
+function valueAtPath(value: unknown, segments: readonly string[]): unknown {
+  let current = value;
+  for (const segment of segments) {
+    if (current === null || (typeof current !== 'object' && typeof current !== 'function')) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
 }
 
 function primitiveValue(node: ts.Expression): string | number | undefined {

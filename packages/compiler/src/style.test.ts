@@ -93,6 +93,98 @@ export const Button = component({
     expect(serverSource).toContain('data-style-src="button.tsx#root; button.override.tsx#danger"');
   });
 
+  it('extracts same-file defineVars and createTheme rules into CSS assets', () => {
+    const result = compileComponentModule({
+      fileName: 'components/themed-button.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const buttonVars = style.defineVars({
+  accent: '#2563eb',
+  onAccent: 'white',
+}, { namespace: 'button', source: 'button.vars.ts' });
+
+const successTheme = style.createTheme(
+  buttonVars,
+  { accent: '#16a34a' },
+  { namespace: 'success', source: 'button.theme.ts' },
+);
+
+const base = style.create({
+  root: {
+    backgroundColor: buttonVars.accent,
+    color: buttonVars.onAccent,
+  },
+}, { namespace: 'button', source: 'button.tsx' });
+
+export const Button = component({
+  render: () => <button style={base.root}>Buy</button>,
+});
+`,
+    });
+
+    const cssSource = result.files.find((file) => file.kind === 'css')?.source ?? '';
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(cssSource).toContain(':root{--kovo-button-accent:#2563eb}');
+    expect(cssSource).toContain(':root{--kovo-button-on-accent:white}');
+    expect(cssSource).toContain('--kovo-button-accent:#16a34a');
+    expect(cssSource).toContain('background-color:var(--kovo-button-accent)');
+    expect(cssSource).toContain('color:var(--kovo-button-on-accent)');
+    expect(serverSource).toContain('kv-button-bg-');
+    expect(result.cssAssets[0]?.styleRuleUsages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          moduleFileName: 'components/themed-button.tsx',
+          source: 'button.vars.ts#accent',
+          styleRef: 'buttonVars.accent',
+        }),
+        expect.objectContaining({
+          moduleFileName: 'components/themed-button.tsx',
+          source: 'button.theme.ts#accent',
+          styleRef: 'successTheme.accent',
+        }),
+        expect.objectContaining({
+          moduleFileName: 'components/themed-button.tsx',
+          source: 'button.tsx#root',
+          styleRef: 'base.root',
+        }),
+      ]),
+    );
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('resolves public theme token imports in static style.create objects', () => {
+    const result = compileComponentModule({
+      fileName: 'components/token-button.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+import { tokens } from '@kovojs/style';
+
+const base = style.create({
+  root: {
+    backgroundColor: tokens.sys.color.primary,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    color: style.tokens.sys.color.onPrimary,
+  },
+}, { namespace: 'tokenButton', source: 'token-button.tsx' });
+
+export const Button = component({
+  render: () => <button style={base.root}>Buy</button>,
+});
+`,
+    });
+
+    const cssSource = result.files.find((file) => file.kind === 'css')?.source ?? '';
+
+    expect(cssSource).toContain('background-color:var(--kovo-theme-sys-color-primary)');
+    expect(cssSource).toContain('border-radius:var(--kovo-theme-sys-shape-corner-medium)');
+    expect(cssSource).toContain('color:var(--kovo-theme-sys-color-on-primary)');
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('composes generated StyleX classes with authored static class writers', () => {
     const result = compileComponentModule({
       fileName: 'components/button.tsx',

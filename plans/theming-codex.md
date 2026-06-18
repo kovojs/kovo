@@ -164,14 +164,24 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
 
 ## Part B — Compiler support for typed tokens/themes
 
-- [ ] **B1. Extract `style.defineVars(...)` rules.** Extend the StyleX extraction environment so
+- [x] **B1. Extract `style.defineVars(...)` rules.** Extend the StyleX extraction environment so
       variable declarations contribute CSS rules to component/package CSS assets, not just runtime
       objects.
-- [ ] **B2. Extract `style.createTheme(...)` rules.** Ensure theme override classes/attributes emit
+  - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/style.test.ts
+    packages/compiler/src/package-styles.test.ts` passes; `style.test.ts` asserts same-file
+    `style.defineVars(...)` emits `:root` custom-property CSS and style-rule provenance.
+- [x] **B2. Extract `style.createTheme(...)` rules.** Ensure theme override classes/attributes emit
       custom-property CSS and carry provenance in CSS manifests.
-- [ ] **B3. Resolve token references in `style.create(...)`.** Teach the static style object resolver
+  - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/style.test.ts
+    packages/compiler/src/package-styles.test.ts` passes; `style.test.ts` asserts same-file
+    `style.createTheme(...)` emits theme override CSS and manifest provenance.
+- [x] **B3. Resolve token references in `style.create(...)`.** Teach the static style object resolver
       to fold module-local and imported token values that are known `defineVars`/Material token
       exports, so UI code can say `color: tokens.sys.color.onPrimary` instead of a raw string.
+  - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/style.test.ts
+    packages/compiler/src/package-styles.test.ts` passes; `style.test.ts` asserts
+    `tokens.sys.color.primary`, `tokens.sys.shape.cornerMedium`, and
+    `style.tokens.sys.color.onPrimary` imported from root `@kovojs/style` lower into atomic CSS.
 - [ ] **B4. Add diagnostics for unresolved token expressions.** If a component style references a
       token-like expression the extractor cannot prove static, emit a clear diagnostic rather than
       silently dropping CSS.
