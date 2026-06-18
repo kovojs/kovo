@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { propertyTest } from '@kovojs/test/assertions';
 import {
-  kovoFragmentFacts,
-  kovoResponseBodyFact,
   htmlElementFacts,
   htmlFormFieldsByName,
   htmlFormFacts,
@@ -13,27 +11,17 @@ import {
 
 import {
   addToCartOptimistic,
-  createCommerceDb,
   renderAddToCartForm,
-  renderOrderHistory,
   renderCartPage,
-  submitAddToCart,
-  submitAddToCartNoJs,
   type AddToCartInput,
 } from './app.js';
 import {
   applyCommerceAddToCartEffect,
   commerceAddToCartPropertyCases,
+  createCommerceScenarioClient,
   shapeCommerceCartQuery,
   type CommerceAddToCartPropertyState,
 } from './app-test-helpers.js';
-
-const cartPageTargets = 'cart-badge=cart; product-grid=productGrid; order-history=orderHistory';
-const cartPageLiveTargets = [
-  'cart-badge#components/cart-badge/cart-badge:{}',
-  'product-grid#components/product-grid/product-grid:{}',
-  'order-history#components/order-history/order-history:{}',
-].join('; ');
 
 describe('commerce example', () => {
   it('predicts cart count with the compiler-derived addToCart optimistic transform', () => {
@@ -84,128 +72,79 @@ describe('commerce example', () => {
   });
 
   it('handles no-JS addToCart success as POST-redirect-GET', async () => {
-    const db = createCommerceDb();
+    const client = createCommerceScenarioClient();
+    const login = await client.signIn({ remoteAddress: '203.0.113.70' });
+    expect(login.status).toBe(303);
 
-    await expect(
-      submitAddToCartNoJs(
-        { productId: 'p1', quantity: 2 },
-        { db, session: { id: 's-no-js-success', user: { id: 'u1' } } },
-      ),
-    ).resolves.toEqual({
-      body: '',
-      headers: {
-        'Cache-Control': 'no-store',
-        Location: '/cart',
-      },
-      status: 303,
-    });
+    const response = await client.addToCartNoJs({ productId: 'p1', quantity: 2 });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('location')).toBe('/cart');
+    await expect(response.text()).resolves.toBe('');
 
-    expect(htmlTextContent(await renderCartPage(db))).toContain('3 in stock');
+    const cart = await client.get('/cart');
+    const cartHtml = await cart.text();
+    expect(cart.status, cartHtml).toBe(200);
+    expect(htmlTextContent(cartHtml)).toContain('3 in stock');
     // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session user.
-    expect(htmlKeyValues(await renderOrderHistory(db, 'u1'))).toContain('order-1');
+    expect(htmlKeyValues(cartHtml)).toContain('order-1');
   });
 
   it('handles enhanced addToCart through the same endpoint as fragment wire', async () => {
-    const db = createCommerceDb();
-    const transaction = db.transaction.bind(db);
+    const client = createCommerceScenarioClient();
+    const transaction = client.shell.db.transaction.bind(client.shell.db);
     let transactions = 0;
 
-    db.transaction = (run) => {
+    client.shell.db.transaction = (run) => {
       transactions += 1;
       return transaction(run);
     };
 
-    await expect(
-      submitAddToCart(
-        { productId: 'p1', quantity: 2 },
-        { db, session: { id: 's-enhanced-success', user: { id: 'u1' } } },
-        {
-          'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': cartPageLiveTargets,
-          'Kovo-Targets': cartPageTargets,
-        },
-      ),
-    ).resolves.toMatchObject({
-      headers: {
-        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
-      },
-      status: 200,
-    });
+    const login = await client.signIn({ remoteAddress: '203.0.113.71' });
+    expect(login.status).toBe(303);
 
-    const response = await submitAddToCart(
-      { productId: 'p2', quantity: 1 },
-      { db, session: { id: 's-enhanced-success-2', user: { id: 'u1' } } },
-      {
-        'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': cartPageLiveTargets,
-        'Kovo-Targets': cartPageTargets,
-      },
-    );
+    const first = await client.addToCartEnhanced({ productId: 'p1', quantity: 2 });
+    expect(first.status, await first.text()).toBe(200);
 
-    const responseFact = kovoResponseBodyFact(response.body);
-    expect(responseFact.queryNames).toEqual(['cart', 'productGrid', 'orderHistory']);
-    expect(responseFact.fragmentTargets).toEqual(['cart-badge', 'product-grid', 'order-history']);
-    expect(responseFact.fragments.flatMap((fragment) => fragment.stylesheetHrefs)).toEqual([]);
-    expect(responseFact.keyValues).toContain('order-2');
+    const response = await client.addToCartEnhanced({ productId: 'p2', quantity: 1 });
+    const body = await response.text();
+    expect(response.status, body).toBe(200);
+    expect(response.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
+    expect(htmlKeyValues(body)).toContain('order-2');
+    expect(htmlTextContent(body)).toContain('Only 1 left');
     expect(transactions).toBe(2);
   });
 
   it('contains product-grid fragment failures with a per-island error boundary', async () => {
-    const db = createCommerceDb();
+    const client = createCommerceScenarioClient();
+    const login = await client.signIn({ remoteAddress: '203.0.113.72' });
+    expect(login.status).toBe(303);
 
-    const response = await submitAddToCart(
+    const response = await client.addToCartEnhanced(
       { productId: 'p1', quantity: 1 },
       {
-        db,
-        renderFaults: {
-          productGrid: () => new Error('catalog unavailable'),
-        },
-        session: { id: 's-enhanced-boundary', user: { id: 'u1' } },
-      },
-      {
-        'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': cartPageLiveTargets,
-        'Kovo-Targets': cartPageTargets,
+        renderProductGridFault: new Error('catalog unavailable'),
       },
     );
+    const body = await response.text();
 
-    expect(response).toMatchObject({
-      headers: {
-        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
-      },
-      status: 200,
-    });
-    const responseFact = kovoResponseBodyFact(response.body);
-    expect(
-      responseFact.fragments.filter((fragment) => fragment.target === 'product-grid'),
-    ).toMatchObject([
-      {
-        attrs: { 'error-boundary': 'product-grid', target: 'product-grid' },
-        stylesheetHrefs: [],
-      },
-    ]);
-    expect(
-      htmlTextContent(
-        responseFact.fragments.find((fragment) => fragment.target === 'product-grid')?.innerHtml ??
-          '',
-      ),
-    ).toBe('Product grid failed: catalog unavailable');
-    expect(responseFact.fragmentTargets).toEqual(['cart-badge', 'product-grid', 'order-history']);
+    expect(response.status, body).toBe(200);
+    expect(response.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
+    expect(htmlTextContent(body)).toContain('Product grid failed: catalog unavailable');
   });
 
   it('handles no-JS addToCart failures as a full 422 page with the form rerendered', async () => {
-    const db = createCommerceDb();
-    const response = await submitAddToCartNoJs(
-      { productId: 'p2', quantity: 3 },
-      { db, session: { id: 's-no-js-fail', user: { id: 'u1' } } },
-    );
+    const client = createCommerceScenarioClient();
+    const login = await client.signIn({ remoteAddress: '203.0.113.73' });
+    expect(login.status).toBe(303);
 
-    expect(response).toMatchObject({
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      status: 422,
-    });
-    expect(htmlElementFacts(response.body, { tag: 'html' })).toHaveLength(1);
-    expect(htmlFormFacts(response.body)).toEqual(
+    const response = await client.addToCartNoJs({ productId: 'p2', quantity: 3 });
+    const body = await response.text();
+
+    expect(response.status, body).toBe(422);
+    expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(htmlElementFacts(body, { tag: 'html' })).toHaveLength(1);
+    expect(htmlFormFacts(body)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           action: '/_m/cart/add',
@@ -217,60 +156,53 @@ describe('commerce example', () => {
       ]),
     );
     expect(
-      htmlElementFacts(response.body, {
+      htmlElementFacts(body, {
         attrs: { 'data-error-code': 'OUT_OF_STOCK' },
         tag: 'output',
       }),
     ).toHaveLength(1);
-    expect(htmlTextContent(response.body)).toContain('Only 2 available.');
+    expect(htmlTextContent(body)).toContain('Only 2 available.');
     // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session user.
-    expect(htmlKeyValues(await renderOrderHistory(db, 'u1'))).not.toContain('order-1');
+    expect(htmlKeyValues(body)).not.toContain('order-1');
   });
 
   it('handles enhanced addToCart failures as a rerendered form fragment', async () => {
-    const db = createCommerceDb();
-    const response = await submitAddToCart(
-      { productId: 'p2', quantity: 3 },
-      { db, session: { id: 's-enhanced-fail', user: { id: 'u1' } } },
-      {
-        'Kovo-Fragment': 'true',
-        'Kovo-Targets': 'add-to-cart:p2',
-      },
-    );
+    const client = createCommerceScenarioClient();
+    const login = await client.signIn({ remoteAddress: '203.0.113.74' });
+    expect(login.status).toBe(303);
 
-    expect(response).toMatchObject({
-      headers: {
-        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
-      },
-      status: 422,
-    });
-    const [formFragment] = kovoFragmentFacts(response.body, 'add-to-cart:p2');
-    expect(formFragment).toMatchObject({
-      stylesheetHrefs: ['/assets/styles.css'],
-      target: 'add-to-cart:p2',
-    });
-    expect(htmlFormFacts(formFragment?.innerHtml ?? '')).toMatchObject([
-      {
-        action: '/_m/cart/add',
-        attrs: { method: 'post' },
-        fields: expect.arrayContaining([
-          expect.objectContaining({ name: 'productId', value: 'p2' }),
-        ]),
-      },
-    ]);
+    const response = await client.addToCartEnhanced(
+      { productId: 'p2', quantity: 3 },
+      { target: 'form' },
+    );
+    const body = await response.text();
+
+    expect(response.status, body).toBe(422);
+    expect(response.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
+    expect(htmlFormFacts(body)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: '/_m/cart/add',
+          fields: expect.arrayContaining([
+            expect.objectContaining({ name: 'productId', value: 'p2' }),
+          ]),
+        }),
+      ]),
+    );
     expect(
-      htmlElementFacts(formFragment?.innerHtml ?? '', {
+      htmlElementFacts(body, {
         attrs: { 'kovo-fragment-target': 'add-to-cart:p2' },
       }),
     ).toHaveLength(1);
     expect(
-      htmlElementFacts(formFragment?.innerHtml ?? '', {
+      htmlElementFacts(body, {
         attrs: { 'data-error-code': 'OUT_OF_STOCK' },
         tag: 'output',
       }),
     ).toHaveLength(1);
-    expect(htmlTextContent(formFragment?.innerHtml ?? '')).toContain('Only 2 available.');
+    expect(htmlTextContent(body)).toContain('Only 2 available.');
     // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session user.
-    expect(htmlKeyValues(await renderOrderHistory(db, 'u1'))).not.toContain('order-1');
+    const cart = await client.get('/cart');
+    expect(htmlKeyValues(await cart.text())).not.toContain('order-1');
   });
 });

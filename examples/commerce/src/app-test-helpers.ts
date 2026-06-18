@@ -1,13 +1,20 @@
 import { headerValues, setCookieValues } from '@kovojs/test/headers';
 import { type StructuralMorphNode } from '@kovojs/runtime';
+import { csrfToken } from '@kovojs/server';
+import { htmlFormFacts, htmlFormFieldsByName } from '@kovojs/test/html-fragment';
 import { eq } from 'drizzle-orm';
 
 import {
+  commerceAuthCsrf,
   createCommerceDb,
   type AddToCartInput,
   type CommerceDb,
   type ProductGridInput,
 } from './app.js';
+import {
+  createCommerceAppShell,
+  type CommerceAppShell,
+} from './generated/app-shell.kovo-route.js';
 import { cartItems, orders, products } from './schema.js';
 
 // SPEC.md §14: the test DB is real Drizzle/PGlite, so tests seed and read rows
@@ -199,4 +206,230 @@ export function productGridInput(after: string | null, limit?: number): ProductG
     ...(after ? { after } : {}),
     ...(limit === undefined ? {} : { limit }),
   };
+}
+
+export interface CommerceScenarioClient {
+  readonly shell: CommerceAppShell;
+  get(path: string, options?: CommerceScenarioRequestOptions): Promise<Response>;
+  postForm(
+    path: string,
+    fields: Record<string, string | number>,
+    options?: CommerceScenarioRequestOptions,
+  ): Promise<Response>;
+  signIn(options?: { next?: string; password?: string; remoteAddress?: string }): Promise<Response>;
+  signOut(): Promise<Response>;
+  addToCartEnhanced(
+    input: AddToCartInput,
+    options?: CommerceScenarioEnhancedOptions,
+  ): Promise<Response>;
+  addToCartNoJs(
+    input: AddToCartInput,
+    options?: CommerceScenarioRequestOptions,
+  ): Promise<Response>;
+}
+
+export interface CommerceScenarioRequestOptions {
+  headers?: HeadersInit;
+  renderProductGridFault?: Error;
+}
+
+export interface CommerceScenarioEnhancedOptions extends CommerceScenarioRequestOptions {
+  target?: 'cart-page' | 'form';
+}
+
+const commerceOrigin = 'https://commerce.test';
+const cartPageTargets = 'cart-badge=cart; product-grid=productGrid; order-history=orderHistory';
+const cartPageLiveTargets = [
+  'cart-badge#components/cart-badge/cart-badge:{}',
+  'product-grid#components/product-grid/product-grid:{}',
+  'order-history#components/order-history/order-history:{}',
+].join('; ');
+
+export function createCommerceScenarioClient(
+  shell = createCommerceAppShell(),
+): CommerceScenarioClient {
+  const cookies = new Map<string, string>();
+
+  async function dispatch(
+    path: string,
+    init: RequestInit = {},
+    options: CommerceScenarioRequestOptions = {},
+  ): Promise<Response> {
+    const headers = new Headers(init.headers);
+    mergeHeaders(headers, options.headers);
+    const cookie = cookieHeader(cookies);
+    if (cookie && !headers.has('cookie')) headers.set('cookie', cookie);
+
+    const request = new Request(new URL(path, commerceOrigin), {
+      ...init,
+      headers,
+      redirect: 'manual',
+    });
+    if (options.renderProductGridFault) {
+      Object.defineProperty(request, 'renderFaults', {
+        configurable: true,
+        value: {
+          productGrid: () => options.renderProductGridFault,
+        },
+      });
+    }
+
+    const response = await shell.requestHandler(request);
+    rememberSetCookies(cookies, response);
+    return response;
+  }
+
+  async function get(path: string, options?: CommerceScenarioRequestOptions): Promise<Response> {
+    return dispatch(path, { method: 'GET' }, options);
+  }
+
+  async function postForm(
+    path: string,
+    fields: Record<string, string | number>,
+    options?: CommerceScenarioRequestOptions,
+  ): Promise<Response> {
+    const body = new URLSearchParams();
+    for (const [key, value] of Object.entries(fields)) body.set(key, String(value));
+    return dispatch(
+      path,
+      {
+        body,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        method: 'POST',
+      },
+      options,
+    );
+  }
+
+  async function signIn(
+    options: { next?: string; password?: string; remoteAddress?: string } = {},
+  ): Promise<Response> {
+    const next = options.next ?? '/cart';
+    const loginPage = await get(`/login?next=${encodeURIComponent(next)}`);
+    const csrf = await formFieldValue(loginPage, '/_m/auth/sign-in', 'csrf');
+    return postForm(
+      '/_m/auth/sign-in',
+      {
+        csrf,
+        email: 'ada@example.com',
+        next,
+        password: options.password ?? 'correct',
+      },
+      {
+        headers: {
+          'x-forwarded-for': options.remoteAddress ?? '203.0.113.60',
+        },
+      },
+    );
+  }
+
+  async function signOut(): Promise<Response> {
+    return postForm('/_m/auth/sign-out', {
+      csrf: csrfToken(
+        {
+          authCsrfId: 'commerce-shell-login',
+          db: shell.db,
+          headers: new Headers({ cookie: cookieHeader(cookies) }),
+          session: { id: 'session-u1', user: { id: 'u1' } },
+        },
+        commerceAuthCsrf,
+      ),
+    });
+  }
+
+  async function addToCartNoJs(
+    input: AddToCartInput,
+    options?: CommerceScenarioRequestOptions,
+  ): Promise<Response> {
+    return postForm('/_m/cart/add', await addToCartFields(input), options);
+  }
+
+  async function addToCartEnhanced(
+    input: AddToCartInput,
+    options: CommerceScenarioEnhancedOptions = {},
+  ): Promise<Response> {
+    const targetHeaders =
+      options.target === 'form'
+        ? { 'Kovo-Targets': `add-to-cart:${input.productId}` }
+        : {
+            'Kovo-Live-Targets': cartPageLiveTargets,
+            'Kovo-Targets': cartPageTargets,
+          };
+    return postForm('/_m/cart/add', await addToCartFields(input), {
+      ...options,
+      headers: {
+        ...headersRecord(options.headers),
+        'Kovo-Fragment': 'true',
+        ...targetHeaders,
+      },
+    });
+  }
+
+  async function addToCartFields(input: AddToCartInput): Promise<Record<string, string | number>> {
+    const cartPage = await get('/cart');
+    const csrf = await formFieldValue(cartPage, '/_m/cart/add', 'csrf', input.productId);
+    return {
+      csrf,
+      productId: input.productId,
+      quantity: input.quantity,
+    };
+  }
+
+  return {
+    get,
+    postForm,
+    shell,
+    signIn,
+    signOut,
+    addToCartEnhanced,
+    addToCartNoJs,
+  };
+}
+
+async function formFieldValue(
+  response: Response,
+  action: string,
+  name: string,
+  productId?: string,
+): Promise<string> {
+  const html = await response.text();
+  const form = htmlFormFacts(html).find((candidate) => {
+    if (candidate.action !== action) return false;
+    if (!productId) return true;
+    return htmlFormFieldsByName(candidate).productId?.value === productId;
+  });
+  const value = htmlFormFieldsByName(form)[name]?.value;
+  if (value === undefined) {
+    throw new Error(`Expected ${action} form field ${name} in response status ${response.status}`);
+  }
+  return value;
+}
+
+function rememberSetCookies(cookies: Map<string, string>, response: Response): void {
+  for (const setCookie of setCookieValues(response.headers)) {
+    const pair = setCookie.split(';', 1)[0] ?? '';
+    const separator = pair.indexOf('=');
+    if (separator === -1) continue;
+    const name = pair.slice(0, separator);
+    const value = pair.slice(separator + 1);
+    if (value === '') {
+      cookies.delete(name);
+    } else {
+      cookies.set(name, value);
+    }
+  }
+}
+
+function cookieHeader(cookies: Map<string, string>): string {
+  return [...cookies].map(([name, value]) => `${name}=${value}`).join('; ');
+}
+
+function mergeHeaders(target: Headers, source: HeadersInit | undefined): void {
+  if (!source) return;
+  new Headers(source).forEach((value, key) => target.set(key, value));
+}
+
+function headersRecord(source: HeadersInit | undefined): Record<string, string> {
+  if (!source) return {};
+  return Object.fromEntries(new Headers(source));
 }

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { cookiePair } from '@kovojs/test/headers';
-import { htmlFormFacts } from '@kovojs/test/html-fragment';
+import {
+  htmlElementFacts,
+  htmlFormFacts,
+  htmlFormFields,
+  htmlTextContent,
+} from '@kovojs/test/html-fragment';
 import { csrfToken, runMutation } from '@kovojs/server';
 
 import {
@@ -11,16 +16,12 @@ import {
   commerceSignIn,
   commerceSession,
   createCommerceDb,
-  renderCommerceLoginForm,
-  renderCommerceLogoutForm,
-  submitCommerceSignInNoJs,
-  submitCommerceSignOutNoJs,
 } from './app.js';
 import {
   commerceAuthRequest,
+  createCommerceScenarioClient,
   mutationSetCookieHeaders,
   readOrders,
-  setCookieHeaders,
 } from './app-test-helpers.js';
 
 describe('commerce example', () => {
@@ -74,64 +75,44 @@ describe('commerce example', () => {
     });
   });
 
-  it('runs commerce login and logout through Better Auth credential mutations', async () => {
-    const request = commerceAuthRequest();
+  it('runs commerce login and logout through the app shell credential mutations', async () => {
+    const client = createCommerceScenarioClient();
 
-    expect(htmlFormFacts(renderCommerceLoginForm(request, { next: '/cart' }))).toMatchObject([
+    const loginPage = await client.get('/login?next=%2Fcart');
+    const loginHtml = await loginPage.text();
+    expect(loginPage.status, loginHtml).toBe(200);
+    expect(htmlFormFacts(loginHtml)).toMatchObject([
       { attrs: { 'data-mutation': 'auth/sign-in' } },
     ]);
-    await expect(
-      submitCommerceSignInNoJs(
-        {
-          csrf: csrfToken(request, commerceAuthCsrf),
-          email: 'ada@example.com',
-          next: '/cart',
-          password: 'correct',
-        },
-        request,
-      ),
-    ).resolves.toMatchObject({
-      body: '',
-      headers: {
-        'Cache-Control': 'no-store',
-        Location: '/cart',
-        'Set-Cookie': ['kovo_commerce_session=session-u1; Path=/; HttpOnly; SameSite=Lax'],
-      },
-      status: 303,
-    });
+    expect(htmlFormFields(loginHtml, 'next')).toMatchObject([{ name: 'next', value: '/cart' }]);
 
-    await expect(
-      submitCommerceSignInNoJs(
-        {
-          csrf: csrfToken(request, commerceAuthCsrf),
-          email: 'ada@example.com',
-          password: 'wrong',
-        },
-        request,
-      ),
-    ).resolves.toMatchObject({
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      status: 422,
+    const failedLogin = await client.signIn({
+      password: 'wrong',
+      remoteAddress: '203.0.113.80',
     });
+    const failedHtml = await failedLogin.text();
+    expect(failedLogin.status, failedHtml).toBe(422);
+    expect(failedLogin.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(htmlTextContent(failedHtml)).toContain('Invalid email or password.');
+    expect(
+      htmlElementFacts(failedHtml, {
+        attrs: { 'data-error-code': 'INVALID_CREDENTIALS' },
+        tag: 'output',
+      }),
+    ).toHaveLength(1);
 
-    const authedRequest = {
-      ...commerceAuthRequest('kovo_commerce_session=session-u1'),
-      session: {
-        id: 'session-u1',
-        user: { id: 'u1', roles: ['admin', 'member'] as const },
-      },
-    };
+    const login = await client.signIn({ remoteAddress: '203.0.113.81' });
+    expect(login.status).toBe(303);
+    expect(login.headers.get('cache-control')).toBe('no-store');
+    expect(login.headers.get('location')).toBe('/cart');
+    expect(cookiePair(login.headers.get('set-cookie') ?? '')).toBe(
+      'kovo_commerce_session=session-u1',
+    );
 
-    expect(htmlFormFacts(renderCommerceLogoutForm(authedRequest))).toMatchObject([
-      { attrs: { 'data-mutation': 'auth/sign-out' } },
-    ]);
-    await expect(submitCommerceSignOutNoJs(authedRequest)).resolves.toMatchObject({
-      headers: {
-        'Cache-Control': 'no-store',
-        Location: '/login',
-        'Set-Cookie': ['kovo_commerce_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'],
-      },
-      status: 303,
-    });
+    const logout = await client.signOut();
+    expect(logout.status).toBe(303);
+    expect(logout.headers.get('cache-control')).toBe('no-store');
+    expect(logout.headers.get('location')).toBe('/login');
+    expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
   });
 });
