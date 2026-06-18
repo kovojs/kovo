@@ -2,12 +2,19 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { createApp, createMemoryVersionedClientModuleRegistry, createRequestHandler, route } from '@kovojs/server';
+import { createApp, createMemoryVersionedClientModuleRegistry, createRequestHandler, route, toNodeHandler } from '@kovojs/server';
 
 import { renderPage } from './render.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA = join(HERE, '..', 'data');
+
+// Mount prefix. Empty = served at '/' (own dev server). Set KOVO_DEVTOOL_BASE
+// (e.g. '/__kovo') to mount under a prefix on a host app's dev server: all emitted
+// absolute URLs are prefixed, and the host middleware strips the prefix before
+// dispatching here (the route itself stays '/'). Selection links are query-only,
+// so they ride any base unchanged.
+const BASE = process.env.KOVO_DEVTOOL_BASE ?? '';
 
 // Pan/zoom/hover enhancement island, registered as a versioned /c/ client module.
 const clientModules = createMemoryVersionedClientModuleRegistry();
@@ -51,10 +58,12 @@ export const homeRoute = route('/', {
       ? str(context.search.app)!
       : manifest[0]?.id ?? 'commerce';
     const bundle = loadBundle(app);
-    return renderPage({ manifest, bundle, app, sel: str(context.search.sel), q: str(context.search.q), pzHref });
+    return renderPage({ manifest, bundle, app, sel: str(context.search.sel), q: str(context.search.q), pzHref: BASE + pzHref });
   },
-  modulepreloads: [pzHref],
-  stylesheets: [{ href: '/src/styles.css', criticalCss }],
+  // Preload only in standalone mode: the registry knows the unprefixed href; under
+  // a mount base the island still loads via the prefixed on:visible ref (perf hint only).
+  modulepreloads: BASE ? [] : [pzHref],
+  stylesheets: [{ href: `${BASE}/src/styles.css`, criticalCss }],
 });
 
 export const app = createApp({
@@ -65,4 +74,5 @@ export const app = createApp({
 });
 
 export const requestHandler = createRequestHandler(app);
+export const nodeHandler = toNodeHandler(requestHandler);
 export default app;

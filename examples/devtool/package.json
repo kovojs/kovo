@@ -7,6 +7,7 @@
     "check": "vp check",
     "conformance": "node scripts/conformance.mjs",
     "dev": "node scripts/build-bundle.mjs && vp dev",
+    "dev:mounted": "node scripts/build-bundle.mjs && KOVO_DEVTOOL_BASE=/__kovo vp dev",
     "mcp": "node scripts/build-bundle.mjs && node scripts/mcp-server.mjs",
     "test": "vp test",
     "test:mcp": "node scripts/test-mcp.mjs"

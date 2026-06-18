@@ -210,7 +210,8 @@ surface ships before the MCP tools, which then drop onto the same model.
 - [ ] Promote slice resolution from the bundle script's symbol heuristic to compiler-emitted `SourceAnchor` (start/end line:col) for exact spans; consider shiki for the highlighter.
 
 ### Phase 2 — Visual graph UI (the lead surface) — shipped
-- [x] Devtool stood up as a Kovo app (`examples/devtool/`); runs on its own `vp dev`. **Open:** mount at `/__kovo` on an existing app's dev server via `shouldHandleRequest` (`packages/server` vite-dev.ts).
+- [x] Devtool stood up as a Kovo app (`examples/devtool/`); runs on its own `vp dev`.
+- [x] Mountable at `/__kovo`: base-path-aware app-shell (`KOVO_DEVTOOL_BASE`) + a prefix-stripping `devtoolMountPlugin` (`vite.config.ts`) dispatching to an exported `nodeHandler`. `dev:mounted` serves under the prefix; copy the plugin into a host app's config to embed. Verified in-browser (page + island + selection all work under `/__kovo`; styles via inlined criticalCss).
 - [x] Layered swimlane render (barycenter ordering, SVG edges + HTML node cards) over the static graph (`src/render.ts`).
 - [x] Select-and-trace + inspector with code previews. Refresh coverage shows optimistic §10.6 status (`derived`/`hand-written`/`await-fragment`/`punted`). **Open:** KV311 update-coverage gaps inline (those facts are absent from current `graph.json` exports).
 - [x] Pan / zoom / hover enhancement island (`src/devtool-pz.client.js`), registered as a versioned `/c/` client module and bootstrapped via `on:visible` (SPEC §4.7), cleanup on `ctx.signal`. Pure progressive enhancement — selection stays real `<a href>` navigation with the island absent. Verified in-browser (fit-on-load, wheel-zoom-to-cursor, drag-pan, 1-hop hover highlight; no console errors).

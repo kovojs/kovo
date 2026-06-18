@@ -87,6 +87,19 @@ an embedding model). Each result is the same card the inspector shows, as stable
 MCP tool both render it, and `scripts/conformance.mjs` asserts the MCP cards equal
 the graph edges the UI draws from — the two surfaces can't drift.
 
-## Next (see `plans/devtools.md`)
+## Mounting in a host app at `/__kovo`
 
-- Mount at `/__kovo` on an existing app's dev server (vs. its own server here).
+The devtool is base-path aware. Run it under a prefix on its own server:
+
+```bash
+pnpm --filter @kovojs/example-devtool dev:mounted   # serves at http://localhost:5173/__kovo
+```
+
+To embed it in *your* app's dev server (so you open your app and visit `/__kovo`
+to inspect it), copy `devtoolMountPlugin` from `vite.config.ts` into your config
+and set `KOVO_DEVTOOL_BASE=/__kovo`. The plugin strips the prefix and dispatches
+to the devtool's `nodeHandler`; everything else falls through to your app. The
+devtool prefixes its own absolute URLs (client module, stylesheet) with the base,
+and selection links are query-only so they ride any prefix. Styles come from
+inlined `criticalCss`, so the devtool renders even where the host doesn't serve
+the devtool's `/src/styles.css`.

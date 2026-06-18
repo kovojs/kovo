@@ -2,8 +2,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { defineConfig } from 'vite-plus';
 
+const MOUNT_BASE = process.env.KOVO_DEVTOOL_BASE;
+
 export default defineConfig({
-  plugins: [starterSharedAppShellDevPlugin()],
+  plugins: [MOUNT_BASE ? devtoolMountPlugin(MOUNT_BASE) : starterSharedAppShellDevPlugin()],
   build: {
     manifest: true,
   },
@@ -104,5 +106,34 @@ function starterSharedAppShellDevPlugin(): StarterDevPlugin {
       return sharedPlugin.configureServer(server);
     },
     name: 'kovo-starter-app-shell-dev-loader',
+  };
+}
+
+type NodeHandler = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;
+
+// Mounts the devtool under a path prefix (e.g. /__kovo). Copy this plugin into a
+// host app's vite.config and set KOVO_DEVTOOL_BASE to embed the devtool in that
+// app's dev server: requests under the prefix are stripped and dispatched to the
+// devtool's own request handler; everything else falls through to the host.
+function devtoolMountPlugin(base: string): StarterDevPlugin {
+  return {
+    name: 'kovo-devtool-mount',
+    async configureServer(server) {
+      const mod = await server.ssrLoadModule('/src/app-shell.ts');
+      const nodeHandler = mod.nodeHandler as NodeHandler;
+      if (typeof nodeHandler !== 'function') throw new Error('app-shell must export nodeHandler.');
+      // Register in the configureServer body (pre) so we intercept before Vite's
+      // HTML fallback would serve index.html for the prefix.
+      server.middlewares.use((req, res, next) => {
+        const url = req.url ?? '/';
+        if (url === base || url.startsWith(`${base}/`) || url.startsWith(`${base}?`)) {
+          const rest = url.slice(base.length);
+          req.url = rest.startsWith('/') ? rest : `/${rest}` || '/';
+          Promise.resolve(nodeHandler(req, res)).catch(() => next());
+          return;
+        }
+        next();
+      });
+    },
   };
 }
