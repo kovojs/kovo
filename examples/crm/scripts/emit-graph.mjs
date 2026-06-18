@@ -1,5 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
@@ -25,7 +28,6 @@ registerHooks({
   },
 });
 
-const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 const {
   deriveInvalidationRegistry,
   serializeInvalidationRegistry,
@@ -40,6 +42,8 @@ const { createCrmGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const crmRoot = resolve(scriptDir, '..');
+const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-crm-graph-'));
+process.on('exit', () => rmSync(tempRoot, { force: true, recursive: true }));
 
 // The generated dir is fmt-ignored in the root vite.config (like commerce's), so
 // the IR serializers' raw valid-TypeScript output is committed verbatim. Skipping
@@ -253,7 +257,7 @@ const crmInvalidationRegistry = deriveInvalidationRegistry({
 });
 
 const crmGraph = createCrmGraph(crmTouchGraph, optimisticEntries, crmQueryDomains);
-const { graph } = deriveAppGraph({ graph: crmGraph });
+const graph = deriveGraphViaCli({ graph: crmGraph });
 
 const crmInvalidationSource = serializeInvalidationRegistry(crmInvalidationRegistry, {
   constName: 'crmInvalidationSets',
@@ -362,6 +366,17 @@ function typeDerivedSubset(source, formName, derivedQueries) {
 function assertFile(path, expected, label) {
   assert.ok(existsSync(path), `${label} is missing — run emit-graph without --check`);
   assert.equal(readFileSync(path, 'utf8'), expected, `${label} is stale — run emit-graph`);
+}
+
+function deriveGraphViaCli(input) {
+  const inputPath = resolve(tempRoot, 'graph-input.json');
+  const outPath = resolve(tempRoot, 'graph-output.json');
+  writeFileSync(inputPath, `${JSON.stringify(input, null, 2)}\n`);
+  execFileSync('kovo', ['compile', 'graph', inputPath, '--out', outPath], {
+    cwd: crmRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return JSON.parse(readFileSync(outPath, 'utf8'));
 }
 
 function kebab(value) {

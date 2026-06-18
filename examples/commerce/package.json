@@ -25,7 +25,6 @@
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
-    "@kovojs/compiler": "workspace:*",
     "@kovojs/conformance-fixtures": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
     "axe-core": "^4.12.1",

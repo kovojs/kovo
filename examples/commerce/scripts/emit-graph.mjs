@@ -1,6 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
@@ -15,9 +18,6 @@ registerHooks({
   },
 });
 
-const { compileComponentModule, compileRouteModule } = await import('@kovojs/compiler');
-const { deriveAppGraph } = await import('@kovojs/compiler/graph');
-const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
 const { commerceCartPageMeta, commerceStylesheets } = await import('../src/graph.js');
 const {
   deriveInvalidationRegistry,
@@ -35,58 +35,58 @@ const sourcePath = resolve(commerceRoot, 'src/app.ts');
 const graphPath = resolve(commerceRoot, 'src/generated/graph.json');
 const touchGraphPath = resolve(commerceRoot, 'src/generated/touch-graph.ts');
 const optimisticPath = resolve(commerceRoot, 'src/generated/optimistic/cart-add.ts');
+const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-commerce-graph-'));
 const source = readFileSync(sourcePath, 'utf8');
 const starterCart = { count: 0 };
 const componentNames = ['cart-badge', 'order-history', 'product-grid'];
 const registryFacts = {
-  mutationInputs: registryMutationInputs('examples/commerce/src/app.ts', source),
+  mutationInputs: compileMutationInputs(),
   mutations: { 'cart/add': 'typeof addToCart' },
 };
-
-function registryMutationInputs(fileName, sourceText) {
-  return Object.fromEntries(
-    [...mutationInputFactsFromSource(fileName, sourceText).values()].map((fact) => [
-      fact.key,
-      fact.fields.map((field) => ({ ...field, provenance: 'registry' })),
-    ]),
-  );
-}
+const registryFactsPath = resolve(tempRoot, 'registry-facts.json');
+writeFileSync(registryFactsPath, `${JSON.stringify(registryFacts, null, 2)}\n`);
+process.on('exit', () => rmSync(tempRoot, { force: true, recursive: true }));
 
 const componentResults = componentNames.map((name) => {
   const fileName = `examples/commerce/src/components/${name}.tsx`;
-  const result = compileComponentModule({
+  const factsPath = resolve(tempRoot, `${name}.facts.json`);
+  runKovo([
+    'compile',
+    'component',
+    resolve(commerceRoot, `src/components/${name}.tsx`),
+    '--out',
+    resolve(tempRoot, `${name}.tsx`),
+    '--file-name',
     fileName,
-    registryFacts,
-    source: readFileSync(resolve(commerceRoot, `src/components/${name}.tsx`), 'utf8'),
-  });
-  assert.deepEqual(
-    result.diagnostics,
-    [],
-    `${fileName} has compiler diagnostics: ${JSON.stringify(result.diagnostics, null, 2)}`,
-  );
-  return result;
+    '--registry-facts',
+    registryFactsPath,
+    '--facts-out',
+    factsPath,
+  ]);
+  return readJson(factsPath);
 });
 
-const routeResult = compileRouteModule({
-  artifactFileName: 'examples/commerce/src/generated/app-shell.kovo-route.tsx',
-  componentImportRewrites: [
-    { localName: 'CartBadge', specifier: './cart-badge.js' },
-    { localName: 'OrderHistory', specifier: './order-history.js' },
-    { localName: 'ProductGrid', specifier: './product-grid.js' },
-  ],
-  fileName: 'examples/commerce/src/app-shell.tsx',
-  source: readFileSync(resolve(commerceRoot, 'src/app-shell.tsx'), 'utf8'),
-});
-
-assert.deepEqual(
-  routeResult.diagnostics,
-  [],
-  `examples/commerce/src/app-shell.tsx has compiler diagnostics: ${JSON.stringify(
-    routeResult.diagnostics,
-    null,
-    2,
-  )}`,
-);
+const routeFactsPath = resolve(tempRoot, 'route.facts.json');
+runKovo([
+  'compile',
+  'route',
+  resolve(commerceRoot, 'src/app-shell.tsx'),
+  '--out',
+  resolve(tempRoot, 'app-shell.kovo-route.tsx'),
+  '--file-name',
+  'examples/commerce/src/app-shell.tsx',
+  '--artifact-file-name',
+  'examples/commerce/src/generated/app-shell.kovo-route.tsx',
+  '--rewrite',
+  'CartBadge=./cart-badge.js',
+  '--rewrite',
+  'OrderHistory=./order-history.js',
+  '--rewrite',
+  'ProductGrid=./product-grid.js',
+  '--facts-out',
+  routeFactsPath,
+]);
+const routeResult = readJson(routeFactsPath);
 
 const formatJson = (value, indent = 0) => {
   if (Array.isArray(value)) {
@@ -272,7 +272,7 @@ const commerceGraph = {
   touchGraph: commerceTouchGraph,
 };
 
-const { graph } = deriveAppGraph({
+const graph = deriveGraphViaCli({
   components: componentResults,
   graph: commerceGraph,
   routePages: [routeResult],
@@ -358,4 +358,37 @@ if (process.argv.includes('--check')) {
   writeFileSync(touchGraphPath, touchGraphSource);
   mkdirSync(resolve(commerceRoot, 'src/generated/optimistic'), { recursive: true });
   writeFileSync(optimisticPath, optimisticSource);
+}
+
+function compileMutationInputs() {
+  const outPath = resolve(tempRoot, 'mutation-inputs.json');
+  runKovo([
+    'compile',
+    'mutation-inputs',
+    sourcePath,
+    '--out',
+    outPath,
+    '--file-name',
+    'examples/commerce/src/app.ts',
+  ]);
+  return readJson(outPath);
+}
+
+function deriveGraphViaCli(input) {
+  const inputPath = resolve(tempRoot, 'graph-input.json');
+  const outPath = resolve(tempRoot, 'graph-output.json');
+  writeFileSync(inputPath, `${JSON.stringify(input, null, 2)}\n`);
+  runKovo(['compile', 'graph', inputPath, '--out', outPath]);
+  return readJson(outPath);
+}
+
+function readJson(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function runKovo(args) {
+  execFileSync('kovo', args, {
+    cwd: commerceRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }
