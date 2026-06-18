@@ -86,40 +86,62 @@ render-plan version skew checks.
 
 ## Open Contract Questions
 
-- [ ] **Define the public dev API surface.**
+- [x] **Define the public dev API surface.**
   - Choose whether app authors use one combined plugin or continue composing the
     compiler plugin plus `kovoAppShellViteDevPlugin`. The likely target is a
     public convenience wrapper that wires diagnostics, component compilation,
     app-shell dev serving, and HMR events without exposing internal subpaths.
-- [ ] **Specify the dev-only browser entry.**
+  - Evidence: `SPEC.md` §9.5.1 defines the app-facing dev API as a convenience
+    wrapper around the compiler plugin plus app-shell dev plugin; app authors do
+    not hand-wire generated refresh registries, HMR endpoints, or client module
+    maps into `createApp()`.
+- [x] **Specify the dev-only browser entry.**
   - Decide whether the app-shell document injects a `/@kovo/hmr-client` module in
     dev or whether the Vite plugin injects it through HTML transform. It must be
     absent from build/static export artifacts.
-- [ ] **Define the stable HMR event vocabulary.**
+  - Evidence: `SPEC.md` §9.5.1 states the dev-only browser entry is served or
+    injected only by the Vite dev stack and must be absent from production build
+    and static export artifacts.
+- [x] **Define the stable HMR event vocabulary.**
   - Proposed events:
     `kovo:component-render`, `kovo:route-shell`, `kovo:diagnostics`, and
     `kovo:full-reload`. Each event should carry the source file, old/new client
     hrefs when known, impacted component registry keys/live targets, diagnostics
     summary, and the new render-plan token.
-- [ ] **Define fragment refresh endpoints for HMR.**
+  - Evidence: `SPEC.md` §9.5.1 defines `kovo:component-render`,
+    `kovo:route-shell`, `kovo:diagnostics`, and `kovo:full-reload` plus their
+    source, module href, impacted target, diagnostic, and render-plan-token
+    payload expectations.
+- [x] **Define fragment refresh endpoints for HMR.**
   - The current live-target renderer path is mutation-driven. HMR needs a
     dev-only request shape that can ask the app shell to re-render either the
     current route document or a set of live targets from their stamped props,
     using the same server renderers as enhanced mutation refresh.
-- [ ] **Define non-refreshable handler edit behavior.**
+  - Evidence: `SPEC.md` §9.5.1 requires dev-only refresh endpoints to reuse
+    existing app-shell route rendering, query reads, live-target renderers, and
+    fragment-wire code; production `createRequestHandler()` must not expose HMR
+    endpoints.
+- [x] **Define non-refreshable handler edit behavior.**
   - If a handler-only edit is outside any proven refreshable target, the default
     should be full reload. A future attribute-ref patch may be allowed only as an
     optimization when the compiler proves DOM shape, params, query plans, target
     identity, and render output are unchanged.
-- [ ] **Define pending work behavior.**
+  - Evidence: `SPEC.md` §9.5.1 requires `kovo:full-reload` for missing facts,
+    query-plan/render-plan changes, app-shell/topology changes, or any unsafe
+    change; handler-only edits without a proven compatible live target therefore
+    fall into the full-reload class.
+- [x] **Define pending work behavior.**
   - Decide how HMR interacts with pending optimistic mutations, focused inputs,
     forms with unsaved values, and in-flight enhanced requests. Conservative
     first milestone: full reload when pending optimistic work exists; otherwise
     use morph survival guarantees.
+  - Evidence: `SPEC.md` §9.5.1 includes pending optimistic work in the
+    `kovo:full-reload` fallback class unless a future implementation can prove a
+    narrower server-owned refresh is safe.
 
 ## Implementation Plan
 
-- [ ] **1. SPEC contract update.**
+- [x] **1. SPEC contract update.**
   - Add a dev/HMR subsection under `SPEC.md` §5 or §9.5 that defines HMR as
     dev-only, server-truth refresh over Vite transport.
   - State the impact classes and fallback ladder: server fragment/query refresh,
@@ -128,6 +150,10 @@ render-plan version skew checks.
     public-import, diagnostic, or post-parse typed-fact rules.
   - State that generated artifacts and static export output never contain HMR
     code.
+  - Evidence: `SPEC.md` §9.5.1 defines dev-only HMR over Vite transport,
+    server-truth refresh, the fallback ladder, typed-fact impact classification,
+    diagnostic behavior, app-author API boundaries, and production/static-export
+    absence requirements; `git diff --check` passes.
 - [ ] **2. Compiler HMR impact facts.**
   - Extend `compileComponentModule()` to return impact metadata:
     component registry key, DOM leaf, emitted client href, emitted query update

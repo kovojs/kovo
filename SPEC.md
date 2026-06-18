@@ -847,6 +847,38 @@ Unexpected-error shells are app config with safe defaults: 404, 403, and 500 doc
 
 Static export replays synthetic GET `Request`s through the same handler. An exportable route writes `.html`, referenced immutable `/c/` modules, and static assets; there is no second render path. Export is L0/L1 only: a route with a guard, unproven session dependence, mutation-only interaction, or a param path without explicit static-path enumeration fails or skips loudly with **KV229** according to the configured export policy. Exported documents disable server refetch assumptions; the no-JS document is the artifact.
 
+#### 9.5.1 Dev HMR
+
+Hot module reloading is a dev-only request-shell enhancement over Vite transport. It is not a
+client render graph, hydration mode, or router. Vite's websocket may carry Kovo `custom` events,
+but every DOM-changing hot action still asks the app shell for server-owned route, query, or
+fragment output before morphing. Unsupported or unproven edits delegate to Vite's full reload.
+
+The app-facing dev API is a convenience wrapper around the compiler plugin and the app-shell dev
+plugin. App authors should not hand-wire generated refresh registries, HMR endpoints, or client
+module maps into `createApp()`: the request shell remains the owner of dev serving, diagnostics,
+and refresh dispatch. The wrapper wires compiler diagnostics into the same dev diagnostic ledger
+used by page, fragment, and mutation requests, so a failed hot update and a failed direct request
+render the same teaching document.
+
+HMR impact classification is compiler-owned and fact-based. After parsing, impact decisions must use
+typed lowering facts (§5.2 rule 9), not source-string heuristics. The impact ladder is:
+server fragment/query refresh for a proven compatible live target; current-route document refresh
+when the route shell is still compatible; `kovo:diagnostics` for compiler errors; and
+`kovo:full-reload` for route table, app shell, query-plan, render-plan token, generated-registry,
+bootstrap, stylesheet topology, pending optimistic work, missing fact, or any other unsafe change.
+
+The stable dev event vocabulary is:
+`kovo:component-render`, `kovo:route-shell`, `kovo:diagnostics`, and `kovo:full-reload`. Events carry
+the source file, old/new client module hrefs when known, the impacted component/live-target ids when
+proven, diagnostics summary when present, and old/new render-plan tokens when available. Stale
+events whose token does not match the current document are rejected and escalate to full reload.
+
+The dev-only browser entry is served or injected only by the Vite dev stack. It must be absent from
+production builds and static export artifacts. Dev refresh endpoints are likewise Vite-dev-only and
+must reuse existing app-shell render, query, live-target renderer, and fragment-wire code; production
+`createRequestHandler()` never exposes HMR endpoints.
+
 ---
 
 ## 10. Data Plane
