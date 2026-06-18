@@ -459,6 +459,77 @@ describe('kovo build', () => {
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  it('prints Cloudflare database guidance when the bundle references DATABASE_URL', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cloudflare-db-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(appPath, databaseEnvAppModuleSource(), 'utf8');
+      writeClientEntry(root);
+
+      const exitCode = await mainAsync([
+        'build',
+        appPath,
+        '--out',
+        outDir,
+        '--preset',
+        'cloudflare',
+      ]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain(
+        'WARN cloudflare-tcp-database The cloudflare preset emits a Worker with nodejs_compat.',
+      );
+      expect(output).toContain('SUMMARY preset=cloudflare');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails Cloudflare builds that import unsupported Node runtime APIs', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cloudflare-blocked-api-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(appPath, blockedCloudflareApiAppModuleSource(), 'utf8');
+      writeClientEntry(root);
+
+      const exitCode = await mainAsync([
+        'build',
+        appPath,
+        '--out',
+        outDir,
+        '--preset',
+        'cloudflare',
+      ]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('ERROR cloudflare-unsupported-node-api');
+      expect(existsSync(join(outDir, 'cloudflare/worker.mjs'))).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 });
 
 function appModuleSource(): string {
@@ -505,6 +576,38 @@ export default createApp({
   routes: [
     route('/cart', {
       page: () => '<main>Cart ' + db.count + '</main>',
+    }),
+  ],
+});
+`;
+}
+
+function databaseEnvAppModuleSource(): string {
+  return `
+import { createApp, route } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/db', {
+      page: () => '<main>' + (process.env.DATABASE_URL ?? 'missing') + '</main>',
+    }),
+  ],
+});
+`;
+}
+
+function blockedCloudflareApiAppModuleSource(): string {
+  return `
+import { spawnSync } from 'node:child_process';
+import { createApp, route } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/blocked', {
+      page: () => {
+        spawnSync('true');
+        return '<main>Blocked</main>';
+      },
     }),
   ],
 });

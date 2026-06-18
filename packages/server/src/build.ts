@@ -1,4 +1,4 @@
-import { copyFile, cp, mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import type { KovoApp } from './app-types.js';
@@ -21,15 +21,24 @@ export interface KovoPreset {
   /** Emit platform-native output from an already-written neutral build. */
   emit?(build: KovoNeutralBuild, context: PresetContext): Promise<void> | void;
   /** Return target-specific diagnostics before output is emitted. */
-  inspect?(build: KovoNeutralBuild): readonly PresetDiagnostic[];
+  inspect?(
+    build: KovoNeutralBuild,
+    context: PresetInspectContext,
+  ): Promise<readonly PresetDiagnostic[]> | readonly PresetDiagnostic[];
   /** Stable preset name, such as `node`, `vercel`, or `cloudflare`. */
   name: string;
 }
 
-/** Context passed to a preset while it transforms the neutral build output. */
-export interface PresetContext {
+/** Context passed to a preset while it validates target-specific constraints. */
+export interface PresetInspectContext {
   /** Environment variables the app declares or the build inferred, such as `DATABASE_URL`. */
   declaredEnv: readonly string[];
+  /** Read the bundled request handler source when a preset needs target-specific inspection. */
+  readServerHandlerSource?(): Promise<string | undefined> | string | undefined;
+}
+
+/** Context passed to a preset while it transforms the neutral build output. */
+export interface PresetContext extends PresetInspectContext {
   /** Build log sink supplied by the CLI or host integration. */
   log(message: string): void;
   /** Platform output directory for the preset. */
@@ -59,7 +68,7 @@ export interface NodePreset extends KovoPreset {
   /** Emit a standalone Node output from Kovo's neutral build artifact. */
   emit(build: KovoNeutralBuild, context: PresetContext): Promise<void>;
   /** Return blocking diagnostics when the neutral build lacks a request handler. */
-  inspect(build: KovoNeutralBuild): readonly PresetDiagnostic[];
+  inspect(build: KovoNeutralBuild, context: PresetInspectContext): readonly PresetDiagnostic[];
   /** Options captured by `node()`. */
   options: NodePresetOptions;
 }
@@ -79,7 +88,7 @@ export interface VercelPreset extends KovoPreset {
   /** Emit `.vercel/output` from Kovo's neutral build artifact. */
   emit(build: KovoNeutralBuild, context: PresetContext): Promise<void>;
   /** Return blocking diagnostics when the neutral build lacks a request handler. */
-  inspect(build: KovoNeutralBuild): readonly PresetDiagnostic[];
+  inspect(build: KovoNeutralBuild, context: PresetInspectContext): readonly PresetDiagnostic[];
   /** Options captured by `vercel()`. */
   options: VercelPresetOptions;
 }
@@ -96,8 +105,11 @@ export interface CloudflarePresetOptions {
 export interface CloudflarePreset extends KovoPreset {
   /** Emit a Wrangler project from Kovo's neutral build artifact. */
   emit(build: KovoNeutralBuild, context: PresetContext): Promise<void>;
-  /** Return blocking diagnostics when the neutral build lacks a request handler. */
-  inspect(build: KovoNeutralBuild): readonly PresetDiagnostic[];
+  /** Return diagnostics for Cloudflare Worker runtime constraints. */
+  inspect(
+    build: KovoNeutralBuild,
+    context: PresetInspectContext,
+  ): Promise<readonly PresetDiagnostic[]>;
   /** Options captured by `cloudflare()`. */
   options: CloudflarePresetOptions;
 }
@@ -125,7 +137,7 @@ export function node(options: NodePresetOptions = {}): NodePreset {
     emit(build, context) {
       return emitNodePreset(build, context, options);
     },
-    inspect(build) {
+    inspect(build, _context) {
       return build.serverHandlerPath === undefined
         ? [
             {
@@ -153,7 +165,7 @@ export function vercel(options: VercelPresetOptions = {}): VercelPreset {
     emit(build, context) {
       return emitVercelPreset(build, context, options);
     },
-    inspect(build) {
+    inspect(build, _context) {
       return build.serverHandlerPath === undefined
         ? [
             {
@@ -180,16 +192,21 @@ export function cloudflare(options: CloudflarePresetOptions = {}): CloudflarePre
     emit(build, context) {
       return emitCloudflarePreset(build, context, options);
     },
-    inspect(build) {
-      return build.serverHandlerPath === undefined
-        ? [
-            {
-              code: 'cloudflare-missing-handler',
-              message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
-              severity: 'error',
-            },
-          ]
-        : [];
+    async inspect(build, context) {
+      const diagnostics: PresetDiagnostic[] =
+        build.serverHandlerPath === undefined
+          ? [
+              {
+                code: 'cloudflare-missing-handler',
+                message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
+                severity: 'error',
+              },
+            ]
+          : [];
+      if (build.serverHandlerPath === undefined) return diagnostics;
+
+      diagnostics.push(...(await cloudflareRuntimeDiagnostics(build, context)));
+      return diagnostics;
     },
     name: 'cloudflare',
     options,
@@ -563,6 +580,67 @@ export default {
   },
 };
 `;
+}
+
+async function cloudflareRuntimeDiagnostics(
+  build: KovoNeutralBuild,
+  context: PresetInspectContext,
+): Promise<readonly PresetDiagnostic[]> {
+  const source = await serverHandlerSourceForInspection(build, context);
+  if (source === undefined) return [];
+
+  const diagnostics: PresetDiagnostic[] = [];
+  if (context.declaredEnv.includes('DATABASE_URL') || source.includes('DATABASE_URL')) {
+    diagnostics.push({
+      code: 'cloudflare-tcp-database',
+      message:
+        'The cloudflare preset emits a Worker with nodejs_compat. TCP database drivers behind DATABASE_URL need Hyperdrive, Cloudflare Containers, or an HTTP database driver before deploy.',
+      severity: 'warning',
+    });
+  }
+
+  for (const moduleName of cloudflareBlockedNodeModules) {
+    if (serverHandlerImportsModule(source, moduleName)) {
+      diagnostics.push({
+        code: 'cloudflare-unsupported-node-api',
+        message: `The cloudflare preset cannot run ${moduleName}; Cloudflare exposes this Node API as a non-functional compatibility stub. Move that code off the request path or deploy with the node preset/Containers.`,
+        severity: 'error',
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+const cloudflareBlockedNodeModules = [
+  'child_process',
+  'cluster',
+  'dgram',
+  'node:child_process',
+  'node:cluster',
+  'node:dgram',
+] as const;
+
+async function serverHandlerSourceForInspection(
+  build: KovoNeutralBuild,
+  context: PresetInspectContext,
+): Promise<string | undefined> {
+  const contextSource = await context.readServerHandlerSource?.();
+  if (contextSource !== undefined) return contextSource;
+  if (build.serverHandlerPath === undefined) return undefined;
+  return readFile(build.serverHandlerPath, 'utf8');
+}
+
+function serverHandlerImportsModule(source: string, moduleName: string): boolean {
+  const quotedModule = moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const modulePattern = new RegExp(
+    [
+      `\\bfrom\\s*['"]${quotedModule}['"]`,
+      `\\bimport\\s*\\(\\s*['"]${quotedModule}['"]\\s*\\)`,
+      `\\brequire\\s*\\(\\s*['"]${quotedModule}['"]\\s*\\)`,
+    ].join('|'),
+  );
+  return modulePattern.test(source);
 }
 
 function wranglerTomlSource(options: CloudflarePresetOptions): string {

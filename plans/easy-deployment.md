@@ -395,30 +395,35 @@ build.test.ts` and `packages/cli/src/index.kovo-build.test.ts` for
 
 ### Phase 3 — `cloudflare` preset
 
-- [ ] Worker entry + `wrangler.toml` with `nodejs_compat`; Workers Assets for
+- [x] Worker entry + `wrangler.toml` with `nodejs_compat`; Workers Assets for
       static; `inspect()` TCP-DB warning + Containers/Hyperdrive guidance.
-  - Partial evidence: `packages/server/src/build.ts` exposes `cloudflare()` from
+  - Evidence: `packages/server/src/build.ts` exposes `cloudflare()` from
     `@kovojs/server/build`; `cloudflare().emit()` writes `worker.mjs`,
     `server/handler.mjs`, `client/`, and `wrangler.toml` with
     `compatibility_flags = ["nodejs_compat"]`, `assets.binding = "ASSETS"`, and
     `run_worker_first = true`. `packages/server/src/build.test.ts` verifies the
     emitted layout, immutable asset header behavior through a fake `ASSETS`
-    binding, and dynamic fallback to the bundled Web handler. The item remains
-    partial for TCP-DB warning / Containers / Hyperdrive diagnostics.
+    binding, and dynamic fallback to the bundled Web handler. `cloudflare().inspect()`
+    warns when the bundle or declared env references `DATABASE_URL`, directing TCP
+    database deployments to Hyperdrive, Cloudflare Containers, or an HTTP database
+    driver.
 - [x] Auto-detect on `CF_PAGES` env.
   - Evidence: `packages/cli/src/index.ts` selects the Cloudflare preset for
     `CF_PAGES` / `CLOUDFLARE`, and `packages/cli/src/index.kovo-build.test.ts`
     verifies `CF_PAGES=1` emits `dist/cloudflare/wrangler.toml` and that
     `KOVO_PRESET=cloudflare` wins over `VERCEL=1`.
-- [ ] Evidence: `wrangler deploy --dry-run` validates; `inspect()` unit tests for
+- [x] Evidence: `wrangler deploy --dry-run` validates; `inspect()` unit tests for
       the banned-API and DB-driver diagnostics.
-  - Partial evidence: a repo-local temporary app was built with
+  - Evidence: a repo-local temporary app was built with
     `node_modules/.bin/jiti packages/cli/src/bin.ts build <app> --out <dir>
 --preset cloudflare`, then `corepack pnpm dlx wrangler deploy --dry-run
 --outdir <dir>/wrangler-out` was run from the emitted `dist/cloudflare`
     directory. Wrangler 4.101.0 read the emitted assets, reported the `ASSETS`
-    binding, and exited due to `--dry-run`. The diagnostics half of this item
-    remains open.
+    binding, and exited due to `--dry-run`. `packages/server/src/build.test.ts`
+    verifies `cloudflare().inspect()` emits the `cloudflare-tcp-database` warning
+    and `cloudflare-unsupported-node-api` error; `packages/cli/src/index.kovo-build.test.ts`
+    verifies the warning is printed by `kovo build` and the unsupported API blocks
+    Cloudflare output.
 
 ### Phase 4 — Templates, docs, examples
 

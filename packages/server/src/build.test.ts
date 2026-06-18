@@ -558,6 +558,52 @@ export default async function handler(request) {
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it('inspects Cloudflare runtime constraints before emitting Worker output', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-inspect-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/db', {
+              page() {
+                return '<main>DB</main>';
+              },
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+import { spawnSync } from 'node:child_process';
+
+export default async function handler() {
+  spawnSync('true');
+  return new Response(process.env.DATABASE_URL ?? 'missing');
+}
+`,
+      });
+
+      await expect(cloudflare().inspect(build, { declaredEnv: ['DATABASE_URL'] })).resolves.toEqual(
+        [
+          {
+            code: 'cloudflare-tcp-database',
+            message:
+              'The cloudflare preset emits a Worker with nodejs_compat. TCP database drivers behind DATABASE_URL need Hyperdrive, Cloudflare Containers, or an HTTP database driver before deploy.',
+            severity: 'warning',
+          },
+          {
+            code: 'cloudflare-unsupported-node-api',
+            message:
+              'The cloudflare preset cannot run node:child_process; Cloudflare exposes this Node API as a non-functional compatibility stub. Move that code off the request path or deploy with the node preset/Containers.',
+            severity: 'error',
+          },
+        ],
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
 });
 
 async function readJson(filePath: string): Promise<unknown> {

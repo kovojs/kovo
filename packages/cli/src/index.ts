@@ -26,7 +26,13 @@ import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import type { KovoApp, StaticExportCompileDiagnostic } from '@kovojs/server';
-import type { KovoConfig, KovoPreset } from '@kovojs/server/build';
+import type {
+  KovoConfig,
+  KovoNeutralBuild,
+  KovoPreset,
+  PresetContext,
+  PresetDiagnostic,
+} from '@kovojs/server/build';
 
 import {
   availableAddComponents,
@@ -2399,28 +2405,50 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       throw new Error(`kovo build preset ${selectedPreset.name} cannot emit build output.`);
     }
 
-    await preset.emit(neutralBuild, {
+    const presetContext: PresetContext = {
       declaredEnv: [],
       log(message) {
         presetLogs.push(message);
       },
       outDir: presetOutDir,
+      readServerHandlerSource() {
+        return serverHandlerSource;
+      },
       readNeutral() {
         return neutralBuild;
       },
-    });
+    };
+    const presetDiagnostics = await inspectKovoBuildPreset(preset, neutralBuild, presetContext);
+    const blockingDiagnostics = presetDiagnostics.filter(
+      (diagnostic) => diagnostic.severity === 'error',
+    );
+    if (blockingDiagnostics.length > 0) {
+      throw new KovoBuildPresetDiagnosticError(blockingDiagnostics);
+    }
+
+    await preset.emit(neutralBuild, presetContext);
 
     return kovoBuildResult({
       appModulePath: resolvedAppModulePath,
       neutralOutDir: neutralBuild.outDir,
       outDir,
       preset: selectedPreset.name,
+      presetDiagnostics,
       presetLogs,
       serverOutDir: presetOutDir,
     });
   } catch (error) {
     return buildErrorResult(error);
   }
+}
+
+async function inspectKovoBuildPreset(
+  preset: KovoPreset,
+  neutralBuild: KovoNeutralBuild,
+  context: PresetContext,
+): Promise<readonly PresetDiagnostic[]> {
+  if (typeof preset.inspect !== 'function') return [];
+  return preset.inspect(neutralBuild, context);
 }
 
 function buildPresetOutDir(outDir: string, preset: KovoBuildPresetName): string {
@@ -2844,6 +2872,7 @@ function kovoBuildResult(options: {
   neutralOutDir: string;
   outDir: string;
   preset: KovoBuildPresetName;
+  presetDiagnostics: readonly PresetDiagnostic[];
   presetLogs: readonly string[];
   serverOutDir: string;
 }): KovoCheckResult {
@@ -2851,11 +2880,30 @@ function kovoBuildResult(options: {
     buildOutputVersion,
     `APP module=${JSON.stringify(options.appModulePath)}`,
     `NEUTRAL outDir=${JSON.stringify(options.neutralOutDir)}`,
+    ...options.presetDiagnostics.map(presetDiagnosticOutputLine),
     ...options.presetLogs.map((message) => `PRESET ${stableText(message)}`),
     `SUMMARY preset=${options.preset} outDir=${JSON.stringify(options.outDir)} serverOutDir=${JSON.stringify(options.serverOutDir)}`,
   ];
 
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
+}
+
+class KovoBuildPresetDiagnosticError extends Error {
+  readonly diagnostics: readonly PresetDiagnostic[];
+
+  constructor(diagnostics: readonly PresetDiagnostic[]) {
+    super(
+      ['kovo build preset inspection failed:', ...diagnostics.map(presetDiagnosticOutputLine)].join(
+        '\n',
+      ),
+    );
+    this.diagnostics = diagnostics;
+  }
+}
+
+function presetDiagnosticOutputLine(diagnostic: PresetDiagnostic): string {
+  const label = diagnostic.severity === 'warning' ? 'WARN' : 'ERROR';
+  return `${label} ${diagnostic.code} ${stableText(diagnostic.message)}`;
 }
 
 function byteLength(value: string): number {
