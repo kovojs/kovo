@@ -2,6 +2,7 @@
 export type { DiagnosticCode } from '@kovojs/core';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -82,6 +83,7 @@ const compileCommandOutputVersion = 'kovo-compile/v1';
 const addOutputVersion = 'kovo-add/v1';
 const mcpOutputVersion = 'kovo-mcp/v1';
 const buildOutputVersion = 'kovo-build/v1';
+const requireFromCli = createRequire(import.meta.url);
 
 /** @internal Synchronous argv dispatcher for the `kovo` bin; not a public API. */
 export function main(args: readonly string[] = process.argv.slice(2)): number {
@@ -2575,7 +2577,6 @@ async function bundleKovoServerHandler(appModulePath: string): Promise<string> {
         minify: false,
         outDir,
         rollupOptions: {
-          external: [/^@kovojs\//],
           input: entryPath,
           output: {
             entryFileNames: 'handler.mjs',
@@ -2587,16 +2588,13 @@ async function bundleKovoServerHandler(appModulePath: string): Promise<string> {
       },
       configFile: false,
       logLevel: 'silent',
-      plugins: [
-        {
-          name: 'kovo-server-build-externals',
-          resolveId(id) {
-            if (id.startsWith('@kovojs/')) return { external: true, id };
-            return null;
-          },
+      resolve: {
+        alias: {
+          '@kovojs/server': requireFromCli.resolve('@kovojs/server'),
         },
-      ],
+      },
       root: process.cwd(),
+      ssr: { noExternal: [/^@kovojs\//] },
     });
 
     return await readFile(join(outDir, 'handler.mjs'), 'utf8');

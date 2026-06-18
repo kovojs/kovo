@@ -1,5 +1,6 @@
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -7,6 +8,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import type { Server } from 'node:http';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -16,6 +18,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
+const dockerIt = process.env.KOVO_TEST_DOCKER === '1' && dockerAvailable() ? it : it.skip;
 
 describe('kovo build', () => {
   it('bundles an app module and emits node preset output without Vite at request time', async () => {
@@ -212,6 +215,79 @@ describe('kovo build', () => {
     }
   });
 
+  dockerIt(
+    'builds and runs the generated node Dockerfile without node_modules in the output',
+    async () => {
+      const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-docker-'));
+      const appPath = join(root, 'app.mjs');
+      const outDir = join(root, 'dist');
+      const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      let containerId: string | undefined;
+      let imageId: string | undefined;
+
+      try {
+        mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+        symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+        writeFileSync(appPath, appModuleSource(), 'utf8');
+        writeClientEntry(root);
+
+        const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+        const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+        expect(exitCode, errorOutput).toBe(0);
+        expect(stderr).not.toHaveBeenCalled();
+        expect(existsSync(join(outDir, 'server/Dockerfile'))).toBe(true);
+        expect(existsSync(join(outDir, 'server/node_modules'))).toBe(false);
+
+        imageId = dockerOutput(['build', '-q', join(outDir, 'server')])
+          .trim()
+          .split('\n')
+          .at(-1);
+        if (!imageId) throw new Error('Docker build did not return an image id.');
+        containerId = dockerOutput(['run', '--rm', '-d', '-p', '127.0.0.1::3000', imageId]).trim();
+        const origin = await dockerContainerOrigin(containerId);
+        await waitForDockerRoute(origin);
+
+        const document = await fetch(`${origin}/cart`);
+        await expect(document.text()).resolves.toContain('<main>Cart 0</main>');
+        expect(document.status).toBe(200);
+
+        const mutationResponse = await fetch(`${origin}/_m/cart/add`, {
+          body: new URLSearchParams({ quantity: '5' }),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          method: 'POST',
+          redirect: 'manual',
+        });
+        expect(mutationResponse.status).toBe(303);
+
+        const updatedDocument = await fetch(`${origin}/cart`);
+        await expect(updatedDocument.text()).resolves.toContain('<main>Cart 5</main>');
+        expect(updatedDocument.status).toBe(200);
+
+        const clientModuleResponse = await fetch(`${origin}/c/cart.client.js?v=cart-v1`);
+        await expect(clientModuleResponse.text()).resolves.toBe('export const cartClient = true;');
+        expect(clientModuleResponse.headers.get('cache-control')).toBe(
+          'public, max-age=31536000, immutable',
+        );
+
+        const stylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
+        const assetResponse = await fetch(`${origin}${stylesheetPath}`);
+        await expect(assetResponse.text()).resolves.toContain('color:#639');
+        expect(assetResponse.status).toBe(200);
+        expect(assetResponse.headers.get('cache-control')).toBe(
+          'public, max-age=31536000, immutable',
+        );
+      } finally {
+        stdout.mockRestore();
+        stderr.mockRestore();
+        if (containerId) dockerCleanup(['rm', '-f', containerId]);
+        if (imageId) dockerCleanup(['image', 'rm', '-f', imageId]);
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    120_000,
+  );
+
   it('loads kovo.config.ts preset before host auto-detection', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-'));
     const outDir = join(root, 'dist');
@@ -401,19 +477,77 @@ async function close(server: Server): Promise<void> {
   });
 }
 
+function dockerAvailable(): boolean {
+  try {
+    execFileSync('docker', ['version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function dockerOutput(args: readonly string[]): string {
+  return execFileSync('docker', [...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+function dockerCleanup(args: readonly string[]): void {
+  try {
+    execFileSync('docker', [...args], { stdio: 'ignore' });
+  } catch {
+    // Cleanup is best-effort; the test failure above is more useful than a
+    // secondary Docker cleanup error.
+  }
+}
+
+async function dockerContainerOrigin(containerId: string): Promise<string> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    try {
+      const portOutput = dockerOutput(['port', containerId, '3000/tcp']).trim();
+      const portLine = portOutput.split('\n').find(Boolean);
+      if (portLine) return `http://${portLine.replace(/^0\.0\.0\.0:/, '127.0.0.1:')}`;
+    } catch {
+      // Docker can need a brief moment before port metadata is available.
+    }
+    await delay(100);
+  }
+  throw new Error(`Docker container ${containerId} did not expose port 3000.`);
+}
+
+async function waitForDockerRoute(origin: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      const response = await fetch(`${origin}/cart`);
+      await response.arrayBuffer();
+      if (response.status === 200) return;
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(100);
+  }
+  throw new Error(`Dockerized Kovo server did not become ready: ${String(lastError)}`);
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function writeProductionOnlyRuntimeNodeModules(runtimeDir: string): void {
   const packageRoot = join(runtimeDir, 'node_modules');
-  const kovoRoot = join(packageRoot, '@kovojs');
-  mkdirSync(kovoRoot, { recursive: true });
-
-  for (const name of ['core', 'runtime', 'server']) {
-    cpSync(join(repoRoot, 'packages', name), join(kovoRoot, name), {
-      recursive: true,
-    });
+  for (const packageName of [
+    '@kovojs/core',
+    '@kovojs/runtime',
+    '@kovojs/server',
+    'vite',
+    'vite-plus',
+  ]) {
+    writeThrowingPackage(packageRoot, packageName);
   }
-
-  writeThrowingPackage(packageRoot, 'vite');
-  writeThrowingPackage(packageRoot, 'vite-plus');
 }
 
 function writeThrowingPackage(packageRoot: string, packageName: string): void {

@@ -93,10 +93,9 @@ adapter-*` packages. Selection is host **auto-detection** (`VERCEL` / `CF_PAGES`
 
 - [ ] **Production serve path is not yet fully switched over.** `kovo build`
       emits a self-contained Node output, but examples/docs still present Vite
-      `middlewareMode` from source as the production story and the Docker path has
-      not been validated with pruned production dependencies. Evidence gap:
+      `middlewareMode` from source as the production story. Evidence gap:
       `examples/commerce/scripts/serve.mjs` still uses `createViteServer`, and
-      Phase 1 container proof remains open.
+      Phase 4 examples/docs switch remains open.
 - [x] **App-author build command exists for the Node preset.** `packages/cli/src/
 index.ts` dispatches `kovo build`, loads `.mjs` and `.ts` app modules through
       build-time Vite SSR, runs the client manifest build, writes the neutral
@@ -351,11 +350,20 @@ vitest --run packages/cli/src/index.kovo-build.test.ts packages/server/src/build
     `packages/server/src/build.test.ts` test imports the emitted `server.mjs`
     directly and verifies route fallback, client-module serving, asset serving,
     content types, and `public, max-age=31536000, immutable` cache headers without
-    Vite in the request path. The full item remains open because the Dockerfile has
-    not been container-built with pruned production dependencies and examples/docs
-    have not been switched to this path.
-- [ ] Evidence: container builds with pruned prod deps; `curl` of a route, a
+    Vite in the request path. The Docker evidence target below proves the generated
+    Dockerfile. The full item remains open because examples/docs have not been
+    switched to this path.
+- [x] Evidence: container builds with pruned prod deps; `curl` of a route, a
       `/assets/*` (immutable cache header), and a `/_m/` mutation succeed.
+  - Evidence: `packages/cli/src/index.ts` now bundles `@kovojs/*` into
+    `server/handler.mjs` through Vite SSR `noExternal`, leaving the emitted
+    `dist/server/` Docker context without `node_modules`. The opt-in Docker test
+    in `packages/cli/src/index.kovo-build.test.ts` runs `kovo build`, asserts the
+    generated node output has a `Dockerfile` and no `node_modules`, builds the
+    image, runs the container, and verifies a route, `/_m/` mutation, immutable
+    `/c/cart.client.js?v=cart-v1`, and immutable Vite-built `/assets/*.css`.
+    Verification: `KOVO_TEST_DOCKER=1 corepack pnpm exec vitest --run
+packages/cli/src/index.kovo-build.test.ts -t "generated node Dockerfile"`.
 
 ### Phase 2 — `vercel` preset
 
