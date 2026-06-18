@@ -169,6 +169,7 @@ export function evaluateClientModule(
   const source = readGenerated(fileName)
     .replace(/import \{[\s\S]*?\} from '@kovojs\/runtime(?:\/generated)?';\n\n?/, '')
     .replace(/import \{[\s\S]*?\} from '@kovojs\/headless-ui\/[^']+';\n\n?/g, '')
+    .replace(/import \{[\s\S]*?\} from '@kovojs\/ui\/[^']+';\n\n?/g, '')
     .replaceAll('export const ', 'exports.');
   const exports: ClientExports = {};
   vm.runInNewContext(source, {

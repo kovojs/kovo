@@ -166,7 +166,7 @@ function rewriteGalleryClientImports(source: string): string {
     .replaceAll("from '@kovojs/runtime/generated';", `from '${galleryRuntimeModuleHref}';`)
     .replaceAll("from '@kovojs/runtime';", `from '${galleryRuntimeModuleHref}';`)
     .replace(
-      /from (["'])@kovojs\/headless-ui\/([a-z0-9-]+)\1;/g,
+      /from (["'])@kovojs\/(?:headless-ui|ui)\/([a-z0-9-]+)\1;/g,
       (_match, _quote: string, family: string) => {
         const href = galleryHeadlessUiClientModuleHrefMap.get(
           `/c/packages/headless-ui/src/primitives/${family}.js`,

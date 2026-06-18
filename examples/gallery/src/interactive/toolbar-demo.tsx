@@ -6,7 +6,11 @@ import {
   toolbarKeyDown as _toolbarKeyDown,
   toolbarRootAttributes,
 } from '@kovojs/headless-ui/toolbar';
-import { toolbarClasses, toolbarItemClasses, toolbarButtonClasses } from '@kovojs/ui/toolbar';
+import {
+  toolbarClasses,
+  toolbarItemClasses,
+  toolbarButtonClasses,
+} from '@kovojs/ui/toolbar';
 
 const TOOLBAR_CLASS = toolbarClasses.join(' ');
 const ITEM_CLASS = toolbarItemClasses.join(' ');

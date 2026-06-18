@@ -13,7 +13,11 @@ import {
   menubarTypeahead as _menubarTypeahead,
   type MenubarItem,
 } from '@kovojs/headless-ui/menubar';
-import { menubarClasses, menubarItemClasses, menubarSubmenuClasses } from '@kovojs/ui/menubar';
+import {
+  menubarClasses,
+  menubarItemClasses,
+  menubarSubmenuClasses,
+} from '@kovojs/ui/menubar';
 
 const ROOT_CLASS = menubarClasses.join(' ');
 const ITEM_CLASS = menubarItemClasses.join(' ');

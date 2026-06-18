@@ -4,7 +4,10 @@ import {
   checkboxTriggerClick as _checkboxTriggerClick,
   type CheckboxCheckedState,
 } from '@kovojs/headless-ui/checkbox';
-import { checkboxClasses, checkboxInputClasses } from '@kovojs/ui/checkbox';
+import {
+  checkboxClasses,
+  checkboxInputClasses,
+} from '@kovojs/ui/checkbox';
 
 const ROOT_CLASS = checkboxClasses.join(' ');
 const INPUT_CLASS = checkboxInputClasses.join(' ');

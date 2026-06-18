@@ -9,7 +9,11 @@ import {
   dialogTriggerClick as _dialogTriggerClick,
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui/dialog';
-import { dialogTriggerClasses, dialogContentClasses, dialogCloseClasses } from '@kovojs/ui/dialog';
+import {
+  dialogTriggerClasses,
+  dialogContentClasses,
+  dialogCloseClasses,
+} from '@kovojs/ui/dialog';
 
 const TRIGGER_CLASS = dialogTriggerClasses.join(' ');
 const CONTENT_CLASS = dialogContentClasses.join(' ');

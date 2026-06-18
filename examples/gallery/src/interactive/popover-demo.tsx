@@ -6,7 +6,11 @@ import {
   popoverRootAttributes,
   popoverTriggerAttributes,
 } from '@kovojs/headless-ui/popover';
-import { popoverClasses, popoverTriggerClasses, popoverContentClasses } from '@kovojs/ui/popover';
+import {
+  popoverClasses,
+  popoverTriggerClasses,
+  popoverContentClasses,
+} from '@kovojs/ui/popover';
 
 const ROOT_CLASS = popoverClasses.join(' ');
 const TRIGGER_CLASS = popoverTriggerClasses.join(' ');

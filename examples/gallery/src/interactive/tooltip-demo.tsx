@@ -10,7 +10,11 @@ import {
   tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter,
   tooltipTriggerPointerLeave as _tooltipTriggerPointerLeave,
 } from '@kovojs/headless-ui/tooltip';
-import { tooltipClasses, tooltipTriggerClasses, tooltipContentClasses } from '@kovojs/ui/tooltip';
+import {
+  tooltipClasses,
+  tooltipTriggerClasses,
+  tooltipContentClasses,
+} from '@kovojs/ui/tooltip';
 
 const ROOT_CLASS = tooltipClasses.join(' ');
 const TRIGGER_CLASS = tooltipTriggerClasses.join(' ');

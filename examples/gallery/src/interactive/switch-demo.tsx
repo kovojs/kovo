@@ -1,7 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { switchTriggerClick as _switchTriggerClick } from '@kovojs/headless-ui/switch';
-import { switchClasses, switchInputClasses } from '@kovojs/ui/switch';
+import {
+  switchClasses,
+  switchInputClasses,
+} from '@kovojs/ui/switch';
 
 const ROOT_CLASS = switchClasses.join(' ');
 const INPUT_CLASS = switchInputClasses.join(' ');
