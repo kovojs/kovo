@@ -727,7 +727,7 @@ type AddArgParseResult =
   | { ok: true; options: AddComponentOptions }
   | { message: string; ok: false };
 
-type CompileTarget = 'component' | 'graph' | 'package-css' | 'route';
+type CompileTarget = 'component' | 'graph' | 'mutation-inputs' | 'package-css' | 'route';
 
 interface CompileBaseOptions {
   check: boolean;
@@ -736,6 +736,9 @@ interface CompileBaseOptions {
 }
 
 interface CompileComponentCommandOptions extends CompileBaseOptions {
+  allowedDiagnosticCodes: readonly DiagnosticCode[];
+  emitClientFiles: boolean;
+  factsOutPath?: string;
   fixpoint: boolean;
   fileName?: string;
   registryFactsPath?: string;
@@ -747,6 +750,7 @@ interface CompileComponentCommandOptions extends CompileBaseOptions {
 interface CompileRouteCommandOptions extends CompileBaseOptions {
   artifactFileName?: string;
   componentImportRewrites: CompileRouteModuleOptions['componentImportRewrites'];
+  factsOutPath?: string;
   fileName?: string;
   sourcePath: string;
   target: 'route';
@@ -755,6 +759,12 @@ interface CompileRouteCommandOptions extends CompileBaseOptions {
 interface CompileGraphCommandOptions extends CompileBaseOptions {
   inputPath: string;
   target: 'graph';
+}
+
+interface CompileMutationInputsCommandOptions extends CompileBaseOptions {
+  fileName?: string;
+  sourcePath: string;
+  target: 'mutation-inputs';
 }
 
 interface CompilePackageCssCommandOptions extends CompileBaseOptions {
@@ -766,6 +776,7 @@ interface CompilePackageCssCommandOptions extends CompileBaseOptions {
 type CompileCommandOptions =
   | CompileComponentCommandOptions
   | CompileGraphCommandOptions
+  | CompileMutationInputsCommandOptions
   | CompilePackageCssCommandOptions
   | CompileRouteCommandOptions;
 
@@ -881,6 +892,7 @@ function parseCompileArgs(args: readonly string[]): CompileArgParseResult {
   if (target === 'component') return parseCompileComponentArgs(args.slice(1));
   if (target === 'route') return parseCompileRouteArgs(args.slice(1));
   if (target === 'graph') return parseCompileGraphArgs(args.slice(1));
+  if (target === 'mutation-inputs') return parseCompileMutationInputsArgs(args.slice(1));
   return parseCompilePackageCssArgs(args.slice(1));
 }
 
@@ -888,10 +900,13 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
   let sourcePath: string | undefined;
   let outPath: string | undefined;
   let fileName: string | undefined;
+  let factsOutPath: string | undefined;
   let registryFactsPath: string | undefined;
   let check = false;
+  let emitClientFiles = false;
   let fixpoint = false;
   let renderEquivalence = false;
+  const allowedDiagnosticCodes: DiagnosticCode[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -907,6 +922,37 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
     }
     if (arg === '--render-equivalence') {
       renderEquivalence = true;
+      continue;
+    }
+    if (arg === '--emit-client-files') {
+      emitClientFiles = true;
+      continue;
+    }
+    if (arg === '--allow-diagnostic') {
+      const value = args[index + 1];
+      if (!value)
+        return { message: 'kovo: compile component --allow-diagnostic requires a code.\n', ok: false };
+      if (!isDiagnosticCode(value)) {
+        return {
+          message: `kovo: compile component --allow-diagnostic received unknown code ${stableValue(value)}.\n`,
+          ok: false,
+        };
+      }
+      allowedDiagnosticCodes.push(value);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--allow-diagnostic=')) {
+      const value = arg.slice('--allow-diagnostic='.length);
+      if (!value)
+        return { message: 'kovo: compile component --allow-diagnostic requires a code.\n', ok: false };
+      if (!isDiagnosticCode(value)) {
+        return {
+          message: `kovo: compile component --allow-diagnostic received unknown code ${stableValue(value)}.\n`,
+          ok: false,
+        };
+      }
+      allowedDiagnosticCodes.push(value);
       continue;
     }
     if (arg === '--out') {
@@ -933,6 +979,20 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
       fileName = arg.slice('--file-name='.length);
       if (!fileName)
         return { message: 'kovo: compile component --file-name requires a name.\n', ok: false };
+      continue;
+    }
+    if (arg === '--facts-out') {
+      const value = args[index + 1];
+      if (!value)
+        return { message: 'kovo: compile component --facts-out requires a JSON path.\n', ok: false };
+      factsOutPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--facts-out=')) {
+      factsOutPath = arg.slice('--facts-out='.length);
+      if (!factsOutPath)
+        return { message: 'kovo: compile component --facts-out requires a JSON path.\n', ok: false };
       continue;
     }
     if (arg === '--registry-facts') {
@@ -978,7 +1038,10 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
   return {
     ok: true,
     options: {
+      allowedDiagnosticCodes,
       check,
+      emitClientFiles,
+      ...(factsOutPath === undefined ? {} : { factsOutPath }),
       fixpoint,
       ...(fileName === undefined ? {} : { fileName }),
       outPath,
@@ -995,6 +1058,7 @@ function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
   let outPath: string | undefined;
   let fileName: string | undefined;
   let artifactFileName: string | undefined;
+  let factsOutPath: string | undefined;
   let check = false;
   const componentImportRewrites: RouteComponentImportRewrite[] = [];
 
@@ -1044,6 +1108,19 @@ function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
         return { message: 'kovo: compile route --artifact-file-name requires a name.\n', ok: false };
       continue;
     }
+    if (arg === '--facts-out') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: compile route --facts-out requires a JSON path.\n', ok: false };
+      factsOutPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--facts-out=')) {
+      factsOutPath = arg.slice('--facts-out='.length);
+      if (!factsOutPath)
+        return { message: 'kovo: compile route --facts-out requires a JSON path.\n', ok: false };
+      continue;
+    }
     if (arg === '--rewrite') {
       const value = args[index + 1];
       if (!value) return { message: 'kovo: compile route --rewrite requires Local=specifier.\n', ok: false };
@@ -1081,6 +1158,7 @@ function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
       ...(artifactFileName === undefined ? {} : { artifactFileName }),
       check,
       componentImportRewrites,
+      ...(factsOutPath === undefined ? {} : { factsOutPath }),
       ...(fileName === undefined ? {} : { fileName }),
       outPath,
       sourcePath,
@@ -1131,6 +1209,83 @@ function parseCompileGraphArgs(args: readonly string[]): CompileArgParseResult {
   if (!outPath) return { message: `kovo: compile graph requires --out.\n${compileUsage()}`, ok: false };
 
   return { ok: true, options: { check, inputPath, outPath, target: 'graph' } };
+}
+
+function parseCompileMutationInputsArgs(args: readonly string[]): CompileArgParseResult {
+  let sourcePath: string | undefined;
+  let outPath: string | undefined;
+  let fileName: string | undefined;
+  let check = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+    if (arg === '--help' || arg === '-h') return { message: compileUsage(), ok: false };
+    if (arg === '--check') {
+      check = true;
+      continue;
+    }
+    if (arg === '--out') {
+      const value = args[index + 1];
+      if (!value)
+        return { message: 'kovo: compile mutation-inputs --out requires a path.\n', ok: false };
+      outPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--out=')) {
+      outPath = arg.slice('--out='.length);
+      if (!outPath)
+        return { message: 'kovo: compile mutation-inputs --out requires a path.\n', ok: false };
+      continue;
+    }
+    if (arg === '--file-name') {
+      const value = args[index + 1];
+      if (!value)
+        return { message: 'kovo: compile mutation-inputs --file-name requires a name.\n', ok: false };
+      fileName = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--file-name=')) {
+      fileName = arg.slice('--file-name='.length);
+      if (!fileName)
+        return { message: 'kovo: compile mutation-inputs --file-name requires a name.\n', ok: false };
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      return {
+        message: `kovo: unknown compile mutation-inputs option ${stableValue(arg)}.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    if (sourcePath) {
+      return {
+        message: `kovo: compile mutation-inputs accepts one source path.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    sourcePath = arg;
+  }
+
+  if (!sourcePath)
+    return {
+      message: `kovo: compile mutation-inputs requires a source path.\n${compileUsage()}`,
+      ok: false,
+    };
+  if (!outPath)
+    return { message: `kovo: compile mutation-inputs requires --out.\n${compileUsage()}`, ok: false };
+
+  return {
+    ok: true,
+    options: {
+      check,
+      ...(fileName === undefined ? {} : { fileName }),
+      outPath,
+      sourcePath,
+      target: 'mutation-inputs',
+    },
+  };
 }
 
 function parseCompilePackageCssArgs(args: readonly string[]): CompileArgParseResult {
@@ -1227,7 +1382,13 @@ function parseRouteRewrite(
 }
 
 function isCompileTarget(value: string): value is CompileTarget {
-  return value === 'component' || value === 'route' || value === 'graph' || value === 'package-css';
+  return (
+    value === 'component' ||
+    value === 'route' ||
+    value === 'graph' ||
+    value === 'mutation-inputs' ||
+    value === 'package-css'
+  );
 }
 
 function compileUsage(): string {
@@ -1239,6 +1400,7 @@ async function runCompileCommand(options: CompileCommandOptions): Promise<CliCom
     if (options.target === 'component') return await runCompileComponentCommand(options);
     if (options.target === 'route') return await runCompileRouteCommand(options);
     if (options.target === 'graph') return await runCompileGraphCommand(options);
+    if (options.target === 'mutation-inputs') return await runCompileMutationInputsCommand(options);
     return await runCompilePackageCssCommand(options);
   } catch (error) {
     return {
@@ -1264,12 +1426,35 @@ async function runCompileComponentCommand(
     ) as NonNullable<CompileComponentOptions['registryFacts']>;
   }
   const result = compileComponentModule(compileOptions);
-  if (result.diagnostics.length > 0) return compileDiagnosticResult(result.diagnostics);
+  const allowedDiagnosticCodes = new Set(options.allowedDiagnosticCodes);
+  const warnings = result.diagnostics.filter((diagnostic) => allowedDiagnosticCodes.has(diagnostic.code));
+  const blockingDiagnostics = result.diagnostics.filter(
+    (diagnostic) => !allowedDiagnosticCodes.has(diagnostic.code),
+  );
+  if (blockingDiagnostics.length > 0) return compileDiagnosticResult(blockingDiagnostics);
   if (options.fixpoint) assertFixpoint(result);
   if (options.renderEquivalence) assertRenderEquivalence(result);
   if (!result.loweredSource) throw new Error(`${options.sourcePath} produced no lowered source`);
 
-  return compileArtifactResult(options, result.loweredSource, 'component');
+  const artifacts: CompileArtifact[] = [
+    { kind: 'component', path: options.outPath, source: result.loweredSource },
+  ];
+  if (options.factsOutPath !== undefined) {
+    artifacts.push({
+      kind: 'component-facts',
+      path: options.factsOutPath,
+      source: `${JSON.stringify({ componentGraphFacts: result.componentGraphFacts }, null, 2)}\n`,
+    });
+  }
+  if (options.emitClientFiles) {
+    for (const file of result.files) {
+      if (file.kind === 'client') {
+        artifacts.push({ kind: 'client', path: file.fileName, source: file.source });
+      }
+    }
+  }
+
+  return compileArtifactsResult(options.check, artifacts, warningLines(warnings));
 }
 
 async function runCompileRouteCommand(
@@ -1289,7 +1474,15 @@ async function runCompileRouteCommand(
   const source = result.files[0]?.source;
   if (!source) throw new Error(`${options.sourcePath} produced no route artifact`);
 
-  return compileArtifactResult(options, source, 'route');
+  const artifacts: CompileArtifact[] = [{ kind: 'route', path: options.outPath, source }];
+  if (options.factsOutPath !== undefined) {
+    artifacts.push({
+      kind: 'route-facts',
+      path: options.factsOutPath,
+      source: `${JSON.stringify({ routePageFacts: result.routePageFacts }, null, 2)}\n`,
+    });
+  }
+  return compileArtifactsResult(options.check, artifacts);
 }
 
 async function runCompileGraphCommand(options: CompileGraphCommandOptions): Promise<CliCommandResult> {
@@ -1297,6 +1490,24 @@ async function runCompileGraphCommand(options: CompileGraphCommandOptions): Prom
   const result = deriveAppGraph(readJsonFile(options.inputPath) as Parameters<typeof deriveAppGraph>[0]);
   if (result.diagnostics.length > 0) return compileDiagnosticResult(result.diagnostics);
   return compileArtifactResult(options, `${JSON.stringify(result.graph, null, 2)}\n`, 'graph');
+}
+
+async function runCompileMutationInputsCommand(
+  options: CompileMutationInputsCommandOptions,
+): Promise<CliCommandResult> {
+  const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
+  const facts = Object.fromEntries(
+    [...mutationInputFactsFromSource(options.fileName ?? options.sourcePath, readFileSync(options.sourcePath, 'utf8')).values()].map(
+      (fact) => [
+        fact.key,
+        fact.fields.map((field) => ({
+          ...field,
+          provenance: 'registry' as const,
+        })),
+      ],
+    ),
+  );
+  return compileArtifactResult(options, `${JSON.stringify(facts, null, 2)}\n`, 'mutation-inputs');
 }
 
 async function runCompilePackageCssCommand(
@@ -1330,31 +1541,60 @@ function compileArtifactResult(
   return { exitCode: 0, output: `${compileArtifactLines(options, source, kind).join('\n')}\n` };
 }
 
+interface CompileArtifact {
+  kind: string;
+  path: string;
+  source: string;
+}
+
+function compileArtifactsResult(
+  check: boolean,
+  artifacts: readonly CompileArtifact[],
+  warnings: readonly string[] = [],
+): CliCommandResult {
+  const lines = [compileCommandOutputVersion];
+  for (const artifact of artifacts) {
+    lines.push(...compileArtifactActionLines(check, artifact));
+  }
+  lines.push(...warnings, `SUMMARY artifacts=${artifacts.length} diagnostics=${warnings.length}`);
+  return { exitCode: 0, output: `${lines.join('\n')}\n` };
+}
+
 function compileArtifactLines(
   options: CompileBaseOptions,
   source: string,
   kind: CompileTarget,
 ): string[] {
-  const target = resolve(options.outPath);
-  if (options.check) {
-    const current = readFileSync(target, 'utf8');
-    if (current !== source) {
-      throw new Error(`${kind} artifact ${target} is stale; rerun without --check`);
-    }
-    return [
-      compileCommandOutputVersion,
-      `CHECK ${kind} path=${JSON.stringify(target)} status=current bytes=${byteLength(source)}`,
-      `SUMMARY artifacts=1 diagnostics=0`,
-    ];
-  }
-
-  mkdirSync(dirname(target), { recursive: true });
-  writeFileSync(target, source, 'utf8');
   return [
     compileCommandOutputVersion,
-    `WRITE ${kind} path=${JSON.stringify(target)} bytes=${byteLength(source)}`,
+    ...compileArtifactActionLines(options.check, { kind, path: options.outPath, source }),
     `SUMMARY artifacts=1 diagnostics=0`,
   ];
+}
+
+function compileArtifactActionLines(check: boolean, artifact: CompileArtifact): string[] {
+  const target = resolve(artifact.path);
+  if (check) {
+    const current = readFileSync(target, 'utf8');
+    if (current !== artifact.source) {
+      throw new Error(`${artifact.kind} artifact ${target} is stale; rerun without --check`);
+    }
+    return [
+      `CHECK ${artifact.kind} path=${JSON.stringify(target)} status=current bytes=${byteLength(artifact.source)}`,
+    ];
+  }
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, artifact.source, 'utf8');
+  return [`WRITE ${artifact.kind} path=${JSON.stringify(target)} bytes=${byteLength(artifact.source)}`];
+}
+
+function warningLines(
+  diagnostics: readonly { code: DiagnosticCode; fileName: string; message: string }[],
+): string[] {
+  return diagnostics.map(
+    (diagnostic) =>
+      `WARN ${diagnostic.code} file=${JSON.stringify(diagnostic.fileName)} ${stableText(diagnostic.message)}`,
+  );
 }
 
 function compileDiagnosticResult(

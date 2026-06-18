@@ -71,6 +71,204 @@ export const CartBadge = component({
     }
   });
 
+  it('writes component client files and graph facts through the CLI facade', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-component-facts-'));
+    const sourcePath = join(root, 'counter.tsx');
+    const outPath = join(root, 'generated/counter.tsx');
+    const factsPath = join(root, 'generated/counter.facts.json');
+    const clientPath = join(root, 'generated/counter.client.js');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        sourcePath,
+        `
+import { component } from '@kovojs/core';
+import { removeItem } from './actions';
+
+export const CartActions = component({
+  render: () => <button onClick={removeItem}>Remove</button>,
+});
+`,
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'component',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          join(root, 'generated/counter.tsx'),
+          '--facts-out',
+          factsPath,
+          '--emit-client-files',
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(readFileSync(clientPath, 'utf8')).toContain('CartActions$removeItem');
+      expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toMatchObject({
+        componentGraphFacts: [{ exportName: 'CartActions' }],
+      });
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `WRITE client path=${JSON.stringify(clientPath)}`,
+      );
+
+      stdout.mockClear();
+      await expect(
+        mainAsync([
+          'compile',
+          'component',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          join(root, 'generated/counter.tsx'),
+          '--facts-out',
+          factsPath,
+          '--emit-client-files',
+          '--check',
+        ]),
+      ).resolves.toBe(0);
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain(`CHECK component path=${JSON.stringify(outPath)} status=current`);
+      expect(output).toContain(`CHECK client path=${JSON.stringify(clientPath)} status=current`);
+      expect(output).toContain('SUMMARY artifacts=3 diagnostics=0');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('allows selected component diagnostics as warnings', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-component-warn-'));
+    const sourcePath = join(root, 'static-id.tsx');
+    const outPath = join(root, 'generated/static-id.tsx');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        sourcePath,
+        `
+import { component } from '@kovojs/core';
+import { removeItem } from './actions';
+
+export const CartBadge = component({
+  queries: { cart: {} },
+  render: () => (
+    <button onClick={() => removeItem(state, item.id)}>
+      <span data-bind="cart.count">2</span>
+    </button>
+  ),
+});
+`,
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'component',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          'src/components/static-id.tsx',
+        ]),
+      ).resolves.toBe(1);
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain('ERROR KV210');
+
+      stderr.mockClear();
+      await expect(
+        mainAsync([
+          'compile',
+          'component',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          'src/components/static-id.tsx',
+          '--allow-diagnostic',
+          'KV210',
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('WARN KV210 file="src/components/static-id.tsx"');
+      expect(output).toContain('SUMMARY artifacts=1 diagnostics=1');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('writes route page facts through the CLI facade', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-route-facts-'));
+    const sourcePath = join(root, 'app-shell.tsx');
+    const outPath = join(root, 'generated/app-shell.kovo-route.tsx');
+    const factsPath = join(root, 'generated/app-shell.facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        sourcePath,
+        `
+import { route } from '@kovojs/server';
+import { CartBadge } from './cart-badge.js';
+
+route('/', {
+  page: () => <CartBadge productId="p1" />,
+});
+`,
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'route',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          'src/app-shell.tsx',
+          '--artifact-file-name',
+          'src/generated/app-shell.kovo-route.tsx',
+          '--rewrite',
+          'CartBadge=./cart-badge.js',
+          '--facts-out',
+          factsPath,
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toMatchObject({
+        routePageFacts: [
+          {
+            components: [{ localName: 'CartBadge' }],
+            route: '/',
+          },
+        ],
+      });
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'SUMMARY artifacts=2 diagnostics=0',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('emits a graph artifact through the CLI facade', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-graph-'));
     const inputPath = join(root, 'graph-input.json');
@@ -99,6 +297,59 @@ export const CartBadge = component({
       });
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `WRITE graph path=${JSON.stringify(outPath)}`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('extracts mutation input facts through the CLI facade', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-mutation-inputs-'));
+    const sourcePath = join(root, 'app.ts');
+    const outPath = join(root, 'mutation-inputs.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        sourcePath,
+        `
+import { mutation, s } from '@kovojs/server';
+
+export const addToCart = mutation('cart/add', {
+  input: s.object({
+    productId: s.string(),
+    quantity: s.number().default(1),
+  }),
+  handler: async () => null,
+});
+`,
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'mutation-inputs',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          'src/app.ts',
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(JSON.parse(readFileSync(outPath, 'utf8'))).toMatchObject({
+        'cart/add': [
+          { coercion: 'string', name: 'productId', provenance: 'registry', required: true },
+          { coercion: 'number', defaulted: true, name: 'quantity', provenance: 'registry' },
+        ],
+      });
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `WRITE mutation-inputs path=${JSON.stringify(outPath)}`,
       );
     } finally {
       stdout.mockRestore();
