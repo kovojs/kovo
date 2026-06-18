@@ -1,87 +1,87 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { registerHooks } from 'node:module';
-import { dirname, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-registerHooks({
-  resolve(specifier, context, nextResolve) {
-    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
-      const tsUrl = new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL);
-      if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
-    }
-    return nextResolve(specifier, context);
-  },
-});
-
-const { assertFixpoint, assertRenderEquivalence, compileComponentModule, compileRouteModule } =
-  await import('@kovojs/compiler');
-const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const soRoot = resolve(scriptDir, '..');
 const componentNames = ['question-detail', 'question-list'];
-const mutationSourcePath = resolve(soRoot, 'src/mutations.ts');
+const check = process.argv.includes('--check');
+const tempRoot = mkdtempSync(join(tmpdir(), 'kovo-so-components-'));
+const registryFactsPath = join(tempRoot, 'registry-facts.json');
+
 const registryFacts = {
-  mutationInputs: registryMutationInputs(
-    'examples/stackoverflow/src/mutations.ts',
-    readFileSync(mutationSourcePath, 'utf8'),
-  ),
+  mutationInputs: {
+    postAnswer: [
+      requiredString('id'),
+      requiredString('questionId'),
+      requiredString('body'),
+      requiredString('authorId'),
+    ],
+    postQuestion: [
+      requiredString('id'),
+      requiredString('title'),
+      requiredString('body'),
+      requiredString('authorId'),
+    ],
+    voteUp: [requiredString('id'), requiredString('targetId'), requiredString('userId')],
+  },
   mutations: {
     postAnswer: 'typeof postAnswerMutation',
     postQuestion: 'typeof postQuestionMutation',
   },
 };
 
-function registryMutationInputs(fileName, source) {
-  return Object.fromEntries(
-    [...mutationInputFactsFromSource(fileName, source).values()].map((fact) => [
-      fact.key,
-      fact.fields.map((field) => ({ ...field, provenance: 'registry' })),
-    ]),
-  );
-}
+try {
+  writeFileSync(registryFactsPath, `${JSON.stringify(registryFacts, null, 2)}\n`);
+  for (const name of componentNames) {
+    const sourcePath = resolve(soRoot, `src/components/${name}.tsx`);
+    const generatedPath = resolve(soRoot, `src/generated/${name}.tsx`);
+    const loweredPath = resolve(tempRoot, `${name}.tsx`);
+    const fileName = `examples/stackoverflow/src/components/${name}.tsx`;
+    const source = readFileSync(sourcePath, 'utf8');
+    const header = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.\n`;
 
-for (const name of componentNames) {
-  const sourcePath = resolve(soRoot, `src/components/${name}.tsx`);
-  const generatedPath = resolve(soRoot, `src/generated/${name}.tsx`);
-  const fileName = `examples/stackoverflow/src/components/${name}.tsx`;
-  const source = readFileSync(sourcePath, 'utf8');
-
-  // SPEC.md §4.8: query-backed component roots derive their refresh stamps.
-  assert.doesNotMatch(
-    source,
-    /(?:data-bind|kovo-deps|kovo-c|kovo-fragment-target|kovo-state|data-p-[\w-]+)=/,
-    `${fileName} hand-writes stamps`,
-  );
-
-  const result = compileComponentModule({ fileName, registryFacts, source });
-  assert.deepEqual(
-    result.diagnostics,
-    [],
-    `${fileName} has compiler diagnostics: ${JSON.stringify(result.diagnostics, null, 2)}`,
-  );
-  assertFixpoint(result);
-  assertRenderEquivalence(result);
-
-  const lowered = result.loweredSource;
-  assert.ok(lowered, `${fileName} produced no lowered render source`);
-
-  const generated = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.\n${lowered}`;
-
-  if (process.argv.includes('--check')) {
-    assert.equal(
-      readFileSync(generatedPath, 'utf8'),
-      generated,
-      `generated ${name}.tsx is stale; run \`pnpm --filter @kovojs/example-stackoverflow run emit-components\``,
+    // SPEC.md §4.8: query-backed component roots derive their refresh stamps.
+    assert.doesNotMatch(
+      source,
+      /(?:data-bind|kovo-deps|kovo-c|kovo-fragment-target|kovo-state|data-p-[\w-]+)=/,
+      `${fileName} hand-writes stamps`,
     );
-  } else {
-    writeFileSync(generatedPath, generated);
-  }
-}
 
-const liveTargetsPath = resolve(soRoot, 'src/generated/live-targets.ts');
-const liveTargetsSource = `// @kovojs-ir — generated live-target registry for StackOverflow components (SPEC.md section 9.1). Do not edit; regenerate with \`pnpm run emit-components\`.
+    if (check) {
+      const current = readFileSync(generatedPath, 'utf8');
+      assert.ok(
+        current.startsWith(header),
+        `generated ${name}.tsx has a stale header; run \`pnpm --filter @kovojs/example-stackoverflow run emit-components\``,
+      );
+      writeFileSync(loweredPath, current.slice(header.length));
+    }
+
+    runKovo([
+      'compile',
+      'component',
+      sourcePath,
+      '--out',
+      loweredPath,
+      '--file-name',
+      fileName,
+      '--registry-facts',
+      registryFactsPath,
+      '--fixpoint',
+      '--render-equivalence',
+      ...(check ? ['--check'] : []),
+    ]);
+
+    if (!check) {
+      writeFileSync(generatedPath, `${header}${readFileSync(loweredPath, 'utf8')}`);
+    }
+  }
+
+  const liveTargetsPath = resolve(soRoot, 'src/generated/live-targets.ts');
+  const liveTargetsSource = `// @kovojs-ir — generated live-target registry for StackOverflow components (SPEC.md section 9.1). Do not edit; regenerate with \`pnpm run emit-components\`.
 import { collectGeneratedLiveTargetRenderers } from '@kovojs/server/internal/wire';
 
 import * as questionDetailModule from './question-detail.js';
@@ -93,44 +93,55 @@ export const liveTargetRenderers = collectGeneratedLiveTargetRenderers([
 ]);
 `;
 
-if (process.argv.includes('--check')) {
-  assert.equal(
-    readFileSync(liveTargetsPath, 'utf8'),
-    liveTargetsSource,
-    'generated live-targets.ts is stale; run `pnpm --filter @kovojs/example-stackoverflow run emit-components`',
-  );
-} else {
-  writeFileSync(liveTargetsPath, liveTargetsSource);
+  if (check) {
+    assert.equal(
+      readFileSync(liveTargetsPath, 'utf8'),
+      liveTargetsSource,
+      'generated live-targets.ts is stale; run `pnpm --filter @kovojs/example-stackoverflow run emit-components`',
+    );
+  } else {
+    writeFileSync(liveTargetsPath, liveTargetsSource);
+  }
+
+  const routeSourcePath = resolve(soRoot, 'src/interactive-app.tsx');
+  const routeGeneratedPath = resolve(soRoot, 'src/generated/interactive-app.kovo-route.tsx');
+  const routeFileName = 'examples/stackoverflow/src/interactive-app.tsx';
+  const routeArtifactFileName = 'examples/stackoverflow/src/generated/interactive-app.kovo-route.tsx';
+
+  runKovo([
+    'compile',
+    'route',
+    routeSourcePath,
+    '--out',
+    routeGeneratedPath,
+    '--file-name',
+    routeFileName,
+    '--artifact-file-name',
+    routeArtifactFileName,
+    '--rewrite',
+    'QuestionDetailRegion=./question-detail.js',
+    '--rewrite',
+    'QuestionListRegion=./question-list.js',
+    ...(check ? ['--check'] : []),
+  ]);
+} finally {
+  rmSync(tempRoot, { force: true, recursive: true });
 }
 
-const routeSourcePath = resolve(soRoot, 'src/interactive-app.tsx');
-const routeGeneratedPath = resolve(soRoot, 'src/generated/interactive-app.kovo-route.tsx');
-const routeFileName = 'examples/stackoverflow/src/interactive-app.tsx';
-const routeArtifactFileName = 'examples/stackoverflow/src/generated/interactive-app.kovo-route.tsx';
-const routeResult = compileRouteModule({
-  artifactFileName: routeArtifactFileName,
-  componentImportRewrites: [
-    { localName: 'QuestionDetailRegion', specifier: './question-detail.js' },
-    { localName: 'QuestionListRegion', specifier: './question-list.js' },
-  ],
-  fileName: routeFileName,
-  source: readFileSync(routeSourcePath, 'utf8'),
-});
+function requiredString(name) {
+  return {
+    coercion: 'string',
+    defaulted: false,
+    name,
+    optional: false,
+    provenance: 'registry',
+    required: true,
+  };
+}
 
-assert.deepEqual(
-  routeResult.diagnostics,
-  [],
-  `${routeFileName} has compiler diagnostics: ${JSON.stringify(routeResult.diagnostics, null, 2)}`,
-);
-assert.equal(routeResult.files.length, 1, `${routeFileName} produced no generated route IR`);
-const routeGenerated = routeResult.files[0].source;
-
-if (process.argv.includes('--check')) {
-  assert.equal(
-    readFileSync(routeGeneratedPath, 'utf8'),
-    routeGenerated,
-    'generated interactive-app.kovo-route.tsx is stale; run `pnpm --filter @kovojs/example-stackoverflow run emit-components`',
-  );
-} else {
-  writeFileSync(routeGeneratedPath, routeGenerated);
+function runKovo(args) {
+  execFileSync('kovo', args, {
+    cwd: soRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }

@@ -645,8 +645,22 @@ tsconfig.json --noEmit --pretty false`.
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
     `node scripts/build-publish.mjs`, `corepack pnpm run check:imports`, and
     `corepack pnpm run check:exports`.
-  - Remaining gap: `examples/commerce/scripts/emit-graph.mjs`, CRM/StackOverflow
-    graph/UI CSS scripts, Gallery interactive emit tooling, and
+  - Progress evidence: `examples/crm/scripts/emit-components.mjs` and
+    `examples/stackoverflow/scripts/emit-components.mjs` now call
+    `kovo compile component` / `kovo compile route` with explicit registry
+    facts instead of importing `@kovojs/compiler` or
+    `@kovojs/compiler/internal`. Their `emit-ui-css.mjs` scripts now call
+    `kovo compile package-css` instead of importing
+    `@kovojs/compiler/package-styles`, and
+    `examples/stackoverflow/package.json` no longer depends directly on
+    `@kovojs/compiler`. Verified with
+    `corepack pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+    `corepack pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+    `corepack pnpm --filter @kovojs/example-crm exec node scripts/emit-ui-css.mjs`,
+    and
+    `corepack pnpm --filter @kovojs/example-stackoverflow exec node scripts/emit-ui-css.mjs`.
+  - Remaining gap: `examples/commerce/scripts/emit-graph.mjs`,
+    `examples/crm/scripts/emit-graph.mjs`, Gallery interactive emit tooling, and
     `site/tutorial/run-steps.mjs` still require compiler APIs or compiler
     capabilities not yet exposed by `kovo compile` (client artifact emission,
     configurable lint-diagnostic policy, and mutation-input fact extraction).

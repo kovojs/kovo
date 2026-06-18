@@ -22,7 +22,6 @@
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
-    "@kovojs/compiler": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
     "@kovojs/test": "workspace:*",
     "kovo": "workspace:*",
