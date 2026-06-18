@@ -1,158 +1,207 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { csrfField } from '@kovojs/server';
-import { Badge } from '@kovojs/ui/badge';
-import { Button } from '@kovojs/ui/button';
-import { Card } from '@kovojs/ui/card';
-import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import { postAnswerMutation, soCsrf } from '../mutations.js';
 import { questionAnswers, questionDetail } from '../queries.js';
 import type { QuestionAnswersResult, QuestionDetailResult, SoRequest } from '../model.js';
-import { freshId, parseTags, renderAuthor, renderTags, voteButton } from '../components/chrome.js';
+import {
+  compactCount,
+  freshId,
+  parseTags,
+  relativeTime,
+  renderTags,
+  renderUserCard,
+  viewsFor,
+  voteButton,
+} from '../components/chrome.js';
 
-// Question detail for `/questions/:id`: the question, answers, and answer form.
+// Question detail for `/questions/:id`: the question post, its answers, and the
+// answer composer — laid out like a Stack Overflow question page (vote gutter,
+// post body, tags, user card, then the answer list and "Your Answer" form).
 
 const detailStyles = style.create(
   {
-    acceptedAnswer: {
-      backgroundColor: tokens.sys.color.tertiaryContainer,
-      borderColor: tokens.sys.color.tertiary,
-      borderLeftColor: tokens.sys.color.tertiary,
-      borderLeftStyle: 'solid',
-      borderLeftWidth: 4,
+    // ---- Question header -----------------------------------------------------
+    header: {
+      borderBottomColor: '#e3e6e8',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      paddingBlockEnd: 12,
     },
-    answerBody: {
-      color: tokens.sys.color.onSurfaceVariant,
+    titleRow: {
+      alignItems: 'flex-start',
+      display: 'flex',
+      gap: 16,
+      justifyContent: 'space-between',
+    },
+    detailTitle: {
+      color: '#0c0d0e',
+      fontSize: 27,
+      fontWeight: 400,
+      lineHeight: 1.3,
+      margin: 0,
+    },
+    askButton: {
+      backgroundColor: '#0a95ff',
+      borderColor: '#0a95ff',
+      borderRadius: 4,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#ffffff',
+      flexShrink: 0,
+      fontSize: 13,
+      paddingBlock: 10,
+      paddingInline: 11,
+      textDecoration: 'none',
+      ':hover': { backgroundColor: '#0074cc' },
+    },
+    metaRow: {
+      color: '#525960',
+      display: 'flex',
+      flexWrap: 'wrap',
+      fontSize: 13,
+      gap: 16,
+      marginBlockStart: 8,
+    },
+    metaLabel: { color: '#6a737c' },
+    metaValue: { color: '#232629' },
+    // ---- Post (question + answer) layout ------------------------------------
+    post: {
+      borderBottomColor: '#e3e6e8',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      display: 'flex',
+      gap: 16,
+      paddingBlock: 16,
+    },
+    gutter: {
+      alignItems: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      flexShrink: 0,
+      gap: 2,
+      width: 42,
+    },
+    acceptMark: {
+      color: '#3d8b5f',
+      fontSize: 28,
+      lineHeight: 1,
+      marginBlockStart: 4,
+    },
+    postMain: {
+      display: 'grid',
+      flex: '1 1 0%',
+      gap: 14,
+      minWidth: 0,
+    },
+    body: {
+      color: '#0c0d0e',
       fontSize: 15,
       lineHeight: 1.65,
       margin: 0,
+      whiteSpace: 'pre-wrap',
+    },
+    postFooter: {
+      alignItems: 'flex-end',
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 12,
+      justifyContent: 'space-between',
+    },
+    // ---- Answers -------------------------------------------------------------
+    answersHead: {
+      alignItems: 'center',
+      display: 'flex',
+      gap: 12,
+      justifyContent: 'space-between',
+      marginBlockStart: 24,
+    },
+    answersTitle: {
+      color: '#0c0d0e',
+      fontSize: 19,
+      fontWeight: 400,
+      margin: 0,
     },
     answerList: {
-      display: 'grid',
-      gap: 14,
       listStyle: 'none',
       margin: 0,
       padding: 0,
     },
-    answerVote: {
+    acceptedNote: {
       alignItems: 'center',
-      color: tokens.sys.color.outline,
-      display: 'flex',
-      flexDirection: 'column',
-      flexShrink: 0,
-      gap: 1,
-      paddingTop: 2,
-      width: 52,
-    },
-    back: {
-      alignItems: 'center',
-      color: tokens.sys.color.onSurfaceVariant,
+      color: '#3d8b5f',
       display: 'inline-flex',
-      fontSize: 14,
-      gap: 6,
-      textDecoration: 'none',
-      width: 'fit-content',
-      ':hover': {
-        color: tokens.sys.color.onSurface,
-      },
+      fontSize: 13,
+      fontWeight: 600,
+      gap: 4,
     },
-    badgeWrap: {
-      marginBottom: 8,
-    },
+    // ---- Answer composer -----------------------------------------------------
     composer: {
       display: 'grid',
-      gap: 11,
-    },
-    composerActions: {
-      display: 'flex',
-      justifyContent: 'flex-end',
+      gap: 12,
+      marginBlockStart: 28,
     },
     composerTitle: {
-      color: tokens.sys.color.onSurface,
-      fontSize: 15,
-      fontWeight: 600,
-      margin: 0,
-    },
-    detailBody: {
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 15,
-      lineHeight: 1.65,
-      marginBlockEnd: 0,
-      marginBlockStart: 4,
-    },
-    detailTitle: {
-      color: tokens.sys.color.onSurface,
-      fontSize: 24,
-      fontWeight: 800,
-      letterSpacing: 0,
-      lineHeight: 1.25,
-      margin: 0,
-    },
-    head: {
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 15,
-      fontWeight: 700,
+      color: '#0c0d0e',
+      fontSize: 19,
+      fontWeight: 400,
       margin: 0,
     },
     input: {
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outline,
-      borderRadius: tokens.sys.shape.cornerMedium,
+      backgroundColor: '#ffffff',
+      borderColor: '#d6d9dc',
+      borderRadius: 4,
       borderStyle: 'solid',
       borderWidth: 1,
       boxSizing: 'border-box',
-      color: tokens.sys.color.onSurface,
-      fontSize: 14,
-      paddingBlock: 10,
-      paddingInline: 13,
+      color: '#0c0d0e',
+      fontSize: 13,
+      paddingBlock: 9,
+      paddingInline: 11,
       width: '100%',
       ':focus': {
-        borderColor: tokens.sys.color.primary,
+        borderColor: '#0a95ff',
+        boxShadow: '0 0 0 4px rgba(10,149,255,0.15)',
         outline: 'none',
       },
-    },
-    row: {
-      alignItems: 'flex-start',
-      display: 'flex',
-      gap: 16,
-    },
-    rowMain: {
-      display: 'grid',
-      flex: '1 1 0%',
-      gap: 9,
-      minWidth: 0,
-    },
-    rowMeta: {
-      alignItems: 'center',
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: 10,
-      justifyContent: 'space-between',
-    },
-    stack: {
-      display: 'grid',
-      gap: 20,
     },
     textarea: {
       lineHeight: 1.5,
       resize: 'vertical',
     },
-    voteCaret: {
-      fontSize: 11,
-      lineHeight: 1,
+    composerActions: {
+      display: 'flex',
+      justifyContent: 'flex-start',
     },
-    voteLabel: {
-      fontSize: 10,
-      letterSpacing: '0.06em',
-      textTransform: 'uppercase',
+    submitButton: {
+      backgroundColor: '#0a95ff',
+      borderColor: '#0a95ff',
+      borderRadius: 4,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: '#ffffff',
+      fontSize: 13,
+      paddingBlock: 10,
+      paddingInline: 11,
+      ':hover': { backgroundColor: '#0074cc' },
     },
-    voteScore: {
-      color: tokens.sys.color.onSurface,
-      fontSize: 17,
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: 700,
+    // ---- Not-found ----------------------------------------------------------
+    notFound: {
+      color: '#525960',
+      fontSize: 15,
+      paddingBlock: 24,
+    },
+    back: {
+      alignItems: 'center',
+      color: '#0074cc',
+      display: 'inline-flex',
+      fontSize: 13,
+      gap: 6,
+      marginBlockEnd: 12,
+      textDecoration: 'none',
+      ':hover': { color: '#0a95ff' },
     },
   },
   {
@@ -165,58 +214,48 @@ export const questionDetailStyleCss = style.emitAtomicCss(
   Object.values(detailStyles).flatMap((entry) => entry.__rules ?? []),
 );
 
-function renderQuestionCard(question: QuestionDetailResult, request?: SoRequest): string {
+function renderQuestionPost(question: QuestionDetailResult): string {
   const tags = parseTags(question.tags);
-  const body = (
-    <div style={detailStyles.row}>
-      {voteButton(question.id, question.score, request)}
-      <div style={detailStyles.rowMain}>
-        <h1 style={detailStyles.detailTitle}>{question.title}</h1>
-        <p style={detailStyles.detailBody}>{question.body}</p>
-        <div style={detailStyles.rowMeta}>
+  return (
+    <div style={detailStyles.post}>
+      <div style={detailStyles.gutter}>{voteButton(question.id, question.score)}</div>
+      <div style={detailStyles.postMain}>
+        <p style={detailStyles.body}>{question.body}</p>
+        <div style={detailStyles.postFooter}>
           {renderTags(tags)}
           {question.authorName
-            ? renderAuthor(question.authorName, question.createdAt, 'asked')
+            ? renderUserCard(question.authorName, question.createdAt, 'asked')
             : ''}
         </div>
       </div>
     </div>
   );
-  return Card.definition.render({ children: body });
 }
 
-function renderAnswerCard(answer: QuestionAnswersResult[number]): string {
-  const acceptedBadge = answer.accepted
-    ? Badge.definition.render({ children: '✓ Accepted answer', variant: 'success' })
-    : '';
-  const body = (
-    <div style={detailStyles.row}>
-      <div style={detailStyles.answerVote}>
-        <span style={detailStyles.voteCaret}>&#9650;</span>
-        <span style={detailStyles.voteScore}>{answer.score}</span>
-        <span style={detailStyles.voteLabel}>votes</span>
+function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
+  return (
+    <li kovo-key={answer.id} style={detailStyles.post}>
+      <div style={detailStyles.gutter}>
+        <span style={detailStyles.body} />
+        {/* Answer scores are static in the demo (only questions are votable). */}
+        {answer.accepted ? <span style={detailStyles.acceptMark}>&#10003;</span> : ''}
       </div>
-      <div style={detailStyles.rowMain}>
-        {acceptedBadge ? <div style={detailStyles.badgeWrap}>{acceptedBadge}</div> : ''}
-        <p style={detailStyles.answerBody}>{answer.body}</p>
-        {answer.authorName ? (
-          <div style={detailStyles.rowMeta}>
-            {renderAuthor(answer.authorName, answer.createdAt, 'answered')}
-          </div>
+      <div style={detailStyles.postMain}>
+        {answer.accepted ? (
+          <span style={detailStyles.acceptedNote}>
+            <span>&#10003;</span> Accepted answer
+          </span>
         ) : (
           ''
         )}
+        <p style={detailStyles.body}>{answer.body}</p>
+        <div style={detailStyles.postFooter}>
+          <span />
+          {answer.authorName
+            ? renderUserCard(answer.authorName, answer.createdAt, 'answered')
+            : ''}
+        </div>
       </div>
-    </div>
-  );
-  const surface = Card.definition.render({
-    children: body,
-    ...(answer.accepted ? { style: detailStyles.acceptedAnswer } : {}),
-  });
-  // Keep the stable key on the repeated child that the fragment morphs.
-  return (
-    <li kovo-key={answer.id}>
-      {surface}
     </li>
   );
 }
@@ -243,57 +282,78 @@ export const QuestionDetailRegion = component({
   ) => {
     if (!question) {
       return (
-        <div style={detailStyles.stack}>
+        <div>
           <a style={detailStyles.back} href="/">
             &larr; All questions
           </a>
-          {Card.definition.render({
-            children:
-              '<h1>Question not found</h1><p>This question does not exist (it may have been a demo that reset).</p>',
-          })}
+          <h1 style={detailStyles.detailTitle}>Question not found</h1>
+          <p style={detailStyles.notFound}>
+            This question does not exist (it may have been a demo that reset).
+          </p>
         </div>
       );
     }
 
-    const postButton = Button.definition.render({
-      children: 'Post your answer',
-      type: 'submit',
-      variant: 'primary',
-    });
+    const views = viewsFor(question.id, question.score);
+    const asked = question.createdAt ? relativeTime(question.createdAt) : 'recently';
     return (
-      <div style={detailStyles.stack}>
-        <a style={detailStyles.back} href="/">
-          &larr; All questions
-        </a>
+      <div>
+        <div style={detailStyles.header}>
+          <div style={detailStyles.titleRow}>
+            <h1 style={detailStyles.detailTitle}>{question.title}</h1>
+            <a href="#your-answer" style={detailStyles.askButton}>
+              Ask Question
+            </a>
+          </div>
+          <div style={detailStyles.metaRow}>
+            <span>
+              <span style={detailStyles.metaLabel}>Asked</span>{' '}
+              <span style={detailStyles.metaValue}>{asked}</span>
+            </span>
+            <span>
+              <span style={detailStyles.metaLabel}>Viewed</span>{' '}
+              <span style={detailStyles.metaValue}>{`${compactCount(views)} times`}</span>
+            </span>
+          </div>
+        </div>
 
-        {renderQuestionCard(question, slots.request)}
+        {renderQuestionPost(question)}
 
-        <section style={detailStyles.stack}>
-          <h2 style={detailStyles.head}>
-            <span>{question.answerCount}</span> {question.answerCount === 1 ? 'Answer' : 'Answers'}
+        <div style={detailStyles.answersHead}>
+          <h2 style={detailStyles.answersTitle}>
+            {question.answerCount} {question.answerCount === 1 ? 'Answer' : 'Answers'}
           </h2>
-          <ul style={detailStyles.answerList}>{answers.map(renderAnswerCard)}</ul>
+        </div>
+        <ul style={detailStyles.answerList}>{answers.map(renderAnswerPost)}</ul>
 
-          {/* Native form; enhanced submissions refresh this whole region. */}
-          <form enhance mutation={postAnswerMutation} style={detailStyles.composer}>
-            {slots.request ? csrfField(slots.request, soCsrf) : ''}
-            <input type="hidden" name="id" value={freshId('a')} />
-            <input type="hidden" name="questionId" value={questionId} />
-            <input type="hidden" name="authorId" value="demo-viewer" />
-            <label style={detailStyles.composerTitle} for="answer-body">
-              Your answer
-            </label>
-            <textarea
-              id="answer-body"
-              name="body"
-              required
-              rows="3"
-              placeholder="Share what you know — code and reasoning welcome…"
-              style={[detailStyles.input, detailStyles.textarea]}
-            />
-            <div style={detailStyles.composerActions}>{postButton}</div>
-          </form>
-        </section>
+        {/* Native form; enhanced submissions refresh this whole region. */}
+        <form
+          enhance
+          mutation={postAnswerMutation}
+          id="your-answer"
+          style={detailStyles.composer}
+        >
+          {/* Compiler-lowered form: add the CSRF field explicitly (see the note on
+              the question-list composer). */}
+          {slots.request ? csrfField(slots.request, soCsrf) : ''}
+          <input type="hidden" name="id" value={freshId('a')} />
+          <input type="hidden" name="questionId" value={questionId} />
+          <input type="hidden" name="authorId" value="demo-viewer" />
+          <h2 style={detailStyles.composerTitle}>Your Answer</h2>
+          <textarea
+            id="answer-body"
+            name="body"
+            required
+            rows="6"
+            placeholder="Share what you know — code and reasoning welcome…"
+            style={[detailStyles.input, detailStyles.textarea]}
+          />
+          <div style={detailStyles.composerActions}>
+            <button type="submit" style={detailStyles.submitButton}>
+              Post Your Answer
+            </button>
+          </div>
+        </form>
       </div>
     );
   },

@@ -76,7 +76,7 @@ export async function buildSoInteractiveApp(
   // JSX composition lets the component query declarations load question +
   // answers from PGlite by `params.id`.
   const questionDetailRoute = route('/questions/:id', {
-    meta: { description: 'Question detail', title: 'Question · DevOverflow' },
+    meta: { description: 'Question detail', title: 'Question · Stack Overflow' },
     params: s.object({ id: s.string() }),
     staticPaths: soStaticQuestionPaths,
     page({ params }: { params: { id: string } }) {
@@ -95,7 +95,7 @@ export async function buildSoInteractiveApp(
       route('/', {
         meta: {
           description: 'Top developer questions and answers.',
-          title: 'Questions · DevOverflow',
+          title: 'Questions · Stack Overflow',
         },
         page() {
           return <QuestionListRegion />;

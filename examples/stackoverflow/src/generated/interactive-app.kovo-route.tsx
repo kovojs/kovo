@@ -78,7 +78,7 @@ export async function buildSoInteractiveApp(
   // JSX composition lets the component query declarations load question +
   // answers from PGlite by `params.id`.
   const questionDetailRoute = route('/questions/:id', {
-    meta: { description: 'Question detail', title: 'Question · DevOverflow' },
+    meta: { description: 'Question detail', title: 'Question · Stack Overflow' },
     params: s.object({ id: s.string() }),
     staticPaths: soStaticQuestionPaths,
     page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionDetailRegion","props":[{"expression":"params.id","name":"questionId","propertyAccesses":["params.id"]}],"propsExpression":"{ questionId: params.id }","serializedPropsExpression":"JSON.stringify({ questionId: params.id })"}],"fileName":"examples/stackoverflow/src/interactive-app.tsx","layouts":[{"localName":"SoLayout","queries":[]}],"navigationSegments":[{"id":"layout:SoLayout","kind":"layout","localName":"SoLayout","queries":[]},{"components":["QuestionDetailRegion"],"id":"page:/questions/:id","kind":"page","localName":"page"}],"route":"/questions/:id"}, function page({ params }: { params: { id: string } }) {
@@ -97,7 +97,7 @@ export async function buildSoInteractiveApp(
       route('/', {
         meta: {
           description: 'Top developer questions and answers.',
-          title: 'Questions · DevOverflow',
+          title: 'Questions · Stack Overflow',
         },
         page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionListRegion","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"examples/stackoverflow/src/interactive-app.tsx","layouts":[{"localName":"SoLayout","queries":[]}],"navigationSegments":[{"id":"layout:SoLayout","kind":"layout","localName":"SoLayout","queries":[]},{"components":["QuestionListRegion"],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, function page() {
           return <QuestionListRegion />;

@@ -1,5 +1,37 @@
+import { eq } from 'drizzle-orm';
+
 import type { SoDb } from './db.js';
 import { answers, questions, votes } from './schema.js';
+
+// Presentation-only enrichment for the two base-seed rows (q1/q2 + a1) created by
+// createSoDb(). The focused tests rely on those rows existing with their base
+// title/score, but not on author/tags/timestamps — so the served demo dresses
+// them up here without touching the test seed in db.ts.
+const DEMO_BASE_OVERLAY = [
+  {
+    id: 'q1',
+    authorName: 'Dana Whitfield',
+    tags: 'kovo,optimistic-ui,drizzle',
+    createdAt: '2026-06-16T18:20:00Z',
+    body: 'I want the upvote count to update instantly on click and reconcile with the server. Can Kovo derive the optimistic update straight from my Drizzle mutation instead of me hand-writing it?',
+  },
+  {
+    id: 'q2',
+    authorName: 'Theo Park',
+    tags: 'testing,pglite,state',
+    createdAt: '2026-06-16T08:05:00Z',
+    body: 'Each run of my example app should start from a clean slate so tests and demos are deterministic. What is the cleanest way to isolate per-session state?',
+  },
+] as const;
+
+const DEMO_ANSWER_OVERLAY = [
+  {
+    id: 'a1',
+    authorName: 'Marcus Webb',
+    createdAt: '2026-06-16T19:02:00Z',
+    body: "Kovo's compiler reads the Drizzle mutation and generates the optimistic patch for you — call deriveOptimistic on the mutation and the count moves on click, then settles to server truth when the fragment comes back.",
+  },
+] as const;
 
 // Realistic Q&A data layered on top of the tiny createSoDb() seed. It makes the
 // served app read like a real Q&A site without changing the base rows used by the
@@ -198,4 +230,18 @@ export async function seedSoDemo(db: SoDb): Promise<void> {
   await db.insert(questions).values(DEMO_QUESTIONS);
   await db.insert(answers).values(DEMO_ANSWERS);
   await db.insert(votes).values(DEMO_VOTES);
+
+  // Dress up the base-seed rows for the served demo (see DEMO_BASE_OVERLAY).
+  for (const overlay of DEMO_BASE_OVERLAY) {
+    await db
+      .update(questions)
+      .set({ authorName: overlay.authorName, tags: overlay.tags, createdAt: overlay.createdAt, body: overlay.body })
+      .where(eq(questions.id, overlay.id));
+  }
+  for (const overlay of DEMO_ANSWER_OVERLAY) {
+    await db
+      .update(answers)
+      .set({ authorName: overlay.authorName, createdAt: overlay.createdAt, body: overlay.body })
+      .where(eq(answers.id, overlay.id));
+  }
 }
