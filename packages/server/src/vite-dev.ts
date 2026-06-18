@@ -7,8 +7,8 @@ import {
   renderDiagnosticDocument,
   type DiagnosticDocumentDiagnostic,
 } from './document-diagnostics.js';
-import { toNodeHandler, type NodeRequestHandler } from './node.js';
-import { readHeader, type RoutePageResponse } from './response.js';
+import { toNodeHandler, writeWebResponseToNode, type NodeRequestHandler } from './node.js';
+import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
 import { renderFragmentWireHtml } from './wire-html.js';
 
@@ -61,6 +61,12 @@ export interface KovoAppShellViteDevPlugin {
 export interface KovoAppShellViteDevPluginOptions {
   appExportName?: string;
   /**
+   * Dev diagnostic ledger shared with the compiler Vite plugin. When present,
+   * requests depending on failed component modules render the same teaching
+   * diagnostic document as direct dev diagnostic requests (SPEC.md §9.5.1).
+   */
+  devDiagnostics?: KovoAppShellDevDiagnosticLedger;
+  /**
    * Defaults to true. Set to false when a dev middleware stack cannot safely
    * relay 103 Early Hints but should still keep the final Link header.
    */
@@ -74,6 +80,23 @@ export interface KovoAppShellViteDevPluginOptions {
   nodeHandlerExportName?: string;
   order?: 'pre' | 'post';
   shouldHandleRequest?: (request: IncomingMessage, app: KovoApp) => boolean;
+}
+
+/**
+ * Compiler-compatible module diagnostic report accepted by the app-shell dev integration.
+ * It is structural on purpose so `@kovojs/server` does not depend on `@kovojs/compiler`.
+ */
+export interface KovoAppShellViteCompilerModuleDiagnosticReport {
+  diagnostics: readonly DiagnosticDocumentDiagnostic[];
+  fileName: string;
+  source: string;
+}
+
+/** Combined app-shell dev plugin plus compiler-diagnostic callback for Vite dev. */
+export interface KovoAppShellViteDevIntegration {
+  diagnostics: KovoAppShellDevDiagnosticLedger;
+  onModuleDiagnostics(report: KovoAppShellViteCompilerModuleDiagnosticReport): void;
+  plugin: KovoAppShellViteDevPlugin;
 }
 
 /**
@@ -163,6 +186,29 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
 }
 
 /**
+ * Create the app-facing dev integration for Kovo's Vite stack. App code can pass
+ * `integration.onModuleDiagnostics` to the compiler plugin and
+ * `integration.plugin` to Vite, while the request shell owns the diagnostic ledger
+ * and rendering behavior (SPEC.md §9.5.1).
+ */
+export function createKovoAppShellViteDevIntegration(
+  options: KovoAppShellViteDevPluginOptions = {},
+): KovoAppShellViteDevIntegration {
+  const diagnostics = options.devDiagnostics ?? createKovoAppShellDevDiagnosticLedger();
+
+  return {
+    diagnostics,
+    onModuleDiagnostics(report) {
+      diagnostics.recordModuleDiagnostics(report);
+    },
+    plugin: kovoAppShellViteDevPlugin({
+      ...options,
+      devDiagnostics: diagnostics,
+    }),
+  };
+}
+
+/**
  * Vite dev-server plugin for a Kovo app shell. App authors add it to the plugins array
  * in their vite.config.ts so the dev server serves the app through the same
  * Request -> Response shell that SPEC.md §9.5 uses for build/export replay. The plugin's
@@ -190,6 +236,17 @@ export function kovoAppShellViteDevPlugin(
             return;
           }
 
+          const diagnosticResponse = renderKovoAppShellViteDevDiagnosticResponse(
+            app,
+            request,
+            options.devDiagnostics,
+          );
+          if (diagnosticResponse) {
+            return writeKovoAppShellViteDevRouteResponse(diagnosticResponse, request, response).catch(
+              next,
+            );
+          }
+
           return readKovoAppShellViteDevNodeHandler(
             module,
             app,
@@ -209,6 +266,18 @@ export function kovoAppShellViteDevPlugin(
     },
     name: options.name ?? 'kovo-app-shell-dev',
   };
+}
+
+async function writeKovoAppShellViteDevRouteResponse(
+  routeResponse: RoutePageResponse,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  await writeWebResponseToNode(
+    routeResponseToWebResponse(routeResponse, { method: request.method ?? 'GET' }),
+    response,
+    request.method ?? 'GET',
+  );
 }
 
 /**

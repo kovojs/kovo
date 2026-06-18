@@ -8,6 +8,7 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
+  createKovoAppShellViteDevIntegration,
   kovoAppShellViteDevPlugin,
   renderKovoAppShellViteDevDiagnosticResponse,
   type KovoAppShellViteMiddleware,
@@ -77,6 +78,68 @@ describe('server app shell Vite dev seam', () => {
       },
       status: 500,
     });
+  });
+
+  it('wires compiler module diagnostics into app-shell dev middleware', async () => {
+    const integration = createKovoAppShellViteDevIntegration({
+      appExportName: 'shopApp',
+      moduleId: '/src/app-shell.ts',
+    });
+    integration.onModuleDiagnostics({
+      diagnostics: [
+        {
+          code: 'KV225',
+          fileName: 'src/components/cart.tsx',
+          message: 'JSX nesting violates the HTML content model.',
+        },
+      ],
+      fileName: 'src/components/cart.tsx',
+      source: 'export const Cart = component({ render: () => <p><div /></p> });',
+    });
+
+    const middlewares: KovoAppShellViteMiddleware[] = [];
+    integration.plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+      async ssrLoadModule(id) {
+        expect(id).toBe('/src/app-shell.ts');
+        return {
+          shopApp: createApp({
+            routes: [
+              route('/cart', {
+                modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
+                page: () => '<main>Cart</main>',
+              }),
+            ],
+          }),
+        };
+      },
+    });
+
+    const server = createHttpServer((request, response) => {
+      middlewares[0]?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'next');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${(server.address() as AddressInfo).port}/cart`,
+      );
+      const body = await response.text();
+
+      expect(response.status).toBe(500);
+      expect(body).toContain('<p class="kovo-diagnostic-code">KV225</p>');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
   });
 
   it('keeps non-error module diagnostics observable without making them blocking', () => {

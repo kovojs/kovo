@@ -64,18 +64,18 @@ export function soSharedAppShellDevPlugin(): SoDevPlugin {
   return {
     async configureServer(server) {
       const serverModule = await server.ssrLoadModule('@kovojs/server');
-      const sharedPluginFactory = serverModule.kovoAppShellViteDevPlugin;
-      if (typeof sharedPluginFactory !== 'function') {
-        throw new Error('@kovojs/server must export kovoAppShellViteDevPlugin.');
+      const createDevIntegration = serverModule.createKovoAppShellViteDevIntegration;
+      if (typeof createDevIntegration !== 'function') {
+        throw new Error('@kovojs/server must export createKovoAppShellViteDevIntegration.');
       }
 
-      const sharedPlugin = sharedPluginFactory({
+      const integration = createDevIntegration({
         name: 'kovo-so-app-shell-dev',
         nodeHandlerExportName: 'soNodeHandler',
         order: 'post',
-      }) as { configureServer(server: SoDevServer): void | DevPostHook };
+      }) as { plugin: { configureServer(server: SoDevServer): void | DevPostHook } };
 
-      return sharedPlugin.configureServer(server);
+      return integration.plugin.configureServer(server);
     },
     name: 'kovo-so-app-shell-dev-loader',
   };

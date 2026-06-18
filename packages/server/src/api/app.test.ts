@@ -89,6 +89,15 @@ type RootStaticExportDiagnosticSeverity = import('../index.js').StaticExportDiag
 type RootKovoAppShellViteDevPluginFactory =
   typeof import('@kovojs/server').kovoAppShellViteDevPlugin;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootKovoAppShellViteDevIntegrationFactory =
+  typeof import('@kovojs/server').createKovoAppShellViteDevIntegration;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootKovoAppShellViteCompilerModuleDiagnosticReport =
+  import('@kovojs/server').KovoAppShellViteCompilerModuleDiagnosticReport;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootKovoAppShellViteDevIntegration =
+  import('@kovojs/server').KovoAppShellViteDevIntegration;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootKovoAppShellViteDevPlugin = import('@kovojs/server').KovoAppShellViteDevPlugin;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootKovoAppShellViteDevPluginOptions =
@@ -407,6 +416,7 @@ describe('server app-shell public API barrels', () => {
       createApp: appApi.createApp,
       createMemoryVersionedClientModuleRegistry:
         clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
+      createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,
       createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
@@ -441,9 +451,15 @@ describe('server app-shell public API barrels', () => {
       clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
     );
     expect(publicApi.createRequestHandler).toBe(appApi.createRequestHandler);
+    expect(publicApi.createKovoAppShellViteDevIntegration).toBe(
+      viteDevApi.createKovoAppShellViteDevIntegration,
+    );
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
     expect(publicApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
     expect(publicApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
+    expect(packageRootApi.createKovoAppShellViteDevIntegration).toBe(
+      viteDevApi.createKovoAppShellViteDevIntegration,
+    );
     expect(packageRootApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
     expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
     expect(publicApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);

@@ -66,19 +66,19 @@ export function commerceSharedAppShellDevPlugin(): CommerceDevPlugin {
   return {
     async configureServer(server) {
       const serverModule = await server.ssrLoadModule('@kovojs/server');
-      const sharedPluginFactory = serverModule.kovoAppShellViteDevPlugin;
-      if (typeof sharedPluginFactory !== 'function') {
-        throw new Error('@kovojs/server must export kovoAppShellViteDevPlugin.');
+      const createDevIntegration = serverModule.createKovoAppShellViteDevIntegration;
+      if (typeof createDevIntegration !== 'function') {
+        throw new Error('@kovojs/server must export createKovoAppShellViteDevIntegration.');
       }
 
-      const sharedPlugin = sharedPluginFactory({
+      const integration = createDevIntegration({
         moduleId: '/src/generated/app-shell.kovo-route.tsx',
         name: 'kovo-commerce-app-shell-dev',
         nodeHandlerExportName: 'commerceNodeHandler',
         order: 'post',
-      }) as { configureServer(server: CommerceDevServer): void | DevPostHook };
+      }) as { plugin: { configureServer(server: CommerceDevServer): void | DevPostHook } };
 
-      return sharedPlugin.configureServer(server);
+      return integration.plugin.configureServer(server);
     },
     name: 'kovo-commerce-app-shell-dev-loader',
   };

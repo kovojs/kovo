@@ -189,7 +189,7 @@ render-plan version skew checks.
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`; `node
     scripts/exported-symbols.mjs --duplicates --check && node
     scripts/api-surface-gate.mjs`; `git diff --check`.
-- [ ] **4. Shared app-shell dev integration.**
+- [x] **4. Shared app-shell dev integration.**
   - Add a public app-shell dev wrapper that wires compiler diagnostics into
     `createKovoAppShellDevDiagnosticLedger()` and keeps route/mutation diagnostic
     responses consistent with `packages/server/src/vite-dev.ts`.
@@ -198,6 +198,20 @@ render-plan version skew checks.
     imports.
   - Update examples/site Vite configs to use the wrapper once the internal
     behavior is proven.
+  - Evidence: `packages/server/src/vite-dev.ts` exports
+    `createKovoAppShellViteDevIntegration()`, which creates the dev diagnostic
+    ledger, exposes a compiler-compatible `onModuleDiagnostics` callback, and
+    passes that ledger into `kovoAppShellViteDevPlugin()` so dependent route and
+    mutation requests render the existing teaching diagnostic responses.
+    `examples/{commerce,crm,stackoverflow}/vite.config.ts`,
+    `site/vite.config.ts`, and `packages/create-kovo/templates/vite.config.ts`
+    now use the integration wrapper. Verification: `corepack pnpm exec vitest
+    --run packages/server/src/vite-dev.test.ts
+    packages/server/src/vite-dev-middleware.test.ts
+    packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`; `node
+    scripts/api-surface-gate.mjs && node site/scripts/api-ref.mjs && node
+    site/scripts/api-examples-check.mjs`; `git diff --check`.
 - [ ] **5. Dev-only HMR client runtime.**
   - Emit or serve a small dev module that subscribes to Kovo HMR events.
   - For `kovo:component-render`, call a dev refresh endpoint and feed returned

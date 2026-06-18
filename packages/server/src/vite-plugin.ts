@@ -42,7 +42,7 @@ export interface KovoAppShellVitePluginOptions {
 
 /**
  * @internal App-shell Vite dev/build internal (SPEC.md §9.5). Raw combined dev + build
- * plugin; app authors use kovoAppShellViteDevPlugin and the export helpers instead.
+ * plugin; app authors use createKovoAppShellViteDevIntegration and the export helpers instead.
  * Exported only for in-repo build/host config, not app authors.
  */
 export function kovoAppShellVitePlugin(

@@ -301,7 +301,7 @@ describe('create-kovo starter', () => {
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
       expect(viteConfig).toContain('starterSharedAppShellDevPlugin()');
       expect(viteConfig).toContain("server.ssrLoadModule('@kovojs/server')");
-      expect(viteConfig).toContain('kovoAppShellViteDevPlugin');
+      expect(viteConfig).toContain('createKovoAppShellViteDevIntegration');
       expect(viteConfig).not.toContain(legacyCssVitePlugin);
       expect(viteConfig).not.toContain(`${legacyCssTool}()`);
       expect(viteConfig).not.toContain('kovoAppShellViteSsrDevPlugin');
