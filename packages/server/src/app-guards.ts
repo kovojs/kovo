@@ -24,6 +24,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isOptionalFunction(value.onError) &&
     isOptionalFunction(value.renderRoute) &&
     isOptionalFunction(value.sessionProvider) &&
+    isStylesheets(value.stylesheets) &&
     isOptionalCsrfOptions(value.csrf)
   );
 }
@@ -214,6 +215,21 @@ function isRouteBoundaries(value: unknown): boolean {
     isOptionalFunction(value.error) &&
     isOptionalFunction(value.notFound) &&
     isOptionalFunction(value.unauthorized)
+  );
+}
+
+function isStylesheets(value: unknown): value is KovoApp['stylesheets'] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (asset) =>
+        typeof asset === 'string' ||
+        (isRecord(asset) &&
+          typeof asset.href === 'string' &&
+          (asset.criticalCss === undefined || typeof asset.criticalCss === 'string') &&
+          (asset.cspHash === undefined || typeof asset.cspHash === 'string') &&
+          (asset.preload === undefined || typeof asset.preload === 'boolean')),
+    )
   );
 }
 

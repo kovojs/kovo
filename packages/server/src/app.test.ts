@@ -13,6 +13,7 @@ import { query } from './query.js';
 import { registerGeneratedLiveTargetRenderer } from './live-target-registry.js';
 import { layout, route } from './route.js';
 import { s } from './schema.js';
+import { stylesheet } from './hints.js';
 
 describe('server createApp request shell', () => {
   it('stores the closed app registries and options without adding middleware', () => {
@@ -23,18 +24,21 @@ describe('server createApp request shell', () => {
       reads: [],
     });
     const sessionProvider = () => ({ user: { id: 'u1' } });
+    const appStylesheet = stylesheet('./styles.css');
 
     const app = createApp({
       endpoints: [statusEndpoint],
       queries: [productQuery],
       routes: [productRoute],
       sessionProvider,
+      stylesheets: [appStylesheet],
     });
 
     expect(app.routes).toEqual([productRoute]);
     expect(app.endpoints).toEqual([statusEndpoint]);
     expect(app.queries).toEqual([productQuery]);
     expect(app.mutations).toEqual([]);
+    expect(app.stylesheets).toEqual([appStylesheet]);
     expect(app.diagnostics).toEqual([]);
     expect(app.sessionProvider).toBe(sessionProvider);
     expect('use' in app).toBe(false);

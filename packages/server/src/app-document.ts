@@ -1,5 +1,6 @@
 import { reportServerError } from './diagnostics.js';
 import { renderErrorDocument, renderRouteDocumentResponse } from './document-core.js';
+import type { PageHintOptions } from './hints.js';
 import { routeResponseToDocumentResponse, type RoutePageResponse } from './response.js';
 import {
   renderRoutePageResponse,
@@ -76,7 +77,7 @@ export async function renderAppRouteDocumentResponse({
 
   return renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
     ...(buildToken !== '' ? { buildToken } : {}),
-    hints: route,
+    hints: mergeAppRouteHints(app, route),
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     ...(app.document.template === undefined ? {} : { template: app.document.template }),
   });
@@ -114,6 +115,7 @@ export async function renderAppErrorDocumentResponse(
   // SPEC §9.2/§9.5: error shells are app config, but unexpected failures
   // still fall back to a stable no-internals document.
   return renderErrorDocument({
+    hints: app.stylesheets.length > 0 ? { stylesheets: app.stylesheets } : undefined,
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     status,
     ...(app.document.template === undefined ? {} : { template: app.document.template }),
@@ -129,6 +131,14 @@ function renderDefaultRouteValue(value: unknown): string {
   if (typeof value === 'string') return value;
 
   return JSON.stringify(value);
+}
+
+function mergeAppRouteHints(app: KovoApp, route: AnyRouteDeclaration): PageHintOptions {
+  const stylesheets = [...app.stylesheets, ...(route.stylesheets ?? [])];
+  return {
+    ...route,
+    ...(stylesheets.length > 0 ? { stylesheets } : {}),
+  };
 }
 
 function searchParamsToRecord(searchParams: URLSearchParams): Record<string, string | string[]> {

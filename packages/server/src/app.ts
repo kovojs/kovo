@@ -91,6 +91,7 @@ export function createApp<
     mutations,
     queries,
     routes,
+    stylesheets: options.stylesheets ?? [],
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(options.db === undefined ? {} : { db: options.db }),
     ...(options.mutationReplayStore === undefined

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.js';
 import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from './app-document.js';
 import { guards } from './guards.js';
+import { stylesheet } from './hints.js';
 import { layout, notFound, route } from './route.js';
 
 describe('server app document boundary', () => {
@@ -38,6 +39,55 @@ describe('server app document boundary', () => {
     expect(response.headers['Content-Type']).toBe('text/html; charset=utf-8');
     expect(response.body).toContain('<html lang="fr">');
     expect(response.body).toContain('<main>Product p1</main>');
+  });
+
+  it('inherits app-wide stylesheets before route-specific stylesheets', async () => {
+    const appStylesheet = stylesheet('./styles.css', {
+      criticalCss: ':root{--brand:blue}',
+    });
+    const productRoute = route('/products/:id', {
+      stylesheets: [stylesheet('./product.css'), appStylesheet],
+      page: () => '<main>Product</main>',
+    });
+    const request = new Request('https://shop.example.test/products/p1');
+    const app = createApp({
+      routes: [productRoute],
+      stylesheets: [appStylesheet],
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: { id: 'p1' },
+      request,
+      route: productRoute,
+      url: new URL(request.url),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain(
+      '<style data-kovo-critical-href="/assets/styles.css" data-kovo-csp-hash=',
+    );
+    expect(response.body).toContain('<link rel="stylesheet" href="/assets/styles.css">');
+    expect(response.body).toContain('<link rel="stylesheet" href="/assets/product.css">');
+    expect(
+      response.body.match(/<link rel="stylesheet" href="\/assets\/styles\.css">/g),
+    ).toHaveLength(1);
+    expect(response.headers.Link).toBe(
+      '</assets/styles.css>; rel=preload; as=style, </assets/product.css>; rel=preload; as=style',
+    );
+  });
+
+  it('applies app-wide stylesheets to framework-owned error documents', async () => {
+    const request = new Request('https://shop.example.test/missing');
+    const app = createApp({
+      stylesheets: [stylesheet('./styles.css')],
+    });
+
+    const response = await renderAppErrorDocumentResponse(app, request, 404);
+
+    expect(response.status).toBe(404);
+    expect(response.body).toContain('<link rel="stylesheet" href="/assets/styles.css">');
+    expect(response.headers.Link).toBe('</assets/styles.css>; rel=preload; as=style');
   });
 
   it('reports error-shell failures through the app document diagnostic seam', async () => {

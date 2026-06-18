@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
+import { stylesheet } from './hints.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 
@@ -134,6 +135,29 @@ describe('server static export', () => {
       },
     ]);
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/index.html']);
+  });
+
+  it('replays app-wide stylesheets into static route documents', async () => {
+    const app = createApp({
+      routes: [
+        route('/', {
+          stylesheets: [stylesheet('./home.css')],
+          page: () => '<main>Home</main>',
+        }),
+      ],
+      stylesheets: [stylesheet('./styles.css')],
+    });
+
+    const result = await exportStaticApp(app);
+
+    expect(result.artifacts).toHaveLength(1);
+    expect(result.artifacts[0]?.body).toContain(
+      '<link rel="stylesheet" href="/assets/styles.css">',
+    );
+    expect(result.artifacts[0]?.body).toContain('<link rel="stylesheet" href="/assets/home.css">');
+    expect(result.artifacts[0]?.headers.link).toBe(
+      '</assets/styles.css>; rel=preload; as=style, </assets/home.css>; rel=preload; as=style',
+    );
   });
 
   it('rejects duplicate static asset paths during dry-run inventory planning', async () => {

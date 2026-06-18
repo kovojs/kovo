@@ -110,6 +110,8 @@ export interface CreateAppOptions<
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
   routes?: AppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
+  /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
+  stylesheets?: readonly (string | StylesheetAsset)[];
 }
 
 /**
@@ -150,6 +152,8 @@ export interface KovoApp<
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
   routes: readonly AppRouteDeclaration<any>[];
   sessionProvider?: SessionProvider<any, any>;
+  /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
+  stylesheets: readonly (string | StylesheetAsset)[];
 }
 
 /** Web-standard request handler returned by `createRequestHandler()` (SPEC §9.5). */

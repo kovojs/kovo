@@ -43,13 +43,18 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Evidence: `packages/server/src/vite.ts` exports `kovo({ app })`; `pnpm
     --filter @kovojs/server exec vitest --run src/vite.test.ts src/api/app.test.ts`
     passed and covers generated-entry rejection plus `@kovojs/server/vite`.
-- [ ] Add an app/route-level stylesheet declaration API so styles are render
+- [x] Add an app/route-level stylesheet declaration API so styles are render
       metadata, not Vite config.
   - Target API: `stylesheet('./styles.css', { theme })`,
     `stylesheet({ theme })` for theme-only CSS, and `stylesheet('./styles.css')`
     for authored global CSS without a theme.
   - Local stylesheet declarations derive a public asset href by default; `href`
     remains an optional override for custom emitted URLs.
+  - Evidence: `packages/server/src/hints.ts` provides `stylesheet(...)`, route
+    definitions already accept `stylesheets`, and `createApp({ stylesheets })`
+    now stores app-wide styles inherited by route documents; `pnpm --filter
+    @kovojs/server exec vitest --run src/app.test.ts src/app-document.test.ts
+    src/static-export-assets.test.ts src/api/app.test.ts` passed.
 - [ ] Add a no-generated-import guard for app-authored source.
   - Scope: fail on `from './generated/*'`, `from '../generated/*'`, or dynamic
     generated imports outside `src/generated/**`, `scripts/**`, compiler-owned
@@ -169,6 +174,10 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - App-level stylesheets are inherited by routes; route-level stylesheets can
     add page-specific CSS while remaining visible to page hints, fragments,
     static export, and `kovo explain page`.
+  - Current progress: app-wide stylesheets are stored on `KovoApp`, merged into
+    route documents before route-level stylesheets, applied to framework-owned
+    error documents, and replayed through static export. Keep open until
+    fragment/explain visibility is verified or implemented.
 
 ## Docs Site
 
