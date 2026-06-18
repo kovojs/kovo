@@ -547,6 +547,14 @@ packages/create-kovo/src/index.test.ts`.
   - Move Vite build/export replay helpers internal-only when `kovo build` or
     another public facade owns app export/build workflows.
   - Evidence:
+    - Gap: leave open. `packages/create-kovo/templates/scripts/export-static.mjs`
+      and `site/scripts/export-static.mjs` still load
+      `@kovojs/server/app-shell/vite` for
+      `exportKovoAppShellViteBuildWithManifestFromManifestFile` and
+      `kovoAppShellViteManifestStylesheetHrefFromFile`; `kovo export` exists
+      for app-module static export but does not yet own the Vite build/manifest
+      replay flow. Verification:
+      `rg -n "@kovojs/server/app-shell/vite|exportKovoAppShellViteBuildWithManifestFromManifestFile|kovoAppShellViteManifestStylesheetHrefFromFile" packages/create-kovo/templates site/scripts packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts`.
 - [x] **Add server export canonical-home tests.**
   - Assert moved symbols are exported from `@kovojs/server`.
   - Assert moved symbols are not exported from their former public subpaths.
