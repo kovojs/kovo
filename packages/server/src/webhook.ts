@@ -1,14 +1,12 @@
-import type {
-  EndpointAuthDeclaration,
-  EndpointMethod,
-  EndpointMount,
-  WebhookVerifier,
-} from '@kovojs/core';
+import type { WebhookVerifier } from '@kovojs/core';
 import type { ChangeRecord } from './change-record.js';
 import type { Domain } from './domain.js';
 import {
   endpointRequestWithoutSession,
   type EndpointDeclaration,
+  type EndpointAuthDeclaration,
+  type EndpointMethod,
+  type EndpointMount,
   type EndpointRequest,
 } from './endpoint.js';
 import {

@@ -809,6 +809,22 @@ tsconfig.json --noEmit --pretty false`.
       `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
       `corepack pnpm run check:imports`; `corepack pnpm run check:exports`;
       `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`.
+  - [x] Move endpoint descriptor/auth/CSRF types to `@kovojs/server`.
+    - Evidence: `@kovojs/core` no longer root-exports `EndpointRegistry`,
+      `Endpoint`, `EndpointMethod`, `EndpointMount`, `EndpointCsrfExemption`, or
+      `EndpointAuthDeclaration`; `packages/server/src/endpoint.ts` now owns those
+      descriptors and `@kovojs/server` re-exports them through
+      `packages/server/src/api/routing.ts`. `site/gen/api/core.md` has no
+      endpoint descriptor entries while `site/gen/api/server.md` documents
+      `Endpoint`, `EndpointAuthDeclaration`, `EndpointCsrfExemption`,
+      `EndpointMethod`, and `EndpointMount`. Verification:
+      `corepack pnpm exec vitest --run packages/core/src/index.test.ts packages/server/src/endpoint.test.ts packages/server/src/webhook.test.ts packages/server/src/api/app.test.ts packages/better-auth/src/index.session.test.ts`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `corepack pnpm run check:imports`; `corepack pnpm run check:exports`;
+      `node scripts/api-surface-gate.mjs`; `node site/scripts/api-ref.mjs`;
+      `node site/scripts/api-examples-check.mjs`; `node scripts/build-publish.mjs`;
+      `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs site/scripts/api-examples-check.test.mjs scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs`;
+      `rg -n 'EndpointRegistry|EndpointMethod|EndpointMount|EndpointCsrfExemption|EndpointAuthDeclaration|#### \`Endpoint\`' site/gen/api/core.md site/gen/api/server.md -S`.
   - Evidence:
 - [x] **Cull vendor-specific `@kovojs/core` symbols.**
   - Remove `stripeSignature` and `StripeSignatureOptions`; inline Stripe logic in

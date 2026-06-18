@@ -1,11 +1,6 @@
 export { Link, href, redirect } from '@kovojs/core';
 export type {
   DiagnosticCode,
-  Endpoint,
-  EndpointAuthDeclaration,
-  EndpointCsrfExemption,
-  EndpointMethod,
-  EndpointMount,
   JsonValue,
   LinkDescriptor,
   Redirect,
@@ -14,9 +9,14 @@ export type {
 export type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
 export { endpoint } from '../endpoint.js';
 export type {
+  Endpoint,
+  EndpointAuthDeclaration,
+  EndpointCsrfExemption,
   EndpointDeclaration,
   EndpointDefinition,
   EndpointHandler,
+  EndpointMethod,
+  EndpointMount,
   EndpointRequest,
 } from '../endpoint.js';
 export { guards, session } from '../guards.js';

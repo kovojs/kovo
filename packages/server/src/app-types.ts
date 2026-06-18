@@ -1,14 +1,12 @@
 import type {
   DiagnosticCode,
   DiagnosticSeverity,
-  EndpointMethod,
-  EndpointMount,
 } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import type { DocumentTemplate } from './document-core.js';
-import type { EndpointDeclaration } from './endpoint.js';
+import type { EndpointDeclaration, EndpointMethod, EndpointMount } from './endpoint.js';
 import type { DbProvider, LifecycleRequest, SessionProvider } from './guards.js';
 import type { Guard } from './guards.js';
 import type { StylesheetAsset } from './hints.js';

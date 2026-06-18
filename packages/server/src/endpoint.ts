@@ -1,9 +1,33 @@
-import type {
-  Endpoint as CoreEndpoint,
-  EndpointAuthDeclaration,
-  EndpointMethod,
-  EndpointMount,
-} from '@kovojs/core';
+/** HTTP method for an endpoint; arbitrary strings are allowed for custom verbs. */
+export type EndpointMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | (string & {});
+
+/** Whether an endpoint matches an exact path or a path prefix. */
+export type EndpointMount = 'exact' | 'prefix';
+
+/** Records an explicit, justified opt-out of default-on CSRF for an endpoint (SPEC §6.6). */
+export interface EndpointCsrfExemption {
+  exempt: true;
+  justification: string;
+}
+
+/** How an endpoint authenticates: a named verifier, a named custom scheme, or a justified `none`. */
+export type EndpointAuthDeclaration =
+  | { kind: 'custom'; name: string }
+  | { kind: 'none'; justification: string }
+  | { kind: 'verifier'; name: string };
+
+/** A raw HTTP endpoint descriptor: path, method, mount mode, and auth/CSRF declarations. */
+export interface Endpoint<
+  Path extends string,
+  Method extends EndpointMethod = EndpointMethod,
+  Mount extends EndpointMount = 'exact',
+> {
+  auth?: EndpointAuthDeclaration;
+  csrf?: EndpointCsrfExemption;
+  method?: Method;
+  mount: Mount;
+  path: Path;
+}
 
 /** A `Request` guaranteed to carry no session, as endpoint handlers receive. */
 export type EndpointRequest = Request & { readonly session?: never };
@@ -39,7 +63,7 @@ export interface EndpointDeclaration<
   Path extends string = string,
   Method extends EndpointMethod = EndpointMethod,
   Mount extends EndpointMount = EndpointMount,
-> extends CoreEndpoint<Path, Method, Mount> {
+> extends Endpoint<Path, Method, Mount> {
   handler: EndpointHandler;
 }
 

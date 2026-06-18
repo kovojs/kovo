@@ -16,7 +16,6 @@ import {
   type Component as KovoComponent,
   type ComponentDefinitionInput,
   type EventPayload,
-  type Endpoint,
   type FormFailure,
   type FormFieldName,
   type FormInput,
@@ -76,9 +75,6 @@ declare module './index.js' {
     >;
   }
 
-  interface EndpointRegistry {
-    '/webhooks/inventory': Endpoint<'/webhooks/inventory', 'POST'>;
-  }
 }
 
 describe('core authoring APIs', () => {
