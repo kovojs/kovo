@@ -87,10 +87,23 @@ function installInlineKovoLoader(im) {
     }
     for (const attr of next.attributes) current.setAttribute(attr.name, attr.value);
   };
+  const xd = (current, next) => {
+    const dark = current.classList?.contains('dark');
+    xa(current, next);
+    current.classList?.toggle('dark', dark);
+  };
   const sf = (href) => {
     const x = globalThis.scrollX || globalThis.pageXOffset || 0;
     const y = globalThis.scrollY || globalThis.pageYOffset || 0;
     if (href) sc[href] = [x, y];
+  };
+  const hid = (hash) => {
+    const value = hash.slice(1);
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
   };
   const vp = (val, path) =>
     path.split('.').reduce((cur, seg) => {
@@ -280,6 +293,14 @@ function installInlineKovoLoader(im) {
     for (const id of di(next)) if (preserved.has(id)) return true;
     return false;
   };
+  const rbd = (nextBody) => {
+    if (doc.documentElement?.replaceChild && doc.body) {
+      doc.documentElement.replaceChild(nextBody, doc.body);
+    } else {
+      doc.body.replaceWith(nextBody);
+    }
+    return nextBody;
+  };
   const ng = (href) => {
     if (location.assign) location.assign(href);
     else location.href = href;
@@ -296,9 +317,10 @@ function installInlineKovoLoader(im) {
       }
       const nextDoc = new DOMParser().parseFromString(await response.text(), 'text/html');
       if (navId !== ni) return;
-      if (!nextDoc?.body || kb() !== kb(nextDoc)) throw Error();
+      const nextBody = nextDoc?.body;
+      if (!nextBody || kb() !== kb(nextDoc)) throw Error();
       const currentSegments = ns(doc.body);
-      const nextSegments = ns(nextDoc.body);
+      const nextSegments = ns(nextBody);
       if (!nextSegments.length) throw Error();
       let triggerRoot;
 
@@ -314,8 +336,7 @@ function installInlineKovoLoader(im) {
 
       if (!currentSegments.length || index === 0) {
         for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
-        doc.body.replaceWith(nextDoc.body);
-        triggerRoot = doc.body;
+        triggerRoot = rbd(nextBody);
       } else if (index < currentSegments.length && index < nextSegments.length) {
         if (dc(pi(currentSegments, index), nextSegments[index])) throw Error();
         for (const el of qa(currentSegments[index], '[kovo-c]')) el.a?.abort();
@@ -326,15 +347,17 @@ function installInlineKovoLoader(im) {
       }
 
       doc.head.innerHTML = nextDoc.head.innerHTML;
-      xa(doc.documentElement, nextDoc.documentElement);
-      xa(doc.body, nextDoc.body);
+      xd(doc.documentElement, nextDoc.documentElement);
+      const body = doc.body || triggerRoot;
+      if (!body) throw Error();
+      xa(body, nextBody);
       if (!pop) globalThis.history?.pushState?.({}, '', finalUrl.href);
       const focusTarget = doc.querySelector('main,[kovo-nav-segment],h1');
       focusTarget?.setAttribute?.('tabindex', '-1');
       focusTarget?.focus?.({ preventScroll: true });
       const saved = sc[finalUrl.href];
       if (saved) globalThis.scrollTo?.(saved[0], saved[1]);
-      else if (finalUrl.hash) doc.getElementById(finalUrl.hash.slice(1))?.scrollIntoView?.();
+      else if (finalUrl.hash) doc.getElementById(hid(finalUrl.hash))?.scrollIntoView?.();
       else globalThis.scrollTo?.(0, 0);
       if (triggerRoot) setTimeout(() => tr(triggerRoot));
       cu = finalUrl.href;
