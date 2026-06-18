@@ -52,11 +52,7 @@ export function validateAuthoringSurface(
 }
 
 export function isNonPublicKovoSpecifier(specifier: string): boolean {
-  return (
-    /^@kovojs\/[^/]+\/(?:internal|generated)(?:\/|$)/.test(specifier) ||
-    specifier === 'kovo/internal' ||
-    specifier.startsWith('kovo/internal/')
-  );
+  return /^@kovojs\/[^/]+\/(?:internal|generated)(?:\/|$)/.test(specifier);
 }
 
 export function isAppLocalGeneratedSpecifier(specifier: string): boolean {

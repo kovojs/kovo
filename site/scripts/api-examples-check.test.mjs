@@ -77,7 +77,7 @@ describe('api-examples extractor', () => {
         path.join(outDir, 'core-internal.md'),
         SAMPLE.replace(
           "import { component } from '@kovojs/core';",
-          "import { main } from 'kovo/internal';",
+          "import { main } from '@kovojs/cli/internal';",
         ),
         'utf8',
       );
@@ -86,7 +86,7 @@ describe('api-examples extractor', () => {
       expect(examples).toHaveLength(1);
       expect(examples[0].id).toBe('core__component__1');
       expect(examples[0].code).not.toContain('/internal');
-      expect(examples[0].code).not.toContain('kovo/internal');
+      expect(examples[0].code).not.toContain('@kovojs/cli/internal');
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }

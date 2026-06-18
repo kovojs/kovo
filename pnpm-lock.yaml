@@ -129,6 +129,9 @@ importers:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
     devDependencies:
+      '@kovojs/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@kovojs/conformance-fixtures':
         specifier: workspace:*
         version: link:../../packages/conformance-fixtures
@@ -138,9 +141,6 @@ importers:
       axe-core:
         specifier: ^4.12.1
         version: 4.12.1
-      kovo:
-        specifier: workspace:*
-        version: link:../../packages/cli
       playwright:
         specifier: ^1.60.0
         version: 1.60.0
@@ -181,15 +181,15 @@ importers:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
     devDependencies:
+      '@kovojs/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../../packages/headless-ui
       '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
-      kovo:
-        specifier: workspace:*
-        version: link:../../packages/cli
       vite:
         specifier: 8.0.16
         version: 8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)
@@ -221,6 +221,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
+      '@kovojs/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@kovojs/conformance-fixtures':
         specifier: workspace:*
         version: link:../../packages/conformance-fixtures
@@ -230,9 +233,6 @@ importers:
       axe-core:
         specifier: ^4.12.1
         version: 4.12.1
-      kovo:
-        specifier: workspace:*
-        version: link:../../packages/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -286,15 +286,15 @@ importers:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
     devDependencies:
+      '@kovojs/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../../packages/headless-ui
       '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
-      kovo:
-        specifier: workspace:*
-        version: link:../../packages/cli
       vite:
         specifier: 8.0.16
         version: 8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)
@@ -398,6 +398,9 @@ importers:
       '@kovojs/better-auth':
         specifier: workspace:*
         version: link:../better-auth
+      '@kovojs/cli':
+        specifier: workspace:*
+        version: link:../cli
       '@kovojs/compiler':
         specifier: workspace:*
         version: link:../compiler
@@ -413,9 +416,6 @@ importers:
       '@kovojs/style':
         specifier: workspace:*
         version: link:../style
-      kovo:
-        specifier: workspace:*
-        version: link:../cli
       vite:
         specifier: 8.0.16
         version: 8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)
@@ -543,15 +543,15 @@ importers:
         specifier: workspace:*
         version: link:../packages/server
     devDependencies:
+      '@kovojs/cli':
+        specifier: workspace:*
+        version: link:../packages/cli
       '@kovojs/compiler':
         specifier: workspace:*
         version: link:../packages/compiler
       '@kovojs/test':
         specifier: workspace:*
         version: link:../packages/test
-      kovo:
-        specifier: workspace:*
-        version: link:../packages/cli
       marked:
         specifier: ^16.0.0
         version: 16.4.2
@@ -567,6 +567,9 @@ importers:
 
   tests/integration:
     dependencies:
+      '@kovojs/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -582,9 +585,6 @@ importers:
       axe-core:
         specifier: 4.12.1
         version: 4.12.1
-      kovo:
-        specifier: workspace:*
-        version: link:../../packages/cli
     devDependencies:
       '@kovojs/compiler':
         specifier: workspace:*

@@ -8,7 +8,7 @@ import {
   type MutationWireHeaderSource,
 } from '@kovojs/server/internal/wire';
 import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test/harness';
-import { kovoCheck, kovoExplain } from 'kovo';
+import { kovoCheck, kovoExplain } from '@kovojs/cli';
 
 import {
   addToCart,

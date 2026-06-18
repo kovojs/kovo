@@ -6,7 +6,7 @@ import {
   kovoExplainRecords,
   parseKovoExplainOutput,
 } from '@kovojs/conformance-fixtures/kovo-explain-fixtures';
-import { main } from 'kovo/internal';
+import { main } from '@kovojs/cli/internal';
 import { describe, expect, it, vi } from 'vitest';
 
 import { galleryKovoExplainCases, galleryKovoExplainGraph } from './kovo-explain-contracts.js';

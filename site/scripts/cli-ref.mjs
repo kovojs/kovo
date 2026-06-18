@@ -112,7 +112,7 @@ function transform(source) {
   const commandSection = COMMANDS_MANIFEST.flatMap((entry) => renderCommand(entry));
 
   const body = [
-    '# kovo',
+    '# @kovojs/cli',
     '',
     'Command-line interface for the Kovo toolchain. Generated from the shared',
     '`@kovojs/cli` command manifest (`packages/cli/src/commands-manifest.ts`) and the',
@@ -129,7 +129,7 @@ function transform(source) {
     ...commandSection,
     '## Programmatic API',
     '',
-    'The `kovo` package also exposes a small in-process verifier surface so callers',
+    'The `@kovojs/cli` package also exposes a small in-process verifier surface so callers',
     'can run the checks against an extracted graph without spawning the bin',
     '(SPEC.md §11.4). This reference is generated from `packages/cli/src/api.ts`.',
     '',

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { KovoExplainInput } from '@kovojs/core/internal/graph';
-import { kovoCheck, kovoExplain } from 'kovo';
+import { kovoCheck, kovoExplain } from '@kovojs/cli';
 import { describe, expect, it } from 'vitest';
 
 const crmRoot = fileURLToPath(new URL('..', import.meta.url));

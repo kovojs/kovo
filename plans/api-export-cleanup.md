@@ -959,30 +959,53 @@ tsconfig.json --noEmit --pretty false`.
 
 ## CLI Package Rename
 
-- [ ] **Rename package `kovo` to `@kovojs/cli`.**
+- [x] **Rename package `kovo` to `@kovojs/cli`.**
   - Update `packages/cli/package.json` `"name"` while preserving
-    `"bin": { "kovo": "./src/index.ts" }`.
+    `"bin": { "kovo": "./src/bin.ts" }`.
   - Update `publishConfig.bin` and `publishConfig.exports` as needed after the
     name change.
-  - Evidence:
-- [ ] **Update workspace dependencies and generated templates.**
+  - Evidence: `packages/cli/package.json` is named `@kovojs/cli` and keeps
+    `bin.kovo` / `publishConfig.bin.kovo`; `node scripts/build-publish.mjs`
+    builds `@kovojs/cli` and verifies `dist/bin.mjs`, `dist/api.*`, and
+    `dist/index.*` publish targets.
+- [x] **Update workspace dependencies and generated templates.**
   - Replace package dependencies/devDependencies on `kovo` with `@kovojs/cli`
     wherever the package is installed.
   - Keep scripts and docs invoking the executable as `kovo`.
-  - Evidence:
-- [ ] **Update imports from the CLI package.**
+  - Evidence: `corepack pnpm install` updated `pnpm-lock.yaml`; package manifests
+    and the create-kovo starter template use `@kovojs/cli: workspace:*`.
+    `corepack pnpm exec vitest --run packages/create-kovo/src/index.test.ts`
+    passes and asserts the generated starter devDependency.
+- [x] **Update imports from the CLI package.**
   - Replace import specifiers that refer to package `kovo` or `kovo/internal` with
     `@kovojs/cli` or `@kovojs/cli/internal`.
   - Preserve command examples as `kovo check`, `kovo explain`, etc.
-  - Evidence:
-- [ ] **Update manifest/API docs for the CLI package rename.**
+  - Evidence: app/example/integration tests import `@kovojs/cli` and internal
+    fixtures import `@kovojs/cli/internal`; `corepack pnpm run check:imports`
+    passes. A package/import scan finds no remaining `kovo` package
+    dependencies/imports outside package-prefix metadata.
+- [x] **Update manifest/API docs for the CLI package rename.**
   - Change the `public-packages.json` entry from `kovo` to `@kovojs/cli`.
   - Update generated API reference, stability docs, and package export tests.
-  - Evidence:
-- [ ] **Verify the renamed package still provides the `kovo` command.**
+  - Evidence: `public-packages.json` lists `@kovojs/cli`; stability docs and the
+    CLI API reference generator distinguish `@kovojs/cli` package identity from
+    the `kovo` executable. Verification:
+    `corepack pnpm exec vitest --run scripts/public-packages.test.mjs site/scripts/api-ref.test.mjs site/scripts/api-examples-check.test.mjs scripts/import-boundary.test.mjs scripts/exported-symbols.test.mjs packages/conformance-fixtures/src/package-exports.test.ts`;
+    `node scripts/api-surface-gate.mjs`; `corepack pnpm run check:exports`.
+- [x] **Verify the renamed package still provides the `kovo` command.**
   - Add or update tests that install/link `@kovojs/cli` and execute the `kovo`
     binary.
-  - Evidence:
+  - Evidence: `packages/cli/src/index.kovo-check.test.ts` asserts
+    `@kovojs/cli` package metadata preserves `bin.kovo` and
+    `publishConfig.bin.kovo`, and its linked-bin smoke test executes the `kovo`
+    entrypoint. Verification:
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-add.test.ts`.
+  - Remaining risk: `packages/cli/package.json` still depends on private
+    `@kovojs/ui` for `kovo add` vendored source discovery.
+    `node scripts/build-publish.mjs` proves the package can be built, but
+    install-time publish correctness still requires either making `@kovojs/ui`
+    public in its own open slice or bundling/moving the add catalog so
+    `@kovojs/cli` no longer depends on a private workspace package.
 
 ## Vendor-Specific Export Cleanup
 

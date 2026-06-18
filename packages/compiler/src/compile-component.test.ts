@@ -850,7 +850,7 @@ export function renderSource() {
 import { component } from '@kovojs/core';
 import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 import { derive } from '@kovojs/runtime/generated';
-import { main } from 'kovo/internal';
+import { main } from '@kovojs/cli/internal';
 
 export { escapeHtml } from '@kovojs/server/internal/html';
 
@@ -889,9 +889,9 @@ export const CartBadge = component({
         code: 'KV235',
         fileName: 'cart-badge.tsx',
         help: expect.stringContaining(
-          'Blocked reason: app source imports non-public Kovo subpath `kovo/internal`.',
+          'Blocked reason: app source imports non-public Kovo subpath `@kovojs/cli/internal`.',
         ),
-        length: 15,
+        length: 20,
         message:
           'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
         severity: 'error',

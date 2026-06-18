@@ -30,7 +30,7 @@ const runtime = () => import('@kovojs/runtime/generated');
   it('classifies non-public Kovo import tiers', () => {
     expect(nonPublicKovoImportTier('@kovojs/core/internal/graph')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/runtime/generated')).toBe('generated');
-    expect(nonPublicKovoImportTier('kovo/internal')).toBe('internal');
+    expect(nonPublicKovoImportTier('@kovojs/cli/internal')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/core')).toBeNull();
   });
 
@@ -49,7 +49,7 @@ const runtime = () => import('@kovojs/runtime/generated');
     await writeFixture(
       rootDir,
       'site/tutorial/steps/01/src/app.test.ts',
-      "import { main } from 'kovo/internal';\n",
+      "import { main } from '@kovojs/cli/internal';\n",
     );
     await writeFixture(
       rootDir,

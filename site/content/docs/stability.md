@@ -28,7 +28,7 @@ this site's generated [API reference](/api) keep that line visible.
 | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@kovojs/core`, `@kovojs/server`, `@kovojs/runtime`, `@kovojs/drizzle`, `@kovojs/better-auth`, `@kovojs/headless-ui` | `@kovojs/compiler` — framework build machinery used behind the `kovo` CLI; app projects should run `kovo compile`, `kovo check`, or `kovo explain`, not import compiler APIs |
 | `@kovojs/style`                                                                                                      | `@kovojs/test` (harness only; fixtures live in the private `@kovojs/conformance-fixtures`)                                                                                  |
-| `kovo`, `create-kovo` (CLIs — a command contract, plus `kovo`'s `kovoCheck`/`kovoExplain`)                           | `@kovojs/ui` — **not** a versioned dependency: copy components in shadcn-style (see [Components & copy-in UI](/guides/components)); copied source builds on public packages |
+| `@kovojs/cli`, `create-kovo` (CLIs — the `kovo` executable contract, plus `@kovojs/cli`'s `kovoCheck`/`kovoExplain`)  | `@kovojs/ui` — **not** a versioned dependency: copy components in shadcn-style (see [Components & copy-in UI](/guides/components)); copied source builds on public packages |
 
 ## Versioning
 

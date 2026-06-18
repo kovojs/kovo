@@ -24,7 +24,7 @@
   "devDependencies": {
     "@kovojs/compiler": "workspace:*",
     "@kovojs/test": "workspace:*",
-    "kovo": "workspace:*",
+    "@kovojs/cli": "workspace:*",
     "marked": "^16.0.0",
     "shiki": "^3.0.0",
     "vite-plus": "^0.1.24",

@@ -1,7 +1,7 @@
 // SPEC.md §9.1 and §11.4: CSRF-exempt endpoint ingress keeps its exemption and
 // auth posture visible in the endpoint audit surface.
 import { expect, test } from '@kovojs/test/internal/integration';
-import { kovoExplain } from 'kovo';
+import { kovoExplain } from '@kovojs/cli';
 
 test.use({ kovoFixture: 'endpoint-csrf-exempt-audited' });
 

@@ -1,5 +1,5 @@
 /**
- * Public API of the `kovo` package.
+ * Public API of the `@kovojs/cli` package.
  *
  * The `kovo` CLI is primarily a bin (`kovo check`, `kovo explain`, `kovo audit`,
  * `kovo export`, `kovo add`, `kovo mcp`). This module exposes only the small,
@@ -7,7 +7,7 @@
  * `kovoExplain` — so callers can run them in-process against an extracted graph
  * (SPEC.md §11.4 verification surface; §1.1 proof claims). Everything else (the
  * argv dispatcher, MCP transport, compile facts, audit) is internal and reachable
- * only through the bin or the explicitly-internal `kovo/internal` subpath.
+ * only through the bin or the explicitly-internal `@kovojs/cli/internal` subpath.
  */
 export { kovoCheck, kovoExplain } from './index.js';
 
@@ -21,7 +21,7 @@ import type {
  * Input graph accepted by `kovoCheck`.
  *
  * The shape is the committed verifier graph produced by Kovo's compiler/tooling
- * pipeline (SPEC.md §11.4). It is re-declared here as the public `kovo` package
+ * pipeline (SPEC.md §11.4). It is re-declared here as the public `@kovojs/cli`
  * verifier contract while the lower-level graph declarations remain under
  * `@kovojs/core/internal/graph`.
  */

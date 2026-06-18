@@ -12,9 +12,9 @@
  * (`./commands-manifest.test.ts`) asserts the manifest covers every dispatched
  * command and that each usage constant matches the literal the CLI emits.
  *
- * Marked `@internal` so it stays out of the public `kovo` API surface (the
+ * Marked `@internal` so it stays out of the public `@kovojs/cli` API surface (the
  * api-surface gate, `scripts/api-surface-gate.mjs`) — it is reachable only through
- * the `kovo/internal` subpath and the docs tooling, never the `.` export.
+ * the `@kovojs/cli/internal` subpath and the docs tooling, never the `.` export.
  */
 
 /** @internal Usage line emitted for `kovo check` (see `writeCheckUsageError`). */

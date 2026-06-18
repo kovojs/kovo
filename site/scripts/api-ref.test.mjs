@@ -275,7 +275,7 @@ describe('api-ref generator', () => {
       '@kovojs/style': 20,
       '@kovojs/better-auth': 13,
       '@kovojs/compiler': 12,
-      kovo: 8,
+      '@kovojs/cli': 8,
       '@kovojs/test': 12,
     };
     for (const pkg of result.packages) {

@@ -90,8 +90,8 @@ describe('create-kovo starter', () => {
         '@kovojs/style': 'workspace:*',
       });
       expect(packageJson.devDependencies).toMatchObject({
+        '@kovojs/cli': 'workspace:*',
         '@types/node': '^25.0.0',
-        kovo: 'workspace:*',
         vite: '^8.0.16',
       });
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');

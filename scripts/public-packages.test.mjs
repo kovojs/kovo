@@ -54,6 +54,18 @@ describe('public-packages manifest', () => {
     }
   });
 
+  it('classifies the CLI package as @kovojs/cli while preserving the kovo bin', () => {
+    const cli = manifest.find((pkg) => pkg.dir === 'cli');
+    expect(cli?.name).toBe('@kovojs/cli');
+    expect(cli?.kind).toBe('cli');
+    expect(publicEntrySubpaths(cli)).toEqual(['.']);
+    expect(internalEntrySubpaths(cli)).toEqual(['./internal']);
+
+    const cliPackage = packageJson('cli');
+    expect(cliPackage.bin).toEqual({ kovo: './src/bin.ts' });
+    expect(cliPackage.publishConfig?.bin).toEqual({ kovo: './dist/bin.mjs' });
+  });
+
   it('requires every private package to set "private": true', () => {
     for (const pkg of privatePackages()) {
       expect(packageJson(pkg.dir).private, `${pkg.name} must set private:true`).toBe(true);

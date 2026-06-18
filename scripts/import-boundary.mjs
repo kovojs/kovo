@@ -88,7 +88,6 @@ export async function collectImportBoundaryViolations({
 export function nonPublicKovoImportTier(specifier) {
   if (/^@kovojs\/[^/]+\/internal(?:\/|$)/.test(specifier)) return 'internal';
   if (/^@kovojs\/[^/]+\/generated(?:\/|$)/.test(specifier)) return 'generated';
-  if (specifier === 'kovo/internal' || specifier.startsWith('kovo/internal/')) return 'internal';
   return null;
 }
 

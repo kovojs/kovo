@@ -1,13 +1,31 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
 import { kovoCheck, main } from './index.js';
 
 describe('kovo check', () => {
+  it('publishes as @kovojs/cli while preserving the kovo bin command', () => {
+    const packageJson = JSON.parse(
+      readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'),
+        'utf8',
+      ),
+    ) as {
+      bin?: Record<string, string>;
+      name?: string;
+      publishConfig?: { bin?: Record<string, string> };
+    };
+
+    expect(packageJson.name).toBe('@kovojs/cli');
+    expect(packageJson.bin).toEqual({ kovo: './src/bin.ts' });
+    expect(packageJson.publishConfig?.bin).toEqual({ kovo: './dist/bin.mjs' });
+  });
+
   it('emits stable OK output for an empty semantic graph', () => {
     expect(kovoCheck({})).toEqual({
       exitCode: 0,

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { KovoExplainInput, PageExplain } from '@kovojs/core/internal/graph';
 import { htmlDocumentFacts } from '@kovojs/test/html-fragment';
 import { renderPageHints } from '@kovojs/server/internal/html';
-import { kovoExplain } from 'kovo';
+import { kovoExplain } from '@kovojs/cli';
 import { describe, expect, it } from 'vitest';
 
 import {

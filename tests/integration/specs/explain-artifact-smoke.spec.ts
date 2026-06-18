@@ -1,5 +1,5 @@
 // SPEC.md §5.3 + §11.4: explain output is a stable graph for behavior intent.
-import { kovoExplain, type KovoExplainInput } from 'kovo';
+import { kovoExplain, type KovoExplainInput } from '@kovojs/cli';
 
 import { expect, test } from '@kovojs/test/internal/integration';
 

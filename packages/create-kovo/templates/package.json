@@ -22,7 +22,7 @@
   "devDependencies": {
     "@types/node": "^25.0.0",
     "@typescript/native-preview": "^7.0.0-dev.20260610.1",
-    "kovo": "workspace:*",
+    "@kovojs/cli": "workspace:*",
     "typescript": "^6.0.0",
     "vite": "^8.0.16",
     "vite-plus": "^0.1.24",

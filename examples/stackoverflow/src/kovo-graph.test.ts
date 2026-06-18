@@ -1,4 +1,4 @@
-import { kovoCheck } from 'kovo';
+import { kovoCheck } from '@kovojs/cli';
 import { describe, expect, it } from 'vitest';
 
 import { soGraph } from './app.js';
