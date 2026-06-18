@@ -5,10 +5,14 @@
   "scripts": {
     "build:bundle": "node scripts/build-bundle.mjs",
     "check": "vp check",
+    "conformance": "node scripts/conformance.mjs",
     "dev": "node scripts/build-bundle.mjs && vp dev",
-    "test": "vp test"
+    "mcp": "node scripts/build-bundle.mjs && node scripts/mcp-server.mjs",
+    "test": "vp test",
+    "test:mcp": "node scripts/test-mcp.mjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@kovojs/core": "workspace:*",
     "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",

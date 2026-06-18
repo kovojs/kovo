@@ -216,12 +216,12 @@ surface ships before the MCP tools, which then drop onto the same model.
 - [x] Pan / zoom / hover enhancement island (`src/devtool-pz.client.js`), registered as a versioned `/c/` client module and bootstrapped via `on:visible` (SPEC §4.7), cleanup on `ctx.signal`. Pure progressive enhancement — selection stays real `<a href>` navigation with the island absent. Verified in-browser (fit-on-load, wheel-zoom-to-cursor, drag-pan, 1-hop hover highlight; no console errors).
 - [ ] Browser suite for render/interaction (Playwright drives `scratch/devtool-interact.mjs` green; no committed assertion suite yet).
 
-### Phase 3 — MCP: BM25 retrieval over graph cards (agent parity over the same model)
-- [ ] Render each Phase-0 node to a self-contained "card" (traced neighborhood + source slice) as stable text + structured facts.
-- [ ] Build a deterministic BM25 index over the cards; extend `kovo_explain` to accept a free-text query returning top-`k` cards (exact node-id lookup still precise).
-- [ ] Return matched terms / scores so the ranking is auditable (legibility ethos).
-- [ ] Conformance test: UI node/edge set ≡ MCP card facts ≡ `kovo explain` text facts for the same app (the same-artifact invariant, three ways).
-- [ ] Document the single tool + an agent-usage example tracing one mutation→UI chain.
+### Phase 3 — MCP: BM25 retrieval over graph cards (agent parity over the same model) — shipped
+- [x] `buildCard(node, bundle)` renders each node to a self-contained card (traced neighborhood + source slice) — the shared fact source (`src/cards.mjs`); `cardToText` is the stable `kovo-explain/v1` text.
+- [x] Deterministic BM25 index over the cards; `kovo_explain({query, app?, limit?})` MCP tool returns top-`k` cards (exact node name/id resolves precisely first), as text + `structuredContent` (`scripts/mcp-server.mjs`). Verified via stdio round-trip (`scripts/test-mcp.mjs`).
+- [x] Returns matched terms + scores (auditable ranking).
+- [x] Same-artifact conformance: `scripts/conformance.mjs` asserts MCP card facts ≡ the graph edges the UI renders, across all apps (green). **Open:** also diff against the CLI's `kovo explain` text for the third leg.
+- [x] Documented the single tool + connection in the README.
 
 ### Phase 4 — Live runtime overlay
 - [ ] Dev-only SSE debug endpoint streaming `Kovo-Changes`/`Kovo-Targets`/`<kovo-query>` frames (§9.1); never present in prod/export.

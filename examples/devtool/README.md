@@ -66,7 +66,27 @@ enhancement island** (`src/devtool-pz.client.js`) loads via `on:visible` (SPEC
 It is pure progressive enhancement: with the island absent, the graph is fully
 usable and selection still works.
 
+## MCP server (the agent surface)
+
+The same graph cards are served to agents over MCP — SPEC §5.3, _"agents consume
+the same artifact humans read."_ One tool, `kovo_explain`:
+
+```bash
+pnpm --filter @kovojs/example-devtool mcp      # stdio MCP server
+pnpm --filter @kovojs/example-devtool test:mcp # stdio round-trip smoke test
+```
+
+Connect from an MCP client (e.g. Claude Code) by pointing it at
+`node scripts/mcp-server.mjs` (stdio). `kovo_explain({ query, app?, limit? })`
+takes a free-text query — an exact node name resolves precisely, otherwise
+**BM25** ranks the graph cards (deterministic, with matched terms + scores, not
+an embedding model). Each result is the same card the inspector shows, as stable
+`kovo-explain/v1` text **and** `structuredContent`.
+
+`src/cards.mjs` is the single source of card facts; the visual inspector and the
+MCP tool both render it, and `scripts/conformance.mjs` asserts the MCP cards equal
+the graph edges the UI draws from — the two surfaces can't drift.
+
 ## Next (see `plans/devtools.md`)
 
-- Wire the matching MCP `kovo_explain` query mode over the same cards.
 - Mount at `/__kovo` on an existing app's dev server (vs. its own server here).
