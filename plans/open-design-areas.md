@@ -21,10 +21,14 @@ with documented workarounds.
 - [ ] **13.3 Streaming details.** `<kovo-defer>` exists in `SPEC.md` §8. Remaining
       design: priority hints between deferred fragments and query-JSON placement
       guarantees under HTTP/1.1 fallbacks.
-- [ ] **13.4 Persistent cross-navigation elements.** Kovo does not support media or
-      state surviving real navigations in v1. Document SharedWorker socket and
-      popout-player escape hatches rather than building a half-iframe
-      architecture. Revisit if the platform ships pagewide persistent elements.
+- [x] **13.4 Persistent cross-navigation elements.** Resolved for framework v1 by
+      `SPEC.md` §8 and `plans/enhanced-navigation.md`: authors still write real
+      routes and anchors, and JS-off navigation is a full document. JS-on enhanced
+      navigation may preserve only unchanged compiler-stamped layout DOM after
+      fetching the canonical target document; this is not app-authored persistent
+      state or a client router. Media/state that must survive outside that proof
+      still uses app-level platform escape hatches such as SharedWorker sockets or
+      popout players rather than a half-iframe architecture.
 - [ ] **13.5 Adopt-don't-invent list.** Remaining adoption targets: head/meta, file
       uploads, per-island error boundaries, i18n, and rate limiting as guard
       middleware. Typed sessions have graduated to core in `SPEC.md` §6.5.

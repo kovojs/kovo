@@ -23,24 +23,30 @@ through client navigation.
 
 ## Required SPEC Reconciliation
 
-- [ ] **Amend the normative MPA language before implementation.**
+- [x] **Amend the normative MPA language before implementation.**
   - Current `SPEC.md` says client router and SPA navigation are rejected (§3.1),
     every navigation is a full document (§4.5), navigation between places is
     always real (§7), and `<Link>` has zero router runtime (§8). Enhanced
     navigation must be specified as a progressive enhancement that keeps those
     URLs and server routes canonical rather than as a client router.
-  - Evidence: pending SPEC diff naming the exact amended sections.
-- [ ] **Graduate the persistent-navigation decision out of open design.**
+  - Evidence: `SPEC.md` §1.3, §3.1, §7, and §8 now define enhanced navigation as
+    a JS-on progressive enhancement over real URLs and canonical server
+    documents, not as a client-owned router or app-authored mode.
+- [x] **Graduate the persistent-navigation decision out of open design.**
   - The current persistent cross-navigation rule lives in
     `plans/open-design-areas.md` item 13.4, while this plan previously referred
     to `SPEC.md` §13.4. The SPEC change must either add a real subsection or
     explicitly keep the open-design entry as the tracked non-normative risk.
-  - Evidence: pending.
-- [ ] **Define enhanced navigation as a new §7/§8 rung, not an app-authored mode.**
+  - Evidence: `plans/open-design-areas.md` item 13.4 is resolved to `SPEC.md` §8
+    and this plan; app-level SharedWorker/popout escape hatches remain documented
+    for media/state outside the compiler-stamped proof.
+- [x] **Define enhanced navigation as a new §7/§8 rung, not an app-authored mode.**
   - Authors still write `route()`, `layout()`, `component()`, `<Link>`, and real
     anchors. App TSX must not hand-author navigation targets or lowered segment
     stamps; that would remain KV235 territory.
-  - Evidence: pending.
+  - Evidence: `SPEC.md` §8 states enhanced navigation is loader-owned, optional,
+    and derived from real anchors plus compiler-stamped segment metadata; app TSX
+    does not author segment stamps or persistence policy.
 
 ## Load-Bearing Invariants
 
@@ -140,12 +146,16 @@ through client navigation.
 
 ## Implementation Plan
 
-- [ ] **0. Navigation contract gate.**
+- [x] **0. Navigation contract gate.**
   - Amend SPEC/open-design text, define eligibility, segment stamps,
     document-shell handling, lifecycle, fallback rules, and the browser evidence
     matrix. No compiler/server/runtime implementation begins until this is
     closed.
-  - Evidence: pending.
+  - Evidence: `SPEC.md` §8 now defines eligibility, full-document oracle,
+    target-document authority, document-shell validation/fallback, segment
+    persistence, history/scroll/focus/announcement ownership, concurrency,
+    bfcache, and loader-budget constraints. Browser evidence remains open under
+    the phase-specific verification targets below.
 - [ ] **1. Compiler: derived segment metadata only.**
   - After `plans/app-authoring-ergonomics.md` item 3 lands, extend layout/route
     lowering so each segment has derived navigation identity, dependency
