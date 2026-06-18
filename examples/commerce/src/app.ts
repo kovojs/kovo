@@ -14,10 +14,6 @@ import {
   betterAuthSession,
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
-  type BetterAuthLike,
-  type BetterAuthResponseLike,
-  type BetterAuthSignInEmailLike,
-  type BetterAuthSignOutLike,
 } from '@kovojs/better-auth';
 import { count, eq, sql } from 'drizzle-orm';
 
@@ -74,9 +70,12 @@ export interface CommerceBetterAuthUser {
   roles: readonly CommerceRole[];
 }
 
-export type CommerceBetterAuth = BetterAuthLike<CommerceBetterAuthSession, CommerceBetterAuthUser> &
-  BetterAuthSignInEmailLike &
-  BetterAuthSignOutLike;
+interface CommerceBetterAuthResponse {
+  headers: Headers;
+  status: number;
+}
+
+export type CommerceBetterAuth = ReturnType<typeof createCommerceBetterAuth>;
 
 export interface CommerceLoginFailureState {
   code: 'INVALID_CREDENTIALS';
@@ -138,12 +137,12 @@ const commerceAuthUsers = new Map<
   ],
 ]);
 
-export function createCommerceBetterAuth(): CommerceBetterAuth {
+export function createCommerceBetterAuth() {
   const sessionUserIds = new Map<string, string>();
 
   return {
     api: {
-      getSession(options) {
+      getSession(options: { headers: Headers }) {
         const token = readCookie(options.headers, commerceAuthCookieName);
         const userId = token ? sessionUserIds.get(token) : undefined;
         const user = userId
@@ -161,7 +160,11 @@ export function createCommerceBetterAuth(): CommerceBetterAuth {
           },
         };
       },
-      signInEmail(options) {
+      signInEmail(options: {
+        asResponse: true;
+        body: { email: string; password: string };
+        headers: Headers;
+      }) {
         const user = commerceAuthUsers.get(options.body.email);
         if (!user || user.password !== options.body.password) {
           return commerceAuthResponse([], 401);
@@ -174,7 +177,7 @@ export function createCommerceBetterAuth(): CommerceBetterAuth {
           `${commerceAuthCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax`,
         ]);
       },
-      signOut(options) {
+      signOut(options: { asResponse: true; headers: Headers }) {
         const token = readCookie(options.headers, commerceAuthCookieName);
         if (token) sessionUserIds.delete(token);
 
@@ -381,7 +384,7 @@ function readCookie(headers: Headers, name: string): string | undefined {
   return undefined;
 }
 
-function commerceAuthResponse(cookies: readonly string[], status = 204): BetterAuthResponseLike {
+function commerceAuthResponse(cookies: readonly string[], status = 204): CommerceBetterAuthResponse {
   const headers = new Headers();
 
   Object.defineProperty(headers, 'getSetCookie', {

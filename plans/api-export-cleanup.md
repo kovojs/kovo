@@ -633,7 +633,7 @@ tsconfig.json --noEmit --pretty false`.
     passes. `corepack pnpm run check:exports` passes with the duplicate baseline
     shrunk from 881 to 858; the remaining two `@kovojs/test` duplicates are
     verifier/verifier-diagnostics overlap, not root aliases.
-- [ ] **Shrink `@kovojs/better-auth` to app-facing adapter APIs.**
+- [x] **Shrink `@kovojs/better-auth` to app-facing adapter APIs.**
   - Keep app-facing helpers such as `mount`, `betterAuthSession`, `authed`, and
     `role`/role types when their public use cases are documented and their type
     closures are public.
@@ -642,7 +642,21 @@ tsconfig.json --noEmit --pretty false`.
     `BetterAuthMountHandler`, `BetterAuthMountLike`, `BetterAuthSignInEmailApi`,
     `BetterAuthSignUpEmailApi`, `BetterAuthSignOutApi`, and `*Like` credential
     API shapes unless apps must author them directly.
-  - Evidence:
+  - Evidence: `packages/better-auth/src/index.ts` now exports the app-facing
+    adapter helpers (`mount`, `betterAuthSession`, credential mutations,
+    `authed`, and `role`) plus the public type closures kept for those helpers;
+    vendor mirror types such as `BetterAuthLike`, `BetterAuthResponseLike`,
+    `BetterAuthSignInEmailLike`, `BetterAuthSignOutLike`, and
+    `BetterAuthSignUpEmailLike` remain available only through
+    `@kovojs/better-auth/internal`. App-authored files in
+    `packages/create-kovo/templates/src/auth.tsx`, `examples/commerce/src/app.ts`,
+    and `examples/reference/src/app.ts` define local structural fake-auth types
+    instead of importing those mirrors. Verification:
+    `node scripts/exported-symbols.mjs --json` reports 13 public
+    `@kovojs/better-auth` root symbols; `corepack pnpm exec vitest --run
+    packages/better-auth/src/index.session.test.ts packages/better-auth/src/index.credential-mutations.test.ts conformance/better-auth-pin/src/index.api-table.test.ts conformance/better-auth-pin/src/index.session-credentials.test.ts packages/create-kovo/src/index.test.ts examples/commerce/src/app.auth.test.ts examples/reference/src/app-shell.test.ts`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `node site/scripts/api-ref.mjs`; `node scripts/build-publish.mjs`.
 - [x] **Review `@kovojs/style` compiler-level result types.**
   - Confirm whether `CompiledStyle`, `AtomicRule`, and `AtomicCssResult` are
     necessary public type closures for public functions such as `style.create`

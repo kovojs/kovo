@@ -3,10 +3,10 @@ import { admin, organization } from 'better-auth/plugins';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
-  type BetterAuthLike,
-  type BetterAuthSignInEmailLike,
-  type BetterAuthSignOutLike,
-  type BetterAuthSignUpEmailLike,
+  betterAuthSession,
+  betterAuthSignInEmailMutation,
+  betterAuthSignOutMutation,
+  betterAuthSignUpEmailMutation,
 } from '@kovojs/better-auth';
 import {
   betterAuthSchemaBridge,
@@ -25,10 +25,10 @@ describe('Better Auth pinned conformance', () => {
     expect(typeof auth.api.signUpEmail).toBe('function');
     expect(typeof auth.handler).toBe('function');
 
-    expectTypeOf(auth).toMatchTypeOf<BetterAuthLike<unknown, unknown>>();
-    expectTypeOf(auth).toMatchTypeOf<BetterAuthSignInEmailLike>();
-    expectTypeOf(auth).toMatchTypeOf<BetterAuthSignOutLike>();
-    expectTypeOf(auth).toMatchTypeOf<BetterAuthSignUpEmailLike>();
+    expectTypeOf(auth).toMatchTypeOf<Parameters<typeof betterAuthSession>[0]>();
+    expectTypeOf(auth).toMatchTypeOf<Parameters<typeof betterAuthSignInEmailMutation>[0]>();
+    expectTypeOf(auth).toMatchTypeOf<Parameters<typeof betterAuthSignOutMutation>[0]>();
+    expectTypeOf(auth).toMatchTypeOf<Parameters<typeof betterAuthSignUpEmailMutation>[0]>();
   });
 
   it('pins Better Auth table metadata used by the schema bridge', () => {

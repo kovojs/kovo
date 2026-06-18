@@ -267,7 +267,7 @@ describe('api-ref generator', () => {
       '@kovojs/server': 70,
       '@kovojs/server/app-shell/vite': 5,
       '@kovojs/style': 20,
-      '@kovojs/better-auth': 30,
+      '@kovojs/better-auth': 13,
       '@kovojs/compiler': 12,
       kovo: 8,
     };

@@ -14,10 +14,6 @@ import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   role,
-  type BetterAuthLike,
-  type BetterAuthResponseLike,
-  type BetterAuthSignInEmailLike,
-  type BetterAuthSignOutLike,
 } from '@kovojs/better-auth';
 import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 
@@ -50,12 +46,12 @@ export interface ReferenceBetterAuthUser {
   roles?: readonly ReferenceRole[] | null;
 }
 
-export type ReferenceBetterAuth = BetterAuthLike<
-  ReferenceBetterAuthSession,
-  ReferenceBetterAuthUser
-> &
-  BetterAuthSignInEmailLike &
-  BetterAuthSignOutLike;
+interface ReferenceBetterAuthResponse {
+  headers: Headers;
+  status: number;
+}
+
+export type ReferenceBetterAuth = ReturnType<typeof createReferenceBetterAuth>;
 
 export type ReferenceAuthBindings = ReturnType<typeof createReferenceAuth>;
 
@@ -104,12 +100,12 @@ const referenceUsers = new Map<string, ReferenceBetterAuthUser & { password: str
   ],
 ]);
 
-export function createReferenceBetterAuth(): ReferenceBetterAuth {
+export function createReferenceBetterAuth() {
   const sessionUserIds = new Map<string, string>();
 
   return {
     api: {
-      getSession(options) {
+      getSession(options: { headers: Headers }) {
         const token = readCookie(options.headers, referenceCookieName);
         const userId = token ? sessionUserIds.get(token) : undefined;
         const user = userId
@@ -128,7 +124,11 @@ export function createReferenceBetterAuth(): ReferenceBetterAuth {
           },
         };
       },
-      signInEmail(options) {
+      signInEmail(options: {
+        asResponse: true;
+        body: { email: string; password: string };
+        headers: Headers;
+      }) {
         const user = referenceUsers.get(options.body.email);
         if (!user || user.password !== options.body.password) {
           return referenceAuthResponse([], 401);
@@ -141,7 +141,7 @@ export function createReferenceBetterAuth(): ReferenceBetterAuth {
           `${referenceCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax`,
         ]);
       },
-      signOut(options) {
+      signOut(options: { asResponse: true; headers: Headers }) {
         const token = readCookie(options.headers, referenceCookieName);
         if (token) sessionUserIds.delete(token);
 
@@ -396,7 +396,10 @@ export function referenceAuthToken(request: ReferenceRequest): string {
   return csrfToken(request, referenceAuthCsrf);
 }
 
-function referenceAuthResponse(cookies: readonly string[], status = 204): BetterAuthResponseLike {
+function referenceAuthResponse(
+  cookies: readonly string[],
+  status = 204,
+): ReferenceBetterAuthResponse {
   const headers = new Headers();
 
   Object.defineProperty(headers, 'getSetCookie', {

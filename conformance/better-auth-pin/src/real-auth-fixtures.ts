@@ -3,14 +3,12 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import { expect } from 'vitest';
 
 import {
+  betterAuthCredentialMutationDeclaredTableTouches,
+  betterAuthCredentialMutationTouches,
   type BetterAuthResponseLike,
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
   type BetterAuthSignUpEmailLike,
-} from '@kovojs/better-auth';
-import {
-  betterAuthCredentialMutationDeclaredTableTouches,
-  betterAuthCredentialMutationTouches,
   type BetterAuthCoreTable,
   type BetterAuthTable,
 } from '@kovojs/better-auth/internal';

@@ -2,7 +2,7 @@ import {
   type BetterAuthLike,
   type BetterAuthMountLike,
   type BetterAuthResponseLike,
-} from './index.js';
+} from './internal.js';
 
 export type AuthSession = {
   activeOrganizationId: null | string;

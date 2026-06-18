@@ -8,9 +8,6 @@ import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   role,
-  type BetterAuthLike,
-  type BetterAuthSignInEmailLike,
-  type BetterAuthSignOutLike,
 } from '@kovojs/better-auth';
 
 export interface StarterSession {
@@ -40,9 +37,36 @@ export interface StarterBetterAuthUser {
   roles?: readonly string[] | null;
 }
 
-export type StarterBetterAuth = BetterAuthLike<StarterBetterAuthSession, StarterBetterAuthUser> &
-  BetterAuthSignInEmailLike &
-  BetterAuthSignOutLike;
+type MaybePromise<Value> = Value | Promise<Value>;
+
+interface StarterBetterAuthResponse {
+  headers: Headers;
+  status: number;
+}
+
+export interface StarterBetterAuth {
+  api: {
+    getSession(options: {
+      headers: Headers;
+    }): MaybePromise<
+      | {
+          session: StarterBetterAuthSession;
+          user: StarterBetterAuthUser;
+        }
+      | null
+      | undefined
+    >;
+    signInEmail(options: {
+      asResponse: true;
+      body: { email: string; password: string };
+      headers: Headers;
+    }): MaybePromise<StarterBetterAuthResponse>;
+    signOut(options: {
+      asResponse: true;
+      headers: Headers;
+    }): MaybePromise<StarterBetterAuthResponse>;
+  };
+}
 
 export type StarterAuthBindings = ReturnType<typeof createStarterAuth>;
 
