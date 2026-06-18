@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { layout, renderComponentMutationFailure, route, s } from '@kovojs/server';
+import { layout, route, s } from '@kovojs/server';
 import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
 import type { RequestHandler } from '@kovojs/server/app-shell/core';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
@@ -10,8 +10,7 @@ import { PipelineRegion } from './components/pipeline.js';
 import { CrmShell } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
-import { addContact, closeDeal, createDeal, moveDeal, type CrmRequest } from './mutations.js';
-import { contactListQuery } from './queries.js';
+import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';
 
 // Interactive CRM app: pipeline, contacts, and deal detail pages backed by the
 // demo database. Forms post to `/_m/*` and refresh query-backed regions.
@@ -84,25 +83,6 @@ export async function buildCrmInteractiveApp(
     db: () => database,
     document: { lang: 'en-US' },
     mutations: [addContact, createDeal, moveDeal, closeDeal],
-    mutationResponses: {
-      [addContact.key]: ({ request }) => ({
-        failureTarget: 'contacts-region',
-        renderFailureFragment: async (failure) =>
-          renderComponentMutationFailure(
-            ContactsRegion,
-            {
-              contactList: await contactListQuery.load(undefined, {
-                request: request as CrmRequest,
-              }),
-            },
-            failure,
-            {
-              formName: 'addContact',
-              slots: { request: request as CrmRequest },
-            },
-          ),
-      }),
-    },
     routes: [
       route('/', {
         meta: {
