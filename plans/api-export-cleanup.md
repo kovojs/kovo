@@ -928,7 +928,7 @@ tsconfig.json --noEmit --pretty false`.
     `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
     `node scripts/exported-symbols.mjs --json` plus a no-`stripe` symbol scan;
     `git diff --check`.
-- [ ] **Shrink `@kovojs/drizzle/derive` and `@kovojs/drizzle/static`.**
+- [x] **Shrink `@kovojs/drizzle/derive` and `@kovojs/drizzle/static`.**
   - Keep only app-facing runtime/build APIs with documented use cases, such as
     `deriveOptimistic` if apps directly author optimistic transforms.
   - Internalize low-level extraction/serialization/fact helpers when graph
@@ -964,14 +964,27 @@ tsconfig.json --noEmit --pretty false`.
       `corepack pnpm exec vitest --run scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs packages/conformance-fixtures/src/package-exports.test.ts`;
       `rg -n "@kovojs/drizzle/derive|serializeDerivedOptimistic|lowerTransform" examples packages/create-kovo/templates site/tutorial site/content site/src --glob '!**/generated/**' --glob '!**/dist/**' --glob '!**/node_modules/**'`
       returned no matches.
-  - Remaining audit: `@kovojs/drizzle/static` is still app-build consumed by
-    `examples/{commerce,crm,stackoverflow}/scripts/emit-graph.mjs` for touch
-    graph, invalidation, algebraic-shape, and symbolic-effect
-    extraction/serialization. Proposed follow-up export map after static graph
-    emission moves behind `@kovojs/cli`: keep `.` public for annotations, keep
-    `./derive` public only if `deriveOptimistic` remains app-authored, and move
-    static extraction helpers to a narrow internal subpath such as
-    `./internal/static-extraction`.
+  - [x] Move static extraction and serialization off `@kovojs/drizzle/static`.
+    - Evidence: `@kovojs/drizzle` now exposes only `.` and `./derive` as public
+      Drizzle subpaths; `@kovojs/drizzle/static` was removed from the package
+      export map and `@kovojs/drizzle/internal/static` is the manifest-declared
+      internal home for extraction, query/effect/shape facts, diagnostics,
+      touch-graph serializers, and invalidation serializers. Example graph
+      scripts in commerce, CRM, and Stack Overflow call `kovo compile
+      drizzle-static` instead of importing low-level static helpers, and
+      `rg -n "@kovojs/drizzle/static" packages examples site docs
+      public-packages.json --glob '!**/dist/**' --glob '!**/node_modules/**'`
+      returned no matches. Verification:
+      `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/index.serialization.test.ts packages/conformance-fixtures/src/package-exports.test.ts`;
+      `corepack pnpm --filter @kovojs/example-commerce run emit-graph -- --check`;
+      `corepack pnpm --filter @kovojs/example-crm run emit-graph -- --check`;
+      `corepack pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `corepack pnpm run check:imports`; `corepack pnpm run check:exports`;
+      `node scripts/api-surface-gate.mjs`;
+      `node site/scripts/api-ref.mjs`; `node site/scripts/api-examples-check.mjs`;
+      `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs site/scripts/api-examples-check.test.mjs`;
+      `node scripts/build-publish.mjs`.
 - [x] **Shrink `@kovojs/headless-ui` root.**
   - After direct family subpaths exist, remove primitive-family exports from the
     root so family symbols have one canonical home.

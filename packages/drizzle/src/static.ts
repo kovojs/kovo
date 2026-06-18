@@ -36,6 +36,7 @@ import {
   type Symbol as MorphSymbol,
   type Type as MorphType,
 } from 'ts-morph';
+/** @internal */
 export type {
   DomainRegistryInput,
   ReadSummaryInput,
@@ -43,6 +44,7 @@ export type {
   UnresolvedSummaryInput,
   WriteSummaryInput,
 } from './graph.js';
+/** @internal */
 export {
   createTouchGraphEntry,
   diagnosticsForTouchGraph,
@@ -63,12 +65,14 @@ import {
   type KovoDomainTableAnnotation,
   type KovoTableAnnotation,
 } from './drizzle-surface.js';
+/** @internal */
 export type {
   InvalidationQueryInput,
   InvalidationRegistry,
   InvalidationRegistryEntry,
   MutationTouchInput,
 } from './invalidation.js';
+/** @internal */
 export { deriveInvalidationRegistry, serializeInvalidationRegistry } from './invalidation.js';
 
 const IGNORED_LOCAL_CALL_NAMES = new Set([
@@ -116,6 +120,7 @@ const UNRESOLVED_DOMAIN_WRITE_COMPUTED_MEMBER = '<computed>';
 const UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER = '<spread>';
 const DRIZZLE_STATIC_PROJECT_ROOT = dirname(fileURLToPath(import.meta.url));
 
+/** @internal */
 export type QueryShape =
   | 'array'
   | 'boolean'
@@ -128,11 +133,13 @@ export type QueryShape =
       readonly [key: string]: QueryShape;
     };
 
+/** @internal */
 export interface QueryShapeWrapper {
   kind: 'nullable' | 'optional';
   shape: QueryShape;
 }
 
+/** @internal */
 export interface QueryFact {
   diagnostics?: readonly TouchGraphDiagnostic[];
   instanceKey?: {
@@ -145,12 +152,14 @@ export interface QueryFact {
   site: string;
 }
 
+/** @internal */
 export interface SourceFileInput {
   columnShapes?: Readonly<Record<string, QueryShape>>;
   fileName: string;
   source: string;
 }
 
+/** @internal */
 export interface TouchGraphProjectOptions {
   compilerOptions?: CompilerOptions;
   files: readonly SourceFileInput[];
@@ -169,6 +178,7 @@ interface ExtractedTable {
   exported: boolean;
 }
 
+/** @internal */
 export function diagnosticsForQueryFacts(facts: readonly QueryFact[]): TouchGraphDiagnostic[] {
   return facts.flatMap((fact) => [...(fact.diagnostics ?? [])]);
 }
@@ -254,6 +264,7 @@ function extractTouchGraphFromPreparedFiles(
   return graph;
 }
 
+/** @internal */
 export function extractTouchGraphFromProject(options: TouchGraphProjectOptions): TouchGraph {
   const extraction = createProjectExtraction(options);
   try {
@@ -271,6 +282,7 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
   }
 }
 
+/** @internal */
 export function extractQueryFactsFromProject(options: TouchGraphProjectOptions): QueryFact[] {
   const extraction = createProjectExtraction(options);
   try {
@@ -8741,7 +8753,7 @@ function lineForIndex(source: string, index: number): number {
 // rather than emitting an unsound prediction.
 // ───────────────────────────────────────────────────────────────────────────
 
-/** One extracted Stage-1 effect with its source site and resolvable write key (domain.action). */
+/** @internal One extracted Stage-1 effect with its source site and resolvable write key (domain.action). */
 export interface SymbolicEffectFact {
   effect: SymbolicEffect;
   site: string;
@@ -8784,6 +8796,7 @@ function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtrac
  * unresolvable table emits the unresolved marker so the deriver's `unsupported`
  * punt fires (never a crash).
  */
+/** @internal */
 export function extractSymbolicEffectsFromProject(
   options: TouchGraphProjectOptions,
 ): SymbolicEffectFact[] {
@@ -9252,6 +9265,7 @@ interface QueryShapeContextForTable {
  * DISTINCT / raw `sql<T>` projection / interprocedural KV406) classify as
  * `opaque` carrying the matching §10.5 `PuntReason`.
  */
+/** @internal */
 export function extractAlgebraicShapesFromProject(
   options: TouchGraphProjectOptions,
 ): AlgebraicQueryShape[] {

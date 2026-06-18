@@ -34,7 +34,7 @@ function drizzleCompatibilityBarrelSource(): string {
 describe('@kovojs/drizzle runtime surface', () => {
   it('keeps the runtime annotation entrypoint separate from static extraction', async () => {
     const runtime = await import('@kovojs/drizzle');
-    const staticExtraction = await import('@kovojs/drizzle/static');
+    const staticExtraction = await import('@kovojs/drizzle/internal/static');
     const compatibilityBarrel = await import('./index.js');
     const packageJson = drizzlePackageJson();
     const compatibilityBarrelSource = drizzleCompatibilityBarrelSource();
@@ -58,12 +58,11 @@ describe('@kovojs/drizzle runtime surface', () => {
       // entrypoint (it consumes the shared IR, not Drizzle source).
       './derive': './src/derive.ts',
       './internal/derive-codegen': './src/derive-codegen.ts',
-      './static': './src/static.ts',
+      './internal/static': './src/static.ts',
     });
     expect(drizzleDeriveSource()).not.toContain('ts-morph');
-    // api-cleanup Phase 6: `./static` is a published, app-build-consumed entry that
-    // imports ts-morph, so ts-morph must be a real dependency (not a devDep) — while
-    // the runtime/derive entrypoints below stay ts-morph-free.
+    // api-cleanup Phase 6: static extraction is now CLI/internal only, but it still
+    // imports ts-morph at runtime through the internal subpath.
     expect(packageJson.dependencies?.['ts-morph']).toBe('^28.0.0');
     expect(packageJson.devDependencies?.['ts-morph']).toBeUndefined();
     expect(runtimeSource).not.toContain('ts-morph');

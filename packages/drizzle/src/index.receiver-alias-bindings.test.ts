@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractTouchGraphFromProject, extractQueryFactsFromProject } from '@kovojs/drizzle/static';
+import { extractTouchGraphFromProject, extractQueryFactsFromProject } from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
 describe('@kovojs/drizzle touch graph helpers', () => {

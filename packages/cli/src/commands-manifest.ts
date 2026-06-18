@@ -48,13 +48,14 @@ export const COMPILE_USAGE = [
   '       kovo compile route <source.tsx> --out <artifact.tsx> [--file-name <name>] [--artifact-file-name <name>] [--rewrite <Local=specifier>] [--facts-out <json>] [--check]',
   '       kovo compile graph <input.json> --out <graph.json> [--check]',
   '       kovo compile mutation-inputs <source.ts> --out <facts.json> [--file-name <name>] [--check]',
+  '       kovo compile drizzle-static <input.json> --out <facts.json> [--check]',
   '       kovo compile drizzle-optimistic <input.json> --out <artifact.ts> [--facts-out <json>] [--check]',
   '       kovo compile package-css <package> --out <file.css> [--entry <source.ts>] [--check]',
 ] as const;
 
 /** @internal Single-line `kovo compile` usage as emitted by the bin's error path. */
 export const COMPILE_USAGE_LINE =
-  'kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>] | kovo compile route <source.tsx> --out <artifact.tsx> [--file-name <name>] [--artifact-file-name <name>] [--rewrite <Local=specifier>] [--facts-out <json>] [--check] | kovo compile graph <input.json> --out <graph.json> [--check] | kovo compile mutation-inputs <source.ts> --out <facts.json> [--file-name <name>] [--check] | kovo compile drizzle-optimistic <input.json> --out <artifact.ts> [--facts-out <json>] [--check] | kovo compile package-css <package> --out <file.css> [--entry <source.ts>] [--check]';
+  'kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>] | kovo compile route <source.tsx> --out <artifact.tsx> [--file-name <name>] [--artifact-file-name <name>] [--rewrite <Local=specifier>] [--facts-out <json>] [--check] | kovo compile graph <input.json> --out <graph.json> [--check] | kovo compile mutation-inputs <source.ts> --out <facts.json> [--file-name <name>] [--check] | kovo compile drizzle-static <input.json> --out <facts.json> [--check] | kovo compile drizzle-optimistic <input.json> --out <artifact.ts> [--facts-out <json>] [--check] | kovo compile package-css <package> --out <file.css> [--entry <source.ts>] [--check]';
 
 /** @internal Usage line emitted for `kovo export` (see `exportUsage`). */
 export const EXPORT_USAGE =
@@ -198,6 +199,7 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
       'kovo compile component src/components/cart.tsx --out src/generated/cart.tsx --check',
       'kovo compile route src/app-shell.tsx --out src/generated/app-shell.kovo-route.tsx --rewrite Cart=./cart.js',
       'kovo compile mutation-inputs src/app.ts --out src/generated/mutation-inputs.json',
+      'kovo compile drizzle-static src/generated/drizzle-static-input.json --out src/generated/drizzle-static-facts.json',
       'kovo compile drizzle-optimistic src/generated/cart-add.optimistic.json --out src/generated/optimistic/cart-add.ts',
       'kovo compile package-css @kovojs/ui --entry src/app.ts --out src/generated/kovo-ui.css',
     ],

@@ -13,7 +13,7 @@ import {
   serializeInvalidationRegistry,
   serializeDomainRegistry,
   serializeTouchGraph,
-} from '@kovojs/drizzle/static';
+} from '@kovojs/drizzle/internal/static';
 import { annotatedTable, pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
 
 const extractQueryFactsFromProject = (

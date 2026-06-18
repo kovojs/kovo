@@ -28,20 +28,13 @@ registerHooks({
   },
 });
 
-const {
-  deriveInvalidationRegistry,
-  serializeInvalidationRegistry,
-  extractTouchGraphFromProject,
-  extractQueryFactsFromProject,
-  extractSymbolicEffectsFromProject,
-  extractAlgebraicShapesFromProject,
-} = await import('@kovojs/drizzle/static');
 const { puntReasonLabel } = await import('@kovojs/core/internal/derivation');
 const { createCrmGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const crmRoot = resolve(scriptDir, '..');
 const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-crm-graph-'));
+let drizzleStaticCounter = 0;
 process.on('exit', () => rmSync(tempRoot, { force: true, recursive: true }));
 
 // The generated dir is fmt-ignored in the root vite.config (like commerce's), so
@@ -73,6 +66,7 @@ const files = SOURCE_FILES.map((relative) => ({
   fileName: `examples/crm/${relative}`,
   source: readFileSync(resolve(crmRoot, relative), 'utf8'),
 }));
+const staticFacts = compileDrizzleStatic({ files });
 
 // ── Mutation handler ↔ public mutation key + per-pair override decisions ───────
 // SPEC.md §10.4: the extractor keys write effects by the handler function name;
@@ -132,10 +126,10 @@ const AWAIT_FRAGMENT_PAIRS = new Set([
 ]);
 
 // ── Stage 1+2 extraction ──────────────────────────────────────────────────────
-const rawTouchGraph = extractTouchGraphFromProject({ files });
-const queryFacts = extractQueryFactsFromProject({ files });
-const effectFacts = extractSymbolicEffectsFromProject({ files });
-const shapes = extractAlgebraicShapesFromProject({ files });
+const rawTouchGraph = staticFacts.touchGraph;
+const queryFacts = staticFacts.queryFacts;
+const effectFacts = staticFacts.symbolicEffects;
+const shapes = staticFacts.algebraicShapes;
 const shapeByQuery = new Map(shapes.map((shape) => [shape.query, shape]));
 
 const effectsByHandler = new Map();
@@ -237,22 +231,23 @@ optimisticEntries.sort(
 );
 
 // ── Touch graph module + invalidation registry ────────────────────────────────
-const crmInvalidationRegistry = deriveInvalidationRegistry({
-  mutations: MUTATIONS.map((mutation) => ({
-    mutation: mutation.key,
-    touchGraphKey: mutation.key,
-  })),
-  queries: crmQueryDomains,
-  touchGraph: crmTouchGraph,
+const staticGraphArtifacts = compileDrizzleStatic({
+  invalidation: {
+    constName: 'crmInvalidationSets',
+    mutations: MUTATIONS.map((mutation) => ({
+      mutation: mutation.key,
+      touchGraphKey: mutation.key,
+    })),
+    queries: crmQueryDomains,
+    touchGraph: crmTouchGraph,
+    typeName: 'CrmInvalidationSets',
+  },
 });
 
 const crmGraph = createCrmGraph(crmTouchGraph, optimisticEntries, crmQueryDomains);
 const graph = deriveGraphViaCli({ graph: crmGraph });
 
-const crmInvalidationSource = serializeInvalidationRegistry(crmInvalidationRegistry, {
-  constName: 'crmInvalidationSets',
-  typeName: 'CrmInvalidationSets',
-});
+const crmInvalidationSource = staticGraphArtifacts.invalidationRegistrySource;
 
 const touchGraphSource = formatSource(
   `import type {
@@ -403,6 +398,18 @@ function compileDrizzleOptimistic(input) {
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
+}
+
+function compileDrizzleStatic(input) {
+  const id = drizzleStaticCounter++;
+  const inputPath = resolve(tempRoot, `drizzle-static-${id}.json`);
+  const outPath = resolve(tempRoot, `drizzle-static-${id}.facts.json`);
+  writeFileSync(inputPath, `${JSON.stringify(input, null, 2)}\n`);
+  execFileSync('kovo', ['compile', 'drizzle-static', inputPath, '--out', outPath], {
+    cwd: crmRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return readJson(outPath);
 }
 
 function readJson(path) {

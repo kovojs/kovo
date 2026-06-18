@@ -9,7 +9,7 @@
     ".": "./src/runtime.ts",
     "./derive": "./src/derive.ts",
     "./internal/derive-codegen": "./src/derive-codegen.ts",
-    "./static": "./src/static.ts"
+    "./internal/static": "./src/static.ts"
   },
   "publishConfig": {
     "exports": {
@@ -25,7 +25,7 @@
         "types": "./dist/derive-codegen.d.mts",
         "default": "./dist/derive-codegen.mjs"
       },
-      "./static": {
+      "./internal/static": {
         "types": "./dist/static.d.mts",
         "default": "./dist/static.mjs"
       }

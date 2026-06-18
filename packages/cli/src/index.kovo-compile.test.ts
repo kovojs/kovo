@@ -420,6 +420,71 @@ export const addToCart = mutation('cart/add', {
     }
   });
 
+  it('writes Drizzle static facts through the CLI facade', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-static-'));
+    const inputPath = join(root, 'static.json');
+    const outPath = join(root, 'static-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const touchGraph = {
+      'cart.addItem': {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'src/app.ts:10', via: 'cart_items' }],
+        unresolved: [],
+      },
+    };
+
+    try {
+      writeFileSync(
+        inputPath,
+        JSON.stringify(
+          {
+            invalidation: {
+              constName: 'cartInvalidationSets',
+              mutations: [{ mutation: 'cart/add', touchGraphKey: 'cart.addItem' }],
+              queries: [{ domains: ['cart'], query: 'cart' }],
+              touchGraph,
+              typeName: 'CartInvalidationSets',
+            },
+            serializeTouchGraph: {
+              exportName: 'cartTouchGraph',
+              touchGraph,
+            },
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const facts = JSON.parse(readFileSync(outPath, 'utf8'));
+      expect(facts.version).toBe('drizzle-static/v1');
+      expect(facts.invalidationRegistrySource).toContain('export interface CartInvalidationSets');
+      expect(facts.invalidationRegistrySource).toContain('cartInvalidationSets');
+      expect(facts.touchGraphSource).toContain('export const cartTouchGraph =');
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `WRITE drizzle-static path=${JSON.stringify(outPath)}`,
+      );
+
+      stdout.mockClear();
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath, '--check']),
+      ).resolves.toBe(0);
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `CHECK drizzle-static path=${JSON.stringify(outPath)} status=current`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('writes Drizzle optimistic codegen through the CLI facade', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-optimistic-'));
     const inputPath = join(root, 'optimistic.json');

@@ -4,7 +4,7 @@ import {
   diagnosticsForQueryFacts,
   extractTouchGraphFromProject,
   extractQueryFactsFromProject,
-} from '@kovojs/drizzle/static';
+} from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
 const queryReceiverTypes = pgDatabaseTypes([

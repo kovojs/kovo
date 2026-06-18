@@ -1,5 +1,6 @@
 import type { TouchGraph, TouchSite } from '@kovojs/core/internal/graph';
 
+/** @internal */
 export interface InvalidationQueryInput {
   domains: readonly string[];
   instanceKey?: {
@@ -9,19 +10,23 @@ export interface InvalidationQueryInput {
   query: string;
 }
 
+/** @internal */
 export interface MutationTouchInput {
   mutation: string;
   touchGraphKey: string;
 }
 
+/** @internal */
 export interface InvalidationRegistryEntry {
   domains: readonly string[];
   keys: Readonly<Record<string, string>> | null;
   query: string;
 }
 
+/** @internal */
 export type InvalidationRegistry = Readonly<Record<string, readonly InvalidationRegistryEntry[]>>;
 
+/** @internal */
 export function deriveInvalidationRegistry(input: {
   mutations: readonly MutationTouchInput[];
   queries: readonly InvalidationQueryInput[];
@@ -58,6 +63,7 @@ export function deriveInvalidationRegistry(input: {
   return registry;
 }
 
+/** @internal */
 export function serializeInvalidationRegistry(
   registry: InvalidationRegistry,
   options: { constName?: string; typeName?: string } = {},

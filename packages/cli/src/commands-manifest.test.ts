@@ -66,6 +66,9 @@ describe('commands manifest', () => {
       '       kovo compile mutation-inputs <source.ts> --out <facts.json> [--file-name <name>] [--check]',
     );
     expect(COMPILE_USAGE).toContain(
+      '       kovo compile drizzle-static <input.json> --out <facts.json> [--check]',
+    );
+    expect(COMPILE_USAGE).toContain(
       '       kovo compile drizzle-optimistic <input.json> --out <artifact.ts> [--facts-out <json>] [--check]',
     );
     expect(COMPILE_USAGE_LINE).toContain('kovo compile component <source.tsx>');

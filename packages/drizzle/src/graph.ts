@@ -7,10 +7,12 @@ interface GraphDomainTableAnnotation {
   key?: string;
 }
 
+/** @internal */
 export interface DomainRegistryInput {
   table: GraphDomainTableAnnotation & { name: string };
 }
 
+/** @internal */
 export interface WriteSummaryInput {
   branch?: string;
   operation: string;
@@ -20,6 +22,7 @@ export interface WriteSummaryInput {
   writeKey?: string;
 }
 
+/** @internal */
 export interface ReadSummaryInput {
   branch?: string;
   operation:
@@ -34,6 +37,7 @@ export interface ReadSummaryInput {
   table: GraphDomainTableAnnotation & { name: string };
 }
 
+/** @internal */
 export interface UnresolvedSummaryInput {
   code?: 'KV404' | 'KV406';
   domain?: string;
@@ -41,6 +45,7 @@ export interface UnresolvedSummaryInput {
   site: string;
 }
 
+/** @internal */
 export interface TouchGraphDiagnostic {
   code: DiagnosticCode;
   message: string;
@@ -48,6 +53,7 @@ export interface TouchGraphDiagnostic {
   site: string;
 }
 
+/** @internal */
 export function serializeDomainRegistry(tables: readonly DomainRegistryInput[]): string {
   const rows = [...tables].sort((left, right) => left.table.name.localeCompare(right.table.name));
   const domains = [...new Set(rows.map((row) => row.table.domain))].sort();
@@ -62,6 +68,7 @@ export function serializeDomainRegistry(tables: readonly DomainRegistryInput[]):
   return `${lines.join('\n')}\n`;
 }
 
+/** @internal */
 export function createTouchGraphEntry(input: {
   reads?: readonly ReadSummaryInput[];
   unresolved?: readonly UnresolvedSummaryInput[];
@@ -118,6 +125,7 @@ function unresolvedMessage(site: UnresolvedSummaryInput): string {
   return diagnosticDefinitions.KV406.message;
 }
 
+/** @internal */
 export function serializeTouchGraph(graph: TouchGraph): string {
   const lines = ['export const touchGraph = {'];
 
@@ -153,6 +161,7 @@ export function serializeTouchGraph(graph: TouchGraph): string {
   return `${lines.join('\n')}\n`;
 }
 
+/** @internal */
 export function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnostic[] {
   return Object.values(graph).flatMap((entry) => [
     ...entry.unresolved.map((unresolved) => ({

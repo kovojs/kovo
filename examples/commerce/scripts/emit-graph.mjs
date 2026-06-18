@@ -19,13 +19,6 @@ registerHooks({
 });
 
 const { commerceCartPageMeta, commerceStylesheets } = await import('../src/graph.js');
-const {
-  deriveInvalidationRegistry,
-  serializeInvalidationRegistry,
-  extractQueryFactsFromProject,
-  extractSymbolicEffectsFromProject,
-  extractAlgebraicShapesFromProject,
-} = await import('@kovojs/drizzle/static');
 const ts = await import('typescript');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -35,6 +28,7 @@ const graphPath = resolve(commerceRoot, 'src/generated/graph.json');
 const touchGraphPath = resolve(commerceRoot, 'src/generated/touch-graph.ts');
 const optimisticPath = resolve(commerceRoot, 'src/generated/optimistic/cart-add.ts');
 const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-commerce-graph-'));
+let drizzleStaticCounter = 0;
 const source = readFileSync(sourcePath, 'utf8');
 const starterCart = { count: 0 };
 const componentNames = ['cart-badge', 'order-history', 'product-grid'];
@@ -125,9 +119,12 @@ const extractionFiles = ['app.ts', 'queries.ts', 'graph.ts', 'schema.ts', 'db.ts
   source: readFileSync(resolve(commerceRoot, `src/${rel}`), 'utf8'),
 }));
 
-const allEffectFacts = extractSymbolicEffectsFromProject({ files: extractionFiles });
-const algebraicShapes = extractAlgebraicShapesFromProject({ files: extractionFiles });
-const queryFacts = extractQueryFactsFromProject({ files: extractionFiles });
+const staticFacts = compileDrizzleStatic({
+  files: extractionFiles,
+});
+const allEffectFacts = staticFacts.symbolicEffects;
+const algebraicShapes = staticFacts.algebraicShapes;
+const queryFacts = staticFacts.queryFacts;
 const commerceQueryDomains = queryDomainsFromFacts(queryFacts);
 const shapeByQuery = new Map(algebraicShapes.map((shape) => [shape.query, shape]));
 
@@ -276,20 +273,18 @@ const graph = deriveGraphViaCli({
   graph: commerceGraph,
   routePages: [routeResult],
 });
-const commerceInvalidationRegistry = deriveInvalidationRegistry({
-  mutations: [{ mutation: 'cart/add', touchGraphKey: 'cart.addItem' }],
-  queries: commerceQueryDomains,
-  touchGraph: commerceTouchGraph,
+const staticGraphArtifacts = compileDrizzleStatic({
+  invalidation: {
+    constName: 'commerceInvalidationSets',
+    mutations: [{ mutation: 'cart/add', touchGraphKey: 'cart.addItem' }],
+    queries: commerceQueryDomains,
+    touchGraph: commerceTouchGraph,
+    typeName: 'CommerceInvalidationSets',
+  },
 });
 
 const graphJson = `${formatJson(graph)}\n`;
-const commerceInvalidationRegistrySource = serializeInvalidationRegistry(
-  commerceInvalidationRegistry,
-  {
-    constName: 'commerceInvalidationSets',
-    typeName: 'CommerceInvalidationSets',
-  },
-);
+const commerceInvalidationRegistrySource = staticGraphArtifacts.invalidationRegistrySource;
 const touchGraphSource = `import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from '../app.js';
 
 export const commerceTouchGraph = ${formatJson(commerceTouchGraph)} as const;
@@ -418,6 +413,15 @@ function compileDrizzleOptimistic(input) {
     '--facts-out',
     input.factsPath,
   ]);
+}
+
+function compileDrizzleStatic(input) {
+  const id = drizzleStaticCounter++;
+  const inputPath = resolve(tempRoot, `drizzle-static-${id}.json`);
+  const outPath = resolve(tempRoot, `drizzle-static-${id}.facts.json`);
+  writeFileSync(inputPath, `${JSON.stringify(input, null, 2)}\n`);
+  runKovo(['compile', 'drizzle-static', inputPath, '--out', outPath]);
+  return readJson(outPath);
 }
 
 function readJson(path) {

@@ -6,7 +6,7 @@ import {
   extractTouchGraphFromProject,
   extractQueryFactsFromProject,
   serializeTouchGraph,
-} from '@kovojs/drizzle/static';
+} from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes, unresolvedQueryLoadFact } from './test-helpers.js';
 
 describe('@kovojs/drizzle touch graph helpers', () => {

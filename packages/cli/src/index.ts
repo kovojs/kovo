@@ -729,6 +729,7 @@ type AddArgParseResult =
 
 type CompileTarget =
   | 'component'
+  | 'drizzle-static'
   | 'drizzle-optimistic'
   | 'graph'
   | 'mutation-inputs'
@@ -780,6 +781,11 @@ interface CompileDrizzleOptimisticCommandOptions extends CompileBaseOptions {
   target: 'drizzle-optimistic';
 }
 
+interface CompileDrizzleStaticCommandOptions extends CompileBaseOptions {
+  inputPath: string;
+  target: 'drizzle-static';
+}
+
 interface CompilePackageCssCommandOptions extends CompileBaseOptions {
   entryPath?: string;
   packageName: string;
@@ -788,6 +794,7 @@ interface CompilePackageCssCommandOptions extends CompileBaseOptions {
 
 type CompileCommandOptions =
   | CompileComponentCommandOptions
+  | CompileDrizzleStaticCommandOptions
   | CompileDrizzleOptimisticCommandOptions
   | CompileGraphCommandOptions
   | CompileMutationInputsCommandOptions
@@ -907,6 +914,7 @@ function parseCompileArgs(args: readonly string[]): CompileArgParseResult {
   if (target === 'route') return parseCompileRouteArgs(args.slice(1));
   if (target === 'graph') return parseCompileGraphArgs(args.slice(1));
   if (target === 'mutation-inputs') return parseCompileMutationInputsArgs(args.slice(1));
+  if (target === 'drizzle-static') return parseCompileDrizzleStaticArgs(args.slice(1));
   if (target === 'drizzle-optimistic') return parseCompileDrizzleOptimisticArgs(args.slice(1));
   return parseCompilePackageCssArgs(args.slice(1));
 }
@@ -1411,6 +1419,62 @@ function parseCompileDrizzleOptimisticArgs(args: readonly string[]): CompileArgP
   };
 }
 
+function parseCompileDrizzleStaticArgs(args: readonly string[]): CompileArgParseResult {
+  let inputPath: string | undefined;
+  let outPath: string | undefined;
+  let check = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+    if (arg === '--help' || arg === '-h') return { message: compileUsage(), ok: false };
+    if (arg === '--check') {
+      check = true;
+      continue;
+    }
+    if (arg === '--out') {
+      const value = args[index + 1];
+      if (!value)
+        return { message: 'kovo: compile drizzle-static --out requires a path.\n', ok: false };
+      outPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--out=')) {
+      outPath = arg.slice('--out='.length);
+      if (!outPath)
+        return { message: 'kovo: compile drizzle-static --out requires a path.\n', ok: false };
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      return {
+        message: `kovo: unknown compile drizzle-static option ${stableValue(arg)}.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    if (inputPath) {
+      return {
+        message: `kovo: compile drizzle-static accepts one input path.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    inputPath = arg;
+  }
+
+  if (!inputPath)
+    return {
+      message: `kovo: compile drizzle-static requires an input path.\n${compileUsage()}`,
+      ok: false,
+    };
+  if (!outPath)
+    return {
+      message: `kovo: compile drizzle-static requires --out.\n${compileUsage()}`,
+      ok: false,
+    };
+
+  return { ok: true, options: { check, inputPath, outPath, target: 'drizzle-static' } };
+}
+
 function parseCompilePackageCssArgs(args: readonly string[]): CompileArgParseResult {
   let packageName: string | undefined;
   let outPath: string | undefined;
@@ -1507,6 +1571,7 @@ function parseRouteRewrite(
 function isCompileTarget(value: string): value is CompileTarget {
   return (
     value === 'component' ||
+    value === 'drizzle-static' ||
     value === 'drizzle-optimistic' ||
     value === 'route' ||
     value === 'graph' ||
@@ -1525,6 +1590,7 @@ async function runCompileCommand(options: CompileCommandOptions): Promise<CliCom
     if (options.target === 'route') return await runCompileRouteCommand(options);
     if (options.target === 'graph') return await runCompileGraphCommand(options);
     if (options.target === 'mutation-inputs') return await runCompileMutationInputsCommand(options);
+    if (options.target === 'drizzle-static') return await runCompileDrizzleStaticCommand(options);
     if (options.target === 'drizzle-optimistic')
       return await runCompileDrizzleOptimisticCommand(options);
     return await runCompilePackageCssCommand(options);
@@ -1642,6 +1708,94 @@ async function runCompileMutationInputsCommand(
 }
 
 type DrizzleOptimisticEntryStatus = 'await-fragment' | 'derived' | 'hand-written';
+
+interface DrizzleStaticCommandInput {
+  extract?: readonly ('algebraicShapes' | 'queryFacts' | 'symbolicEffects' | 'touchGraph')[];
+  files?: readonly unknown[];
+  invalidation?: {
+    constName?: string;
+    mutations: readonly unknown[];
+    queries?: readonly unknown[];
+    touchGraph?: unknown;
+    typeName?: string;
+  };
+  serializeTouchGraph?: {
+    exportName?: string;
+    touchGraph?: unknown;
+  };
+}
+
+async function runCompileDrizzleStaticCommand(
+  options: CompileDrizzleStaticCommandOptions,
+): Promise<CliCommandResult> {
+  const {
+    deriveInvalidationRegistry,
+    extractAlgebraicShapesFromProject,
+    extractQueryFactsFromProject,
+    extractSymbolicEffectsFromProject,
+    extractTouchGraphFromProject,
+    serializeInvalidationRegistry,
+    serializeTouchGraph,
+  } = await import('@kovojs/drizzle/internal/static');
+  const input = readJsonFile(options.inputPath) as DrizzleStaticCommandInput;
+  const files = input.files as Parameters<typeof extractTouchGraphFromProject>[0]['files'] | undefined;
+  const output: Record<string, unknown> = { version: 'drizzle-static/v1' };
+
+  if (files !== undefined) {
+    const extract = new Set(
+      input.extract ?? ['algebraicShapes', 'queryFacts', 'symbolicEffects', 'touchGraph'],
+    );
+    if (extract.has('touchGraph')) output.touchGraph = extractTouchGraphFromProject({ files });
+    if (extract.has('queryFacts')) {
+      const queryFacts = extractQueryFactsFromProject({ files });
+      output.queryFacts = queryFacts;
+      output.queryDomains = queryDomainsFromStaticFacts(queryFacts);
+    }
+    if (extract.has('symbolicEffects'))
+      output.symbolicEffects = extractSymbolicEffectsFromProject({ files });
+    if (extract.has('algebraicShapes'))
+      output.algebraicShapes = extractAlgebraicShapesFromProject({ files });
+  }
+
+  if (input.invalidation !== undefined) {
+    const touchGraph = (input.invalidation.touchGraph ?? output.touchGraph) as Parameters<
+      typeof deriveInvalidationRegistry
+    >[0]['touchGraph'];
+    const queries = (input.invalidation.queries ?? output.queryDomains) as Parameters<
+      typeof deriveInvalidationRegistry
+    >[0]['queries'];
+    if (touchGraph === undefined) throw new Error('drizzle-static invalidation requires touchGraph');
+    if (queries === undefined) throw new Error('drizzle-static invalidation requires queries');
+    const invalidationRegistry = deriveInvalidationRegistry({
+      mutations: input.invalidation.mutations as Parameters<typeof deriveInvalidationRegistry>[0]['mutations'],
+      queries,
+      touchGraph,
+    });
+    output.invalidationRegistry = invalidationRegistry;
+    output.invalidationRegistrySource = serializeInvalidationRegistry(invalidationRegistry, {
+      constName: input.invalidation.constName ?? 'invalidationSets',
+      typeName: input.invalidation.typeName ?? 'InvalidationSets',
+    });
+  }
+
+  if (input.serializeTouchGraph !== undefined) {
+    const touchGraph = (input.serializeTouchGraph.touchGraph ?? output.touchGraph) as Parameters<
+      typeof serializeTouchGraph
+    >[0];
+    if (touchGraph === undefined) throw new Error('drizzle-static serializeTouchGraph requires touchGraph');
+    const source = serializeTouchGraph(touchGraph);
+    output.touchGraphSource =
+      input.serializeTouchGraph.exportName === undefined
+        ? source
+        : source.replace('export const touchGraph =', `export const ${input.serializeTouchGraph.exportName} =`);
+  }
+
+  return compileArtifactResult(
+    options,
+    `${JSON.stringify(output, null, 2)}\n`,
+    'drizzle-static',
+  );
+}
 
 interface DrizzleOptimisticCommandInput {
   complete?: boolean;
@@ -1828,6 +1982,18 @@ function compileDiagnosticResult(
 
 function readJsonFile(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown;
+}
+
+function queryDomainsFromStaticFacts(
+  facts: readonly { query: string; reads: readonly string[]; site: string }[],
+): { domains: readonly string[]; query: string }[] {
+  return [...facts]
+    .sort((left, right) => siteLineNumber(left.site) - siteLineNumber(right.site))
+    .map((fact) => ({ domains: [...fact.reads], query: fact.query }));
+}
+
+function siteLineNumber(site: string): number {
+  return Number(String(site).split(':').pop() ?? 0);
 }
 
 function parseExportArgs(args: readonly string[]): ExportArgParseResult {

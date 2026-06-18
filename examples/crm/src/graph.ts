@@ -1,8 +1,11 @@
 import type { KovoExplainInput, OptimisticCoverage, TouchGraph } from '@kovojs/core/internal/graph';
-import type { InvalidationQueryInput } from '@kovojs/drizzle/static';
 
 // Static graph declarations for the CRM demo. scripts/emit-graph.mjs adds the
 // extracted touch graph and optimistic coverage from the source files.
+interface InvalidationQueryInput {
+  domains: readonly string[];
+  query: string;
+}
 
 export function crmGraphDeclarations(queries: readonly InvalidationQueryInput[]) {
   return {

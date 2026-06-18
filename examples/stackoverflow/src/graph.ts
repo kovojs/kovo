@@ -1,8 +1,12 @@
 import type { KovoExplainInput, TouchGraph } from '@kovojs/core/internal/graph';
-import type { InvalidationQueryInput } from '@kovojs/drizzle/static';
 
 // Demo graph facts consumed by `kovo check`. Collection queries use generated
 // optimistic updates; detail queries wait for the refreshed server fragment.
+interface InvalidationQueryInput {
+  domains: readonly string[];
+  query: string;
+}
+
 const DERIVED_OPTIMISTIC = [
   { mutation: 'postQuestion', query: 'questionList' },
   { mutation: 'postAnswer', query: 'answerList' },

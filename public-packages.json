@@ -200,9 +200,9 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": [".", "./derive", "./static"],
+        "public": [".", "./derive"],
         "generated": [],
-        "internal": ["./internal/derive-codegen"]
+        "internal": ["./internal/derive-codegen", "./internal/static"]
       },
       "apiRef": {
         "order": 5,
