@@ -80,30 +80,24 @@ describe('api-ref generator', () => {
     await rm(outDir, { force: true, recursive: true });
   });
 
-  it('emits one page per app-facing package', () => {
+  it('emits one page per documented package, with app-facing subpaths on that page', () => {
     expect(result.packages.map((pkg) => pkg.file)).toEqual([
       'core.md',
       'server.md',
-      'server-app-shell-vite.md',
       'runtime.md',
-      'test-assertions.md',
-      'test-headers.md',
-      'test-harness.md',
-      'test-harness-operations.md',
-      'test-html-fragment.md',
-      'test-page.md',
-      'test-pglite.md',
-      'test-sql-observer.md',
-      'test-case.md',
-      'test-verifier.md',
-      'test-verifier-diagnostics.md',
-      'test-verifier-sql.md',
+      'test.md',
       'drizzle.md',
       'style.md',
       'better-auth.md',
       'compiler.md',
       'cli.md',
     ]);
+    expect(result.packages.find((pkg) => pkg.name === '@kovojs/server').subpaths).toContain(
+      '@kovojs/server/app-shell/vite',
+    );
+    expect(result.packages.find((pkg) => pkg.name === '@kovojs/test').subpaths).toContain(
+      '@kovojs/test/verifier-sql',
+    );
     for (const pkg of result.packages) expect(pkg.exports).toBeGreaterThan(0);
   });
 
@@ -119,10 +113,9 @@ describe('api-ref generator', () => {
             slug: 'fixture',
           },
         }),
-      ]).map((entry) => [entry.name, entry.entryPath, entry.slug]),
+      ]).map((pkg) => [pkg.name, pkg.slug, pkg.entries.map((entry) => entry.entryPath)]),
     ).toEqual([
-      ['@kovojs/fixture', '.', 'fixture'],
-      ['@kovojs/fixture/build', './build', 'fixture-build'],
+      ['@kovojs/fixture', 'fixture', ['.', './build']],
     ]);
 
     expect(() =>
@@ -157,7 +150,7 @@ describe('api-ref generator', () => {
     const names = coreExportNames();
     expect(names.length).toBeGreaterThan(0);
     for (const name of names) {
-      expect(corePage, `missing export "${name}"`).toContain(`### \`${name}\``);
+      expect(corePage, `missing export "${name}"`).toContain(`#### \`${name}\``);
     }
     const core = result.packages.find((pkg) => pkg.name === '@kovojs/core');
     expect(new Set(core.names)).toEqual(new Set(names));
@@ -165,7 +158,7 @@ describe('api-ref generator', () => {
 
   it('flags undocumented exports with an explicit marker, never omits them', () => {
     const core = result.packages.find((pkg) => pkg.name === '@kovojs/core');
-    const headings = corePage.match(/^### `/gm) ?? [];
+    const headings = corePage.match(/^#### `/gm) ?? [];
     const markers = corePage.match(/^\*Undocumented\.\*$/gm) ?? [];
     expect(headings.length).toBe(core.exports);
     expect(markers.length).toBe(core.exports - core.documented);
@@ -202,7 +195,7 @@ describe('api-ref generator', () => {
 
   it('renders @param/@returns as a markdown table with a Type column', () => {
     // The `component` export is documented with a param + a returns row.
-    const section = corePage.slice(corePage.indexOf('### `component`'));
+    const section = corePage.slice(corePage.indexOf('#### `component`'));
     expect(section).toContain('| Parameter | Type | Description |');
     expect(section).toContain('| --- | --- | --- |');
     expect(section).toMatch(/^\| `definition` \|.*\|.+\|$/m);
@@ -211,26 +204,33 @@ describe('api-ref generator', () => {
 
   it('renders parameter types from the real signature and links documented types', () => {
     const section = corePage.slice(
-      corePage.indexOf('### `component`'),
-      corePage.indexOf('### `route`'),
+      corePage.indexOf('#### `component`'),
+      corePage.indexOf('#### `route`'),
     );
     // The return type is the documented `Component` type, linked to its anchor;
     // the type-parameter `Definition` stays plain text. Type cells are inline
     // `<code>` HTML so generics survive the GFM table.
-    expect(section).toMatch(/\| \*\(returns\)\* \| <code><a href="#component">Component<\/a>/);
+    expect(section).toMatch(/\| \*\(returns\)\* \| <code><a href="#component-\d+">Component<\/a>/);
     // Generics are HTML-escaped so `<` / `>` cannot be parsed as tags.
     expect(section).toContain('&lt;Definition&gt;');
   });
 
-  it('emits a per-package sidebar manifest with categories, anchors, and source links', async () => {
+  it('emits a per-package sidebar manifest grouped by subpath, with anchors and source links', async () => {
     const manifest = JSON.parse(await readFile(path.join(outDir, 'core.sidebar.json'), 'utf8'));
     expect(manifest.package).toBe('@kovojs/core');
     expect(manifest.slug).toBe('core');
-    expect(manifest.sourceHref).toMatch(/^https:\/\/github\.com\/kovojs\/kovo\/blob\/main\/.+/);
-    expect(manifest.sourceHref).not.toContain(repoRoot);
 
-    const functions = manifest.categories.find((category) => category.title === 'Functions');
-    expect(functions.anchor).toBe('functions');
+    expect(manifest.subpaths).toHaveLength(1);
+    expect(manifest.subpaths[0].importPath).toBe('@kovojs/core');
+    expect(manifest.subpaths[0].sourceHref).toMatch(
+      /^https:\/\/github\.com\/kovojs\/kovo\/blob\/main\/.+/,
+    );
+    expect(manifest.subpaths[0].sourceHref).not.toContain(repoRoot);
+
+    const functions = manifest.subpaths[0].categories.find(
+      (category) => category.title === 'Functions',
+    );
+    expect(functions.anchor).toBe('kovojscore-functions');
     const component = functions.symbols.find((symbol) => symbol.name === 'component');
     // The anchor matches the page heading id (slugify), so deep links resolve.
     expect(component.anchor).toBe('component');
@@ -238,17 +238,25 @@ describe('api-ref generator', () => {
     expect(component.sourceHref).toMatch(/\/packages\/core\/.+#L\d+$/);
 
     // Every symbol on the page is represented in the manifest (no silent drops).
-    const manifestNames = manifest.categories.flatMap((category) =>
-      category.symbols.map((symbol) => symbol.name),
+    const manifestNames = manifest.subpaths.flatMap((subpath) =>
+      subpath.categories.flatMap((category) => category.symbols.map((symbol) => symbol.name)),
     );
     const core = result.packages.find((pkg) => pkg.name === '@kovojs/core');
     expect(new Set(manifestNames)).toEqual(new Set(core.names));
+
+    const testManifest = JSON.parse(await readFile(path.join(outDir, 'test.sidebar.json'), 'utf8'));
+    expect(testManifest.subpaths.map((subpath) => subpath.importPath)).toContain(
+      '@kovojs/test/assertions',
+    );
+    expect(testManifest.subpaths.map((subpath) => subpath.importPath)).toContain(
+      '@kovojs/test/verifier-sql',
+    );
   });
 
   it('renders @example blocks as fenced ts sections after an Example marker', () => {
     const section = corePage.slice(
-      corePage.indexOf('### `component`'),
-      corePage.indexOf('### `route`'),
+      corePage.indexOf('#### `component`'),
+      corePage.indexOf('#### `route`'),
     );
     expect(section).toContain('**Example**');
     // The example is its own fenced block and imports the real export.
@@ -265,19 +273,14 @@ describe('api-ref generator', () => {
       '@kovojs/drizzle': 4,
       '@kovojs/runtime': 15,
       '@kovojs/server': 70,
-      '@kovojs/server/app-shell/vite': 5,
       '@kovojs/style': 20,
       '@kovojs/better-auth': 30,
       '@kovojs/compiler': 12,
       kovo: 8,
+      '@kovojs/test': 12,
     };
     for (const pkg of result.packages) {
-      if (pkg.name.startsWith('@kovojs/test/')) continue;
       expect(pkg.documented, `${pkg.name} documented`).toBeGreaterThanOrEqual(expected[pkg.name]);
     }
-    const documentedTestExports = result.packages
-      .filter((pkg) => pkg.name.startsWith('@kovojs/test/'))
-      .reduce((sum, pkg) => sum + pkg.documented, 0);
-    expect(documentedTestExports, '@kovojs/test subpaths documented').toBeGreaterThanOrEqual(12);
   });
 });

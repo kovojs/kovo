@@ -174,39 +174,54 @@ export interface ApiSidebarProps {
 }
 
 /** Right-hand rail for generated API reference pages: symbols grouped into
- * collapsible (expanded-by-default) categories with counts, each linking to its
- * anchor plus its defining source line. Replaces the flat heading TOC, which is
+ * collapsible subpath/category groups with counts, each linking to its anchor
+ * plus its defining source line. Replaces the flat heading TOC, which is
  * unusable at 200+ symbols. */
 export const ApiSidebar = component({
   render: ({ apiSidebar }: ApiSidebarProps) => (
     <nav class="api-nav" aria-label="Symbols on this page">
       <div class="api-nav-head">
         <p>On this page</p>
-        <a class="api-nav-src-pkg" href={apiSidebar.sourceHref} rel="external">
-          source
-        </a>
       </div>
-      {apiSidebar.categories.map((category) => (
-        <details class="api-nav-group" open>
+      {apiSidebar.subpaths.map((subpath) => (
+        <details class="api-nav-subpath" open>
           <summary>
-            {escapeHtml(category.title)}{' '}
-            <span class="api-nav-count">{String(category.symbols.length)}</span>
+            <span>{escapeHtml(subpath.importPath)}</span>
+            <span class="api-nav-count">
+              {String(
+                subpath.categories.reduce(
+                  (count, category) => count + category.symbols.length,
+                  0,
+                ),
+              )}
+            </span>
           </summary>
-          <ul>
-            {category.symbols.map((symbol) => (
-              <li>
-                <a href={`#${symbol.anchor}`}>{escapeHtml(symbol.name)}</a>
-                <a
-                  class="api-nav-src"
-                  href={symbol.sourceHref}
-                  rel="external"
-                  aria-label={`Source for ${escapeHtml(symbol.name)}`}
-                >
-                  {SOURCE_ICON}
-                </a>
-              </li>
-            ))}
-          </ul>
+          <a class="api-nav-src-pkg" href={subpath.sourceHref} rel="external">
+            source
+          </a>
+          {subpath.categories.map((category) => (
+            <details class="api-nav-group" open>
+              <summary>
+                {escapeHtml(category.title)}{' '}
+                <span class="api-nav-count">{String(category.symbols.length)}</span>
+              </summary>
+              <ul>
+                {category.symbols.map((symbol) => (
+                  <li>
+                    <a href={`#${symbol.anchor}`}>{escapeHtml(symbol.name)}</a>
+                    <a
+                      class="api-nav-src"
+                      href={symbol.sourceHref}
+                      rel="external"
+                      aria-label={`Source for ${escapeHtml(symbol.name)}`}
+                    >
+                      {SOURCE_ICON}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ))}
         </details>
       ))}
       {API_NAV_SCRIPT}

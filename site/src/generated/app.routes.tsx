@@ -68,78 +68,66 @@ const page27 = pageAt(27, "/guides/components");
 const page28 = pageAt(28, "/api");
 const page29 = pageAt(29, "/api/core");
 const page30 = pageAt(30, "/api/server");
-const page31 = pageAt(31, "/api/server-app-shell-vite");
-const page32 = pageAt(32, "/api/runtime");
-const page33 = pageAt(33, "/api/test-assertions");
-const page34 = pageAt(34, "/api/test-headers");
-const page35 = pageAt(35, "/api/test-harness");
-const page36 = pageAt(36, "/api/test-harness-operations");
-const page37 = pageAt(37, "/api/test-html-fragment");
-const page38 = pageAt(38, "/api/test-page");
-const page39 = pageAt(39, "/api/test-pglite");
-const page40 = pageAt(40, "/api/test-sql-observer");
-const page41 = pageAt(41, "/api/test-case");
-const page42 = pageAt(42, "/api/test-verifier");
-const page43 = pageAt(43, "/api/test-verifier-diagnostics");
-const page44 = pageAt(44, "/api/test-verifier-sql");
-const page45 = pageAt(45, "/api/drizzle");
-const page46 = pageAt(46, "/api/style");
-const page47 = pageAt(47, "/api/better-auth");
-const page48 = pageAt(48, "/api/compiler");
-const page49 = pageAt(49, "/api/cli");
-const page50 = pageAt(50, "/reference");
-const page51 = pageAt(51, "/reference/diagnostics");
-const page52 = pageAt(52, "/gallery");
-const page53 = pageAt(53, "/gallery/interactive");
-const page54 = pageAt(54, "/gallery/components/accordion");
-const page55 = pageAt(55, "/gallery/components/alert");
-const page56 = pageAt(56, "/gallery/components/alert-dialog");
-const page57 = pageAt(57, "/gallery/components/autocomplete");
-const page58 = pageAt(58, "/gallery/components/avatar");
-const page59 = pageAt(59, "/gallery/components/badge");
-const page60 = pageAt(60, "/gallery/components/breadcrumb");
-const page61 = pageAt(61, "/gallery/components/button");
-const page62 = pageAt(62, "/gallery/components/card");
-const page63 = pageAt(63, "/gallery/components/checkbox");
-const page64 = pageAt(64, "/gallery/components/checkbox-group");
-const page65 = pageAt(65, "/gallery/components/collapsible");
-const page66 = pageAt(66, "/gallery/components/combobox");
-const page67 = pageAt(67, "/gallery/components/command");
-const page68 = pageAt(68, "/gallery/components/context-menu");
-const page69 = pageAt(69, "/gallery/components/dialog");
-const page70 = pageAt(70, "/gallery/components/disclosure");
-const page71 = pageAt(71, "/gallery/components/drawer");
-const page72 = pageAt(72, "/gallery/components/dropdown-menu");
-const page73 = pageAt(73, "/gallery/components/field");
-const page74 = pageAt(74, "/gallery/components/hover-card");
-const page75 = pageAt(75, "/gallery/components/kbd");
-const page76 = pageAt(76, "/gallery/components/menubar");
-const page77 = pageAt(77, "/gallery/components/meter");
-const page78 = pageAt(78, "/gallery/components/navigation-menu");
-const page79 = pageAt(79, "/gallery/components/number-field");
-const page80 = pageAt(80, "/gallery/components/otp-field");
-const page81 = pageAt(81, "/gallery/components/popover");
-const page82 = pageAt(82, "/gallery/components/progress");
-const page83 = pageAt(83, "/gallery/components/radio-group");
-const page84 = pageAt(84, "/gallery/components/scroll-area");
-const page85 = pageAt(85, "/gallery/components/select");
-const page86 = pageAt(86, "/gallery/components/separator");
-const page87 = pageAt(87, "/gallery/components/sheet");
-const page88 = pageAt(88, "/gallery/components/skeleton");
-const page89 = pageAt(89, "/gallery/components/slider");
-const page90 = pageAt(90, "/gallery/components/switch");
-const page91 = pageAt(91, "/gallery/components/table");
-const page92 = pageAt(92, "/gallery/components/tabs");
-const page93 = pageAt(93, "/gallery/components/toast");
-const page94 = pageAt(94, "/gallery/components/toggle");
-const page95 = pageAt(95, "/gallery/components/toggle-group");
-const page96 = pageAt(96, "/gallery/components/toolbar");
-const page97 = pageAt(97, "/gallery/components/tooltip");
-const page98 = pageAt(98, "/examples");
-const page99 = pageAt(99, "/examples/commerce");
-const page100 = pageAt(100, "/examples/crm");
-const page101 = pageAt(101, "/examples/stackoverflow");
-const page102 = pageAt(102, "/spec");
+const page31 = pageAt(31, "/api/runtime");
+const page32 = pageAt(32, "/api/test");
+const page33 = pageAt(33, "/api/drizzle");
+const page34 = pageAt(34, "/api/style");
+const page35 = pageAt(35, "/api/better-auth");
+const page36 = pageAt(36, "/api/compiler");
+const page37 = pageAt(37, "/api/cli");
+const page38 = pageAt(38, "/reference");
+const page39 = pageAt(39, "/reference/diagnostics");
+const page40 = pageAt(40, "/gallery");
+const page41 = pageAt(41, "/gallery/interactive");
+const page42 = pageAt(42, "/gallery/components/accordion");
+const page43 = pageAt(43, "/gallery/components/alert");
+const page44 = pageAt(44, "/gallery/components/alert-dialog");
+const page45 = pageAt(45, "/gallery/components/autocomplete");
+const page46 = pageAt(46, "/gallery/components/avatar");
+const page47 = pageAt(47, "/gallery/components/badge");
+const page48 = pageAt(48, "/gallery/components/breadcrumb");
+const page49 = pageAt(49, "/gallery/components/button");
+const page50 = pageAt(50, "/gallery/components/card");
+const page51 = pageAt(51, "/gallery/components/checkbox");
+const page52 = pageAt(52, "/gallery/components/checkbox-group");
+const page53 = pageAt(53, "/gallery/components/collapsible");
+const page54 = pageAt(54, "/gallery/components/combobox");
+const page55 = pageAt(55, "/gallery/components/command");
+const page56 = pageAt(56, "/gallery/components/context-menu");
+const page57 = pageAt(57, "/gallery/components/dialog");
+const page58 = pageAt(58, "/gallery/components/disclosure");
+const page59 = pageAt(59, "/gallery/components/drawer");
+const page60 = pageAt(60, "/gallery/components/dropdown-menu");
+const page61 = pageAt(61, "/gallery/components/field");
+const page62 = pageAt(62, "/gallery/components/hover-card");
+const page63 = pageAt(63, "/gallery/components/kbd");
+const page64 = pageAt(64, "/gallery/components/menubar");
+const page65 = pageAt(65, "/gallery/components/meter");
+const page66 = pageAt(66, "/gallery/components/navigation-menu");
+const page67 = pageAt(67, "/gallery/components/number-field");
+const page68 = pageAt(68, "/gallery/components/otp-field");
+const page69 = pageAt(69, "/gallery/components/popover");
+const page70 = pageAt(70, "/gallery/components/progress");
+const page71 = pageAt(71, "/gallery/components/radio-group");
+const page72 = pageAt(72, "/gallery/components/scroll-area");
+const page73 = pageAt(73, "/gallery/components/select");
+const page74 = pageAt(74, "/gallery/components/separator");
+const page75 = pageAt(75, "/gallery/components/sheet");
+const page76 = pageAt(76, "/gallery/components/skeleton");
+const page77 = pageAt(77, "/gallery/components/slider");
+const page78 = pageAt(78, "/gallery/components/switch");
+const page79 = pageAt(79, "/gallery/components/table");
+const page80 = pageAt(80, "/gallery/components/tabs");
+const page81 = pageAt(81, "/gallery/components/toast");
+const page82 = pageAt(82, "/gallery/components/toggle");
+const page83 = pageAt(83, "/gallery/components/toggle-group");
+const page84 = pageAt(84, "/gallery/components/toolbar");
+const page85 = pageAt(85, "/gallery/components/tooltip");
+const page86 = pageAt(86, "/examples");
+const page87 = pageAt(87, "/examples/commerce");
+const page88 = pageAt(88, "/examples/crm");
+const page89 = pageAt(89, "/examples/stackoverflow");
+const page90 = pageAt(90, "/spec");
 
 const routes: SiteRoute[] = [
   route('/', {
@@ -434,7 +422,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page30.body} />;
     },
   }) as SiteRoute,
-  route("/api/server-app-shell-vite", {
+  route("/api/runtime", {
     layout: SiteRouteLayout,
     meta: page31.meta,
     ...(page31.modulepreloads ? { modulepreloads: page31.modulepreloads } : {}),
@@ -443,7 +431,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page31.body} />;
     },
   }) as SiteRoute,
-  route("/api/runtime", {
+  route("/api/test", {
     layout: SiteRouteLayout,
     meta: page32.meta,
     ...(page32.modulepreloads ? { modulepreloads: page32.modulepreloads } : {}),
@@ -452,7 +440,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page32.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-assertions", {
+  route("/api/drizzle", {
     layout: SiteRouteLayout,
     meta: page33.meta,
     ...(page33.modulepreloads ? { modulepreloads: page33.modulepreloads } : {}),
@@ -461,7 +449,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page33.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-headers", {
+  route("/api/style", {
     layout: SiteRouteLayout,
     meta: page34.meta,
     ...(page34.modulepreloads ? { modulepreloads: page34.modulepreloads } : {}),
@@ -470,7 +458,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page34.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-harness", {
+  route("/api/better-auth", {
     layout: SiteRouteLayout,
     meta: page35.meta,
     ...(page35.modulepreloads ? { modulepreloads: page35.modulepreloads } : {}),
@@ -479,7 +467,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page35.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-harness-operations", {
+  route("/api/compiler", {
     layout: SiteRouteLayout,
     meta: page36.meta,
     ...(page36.modulepreloads ? { modulepreloads: page36.modulepreloads } : {}),
@@ -488,7 +476,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page36.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-html-fragment", {
+  route("/api/cli", {
     layout: SiteRouteLayout,
     meta: page37.meta,
     ...(page37.modulepreloads ? { modulepreloads: page37.modulepreloads } : {}),
@@ -497,7 +485,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page37.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-page", {
+  route("/reference", {
     layout: SiteRouteLayout,
     meta: page38.meta,
     ...(page38.modulepreloads ? { modulepreloads: page38.modulepreloads } : {}),
@@ -506,7 +494,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page38.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-pglite", {
+  route("/reference/diagnostics", {
     layout: SiteRouteLayout,
     meta: page39.meta,
     ...(page39.modulepreloads ? { modulepreloads: page39.modulepreloads } : {}),
@@ -515,7 +503,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page39.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-sql-observer", {
+  route("/gallery", {
     layout: SiteRouteLayout,
     meta: page40.meta,
     ...(page40.modulepreloads ? { modulepreloads: page40.modulepreloads } : {}),
@@ -524,7 +512,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page40.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-case", {
+  route("/gallery/interactive", {
     layout: SiteRouteLayout,
     meta: page41.meta,
     ...(page41.modulepreloads ? { modulepreloads: page41.modulepreloads } : {}),
@@ -533,7 +521,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page41.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-verifier", {
+  route("/gallery/components/accordion", {
     layout: SiteRouteLayout,
     meta: page42.meta,
     ...(page42.modulepreloads ? { modulepreloads: page42.modulepreloads } : {}),
@@ -542,7 +530,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page42.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-verifier-diagnostics", {
+  route("/gallery/components/alert", {
     layout: SiteRouteLayout,
     meta: page43.meta,
     ...(page43.modulepreloads ? { modulepreloads: page43.modulepreloads } : {}),
@@ -551,7 +539,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page43.body} />;
     },
   }) as SiteRoute,
-  route("/api/test-verifier-sql", {
+  route("/gallery/components/alert-dialog", {
     layout: SiteRouteLayout,
     meta: page44.meta,
     ...(page44.modulepreloads ? { modulepreloads: page44.modulepreloads } : {}),
@@ -560,7 +548,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page44.body} />;
     },
   }) as SiteRoute,
-  route("/api/drizzle", {
+  route("/gallery/components/autocomplete", {
     layout: SiteRouteLayout,
     meta: page45.meta,
     ...(page45.modulepreloads ? { modulepreloads: page45.modulepreloads } : {}),
@@ -569,7 +557,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page45.body} />;
     },
   }) as SiteRoute,
-  route("/api/style", {
+  route("/gallery/components/avatar", {
     layout: SiteRouteLayout,
     meta: page46.meta,
     ...(page46.modulepreloads ? { modulepreloads: page46.modulepreloads } : {}),
@@ -578,7 +566,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page46.body} />;
     },
   }) as SiteRoute,
-  route("/api/better-auth", {
+  route("/gallery/components/badge", {
     layout: SiteRouteLayout,
     meta: page47.meta,
     ...(page47.modulepreloads ? { modulepreloads: page47.modulepreloads } : {}),
@@ -587,7 +575,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page47.body} />;
     },
   }) as SiteRoute,
-  route("/api/compiler", {
+  route("/gallery/components/breadcrumb", {
     layout: SiteRouteLayout,
     meta: page48.meta,
     ...(page48.modulepreloads ? { modulepreloads: page48.modulepreloads } : {}),
@@ -596,7 +584,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page48.body} />;
     },
   }) as SiteRoute,
-  route("/api/cli", {
+  route("/gallery/components/button", {
     layout: SiteRouteLayout,
     meta: page49.meta,
     ...(page49.modulepreloads ? { modulepreloads: page49.modulepreloads } : {}),
@@ -605,7 +593,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page49.body} />;
     },
   }) as SiteRoute,
-  route("/reference", {
+  route("/gallery/components/card", {
     layout: SiteRouteLayout,
     meta: page50.meta,
     ...(page50.modulepreloads ? { modulepreloads: page50.modulepreloads } : {}),
@@ -614,7 +602,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page50.body} />;
     },
   }) as SiteRoute,
-  route("/reference/diagnostics", {
+  route("/gallery/components/checkbox", {
     layout: SiteRouteLayout,
     meta: page51.meta,
     ...(page51.modulepreloads ? { modulepreloads: page51.modulepreloads } : {}),
@@ -623,7 +611,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page51.body} />;
     },
   }) as SiteRoute,
-  route("/gallery", {
+  route("/gallery/components/checkbox-group", {
     layout: SiteRouteLayout,
     meta: page52.meta,
     ...(page52.modulepreloads ? { modulepreloads: page52.modulepreloads } : {}),
@@ -632,7 +620,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page52.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/interactive", {
+  route("/gallery/components/collapsible", {
     layout: SiteRouteLayout,
     meta: page53.meta,
     ...(page53.modulepreloads ? { modulepreloads: page53.modulepreloads } : {}),
@@ -641,7 +629,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page53.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/accordion", {
+  route("/gallery/components/combobox", {
     layout: SiteRouteLayout,
     meta: page54.meta,
     ...(page54.modulepreloads ? { modulepreloads: page54.modulepreloads } : {}),
@@ -650,7 +638,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page54.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/alert", {
+  route("/gallery/components/command", {
     layout: SiteRouteLayout,
     meta: page55.meta,
     ...(page55.modulepreloads ? { modulepreloads: page55.modulepreloads } : {}),
@@ -659,7 +647,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page55.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/alert-dialog", {
+  route("/gallery/components/context-menu", {
     layout: SiteRouteLayout,
     meta: page56.meta,
     ...(page56.modulepreloads ? { modulepreloads: page56.modulepreloads } : {}),
@@ -668,7 +656,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page56.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/autocomplete", {
+  route("/gallery/components/dialog", {
     layout: SiteRouteLayout,
     meta: page57.meta,
     ...(page57.modulepreloads ? { modulepreloads: page57.modulepreloads } : {}),
@@ -677,7 +665,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page57.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/avatar", {
+  route("/gallery/components/disclosure", {
     layout: SiteRouteLayout,
     meta: page58.meta,
     ...(page58.modulepreloads ? { modulepreloads: page58.modulepreloads } : {}),
@@ -686,7 +674,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page58.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/badge", {
+  route("/gallery/components/drawer", {
     layout: SiteRouteLayout,
     meta: page59.meta,
     ...(page59.modulepreloads ? { modulepreloads: page59.modulepreloads } : {}),
@@ -695,7 +683,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page59.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/breadcrumb", {
+  route("/gallery/components/dropdown-menu", {
     layout: SiteRouteLayout,
     meta: page60.meta,
     ...(page60.modulepreloads ? { modulepreloads: page60.modulepreloads } : {}),
@@ -704,7 +692,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page60.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/button", {
+  route("/gallery/components/field", {
     layout: SiteRouteLayout,
     meta: page61.meta,
     ...(page61.modulepreloads ? { modulepreloads: page61.modulepreloads } : {}),
@@ -713,7 +701,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page61.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/card", {
+  route("/gallery/components/hover-card", {
     layout: SiteRouteLayout,
     meta: page62.meta,
     ...(page62.modulepreloads ? { modulepreloads: page62.modulepreloads } : {}),
@@ -722,7 +710,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page62.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/checkbox", {
+  route("/gallery/components/kbd", {
     layout: SiteRouteLayout,
     meta: page63.meta,
     ...(page63.modulepreloads ? { modulepreloads: page63.modulepreloads } : {}),
@@ -731,7 +719,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page63.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/checkbox-group", {
+  route("/gallery/components/menubar", {
     layout: SiteRouteLayout,
     meta: page64.meta,
     ...(page64.modulepreloads ? { modulepreloads: page64.modulepreloads } : {}),
@@ -740,7 +728,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page64.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/collapsible", {
+  route("/gallery/components/meter", {
     layout: SiteRouteLayout,
     meta: page65.meta,
     ...(page65.modulepreloads ? { modulepreloads: page65.modulepreloads } : {}),
@@ -749,7 +737,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page65.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/combobox", {
+  route("/gallery/components/navigation-menu", {
     layout: SiteRouteLayout,
     meta: page66.meta,
     ...(page66.modulepreloads ? { modulepreloads: page66.modulepreloads } : {}),
@@ -758,7 +746,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page66.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/command", {
+  route("/gallery/components/number-field", {
     layout: SiteRouteLayout,
     meta: page67.meta,
     ...(page67.modulepreloads ? { modulepreloads: page67.modulepreloads } : {}),
@@ -767,7 +755,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page67.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/context-menu", {
+  route("/gallery/components/otp-field", {
     layout: SiteRouteLayout,
     meta: page68.meta,
     ...(page68.modulepreloads ? { modulepreloads: page68.modulepreloads } : {}),
@@ -776,7 +764,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page68.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/dialog", {
+  route("/gallery/components/popover", {
     layout: SiteRouteLayout,
     meta: page69.meta,
     ...(page69.modulepreloads ? { modulepreloads: page69.modulepreloads } : {}),
@@ -785,7 +773,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page69.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/disclosure", {
+  route("/gallery/components/progress", {
     layout: SiteRouteLayout,
     meta: page70.meta,
     ...(page70.modulepreloads ? { modulepreloads: page70.modulepreloads } : {}),
@@ -794,7 +782,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page70.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/drawer", {
+  route("/gallery/components/radio-group", {
     layout: SiteRouteLayout,
     meta: page71.meta,
     ...(page71.modulepreloads ? { modulepreloads: page71.modulepreloads } : {}),
@@ -803,7 +791,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page71.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/dropdown-menu", {
+  route("/gallery/components/scroll-area", {
     layout: SiteRouteLayout,
     meta: page72.meta,
     ...(page72.modulepreloads ? { modulepreloads: page72.modulepreloads } : {}),
@@ -812,7 +800,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page72.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/field", {
+  route("/gallery/components/select", {
     layout: SiteRouteLayout,
     meta: page73.meta,
     ...(page73.modulepreloads ? { modulepreloads: page73.modulepreloads } : {}),
@@ -821,7 +809,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page73.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/hover-card", {
+  route("/gallery/components/separator", {
     layout: SiteRouteLayout,
     meta: page74.meta,
     ...(page74.modulepreloads ? { modulepreloads: page74.modulepreloads } : {}),
@@ -830,7 +818,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page74.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/kbd", {
+  route("/gallery/components/sheet", {
     layout: SiteRouteLayout,
     meta: page75.meta,
     ...(page75.modulepreloads ? { modulepreloads: page75.modulepreloads } : {}),
@@ -839,7 +827,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page75.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/menubar", {
+  route("/gallery/components/skeleton", {
     layout: SiteRouteLayout,
     meta: page76.meta,
     ...(page76.modulepreloads ? { modulepreloads: page76.modulepreloads } : {}),
@@ -848,7 +836,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page76.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/meter", {
+  route("/gallery/components/slider", {
     layout: SiteRouteLayout,
     meta: page77.meta,
     ...(page77.modulepreloads ? { modulepreloads: page77.modulepreloads } : {}),
@@ -857,7 +845,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page77.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/navigation-menu", {
+  route("/gallery/components/switch", {
     layout: SiteRouteLayout,
     meta: page78.meta,
     ...(page78.modulepreloads ? { modulepreloads: page78.modulepreloads } : {}),
@@ -866,7 +854,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page78.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/number-field", {
+  route("/gallery/components/table", {
     layout: SiteRouteLayout,
     meta: page79.meta,
     ...(page79.modulepreloads ? { modulepreloads: page79.modulepreloads } : {}),
@@ -875,7 +863,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page79.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/otp-field", {
+  route("/gallery/components/tabs", {
     layout: SiteRouteLayout,
     meta: page80.meta,
     ...(page80.modulepreloads ? { modulepreloads: page80.modulepreloads } : {}),
@@ -884,7 +872,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page80.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/popover", {
+  route("/gallery/components/toast", {
     layout: SiteRouteLayout,
     meta: page81.meta,
     ...(page81.modulepreloads ? { modulepreloads: page81.modulepreloads } : {}),
@@ -893,7 +881,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page81.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/progress", {
+  route("/gallery/components/toggle", {
     layout: SiteRouteLayout,
     meta: page82.meta,
     ...(page82.modulepreloads ? { modulepreloads: page82.modulepreloads } : {}),
@@ -902,7 +890,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page82.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/radio-group", {
+  route("/gallery/components/toggle-group", {
     layout: SiteRouteLayout,
     meta: page83.meta,
     ...(page83.modulepreloads ? { modulepreloads: page83.modulepreloads } : {}),
@@ -911,7 +899,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page83.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/scroll-area", {
+  route("/gallery/components/toolbar", {
     layout: SiteRouteLayout,
     meta: page84.meta,
     ...(page84.modulepreloads ? { modulepreloads: page84.modulepreloads } : {}),
@@ -920,7 +908,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page84.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/select", {
+  route("/gallery/components/tooltip", {
     layout: SiteRouteLayout,
     meta: page85.meta,
     ...(page85.modulepreloads ? { modulepreloads: page85.modulepreloads } : {}),
@@ -929,7 +917,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page85.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/separator", {
+  route("/examples", {
     layout: SiteRouteLayout,
     meta: page86.meta,
     ...(page86.modulepreloads ? { modulepreloads: page86.modulepreloads } : {}),
@@ -938,7 +926,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page86.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/sheet", {
+  route("/examples/commerce", {
     layout: SiteRouteLayout,
     meta: page87.meta,
     ...(page87.modulepreloads ? { modulepreloads: page87.modulepreloads } : {}),
@@ -947,7 +935,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page87.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/skeleton", {
+  route("/examples/crm", {
     layout: SiteRouteLayout,
     meta: page88.meta,
     ...(page88.modulepreloads ? { modulepreloads: page88.modulepreloads } : {}),
@@ -956,7 +944,7 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page88.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/slider", {
+  route("/examples/stackoverflow", {
     layout: SiteRouteLayout,
     meta: page89.meta,
     ...(page89.modulepreloads ? { modulepreloads: page89.modulepreloads } : {}),
@@ -965,121 +953,13 @@ const routes: SiteRoute[] = [
       return <DocsRoutePage clients={clientHrefs} page={page89.body} />;
     },
   }) as SiteRoute,
-  route("/gallery/components/switch", {
+  route("/spec", {
     layout: SiteRouteLayout,
     meta: page90.meta,
     ...(page90.modulepreloads ? { modulepreloads: page90.modulepreloads } : {}),
     stylesheets: siteStylesheets,
     page() {
       return <DocsRoutePage clients={clientHrefs} page={page90.body} />;
-    },
-  }) as SiteRoute,
-  route("/gallery/components/table", {
-    layout: SiteRouteLayout,
-    meta: page91.meta,
-    ...(page91.modulepreloads ? { modulepreloads: page91.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page91.body} />;
-    },
-  }) as SiteRoute,
-  route("/gallery/components/tabs", {
-    layout: SiteRouteLayout,
-    meta: page92.meta,
-    ...(page92.modulepreloads ? { modulepreloads: page92.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page92.body} />;
-    },
-  }) as SiteRoute,
-  route("/gallery/components/toast", {
-    layout: SiteRouteLayout,
-    meta: page93.meta,
-    ...(page93.modulepreloads ? { modulepreloads: page93.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page93.body} />;
-    },
-  }) as SiteRoute,
-  route("/gallery/components/toggle", {
-    layout: SiteRouteLayout,
-    meta: page94.meta,
-    ...(page94.modulepreloads ? { modulepreloads: page94.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page94.body} />;
-    },
-  }) as SiteRoute,
-  route("/gallery/components/toggle-group", {
-    layout: SiteRouteLayout,
-    meta: page95.meta,
-    ...(page95.modulepreloads ? { modulepreloads: page95.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page95.body} />;
-    },
-  }) as SiteRoute,
-  route("/gallery/components/toolbar", {
-    layout: SiteRouteLayout,
-    meta: page96.meta,
-    ...(page96.modulepreloads ? { modulepreloads: page96.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page96.body} />;
-    },
-  }) as SiteRoute,
-  route("/gallery/components/tooltip", {
-    layout: SiteRouteLayout,
-    meta: page97.meta,
-    ...(page97.modulepreloads ? { modulepreloads: page97.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page97.body} />;
-    },
-  }) as SiteRoute,
-  route("/examples", {
-    layout: SiteRouteLayout,
-    meta: page98.meta,
-    ...(page98.modulepreloads ? { modulepreloads: page98.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page98.body} />;
-    },
-  }) as SiteRoute,
-  route("/examples/commerce", {
-    layout: SiteRouteLayout,
-    meta: page99.meta,
-    ...(page99.modulepreloads ? { modulepreloads: page99.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page99.body} />;
-    },
-  }) as SiteRoute,
-  route("/examples/crm", {
-    layout: SiteRouteLayout,
-    meta: page100.meta,
-    ...(page100.modulepreloads ? { modulepreloads: page100.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page100.body} />;
-    },
-  }) as SiteRoute,
-  route("/examples/stackoverflow", {
-    layout: SiteRouteLayout,
-    meta: page101.meta,
-    ...(page101.modulepreloads ? { modulepreloads: page101.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page101.body} />;
-    },
-  }) as SiteRoute,
-  route("/spec", {
-    layout: SiteRouteLayout,
-    meta: page102.meta,
-    ...(page102.modulepreloads ? { modulepreloads: page102.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page102.body} />;
     },
   }) as SiteRoute,
 ];

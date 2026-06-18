@@ -399,7 +399,6 @@ function entryFromSymbol(name, symbol, checker, packageName) {
   const doc = declarations.map((decl) => docCommentOf(decl)).find((text) => text !== '') ?? '';
 
   return {
-    anchor: slugify(name),
     doc,
     kind,
     name,
@@ -499,11 +498,16 @@ function collectExports(sourceFile, checker, packageName) {
  * signature, then each `@example` as its own fenced `ts` block (the shape the
  * `@example` typecheck gate extracts). Undocumented exports keep the explicit
  * marker so they are flagged, never omitted. */
-function renderEntry(entry, slug, targets) {
+function renderEntry(entry, slug, targets, depth = 4) {
   const parsed = entry.doc === '' ? undefined : parseJsDoc(entry.doc);
   const body = parsed && parsed.summary !== '' ? parsed.summary : entry.doc;
 
-  const lines = [`### \`${entry.name}\``, '', entry.doc === '' ? UNDOCUMENTED : body, ''];
+  const lines = [
+    `${'#'.repeat(depth)} \`${entry.name}\``,
+    '',
+    entry.doc === '' ? UNDOCUMENTED : body,
+    '',
+  ];
 
   if (parsed) {
     const table = renderParamsTable(parsed, entry.sig, slug, targets);
@@ -534,9 +538,26 @@ function categoryGroups(entries) {
   ].filter((group) => group.entries.length > 0);
 }
 
-function renderPage(pkg, entries, entryRel, targets) {
-  const groups = categoryGroups(entries);
-  const documented = entries.filter((entry) => entry.doc !== '').length;
+function assignSymbolAnchors(subpaths) {
+  const seen = new Map();
+  for (const subpath of subpaths) {
+    for (const group of categoryGroups(subpath.entries)) {
+      for (const entry of group.entries) {
+        const id = slugify(entry.name);
+        const count = seen.get(id) ?? 0;
+        seen.set(id, count + 1);
+        entry.anchor = count === 0 ? id : `${id}-${count}`;
+      }
+    }
+  }
+}
+
+function renderPage(pkg, subpaths, targets) {
+  const exports = subpaths.reduce((count, subpath) => count + subpath.entries.length, 0);
+  const documented = subpaths.reduce(
+    (count, subpath) => count + subpath.entries.filter((entry) => entry.doc !== '').length,
+    0,
+  );
 
   return [
     '---',
@@ -547,12 +568,22 @@ function renderPage(pkg, entries, entryRel, targets) {
     '',
     `# ${pkg.name}`,
     '',
-    `Generated from \`${entryRel}\` — ${entries.length} exports, ${documented} documented. Do not edit by hand.`,
+    `Generated from ${subpaths.length} public subpath${subpaths.length === 1 ? '' : 's'} — ${exports} exports, ${documented} documented. Do not edit by hand.`,
     '',
-    ...groups.flatMap((group) => [
-      `## ${group.title}`,
+    ...subpaths.flatMap((subpath) => [
+      `## \`${subpath.importPath}\``,
       '',
-      ...group.entries.flatMap((entry) => [renderEntry(entry, pkg.slug, targets), '']),
+      subpath.description ?? pkg.description,
+      '',
+      `Source: [\`${subpath.entryRel}\`](${GITHUB_BASE}/${subpath.entryRel})`,
+      '',
+      ...(subpath.entries.length === 0
+        ? ['No public exports are declared by this subpath.', '']
+        : categoryGroups(subpath.entries).flatMap((group) => [
+            `### ${group.title}`,
+            '',
+            ...group.entries.flatMap((entry) => [renderEntry(entry, pkg.slug, targets), '']),
+          ])),
     ]),
   ]
     .join('\n')
@@ -563,20 +594,24 @@ function renderPage(pkg, entries, entryRel, targets) {
  * collapsible group per category, each symbol carrying its anchor, kind, and a
  * link to the defining source line. Deterministic (repo-relative source paths +
  * a fixed GitHub ref). */
-function buildSidebar(pkg, entries, entryRel) {
+function buildSidebar(pkg, subpaths) {
   return {
     package: pkg.name,
     slug: pkg.slug,
-    sourceHref: `${GITHUB_BASE}/${entryRel}`,
-    categories: categoryGroups(entries).map((group) => ({
-      title: group.title,
-      anchor: slugify(group.title),
-      symbols: group.entries.map((entry) => ({
-        name: entry.name,
-        anchor: entry.anchor,
-        kind: entry.kind,
-        documented: entry.doc !== '',
-        sourceHref: entry.sourceHref,
+    subpaths: subpaths.map((subpath) => ({
+      title: subpath.title,
+      importPath: subpath.importPath,
+      sourceHref: `${GITHUB_BASE}/${subpath.entryRel}`,
+      categories: categoryGroups(subpath.entries).map((group) => ({
+        title: group.title,
+        anchor: slugify(`${subpath.importPath} ${group.title}`),
+        symbols: group.entries.map((entry) => ({
+          name: entry.name,
+          anchor: entry.anchor,
+          kind: entry.kind,
+          documented: entry.doc !== '',
+          sourceHref: entry.sourceHref,
+        })),
       })),
     })),
   };
@@ -618,16 +653,31 @@ function normalizeExportPath(entryPath) {
   return entryPath.startsWith('./') ? entryPath : `./${entryPath}`;
 }
 
-function pageSlug(packageSlug, entryPath) {
-  if (entryPath === '.') return packageSlug;
-  return `${packageSlug}-${entryPath.replace(/^\.\//, '').replace(/[^\w]+/g, '-')}`;
-}
-
 function publicEntrySpecs(pkg) {
   const apiRef = pkg.apiRef ?? {};
-  const entries = apiRef.entries ?? apiRef.publicEntries ?? pkg.publicEntries;
-  if (entries !== undefined) return normalizeEntryList(entries);
-  return [normalizeEntrySpec('.', apiRef)];
+  const described = new Map(
+    normalizeEntryList(apiRef.entries ?? apiRef.publicEntries ?? pkg.publicEntries).map((entry) => [
+      entry.path,
+      entry,
+    ]),
+  );
+  const paths =
+    Array.isArray(pkg.apiBoundary?.public) && pkg.apiBoundary.public.length > 0
+      ? pkg.apiBoundary.public
+      : described.size > 0
+        ? [...described.keys()]
+        : ['.'];
+
+  return paths.map((pathValue, index) => {
+    const path = normalizeExportPath(pathValue);
+    const describedEntry = described.get(path);
+    return {
+      description: describedEntry?.description ?? apiRef.description,
+      order: describedEntry?.order ?? apiRef.order + index / 100,
+      path,
+      title: path === '.' ? pkg.name : `${pkg.name}/${path.replace(/^\.\//, '')}`,
+    };
+  });
 }
 
 function nonPublicEntryPaths(pkg) {
@@ -655,25 +705,29 @@ function isGeneratedOrInternalPath(entryPath) {
 export function documentedApiEntries(packages = loadPublicPackages()) {
   return packages
     .filter((pkg) => pkg.visibility === 'public' && pkg.apiRef)
-    .flatMap((pkg) => {
+    .map((pkg) => {
       const apiRef = pkg.apiRef;
       const blocked = nonPublicEntryPaths(pkg);
-      return publicEntrySpecs(pkg).map((entry, index) => {
+      const entries = publicEntrySpecs(pkg).map((entry) => {
         if (blocked.has(entry.path) || isGeneratedOrInternalPath(entry.path)) {
           throw new Error(
             `api-ref: ${pkg.name} public docs entry ${entry.path} overlaps a generated/internal subpath`,
           );
         }
         return {
-          description: entry.description ?? apiRef.description,
-          dir: pkg.dir,
           entryPath: entry.path,
-          name: entry.path === '.' ? pkg.name : `${pkg.name}/${entry.path.replace(/^\.\//, '')}`,
-          order: entry.order ?? apiRef.order + index / 100,
-          packageName: pkg.name,
-          slug: entry.slug ?? pageSlug(apiRef.slug, entry.path),
+          description: entry.description,
+          title: entry.title,
         };
       });
+      return {
+        description: apiRef.description,
+        dir: pkg.dir,
+        entries,
+        name: pkg.name,
+        order: apiRef.order,
+        slug: apiRef.slug,
+      };
     })
     .sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug));
 }
@@ -686,7 +740,7 @@ export function documentedApiEntries(packages = loadPublicPackages()) {
  * (plan Phase 3) the `source`/`development` condition is preferred over the built
  * `dist` target.
  */
-function resolvePackageEntry(pkg) {
+function resolvePackageEntry(pkg, entry) {
   const pkgJsonPath = path.join(repoRoot, 'packages', pkg.dir, 'package.json');
   if (!existsSync(pkgJsonPath)) {
     throw new Error(
@@ -694,7 +748,7 @@ function resolvePackageEntry(pkg) {
     );
   }
   const pkgJson = JSON.parse(ts.sys.readFile(pkgJsonPath) ?? '{}');
-  const exportedEntry = pkgJson.exports?.[pkg.entryPath];
+  const exportedEntry = pkgJson.exports?.[entry.entryPath];
   const target =
     typeof exportedEntry === 'string'
       ? exportedEntry
@@ -706,7 +760,7 @@ function resolvePackageEntry(pkg) {
         : undefined;
   if (typeof target !== 'string') {
     throw new Error(
-      `api-ref: ${pkg.name} has no resolvable "${pkg.entryPath}" export in package.json`,
+      `api-ref: ${pkg.name} has no resolvable "${entry.entryPath}" export in package.json`,
     );
   }
   const absPath = path.join(repoRoot, 'packages', pkg.dir, target);
@@ -714,8 +768,13 @@ function resolvePackageEntry(pkg) {
 }
 
 export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/api') } = {}) {
-  const resolvedEntries = PACKAGES.map((pkg) => resolvePackageEntry(pkg));
-  const entryFiles = resolvedEntries.map((entry) => entry.absPath);
+  const resolvedPackages = PACKAGES.map((pkg) => ({
+    pkg,
+    subpaths: pkg.entries.map((entry) => ({ ...entry, ...resolvePackageEntry(pkg, entry) })),
+  }));
+  const entryFiles = resolvedPackages.flatMap((pkg) =>
+    pkg.subpaths.map((subpath) => subpath.absPath),
+  );
   for (const file of entryFiles) {
     if (!existsSync(file)) {
       throw new Error(`api-ref: package entry point missing: ${path.relative(repoRoot, file)}`);
@@ -737,24 +796,34 @@ export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/a
   await rm(outDir, { force: true, recursive: true });
   await mkdir(outDir, { recursive: true });
 
-  // Pass 1: collect every package's exports and build the global name → target
-  // map (symbol name → its page slug + anchor) so type tokens can be linked
-  // across packages, not just within a page.
+  // Pass 1: collect every package subpath's exports.
   const collected = [];
+  for (const { pkg, subpaths } of resolvedPackages) {
+    const collectedSubpaths = [];
+    for (const subpath of subpaths) {
+      const sourceFile = program.getSourceFile(subpath.absPath);
+      if (!sourceFile) {
+        throw new Error(
+          `api-ref: TypeScript did not load ${path.relative(repoRoot, subpath.absPath)}`,
+        );
+      }
+      const entries = collectExports(sourceFile, checker, subpath.title);
+      collectedSubpaths.push({
+        ...subpath,
+        entries,
+        importPath: subpath.title,
+        entryRel: subpath.repoRelative,
+      });
+    }
+    assignSymbolAnchors(collectedSubpaths);
+    collected.push({ pkg, subpaths: collectedSubpaths });
+  }
+
+  // Pass 2: build the global name → target map (symbol name → package page slug
+  // + unique anchor) so type tokens can link across packages/subpaths.
   const targets = new Map();
-  for (const [index, pkg] of PACKAGES.entries()) {
-    const sourceFile = program.getSourceFile(entryFiles[index]);
-    if (!sourceFile) {
-      throw new Error(
-        `api-ref: TypeScript did not load ${path.relative(repoRoot, entryFiles[index])}`,
-      );
-    }
-    const entries = collectExports(sourceFile, checker, pkg.name);
-    if (entries.length === 0) {
-      throw new Error(`api-ref: ${pkg.name} has no exports — wrong entry point?`);
-    }
-    collected.push({ entries, entryRel: resolvedEntries[index].repoRelative, pkg });
-    for (const entry of entries) {
+  for (const { pkg, subpaths } of collected) {
+    for (const entry of subpaths.flatMap((subpath) => subpath.entries)) {
       // First package that owns a name wins (packages are in display order), so
       // links are stable and a re-export does not flip the target.
       if (!targets.has(entry.name)) {
@@ -763,18 +832,19 @@ export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/a
     }
   }
 
-  // Pass 2: render each page (type links resolved against the global map) and
-  // emit its sidebar manifest.
+  // Pass 3: render each package page (type links resolved against the global
+  // map) and emit its subpath-grouped sidebar manifest.
   const report = [];
-  for (const { entries, entryRel, pkg } of collected) {
+  for (const { pkg, subpaths } of collected) {
+    const entries = subpaths.flatMap((subpath) => subpath.entries);
     await writeFile(
       path.join(outDir, `${pkg.slug}.md`),
-      `${renderPage(pkg, entries, entryRel, targets)}\n`,
+      `${renderPage(pkg, subpaths, targets)}\n`,
       'utf8',
     );
     await writeFile(
       path.join(outDir, `${pkg.slug}.sidebar.json`),
-      `${JSON.stringify(buildSidebar(pkg, entries, entryRel), null, 2)}\n`,
+      `${JSON.stringify(buildSidebar(pkg, subpaths), null, 2)}\n`,
       'utf8',
     );
     report.push({
@@ -783,6 +853,7 @@ export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/a
       file: `${pkg.slug}.md`,
       name: pkg.name,
       names: entries.map((entry) => entry.name),
+      subpaths: subpaths.map((subpath) => subpath.importPath),
     });
   }
 

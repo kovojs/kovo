@@ -69,15 +69,21 @@ export interface ApiSidebarCategory {
   title: string;
 }
 
+export interface ApiSidebarSubpath {
+  categories: ApiSidebarCategory[];
+  importPath: string;
+  sourceHref: string;
+  title: string;
+}
+
 /** Structured API navigation for a generated reference page, produced by
  * `api-ref.mjs` (`gen/api/<slug>.sidebar.json`) and consumed by the `ApiSidebar`
- * component so the right rail can group symbols by category with counts,
+ * component so the right rail can group symbols by subpath/category with counts,
  * source links, and scroll-spy — instead of a flat 200-item heading list. */
 export interface ApiSidebar {
-  categories: ApiSidebarCategory[];
   package: string;
   slug: string;
-  sourceHref: string;
+  subpaths: ApiSidebarSubpath[];
 }
 
 export interface NavLink {
@@ -300,15 +306,17 @@ async function buildSiteContent(): Promise<SiteContent> {
       // One search entry per documented API symbol, deep-linked to its anchor so
       // ⌘K lands directly on the symbol rather than the package page top.
       if (apiSidebar) {
-        for (const category of apiSidebar.categories) {
-          for (const symbol of category.symbols) {
-            search.push({
-              kind: symbol.kind,
-              section: `${apiSidebar.package} · ${category.title}`,
-              text: `${symbol.name} ${apiSidebar.package} ${symbol.kind}`,
-              title: symbol.name,
-              url: `${raw.url}#${symbol.anchor}`,
-            });
+        for (const subpath of apiSidebar.subpaths) {
+          for (const category of subpath.categories) {
+            for (const symbol of category.symbols) {
+              search.push({
+                kind: symbol.kind,
+                section: `${subpath.importPath} · ${category.title}`,
+                text: `${symbol.name} ${subpath.importPath} ${apiSidebar.package} ${symbol.kind}`,
+                title: symbol.name,
+                url: `${raw.url}#${symbol.anchor}`,
+              });
+            }
           }
         }
       }

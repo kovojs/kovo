@@ -143,9 +143,9 @@ function transform(source) {
  * Rewrite the api-ref-generated `cli.sidebar.json` to match the command-first
  * page: a "Commands" group on top (one row per `kovo <command>`, anchored to its
  * `### kovo <command>` heading), with the programmatic `Functions`/`Types`
- * groups kept after it (their anchors still resolve — the symbols are only
- * demoted to `####`, the ids are unchanged). Without this, the API rail would
- * advertise only the two programmatic functions and omit every command.
+ * groups kept after it inside the `kovo` subpath group. Without this, the API
+ * rail would advertise only the two programmatic functions and omit every
+ * command.
  */
 function transformSidebar(manifest) {
   const commands = {
@@ -159,7 +159,12 @@ function transformSidebar(manifest) {
       sourceHref: CLI_SOURCE_HREF,
     })),
   };
-  return { ...manifest, categories: [commands, ...manifest.categories] };
+  return {
+    ...manifest,
+    subpaths: manifest.subpaths.map((subpath, index) =>
+      index === 0 ? { ...subpath, categories: [commands, ...subpath.categories] } : subpath,
+    ),
+  };
 }
 
 export async function generateCliReference({ outDir = path.join(siteRoot, 'gen/api') } = {}) {
