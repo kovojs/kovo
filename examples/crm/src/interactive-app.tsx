@@ -13,13 +13,8 @@ import { seedCrmDemo } from './demo-data.js';
 import { addContact, closeDeal, createDeal, moveDeal, type CrmRequest } from './mutations.js';
 import { contactListQuery } from './queries.js';
 
-// SPEC.md §9.1/§9.5: the CRM example as a FULLY INTERACTIVE Kovo app. It
-// registers the addContact / createDeal / moveDeal / closeDeal mutations and
-// lets generated live-target renderers refresh visible query-backed regions from
-// server truth. The native `enhance` forms POST to `/_m/*`; served by the Node
-// server (scripts/serve.mjs), the inline loader morphs the re-rendered region.
-// The mutations carry a `guards.authed` guard, so the request gets a demo session
-// below.
+// Interactive CRM app: pipeline, contacts, and deal detail pages backed by the
+// demo database. Forms post to `/_m/*` and refresh query-backed regions.
 
 const crmStylesheets = ['/assets/styles.css'] as const;
 const crmStaticDealPaths = [
@@ -35,9 +30,7 @@ const crmStaticDealPaths = [
   '/deals/d10',
 ] as const;
 
-// The demo viewer attached to every request so the mutations' `guards.authed`
-// guard (SPEC.md §6.5) passes. This is a no-auth public demo; the session is a
-// fixed stand-in for a logged-in sales rep (owner `u1`, the demo seed owner).
+// Fixed demo viewer attached to each request so the guarded mutations can run.
 const demoSession = { id: 'demo-session', user: { id: 'u1', roles: ['sales'] as const } };
 
 const PipelineLayout = layout({
@@ -74,10 +67,7 @@ export async function buildCrmInteractiveApp(
   }
   const database = db;
 
-  // SPEC.md §5.1: one parameterized detail route (not a route per seeded deal), so
-  // deals created at runtime are immediately viewable. SPEC.md §9.5 route JSX
-  // composition lets the component query declarations load the deal, contact,
-  // and timeline from PGlite by `params.id`.
+  // One parameterized detail route keeps newly created deals viewable.
   const dealDetailRoute = route('/deals/:id', {
     meta: { description: 'CRM deal detail.', title: 'Deal · Atlas CRM' },
     params: s.object({ id: s.string() }),

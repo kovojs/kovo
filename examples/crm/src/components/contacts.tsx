@@ -11,15 +11,8 @@ import { addContactForm } from '../forms.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
 import { freshId } from '../components/chrome.js';
 
-// Contact book (route `/contacts`). Reads the `contactList` rowset and shows
-// each contact with their owner and rolling deal count (the `contacts.dealCount`
-// column the createDeal mutation increments — see mutations.ts / the custom
-// optimism that bumps contactList). The whole region is a `kovo-fragment-target`
-// host so generated enhanced refresh can re-render it from server truth: a
-// no-JS POST to `/_m/addContact` morphs the list with the new person in place
-// (SPEC.md §9.1). The presentational company / job-title columns are intentionally
-// NOT in this rowset query (they would leak placeholder tempIds into derived
-// optimism — SPEC.md §10.5); they surface on the deal-detail page instead.
+// Contact book for `/contacts`. The add-contact form posts back to this region
+// so the list refreshes with the new person.
 
 function initials(name: string): string {
   return name
@@ -63,9 +56,7 @@ const defaultContactsRenderSlots: ContactsRenderSlots = {
   forms: { addContact: { failure: null } },
 };
 
-// The interactive region, rendered both inside the full page and as the
-// addContact / createDeal fragment payload. SPEC.md §4.8: the query-backed
-// component root derives its fragment target in the generated module.
+// Rendered as both the full page region and the add-contact fragment payload.
 export const ContactsRegion = component({
   mutations: { addContact: addContactForm },
   queries: { contactList: contactListQuery },
@@ -83,11 +74,7 @@ export const ContactsRegion = component({
           <p class="mt-1 text-sm text-slate-600">{contacts.length} people in the book.</p>
         </div>
 
-        {/* SPEC.md §6.3: a no-JS "add contact" form. POSTs to the addContact
-          mutation; the fragment re-renders this whole region so the new contact
-          appears and the composer resets (with a fresh id). The text primary key
-          is minted at render time so each submission is unique; ownerId is the
-          demo session user. */}
+        {/* The refreshed fragment resets the form with a fresh contact id. */}
         <form
           {...mutationFormAttributes(addContact)}
           class="rounded-lg border border-slate-200 bg-white p-4"

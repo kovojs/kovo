@@ -1,15 +1,8 @@
 import type { KovoExplainInput, OptimisticCoverage, TouchGraph } from '@kovojs/core/internal/graph';
 import type { InvalidationQueryInput } from '@kovojs/drizzle/static';
 
-// SPEC.md §10.2/§10.5/§11.2: the CRM graph facts. The static declarations
-// (mutations, queries, endpoints) are authored once; the touch graph and the
-// optimistic[] coverage matrix are produced by scripts/emit-graph.mjs from the
-// real Drizzle source and passed in here. The optimistic[] matrix is the MIX:
-// `derived` pairs carry `derivation:{status:'derived'}`, hand-written pairs carry
-// `status:'hand-written'`, await-fragment pairs `status:'await-fragment'`, and the
-// punted-but-overridden pairs carry the named PUNTED derivation reason that
-// `kovo explain --optimistic` renders inline. Every invalidated pair is covered, so
-// `kovo check` reports zero unhandled KV310.
+// Static graph declarations for the CRM demo. scripts/emit-graph.mjs adds the
+// extracted touch graph and optimistic coverage from the source files.
 
 export function crmGraphDeclarations(queries: readonly InvalidationQueryInput[]) {
   return {

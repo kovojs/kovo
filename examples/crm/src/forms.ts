@@ -1,8 +1,6 @@
 import { form, type FormInput } from '@kovojs/core';
 
-// SPEC.md §6.3 / §10.4: typed form references. Input and invalidated-query
-// facts come from generated registries, so `OptimisticFor<typeof form>` is
-// exhaustiveness-checked without app-authored form generics.
+// Typed form references shared by mutations and optimistic patches.
 
 export const addContactForm = form('addContact');
 export const createDealForm = form('createDeal');

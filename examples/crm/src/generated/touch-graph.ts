@@ -12,7 +12,7 @@ export const crmTouchGraph = {
       {
         "domain": "contact",
         "keys": null,
-        "site": "examples/crm/src/mutations.ts:76",
+        "site": "examples/crm/src/mutations.ts:59",
         "source": "select",
         "via": "contacts"
       }
@@ -21,7 +21,7 @@ export const crmTouchGraph = {
       {
         "domain": "contact",
         "keys": null,
-        "site": "examples/crm/src/mutations.ts:81",
+        "site": "examples/crm/src/mutations.ts:64",
         "via": "contacts"
       }
     ],
@@ -33,13 +33,13 @@ export const crmTouchGraph = {
       {
         "domain": "contact",
         "keys": "arg:contactId",
-        "site": "examples/crm/src/mutations.ts:116",
+        "site": "examples/crm/src/mutations.ts:92",
         "via": "contacts"
       },
       {
         "domain": "deal",
         "keys": null,
-        "site": "examples/crm/src/mutations.ts:115",
+        "site": "examples/crm/src/mutations.ts:91",
         "via": "deals"
       }
     ],
@@ -51,7 +51,7 @@ export const crmTouchGraph = {
       {
         "domain": "deal",
         "keys": "arg:dealId",
-        "site": "examples/crm/src/mutations.ts:175",
+        "site": "examples/crm/src/mutations.ts:139",
         "via": "deals"
       }
     ],
@@ -63,7 +63,7 @@ export const crmTouchGraph = {
       {
         "domain": "deal",
         "keys": "arg:dealId",
-        "site": "examples/crm/src/mutations.ts:242",
+        "site": "examples/crm/src/mutations.ts:189",
         "via": "deals"
       }
     ],

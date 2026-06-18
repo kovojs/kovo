@@ -3,25 +3,17 @@ import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 
 import * as schema from './schema.js';
 
-// SPEC.md §14 / §11.5: the CRM example runs on real Postgres semantics via the
-// in-process PGlite driver wrapped by Drizzle (the same engine the pglite test
-// harness uses). `createCrmDb()` returns a fresh, seeded instance — used per
-// request for the stateless demo and fresh per test for isolation.
+// The CRM demo uses an in-process PGlite database wrapped by Drizzle.
 
 /** The CRM runtime database: Drizzle over PGlite, typed by the schema. */
 export type CrmDb = PgliteDatabase<typeof schema>;
 
 const SCHEMA_DDL = [
-  // `company` / `title` (contacts) and `title` (deals) are presentational-only and
-  // carry DEFAULTs so inserts that omit them (mutation handlers, fixture inserts)
-  // stay valid — the mutations never write these columns (SPEC.md §10.5).
+  // Presentational fields carry defaults so the demo forms can keep their inputs small.
   "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, owner_id text NOT NULL, deal_count integer NOT NULL, company text NOT NULL DEFAULT 'Independent', title text NOT NULL DEFAULT 'Contact');",
   "CREATE TABLE deals (id text PRIMARY KEY, contact_id text NOT NULL, stage text NOT NULL, amount integer NOT NULL, owner_id text NOT NULL, title text NOT NULL DEFAULT 'New opportunity');",
   'CREATE TABLE activities (id serial PRIMARY KEY, deal_id text NOT NULL, kind text NOT NULL, note text NOT NULL);',
-  // SPEC.md §10.5: closeDeal's `amount = compute_commission(amount)` is a raw sql
-  // server compute the extractor classifies Opaque (the commission stays server
-  // truth; the client awaits the fragment). Define it as a real Postgres function
-  // so the served closeDeal mutation runs end-to-end — here, a 20% close fee.
+  // closeDeal uses this to show a server-computed value in the returned fragment.
   'CREATE FUNCTION compute_commission(amount integer) RETURNS integer AS $$ SELECT (amount * 8 / 10)::int $$ LANGUAGE sql IMMUTABLE;',
 ].join('\n');
 

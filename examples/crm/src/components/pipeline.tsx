@@ -26,16 +26,10 @@ import {
 } from '../queries.js';
 import { freshId, money, stageBadge } from '../components/chrome.js';
 
-// Pipeline dashboard (route `/`). Reads the `pipelineByStage` aggregate (SUM by
-// stage — the out-of-grammar GROUP BY query whose optimism is hand-written in
-// mutations.ts) and the `openDeals` rowset, joining deals to their contact for
-// display. Each open deal links to its `/deals/:id` detail page. The whole region
-// is a `kovo-fragment-target` host so generated enhanced refresh can re-render
-// the pipeline from server truth: opening a new deal morphs the bucket totals and
-// the open-deals table in place (SPEC.md §9.1).
+// Pipeline dashboard for `/`. A new deal refreshes the stage totals and open
+// deals table.
 
-// The stages a new deal can start in (mirrors the demo data / pipelineByStage
-// buckets). A new deal opens in one of these; 'won' is reached via closeDeal.
+// A new deal starts in one of these stages; closing moves it to `won`.
 const NEW_DEAL_STAGES = ['lead', 'qualified', 'open', 'proposal'] as const;
 
 interface PipelineRenderSlots {
@@ -92,9 +86,7 @@ function renderOpenDealsTable(openDeals: DealRow[], contactsById: Map<string, Co
   });
 }
 
-// The interactive region, rendered both inside the full page and as the
-// createDeal / moveDeal / closeDeal fragment payload. SPEC.md §4.8: the
-// query-backed component root derives its fragment target in generated output.
+// Rendered as both the full page region and the pipeline fragment payload.
 export const PipelineRegion = component({
   queries: {
     contactList: contactListQuery,
@@ -134,11 +126,7 @@ export const PipelineRegion = component({
           </div>
         </section>
 
-        {/* SPEC.md §6.3: a no-JS "new deal" form. POSTs to the createDeal mutation
-          (INSERT deal + bump contacts.dealCount); the fragment re-renders the
-          pipeline so the new bucket total and open-deals row appear from server
-          truth. The text primary key is minted at render time; ownerId is the
-          demo session user. */}
+        {/* The refreshed fragment resets the form with a fresh deal id. */}
         <section>
           <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
             New deal

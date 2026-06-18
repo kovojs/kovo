@@ -1,11 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { Badge, type BadgeVariant } from '@kovojs/ui/badge';
 
-// Shared page chrome for the CRM example UI. The app-shell wraps each page()
-// return in the document <html>/<head> (with the stylesheet), so these helpers
-// render the <body> contents: a top bar with section nav plus a main column.
-// Page chrome (header/nav/container) stays document CSS; content surfaces use the
-// @kovojs/ui styled components (Card / Table / Badge / Button).
+// Shared page chrome and formatting helpers for the CRM example UI.
 
 export type CrmSection = 'pipeline' | 'contacts';
 
@@ -14,10 +10,7 @@ const NAV: { href: string; label: string; section: CrmSection }[] = [
   { href: '/contacts', label: 'Contacts', section: 'contacts' },
 ];
 
-// SPEC.md §6.3: addContact / createDeal use text primary keys, so each rendered
-// composer mints a unique id. The app-shell renders server-side (Node), where
-// crypto.randomUUID is available; a fresh fragment re-render yields a new id, so
-// sequential inserts never collide on the text PK.
+// Form fragments mint ids server-side so each rendered composer is ready to post.
 export function freshId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }
@@ -27,9 +20,7 @@ export function money(amount: number): string {
   return `$${amount.toLocaleString('en-US')}`;
 }
 
-// Map each pipeline stage onto one of the @kovojs/ui Badge variants
-// (neutral / success / warning). Won is a success; lost a warning; everything
-// in-flight is neutral.
+// Won is a success; lost is a warning; in-flight stages stay neutral.
 const STAGE_VARIANT: Record<string, BadgeVariant> = {
   lead: 'neutral',
   qualified: 'neutral',

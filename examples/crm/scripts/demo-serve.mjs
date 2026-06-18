@@ -2,11 +2,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createDemoServeServer, runDemoServeCli } from '../../../scripts/demo-session/serve.mjs';
 
-// SPEC.md §9.5: per-visitor multi-tenant serve for the CRM example. Each browser
-// session drives its OWN seeded PGlite through the real CRM node handler (pipeline
-// dashboard, new-deal/add-contact forms, move-stage/close-won actions). See
-// scripts/serve.mjs for the single-tenant variant; run `vp build` first so built
-// `/assets/*` stylesheets are present.
+// Per-visitor demo server: each browser session gets its own seeded CRM database.
 
 const crmRoot = fileURLToPath(new URL('../', import.meta.url));
 

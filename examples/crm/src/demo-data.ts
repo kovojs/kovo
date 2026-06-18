@@ -1,12 +1,8 @@
 import type { CrmDb } from './db.js';
 import { activities, contacts, deals } from './schema.js';
 
-// Realistic demo book layered on top of the minimal createCrmDb() seed (which
-// the commuting tests depend on, so it stays untouched — SPEC.md §10.5). This
-// enriches ONLY the app-shell / serve surface: a fuller contact book, deals
-// spread across the pipeline stages, and a few activities, so the UI reads like
-// a real sales CRM rather than a two-row fixture. Ids never collide with the
-// base seed's c1/c2/d1/d2.
+// Fuller data for the interactive demo. createCrmDb() keeps a small base seed
+// for fast tests; this adds enough contacts, deals, and activity for the UI.
 
 const DEMO_CONTACTS = [
   {

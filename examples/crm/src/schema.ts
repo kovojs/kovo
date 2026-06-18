@@ -1,14 +1,8 @@
 import { kovo } from '@kovojs/drizzle';
 import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core';
 
-// SPEC.md §10.1 (schema as domain registry) + §11.1: the Drizzle-blessed data
-// layer for the CRM example. Each table carries its kovo({ domain, key })
-// annotation, so the static extractor derives the touch graph, query shapes, and
-// write effects directly from this source. The derived-optimism transforms in
-// generated/optimistic/ are produced from these tables + the query loaders and
-// mutation handlers — never hand-authored — and the deliberately out-of-grammar
-// pairs (GROUP BY pipeline, opaque commission) punt to the hand-written
-// overrides in mutations.ts (SPEC.md §10.4 / §10.5).
+// Drizzle tables for the CRM demo. The kovo annotations connect table writes to
+// the contact, deal, and activity domains used by the generated invalidation graph.
 
 export const contacts = pgTable(
   'contacts',
@@ -18,10 +12,7 @@ export const contacts = pgTable(
     email: text('email').notNull(),
     ownerId: text('owner_id').notNull(),
     dealCount: integer('deal_count').notNull(),
-    // Presentational-only columns: read by the UI (company chip, job title) but
-    // NEVER written by a mutation, so they carry DB DEFAULTs and the derived
-    // optimism / commuting tests stay valid even for fixture inserts that omit
-    // them (SPEC.md §10.5).
+    // Presentational fields used by the UI; demo forms leave them to defaults.
     company: text('company').notNull().default('Independent'),
     title: text('title').notNull().default('Contact'),
   },
@@ -36,8 +27,7 @@ export const deals = pgTable(
     stage: text('stage').notNull(),
     amount: integer('amount').notNull(),
     ownerId: text('owner_id').notNull(),
-    // Presentational-only column: the human deal name shown in the pipeline. Never
-    // written by a mutation, so it carries a DB DEFAULT (see contacts above).
+    // Human deal name shown in the pipeline.
     title: text('title').notNull().default('New opportunity'),
   },
   kovo({ domain: 'deal', key: 'id' }),

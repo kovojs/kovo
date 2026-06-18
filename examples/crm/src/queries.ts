@@ -5,12 +5,8 @@ import type { Domain } from '@kovojs/server';
 import { activity, contact, deal } from './domains.js';
 import { activities, contacts, deals } from './schema.js';
 
-// SPEC.md §10.2: a query couples a stable key, its `reads` (the invalidation
-// declaration), and a `load(input, db)` loader. We declare it with this local
-// factory rather than the server `query` runtime entry because the §10.5 static
-// extractor classifies the inline Drizzle select straight from the 2nd loader
-// parameter (`db`), and the loaders run directly over the real PGlite db in the
-// commuting tests. The key/`reads`/loader shape the extractor reads is identical.
+// Small query factory for the demo. Each query names the domains it reads and
+// exposes a loader that can run against either the app request context or a test db.
 type CrmQueryLoadContext = CrmDb | { db?: CrmDb; request?: { db?: CrmDb } };
 
 interface QueryDefinition<Key extends string, Value> {
@@ -35,14 +31,8 @@ function query<const Key extends string, Value>(
   };
 }
 
-// SPEC.md §10.2 / §10.5 Stage 2: every read couples a stable key, an inline
-// Drizzle select (the static extractor classifies the select directly — it does
-// NOT trace helpers), and the domains it reads. The shapes the extractor derives
-// from these loaders drive the derived-optimism transforms in
-// generated/optimistic/. `pipelineByStage` deliberately uses GROUP BY, which is
-// out-of-grammar: the extractor classifies it `opaque-shape {group-by-having}`,
-// so every mutation × pipelineByStage pair PUNTs and must be hand-written
-// (mutations.ts) — that punt is the whole point of this example.
+// Keep the Drizzle selects inline so the graph emitter can read the same source
+// the app runs.
 
 export interface ContactRow {
   id: string;
@@ -161,10 +151,7 @@ export const openDealsQuery = query('openDeals', {
 });
 
 /**
- * SUM(amount) GROUP BY stage — the pipeline value per stage. GROUP BY is
- * out-of-grammar (SPEC.md §10.5 PUNT list, `opaque-shape {group-by-having}`):
- * the extractor cannot derive an optimistic patch for it, so it PUNTs and every
- * mutation that touches deals must hand-write a custom pipelineByStage transform.
+ * SUM(amount) GROUP BY stage — the pipeline value per stage.
  */
 export const pipelineByStageQuery = query('pipelineByStage', {
   reads: [deal],

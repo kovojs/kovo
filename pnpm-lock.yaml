@@ -181,9 +181,6 @@ importers:
       '@kovojs/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
-      '@kovojs/conformance-fixtures':
-        specifier: workspace:*
-        version: link:../../packages/conformance-fixtures
       '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../../packages/headless-ui

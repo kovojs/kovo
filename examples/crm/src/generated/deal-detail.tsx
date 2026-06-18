@@ -17,31 +17,17 @@ import { money, stageBadge } from '../components/chrome.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
-// Deal detail (route `/deals/:id`). Joins a single deal to its contact and the
-// activity timeline. This is the page the pipeline's open-deal rows link into.
-// The whole region is a `kovo-fragment-target` host so the moveDeal / closeDeal
-// generated refresh can re-render it from server truth: moving the deal to a new
-// stage or closing it (won, server-computed commission) both morph this region
-// in place (SPEC.md §9.1).
-//
-// The detail route loads the persisted row directly (not via the derivable
-// rowset queries), so it carries the presentational-only columns the query
-// shapes omit — the deal `title` and the contact `company` / job `title` — see
-// db.ts / schema.ts (SPEC.md §10.5: those columns are never written by a
-// mutation, so the derived optimism stays clean).
+// Deal detail for `/deals/:id`. Moving or closing the deal refreshes this region
+// with the server-updated stage and amount.
 
-// The pipeline stages a deal can be moved through (mirrors the demo data + the
-// pipelineByStage buckets). 'won' is reached via the close-deal action (which
-// also applies the server commission), so it is not a plain move target.
+// `won` is reached through the close action because it applies commission.
 const MOVE_STAGES = ['lead', 'qualified', 'open', 'proposal', 'lost'] as const;
 
 interface DealDetailRenderSlots {
   request?: CrmRequest | undefined;
 }
 
-// The interactive region, rendered inside the page and as the moveDeal /
-// closeDeal fragment payload. SPEC.md §4.8: the query-backed component root
-// derives its fragment target in the generated module.
+// Rendered as both the detail page region and the deal-action fragment payload.
 export const DealDetailRegion = component({
   props: { dealId: String },
   queries: {
@@ -115,12 +101,7 @@ export const DealDetailRegion = component({
           )}
         </div>
 
-        {/* SPEC.md §6.3: no-JS "move stage" + "close deal" controls. Each button is
-          its own enhance form posting the deal's id to a mutation endpoint; the
-          fragment re-renders this region so the new stage/amount appear from
-          server truth (closeDeal applies the server commission, so the amount is
-          whatever Postgres computed). The current stage's move button is
-          disabled, and once won/lost the deal is closed. */}
+        {/* Each stage button posts a tiny form and refreshes this region. */}
         <div class="rounded-lg border border-slate-200 bg-white p-5">
           <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Move stage
