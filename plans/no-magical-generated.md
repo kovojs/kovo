@@ -221,13 +221,17 @@ internals, emit/check scripts, and narrowly named artifact tests.
     overridden with `href`.
   - Evidence: `pnpm --filter @kovojs/server exec vitest --run src/hints.test.ts
     src/api/app.test.ts`.
-- [ ] Make emitted stylesheet assets aggregate compiler-owned CSS.
+- [x] Make emitted stylesheet assets aggregate compiler-owned CSS.
   - The emitted asset should contain declared theme CSS, authored global CSS when
     present, generated `@kovojs/ui` CSS used by the app graph, and generated
     `@kovojs/style` atomic CSS used by authored style objects.
-  - Current gap: authored example CSS no longer imports `src/generated/kovo-ui.css`,
-    but the framework-owned Vite/build aggregation hook still needs to materialize
-    package UI CSS into the emitted `/assets/styles.css` asset.
+  - Evidence: `packages/server/src/build.ts` materializes declared critical CSS
+    and build-owned CSS into neutral client/static stylesheet assets, while
+    `packages/cli/src/index.ts` feeds `@kovojs/ui` token and component CSS into
+    `kovo build`; `pnpm --filter @kovojs/server exec vitest --run
+    src/build.test.ts`, `pnpm --filter @kovojs/cli exec vitest --run
+    src/index.kovo-build.test.ts`, `pnpm --filter @kovojs/example-commerce exec
+    vitest --run src/app.rendering.test.ts`, and `git diff --check` passed.
 - [x] Allow app-wide and route-level stylesheet declarations.
   - App-level stylesheets are inherited by routes; route-level stylesheets can
     add page-specific CSS while remaining visible to page hints, fragments,

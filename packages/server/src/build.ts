@@ -2,6 +2,7 @@ import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import type { KovoApp } from './app-types.js';
+import type { StylesheetAsset } from './hints.js';
 import { exportStaticApp } from './static-export.js';
 import type { StaticExportAssetInput } from './static-export-types.js';
 import type { StaticExportDiagnostic } from './static-export-diagnostics.js';
@@ -221,6 +222,16 @@ export interface WriteKovoNeutralBuildOptions {
   app: KovoApp;
   /** Optional public base path used to resolve manifest asset hrefs. */
   base?: string;
+  /**
+   * Build-owned CSS fragments to materialize into declared stylesheet assets, such as
+   * first-party package component CSS extracted by `kovo build` (SPEC.md §13.1).
+   */
+  buildStylesheetCss?: readonly {
+    /** CSS text to merge into the stylesheet asset. */
+    css: string;
+    /** Public stylesheet href that receives this CSS. */
+    href: string;
+  }[];
   /** Compiler-produced client modules that should be emitted under `client/c/`. */
   clientModules?: readonly KovoAppShellCompiledClientModule[];
   /** Vite manifest file used to derive asset inventory and per-route hints. */
@@ -325,6 +336,12 @@ export async function writeKovoNeutralBuild(
     await writeFile(serverHandlerPath, serverHandlerSource, 'utf8');
   }
   await copyNeutralStaticAssets(appShellBuild.assets, clientDir, manifestDistDir);
+  await materializeNeutralStylesheetAssets({
+    app: appShellBuild.app,
+    assets: appShellBuild.assets,
+    buildStylesheetCss: options.buildStylesheetCss ?? [],
+    rootDir: clientDir,
+  });
 
   const manifestPath = path.join(outDir, 'manifest.json');
   const routesPath = path.join(outDir, 'routes.json');
@@ -335,6 +352,14 @@ export async function writeKovoNeutralBuild(
     manifestDistDir,
     outDir,
   });
+  if (staticOutput !== undefined) {
+    await materializeNeutralStylesheetAssets({
+      app: appShellBuild.app,
+      assets: appShellBuild.assets,
+      buildStylesheetCss: options.buildStylesheetCss ?? [],
+      rootDir: staticOutput.dir,
+    });
+  }
   const neutral: KovoNeutralBuild = {
     clientDir,
     clientModules: appShellBuild.clientModules,
@@ -603,6 +628,133 @@ async function copyNeutralStaticAssets(
     await mkdir(path.dirname(outputPath), { recursive: true });
     await copyFile(viteDistSourcePath(manifestDistDir, asset.file), outputPath);
   }
+}
+
+interface MaterializeNeutralStylesheetAssetsOptions {
+  app: KovoApp;
+  assets: readonly KovoNeutralBuild['staticAssets'][number][];
+  buildStylesheetCss: readonly { css: string; href: string }[];
+  rootDir: string;
+}
+
+async function materializeNeutralStylesheetAssets({
+  app,
+  assets,
+  buildStylesheetCss,
+  rootDir,
+}: MaterializeNeutralStylesheetAssetsOptions): Promise<void> {
+  const cssByPath = stylesheetCssByPath(app, assets, buildStylesheetCss);
+
+  for (const [assetPath, cssChunks] of cssByPath) {
+    const outputPath = neutralClientOutputPath(rootDir, assetPath);
+    const existingCss = await readExistingStylesheet(outputPath);
+    const mergedCss = dedupeCssChunks([...cssChunks, existingCss]).join('\n');
+    if (!mergedCss) continue;
+
+    await mkdir(path.dirname(outputPath), { recursive: true });
+    await writeFile(outputPath, `${mergedCss}${mergedCss.endsWith('\n') ? '' : '\n'}`, 'utf8');
+  }
+}
+
+function stylesheetCssByPath(
+  app: KovoApp,
+  assets: readonly KovoNeutralBuild['staticAssets'][number][],
+  buildStylesheetCss: readonly { css: string; href: string }[],
+): Map<string, string[]> {
+  const cssByPath = new Map<string, string[]>();
+
+  for (const asset of app.stylesheets) {
+    addStylesheetCriticalCss(cssByPath, asset);
+  }
+  for (const route of app.routes) {
+    for (const asset of route.stylesheets ?? []) addStylesheetCriticalCss(cssByPath, asset);
+  }
+  const cssAssetPaths = assets
+    .map((asset) => asset.path)
+    .filter((assetPath) => assetPath.endsWith('.css'));
+  for (const asset of buildStylesheetCss) {
+    addStylesheetCss(
+      cssByPath,
+      buildStylesheetCssHref(asset.href, cssByPath, cssAssetPaths),
+      asset.css,
+    );
+  }
+
+  return cssByPath;
+}
+
+function buildStylesheetCssHref(
+  href: string,
+  cssByPath: Map<string, string[]>,
+  cssAssetPaths: readonly string[],
+): string {
+  const assetPath = localStylesheetAssetPath(href);
+  if (assetPath && cssByPath.has(assetPath)) return href;
+  if (cssAssetPaths.length === 1) return cssAssetPaths[0];
+  return href;
+}
+
+function addStylesheetCriticalCss(
+  cssByPath: Map<string, string[]>,
+  asset: string | StylesheetAsset,
+): void {
+  if (typeof asset === 'string') return;
+  addStylesheetCss(cssByPath, asset.href, asset.criticalCss);
+}
+
+function addStylesheetCss(
+  cssByPath: Map<string, string[]>,
+  href: string,
+  css: string | undefined,
+): void {
+  if (!css) return;
+
+  const assetPath = localStylesheetAssetPath(href);
+  if (!assetPath) return;
+
+  const chunks = cssByPath.get(assetPath);
+  if (chunks) {
+    chunks.push(css);
+  } else {
+    cssByPath.set(assetPath, [css]);
+  }
+}
+
+function localStylesheetAssetPath(href: string): string | null {
+  try {
+    const url = new URL(href, 'https://kovo.local');
+    if (url.origin !== 'https://kovo.local') return null;
+    return url.pathname;
+  } catch {
+    return null;
+  }
+}
+
+async function readExistingStylesheet(fileName: string): Promise<string> {
+  try {
+    return await readFile(fileName, 'utf8');
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') return '';
+    throw error;
+  }
+}
+
+function dedupeCssChunks(chunks: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const chunk of chunks) {
+    const css = chunk.trim();
+    if (!css || seen.has(css)) continue;
+    seen.add(css);
+    deduped.push(css);
+  }
+
+  return deduped;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
 }
 
 function neutralClientOutputPath(clientDir: string, urlPath: string): string {

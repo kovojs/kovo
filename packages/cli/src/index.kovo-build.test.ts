@@ -84,7 +84,10 @@ describe('kovo build', () => {
 
         const stylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
         const stylesheetResponse = await fetch(`${origin}${stylesheetPath}`);
-        await expect(stylesheetResponse.text()).resolves.toContain('color:#639');
+        const stylesheetText = await stylesheetResponse.text();
+        expect(stylesheetText).toContain('color:#639');
+        expect(stylesheetText).toContain('--kovo-color-background:');
+        expect(stylesheetText).toContain('.kv-button-');
         expect(stylesheetResponse.status).toBe(200);
         expect(stylesheetResponse.headers.get('cache-control')).toBe(
           'public, max-age=31536000, immutable',
