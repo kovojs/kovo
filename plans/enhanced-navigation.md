@@ -125,7 +125,7 @@ through client navigation.
     attrs, stylesheet/modulepreload hints, speculation rules, and route-level
     document state. Unsupported shell drift falls back to full GET.
   - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
-packages/runtime/src/inline-loader-navigation.browser.test.ts` passed 63
+packages/runtime/src/inline-loader-navigation.browser.test.ts` passed 69
     browser tests and proves target document updates `<title>`, meta, html/body
     attrs, stylesheet/modulepreload hints, and speculation rules. It
     also proves docs theme state from `localStorage.theme` (`dark` and `light`)
@@ -168,7 +168,7 @@ packages/runtime/src/inline-loader-navigation.test.ts` passed with 93 tests
     document across all inline installer artifacts. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/inline-loader-navigation.browser.test.ts` passed with
-    63 browser tests; `pnpm --filter @kovojs/site run smoke:navigation` passed
+    69 browser tests; `pnpm --filter @kovojs/site run smoke:navigation` passed
     after the site build and proves exported docs/reference/API pages expose
     `kovo-nav-segment` stamps, fire `kovo:navigate`, and preserve the route
     layout DOM identity across enhanced docs/API clicks.
@@ -214,19 +214,22 @@ packages/runtime/src/inline-loader-artifact-minifier.test.ts` passed 64
     hash anchors to native browser navigation. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    passed with 63 browser tests and proves target-document API hashes scroll
+    passed with 69 browser tests and proves target-document API hashes scroll
     after morphing, preserve request fragments when real `fetch()` response URLs
     omit hashes, offset below sticky document chrome, update `location.href`, and
     restore saved scroll/hash URL state through browser `popstate`. It also
-    proves fresh clicks to previously visited API symbol hashes ignore stale
-    saved scroll and land on the requested symbol.
+    proves popstate hash URLs with no saved scroll land on the requested target,
+    same-path links with changed query strings and hashes remain enhanced
+    navigations, and fresh clicks to previously visited API symbol hashes ignore
+    stale saved scroll and land on the requested symbol.
     `pnpm --filter @kovojs/site run smoke:navigation` passed
     `site-navigation-smoke/v1 OK` after `pnpm --filter @kovojs/site run build`
     and proves actual enhanced docs/API clicks (`kovo:navigate` plus preserved
-    route layout identity), dark/light docs theme choices, same-page API symbol-rail
-    hashes, cross-page enhanced API symbol hashes, fresh API symbol clicks after
-    leaving a previously visited symbol page, and back/forward restoration all
-    land below the sticky docs header in the exported site.
+    route layout identity), dark/light docs theme choices, same-page API
+    symbol-rail hashes remaining native, cross-page enhanced API symbol hashes,
+    fresh API symbol clicks after leaving a previously visited symbol page, and
+    back/forward restoration all land below the sticky docs header in the
+    exported site.
     `pnpm exec vitest --run packages/runtime/src/inline-loader-navigation.test.ts`
     passed with 52 tests and proves `popstate` restores saved scroll without
     pushing another history entry while fresh clicks ignore saved scroll across

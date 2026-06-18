@@ -1175,6 +1175,55 @@ describe('browser inline loader enhanced navigation', () => {
     }
   });
 
+  it('scrolls requested hashes on popstate when no saved scroll exists', async () => {
+    history.replaceState({}, '', new URL('/docs', initialUrl).href);
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+      '</main>',
+    ].join('');
+    const scrolledIds: string[] = [];
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>API</title>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+          '<h2 id="symbols/fresh-popstate">Fresh popstate target</h2>',
+          '</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/api', location.href).href,
+    }));
+    const originalScrollIntoView = currentElementScrollIntoView();
+    Element.prototype.scrollIntoView = function scrollIntoView() {
+      scrolledIds.push((this as Element).id);
+    };
+    const scrollTo = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', scrollTo);
+
+    try {
+      installNavigationLoader();
+      history.replaceState({}, '', new URL('/api#symbols%2Ffresh-popstate', initialUrl).href);
+      dispatchEvent(new PopStateEvent('popstate'));
+
+      await vi.waitFor(() => expect(document.title).toBe('API'));
+
+      expect(scrolledIds).toEqual(['symbols/fresh-popstate']);
+      expect(scrollTo).not.toHaveBeenCalledWith(0, 0);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
+
   it('leaves same-document hash anchors to native browser navigation', async () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>API</title>';
     document.body.innerHTML = [
@@ -1196,6 +1245,64 @@ describe('browser inline loader enhanced navigation', () => {
     expect(click.defaultPrevented).toBe(false);
     expect(fetch).not.toHaveBeenCalled();
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('enhances same-path hash navigations when the query string changes', async () => {
+    history.replaceState({}, '', new URL('/api?view=summary', initialUrl).href);
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>API summary</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-details" href="/api?view=details#symbols%2Fdetails">Details</a>',
+      '<section kovo-nav-segment="page:/api-summary" kovo-nav-kind="page" kovo-nav-name="page">',
+      '<h2 id="symbols/summary">Summary</h2>',
+      '</section>',
+      '</main>',
+    ].join('');
+    const scrolledIds: string[] = [];
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>API details</title>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+          '<a id="to-summary" href="/api?view=summary#symbols%2Fsummary">Summary</a>',
+          '<section kovo-nav-segment="page:/api-details" kovo-nav-kind="page" kovo-nav-name="page">',
+          '<h2 id="symbols/details">Details</h2>',
+          '</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/api?view=details', location.href).href,
+    }));
+    const originalScrollIntoView = currentElementScrollIntoView();
+    Element.prototype.scrollIntoView = function scrollIntoView() {
+      scrolledIds.push((this as Element).id);
+    };
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    try {
+      installNavigationLoader();
+      const click = dispatchAnchorLikeClick('/api?view=details#symbols%2Fdetails');
+
+      await vi.waitFor(() => expect(document.title).toBe('API details'));
+
+      expect(click.defaultPrevented).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(scrolledIds).toEqual(['symbols/details']);
+      expect(pushState).toHaveBeenCalledWith(
+        {},
+        '',
+        new URL('/api?view=details#symbols%2Fdetails', initialUrl).href,
+      );
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
   });
 
   it('keeps document.body available after full-body layout replacement', async () => {

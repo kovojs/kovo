@@ -156,8 +156,20 @@ try {
   if (!hash) {
     failures.push('API rail exposes a symbol hash');
   } else {
+    const samePageEventCount = await page.evaluate(
+      () => (globalThis.__kovoNavigationSmokeEvents ?? []).length,
+    );
     await railLink.click();
     await page.waitForFunction((expectedHash) => location.hash === expectedHash, hash);
+    await check('same-page API rail hash remains native', () =>
+      page.evaluate(
+        ({ expectedHash, expectedCount }) =>
+          location.pathname === '/api/core/' &&
+          location.hash === expectedHash &&
+          (globalThis.__kovoNavigationSmokeEvents ?? []).length === expectedCount,
+        { expectedHash: hash, expectedCount: samePageEventCount },
+      ),
+    );
     await assertHashBelowHeader(page, hash, 'same-page API rail hash lands below sticky header');
 
     await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
