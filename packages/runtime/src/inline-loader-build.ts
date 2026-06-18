@@ -80,6 +80,13 @@ function installInlineKovoLoader(im) {
   };
   const qa = (root, selector) =>
     root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
+  const xa = (current, next) => {
+    for (let i = current.attributes.length; i--; ) {
+      const attr = current.attributes[i];
+      if (attr && !next.hasAttribute(attr.name)) current.removeAttribute(attr.name);
+    }
+    for (const attr of next.attributes) current.setAttribute(attr.name, attr.value);
+  };
   const sf = (href) => {
     const x = globalThis.scrollX || globalThis.pageXOffset || 0;
     const y = globalThis.scrollY || globalThis.pageYOffset || 0;
@@ -291,6 +298,8 @@ function installInlineKovoLoader(im) {
       }
 
       doc.head.innerHTML = nextDoc.head.innerHTML;
+      xa(doc.documentElement, nextDoc.documentElement);
+      xa(doc.body, nextDoc.body);
       if (!pop) globalThis.history?.pushState?.({}, '', finalUrl.href);
       const focusTarget = doc.querySelector('main,[kovo-nav-segment],h1');
       focusTarget?.setAttribute?.('tabindex', '-1');

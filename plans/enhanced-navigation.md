@@ -72,16 +72,19 @@ through client navigation.
     segment or falling back to a full GET.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves a shared layout segment persists when its target-document chrome is
-    equivalent and the route leaf changes, and proves the layout segment morphs
-    from the target document when same-id layout chrome changes.
-- [x] **The server remains authoritative for target route and guard results.**
+    equivalent and the route leaf changes; `packages/runtime/src/inline-loader-navigation.test.ts`
+    proves divergent layout chrome replaces the current body from the parsed
+    target document across all inline installer artifacts.
+- [ ] **The server remains authoritative for target route and guard results.**
   - Any client-supplied current chain is an optimization hint only. The server or
     full target document determines the destination layout chain and rendered
     output; the client never uses its current chain to skip guards or layouts.
-  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    proves the loader uses the fetched target document for same-origin auth
-    redirects and compatible 403 server-rendered shells, including the final
-    response URL and target layout/page segments.
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves the loader uses the fetched target document for the destination
+    page/layout output; `packages/runtime/src/inline-loader-navigation.test.ts`
+    proves target-document layout divergence replaces the current body across
+    all inline installer artifacts. Remaining gap: same-origin redirects and
+    guarded 403/404/500 shells.
 - [x] **Deploy skew is loud and recoverable.**
   - Reuse the §9.1.1 render-plan version token. Token mismatch discards the
     enhanced path and performs a full GET.
@@ -111,14 +114,15 @@ through client navigation.
     response passes the same eligibility checks. 403/404/500 shells are target
     documents and may be morphed only when their segment/document stamps are
     compatible; otherwise full GET.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    proves same-origin HTML redirect and forbidden-shell handling. Remaining
-    gap: notFound fixture.
-- [ ] **Head and document shell updates are part of navigation.**
+  - Evidence: pending redirect, 403, 404, and 500 fixtures.
+- [x] **Head and document shell updates are part of navigation.**
   - The full-document MVP must update or validate `<title>`, meta, html/body
     attrs, stylesheet/modulepreload hints, speculation rules, and route-level
     document state. Unsupported shell drift falls back to full GET.
-  - Evidence: pending head/document fixture.
+  - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
+    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63350`
+    passed and proves target document updates `<title>`, meta, html/body attrs,
+    stylesheet/modulepreload hints, and speculation rules.
 
 ## Segment Identity And Morph Contract
 
@@ -140,9 +144,9 @@ through client navigation.
     prefixes can persist; divergent or changed suffixes morph from the target
     document. If equivalence cannot be proven, full GET.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    covers unchanged-prefix preservation, changed leaf morphing, stale response
-    suppression, and changed layout chrome morphing from the parsed target
-    document.
+    covers unchanged-prefix preservation and changed leaf morphing; `packages/runtime/src/inline-loader-navigation.test.ts`
+    covers divergent layout chrome body replacement from the parsed target
+    document across all inline installer artifacts.
 - [ ] **Island lifecycle follows the existing morph rules.**
   - Islands inside preserved segments keep DOM identity and client state. Islands
     removed by a morphed segment have `ctx.signal` aborted. Islands inserted by a
@@ -177,7 +181,7 @@ through client navigation.
     SPEC must deliberately change that budget with acceptance evidence.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
     `node --experimental-strip-types - <<'NODE' ...` reported
-    `inline-loader-gzip=5267/8192`.
+    `inline-loader-gzip=5340/8192`.
 
 ## Implementation Plan
 
@@ -222,17 +226,17 @@ through client navigation.
     inline loader registers `popstate`; `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves successful enhanced navigation focuses the preserved layout root,
     sets manual scroll restoration, scrolls to top, and emits the full-document
-    `kovo:navigate` announcement, and proves stale full-document responses do
-    not override a newer navigation. Remaining gap: dedicated back/forward, hash
-    restoration, and bfcache evidence.
-- [x] **4. Mutation/live composition after enhanced navigation.**
+    `kovo:navigate` announcement. Remaining gap: dedicated back/forward, hash
+    restoration, stale response, and bfcache evidence.
+- [ ] **4. Mutation/live composition after enhanced navigation.**
   - Prove `Kovo-Targets`/`Kovo-Live-Targets` snapshots include preserved layout
     targets after navigation, inserted leaf targets are discoverable, and stale
     targets do not double-morph.
-  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    proves an enhanced mutation after enhanced navigation sends preserved layout
-    and inserted leaf entries in `Kovo-Targets`/`Kovo-Live-Targets`, excludes a
-    stale pre-navigation target, and applies the inserted leaf fragment once.
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves mutation snapshots from post-navigation DOM send preserved layout and
+    inserted leaf entries in `Kovo-Targets`/`Kovo-Live-Targets` and apply the
+    inserted leaf fragment once. Remaining gap: integrated enhanced navigation
+    followed by mutation without test-harness body replacement.
 - [ ] **5. Render-equivalence and no-JS gates.**
   - Extend the §5.2/§9.2 gates so no-JS full load and JS-on enhanced navigation
     produce equivalent DOM over the corpus, after normalizing intentionally
@@ -264,29 +268,34 @@ through client navigation.
     are not intercepted.
 - [ ] **Full-document MVP:** JS-on fetches canonical HTML, morphs compatible
       segments, and falls back on unsupported document-shell drift.
-  - Evidence: pending.
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves full-document fetch, compatible leaf morphing, and document shell
+    updates; `packages/runtime/src/inline-loader-navigation.test.ts` proves
+    build-token and non-HTML fallback. Remaining gap: unsupported shell drift.
 - [ ] **Segment persistence:** unchanged layout island/media state survives;
       changed layout or leaf segments morph from server-rendered target HTML.
-  - Evidence: pending.
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves unchanged layout persistence and changed leaf morphing; `packages/runtime/src/inline-loader-navigation.test.ts`
+    proves divergent layout body replacement. Remaining gap: island/media state
+    survival.
 - [ ] **Render-equivalence:** enhanced navigation DOM matches fresh full-load DOM
       after allowed browser-state normalization.
   - Evidence: pending.
 - [ ] **Version and guard safety:** build-token mismatch, auth redirect, 403/404,
       and morph failure fall back to full GET or morph the correct server shell.
   - Evidence so far: `packages/runtime/src/inline-loader-navigation.test.ts`
-    proves build-token mismatch fallback across inline artifacts;
-    `packages/runtime/src/inline-loader-navigation.browser.test.ts` proves auth
-    redirect and 403 shell morphing. Remaining gap: 404 and morph-failure
-    fixture.
-- [x] **Mutation/live after navigation:** preserved and inserted targets refresh
+    proves build-token mismatch and non-HTML fallback across inline artifacts.
+    Remaining gap: auth redirect, 403/404, and morph-failure fixtures.
+- [ ] **Mutation/live after navigation:** preserved and inserted targets refresh
       correctly with no stale-target or double-morph races.
-  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     covers preserved layout target `layout-shell`, inserted target `cart-badge`,
-    stale target exclusion, and single fragment application after navigation.
+    and single fragment application from post-navigation DOM. Remaining gap:
+    integrated navigation-plus-mutation and stale-target exclusion.
 - [ ] **History/scroll/focus/a11y/bfcache:** back/forward, restoration,
       route-change announcement, axe, and bfcache hygiene pass.
   - Evidence: pending.
 - [x] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
       budget change is explicitly accepted.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
-    the measured shipped source was `inline-loader-gzip=5267/8192`.
+    the measured shipped source was `inline-loader-gzip=5340/8192`.

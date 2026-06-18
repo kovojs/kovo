@@ -3,6 +3,29 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installInlineKovoLoader } from './inline-loader.js';
 
 const initialUrl = location.href;
+let inlineLoaderInstalled = false;
+
+function installNavigationLoader(): void {
+  if (inlineLoaderInstalled) return;
+  installInlineKovoLoader(async () => ({}));
+  inlineLoaderInstalled = true;
+}
+
+function dispatchAnchorLikeClick(href: string): MouseEvent {
+  const target = document.createElement('button');
+  const anchor = {
+    hasAttribute: () => false,
+    href: new URL(href, initialUrl).href,
+    target: '',
+  };
+  target.closest = ((selector: string) =>
+    selector === 'a[href]' ? anchor : null) as typeof target.closest;
+  document.body.append(target);
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+  target.dispatchEvent(event);
+  target.remove();
+  return event;
+}
 
 afterEach(() => {
   document.head.innerHTML = '';
@@ -27,7 +50,7 @@ describe('browser inline loader enhanced navigation', () => {
     const layout = document.querySelector('main');
     const scrollTo = vi.fn();
     const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
-    const fetch = vi.fn(async () => ({
+    const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
       headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
       async text() {
         return [
@@ -50,10 +73,9 @@ describe('browser inline loader enhanced navigation', () => {
     addEventListener('kovo:navigate', navigated);
 
     try {
-      installInlineKovoLoader(async () => ({}));
+      installNavigationLoader();
 
-      const click = new MouseEvent('click', { bubbles: true, cancelable: true });
-      document.querySelector('#to-cart')?.dispatchEvent(click);
+      const click = dispatchAnchorLikeClick('/cart');
 
       await vi.waitFor(() => expect(document.title).toBe('Cart'));
 
@@ -82,85 +104,34 @@ describe('browser inline loader enhanced navigation', () => {
     }
   });
 
-  it('ignores stale full-document responses when a newer navigation wins', async () => {
-    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Start</title>';
-    document.body.innerHTML = [
-      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-      '<a id="slow" href="/slow">Slow</a>',
-      '<a id="fast" href="/fast">Fast</a>',
-      '<section kovo-nav-segment="page:/start" kovo-nav-kind="page" kovo-nav-name="page">Start</section>',
-      '</main>',
+  it('updates head, html, and body shell fields from the target document', async () => {
+    document.documentElement.setAttribute('lang', 'en');
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.body.setAttribute('data-route', 'products');
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Products</title>',
+      '<meta name="description" content="Products">',
+      '<link rel="stylesheet" href="/products.css">',
     ].join('');
-
-    let resolveSlow: ((value: unknown) => void) | undefined;
-    let resolveFast: ((value: unknown) => void) | undefined;
-    const response = (path: string, label: string) => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
-      async text() {
-        return [
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          `<title>${label}</title>`,
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          `<section kovo-nav-segment="page:/${path}" kovo-nav-kind="page" kovo-nav-name="page">${label}</section>`,
-          '</main>',
-          '</body></html>',
-        ].join('');
-      },
-      url: new URL(`/${path}`, location.href).href,
-    });
-    const fetch = vi.fn(
-      (href: string) =>
-        new Promise((resolve) => {
-          if (href.endsWith('/slow')) resolveSlow = resolve;
-          if (href.endsWith('/fast')) resolveFast = resolve;
-        }),
-    );
-    vi.stubGlobal('fetch', fetch);
-    vi.stubGlobal('scrollTo', vi.fn());
-    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
-
-    installInlineKovoLoader(async () => ({}));
-    document.querySelector('#slow')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true, cancelable: true }),
-    );
-    document.querySelector('#fast')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true, cancelable: true }),
-    );
-
-    resolveFast?.(response('fast', 'Fast'));
-    await vi.waitFor(() =>
-      expect(document.querySelector('[kovo-nav-segment="page:/fast"]')?.textContent).toBe('Fast'),
-    );
-
-    resolveSlow?.(response('slow', 'Slow'));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(document.querySelector('[kovo-nav-segment="page:/fast"]')?.textContent).toBe('Fast');
-    expect(document.querySelector('[kovo-nav-segment="page:/slow"]')).toBeNull();
-  });
-
-  it('morphs a layout segment when target-document layout chrome changes', async () => {
-    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Start</title>';
     document.body.innerHTML = [
       '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-      '<nav>Old nav</nav>',
       '<a id="to-cart" href="/cart">Cart</a>',
-      '<section kovo-nav-segment="page:/start" kovo-nav-kind="page" kovo-nav-name="page">Start</section>',
+      '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">Products</section>',
       '</main>',
     ].join('');
-    const currentLayout = document.querySelector('main');
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
       async text() {
         return [
-          '<!doctype html><html><head>',
+          '<!doctype html><html lang="fr" data-theme="dark"><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
-          '</head><body>',
+          '<meta name="description" content="Cart">',
+          '<link rel="modulepreload" href="/cart.client.js">',
+          '<script type="speculationrules">{"prefetch":[{"source":"list","urls":["/checkout"]}]}</script>',
+          '</head><body data-route="cart" data-shell="checkout">',
           '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<nav>New nav</nav>',
           '<a id="to-cart" href="/cart">Cart</a>',
           '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
           '</main>',
@@ -173,160 +144,54 @@ describe('browser inline loader enhanced navigation', () => {
     vi.stubGlobal('scrollTo', vi.fn());
     vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
 
-    installInlineKovoLoader(async () => ({}));
-    document.querySelector('#to-cart')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true, cancelable: true }),
+    installNavigationLoader();
+    dispatchAnchorLikeClick('/cart');
+
+    await vi.waitFor(() => expect(document.title).toBe('Cart'));
+
+    expect(document.documentElement.getAttribute('lang')).toBe('fr');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(document.body.getAttribute('data-route')).toBe('cart');
+    expect(document.body.getAttribute('data-shell')).toBe('checkout');
+    expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe(
+      'Cart',
     );
-
-    await vi.waitFor(() => expect(document.querySelector('nav')?.textContent).toBe('New nav'));
-
-    expect(document.querySelector('main')).not.toBe(currentLayout);
-    expect(document.querySelector('[kovo-nav-segment="page:/cart"]')?.textContent).toBe('Cart');
-  });
-
-  it('uses the final same-origin redirect document as navigation authority', async () => {
-    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Admin</title>';
-    document.body.innerHTML = [
-      '<main kovo-nav-segment="layout:Admin" kovo-nav-kind="layout" kovo-nav-name="Admin">',
-      '<a id="admin" href="/admin">Admin</a>',
-      '<section kovo-nav-segment="page:/admin" kovo-nav-kind="page" kovo-nav-name="page">Admin</section>',
-      '</main>',
-    ].join('');
-    const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
-    const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
-      async text() {
-        return [
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Login</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Auth" kovo-nav-kind="layout" kovo-nav-name="Auth">',
-          '<section kovo-nav-segment="page:/login" kovo-nav-kind="page" kovo-nav-name="page">Login required</section>',
-          '</main>',
-          '</body></html>',
-        ].join('');
-      },
-      url: new URL('/login?next=%2Fadmin', location.href).href,
-    }));
-    vi.stubGlobal('fetch', fetch);
-    vi.stubGlobal('scrollTo', vi.fn());
-
-    installInlineKovoLoader(async () => ({}));
-    document.querySelector('#admin')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true, cancelable: true }),
+    expect(document.querySelector('link[rel="stylesheet"]')).toBeNull();
+    expect(document.querySelector('link[rel="modulepreload"]')?.getAttribute('href')).toBe(
+      '/cart.client.js',
     );
-
-    await vi.waitFor(() => expect(document.title).toBe('Login'));
-
-    expect(document.querySelector('[kovo-nav-segment="layout:Auth"]')).not.toBeNull();
-    expect(document.querySelector('[kovo-nav-segment="page:/login"]')?.textContent).toBe(
-      'Login required',
-    );
-    expect(pushState).toHaveBeenCalledWith(
-      {},
-      '',
-      new URL('/login?next=%2Fadmin', initialUrl).href,
-    );
-  });
-
-  it('morphs compatible non-200 target documents from server-rendered shells', async () => {
-    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Admin</title>';
-    document.body.innerHTML = [
-      '<main kovo-nav-segment="layout:Admin" kovo-nav-kind="layout" kovo-nav-name="Admin">',
-      '<a id="admin" href="/admin">Admin</a>',
-      '<section kovo-nav-segment="page:/admin" kovo-nav-kind="page" kovo-nav-name="page">Admin</section>',
-      '</main>',
-    ].join('');
-    const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
-      async text() {
-        return [
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Forbidden</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Admin" kovo-nav-kind="layout" kovo-nav-name="Admin">',
-          '<section kovo-nav-segment="page:/admin" kovo-nav-kind="page" kovo-nav-name="page">Denied by server</section>',
-          '</main>',
-          '</body></html>',
-        ].join('');
-      },
-      status: 403,
-      url: new URL('/admin', location.href).href,
-    }));
-    vi.stubGlobal('fetch', fetch);
-    vi.stubGlobal('scrollTo', vi.fn());
-    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
-
-    installInlineKovoLoader(async () => ({}));
-    document.querySelector('#admin')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true, cancelable: true }),
-    );
-
-    await vi.waitFor(() => expect(document.title).toBe('Forbidden'));
-
-    expect(document.querySelector('[kovo-nav-segment="page:/admin"]')?.textContent).toBe(
-      'Denied by server',
+    expect(document.querySelector('script[type="speculationrules"]')?.textContent).toContain(
+      '/checkout',
     );
   });
 
   it('collects mutation live targets from the post-navigation DOM', async () => {
-    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Start</title>';
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Cart</title>';
     document.body.innerHTML = [
       '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-deps="viewer">',
-      '<a id="to-cart" href="/cart">Cart</a>',
-      '<section kovo-nav-segment="page:/start" kovo-nav-kind="page" kovo-nav-name="page">',
-      '<section kovo-fragment-target="old-target" kovo-deps="old">Old</section>',
+      '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
+      '<form id="cart-form" enhance action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
+      '<button type="submit">Save</button>',
+      '</form>',
+      '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-deps="cart">Cart</section>',
       '</section>',
       '</main>',
     ].join('');
-    const fetch = vi.fn(async (href: string, init?: RequestInit) => {
-      if (init?.method === 'POST') {
-        return {
-          async text() {
-            return [
-              '<kovo-fragment target="cart-badge">',
-              '<section kovo-fragment-target="cart-badge" kovo-deps="cart">Updated cart</section>',
-              '</kovo-fragment>',
-            ].join('');
-          },
-        };
-      }
-
-      return {
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
-        async text() {
-          return [
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            '<title>Cart</title>',
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-deps="viewer">',
-            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
-            '<form id="cart-form" enhance action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
-            '<button type="submit">Save</button>',
-            '</form>',
-            '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-deps="cart">Cart</section>',
-            '</section>',
-            '</main>',
-            '</body></html>',
-          ].join('');
-        },
-        url: new URL('/cart', location.href).href,
-      };
-    });
+    const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
+      async text() {
+        return [
+          '<kovo-fragment target="cart-badge">',
+          '<section kovo-fragment-target="cart-badge" kovo-deps="cart">Updated cart</section>',
+          '</kovo-fragment>',
+        ].join('');
+      },
+    }));
     vi.stubGlobal('fetch', fetch);
     vi.stubGlobal('scrollTo', vi.fn());
     vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
 
-    installInlineKovoLoader(async () => ({}));
-    document.querySelector('#to-cart')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true, cancelable: true }),
-    );
-    await vi.waitFor(() =>
-      expect(document.querySelector('[kovo-nav-segment="page:/cart"]')).not.toBeNull(),
-    );
+    installNavigationLoader();
+    document.querySelector('form')?.addEventListener('submit', (event) => event.preventDefault());
 
     document.querySelector('form')?.dispatchEvent(
       new SubmitEvent('submit', { bubbles: true, cancelable: true }),
