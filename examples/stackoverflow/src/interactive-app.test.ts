@@ -48,6 +48,25 @@ async function postForm(
 }
 
 describe('stackoverflow interactive app', () => {
+  it('serves every authored route as no-JS full HTML documents', async () => {
+    const { handler } = await buildSoInteractiveApp();
+
+    for (const route of ['/', '/questions/q1']) {
+      const response = await handler(
+        new Request(`http://example.test${route}`, {
+          headers: { Accept: 'text/html' },
+        }),
+      );
+      const html = await response.text();
+
+      expect(response.status, html).toBe(200);
+      expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+      expect(html).toContain('<!doctype html>');
+      expect(html).toContain('<main');
+      expect(html).not.toContain('<kovo-fragment');
+    }
+  });
+
   it('voteUp persists to PGlite and the fragment wire reflects the new score', async () => {
     const { db, handler } = await buildSoInteractiveApp();
 

@@ -296,9 +296,11 @@ through client navigation.
   - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves enhanced navigation body markup matches the fetched full target
     document after normalizing the loader-added focus tabindex; `examples/commerce/src/app-shell.test.ts`
-    proves Commerce `/`, `/cart`, and `/login` serve no-JS full HTML documents.
-    Remaining gap: corpus-level no-JS/full-load versus enhanced-navigation
-    equivalence gate.
+    proves Commerce `/`, `/cart`, and `/login` serve no-JS full HTML documents;
+    `examples/crm/src/interactive-app.test.ts` and
+    `examples/stackoverflow/src/interactive-app.test.ts` prove their authored
+    routes serve no-JS full HTML documents. Remaining gap: corpus-level
+    enhanced-navigation render-equivalence gate.
 - [x] **6. Partial response optimization is explicitly deferred.**
   - V1 enhanced navigation keeps the full target document as the only navigation
     oracle. Header-selected navigation fragments, target-chain hints, or
@@ -318,10 +320,12 @@ through client navigation.
 
 ## Verification Targets
 
-- [ ] **JS-off route walk:** every app route loads and navigates as full documents.
-  - Evidence so far: `examples/commerce/src/app-shell.test.ts` proves Commerce
-    `/`, `/cart`, and `/login` routes serve full HTML documents with no fragment
-    response markers. Remaining gap: broader example/app corpus route walk.
+- [x] **JS-off route walk:** every app route loads and navigates as full documents.
+  - Evidence: `examples/commerce/src/app-shell.test.ts` proves Commerce `/`,
+    `/cart`, and `/login` routes serve full HTML documents with no fragment
+    response markers; `examples/crm/src/interactive-app.test.ts` proves CRM `/`,
+    `/contacts`, and `/deals/d1`; `examples/stackoverflow/src/interactive-app.test.ts`
+    proves StackOverflow `/` and `/questions/q1`.
 - [x] **Anchor semantics:** `<Link>` emits `<a href>` and modified/external/hash/
       download navigations remain native.
   - Evidence: `packages/core/src/index.test.ts` and

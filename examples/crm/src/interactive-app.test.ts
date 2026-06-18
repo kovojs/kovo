@@ -57,6 +57,25 @@ async function postForm(
 }
 
 describe('crm interactive app', () => {
+  it('serves every authored route as no-JS full HTML documents', async () => {
+    const { handler } = await buildCrmInteractiveApp();
+
+    for (const route of ['/', '/contacts', '/deals/d1']) {
+      const response = await handler(
+        new Request(`http://example.test${route}`, {
+          headers: { Accept: 'text/html' },
+        }),
+      );
+      const html = await response.text();
+
+      expect(response.status, html).toBe(200);
+      expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+      expect(html).toContain('<!doctype html>');
+      expect(html).toContain('<main');
+      expect(html).not.toContain('<kovo-fragment');
+    }
+  });
+
   it('addContact inserts the contact and re-renders the contact-list region', async () => {
     const { db, handler } = await buildCrmInteractiveApp();
     const before = (await db.select().from(contacts)).length;
