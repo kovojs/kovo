@@ -71,13 +71,17 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Current generated imports are in `examples/commerce/src/app-test-helpers.ts`,
     `examples/commerce/src/app.test.ts`, and
     `examples/commerce/src/enhanced-navigation.test.ts`.
-- [ ] Delete `examples/commerce/src/source-truth.test.ts`.
+- [x] Delete `examples/commerce/src/source-truth.test.ts`.
   - Rationale: reading `src/generated/graph.json` from an example test is not a
     useful app-author DevX signal. Graph correctness should live in compiler/CLI
     package tests and explicit generated graph checks.
-- [ ] Move any remaining Commerce graph-smoke value into package-level coverage
+  - Evidence: `test ! -e examples/commerce/src/source-truth.test.ts` passed.
+- [x] Move any remaining Commerce graph-smoke value into package-level coverage
       or a CLI/explain test that does not require app tests to know the generated
       file path.
+  - Evidence: `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`
+    passed; `examples/commerce/scripts/emit-graph.mjs` owns graph, touch-graph,
+    and optimistic artifact freshness checks.
 - [x] Update Commerce Vite config to reference the authored entry only.
   - Target authoring shape:
     `plugins: [kovo({ app: '/src/app.tsx' })]`, with any demo-only conditional
