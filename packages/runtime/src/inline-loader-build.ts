@@ -402,7 +402,12 @@ function installInlineKovoLoader(im) {
       focusTarget?.focus?.({ preventScroll: true });
       const saved = sc[finalUrl.href];
       if (pop && saved) globalThis.scrollTo?.(saved[0], saved[1]);
-      else if (finalUrl.hash) hscl(finalUrl.hash);
+      else if (finalUrl.hash) {
+        hscl(finalUrl.hash);
+        setTimeout(() => {
+          if (navId === ni) hscl(finalUrl.hash);
+        });
+      }
       else globalThis.scrollTo?.(0, 0);
       if (triggerRoot) setTimeout(() => tr(triggerRoot));
       cu = finalUrl.href;
