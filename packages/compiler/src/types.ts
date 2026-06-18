@@ -264,6 +264,7 @@ export interface CompileResult {
   diagnostics: readonly CompilerDiagnostic[];
   files: readonly EmittedFile[];
   handlerExports: readonly string[];
+  hmrImpact: HmrImpactMetadata | null;
   loweredSource: string | null;
   outputContextFacts: readonly GeneratedOutputWriteFact[];
   platformSubstitutions: readonly PlatformSubstitution[];
@@ -271,6 +272,69 @@ export interface CompileResult {
   renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
   updateCoverage: readonly QueryUpdateCoverageFact[];
   viewTransitions: readonly ViewTransitionStamp[];
+}
+
+/** Compiler-owned HMR impact metadata derived from parsed/lowered facts (SPEC.md §5.2). */
+export interface HmrImpactMetadata {
+  clientHref: string | null;
+  component: HmrImpactComponentFact | null;
+  diagnostics: readonly HmrImpactDiagnosticFact[];
+  factHash: string;
+  liveTargetFacts: readonly LiveTargetFact[];
+  liveTargetFactsHash: string;
+  queryUpdatePlanHash: string;
+  routeShellHash: string | null;
+  sourceFileName: string;
+  sourceKind: 'component' | 'route-shell' | 'unknown';
+  stylesheetAssets: readonly HmrImpactStylesheetFact[];
+  stylesheetAssetsHash: string;
+  renderOutputHash: string;
+}
+
+export interface HmrImpactComponentFact {
+  domLeaf: string;
+  registryKey: string;
+}
+
+export interface HmrImpactDiagnosticFact {
+  code: CompilerDiagnostic['code'];
+  message: string;
+  severity: CompilerDiagnostic['severity'];
+}
+
+export interface HmrImpactStylesheetFact {
+  contentHash?: string;
+  cspHash?: string;
+  href: string;
+  sourceFileName: string;
+  styleRuleUsages?: readonly {
+    className: string;
+    moduleFileName: string;
+    source: string;
+    styleRef: string;
+  }[];
+}
+
+export type HmrImpactClass =
+  | 'componentRefresh'
+  | 'diagnosticError'
+  | 'fullReload'
+  | 'routeRefresh';
+
+export type HmrImpactReason =
+  | 'diagnostics'
+  | 'handler-only'
+  | 'live-target'
+  | 'missing-facts'
+  | 'query-plan'
+  | 'render-output'
+  | 'route-shell'
+  | 'style'
+  | 'topology';
+
+export interface HmrImpactClassification {
+  impact: HmrImpactClass;
+  reasons: readonly HmrImpactReason[];
 }
 
 export interface HandlerLowering {
@@ -368,6 +432,7 @@ export function createEmptyCompileResult(): CompileResult {
     diagnostics: [],
     files: [],
     handlerExports: [],
+    hmrImpact: null,
     loweredSource: null,
     outputContextFacts: [],
     platformSubstitutions: [],

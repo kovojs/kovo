@@ -154,7 +154,7 @@ render-plan version skew checks.
     server-truth refresh, the fallback ladder, typed-fact impact classification,
     diagnostic behavior, app-author API boundaries, and production/static-export
     absence requirements; `git diff --check` passes.
-- [ ] **2. Compiler HMR impact facts.**
+- [x] **2. Compiler HMR impact facts.**
   - Extend `compileComponentModule()` to return impact metadata:
     component registry key, DOM leaf, emitted client href, emitted query update
     plan hash, live target facts, stylesheet asset facts, and diagnostics.
@@ -165,6 +165,10 @@ render-plan version skew checks.
   - Cover with focused tests in `packages/compiler/src/vite.test.ts` or a new
     `hmr-impact.test.ts`, including the no-source-string rule from `SPEC.md`
     §5.2 rule 9.
+  - Evidence: `packages/compiler/src/hmr-impact.test.ts` covers handler-only,
+    query-plan, style, diagnostics, missing-fact fallback, and source-string trap
+    classification; `pnpm exec vitest --run packages/compiler/src/hmr-impact.test.ts`,
+    `pnpm exec tsc --noEmit`, and `pnpm run check:exports` pass.
 - [ ] **3. Vite plugin HMR transport.**
   - Extend `packages/compiler/src/vite.ts` with `handleHotUpdate` support and a
     typed dev-server websocket surface.

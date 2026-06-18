@@ -3,6 +3,7 @@ import { createKovoVitePlugin, type KovoVitePlugin, type KovoVitePluginOptions }
 
 export type { QueryPlanBootstrapInput, QueryPlanBootstrapOptions } from './emit/bootstrap.js';
 export { emitQueryPlanBootstrapModule } from './emit/bootstrap.js';
+export { classifyHmrImpact, createComponentHmrImpactMetadata } from './hmr-impact.js';
 export type {
   AttributeMergeResult,
   MergeableAttribute,
@@ -18,6 +19,13 @@ export type {
   CompileResult,
   CompileRouteModuleOptions,
   CompileRouteModuleResult,
+  HmrImpactClass,
+  HmrImpactClassification,
+  HmrImpactComponentFact,
+  HmrImpactDiagnosticFact,
+  HmrImpactMetadata,
+  HmrImpactReason,
+  HmrImpactStylesheetFact,
   RouteComponentImportRewrite,
   RoutePageComponentFact,
   RoutePageComponentPropFact,

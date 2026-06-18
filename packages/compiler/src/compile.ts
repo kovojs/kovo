@@ -17,6 +17,7 @@ import {
   findLiveTargetFacts,
 } from './internal-graph.js';
 import { cssIrHeader } from './ir.js';
+import { createComponentHmrImpactMetadata } from './hmr-impact.js';
 import {
   clientModuleUrl,
   clientModuleVersion,
@@ -230,18 +231,27 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
     viewTransitions: structuralLowering.viewTransitionStamps,
   });
+  const diagnostics = [
+    ...authoringSurfaceDiagnostics,
+    ...versionedHandlers.flatMap((handler) => handler.diagnostics ?? []),
+    ...structuralLowering.diagnostics,
+    ...styleExtraction.diagnostics,
+    ...serverRender.diagnostics,
+    ...packagePrefixDiagnostics,
+    ...validationDiagnostics,
+  ];
+  const renderEquivalenceChecks = [
+    semanticRenderEquivalenceCheck(
+      fileNames.server,
+      originalModel,
+      serverModule.executableSource,
+      compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {},
+    ),
+  ];
 
   return {
     componentGraphFacts,
-    diagnostics: [
-      ...authoringSurfaceDiagnostics,
-      ...versionedHandlers.flatMap((handler) => handler.diagnostics ?? []),
-      ...structuralLowering.diagnostics,
-      ...styleExtraction.diagnostics,
-      ...serverRender.diagnostics,
-      ...packagePrefixDiagnostics,
-      ...validationDiagnostics,
-    ],
+    diagnostics,
     files: [
       { fileName: fileNames.server, kind: 'server', source: serverModule.source },
       { fileName: fileNames.client, kind: 'client', source: clientSource },
@@ -253,6 +263,19 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...stateDerives.map((derive) => derive.exportName),
     ],
     handlerExports: versionedHandlers.map((handler) => handler.exportName),
+    hmrImpact: createComponentHmrImpactMetadata({
+      clientHref,
+      componentGraphFacts,
+      cssAssets,
+      diagnostics,
+      liveTargetFacts,
+      queryUpdatePlans,
+      renderEquivalenceChecks,
+      sourceFileName: options.fileName,
+      ...(cssSource
+        ? { stylesheetSources: [{ source: cssSource, sourceFileName: fileNames.css }] }
+        : {}),
+    }),
     loweredSource: serverRenderedSource,
     cssAssets,
     outputContextFacts: dedupeOutputContextFacts([
@@ -267,14 +290,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     queryUpdatePlans,
     // SPEC §5.2 rule 3: render the authored Kovo JSX model and the lowered server artifact
     // independently, then ignore only generated runtime stamps with an explicit allowlist.
-    renderEquivalenceChecks: [
-      semanticRenderEquivalenceCheck(
-        fileNames.server,
-        originalModel,
-        serverModule.executableSource,
-        compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {},
-      ),
-    ],
+    renderEquivalenceChecks,
     updateCoverage,
     viewTransitions: structuralLowering.viewTransitionStamps,
   };
