@@ -1,21 +1,4 @@
 {
-  "components": [
-    {
-      "fragments": ["cart-badge"],
-      "name": "CartBadge",
-      "queries": ["cart"]
-    },
-    {
-      "fragments": ["product-grid"],
-      "name": "ProductGrid",
-      "queries": ["productGrid"]
-    },
-    {
-      "fragments": ["order-history"],
-      "name": "OrderHistory",
-      "queries": ["orderHistory"]
-    }
-  ],
   "endpoints": [],
   "mutations": [
     {
@@ -70,9 +53,61 @@
       },
       "modulepreloads": [],
       "prefetch": false,
-      "queries": ["cart", "productGrid", "orderHistory"],
+      "route": "/",
+      "stylesheets": ["/assets/styles.css"],
+      "layouts": [
+        {
+          "name": "CommerceCartLayout",
+          "queries": []
+        }
+      ],
+      "navigationSegments": [
+        {
+          "id": "layout:CommerceCartLayout",
+          "kind": "layout",
+          "name": "CommerceCartLayout"
+        },
+        {
+          "components": ["CartBadge", "ProductGrid", "OrderHistory"],
+          "id": "page:/",
+          "kind": "page",
+          "name": "page",
+          "queries": ["cart", "orderHistory", "productGrid"]
+        }
+      ],
+      "queries": ["cart", "orderHistory", "productGrid"]
+    },
+    {
+      "i18n": ["en-US:cartLabel,productStock"],
+      "meta": {
+        "description": "Browse products and checkout with 0 verifiable cart item.",
+        "title": "Kovo Commerce (0)"
+      },
+      "modulepreloads": [],
+      "prefetch": false,
       "route": "/cart",
-      "stylesheets": ["/assets/styles.css"]
+      "stylesheets": ["/assets/styles.css"],
+      "layouts": [
+        {
+          "name": "CommerceCartLayout",
+          "queries": []
+        }
+      ],
+      "navigationSegments": [
+        {
+          "id": "layout:CommerceCartLayout",
+          "kind": "layout",
+          "name": "CommerceCartLayout"
+        },
+        {
+          "components": ["CartBadge", "ProductGrid", "OrderHistory"],
+          "id": "page:/cart",
+          "kind": "page",
+          "name": "page",
+          "queries": ["cart", "orderHistory", "productGrid"]
+        }
+      ],
+      "queries": ["cart", "orderHistory", "productGrid"]
     }
   ],
   "queries": [
@@ -116,5 +151,28 @@
       "reads": [],
       "unresolved": []
     }
-  }
+  },
+  "components": [
+    {
+      "domName": "cart-badge",
+      "exportName": "CartBadge",
+      "fragments": ["components/cart-badge/cart-badge"],
+      "name": "components/cart-badge/cart-badge",
+      "queries": ["cart"]
+    },
+    {
+      "domName": "order-history",
+      "exportName": "OrderHistory",
+      "fragments": ["components/order-history/order-history"],
+      "name": "components/order-history/order-history",
+      "queries": ["orderHistory"]
+    },
+    {
+      "domName": "product-grid",
+      "exportName": "ProductGrid",
+      "fragments": ["components/product-grid/product-grid"],
+      "name": "components/product-grid/product-grid",
+      "queries": ["productGrid"]
+    }
+  ]
 }

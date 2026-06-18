@@ -82,6 +82,7 @@ export interface ComponentExplain {
   derives?: readonly DeriveExplain[];
   disambiguatedDomName?: string;
   domName?: string;
+  exportName?: string;
   fragments?: readonly string[];
   handlers?: readonly HandlerExplain[];
   name: string;

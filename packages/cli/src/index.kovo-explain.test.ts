@@ -731,7 +731,13 @@ describe('kovo explain', () => {
     expect(
       kovoExplain(
         {
-          components: [{ name: 'CartBadge', queries: ['cart'] }],
+          components: [
+            {
+              exportName: 'CartBadge',
+              name: 'components/cart-badge/cart-badge',
+              queries: ['cart'],
+            },
+          ],
           mutations: [
             { guards: ['authed'], key: 'cart/add', writes: ['cart'] },
             { guards: ['authed'], invalidates: ['cart'], key: 'cart/remove' },

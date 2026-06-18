@@ -403,6 +403,7 @@ export const ProductGrid = component({
     expect(cartBadge.componentGraphFacts).toEqual([
       {
         domName: 'cart-badge',
+        exportName: 'CartBadge',
         fragments: ['components/cart/cart-badge/cart-badge'],
         name: 'components/cart/cart-badge/cart-badge',
         queries: ['cart'],
@@ -424,12 +425,14 @@ export const ProductGrid = component({
     expect(derived.graph.components).toEqual([
       {
         domName: 'cart-badge',
+        exportName: 'CartBadge',
         fragments: ['components/cart/cart-badge/cart-badge'],
         name: 'components/cart/cart-badge/cart-badge',
         queries: ['cart'],
       },
       {
         domName: 'product-grid',
+        exportName: 'ProductGrid',
         fragments: ['components/products/product-grid/product-grid'],
         name: 'components/products/product-grid/product-grid',
         queries: ['productGrid'],
@@ -451,6 +454,71 @@ export const ProductGrid = component({
       },
       routes: ['/cart'],
     });
+  });
+
+  it('derives page query facts from compiled route component usage', () => {
+    const cartBadge = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: cartBadgeSource,
+    });
+    const productGrid = compileComponentModule({
+      fileName: 'components/products/product-grid.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+export const ProductGrid = component({
+  queries: { productGrid: {} },
+  render: () => <section><ul data-bind="productGrid.items"></ul></section>,
+});
+`,
+    });
+    const routes = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+
+export const cart = route('/cart', {
+  page: () => (
+    <>
+      <CartBadge />
+      <ProductGrid />
+    </>
+  ),
+});
+`,
+    });
+
+    const derived = deriveAppGraph({
+      components: [cartBadge, productGrid],
+      graph: {
+        pages: [
+          {
+            meta: { title: 'Cart' },
+            route: '/cart',
+            stylesheets: ['/assets/styles.css'],
+          },
+        ],
+      },
+      routePages: [routes],
+    });
+
+    expect(derived.graph.pages).toEqual([
+      {
+        meta: { title: 'Cart' },
+        navigationSegments: [
+          {
+            components: ['CartBadge', 'ProductGrid'],
+            id: 'page:/cart',
+            kind: 'page',
+            name: 'page',
+            queries: ['cart', 'productGrid'],
+          },
+        ],
+        queries: ['cart', 'productGrid'],
+        route: '/cart',
+        stylesheets: ['/assets/styles.css'],
+      },
+    ]);
   });
 
   it('marks duplicate DOM leaves with stable registry-key disambiguation facts', () => {

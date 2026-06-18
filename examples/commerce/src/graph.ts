@@ -10,29 +10,13 @@ export interface CommerceGraphCartSummary {
 export const commerceStylesheets = ['/assets/styles.css'] as const;
 
 // SPEC.md §10.2/§11.2: commerce graph facts are declared once and consumed by
-// both the runtime example and generated acceptance artifacts.
+// both the runtime example and generated acceptance artifacts. Component and
+// page query facts are joined in scripts/emit-graph.mjs from compiler output.
 export function commerceGraphDeclarations(
   cart: CommerceGraphCartSummary,
   queries: readonly InvalidationQueryInput[],
 ) {
   return {
-    components: [
-      {
-        fragments: ['cart-badge'],
-        name: 'CartBadge',
-        queries: ['cart'],
-      },
-      {
-        fragments: ['product-grid'],
-        name: 'ProductGrid',
-        queries: ['productGrid'],
-      },
-      {
-        fragments: ['order-history'],
-        name: 'OrderHistory',
-        queries: ['orderHistory'],
-      },
-    ],
     endpoints: [],
     mutations: [
       {
@@ -76,7 +60,14 @@ export function commerceGraphDeclarations(
         meta: commerceCartPageMeta(cart),
         modulepreloads: [],
         prefetch: false,
-        queries: ['cart', 'productGrid', 'orderHistory'],
+        route: '/',
+        stylesheets: [...commerceStylesheets],
+      },
+      {
+        i18n: ['en-US:cartLabel,productStock'],
+        meta: commerceCartPageMeta(cart),
+        modulepreloads: [],
+        prefetch: false,
         route: '/cart',
         stylesheets: [...commerceStylesheets],
       },

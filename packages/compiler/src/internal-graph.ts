@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
 import ts from 'typescript';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
@@ -20,6 +21,7 @@ import type {
   RegistryFacts,
   RegistryGraphInput,
   RegistryTypeFactOptions,
+  RoutePageFact,
 } from './types.js';
 import type { StyleRuleUsage } from './css.js';
 
@@ -42,37 +44,12 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.components ?? []).flatMap((component) => component.componentGraphFacts),
   ]);
   const routePages = (options.routePages ?? []).flatMap((routePage) => routePage.routePageFacts);
+  const derivedRoutePages = derivedPageFactsFromRoutePages(routePages, components);
   const graph: RegistryGraphInput = {
     ...options.graph,
     components,
-    ...(routePages.length > 0
-      ? {
-          pages: [
-            ...(options.graph?.pages ?? []),
-            ...routePages.map((page) => ({
-              ...(page.layouts && page.layouts.length > 0
-                ? {
-                    layouts: page.layouts.map((layout) => ({
-                      name: layout.localName,
-                      queries: layout.queries,
-                    })),
-                  }
-                : {}),
-              ...(page.navigationSegments && page.navigationSegments.length > 0
-                ? {
-                    navigationSegments: page.navigationSegments.map((segment) => ({
-                      ...(segment.components === undefined ? {} : { components: segment.components }),
-                      id: segment.id,
-                      kind: segment.kind,
-                      name: segment.localName,
-                      ...(segment.queries === undefined ? {} : { queries: segment.queries }),
-                    })),
-                  }
-                : {}),
-              route: page.route,
-            })),
-          ],
-        }
+    ...(derivedRoutePages.length > 0 || (options.graph?.pages?.length ?? 0) > 0
+      ? { pages: mergeGraphPages(options.graph?.pages ?? [], derivedRoutePages) }
       : {}),
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
   };
@@ -143,11 +120,13 @@ export function componentGraphFact(
   model: ComponentModuleModel,
   fragmentTargets: readonly string[],
   styleRuleUsages: readonly StyleRuleUsage[] = [],
+  exportName?: string,
 ): ComponentGraphFact {
   const queries = componentQueryNames(model);
 
   return {
     domName,
+    ...(exportName === undefined ? {} : { exportName }),
     ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
     name: componentName,
     ...(queries.length === 0 ? {} : { queries }),
@@ -267,6 +246,120 @@ function deriveViewTransitionsFromGraph(graph: RegistryGraphInput): string[] {
   return [...new Set((graph.pages ?? []).flatMap((page) => page.viewTransitions ?? []))].sort(
     (left, right) => left.localeCompare(right),
   );
+}
+
+function derivedPageFactsFromRoutePages(
+  routePages: readonly RoutePageFact[],
+  components: readonly ComponentGraphFact[],
+): CoreGraph.PageExplain[] {
+  const componentQueriesByExportName = componentQueryMap(components);
+
+  return routePages.map((page) => {
+    const queries = pageComponentQueries(page, componentQueriesByExportName);
+    const navigationSegments = (page.navigationSegments ?? []).map((segment) => {
+      const segmentQueries =
+        segment.kind === 'page'
+          ? uniqueSorted(
+              (segment.components ?? []).flatMap(
+                (component) => componentQueriesByExportName.get(component) ?? [],
+              ),
+            )
+          : (segment.queries ?? []);
+
+      return {
+        ...(segment.components === undefined ? {} : { components: segment.components }),
+        id: segment.id,
+        kind: segment.kind,
+        name: segment.localName,
+        ...(segmentQueries.length === 0 ? {} : { queries: segmentQueries }),
+      };
+    });
+
+    return {
+      ...(page.layouts && page.layouts.length > 0
+        ? {
+            layouts: page.layouts.map((layout) => ({
+              name: layout.localName,
+              queries: layout.queries,
+            })),
+          }
+        : {}),
+      ...(navigationSegments.length > 0 ? { navigationSegments } : {}),
+      ...(queries.length === 0 ? {} : { queries }),
+      route: page.route,
+    };
+  });
+}
+
+function mergeGraphPages(
+  authoredPages: readonly CoreGraph.PageExplain[],
+  routePages: readonly CoreGraph.PageExplain[],
+): CoreGraph.PageExplain[] {
+  const result = [...authoredPages];
+  const routeCounts = new Map<string, number>();
+  for (const page of routePages) routeCounts.set(page.route, (routeCounts.get(page.route) ?? 0) + 1);
+
+  for (const page of routePages) {
+    const authoredMatches = result
+      .map((candidate, index) => ({ candidate, index }))
+      .filter(({ candidate }) => candidate.route === page.route);
+    if ((routeCounts.get(page.route) ?? 0) === 1 && authoredMatches.length === 1) {
+      const [match] = authoredMatches;
+      if (!match) continue;
+      result[match.index] = mergeGraphPage(match.candidate, page);
+    } else {
+      result.push(page);
+    }
+  }
+
+  return result;
+}
+
+function mergeGraphPage(
+  authoredPage: CoreGraph.PageExplain,
+  derivedPage: CoreGraph.PageExplain,
+): CoreGraph.PageExplain {
+  return {
+    ...authoredPage,
+    ...(derivedPage.layouts === undefined ? {} : { layouts: derivedPage.layouts }),
+    ...(derivedPage.navigationSegments === undefined
+      ? {}
+      : { navigationSegments: derivedPage.navigationSegments }),
+    ...(authoredPage.queries === undefined && derivedPage.queries === undefined
+      ? {}
+      : {
+          queries: uniqueSorted([...(authoredPage.queries ?? []), ...(derivedPage.queries ?? [])]),
+        }),
+  };
+}
+
+function componentQueryMap(
+  components: readonly ComponentGraphFact[],
+): ReadonlyMap<string, readonly string[]> {
+  const queriesByExportName = new Map<string, string[]>();
+
+  for (const component of components) {
+    const exportName = component.exportName;
+    if (!exportName) continue;
+    queriesByExportName.set(exportName, uniqueSorted(component.queries ?? []));
+  }
+
+  return queriesByExportName;
+}
+
+function pageComponentQueries(
+  page: RoutePageFact,
+  componentQueriesByExportName: ReadonlyMap<string, readonly string[]>,
+): string[] {
+  return uniqueSorted(
+    page.components.flatMap(
+      (component) => componentQueriesByExportName.get(component.localName) ?? [],
+    ),
+  );
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function componentQueryNames(model: ComponentModuleModel): string[] {

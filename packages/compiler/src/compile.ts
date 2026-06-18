@@ -169,6 +169,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       model,
       fragmentTargets,
       styleExtraction.ruleUsages,
+      firstComponentModel(originalModel)?.localName,
     ),
   ];
   const cssAssets = cssSource

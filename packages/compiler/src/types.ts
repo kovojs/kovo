@@ -30,7 +30,13 @@ export interface CompileComponentOptions {
  */
 export type ComponentGraphFact = Pick<
   CoreGraph.ComponentExplain,
-  'disambiguatedDomName' | 'domName' | 'fragments' | 'name' | 'queries' | 'styleRules'
+  | 'disambiguatedDomName'
+  | 'domName'
+  | 'exportName'
+  | 'fragments'
+  | 'name'
+  | 'queries'
+  | 'styleRules'
 >;
 
 /**

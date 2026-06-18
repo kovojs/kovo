@@ -36,6 +36,7 @@ export const Root = component({
       {
         disambiguatedDomName: 'components/accordion/root',
         domName: 'root',
+        exportName: 'Root',
         name: 'components/accordion/root',
       },
     ]);
@@ -43,6 +44,7 @@ export const Root = component({
       {
         disambiguatedDomName: 'components/tabs/root',
         domName: 'root',
+        exportName: 'Root',
         name: 'components/tabs/root',
       },
     ]);

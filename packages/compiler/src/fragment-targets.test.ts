@@ -450,6 +450,7 @@ export const CartTable = component({
     expect(result.componentGraphFacts).toEqual([
       {
         domName: 'cart-table',
+        exportName: 'CartTable',
         fragments: ['cart-row/cart-table'],
         name: 'cart-row/cart-table',
         queries: ['cart'],

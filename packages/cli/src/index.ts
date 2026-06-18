@@ -1921,7 +1921,7 @@ function queryConsumers(queryName: string, input: CoreGraph.KovoExplainInput): s
   const components =
     input.components
       ?.filter((component) => component.queries?.includes(queryName))
-      .map((component) => `component:${component.name}`) ?? [];
+      .map((component) => `component:${component.exportName ?? component.name}`) ?? [];
   const pages =
     input.pages
       ?.filter((page) => page.queries?.includes(queryName))

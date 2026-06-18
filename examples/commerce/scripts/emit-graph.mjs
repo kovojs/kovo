@@ -15,7 +15,9 @@ registerHooks({
   },
 });
 
+const { compileComponentModule, compileRouteModule } = await import('@kovojs/compiler');
 const { deriveAppGraph } = await import('@kovojs/compiler/graph');
+const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
 const {
   deriveInvalidationRegistry,
   serializeInvalidationRegistry,
@@ -35,6 +37,56 @@ const touchGraphPath = resolve(commerceRoot, 'src/generated/touch-graph.ts');
 const optimisticPath = resolve(commerceRoot, 'src/generated/optimistic/cart-add.ts');
 const source = readFileSync(sourcePath, 'utf8');
 const starterCart = { count: 0 };
+const componentNames = ['cart-badge', 'order-history', 'product-grid'];
+const registryFacts = {
+  mutationInputs: registryMutationInputs('examples/commerce/src/app.ts', source),
+  mutations: { 'cart/add': 'typeof addToCart' },
+};
+
+function registryMutationInputs(fileName, sourceText) {
+  return Object.fromEntries(
+    [...mutationInputFactsFromSource(fileName, sourceText).values()].map((fact) => [
+      fact.key,
+      fact.fields.map((field) => ({ ...field, provenance: 'registry' })),
+    ]),
+  );
+}
+
+const componentResults = componentNames.map((name) => {
+  const fileName = `examples/commerce/src/components/${name}.tsx`;
+  const result = compileComponentModule({
+    fileName,
+    registryFacts,
+    source: readFileSync(resolve(commerceRoot, `src/components/${name}.tsx`), 'utf8'),
+  });
+  assert.deepEqual(
+    result.diagnostics,
+    [],
+    `${fileName} has compiler diagnostics: ${JSON.stringify(result.diagnostics, null, 2)}`,
+  );
+  return result;
+});
+
+const routeResult = compileRouteModule({
+  artifactFileName: 'examples/commerce/src/generated/app-shell.kovo-route.tsx',
+  componentImportRewrites: [
+    { localName: 'CartBadge', specifier: './cart-badge.js' },
+    { localName: 'OrderHistory', specifier: './order-history.js' },
+    { localName: 'ProductGrid', specifier: './product-grid.js' },
+  ],
+  fileName: 'examples/commerce/src/app-shell.tsx',
+  source: readFileSync(resolve(commerceRoot, 'src/app-shell.tsx'), 'utf8'),
+});
+
+assert.deepEqual(
+  routeResult.diagnostics,
+  [],
+  `examples/commerce/src/app-shell.tsx has compiler diagnostics: ${JSON.stringify(
+    routeResult.diagnostics,
+    null,
+    2,
+  )}`,
+);
 
 const formatJson = (value, indent = 0) => {
   if (Array.isArray(value)) {
@@ -165,7 +217,9 @@ const commerceTouchGraph = {
 const commerceGraph = createCommerceGraph(starterCart, commerceTouchGraph, commerceQueryDomains);
 
 const { graph } = deriveAppGraph({
+  components: componentResults,
   graph: commerceGraph,
+  routePages: [routeResult],
 });
 const commerceInvalidationRegistry = deriveInvalidationRegistry({
   mutations: [{ mutation: 'cart/add', touchGraphKey: 'cart.addItem' }],

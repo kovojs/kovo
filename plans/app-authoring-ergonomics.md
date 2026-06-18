@@ -393,21 +393,26 @@ item inherits from rather than re-deciding it:
       `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.add-to-cart.test.ts app.rendering.test.ts app.auth.test.ts`;
       `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
       `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`.
-    - [ ] App shells, mutation registries, and `graph.ts` no longer carry manual
+    - [x] App shells, mutation registries, and `graph.ts` no longer carry manual
       query arrays for route/component/layout queries.
       - Evidence: runtime app-shell and mutation registry arrays are removed;
         graph query-domain facts now come from `extractQueryFactsFromProject()`
         in the example graph emitters and are exported as generated
         `commerceQueryDomains`, `crmQueryDomains`, and `soQueryDomains`.
+      - Evidence: Commerce component/page graph consumer facts are derived by
+        `deriveAppGraph({ components, routePages })`, joining route JSX component
+        usage to compiler component query facts via `exportName`; Commerce
+        `graph.ts` now keeps only authored mutation, page metadata, and optimistic
+        declarations.
       - Verification: `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`;
         `pnpm --filter @kovojs/example-crm run emit-graph -- --check`;
         `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`;
         `pnpm --filter @kovojs/example-commerce test -- source-truth.test.ts`;
         `pnpm --filter @kovojs/example-crm test -- src/graph.test.ts`;
         `pnpm --filter @kovojs/example-stackoverflow test -- src/kovo-graph.test.ts src/registry-facts.test.ts`.
-      - Gap: component/page graph consumer arrays in Commerce `graph.ts` remain
-        hand-authored display facts; removing those needs a compiler graph join
-        between route facts and component query facts.
+      - Verification: `rg -n "components:\s*\[|fragments:\s*\['cart-badge'|fragments:\s*\['product-grid'|fragments:\s*\['order-history'|queries:\s*\['cart'|queries:\s*\['productGrid'|queries:\s*\['orderHistory'" examples/commerce/src/graph.ts`
+        exits 1 with no hits; `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts packages/core/src/graph.test.ts packages/cli/src/index.kovo-explain.test.ts`;
+        `pnpm --filter @kovojs/example-commerce test -- source-truth.test.ts app-shell.test.ts app.rendering.test.ts`.
     - [x] Per-component generated live-target query key arrays are inferred from
       component declarations rather than emitted as explicit generated metadata.
       - Evidence: `componentLiveTargetRenderer()` now normalizes
