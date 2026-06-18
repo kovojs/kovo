@@ -1398,6 +1398,24 @@ dialog.search-dialog::backdrop {
   padding: 0.5rem;
 }
 
+.search-results-label,
+.search-results-empty {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  padding: 0.55rem 0.75rem 0.35rem;
+  text-transform: uppercase;
+}
+
+.search-results-empty {
+  border-bottom: 1px solid var(--edge-soft);
+  color: var(--dim);
+  margin-bottom: 0.25rem;
+  padding-bottom: 0.65rem;
+  text-transform: none;
+}
+
 .search-results a {
   align-items: center;
   color: var(--ink);
@@ -1428,6 +1446,17 @@ dialog.search-dialog::backdrop {
 
 .search-results .result-kind[data-kind='function'] {
   color: var(--teal);
+}
+
+.search-results .result-kind[data-kind='api'],
+.search-results .result-kind[data-kind='spec'] {
+  color: var(--purple);
+}
+
+.search-results .result-kind[data-kind='app'],
+.search-results .result-kind[data-kind='guide'],
+.search-results .result-kind[data-kind='start'] {
+  color: var(--sky);
 }
 
 .search-results .result-body {

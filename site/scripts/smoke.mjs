@@ -103,6 +103,22 @@ try {
   await page.click('button[on\\:click^="/c/search.js"]');
   await page.waitForFunction(() => document.getElementById('site-search')?.open === true);
   check(scriptRequests.includes('/c/search.js'), 'JS: search module loads on first interaction');
+  check(
+    (await page.locator('#site-search-results li.active a').getAttribute('href')) ===
+      '/docs/quickstart/',
+    'JS: search zero-state suggests useful links',
+  );
+
+  await page.fill('#site-search input', 'zzzz-no-results');
+  await page.waitForFunction(() =>
+    document
+      .querySelector('#site-search-results .search-results-empty')
+      ?.textContent?.includes('No matching docs'),
+  );
+  check(
+    (await page.locator('#site-search-results a[href="/api/"]').count()) === 1,
+    'JS: search empty-state keeps suggested links',
+  );
 
   await page.fill('#site-search input', 'mutation');
   await page.waitForFunction(
