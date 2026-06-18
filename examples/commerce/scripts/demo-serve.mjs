@@ -7,7 +7,7 @@ import { createDemoServeServer, runDemoServeCli } from '../../../scripts/demo-se
 // handler (SSR routes, add-to-cart `/_m/*`, and the `/products?after=` "More"
 // pagination). Run `pnpm run build:demo` first so built `/assets/*` stylesheets
 // are present. This is the hosted demo path; production app serve uses
-// `kovo build ./src/app-shell.tsx` and `dist/server/server.mjs`.
+// `kovo build ./src/app.tsx` and `dist/server/server.mjs`.
 
 const commerceRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -17,20 +17,20 @@ export function createCommerceDemoServer(options = {}) {
     root: commerceRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     async loadInstanceFactory(vite) {
-      const appShell = await vite.ssrLoadModule('/src/generated/app-shell.kovo-route.tsx');
-      const { createCommerceAppShell } = appShell;
-      if (typeof createCommerceAppShell !== 'function') {
+      const appShell = await vite.ssrLoadModule('/src/generated/app.kovo-route.tsx');
+      const { createCommerceApp } = appShell;
+      if (typeof createCommerceApp !== 'function') {
         throw new Error(
-          'commerce /src/generated/app-shell.kovo-route.tsx must export createCommerceAppShell.',
+          'commerce /src/generated/app.kovo-route.tsx must export createCommerceApp.',
         );
       }
       // A reference instance only supplies the route table for the ownership
       // predicate; every visitor's requests run against their own fresh instance
-      // (createCommerceAppShell() with no db mints a fresh seeded PGlite).
-      const reference = createCommerceAppShell();
+      // (createCommerceApp() with no db mints a fresh seeded PGlite).
+      const reference = createCommerceApp();
       return {
         referenceApp: reference.app,
-        buildHandler: () => createCommerceAppShell().nodeHandler,
+        buildHandler: () => createCommerceApp().nodeHandler,
       };
     },
     ...options,

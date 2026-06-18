@@ -3,7 +3,7 @@
 import { component } from '@kovojs/core';
 import { t } from '@kovojs/server';
 
-import { commerceMessages, type CartQueryResult } from '../app.js';
+import { commerceMessages, type CartQueryResult } from '../domain.js';
 import { cartQuery } from '../queries.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 

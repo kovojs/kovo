@@ -23,20 +23,20 @@ import {
   type CommerceAuthRequest,
   type CommerceDb,
   type CommerceSession,
-} from './app.js';
+} from './domain.js';
 import { LoginForm } from './components/auth-forms.js';
 import { CartBadge } from './components/cart-badge.js';
 import { OrderHistory } from './components/order-history.js';
 import { ProductGrid, ProductGridError } from './components/product-grid.js';
 
-export type CommerceShellRequest = Request & CommerceAuthRequest;
+export type CommerceRouteRequest = Request & CommerceAuthRequest;
 
-export interface CommerceAppShellOptions {
+export interface CommerceAppOptions {
   db?: CommerceDb;
   onError?: ServerErrorHandler;
 }
 
-export interface CommerceAppShell {
+export interface CommerceApp {
   app: KovoApp<CommerceSession>;
   db: CommerceDb;
   nodeHandler: NodeRequestHandler;
@@ -51,7 +51,7 @@ function CommerceCartShell({ children }: { children?: unknown }): string {
   );
 }
 
-function CommerceCartPage({ request }: { request: CommerceShellRequest }): string {
+function CommerceCartPage({ request }: { request: CommerceRouteRequest }): string {
   return (
     <>
       <CartBadge />
@@ -78,7 +78,7 @@ export const commerceHomeRoute = route('/', {
     title: 'Kovo Commerce',
   },
   layout: CommerceCartLayout,
-  page(_context, request: CommerceShellRequest) {
+  page(_context, request: CommerceRouteRequest) {
     return <CommerceCartPage request={request} />;
   },
   stylesheets: commerceStylesheets,
@@ -91,7 +91,7 @@ export const commerceCartRoute = route('/cart', {
     title: 'Kovo Commerce',
   },
   layout: CommerceCartLayout,
-  page(_context, request: CommerceShellRequest) {
+  page(_context, request: CommerceRouteRequest) {
     return <CommerceCartPage request={request} />;
   },
   stylesheets: commerceStylesheets,
@@ -102,7 +102,7 @@ export const commerceLoginRoute = route('/login', {
     description: 'Sign in to the Kovo commerce reference app.',
     title: 'Kovo Commerce Sign In',
   },
-  page(context, _request: CommerceShellRequest) {
+  page(context, _request: CommerceRouteRequest) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/cart';
     return (
       <main class="mx-auto max-w-md p-6">
@@ -113,7 +113,7 @@ export const commerceLoginRoute = route('/login', {
   stylesheets: commerceStylesheets,
 });
 
-export function createCommerceAppShell(options: CommerceAppShellOptions = {}): CommerceAppShell {
+export function createCommerceApp(options: CommerceAppOptions = {}): CommerceApp {
   const db = options.db ?? createCommerceDb();
   const app: KovoApp<CommerceSession> = createApp<CommerceSession, CommerceDb>({
     db: () => db,
@@ -124,7 +124,7 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
       return routeValueToHtml(value);
     },
     routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
-    sessionProvider: (request) => commerceSessionProvider(request as CommerceShellRequest),
+    sessionProvider: (request) => commerceSessionProvider(request as CommerceRouteRequest),
   });
   const requestHandler = createRequestHandler(app);
 
@@ -142,8 +142,6 @@ function routeValueToHtml(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export const commerceAppShell = createCommerceAppShell();
-export const commerceRequestHandler = commerceAppShell.requestHandler;
-export const commerceNodeHandler = commerceAppShell.nodeHandler;
+export const commerceApp = createCommerceApp();
 
-export default commerceAppShell.app;
+export default commerceApp.app;

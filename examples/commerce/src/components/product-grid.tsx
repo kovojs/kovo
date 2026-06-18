@@ -4,7 +4,7 @@ import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
-import { addToCart, type ProductGridResult } from '../app.js';
+import { addToCart, type ProductGridResult } from '../domain.js';
 import { productGridQuery } from '../queries.js';
 
 const addToCartForm = form('cart/add');

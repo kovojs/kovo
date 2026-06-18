@@ -10,8 +10,8 @@ import {
   type AddToCartInput,
   type CommerceDb,
   type ProductGridInput,
-} from './app.js';
-import { createCommerceAppShell, type CommerceAppShell } from './generated/app-shell.kovo-route.js';
+} from './domain.js';
+import { createCommerceApp, type CommerceApp } from './generated/app.kovo-route.js';
 import { cartItems, orders, products } from './schema.js';
 
 export type ProductRow = { id: string; stock: number; unitPrice: number };
@@ -145,7 +145,7 @@ export function productGridInput(after: string | null, limit?: number): ProductG
 }
 
 export interface CommerceScenarioClient {
-  readonly shell: CommerceAppShell;
+  readonly shell: CommerceApp;
   get(path: string, options?: CommerceScenarioRequestOptions): Promise<Response>;
   postForm(
     path: string,
@@ -182,7 +182,7 @@ const cartPageLiveTargets = [
 ];
 
 export function createCommerceScenarioClient(
-  shell = createCommerceAppShell(),
+  shell = createCommerceApp(),
 ): CommerceScenarioClient {
   const cookies = new Map<string, string>();
 

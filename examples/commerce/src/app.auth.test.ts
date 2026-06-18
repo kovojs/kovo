@@ -17,7 +17,7 @@ import {
   commerceSignIn,
   commerceSession,
   createCommerceDb,
-} from './app.js';
+} from './domain.js';
 import {
   commerceAuthRequest,
   createCommerceScenarioClient,

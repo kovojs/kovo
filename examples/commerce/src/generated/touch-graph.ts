@@ -1,4 +1,4 @@
-import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from '../app.js';
+import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from '../domain.js';
 
 export const commerceTouchGraph = {
   "cart.addItem": {
@@ -6,20 +6,20 @@ export const commerceTouchGraph = {
       {
         "domain": "cart",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:262",
+        "site": "examples/commerce/src/domain.ts:248",
         "via": "cart_items"
       },
       {
         "domain": "order",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:267",
+        "site": "examples/commerce/src/domain.ts:253",
         "via": "orders"
       },
       {
         "domain": "product",
         "keys": "arg:productId",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:275",
+        "site": "examples/commerce/src/domain.ts:261",
         "via": "products"
       }
     ],
@@ -63,7 +63,7 @@ declare module '@kovojs/core' {
   }
 
   interface MutationRegistry {
-    'cart/add': typeof import('../app.js').addToCart;
+    'cart/add': typeof import('../domain.js').addToCart;
   }
 
   interface InvalidationSets extends CommerceInvalidationSets {}

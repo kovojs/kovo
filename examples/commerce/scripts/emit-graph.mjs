@@ -23,7 +23,7 @@ const ts = await import('typescript');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
-const sourcePath = resolve(commerceRoot, 'src/app.ts');
+const sourcePath = resolve(commerceRoot, 'src/domain.ts');
 const graphPath = resolve(commerceRoot, 'src/generated/graph.json');
 const touchGraphPath = resolve(commerceRoot, 'src/generated/touch-graph.ts');
 const optimisticPath = resolve(commerceRoot, 'src/generated/optimistic/cart-add.ts');
@@ -63,13 +63,13 @@ const routeFactsPath = resolve(tempRoot, 'route.facts.json');
 runKovo([
   'compile',
   'route',
-  resolve(commerceRoot, 'src/app-shell.tsx'),
+  resolve(commerceRoot, 'src/app.tsx'),
   '--out',
-  resolve(tempRoot, 'app-shell.kovo-route.tsx'),
+  resolve(tempRoot, 'app.kovo-route.tsx'),
   '--file-name',
-  'examples/commerce/src/app-shell.tsx',
+  'examples/commerce/src/app.tsx',
   '--artifact-file-name',
-  'examples/commerce/src/generated/app-shell.kovo-route.tsx',
+  'examples/commerce/src/generated/app.kovo-route.tsx',
   '--rewrite',
   'CartBadge=./cart-badge.js',
   '--rewrite',
@@ -114,7 +114,7 @@ const siteLineNumber = (site) => Number(String(site).split(':').pop() ?? 0);
 // loaders/handlers; nothing here is hand-authored. The deriver turns each
 // (mutation effects × query shape) pair into a committed optimistic transform
 // or a named §10.5 punt.
-const extractionFiles = ['app.ts', 'queries.ts', 'graph.ts', 'schema.ts', 'db.ts'].map((rel) => ({
+const extractionFiles = ['domain.ts', 'queries.ts', 'graph.ts', 'schema.ts', 'db.ts'].map((rel) => ({
   fileName: `examples/commerce/src/${rel}`,
   source: readFileSync(resolve(commerceRoot, `src/${rel}`), 'utf8'),
 }));
@@ -130,7 +130,7 @@ const shapeByQuery = new Map(algebraicShapes.map((shape) => [shape.query, shape]
 
 // Map each exported handler variable to the line span of its
 // definition, so extracted write sites can be attributed to the right handler.
-const appSourceFile = ts.createSourceFile('app.ts', source, ts.ScriptTarget.Latest, true);
+const appSourceFile = ts.createSourceFile('domain.ts', source, ts.ScriptTarget.Latest, true);
 const handlerSpans = new Map();
 const collectSpans = (node) => {
   if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
@@ -285,7 +285,7 @@ const staticGraphArtifacts = compileDrizzleStatic({
 
 const graphJson = `${formatJson(graph)}\n`;
 const commerceInvalidationRegistrySource = staticGraphArtifacts.invalidationRegistrySource;
-const touchGraphSource = `import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from '../app.js';
+const touchGraphSource = `import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from '../domain.js';
 
 export const commerceTouchGraph = ${formatJson(commerceTouchGraph)} as const;
 
@@ -300,7 +300,7 @@ declare module '@kovojs/core' {
   }
 
   interface MutationRegistry {
-    'cart/add': typeof import('../app.js').addToCart;
+    'cart/add': typeof import('../domain.js').addToCart;
   }
 
   interface InvalidationSets extends CommerceInvalidationSets {}
@@ -328,7 +328,7 @@ compileDrizzleOptimistic({
   effects: cartAddEffects,
   entries: cartAddOptimisticQueries,
   factsPath: optimisticFactsPath,
-  formImport: { name: 'addToCartForm', path: '../../app.js' },
+  formImport: { name: 'addToCartForm', path: '../../domain.js' },
   outPath: optimisticSourcePath,
   queue: 'cart',
 });
@@ -374,7 +374,7 @@ function compileMutationInputs() {
     '--out',
     outPath,
     '--file-name',
-    'examples/commerce/src/app.ts',
+    'examples/commerce/src/domain.ts',
   ]);
   return readJson(outPath);
 }

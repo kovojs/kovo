@@ -15,9 +15,9 @@ export const commerceViteConfig = defineConfig({
     },
   },
   // KOVO_DEMO_MULTITENANT (scripts/demo-serve.mjs) mounts its own per-session
-  // request dispatch, so drop the singleton app-shell dev plugin that would
+  // request dispatch, so drop the singleton app dev plugin that would
   // otherwise also claim app routes against one shared PGlite (SPEC.md §9.5).
-  plugins: process.env.KOVO_DEMO_MULTITENANT ? [] : [commerceSharedAppShellDevPlugin()],
+  plugins: process.env.KOVO_DEMO_MULTITENANT ? [] : [commerceSharedAppDevPlugin()],
   // The Drizzle/PGlite (WASM) data layer makes the build/dev tests (which spawn
   // real vite builds and a dev server) run well past Vitest's 5s default,
   // especially under the suite's parallelism. Give them room.
@@ -62,7 +62,7 @@ interface CommerceDevPlugin {
   name: string;
 }
 
-export function commerceSharedAppShellDevPlugin(): CommerceDevPlugin {
+export function commerceSharedAppDevPlugin(): CommerceDevPlugin {
   return {
     async configureServer(server) {
       const serverModule = await server.ssrLoadModule('@kovojs/server');
@@ -72,14 +72,13 @@ export function commerceSharedAppShellDevPlugin(): CommerceDevPlugin {
       }
 
       const integration = createDevIntegration({
-        moduleId: '/src/generated/app-shell.kovo-route.tsx',
-        name: 'kovo-commerce-app-shell-dev',
-        nodeHandlerExportName: 'commerceNodeHandler',
+        moduleId: '/src/generated/app.kovo-route.tsx',
+        name: 'kovo-commerce-app-dev',
         order: 'post',
       }) as { plugin: { configureServer(server: CommerceDevServer): void | DevPostHook } };
 
       return integration.plugin.configureServer(server);
     },
-    name: 'kovo-commerce-app-shell-dev-loader',
+    name: 'kovo-commerce-app-dev-loader',
   };
 }

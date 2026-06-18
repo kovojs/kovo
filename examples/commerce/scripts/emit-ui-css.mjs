@@ -37,7 +37,7 @@ try {
       'package-css',
       '@kovojs/ui',
       '--entry',
-      resolve(commerceRoot, 'src/app.ts'),
+      resolve(commerceRoot, 'src/app.tsx'),
       '--out',
       componentCssPath,
     ],

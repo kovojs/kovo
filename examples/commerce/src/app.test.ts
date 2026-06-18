@@ -14,8 +14,8 @@ import {
   htmlFormFields,
 } from '@kovojs/test/html-fragment';
 
-import { commerceAuthCsrf, commerceCsrf, commerceSignIn } from './app.js';
-import { createCommerceAppShell } from './generated/app-shell.kovo-route.js';
+import { commerceAuthCsrf, commerceCsrf, commerceSignIn } from './domain.js';
+import { createCommerceApp } from './generated/app.kovo-route.js';
 
 let server: Server | undefined;
 
@@ -32,10 +32,10 @@ afterEach(async () => {
   server = undefined;
 });
 
-describe('commerce app shell HTTP entry', () => {
+describe('commerce app HTTP entry', () => {
   it('serves the commerce cart document and query endpoint over node:http', async () => {
     const errors: unknown[] = [];
-    const shell = createCommerceAppShell({
+    const shell = createCommerceApp({
       onError(error) {
         errors.push(error);
       },
@@ -61,7 +61,7 @@ describe('commerce app shell HTTP entry', () => {
   });
 
   it('serves every commerce route as no-JS full HTML documents', async () => {
-    const shell = createCommerceAppShell();
+    const shell = createCommerceApp();
 
     server = createServer(shell.nodeHandler);
     await listen(server);
@@ -82,7 +82,7 @@ describe('commerce app shell HTTP entry', () => {
   });
 
   it('renders home and cart with a shared navigation layout segment', async () => {
-    const shell = createCommerceAppShell();
+    const shell = createCommerceApp();
 
     server = createServer(shell.nodeHandler);
     await listen(server);
@@ -106,8 +106,8 @@ describe('commerce app shell HTTP entry', () => {
     expect(cartLayout).toBe(homeLayout);
   });
 
-  it('dispatches enhanced and no-JS cart mutations through the shared app shell over HTTP', async () => {
-    const shell = createCommerceAppShell();
+  it('dispatches enhanced and no-JS cart mutations through the shared app over HTTP', async () => {
+    const shell = createCommerceApp();
     const sessionCookie = await signInCookie(shell.db);
     const sessionRequest = {
       db: shell.db,
@@ -167,7 +167,7 @@ describe('commerce app shell HTTP entry', () => {
   });
 
   it('dispatches shell login and logout mutations', async () => {
-    const shell = createCommerceAppShell();
+    const shell = createCommerceApp();
 
     server = createServer(shell.nodeHandler);
     await listen(server);
@@ -255,7 +255,7 @@ function expectCommerceShellDocument(html: string): void {
   expect(htmlFormActions(html)).toContain('/_m/cart/add');
 }
 
-async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db']): Promise<string> {
+async function signInCookie(db: ReturnType<typeof createCommerceApp>['db']): Promise<string> {
   const request = {
     authCsrfId: 'commerce-shell-login',
     db,
@@ -280,7 +280,7 @@ async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db'])
   return sessionCookie;
 }
 
-function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceAppShell>['db']) {
+function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceApp>['db']) {
   return {
     authCsrfId: 'commerce-shell-login',
     db,

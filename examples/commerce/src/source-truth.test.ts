@@ -17,7 +17,7 @@ import {
   loadCartQuery,
   productGridQuery,
   type CartQueryResult,
-} from './app.js';
+} from './domain.js';
 import { queryContext } from './app-test-helpers.js';
 import { resetProducts } from './app-test-helpers.js';
 

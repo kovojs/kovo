@@ -5,7 +5,7 @@ import { chromium, type Browser } from 'playwright';
 import { afterEach, describe, expect, it } from 'vitest';
 import axe from 'axe-core';
 
-import { createCommerceAppShell } from './generated/app-shell.kovo-route.js';
+import { createCommerceApp } from './generated/app.kovo-route.js';
 
 let browser: Browser | undefined;
 let server: Server | undefined;
@@ -22,7 +22,7 @@ afterEach(async () => {
 
 describe('commerce enhanced navigation', () => {
   it('preserves the shared layout and matches the full target document', async () => {
-    const shell = createCommerceAppShell();
+    const shell = createCommerceApp();
     server = createServer(shell.nodeHandler);
     await listen(server);
     const origin = serverOrigin(server);

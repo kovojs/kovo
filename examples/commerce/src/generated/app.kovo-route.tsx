@@ -25,20 +25,20 @@ import {
   type CommerceAuthRequest,
   type CommerceDb,
   type CommerceSession,
-} from "../app.js";
+} from "../domain.js";
 import { LoginForm } from "../components/auth-forms.js";
 import { CartBadge } from "./cart-badge.js";
 import { OrderHistory } from "./order-history.js";
 import { ProductGrid, ProductGridError } from "./product-grid.js";
 
-export type CommerceShellRequest = Request & CommerceAuthRequest;
+export type CommerceRouteRequest = Request & CommerceAuthRequest;
 
-export interface CommerceAppShellOptions {
+export interface CommerceAppOptions {
   db?: CommerceDb;
   onError?: ServerErrorHandler;
 }
 
-export interface CommerceAppShell {
+export interface CommerceApp {
   app: KovoApp<CommerceSession>;
   db: CommerceDb;
   nodeHandler: NodeRequestHandler;
@@ -53,7 +53,7 @@ function CommerceCartShell({ children }: { children?: unknown }): string {
   );
 }
 
-function CommerceCartPage({ request }: { request: CommerceShellRequest }): string {
+function CommerceCartPage({ request }: { request: CommerceRouteRequest }): string {
   return (
     <>
       <CartBadge />
@@ -80,7 +80,7 @@ export const commerceHomeRoute = route('/', {
     title: 'Kovo Commerce',
   },
   layout: CommerceCartLayout,
-  page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CommerceCartPage","props":[{"expression":"request","name":"request"}],"propsExpression":"{ request: request }","serializedPropsExpression":"JSON.stringify({ request: request })"}],"fileName":"examples/commerce/src/app-shell.tsx","layouts":[{"localName":"CommerceCartLayout","queries":[]}],"navigationSegments":[{"id":"layout:CommerceCartLayout","kind":"layout","localName":"CommerceCartLayout","queries":[]},{"components":["CommerceCartPage"],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, function page(_context, request: CommerceShellRequest) {
+  page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CommerceCartPage","props":[{"expression":"request","name":"request"}],"propsExpression":"{ request: request }","serializedPropsExpression":"JSON.stringify({ request: request })"}],"fileName":"examples/commerce/src/app.tsx","layouts":[{"localName":"CommerceCartLayout","queries":[]}],"navigationSegments":[{"id":"layout:CommerceCartLayout","kind":"layout","localName":"CommerceCartLayout","queries":[]},{"components":["CommerceCartPage"],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, function page(_context, request: CommerceRouteRequest) {
     return <CommerceCartPage request={request} />;
   }),
   stylesheets: commerceStylesheets,
@@ -93,7 +93,7 @@ export const commerceCartRoute = route('/cart', {
     title: 'Kovo Commerce',
   },
   layout: CommerceCartLayout,
-  page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CommerceCartPage","props":[{"expression":"request","name":"request"}],"propsExpression":"{ request: request }","serializedPropsExpression":"JSON.stringify({ request: request })"}],"fileName":"examples/commerce/src/app-shell.tsx","layouts":[{"localName":"CommerceCartLayout","queries":[]}],"navigationSegments":[{"id":"layout:CommerceCartLayout","kind":"layout","localName":"CommerceCartLayout","queries":[]},{"components":["CommerceCartPage"],"id":"page:/cart","kind":"page","localName":"page"}],"route":"/cart"}, function page(_context, request: CommerceShellRequest) {
+  page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CommerceCartPage","props":[{"expression":"request","name":"request"}],"propsExpression":"{ request: request }","serializedPropsExpression":"JSON.stringify({ request: request })"}],"fileName":"examples/commerce/src/app.tsx","layouts":[{"localName":"CommerceCartLayout","queries":[]}],"navigationSegments":[{"id":"layout:CommerceCartLayout","kind":"layout","localName":"CommerceCartLayout","queries":[]},{"components":["CommerceCartPage"],"id":"page:/cart","kind":"page","localName":"page"}],"route":"/cart"}, function page(_context, request: CommerceRouteRequest) {
     return <CommerceCartPage request={request} />;
   }),
   stylesheets: commerceStylesheets,
@@ -104,7 +104,7 @@ export const commerceLoginRoute = route('/login', {
     description: 'Sign in to the Kovo commerce reference app.',
     title: 'Kovo Commerce Sign In',
   },
-  page: __kovoDefineCompiledRoutePage({"components":[{"localName":"LoginForm","props":[{"expression":"next","name":"next"}],"propsExpression":"{ next: next }","serializedPropsExpression":"JSON.stringify({ next: next })"}],"fileName":"examples/commerce/src/app-shell.tsx","navigationSegments":[{"components":["LoginForm"],"id":"page:/login","kind":"page","localName":"page"}],"route":"/login"}, function page(context, _request: CommerceShellRequest) {
+  page: __kovoDefineCompiledRoutePage({"components":[{"localName":"LoginForm","props":[{"expression":"next","name":"next"}],"propsExpression":"{ next: next }","serializedPropsExpression":"JSON.stringify({ next: next })"}],"fileName":"examples/commerce/src/app.tsx","navigationSegments":[{"components":["LoginForm"],"id":"page:/login","kind":"page","localName":"page"}],"route":"/login"}, function page(context, _request: CommerceRouteRequest) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/cart';
     return (
       <main class="mx-auto max-w-md p-6">
@@ -115,7 +115,7 @@ export const commerceLoginRoute = route('/login', {
   stylesheets: commerceStylesheets,
 });
 
-export function createCommerceAppShell(options: CommerceAppShellOptions = {}): CommerceAppShell {
+export function createCommerceApp(options: CommerceAppOptions = {}): CommerceApp {
   const db = options.db ?? createCommerceDb();
   const app: KovoApp<CommerceSession> = createApp<CommerceSession, CommerceDb>({
     db: () => db,
@@ -126,7 +126,7 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
       return routeValueToHtml(value);
     },
     routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
-    sessionProvider: (request) => commerceSessionProvider(request as CommerceShellRequest),
+    sessionProvider: (request) => commerceSessionProvider(request as CommerceRouteRequest),
   });
   const requestHandler = createRequestHandler(app);
 
@@ -144,8 +144,6 @@ function routeValueToHtml(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export const commerceAppShell = createCommerceAppShell();
-export const commerceRequestHandler = commerceAppShell.requestHandler;
-export const commerceNodeHandler = commerceAppShell.nodeHandler;
+export const commerceApp = createCommerceApp();
 
-export default commerceAppShell.app;
+export default commerceApp.app;

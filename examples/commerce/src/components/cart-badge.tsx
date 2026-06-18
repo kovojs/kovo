@@ -2,7 +2,7 @@
 import { component } from '@kovojs/core';
 import { t } from '@kovojs/server';
 
-import { commerceMessages, type CartQueryResult } from '../app.js';
+import { commerceMessages, type CartQueryResult } from '../domain.js';
 import { cartQuery } from '../queries.js';
 
 export const CartBadge = component({

@@ -36,8 +36,17 @@ const viteServer = await createServer({
 
 let html;
 try {
-  const appModule = await viteServer.ssrLoadModule('/src/app.ts');
-  html = await appModule.renderCartPage();
+  const appModule = await viteServer.ssrLoadModule('/src/generated/app.kovo-route.tsx');
+  const app = appModule.default ?? appModule.commerceApp?.app;
+  const requestHandler =
+    typeof appModule.createCommerceApp === 'function'
+      ? appModule.createCommerceApp().requestHandler
+      : undefined;
+  if (!requestHandler || !app) {
+    throw new Error('/src/generated/app.kovo-route.tsx must export createCommerceApp and default app.');
+  }
+  const response = await requestHandler(new Request('https://commerce.test/cart'));
+  html = await response.text();
 } finally {
   await viteServer.close();
 }

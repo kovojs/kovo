@@ -5,7 +5,7 @@ import '../live-targets.js';
 // override lets derivation take this pair back over, pair by pair (SPEC.md §10.4).
 import { tempId, type OptimisticFor } from '@kovojs/runtime';
 
-import type { addToCartForm } from '../../app.js';
+import type { addToCartForm } from '../../domain.js';
 
 export const cartAddDerivedOptimistic = {
   queue: 'cart',

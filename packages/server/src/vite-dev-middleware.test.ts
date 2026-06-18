@@ -144,7 +144,7 @@ describe('server app shell Vite plugin', () => {
     });
     const app = createApp({ routes: [productRoute] });
     const plugin = kovoAppShellViteDevPlugin({
-      nodeHandlerExportName: 'commerceNodeHandler',
+      nodeHandlerExportName: 'shopNodeHandler',
     });
     const middlewares: KovoAppShellViteMiddleware[] = [];
     let moduleLoads = 0;
@@ -160,7 +160,7 @@ describe('server app shell Vite plugin', () => {
         moduleLoads += 1;
         expect(id).toBe('/src/app-shell.ts');
         return {
-          commerceNodeHandler(_request: unknown, response: { end(body: string): void }) {
+          shopNodeHandler(_request: unknown, response: { end(body: string): void }) {
             handled += 1;
             response.end('handled by dev app shell');
           },
@@ -278,7 +278,7 @@ describe('server app shell Vite plugin', () => {
   it('keeps explicit dev node handler exports strict', async () => {
     const app = createApp({ routes: [route('/cart', {})] });
     const plugin = kovoAppShellViteDevPlugin({
-      nodeHandlerExportName: 'commerceNodeHandler',
+      nodeHandlerExportName: 'shopNodeHandler',
     });
     const middlewares: KovoAppShellViteMiddleware[] = [];
 
@@ -305,7 +305,7 @@ describe('server app shell Vite plugin', () => {
       await expect(
         nodeFetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/cart`),
       ).resolves.toMatchObject({
-        body: '/src/app-shell.ts must export commerceNodeHandler as a Node app-shell handler with (request, response).',
+        body: '/src/app-shell.ts must export shopNodeHandler as a Node app-shell handler with (request, response).',
         status: 500,
       });
     } finally {

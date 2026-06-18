@@ -6,7 +6,7 @@ import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
-import { addToCart, type ProductGridResult } from '../app.js';
+import { addToCart, type ProductGridResult } from '../domain.js';
 import { productGridQuery } from '../queries.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 

@@ -20,7 +20,7 @@ const STATIC_MIME = {
 };
 
 // SPEC.md §9.5: dev/demo source serve for the commerce example. Production uses
-// `kovo build ./src/app-shell.tsx` and the generated `dist/server/server.mjs`.
+// `kovo build ./src/app.tsx` and the generated `dist/server/server.mjs`.
 // This helper keeps the Vite middleware path available for local source-serving
 // checks, serving built `/assets/*` from `dist/` when `vp build` has populated it.
 async function tryServeBuiltAsset(req, res) {
@@ -54,11 +54,10 @@ export async function createCommerceServeServer({
     root: commerceRoot,
     server: { middlewareMode: true },
   });
-  // The shared app-shell dev plugin wires the interactive `commerceNodeHandler`
-  // (createCommerceAppShell) into the Vite middleware — see vite.config.ts
-  // `nodeHandlerExportName: 'commerceNodeHandler'`. So mutations (`/_m/*`) round-
-  // trip against the real PGlite-backed app here; this serve path only adds the
-  // built-asset shortcut so the app is styled in production serve.
+  // The shared app dev plugin loads the generated route module's default
+  // Kovo app and derives the Node adapter inside @kovojs/server. Mutations
+  // (`/_m/*`) round-trip against the real PGlite-backed app here; this serve path
+  // only adds the built-asset shortcut so the app is styled in production serve.
   const server = createNodeServer((req, res) => {
     void tryServeBuiltAsset(req, res).then((served) => {
       if (!served) vite.middlewares(req, res);

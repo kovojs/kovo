@@ -2,7 +2,7 @@
 import { component } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
 
-import type { OrderHistoryResult } from '../app.js';
+import type { OrderHistoryResult } from '../domain.js';
 import { orderHistoryQuery } from '../queries.js';
 import { priceLabel } from './product-grid.js';
 

@@ -12,7 +12,7 @@ import {
   loadProductGrid,
   orderHistoryQuery,
   productGridQuery,
-} from './app.js';
+} from './domain.js';
 import {
   productGridInput,
   queryContext,

@@ -4,7 +4,7 @@ import {
   type LiveTargetRenderer,
 } from '@kovojs/server/internal/wire';
 
-import type { CommerceRequest } from '../app.js';
+import type { CommerceRequest } from '../domain.js';
 import * as cartBadgeModule from './cart-badge.js';
 import * as orderHistoryModule from './order-history.js';
 import * as productGridModule from './product-grid.js';

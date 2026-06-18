@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { FormError } from '@kovojs/core';
 
-import { commerceSignIn, commerceSignOut } from '../app.js';
+import { commerceSignIn, commerceSignOut } from '../domain.js';
 
 export function LoginForm({ next = '/cart' }: { next?: string }): string {
   return (

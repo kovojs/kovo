@@ -111,7 +111,7 @@ import {
   type LiveTargetRenderer,
 } from '@kovojs/server/internal/wire';
 
-import type { CommerceRequest } from '../app.js';
+import type { CommerceRequest } from '../domain.js';
 import * as cartBadgeModule from './cart-badge.js';
 import * as orderHistoryModule from './order-history.js';
 import * as productGridModule from './product-grid.js';
@@ -135,10 +135,10 @@ export const liveTargetRenderers: readonly LiveTargetRenderer<CommerceRequest>[]
     writeFileSync(liveTargetsPath, liveTargetsSource);
   }
 
-  const routeSourcePath = resolve(commerceRoot, 'src/app-shell.tsx');
-  const routeGeneratedPath = resolve(commerceRoot, 'src/generated/app-shell.kovo-route.tsx');
-  const routeFileName = 'examples/commerce/src/app-shell.tsx';
-  const routeArtifactFileName = 'examples/commerce/src/generated/app-shell.kovo-route.tsx';
+  const routeSourcePath = resolve(commerceRoot, 'src/app.tsx');
+  const routeGeneratedPath = resolve(commerceRoot, 'src/generated/app.kovo-route.tsx');
+  const routeFileName = 'examples/commerce/src/app.tsx';
+  const routeArtifactFileName = 'examples/commerce/src/generated/app.kovo-route.tsx';
   const routeGenerated = compileArtifact(
     [
       'route',
@@ -154,14 +154,14 @@ export const liveTargetRenderers: readonly LiveTargetRenderer<CommerceRequest>[]
       '--rewrite',
       'ProductGrid=./product-grid.js',
     ],
-    resolve(tempRoot, 'app-shell.kovo-route.tsx'),
+    resolve(tempRoot, 'app.kovo-route.tsx'),
   );
 
   if (checkMode) {
     assert.equal(
       readFileSync(routeGeneratedPath, 'utf8'),
       routeGenerated,
-      'generated app-shell.kovo-route.tsx is stale; run `pnpm --filter @kovojs/example-commerce run emit-components`',
+      'generated app.kovo-route.tsx is stale; run `pnpm --filter @kovojs/example-commerce run emit-components`',
     );
   } else {
     writeFileSync(routeGeneratedPath, routeGenerated);

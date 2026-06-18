@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "kovo build ./src/app-shell.tsx --preset node",
+    "build": "kovo build ./src/app.tsx --preset node",
     "build:demo": "vp build",
     "dev": "vp dev",
     "emit-components": "node scripts/emit-components.mjs",

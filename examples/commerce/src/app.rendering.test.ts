@@ -15,7 +15,7 @@ import {
   createCommerceDb,
   loadCartQuery,
   type CartQueryResult,
-} from './app.js';
+} from './domain.js';
 import { createCommerceScenarioClient, seedCartItems } from './app-test-helpers.js';
 
 const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
