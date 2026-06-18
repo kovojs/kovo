@@ -1,5 +1,5 @@
 import { escapeAttribute } from '@kovojs/server/internal/html';
-import type { DocumentTemplate } from '@kovojs/server/app-shell/core';
+import type { DocumentTemplate } from '@kovojs/server';
 
 import { clientHrefs } from './client/modules.js';
 

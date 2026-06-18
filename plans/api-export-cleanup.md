@@ -326,29 +326,37 @@ packages/server/src/vite-plugin-boundary.test.ts` passes, including negative
     `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs`;
     `node scripts/build-publish.mjs`;
     `git diff --check`.
-- [ ] **Remove existing root/subpath duplicates from app-shell subpaths.**
+- [x] **Remove existing root/subpath duplicates from app-shell subpaths.**
   - Remove duplicate subpath exports for root-owned symbols such as `createApp`,
     `createRequestHandler`, `route`, `layout`, `respond`, `toNodeHandler`,
     `exportStaticApp`, and `createMemoryVersionedClientModuleRegistry`.
   - Update all repo imports to use `@kovojs/server` for those symbols.
-  - Evidence:
-- [ ] **Keep tooling/support helpers subpath-only.**
+  - Evidence: `packages/server/src/api/app-shell/core.ts`,
+    `client-modules.ts`, and `node.ts` are empty public compatibility modules,
+    while `static-export.ts` keeps only static-export artifact types. Repo imports
+    and starter expectations now use root `@kovojs/server` for root-owned
+    app-shell helpers. `packages/server/src/api/app.test.ts` asserts the root
+    exports and old-subpath removals; `node scripts/exported-symbols.mjs
+--duplicates` reports only the JSX runtime/dev-runtime aliases remaining for
+    `@kovojs/server`.
+- [x] **Keep tooling/support helpers subpath-only.**
   - Keep Vite build/export replay helpers, manifest/output bundle types,
     `internal/*`, and JSX runtime exports off the root.
   - Move client-module response/href helpers and static-export manifest/assertion
     helpers to internal subpaths instead of keeping them public subpath APIs.
   - [x] Client-module response/href helper portion is internal-only.
-    - Evidence: `packages/server/src/api/app-shell/client-modules.ts` exports only
-      `createMemoryVersionedClientModuleRegistry`; `packages/server/src/internal/client-modules.ts`
-      exports `renderVersionedClientModuleResponse`, `versionedClientModuleHref`,
+    - Evidence: `packages/server/src/api/app-shell/client-modules.ts` exports no
+      public values; `packages/server/src/internal/client-modules.ts` exports
+      `renderVersionedClientModuleResponse`, `versionedClientModuleHref`,
       `VersionedClientModuleRequest`, and `VersionedClientModuleResponse`.
-      Verification: `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts`;
-      `node scripts/api-surface-gate.mjs`.
+      Verification: `corepack pnpm exec vitest --run
+packages/server/src/api/app.test.ts`; `node scripts/api-surface-gate.mjs`.
   - [x] Static-export support helper portion is internal-only.
-    - Evidence: `packages/server/src/api/app-shell/static-export.ts` exports only
-      `exportStaticApp`; `packages/server/src/internal/static-export.ts` exports
-      the manifest/assertion/output-plan and diagnostic formatter/guard helpers.
-      Verification: `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
+    - Evidence: `packages/server/src/api/app-shell/static-export.ts` exports no
+      public values; `packages/server/src/internal/static-export.ts` exports the
+      manifest/assertion/output-plan and diagnostic formatter/guard helpers.
+      Verification: `corepack pnpm exec vitest --run
+packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
       `node scripts/api-surface-gate.mjs`.
 - [x] **Move client-module support helpers behind an internal server subpath.**
   - Remove `renderVersionedClientModuleResponse`, `versionedClientModuleHref`,
@@ -461,10 +469,17 @@ packages/create-kovo/src/index.test.ts`.
   - Move Vite build/export replay helpers internal-only when `kovo build` or
     another public facade owns app export/build workflows.
   - Evidence:
-- [ ] **Add server export canonical-home tests.**
+- [x] **Add server export canonical-home tests.**
   - Assert moved symbols are exported from `@kovojs/server`.
   - Assert moved symbols are not exported from their former public subpaths.
-  - Evidence:
+  - Evidence: `packages/server/src/api/app.test.ts` asserts root availability for
+    `createApp`, `createRequestHandler`, `isKovoApp`, `route`, `layout`,
+    `respond`, `toNodeHandler`, `exportStaticApp`, and
+    `createMemoryVersionedClientModuleRegistry`, and uses compile-time
+    `@ts-expect-error` assertions plus runtime value-key checks for the old
+    app-shell subpaths. Verification: `corepack pnpm exec vitest --run
+packages/server/src/api/app.test.ts`; `corepack pnpm exec tsc -p
+tsconfig.json --noEmit --pretty false`.
 
 ## Compiler App-Author Import Cleanup
 

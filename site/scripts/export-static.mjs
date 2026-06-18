@@ -42,7 +42,7 @@ export async function exportSiteStaticApp({
       viteServer.ssrLoadModule('/src/app.ts'),
       viteServer.ssrLoadModule('/src/aux.ts'),
       viteServer.ssrLoadModule('/src/examples.ts'),
-      viteServer.ssrLoadModule('@kovojs/server/app-shell/core'),
+      viteServer.ssrLoadModule('@kovojs/server'),
       viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
     ]);
     const { isKovoApp } = coreModule;
@@ -103,11 +103,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   } catch (error) {
     if (!isStaticExportDiagnosticError(error)) throw error;
     process.stderr.write(
-      [
-        'site-export/v1',
-        ...formatStaticExportDiagnostics(error.diagnostics, 'ERROR'),
-        '',
-      ].join('\n'),
+      ['site-export/v1', ...formatStaticExportDiagnostics(error.diagnostics, 'ERROR'), ''].join(
+        '\n',
+      ),
     );
     process.exitCode = 1;
   }

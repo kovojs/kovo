@@ -6,7 +6,7 @@
 // writes only the app and (optionally) its schema/seed. SPEC §11 frames this as a
 // framework-owned suite: fixtures exercise framework public APIs end-to-end, not
 // app wiring.
-import type { KovoApp } from '@kovojs/server/app-shell/core';
+import type { KovoApp } from '@kovojs/server';
 import type { TouchGraph } from '@kovojs/core/internal/graph';
 
 import type { PgliteTestDb } from '../pglite.js';

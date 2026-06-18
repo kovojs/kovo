@@ -2,7 +2,7 @@
 // recreated on `reset()` so each test gets an isolated, freshly-seeded PGlite —
 // the app object closes over a mutable `db` holder, so the same request handler
 // keeps working across resets without rebuilding the Vite module graph.
-import { createRequestHandler, type KovoApp } from '@kovojs/server/app-shell/core';
+import { createRequestHandler, type KovoApp } from '@kovojs/server';
 
 import { createPgliteTestDb, type PgliteTestDb } from '../pglite.js';
 import { createDbVerifier, type DbVerifier } from '../verifier.js';

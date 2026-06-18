@@ -1,11 +1,13 @@
 /** @jsxImportSource @kovojs/server */
-import { layout, route, s } from '@kovojs/server';
 import {
   createApp,
+  createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
-} from '@kovojs/server/app-shell/core';
-import type { RequestHandler } from '@kovojs/server';
-import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
+  layout,
+  route,
+  s,
+  type RequestHandler,
+} from '@kovojs/server';
 
 import { QuestionDetailRegion } from './components/question-detail.js';
 import { QuestionListRegion } from './components/question-list.js';

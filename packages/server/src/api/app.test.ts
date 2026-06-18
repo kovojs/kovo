@@ -9,11 +9,15 @@ import * as packageViteApi from '@kovojs/server/app-shell/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
 import * as packageInternalStaticExportApi from '@kovojs/server/internal/static-export';
 import serverPackage from '../../package.json' with { type: 'json' };
+import * as appApi from '../app.js';
+import * as appGuardsApi from '../app-guards.js';
+import * as clientModulesSourceApi from '../client-modules.js';
 import * as publicApi from '../index.js';
 import * as clientModulesApi from './app-shell/client-modules.js';
 import * as coreApi from './app-shell/core.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
 import * as nodeApi from './app-shell/node.js';
+import * as nodeSourceApi from '../node.js';
 import * as staticExportApi from './app-shell/static-export.js';
 import * as viteApi from './app-shell/vite.js';
 import type * as vt from './app-shell/vite.js';
@@ -75,6 +79,54 @@ type RootKovoAppShellViteDevPlugin = import('@kovojs/server').KovoAppShellViteDe
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootKovoAppShellViteDevPluginOptions =
   import('@kovojs/server').KovoAppShellViteDevPluginOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootIsKovoApp = typeof import('@kovojs/server').isKovoApp;
+
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedCreateApp =
+  // @ts-expect-error SPEC.md §9.5: createApp now has the root @kovojs/server
+  // canonical home, not the app-shell/core subpath.
+  typeof import('./app-shell/core.js').createApp;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedCreateRequestHandler =
+  // @ts-expect-error SPEC.md §9.5: createRequestHandler now has the root
+  // @kovojs/server canonical home, not the app-shell/core subpath.
+  typeof import('./app-shell/core.js').createRequestHandler;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedIsKovoApp =
+  // @ts-expect-error SPEC.md §9.5: the dynamic app guard now has the root
+  // @kovojs/server canonical home, not the app-shell/core subpath.
+  typeof import('./app-shell/core.js').isKovoApp;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedLayout =
+  // @ts-expect-error SPEC.md §9.5: layout now has the root @kovojs/server
+  // canonical home, not the app-shell/core subpath.
+  typeof import('./app-shell/core.js').layout;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedRespond =
+  // @ts-expect-error SPEC.md §9.5: respond now has the root @kovojs/server
+  // canonical home, not the app-shell/core subpath.
+  typeof import('./app-shell/core.js').respond;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedRoute =
+  // @ts-expect-error SPEC.md §9.5: route now has the root @kovojs/server
+  // canonical home, not the app-shell/core subpath.
+  typeof import('./app-shell/core.js').route;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedCreateMemoryVersionedClientModuleRegistry =
+  // @ts-expect-error SPEC.md §9.5: memory client-module registry construction now
+  // has the root @kovojs/server canonical home.
+  typeof import('./app-shell/client-modules.js').createMemoryVersionedClientModuleRegistry;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedToNodeHandler =
+  // @ts-expect-error SPEC.md §9.5: toNodeHandler now has the root
+  // @kovojs/server canonical home.
+  typeof import('./app-shell/node.js').toNodeHandler;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedExportStaticApp =
+  // @ts-expect-error SPEC.md §9.5: exportStaticApp now has the root
+  // @kovojs/server canonical home.
+  typeof import('./app-shell/static-export.js').exportStaticApp;
 
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedAppDocumentOptions =
@@ -319,31 +371,34 @@ describe('server app-shell public API barrels', () => {
       'createMemoryVersionedClientModuleRegistry',
       'createRequestHandler',
       'exportStaticApp',
+      'isKovoApp',
       'layout',
       'respond',
       'route',
       'toNodeHandler',
     ]);
     const rootAppShellEntrypointValues = {
-      createApp: coreApi.createApp,
+      createApp: appApi.createApp,
       createMemoryVersionedClientModuleRegistry:
-        clientModulesApi.createMemoryVersionedClientModuleRegistry,
-      createRequestHandler: coreApi.createRequestHandler,
-      exportStaticApp: staticExportApi.exportStaticApp,
-      layout: coreApi.layout,
-      respond: coreApi.respond,
-      route: coreApi.route,
-      toNodeHandler: nodeApi.toNodeHandler,
+        clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
+      createRequestHandler: appApi.createRequestHandler,
+      exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
+      isKovoApp: appGuardsApi.isKovoApp,
+      layout: routeApi.layout,
+      respond: responseApi.respond,
+      route: routeApi.route,
+      toNodeHandler: nodeSourceApi.toNodeHandler,
     };
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
-      createApp: coreApi.createApp,
+      createApp: appApi.createApp,
       createMemoryVersionedClientModuleRegistry:
-        clientModulesApi.createMemoryVersionedClientModuleRegistry,
-      createRequestHandler: coreApi.createRequestHandler,
+        clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
+      createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
+      isKovoApp: appGuardsApi.isKovoApp,
       kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
-      toNodeHandler: nodeApi.toNodeHandler,
+      toNodeHandler: nodeSourceApi.toNodeHandler,
     });
 
     expect(Object.keys(publicValues).sort()).toEqual(rootValues);
@@ -381,16 +436,17 @@ describe('server app-shell public API barrels', () => {
     expect(renderingApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(publicApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(publicApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
-    expect(publicApi.createApp).toBe(coreApi.createApp);
+    expect(publicApi.createApp).toBe(appApi.createApp);
     expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
-      clientModulesApi.createMemoryVersionedClientModuleRegistry,
+      clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
     );
-    expect(publicApi.createRequestHandler).toBe(coreApi.createRequestHandler);
+    expect(publicApi.createRequestHandler).toBe(appApi.createRequestHandler);
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
+    expect(publicApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
     expect(publicApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
     expect(packageRootApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
     expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
-    expect(publicApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
+    expect(publicApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
 
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell');
   });
@@ -399,45 +455,43 @@ describe('server app-shell public API barrels', () => {
     // SPEC.md §9.5 keeps request-shell extension points declared and printable; the public
     // app-shell subpaths stay focused so Vite, static export, and outside adoption paths do not
     // regain an aggregate compatibility surface by accident.
-    expect(moduleValueKeys(packageClientModulesApi)).toEqual([
-      'createMemoryVersionedClientModuleRegistry',
-    ]);
+    expect(moduleValueKeys(packageClientModulesApi)).toEqual([]);
     expect(moduleValueKeys(packageInternalClientModulesApi)).toEqual([
       'renderVersionedClientModuleResponse',
       'versionedClientModuleHref',
     ]);
-    expect(moduleValueKeys(packageCoreApi)).toEqual([
-      'createApp',
-      'createRequestHandler',
-      'isKovoApp',
-      'layout',
-      'respond',
-      'route',
-    ]);
-    expect(moduleValueKeys(packageNodeApi)).toEqual(['toNodeHandler']);
-    expect(moduleValueKeys(packageStaticExportApi)).toEqual(['exportStaticApp']);
+    expect(moduleValueKeys(packageCoreApi)).toEqual([]);
+    expect(moduleValueKeys(packageNodeApi)).toEqual([]);
+    expect(moduleValueKeys(packageStaticExportApi)).toEqual([]);
     expect(moduleValueKeys(packageViteApi)).toEqual([
       'exportKovoAppShellViteBuildWithManifestFromManifestFile',
       'kovoAppShellViteManifestStylesheetHrefFromFile',
     ]);
 
-    expect(packageCoreApi.createApp).toBe(coreApi.createApp);
-    expect(packageCoreApi.isKovoApp).toBe(coreApi.isKovoApp);
-    expect(packageCoreApi.layout).toBe(coreApi.layout);
-    expect(packageCoreApi.route).toBe(routeApi.route);
-    expect(packageCoreApi.respond).toBe(responseApi.respond);
+    expect(packageRootApi.createApp).toBe(appApi.createApp);
+    expect(packageRootApi.createMemoryVersionedClientModuleRegistry).toBe(
+      clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
+    );
+    expect(packageRootApi.createRequestHandler).toBe(appApi.createRequestHandler);
+    expect(packageRootApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
+    expect(packageRootApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
+    expect(packageRootApi.layout).toBe(routeApi.layout);
+    expect(packageRootApi.respond).toBe(responseApi.respond);
+    expect(packageRootApi.route).toBe(routeApi.route);
+    expect(packageRootApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
     expect(packageClientModulesApi).not.toHaveProperty('renderVersionedClientModuleResponse');
     expect(packageClientModulesApi).not.toHaveProperty('versionedClientModuleHref');
+    expect(packageClientModulesApi).not.toHaveProperty('createMemoryVersionedClientModuleRegistry');
     expect(packageInternalClientModulesApi.renderVersionedClientModuleResponse).toBe(
       internalClientModulesApi.renderVersionedClientModuleResponse,
     );
     expect(packageInternalClientModulesApi.versionedClientModuleHref).toBe(
       internalClientModulesApi.versionedClientModuleHref,
     );
-    expect(packageNodeApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
+    expect(packageNodeApi).not.toHaveProperty('toNodeHandler');
     expect(packageNodeApi).not.toHaveProperty('nodeRequestToWebRequest');
     expect(packageNodeApi).not.toHaveProperty('writeWebResponseToNode');
-    expect(packageStaticExportApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
+    expect(packageStaticExportApi).not.toHaveProperty('exportStaticApp');
     expect(packageStaticExportApi).not.toHaveProperty('StaticExportError');
     expect(packageStaticExportApi).not.toHaveProperty('staticExportInventory');
     expect(packageStaticExportApi).not.toHaveProperty('staticExportManifest');
@@ -459,9 +513,9 @@ describe('server app-shell public API barrels', () => {
     expect(packageInternalStaticExportApi.assertStaticExportManifestMatchesResult).toBe(
       staticExportResultApi.assertStaticExportManifestMatchesResult,
     );
-    expect(packageInternalStaticExportApi.assertStaticExportManifestUsesDirectoryIndexDocuments).toBe(
-      staticExportResultApi.assertStaticExportManifestUsesDirectoryIndexDocuments,
-    );
+    expect(
+      packageInternalStaticExportApi.assertStaticExportManifestUsesDirectoryIndexDocuments,
+    ).toBe(staticExportResultApi.assertStaticExportManifestUsesDirectoryIndexDocuments);
     expect(packageInternalStaticExportApi.staticExportOutputPlan).toBe(
       staticExportOutputApi.staticExportOutputPlan,
     );
@@ -535,22 +589,20 @@ describe('server app-shell public API barrels', () => {
   });
 
   it('validates dynamically loaded app-shell aggregates through the shared core guard', () => {
-    const app = coreApi.createApp();
+    const app = publicApi.createApp();
 
-    expect(packageCoreApi.isKovoApp(app)).toBe(true);
-    expect(packageCoreApi.isKovoApp({ ...app, document: undefined })).toBe(false);
-    expect(packageCoreApi.isKovoApp({ ...app, document: { template: '<html></html>' } })).toBe(
+    expect(publicApi.isKovoApp(app)).toBe(true);
+    expect(publicApi.isKovoApp({ ...app, document: undefined })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, document: { template: '<html></html>' } })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, errorShells: undefined })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, errorShells: { notFound: '<main>404</main>' } })).toBe(
       false,
     );
-    expect(packageCoreApi.isKovoApp({ ...app, errorShells: undefined })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, clientModules: {} })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, renderRoute: '<main>compat</main>' })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, sessionProvider: { session: null } })).toBe(false);
     expect(
-      packageCoreApi.isKovoApp({ ...app, errorShells: { notFound: '<main>404</main>' } }),
-    ).toBe(false);
-    expect(packageCoreApi.isKovoApp({ ...app, clientModules: {} })).toBe(false);
-    expect(packageCoreApi.isKovoApp({ ...app, renderRoute: '<main>compat</main>' })).toBe(false);
-    expect(packageCoreApi.isKovoApp({ ...app, sessionProvider: { session: null } })).toBe(false);
-    expect(
-      packageCoreApi.isKovoApp({
+      publicApi.isKovoApp({
         ...app,
         clientModules: {
           resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
@@ -558,23 +610,21 @@ describe('server app-shell public API barrels', () => {
       }),
     ).toBe(false);
     expect(
-      packageCoreApi.isKovoApp({
+      publicApi.isKovoApp({
         ...app,
         clientModules: { put: () => '/c/cart.client.js?v=test' },
       }),
     ).toBe(false);
-    expect(packageCoreApi.isKovoApp({ ...app, endpoints: [{ path: '/status' }] })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, endpoints: [{ path: '/status' }] })).toBe(false);
     expect(
-      packageCoreApi.isKovoApp({
+      publicApi.isKovoApp({
         ...app,
         mutations: [{ handler: () => ({ ok: true }), key: 'cart/add' }],
       }),
     ).toBe(false);
-    expect(packageCoreApi.isKovoApp({ ...app, queries: [{ key: 'cart', reads: [{}] }] })).toBe(
+    expect(publicApi.isKovoApp({ ...app, queries: [{ key: 'cart', reads: [{}] }] })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, routes: [{ page: () => '<main>Cart</main>' }] })).toBe(
       false,
     );
-    expect(
-      packageCoreApi.isKovoApp({ ...app, routes: [{ page: () => '<main>Cart</main>' }] }),
-    ).toBe(false);
   });
 });

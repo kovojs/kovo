@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { createRequestHandler } from '@kovojs/server/app-shell/core';
+import { createRequestHandler } from '@kovojs/server';
 
 import { siteStaticExportApp } from './app.js';
 import { loadSiteContent } from './content.js';

@@ -1,7 +1,11 @@
 import type { KovoApp } from './app-types.js';
 
-// SPEC §9.5: app-shell dev and export tasks dynamically load user modules, then
-// replay the closed app aggregate through the public Request -> Response shell.
+/**
+ * Return whether a dynamically loaded value is a closed Kovo app aggregate.
+ *
+ * App-owned dev and export scripts use this SPEC.md §9.5 guard after loading an
+ * app module, before replaying it through the public Request -> Response shell.
+ */
 export function isKovoApp(value: unknown): value is KovoApp {
   return (
     isRecord(value) &&

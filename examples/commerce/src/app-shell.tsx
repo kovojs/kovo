@@ -1,17 +1,16 @@
 /** @jsxImportSource @kovojs/server */
-import {
-  layout,
-  route,
-  type ServerErrorHandler,
-} from '@kovojs/server';
 import { ErrorBoundary } from '@kovojs/core';
 import {
   createApp,
   createRequestHandler,
+  layout,
+  route,
+  toNodeHandler,
   type KovoApp,
-} from '@kovojs/server/app-shell/core';
-import type { NodeRequestHandler, RequestHandler } from '@kovojs/server';
-import { toNodeHandler } from '@kovojs/server/app-shell/node';
+  type NodeRequestHandler,
+  type RequestHandler,
+  type ServerErrorHandler,
+} from '@kovojs/server';
 
 import {
   addToCart,

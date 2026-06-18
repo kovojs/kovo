@@ -1,4 +1,4 @@
-import { toNodeHandler } from '@kovojs/server/app-shell/node';
+import { toNodeHandler } from '@kovojs/server';
 
 import { buildSoInteractiveApp } from './generated/interactive-app.kovo-route.js';
 

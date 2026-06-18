@@ -20,8 +20,7 @@ per-request `db`, seeding, and teardown.
 
 ```tsx
 // tests/integration/fixtures/hello/app.tsx
-import { route } from '@kovojs/server';
-import { createApp } from '@kovojs/server/app-shell/core';
+import { createApp, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/integration/define';
 
 const app = createApp({

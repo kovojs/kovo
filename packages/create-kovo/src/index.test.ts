@@ -216,9 +216,13 @@ describe('create-kovo starter', () => {
       expect(appSource).not.toContain('text-kovo-accent');
       expect(appSource).not.toMatch(/render:\s*\(\)\s*=>\s*['"`]</);
       const appShellSource = readFileSync(join(root, 'src/app-shell.ts'), 'utf8');
-      expect(appShellSource).toContain("from '@kovojs/server/app-shell/client-modules'");
-      expect(appShellSource).toContain("from '@kovojs/server/app-shell/core'");
-      expect(appShellSource).toContain("import { layout, route } from '@kovojs/server';");
+      expect(appShellSource).toContain("from '@kovojs/server'");
+      expect(appShellSource).toContain('createMemoryVersionedClientModuleRegistry');
+      expect(appShellSource).toContain('createRequestHandler');
+      expect(appShellSource).toContain('layout');
+      expect(appShellSource).toContain('route');
+      expect(appShellSource).not.toContain('@kovojs/server/app-shell/core');
+      expect(appShellSource).not.toContain('@kovojs/server/app-shell/client-modules');
       expect(appShellSource).toContain('criticalCss: starterAppStyleCss');
       expect(appShellSource).toContain('export const starterLayout = layout<StarterRequest>');
       expect(appShellSource).toContain('data-session="${request.session?.user.id ?? \'guest\'}"');
@@ -233,11 +237,14 @@ describe('create-kovo starter', () => {
       expect(appShellSource).not.toContain('writeWebResponseToNode');
       const appShellTestSource = readFileSync(join(root, 'src/app-shell.test.ts'), 'utf8');
       expect(appShellTestSource).toContain('SPEC.md section 9.5');
-      expect(appShellTestSource).toContain("from '@kovojs/server/app-shell/core'");
-      expect(appShellTestSource).toContain("from '@kovojs/server/app-shell/static-export'");
+      expect(appShellTestSource).toContain("from '@kovojs/server'");
+      expect(appShellTestSource).not.toContain('@kovojs/server/app-shell/core');
+      expect(appShellTestSource).not.toContain('@kovojs/server/app-shell/static-export');
       expect(appShellTestSource).toContain('isKovoApp(app)');
       expect(appShellTestSource).toContain('isDirectoryIndexDocumentPath');
-      expect(appShellTestSource).not.toContain('assertStaticExportManifestUsesDirectoryIndexDocuments');
+      expect(appShellTestSource).not.toContain(
+        'assertStaticExportManifestUsesDirectoryIndexDocuments',
+      );
       expect(appShellTestSource).not.toContain('staticExportManifest');
       const authSource = readFileSync(join(root, 'src/auth.tsx'), 'utf8');
       expect(authSource).toContain("from '@kovojs/better-auth'");
@@ -295,11 +302,10 @@ describe('create-kovo starter', () => {
       expect(viteConfig).not.toContain("pathname.startsWith('/c/')");
       const exportStaticScript = readFileSync(join(root, 'scripts/export-static.mjs'), 'utf8');
       expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
-      expect(exportStaticScript).toContain("server.ssrLoadModule('@kovojs/server/app-shell/core')");
+      expect(exportStaticScript).toContain("server.ssrLoadModule('@kovojs/server')");
       expect(exportStaticScript).toContain("server.ssrLoadModule('@kovojs/server/app-shell/vite')");
-      expect(exportStaticScript).not.toContain(
-        "server.ssrLoadModule('@kovojs/server/app-shell/static-export')",
-      );
+      expect(exportStaticScript).not.toContain('@kovojs/server/app-shell/core');
+      expect(exportStaticScript).not.toContain('@kovojs/server/app-shell/static-export');
       expect(exportStaticScript).toContain(
         'kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile)',
       );
@@ -487,11 +493,12 @@ describe('create-kovo starter', () => {
         exitCode: 0,
         output: 'kovo-check/v1\nOK\n',
       });
-      expect(kovoExplain(emittedGraph, { kind: 'mutation', optimistic: true, target: 'cart/add' }))
-        .toMatchObject({
-          exitCode: 0,
-          output: expect.stringContaining('OPTIMISTIC cart await-fragment\n'),
-        });
+      expect(
+        kovoExplain(emittedGraph, { kind: 'mutation', optimistic: true, target: 'cart/add' }),
+      ).toMatchObject({
+        exitCode: 0,
+        output: expect.stringContaining('OPTIMISTIC cart await-fragment\n'),
+      });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

@@ -21,7 +21,7 @@ const server = await createServer({
 
 try {
   const [coreModule, viteModule] = await Promise.all([
-    server.ssrLoadModule('@kovojs/server/app-shell/core'),
+    server.ssrLoadModule('@kovojs/server'),
     server.ssrLoadModule('@kovojs/server/app-shell/vite'),
   ]);
   ({ isKovoApp } = coreModule);
@@ -36,7 +36,7 @@ try {
     );
   }
   if (typeof isKovoApp !== 'function') {
-    throw new Error('@kovojs/server/app-shell/core must export isKovoApp.');
+    throw new Error('@kovojs/server must export isKovoApp.');
   }
   if (typeof kovoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
     throw new Error(

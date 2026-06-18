@@ -1,11 +1,13 @@
-import { route, type CsrfValidationOptions, type ServerErrorHandler } from '@kovojs/server';
-import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 import {
   createApp,
+  createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
-} from '@kovojs/server/app-shell/core';
-import type { RequestHandler } from '@kovojs/server';
-import { toNodeHandler } from '@kovojs/server/app-shell/node';
+  route,
+  toNodeHandler,
+  type CsrfValidationOptions,
+  type RequestHandler,
+  type ServerErrorHandler,
+} from '@kovojs/server';
 
 import {
   accountRoute,

@@ -1,6 +1,10 @@
-import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
-import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
-import { layout, route } from '@kovojs/server';
+import {
+  createApp,
+  createMemoryVersionedClientModuleRegistry,
+  createRequestHandler,
+  layout,
+  route,
+} from '@kovojs/server';
 import { App, starterAppStyleCss } from './app.js';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();

@@ -16,7 +16,7 @@ export function createSoDemoServer(options = {}) {
       const { buildSoInteractiveApp } = await vite.ssrLoadModule(
         '/src/generated/interactive-app.kovo-route.tsx',
       );
-      const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server/app-shell/node');
+      const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server');
       if (typeof buildSoInteractiveApp !== 'function') {
         throw new Error(
           'stackoverflow /src/generated/interactive-app.kovo-route.tsx must export buildSoInteractiveApp.',

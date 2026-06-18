@@ -1,6 +1,4 @@
-import { route } from '@kovojs/server';
-import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
-import { toNodeHandler } from '@kovojs/server/app-shell/node';
+import { createApp, createRequestHandler, route, toNodeHandler } from '@kovojs/server';
 
 import { clientHrefs, siteClientModules } from './client/modules.js';
 import { renderSectionIndex, sectionIndexInput } from './components/docs-layout.js';

@@ -6,8 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { exportStaticApp } from '@kovojs/server/app-shell/static-export';
-import { isKovoApp } from '@kovojs/server/app-shell/core';
+import { exportStaticApp, isKovoApp } from '@kovojs/server';
 import { createServer as createViteServer } from 'vite';
 import { describe, expect, it } from 'vitest';
 

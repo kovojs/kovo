@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { route } from '@kovojs/server';
-import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
-import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
-import { toNodeHandler } from '@kovojs/server/app-shell/node';
+import {
+  createApp,
+  createMemoryVersionedClientModuleRegistry,
+  createRequestHandler,
+  route,
+  toNodeHandler,
+} from '@kovojs/server';
 import ts from 'typescript';
 
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';

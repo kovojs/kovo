@@ -12,7 +12,7 @@ import { stat } from 'node:fs/promises';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import path from 'node:path';
 
-import { toNodeHandler } from '@kovojs/server/app-shell/node';
+import { toNodeHandler } from '@kovojs/server';
 import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/internal/app-shell-vite';
 import { createServer as createViteServer } from 'vite';
 

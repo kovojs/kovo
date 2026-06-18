@@ -1,5 +1,4 @@
-import { route } from '@kovojs/server';
-import type { RouteDeclaration } from '@kovojs/server/app-shell/core';
+import { route, type RouteDeclaration } from '@kovojs/server';
 
 import { clientHrefs } from './client/modules.js';
 import { renderDocsBody, type PageOptions } from './components/docs-layout.js';

@@ -15,7 +15,7 @@ export function createCrmDemoServer(options = {}) {
       const { buildCrmInteractiveApp } = await vite.ssrLoadModule(
         '/src/generated/interactive-app.kovo-route.tsx',
       );
-      const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server/app-shell/node');
+      const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server');
       if (typeof buildCrmInteractiveApp !== 'function') {
         throw new Error(
           'crm /src/generated/interactive-app.kovo-route.tsx must export buildCrmInteractiveApp.',

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
 
 // The docs site's client islands (SPEC §4.4, §7 L1): search ⌘K, theme toggle,
 // and the code-window copy button. They are authored source under src/client/
