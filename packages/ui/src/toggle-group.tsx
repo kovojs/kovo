@@ -11,6 +11,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface ToggleGroupStyleOverrides {
@@ -145,6 +147,7 @@ export const ToggleGroup = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-labelledby={attrs['aria-labelledby']}
@@ -181,6 +184,7 @@ export const ToggleGroupItem = component({
     return (
       <span
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -213,6 +217,7 @@ export const ToggleGroupButton = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-pressed={attrs['aria-pressed']}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
@@ -227,3 +232,5 @@ export const ToggleGroupButton = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/toggle-group';

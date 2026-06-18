@@ -1,30 +1,21 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  contextMenuContentAttributes,
+  ContextMenu,
+  ContextMenuContent,
   contextMenuFocusElement as _contextMenuFocusElement,
-  contextMenuItemAttributes,
+  ContextMenuItem,
   contextMenuItemClick as _contextMenuItemClick,
   contextMenuItemKeyDown as _contextMenuItemKeyDown,
   contextMenuKeyDown as _contextMenuKeyDown,
   contextMenuMove as _contextMenuMove,
-  contextMenuRootAttributes,
-  contextMenuTriggerAttributes,
+  ContextMenuTrigger,
   contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu,
   contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown,
   contextMenuTypeahead as _contextMenuTypeahead,
-  type ContextMenuItem,
+  type ContextMenuItem as GalleryContextMenuItem,
   type ContextMenuPoint,
-} from '@kovojs/headless-ui/context-menu';
-import {
-  contextMenuTriggerClasses,
-  contextMenuContentClasses,
-  contextMenuItemClasses,
 } from '@kovojs/ui/context-menu';
-
-const TRIGGER_CLASS = contextMenuTriggerClasses.join(' ');
-const CONTENT_CLASS = contextMenuContentClasses.join(' ');
-const ITEM_CLASS = contextMenuItemClasses.join(' ');
 
 export interface GalleryContextMenuDemoState {
   highlightedValue: string;
@@ -33,7 +24,7 @@ export interface GalleryContextMenuDemoState {
   value: string;
 }
 
-const contextItems: readonly ContextMenuItem[] = Object.freeze([
+const contextItems: readonly GalleryContextMenuItem[] = Object.freeze([
   { label: 'Copy link', value: 'copy' },
   { disabled: true, label: 'Delete', value: 'delete' },
   { label: 'Inspect', value: 'inspect' },
@@ -53,16 +44,15 @@ export const GalleryContextMenuDemo = component({
     };
 
     return (
-      <section
-        {...contextMenuRootAttributes(menuState)}
-        class="grid gap-2"
+      <ContextMenu
+        {...menuState}
         data-gallery-interactive="context-menu"
         data-state={state.open ? 'open' : 'closed'}
       >
-        <div
-          {...contextMenuTriggerAttributes({ ...menuState, contentId })}
+        <ContextMenuTrigger
+          {...menuState}
           aria-expanded={state.open ? 'true' : 'false'}
-          class={TRIGGER_CLASS}
+          contentId={contentId}
           data-state={state.open ? 'open' : 'closed'}
           id="gallery-context-menu-trigger"
           onContextMenu={() => {
@@ -104,26 +94,22 @@ export const GalleryContextMenuDemo = component({
           tabIndex="0"
         >
           Right click target
-        </div>
-        <div
-          {...contextMenuContentAttributes({ ...menuState, id: contentId })}
-          class={CONTENT_CLASS}
+        </ContextMenuTrigger>
+        <ContextMenuContent
+          {...menuState}
           data-anchor-x={String(state.point.x)}
           data-anchor-y={String(state.point.y)}
           data-state={state.open ? 'open' : 'closed'}
           hidden={!state.open}
+          id={contentId}
         >
-          <button
-            {...contextMenuItemAttributes({
-              ...menuState,
-              id: 'gallery-context-menu-copy',
-              itemLabel: 'Copy link',
-              itemValue: 'copy',
-            })}
-            class={ITEM_CLASS}
+          <ContextMenuItem
+            {...menuState}
             data-highlighted={state.highlightedValue === 'copy' ? '' : null}
             data-state={state.highlightedValue === 'copy' ? 'active' : 'inactive'}
-            tabIndex={state.highlightedValue === 'copy' ? 0 : -1}
+            id="gallery-context-menu-copy"
+            itemLabel="Copy link"
+            itemValue="copy"
             onKeyDown={() => {
               const result = _contextMenuItemKeyDown(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -229,32 +215,26 @@ export const GalleryContextMenuDemo = component({
               state.value = result.value;
               _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
             }}
+            tabIndex={state.highlightedValue === 'copy' ? 0 : -1}
           >
             Copy link
-          </button>
-          <button
-            {...contextMenuItemAttributes({
-              ...menuState,
-              id: 'gallery-context-menu-delete',
-              itemDisabled: true,
-              itemLabel: 'Delete',
-              itemValue: 'delete',
-            })}
-            class={ITEM_CLASS}
+          </ContextMenuItem>
+          <ContextMenuItem
+            {...menuState}
+            id="gallery-context-menu-delete"
+            itemDisabled={true}
+            itemLabel="Delete"
+            itemValue="delete"
           >
             Delete
-          </button>
-          <button
-            {...contextMenuItemAttributes({
-              ...menuState,
-              id: 'gallery-context-menu-inspect',
-              itemLabel: 'Inspect',
-              itemValue: 'inspect',
-            })}
-            class={ITEM_CLASS}
+          </ContextMenuItem>
+          <ContextMenuItem
+            {...menuState}
             data-highlighted={state.highlightedValue === 'inspect' ? '' : null}
             data-state={state.highlightedValue === 'inspect' ? 'active' : 'inactive'}
-            tabIndex={state.highlightedValue === 'inspect' ? 0 : -1}
+            id="gallery-context-menu-inspect"
+            itemLabel="Inspect"
+            itemValue="inspect"
             onKeyDown={() => {
               const result = _contextMenuItemKeyDown(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -360,13 +340,14 @@ export const GalleryContextMenuDemo = component({
               state.value = result.value;
               _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
             }}
+            tabIndex={state.highlightedValue === 'inspect' ? 0 : -1}
           >
             Inspect
-          </button>
-        </div>
+          </ContextMenuItem>
+        </ContextMenuContent>
         <output data-demo-state="context-open">{state.open ? 'open' : 'closed'}</output>
         <output data-demo-state="context-value">{state.value}</output>
-      </section>
+      </ContextMenu>
     );
   },
 });

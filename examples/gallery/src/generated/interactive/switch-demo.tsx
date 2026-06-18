@@ -2,24 +2,15 @@
 /** @jsxImportSource @kovojs/server */
 import { derive } from '@kovojs/runtime/generated';
 
-export const GallerySwitchDemo$input_aria_checked_derive = derive(['state'], (state: any) =>
-  String(state.checked),
-);
-export const GallerySwitchDemo$input_checked_derive = derive(['state'], (state: any) =>
+export const GallerySwitchDemo$Switch_checked_derive = derive(['state'], (state: any) =>
   state.checked ? '' : null,
-);
-export const GallerySwitchDemo$input_data_state_derive = derive(['state'], (state: any) =>
-  state.checked ? 'checked' : 'unchecked',
 );
 export const GallerySwitchDemo$output_text_derive = derive(['state'], (state: any) =>
   state.checked ? 'on' : 'off',
 );
 
 import { component } from '@kovojs/core';
-import { switchClasses, switchInputClasses } from '@kovojs/ui/switch';
-
-const ROOT_CLASS = switchClasses.join(' ');
-const INPUT_CLASS = switchInputClasses.join(' ');
+import { Switch } from '@kovojs/ui/switch';
 
 export interface GallerySwitchDemoState {
   checked: boolean;
@@ -30,37 +21,26 @@ export interface GallerySwitchDemoState {
 export const GallerySwitchDemo = component({
   state: () => ({ checked: false }),
   render: (_queries: Record<string, never>, state: GallerySwitchDemoState) => (
-    <label
-      class={ROOT_CLASS}
+    <Switch
       data-gallery-interactive="switch"
-      kovo-c="gallery-switch-demo"
+      form="gallery-switch-form"
+      name="gallery-notifications"
+      on:click="/c/__v/96f3406e/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_click"
+      on:keydown="/c/__v/96f3406e/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_keydown"
+      value="enabled"
+      checked={state.checked}
+      data-bind:checked="/c/__v/96f3406e/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_checked_derive"
       kovo-state='{"checked":false}'
     >
-      <input
-        class={INPUT_CLASS}
-        form="gallery-switch-form"
-        name="gallery-notifications"
-        on:click="/c/__v/e6f77f1d/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$input_click"
-        on:keydown="/c/__v/e6f77f1d/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$input_keydown"
-        role="switch"
-        type="checkbox"
-        value="enabled"
-        aria-checked={String(state.checked)}
-        data-bind:aria-checked="/c/__v/e6f77f1d/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$input_aria_checked_derive"
-        checked={state.checked}
-        data-bind:checked="/c/__v/e6f77f1d/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$input_checked_derive"
-        data-state={state.checked ? 'checked' : 'unchecked'}
-        data-bind:data-state="/c/__v/e6f77f1d/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$input_data_state_derive"
-      />
       <span class="select-none leading-none">Notifications</span>
       <output
         class="text-xs text-neutral-500"
         data-demo-state="checked"
-        data-bind="/c/__v/e6f77f1d/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$output_text_derive"
+        data-bind="/c/__v/96f3406e/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$output_text_derive"
       >
         {state.checked ? 'on' : 'off'}
       </output>
-    </label>
+    </Switch>
   ),
 });
 GallerySwitchDemo.name = 'generated/interactive/switch-demo/gallery-switch-demo';

@@ -1,26 +1,17 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  hoverCardContentAttributes,
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
   hoverCardContentPointerEnter as _hoverCardContentPointerEnter,
   hoverCardContentPointerLeave as _hoverCardContentPointerLeave,
   hoverCardEscapeKeyDown as _hoverCardEscapeKeyDown,
-  hoverCardRootAttributes,
   hoverCardTriggerBlur as _hoverCardTriggerBlur,
   hoverCardTriggerFocus as _hoverCardTriggerFocus,
-  hoverCardTriggerAttributes,
   hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
   hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
-} from '@kovojs/headless-ui/hover-card';
-import {
-  hoverCardClasses,
-  hoverCardTriggerClasses,
-  hoverCardContentClasses,
 } from '@kovojs/ui/hover-card';
-
-const ROOT_CLASS = hoverCardClasses.join(' ');
-const TRIGGER_CLASS = hoverCardTriggerClasses.join(' ');
-const CONTENT_CLASS = hoverCardContentClasses.join(' ');
 
 export interface GalleryHoverCardDemoState {
   open: boolean;
@@ -34,17 +25,16 @@ export const GalleryHoverCardDemo = component({
     const contentId = 'gallery-hover-card-content';
 
     return (
-      <section
-        {...hoverCardRootAttributes({ open: state.open })}
-        class={ROOT_CLASS}
+      <HoverCard
         data-gallery-interactive="hover-card"
         data-state={state.open ? 'open' : 'closed'}
+        open={state.open}
       >
-        <a
-          {...hoverCardTriggerAttributes({ contentId, open: state.open })}
-          class={TRIGGER_CLASS}
+        <HoverCardTrigger
+          contentId={contentId}
           data-state={state.open ? 'open' : 'closed'}
           href="#hover-card-demo"
+          open={state.open}
           onBlur={() => {
             const result = _hoverCardTriggerBlur(Object(event), { open: state.open });
             if (!result) return;
@@ -76,12 +66,12 @@ export const GalleryHoverCardDemo = component({
           }}
         >
           Ada Lovelace
-        </a>
-        <aside
-          {...hoverCardContentAttributes({ contentId, open: state.open })}
-          class={CONTENT_CLASS}
+        </HoverCardTrigger>
+        <HoverCardContent
+          contentId={contentId}
           data-state={state.open ? 'open' : 'closed'}
           hidden={!state.open}
+          open={state.open}
           onPointerEnter={() => {
             const result = _hoverCardContentPointerEnter(Object(event), { open: state.open });
             if (!result) return;
@@ -94,9 +84,9 @@ export const GalleryHoverCardDemo = component({
           }}
         >
           First programmer and analytical engine collaborator.
-        </aside>
+        </HoverCardContent>
         <output data-demo-state="hover-card-open">{state.open ? 'open' : 'closed'}</output>
-      </section>
+      </HoverCard>
     );
   },
 });

@@ -1,26 +1,17 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  numberFieldDecrementAttributes,
+  NumberField,
+  NumberFieldControl,
+  NumberFieldDecrement,
   numberFieldDecrementClick as _numberFieldDecrementClick,
-  numberFieldIncrementAttributes,
+  NumberFieldIncrement,
   numberFieldIncrementClick as _numberFieldIncrementClick,
   numberFieldInput as _numberFieldInput,
-  numberFieldInputAttributes,
+  NumberFieldInput,
   numberFieldKeyDown as _numberFieldKeyDown,
-  numberFieldRootAttributes,
-} from '@kovojs/headless-ui/number-field';
-import {
-  numberFieldClasses,
-  numberFieldControlClasses,
-  numberFieldInputClasses,
-  numberFieldButtonClasses,
 } from '@kovojs/ui/number-field';
 
-const ROOT_CLASS = numberFieldClasses.join(' ');
-const CONTROL_CLASS = numberFieldControlClasses.join(' ');
-const INPUT_CLASS = numberFieldInputClasses.join(' ');
-const BUTTON_CLASS = numberFieldButtonClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 
 export interface GalleryNumberFieldDemoState {
@@ -45,21 +36,21 @@ export const GalleryNumberFieldDemo = component({
     const inputId = 'gallery-number-field-input';
 
     return (
-      <form
-        {...numberFieldRootAttributes(fieldState)}
-        class={ROOT_CLASS}
+      <NumberField
+        {...fieldState}
         data-gallery-interactive="number-field"
         id={formId}
       >
         <label for={inputId} class={LABEL_CLASS}>
           Seats
         </label>
-        <div class={CONTROL_CLASS}>
-          <button
-            {...numberFieldDecrementAttributes({ ...fieldState, inputId, label: 'Decrease seats' })}
-            class={BUTTON_CLASS}
+        <NumberFieldControl {...fieldState}>
+          <NumberFieldDecrement
+            {...fieldState}
             data-disabled={state.value <= 0 ? '' : null}
             disabled={state.value <= 0}
+            inputId={inputId}
+            label="Decrease seats"
             onClick={() => {
               const result = _numberFieldDecrementClick(Object(event), {
                 max: 5,
@@ -73,16 +64,12 @@ export const GalleryNumberFieldDemo = component({
             }}
           >
             -
-          </button>
-          <input
-            {...numberFieldInputAttributes({
-              ...fieldState,
-              form: formId,
-              id: inputId,
-              label: 'Seats',
-            })}
-            class={INPUT_CLASS}
-            value={state.value}
+          </NumberFieldDecrement>
+          <NumberFieldInput
+            {...fieldState}
+            form={formId}
+            id={inputId}
+            label="Seats"
             onInput={() => {
               const result = _numberFieldInput(Object(event), {
                 max: 5,
@@ -105,12 +92,14 @@ export const GalleryNumberFieldDemo = component({
               if (!result) return;
               state.value = result.value ?? 0;
             }}
+            value={state.value}
           />
-          <button
-            {...numberFieldIncrementAttributes({ ...fieldState, inputId, label: 'Increase seats' })}
-            class={BUTTON_CLASS}
+          <NumberFieldIncrement
+            {...fieldState}
             data-disabled={state.value >= 5 ? '' : null}
             disabled={state.value >= 5}
+            inputId={inputId}
+            label="Increase seats"
             onClick={() => {
               const result = _numberFieldIncrementClick(Object(event), {
                 max: 5,
@@ -124,12 +113,12 @@ export const GalleryNumberFieldDemo = component({
             }}
           >
             +
-          </button>
-        </div>
+          </NumberFieldIncrement>
+        </NumberFieldControl>
         <output data-demo-state="value" class="text-xs text-neutral-500">
           {String(state.value)}
         </output>
-      </form>
+      </NumberField>
     );
   },
 });

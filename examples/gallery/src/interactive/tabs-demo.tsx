@@ -1,24 +1,13 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsTrigger,
   tabsKeyDown as _tabsKeyDown,
-  tabsListAttributes,
-  tabsPanelAttributes,
-  tabsRootAttributes,
   tabsTriggerClick as _tabsTriggerClick,
-  tabsTriggerAttributes,
-} from '@kovojs/headless-ui/tabs';
-import {
-  tabsClasses,
-  tabsListClasses,
-  tabsTriggerClasses,
-  tabsPanelClasses,
 } from '@kovojs/ui/tabs';
-
-const ROOT_CLASS = tabsClasses.join(' ');
-const LIST_CLASS = tabsListClasses.join(' ');
-const TRIGGER_CLASS = tabsTriggerClasses.join(' ');
-const PANEL_CLASS = tabsPanelClasses.join(' ');
 
 export interface GalleryTabsDemoState {
   activeValue: string;
@@ -44,9 +33,8 @@ export const GalleryTabsDemo = component({
     };
 
     return (
-      <section
-        {...tabsRootAttributes(rootState)}
-        class={ROOT_CLASS}
+      <Tabs
+        {...rootState}
         data-gallery-interactive="tabs"
         onKeyDown={() => {
           const result = _tabsKeyDown(Object(event), {
@@ -64,20 +52,13 @@ export const GalleryTabsDemo = component({
           state.value = result.value ?? state.value;
         }}
       >
-        <div
-          {...tabsListAttributes({ ...rootState, label: 'Gallery sections' })}
-          class={LIST_CLASS}
-        >
-          <button
-            {...tabsTriggerAttributes({
-              ...rootState,
-              id: 'gallery-tabs-overview-trigger',
-              itemValue: 'overview',
-              panelId: 'gallery-tabs-overview-panel',
-            })}
+        <TabsList {...rootState} label="Gallery sections">
+          <TabsTrigger
+            {...rootState}
             aria-selected={String(state.value === 'overview')}
-            class={TRIGGER_CLASS}
             data-state={state.value === 'overview' ? 'active' : 'inactive'}
+            id="gallery-tabs-overview-trigger"
+            itemValue="overview"
             onClick={() => {
               const result = _tabsTriggerClick(Object(event), {
                 itemValue: 'overview',
@@ -87,20 +68,17 @@ export const GalleryTabsDemo = component({
               state.activeValue = result.value ?? state.activeValue;
               state.value = result.value ?? state.value;
             }}
+            panelId="gallery-tabs-overview-panel"
             tabIndex={state.activeValue === 'overview' ? 0 : -1}
           >
             Overview
-          </button>
-          <button
-            {...tabsTriggerAttributes({
-              ...rootState,
-              id: 'gallery-tabs-details-trigger',
-              itemValue: 'details',
-              panelId: 'gallery-tabs-details-panel',
-            })}
+          </TabsTrigger>
+          <TabsTrigger
+            {...rootState}
             aria-selected={String(state.value === 'details')}
-            class={TRIGGER_CLASS}
             data-state={state.value === 'details' ? 'active' : 'inactive'}
+            id="gallery-tabs-details-trigger"
+            itemValue="details"
             onClick={() => {
               const result = _tabsTriggerClick(Object(event), {
                 itemValue: 'details',
@@ -110,68 +88,58 @@ export const GalleryTabsDemo = component({
               state.activeValue = result.value ?? state.activeValue;
               state.value = result.value ?? state.value;
             }}
+            panelId="gallery-tabs-details-panel"
             tabIndex={state.activeValue === 'details' ? 0 : -1}
           >
             Details
-          </button>
-          <button
-            {...tabsTriggerAttributes({
-              ...rootState,
-              id: 'gallery-tabs-audit-trigger',
-              itemValue: 'audit',
-              panelId: 'gallery-tabs-audit-panel',
-            })}
+          </TabsTrigger>
+          <TabsTrigger
+            {...rootState}
             aria-selected={String(state.value === 'audit')}
-            class={TRIGGER_CLASS}
             data-state={state.value === 'audit' ? 'active' : 'inactive'}
+            id="gallery-tabs-audit-trigger"
+            itemDisabled={true}
+            itemValue="audit"
+            panelId="gallery-tabs-audit-panel"
             tabIndex={-1}
           >
             Audit
-          </button>
-        </div>
-        <section
-          {...tabsPanelAttributes({
-            ...rootState,
-            id: 'gallery-tabs-overview-panel',
-            itemValue: 'overview',
-            triggerId: 'gallery-tabs-overview-trigger',
-          })}
-          class={PANEL_CLASS}
+          </TabsTrigger>
+        </TabsList>
+        <TabsPanel
+          {...rootState}
           data-state={state.value === 'overview' ? 'active' : 'inactive'}
           hidden={state.value !== 'overview'}
+          id="gallery-tabs-overview-panel"
+          itemValue="overview"
           tabIndex={state.value === 'overview' ? 0 : undefined}
+          triggerId="gallery-tabs-overview-trigger"
         >
           Summary metrics stay visible without client runtime.
-        </section>
-        <section
-          {...tabsPanelAttributes({
-            ...rootState,
-            id: 'gallery-tabs-details-panel',
-            itemValue: 'details',
-            triggerId: 'gallery-tabs-details-trigger',
-          })}
-          class={PANEL_CLASS}
+        </TabsPanel>
+        <TabsPanel
+          {...rootState}
           data-state={state.value === 'details' ? 'active' : 'inactive'}
           hidden={state.value !== 'details'}
+          id="gallery-tabs-details-panel"
+          itemValue="details"
           tabIndex={state.value === 'details' ? 0 : undefined}
+          triggerId="gallery-tabs-details-trigger"
         >
           Detailed notes are selected by click or arrow-key activation.
-        </section>
-        <section
-          {...tabsPanelAttributes({
-            ...rootState,
-            id: 'gallery-tabs-audit-panel',
-            itemValue: 'audit',
-            triggerId: 'gallery-tabs-audit-trigger',
-          })}
-          class={PANEL_CLASS}
+        </TabsPanel>
+        <TabsPanel
+          {...rootState}
           data-state={state.value === 'audit' ? 'active' : 'inactive'}
           hidden={state.value !== 'audit'}
+          id="gallery-tabs-audit-panel"
+          itemValue="audit"
           tabIndex={state.value === 'audit' ? 0 : undefined}
+          triggerId="gallery-tabs-audit-trigger"
         >
           Disabled audit notes stay out of the roving keyboard path.
-        </section>
-      </section>
+        </TabsPanel>
+      </Tabs>
     );
   },
 });

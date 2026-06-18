@@ -1,14 +1,9 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { progressRootAttributes } from '@kovojs/headless-ui/progress';
-import { progressClasses } from '@kovojs/ui/progress';
+import { Button } from '@kovojs/ui/button';
+import { Progress } from '@kovojs/ui/progress';
 
-// PROGRESS_CLASS comes from @kovojs/ui/progress; the wrapper and control buttons
-// keep local demo layout classes because they are not the progress component surface.
 const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
-const PROGRESS_CLASS = progressClasses.join(' ');
-const BUTTON_CLASS =
-  'inline-flex h-9 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
 
 export interface GalleryProgressDemoState {
   value: number | null;
@@ -24,38 +19,36 @@ export const GalleryProgressDemo = component({
     return (
       <section class={ROOT_CLASS} data-gallery-interactive="progress">
         <label for="gallery-progress-value">Upload progress</label>
-        <progress
-          {...progressRootAttributes({ max: 100, value: state.value, valueText })}
+        <Progress
           aria-valuetext={
             state.value === null ? 'Upload pending' : `${state.value} percent uploaded`
           }
-          class={PROGRESS_CLASS}
-          data-state={
-            state.value === null ? 'indeterminate' : state.value === 100 ? 'complete' : 'loading'
-          }
-          data-value={state.value === null ? undefined : String(state.value)}
           id="gallery-progress-value"
-          value={state.value === null ? undefined : state.value}
-        />
+          max={100}
+          value={state.value}
+          valueText={valueText}
+        >
+          Upload progress
+        </Progress>
         <div class="inline-flex gap-2">
-          <button
+          <Button
             type="button"
-            class={BUTTON_CLASS}
+            variant="secondary"
             onClick={() => {
               state.value = state.value === 100 ? 40 : 100;
             }}
           >
             Complete upload
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            class={BUTTON_CLASS}
+            variant="secondary"
             onClick={() => {
               state.value = null;
             }}
           >
             Mark pending
-          </button>
+          </Button>
         </div>
         <output data-demo-state="progress-value">
           {state.value === null ? 'pending' : `${state.value}%`}

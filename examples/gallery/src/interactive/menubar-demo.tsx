@@ -2,26 +2,17 @@
 import { component } from '@kovojs/core';
 import {
   menubarFocusElement as _menubarFocusElement,
-  menubarItemAttributes,
+  Menubar,
+  MenubarItem,
   menubarItemClick as _menubarItemClick,
   menubarItemKeyDown as _menubarItemKeyDown,
   menubarKeyDown as _menubarKeyDown,
   menubarMove as _menubarMove,
-  menubarRootAttributes,
-  menubarSubmenuAttributes,
+  MenubarSubmenu,
   menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick,
   menubarTypeahead as _menubarTypeahead,
-  type MenubarItem,
-} from '@kovojs/headless-ui/menubar';
-import {
-  menubarClasses,
-  menubarItemClasses,
-  menubarSubmenuClasses,
+  type MenubarItem as GalleryMenubarItem,
 } from '@kovojs/ui/menubar';
-
-const ROOT_CLASS = menubarClasses.join(' ');
-const ITEM_CLASS = menubarItemClasses.join(' ');
-const SUBMENU_CLASS = menubarSubmenuClasses.join(' ');
 
 export interface GalleryMenubarDemoState {
   activeValue: string;
@@ -29,7 +20,7 @@ export interface GalleryMenubarDemoState {
   value: string;
 }
 
-const menubarItems: readonly MenubarItem[] = Object.freeze([
+const menubarItems: readonly GalleryMenubarItem[] = Object.freeze([
   { hasPopup: true, label: 'File', value: 'file' },
   { label: 'Edit', value: 'edit' },
   { label: 'New file', parentValue: 'file', value: 'new' },
@@ -126,20 +117,16 @@ export const GalleryMenubarDemo = component({
           );
         }}
       >
-        <div {...menubarRootAttributes(rootState)} class={ROOT_CLASS}>
-          <button
-            {...menubarItemAttributes({
-              ...rootState,
-              contentId: 'gallery-menubar-file-menu',
-              id: 'gallery-menubar-file',
-              itemLabel: 'File',
-              itemValue: 'file',
-            })}
+        <Menubar {...rootState}>
+          <MenubarItem
+            {...rootState}
             aria-expanded={state.openValue === 'file' ? 'true' : 'false'}
-            class={ITEM_CLASS}
+            contentId="gallery-menubar-file-menu"
             data-highlighted={state.activeValue === 'file' ? '' : null}
             data-state={state.activeValue === 'file' ? 'active' : 'inactive'}
-            tabIndex={state.activeValue === 'file' ? 0 : -1}
+            id="gallery-menubar-file"
+            itemLabel="File"
+            itemValue="file"
             onClick={() => {
               const result = _menubarSubmenuTriggerClick(Object(event), {
                 activeValue: state.activeValue,
@@ -186,51 +173,42 @@ export const GalleryMenubarDemo = component({
               if (result.openValue === 'file')
                 _menubarFocusElement(Object(event), 'gallery-menubar-new', { defer: true });
             }}
+            tabIndex={state.activeValue === 'file' ? 0 : -1}
           >
             File
-          </button>
-          <button
-            {...menubarItemAttributes({
-              ...rootState,
-              id: 'gallery-menubar-edit',
-              itemLabel: 'Edit',
-              itemValue: 'edit',
-            })}
-            class={ITEM_CLASS}
+          </MenubarItem>
+          <MenubarItem
+            {...rootState}
             data-highlighted={state.activeValue === 'edit' ? '' : null}
             data-state={state.activeValue === 'edit' ? 'active' : 'inactive'}
-            tabIndex={state.activeValue === 'edit' ? 0 : -1}
+            id="gallery-menubar-edit"
+            itemLabel="Edit"
+            itemValue="edit"
             onClick={() => {
               state.activeValue = 'edit';
               state.openValue = '';
             }}
+            tabIndex={state.activeValue === 'edit' ? 0 : -1}
           >
             Edit
-          </button>
-        </div>
-        <div
-          {...menubarSubmenuAttributes({
-            ...rootState,
-            id: 'gallery-menubar-file-menu',
-            labelledBy: 'gallery-menubar-file',
-            value: 'file',
-          })}
-          class={SUBMENU_CLASS}
+          </MenubarItem>
+        </Menubar>
+        <MenubarSubmenu
+          {...rootState}
           data-state={state.openValue === 'file' ? 'open' : 'closed'}
           hidden={state.openValue !== 'file'}
+          id="gallery-menubar-file-menu"
+          labelledBy="gallery-menubar-file"
+          value="file"
         >
-          <button
-            {...menubarItemAttributes({
-              ...rootState,
-              id: 'gallery-menubar-new',
-              itemLabel: 'New file',
-              itemParentValue: 'file',
-              itemValue: 'new',
-            })}
-            class={ITEM_CLASS}
+          <MenubarItem
+            {...rootState}
             data-highlighted={state.activeValue === 'new' ? '' : null}
             data-state={state.activeValue === 'new' ? 'active' : 'inactive'}
-            tabIndex={state.activeValue === 'new' ? 0 : -1}
+            id="gallery-menubar-new"
+            itemLabel="New file"
+            itemParentValue="file"
+            itemValue="new"
             onKeyDown={() => {
               const result = _menubarItemKeyDown(Object(event), {
                 activeValue: state.activeValue,
@@ -328,23 +306,21 @@ export const GalleryMenubarDemo = component({
               state.value = result.value;
               _menubarFocusElement(Object(event), 'gallery-menubar-file');
             }}
+            tabIndex={state.activeValue === 'new' ? 0 : -1}
           >
             New file
-          </button>
-          <button
-            {...menubarItemAttributes({
-              ...rootState,
-              id: 'gallery-menubar-import',
-              itemDisabled: true,
-              itemLabel: 'Import',
-              itemParentValue: 'file',
-              itemValue: 'import',
-            })}
-            class={ITEM_CLASS}
+          </MenubarItem>
+          <MenubarItem
+            {...rootState}
+            id="gallery-menubar-import"
+            itemDisabled={true}
+            itemLabel="Import"
+            itemParentValue="file"
+            itemValue="import"
           >
             Import
-          </button>
-        </div>
+          </MenubarItem>
+        </MenubarSubmenu>
         <output data-demo-state="menubar-active">{state.activeValue}</output>
         <output data-demo-state="menubar-open">{state.openValue || 'none'}</output>
         <output data-demo-state="menubar-value">{state.value}</output>

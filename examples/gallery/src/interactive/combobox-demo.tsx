@@ -1,30 +1,18 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  Combobox,
   comboboxFilteredItems as _comboboxFilteredItems,
   comboboxInput as _comboboxInput,
-  comboboxInputAttributes,
+  ComboboxInput,
   comboboxKeyDown as _comboboxKeyDown,
-  comboboxListboxAttributes,
-  comboboxOptionAttributes,
+  ComboboxListbox,
+  ComboboxOption,
   comboboxOptionClick as _comboboxOptionClick,
-  comboboxRootAttributes,
-  comboboxValueAttributes,
+  ComboboxValue,
   type ComboboxItem,
-} from '@kovojs/headless-ui/combobox';
-import {
-  comboboxClasses,
-  comboboxInputClasses,
-  comboboxListboxClasses,
-  comboboxOptionClasses,
-  comboboxValueClasses,
 } from '@kovojs/ui/combobox';
 
-const ROOT_CLASS = comboboxClasses.join(' ');
-const INPUT_CLASS = comboboxInputClasses.join(' ');
-const LISTBOX_CLASS = comboboxListboxClasses.join(' ');
-const OPTION_CLASS = comboboxOptionClasses.join(' ');
-const VALUE_CLASS = comboboxValueClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 
 export interface GalleryComboboxDemoState {
@@ -63,23 +51,18 @@ export const GalleryComboboxDemo = component({
     };
 
     return (
-      <section
-        {...comboboxRootAttributes({ ...inputState, id: 'gallery-combobox-root' })}
-        class={ROOT_CLASS}
+      <Combobox
+        {...inputState}
         data-gallery-interactive="combobox"
         data-state={state.open ? 'open' : 'closed'}
+        id="gallery-combobox-root"
       >
         <label id="gallery-combobox-label" for="gallery-combobox-input" class={LABEL_CLASS}>
           City
         </label>
         <form id="gallery-combobox-form" data-gallery-form="combobox" />
-        <input
-          {...comboboxInputAttributes({
-            ...inputState,
-            id: 'gallery-combobox-input',
-            labelledBy: 'gallery-combobox-label',
-          })}
-          id="gallery-combobox-input"
+        <ComboboxInput
+          {...inputState}
           aria-activedescendant={
             state.highlightedValue === 'chicago'
               ? 'gallery-combobox-listbox-option-2'
@@ -90,10 +73,10 @@ export const GalleryComboboxDemo = component({
                   : null
           }
           aria-expanded={state.open ? 'true' : 'false'}
-          class={INPUT_CLASS}
           data-placeholder={state.inputValue === '' ? '' : null}
           data-state={state.open ? 'open' : 'closed'}
-          value={state.inputValue}
+          id="gallery-combobox-input"
+          labelledBy="gallery-combobox-label"
           onInput={() => {
             const result = _comboboxInput(Object(event), { value: state.inputValue });
             if (!result) return;
@@ -169,32 +152,27 @@ export const GalleryComboboxDemo = component({
               }
             }
           }}
+          value={state.inputValue}
         />
-        <div
-          {...comboboxListboxAttributes({
-            ...inputState,
-            id: listboxId,
-            labelledBy: 'gallery-combobox-label',
-          })}
-          class={LISTBOX_CLASS}
+        <ComboboxListbox
+          {...inputState}
           data-state={state.open ? 'open' : 'closed'}
           hidden={!state.open}
+          id={listboxId}
+          labelledBy="gallery-combobox-label"
         >
-          <button
-            {...comboboxOptionAttributes({
-              ...selectedState,
-              id: 'gallery-combobox-listbox-option-0',
-              itemLabel: 'Austin',
-              itemValue: 'austin',
-            })}
+          <ComboboxOption
+            {...selectedState}
             aria-selected={state.value === 'austin' ? 'true' : 'false'}
-            class={OPTION_CLASS}
             data-highlighted={state.highlightedValue === 'austin' ? '' : null}
             data-state={state.value === 'austin' ? 'checked' : 'unchecked'}
             hidden={
               state.inputValue !== '' &&
               !'austin austin'.includes(state.inputValue.toLocaleLowerCase())
             }
+            id="gallery-combobox-listbox-option-0"
+            itemLabel="Austin"
+            itemValue="austin"
             onClick={() => {
               const result = _comboboxOptionClick(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -231,41 +209,35 @@ export const GalleryComboboxDemo = component({
             tabIndex={state.highlightedValue === 'austin' ? 0 : -1}
           >
             Austin
-          </button>
-          <button
-            {...comboboxOptionAttributes({
-              ...selectedState,
-              id: 'gallery-combobox-listbox-option-1',
-              itemDisabled: true,
-              itemLabel: 'Boston',
-              itemValue: 'boston',
-            })}
+          </ComboboxOption>
+          <ComboboxOption
+            {...selectedState}
             aria-selected={state.value === 'boston' ? 'true' : 'false'}
-            class={OPTION_CLASS}
             data-highlighted={state.highlightedValue === 'boston' ? '' : null}
             data-state={state.value === 'boston' ? 'checked' : 'unchecked'}
             hidden={
               state.inputValue !== '' &&
               !'boston boston'.includes(state.inputValue.toLocaleLowerCase())
             }
+            id="gallery-combobox-listbox-option-1"
+            itemDisabled={true}
+            itemLabel="Boston"
+            itemValue="boston"
             tabIndex={-1}
           >
             Boston
-          </button>
-          <button
-            {...comboboxOptionAttributes({
-              ...selectedState,
-              id: 'gallery-combobox-listbox-option-2',
-              itemValue: 'chicago',
-            })}
+          </ComboboxOption>
+          <ComboboxOption
+            {...selectedState}
             aria-selected={state.value === 'chicago' ? 'true' : 'false'}
-            class={OPTION_CLASS}
             data-highlighted={state.highlightedValue === 'chicago' ? '' : null}
             data-state={state.value === 'chicago' ? 'checked' : 'unchecked'}
             hidden={
               state.inputValue !== '' &&
               !'chicago city chicago'.includes(state.inputValue.toLocaleLowerCase())
             }
+            id="gallery-combobox-listbox-option-2"
+            itemValue="chicago"
             onClick={() => {
               const result = _comboboxOptionClick(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -302,16 +274,13 @@ export const GalleryComboboxDemo = component({
             tabIndex={state.highlightedValue === 'chicago' ? 0 : -1}
           >
             Chicago city
-          </button>
-        </div>
-        <output
-          {...comboboxValueAttributes(selectedState)}
-          class={VALUE_CLASS}
+          </ComboboxOption>
+        </ComboboxListbox>
+        <ComboboxValue
+          {...selectedState}
           data-demo-state="combobox-value"
-        >
-          {state.value === 'chicago' ? 'Chicago city' : 'Austin'}
-        </output>
-      </section>
+        />
+      </Combobox>
     );
   },
 });

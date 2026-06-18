@@ -8,6 +8,8 @@ import {
 } from '@kovojs/headless-ui/dialog';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export type SheetSide = 'top' | 'right' | 'bottom' | 'left';
@@ -34,6 +36,43 @@ export interface SheetProps {
   styles?: SheetStyleOverrides;
   title: string;
   trigger?: string;
+}
+
+export interface SheetStateProps {
+  disabled?: boolean;
+  open?: boolean;
+  styles?: SheetStyleOverrides;
+}
+
+export interface SheetRootProps extends SheetStateProps {
+  children?: string;
+  id?: string;
+}
+
+export interface SheetTriggerProps extends SheetStateProps {
+  children?: string;
+  contentId: string;
+  id?: string;
+}
+
+export interface SheetContentProps extends SheetStateProps {
+  children?: string;
+  contentId: string;
+  descriptionId?: string;
+  side?: SheetSide;
+  titleId: string;
+}
+
+export interface SheetPartProps {
+  children?: string;
+  id?: string;
+  styles?: SheetStyleOverrides;
+}
+
+export interface SheetCloseProps extends SheetStateProps {
+  children?: string;
+  contentId: string;
+  id?: string;
 }
 
 function escapeHtml(value: string): string {
@@ -219,11 +258,13 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
   return (
     <div
       {...rootStyleAttrs}
+      {...passThroughProps(props)}
       data-disabled={rootAttrs['data-disabled']}
       data-state={rootAttrs['data-state']}
     >
       <button
         {...triggerStyleAttrs}
+        {...passThroughProps(props)}
         aria-controls={triggerAttrs['aria-controls']}
         aria-expanded={triggerAttrs['aria-expanded']}
         aria-haspopup={triggerAttrs['aria-haspopup']}
@@ -238,6 +279,7 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
       </button>
       <dialog
         {...contentStyleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={contentAttrs['aria-describedby']}
         aria-labelledby={contentAttrs['aria-labelledby']}
         closedby={contentAttrs.closedby}
@@ -260,6 +302,7 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
         <div {...bodyStyleAttrs}>{props.children}</div>
         <button
           {...closeStyleAttrs}
+          {...passThroughProps(props)}
           command={closeAttrs.command}
           commandfor={closeAttrs.commandfor}
           data-disabled={closeAttrs['data-disabled']}
@@ -277,5 +320,149 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
 export const Sheet = component({
   render(props: SheetProps) {
     return renderDialogPanel(props, 'right');
+  },
+});
+
+export const SheetRoot = component({
+  render(props: SheetRootProps) {
+    const attrs = dialogRootAttributes({
+      ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.open === undefined ? {} : { open: props.open }),
+    });
+    const styleAttrs = style.attrs(sheetStyles.root, props.styles?.root);
+
+    return (
+      <div
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        data-disabled={attrs['data-disabled']}
+        data-state={attrs['data-state']}
+        id={props.id}
+      >
+        {props.children}
+      </div>
+    );
+  },
+});
+
+export const SheetTrigger = component({
+  render(props: SheetTriggerProps) {
+    const attrs = dialogTriggerAttributes({
+      ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      contentId: props.contentId,
+      ...(props.open === undefined ? {} : { open: props.open }),
+    });
+    const styleAttrs = style.attrs(sheetStyles.trigger, props.styles?.trigger);
+
+    return (
+      <button
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        aria-controls={attrs['aria-controls']}
+        aria-expanded={attrs['aria-expanded']}
+        aria-haspopup={attrs['aria-haspopup']}
+        command={attrs.command}
+        commandfor={attrs.commandfor}
+        data-disabled={attrs['data-disabled']}
+        data-state={attrs['data-state']}
+        disabled={attrs.disabled}
+        id={props.id}
+        type={attrs.type}
+      >
+        {props.children}
+      </button>
+    );
+  },
+});
+
+export const SheetContent = component({
+  render(props: SheetContentProps) {
+    const side = props.side ?? 'right';
+    const attrs = dialogContentAttributes({
+      contentId: props.contentId,
+      ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
+      ...(props.open === undefined ? {} : { open: props.open }),
+      titleId: props.titleId,
+    });
+    const styleAttrs = style.attrs(
+      sheetStyles.content,
+      sheetSideStyles[side],
+      props.styles?.content,
+    );
+
+    return (
+      <dialog
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        aria-describedby={attrs['aria-describedby']}
+        aria-labelledby={attrs['aria-labelledby']}
+        closedby={attrs.closedby}
+        data-state={attrs['data-state']}
+        id={attrs.id}
+        open={attrs.open}
+      >
+        {props.children}
+      </dialog>
+    );
+  },
+});
+
+export const SheetHeader = component({
+  render(props: SheetPartProps) {
+    const styleAttrs = style.attrs(sheetStyles.header, props.styles?.header);
+    return (
+      <header {...styleAttrs} {...passThroughProps(props)} id={props.id}>
+        {props.children}
+      </header>
+    );
+  },
+});
+
+export const SheetTitle = component({
+  render(props: SheetPartProps) {
+    const styleAttrs = style.attrs(sheetStyles.title, props.styles?.title);
+    return (
+      <h2 {...styleAttrs} {...passThroughProps(props)} id={props.id}>
+        {props.children}
+      </h2>
+    );
+  },
+});
+
+export const SheetDescription = component({
+  render(props: SheetPartProps) {
+    const styleAttrs = style.attrs(sheetStyles.description, props.styles?.description);
+    return (
+      <p {...styleAttrs} {...passThroughProps(props)} id={props.id}>
+        {props.children}
+      </p>
+    );
+  },
+});
+
+export const SheetClose = component({
+  render(props: SheetCloseProps) {
+    const attrs = dialogCloseAttributes({
+      ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      contentId: props.contentId,
+      ...(props.open === undefined ? {} : { open: props.open }),
+    });
+    const styleAttrs = style.attrs(sheetStyles.close, props.styles?.close);
+
+    return (
+      <button
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        command={attrs.command}
+        commandfor={attrs.commandfor}
+        data-disabled={attrs['data-disabled']}
+        data-state={attrs['data-state']}
+        disabled={attrs.disabled}
+        id={props.id}
+        type={attrs.type}
+      >
+        {props.children ?? 'Close'}
+      </button>
+    );
   },
 });

@@ -1,9 +1,9 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { meterValueState as _meterValueState } from '@kovojs/headless-ui/meter';
+import { meterValueState as _meterValueState } from '@kovojs/ui/meter';
 
-export const GalleryMeterDemo$button_click = handler((_event, ctx) => {
+export const GalleryMeterDemo$Button_click = handler((_event, ctx) => {
   const value = ctx.state.value === 92 ? 72 : 92;
   ctx.state.value = value;
   ctx.state.dataState = _meterValueState({
@@ -16,18 +16,15 @@ export const GalleryMeterDemo$button_click = handler((_event, ctx) => {
   }).state;
 });
 
-export const GalleryMeterDemo$meter_aria_valuetext_derive = derive(
+export const GalleryMeterDemo$Meter_aria_valuetext_derive = derive(
   ['state'],
   (state) => `${state.value} percent capacity`,
 );
-export const GalleryMeterDemo$meter_data_state_derive = derive(
+export const GalleryMeterDemo$Meter_data_state_derive = derive(
   ['state'],
   (state) => state.dataState,
 );
-export const GalleryMeterDemo$meter_data_value_derive = derive(['state'], (state) =>
-  String(state.value),
-);
-export const GalleryMeterDemo$meter_value_derive = derive(['state'], (state) => state.value);
+export const GalleryMeterDemo$Meter_value_derive = derive(['state'], (state) => state.value);
 export const GalleryMeterDemo$output_text_derive = derive(['state'], (state) =>
   String(state.value),
 );

@@ -1,29 +1,20 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  dropdownMenuContentAttributes,
+  DropdownMenu,
+  DropdownMenuContent,
   dropdownMenuFocusElement as _dropdownMenuFocusElement,
-  dropdownMenuItemAttributes,
+  DropdownMenuItem,
   dropdownMenuItemClick as _dropdownMenuItemClick,
   dropdownMenuItemKeyDown as _dropdownMenuItemKeyDown,
   dropdownMenuKeyDown as _dropdownMenuKeyDown,
   dropdownMenuMove as _dropdownMenuMove,
-  dropdownMenuRootAttributes,
-  dropdownMenuTriggerAttributes,
+  DropdownMenuTrigger,
   dropdownMenuTriggerClick as _dropdownMenuTriggerClick,
   dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown,
   dropdownMenuTypeahead as _dropdownMenuTypeahead,
-  type DropdownMenuItem,
-} from '@kovojs/headless-ui/dropdown-menu';
-import {
-  dropdownMenuTriggerClasses,
-  dropdownMenuContentClasses,
-  dropdownMenuItemClasses,
+  type DropdownMenuItem as GalleryDropdownMenuItem,
 } from '@kovojs/ui/dropdown-menu';
-
-const TRIGGER_CLASS = dropdownMenuTriggerClasses.join(' ');
-const CONTENT_CLASS = dropdownMenuContentClasses.join(' ');
-const ITEM_CLASS = dropdownMenuItemClasses.join(' ');
 
 export interface GalleryDropdownMenuDemoState {
   highlightedValue: string;
@@ -31,7 +22,7 @@ export interface GalleryDropdownMenuDemoState {
   value: string;
 }
 
-const dropdownItems: readonly DropdownMenuItem[] = Object.freeze([
+const dropdownItems: readonly GalleryDropdownMenuItem[] = Object.freeze([
   { label: 'Duplicate', value: 'duplicate' },
   { disabled: true, label: 'Archive', value: 'archive' },
   { label: 'Rename', value: 'rename' },
@@ -50,18 +41,17 @@ export const GalleryDropdownMenuDemo = component({
     };
 
     return (
-      <section
-        {...dropdownMenuRootAttributes(menuState)}
-        class="grid gap-2"
+      <DropdownMenu
+        {...menuState}
         data-gallery-interactive="dropdown-menu"
         data-state={state.open ? 'open' : 'closed'}
       >
-        <button
-          {...dropdownMenuTriggerAttributes({ ...menuState, contentId })}
-          class={TRIGGER_CLASS}
-          id="gallery-dropdown-menu-trigger"
+        <DropdownMenuTrigger
+          {...menuState}
           aria-expanded={state.open ? 'true' : 'false'}
+          contentId={contentId}
           data-state={state.open ? 'open' : 'closed'}
+          id="gallery-dropdown-menu-trigger"
           onClick={() => {
             const result = _dropdownMenuTriggerClick(Object(event), {
               highlightedValue: state.highlightedValue,
@@ -105,24 +95,20 @@ export const GalleryDropdownMenuDemo = component({
           }}
         >
           Actions
-        </button>
-        <div
-          {...dropdownMenuContentAttributes({ ...menuState, id: contentId })}
-          class={CONTENT_CLASS}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          {...menuState}
           data-state={state.open ? 'open' : 'closed'}
           hidden={!state.open}
+          id={contentId}
         >
-          <button
-            {...dropdownMenuItemAttributes({
-              ...menuState,
-              id: 'gallery-dropdown-menu-duplicate',
-              itemLabel: 'Duplicate',
-              itemValue: 'duplicate',
-            })}
-            class={ITEM_CLASS}
+          <DropdownMenuItem
+            {...menuState}
             data-highlighted={state.highlightedValue === 'duplicate' ? '' : null}
             data-state={state.highlightedValue === 'duplicate' ? 'active' : 'inactive'}
-            tabIndex={state.highlightedValue === 'duplicate' ? 0 : -1}
+            id="gallery-dropdown-menu-duplicate"
+            itemLabel="Duplicate"
+            itemValue="duplicate"
             onKeyDown={() => {
               const result = _dropdownMenuItemKeyDown(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -223,32 +209,26 @@ export const GalleryDropdownMenuDemo = component({
               state.value = result.value;
               _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-trigger');
             }}
+            tabIndex={state.highlightedValue === 'duplicate' ? 0 : -1}
           >
             Duplicate
-          </button>
-          <button
-            {...dropdownMenuItemAttributes({
-              ...menuState,
-              id: 'gallery-dropdown-menu-archive',
-              itemDisabled: true,
-              itemLabel: 'Archive',
-              itemValue: 'archive',
-            })}
-            class={ITEM_CLASS}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            {...menuState}
+            id="gallery-dropdown-menu-archive"
+            itemDisabled={true}
+            itemLabel="Archive"
+            itemValue="archive"
           >
             Archive
-          </button>
-          <button
-            {...dropdownMenuItemAttributes({
-              ...menuState,
-              id: 'gallery-dropdown-menu-rename',
-              itemLabel: 'Rename',
-              itemValue: 'rename',
-            })}
-            class={ITEM_CLASS}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            {...menuState}
             data-highlighted={state.highlightedValue === 'rename' ? '' : null}
             data-state={state.highlightedValue === 'rename' ? 'active' : 'inactive'}
-            tabIndex={state.highlightedValue === 'rename' ? 0 : -1}
+            id="gallery-dropdown-menu-rename"
+            itemLabel="Rename"
+            itemValue="rename"
             onKeyDown={() => {
               const result = _dropdownMenuItemKeyDown(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -349,13 +329,14 @@ export const GalleryDropdownMenuDemo = component({
               state.value = result.value;
               _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-trigger');
             }}
+            tabIndex={state.highlightedValue === 'rename' ? 0 : -1}
           >
             Rename
-          </button>
-        </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
         <output data-demo-state="dropdown-open">{state.open ? 'open' : 'closed'}</output>
         <output data-demo-state="dropdown-value">{state.value}</output>
-      </section>
+      </DropdownMenu>
     );
   },
 });

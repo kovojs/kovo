@@ -10,9 +10,9 @@ import {
   contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu,
   contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown,
   contextMenuTypeahead as _contextMenuTypeahead,
-} from '@kovojs/headless-ui/context-menu';
+} from '@kovojs/ui/context-menu';
 
-export const GalleryContextMenuDemo$div_contextmenu = handler((event, ctx) => {
+export const GalleryContextMenuDemo$ContextMenuTrigger_contextmenu = handler((event, ctx) => {
   const result = _contextMenuTriggerContextMenu(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -30,7 +30,7 @@ export const GalleryContextMenuDemo$div_contextmenu = handler((event, ctx) => {
   if (result.open)
     _contextMenuFocusElement(Object(event), 'gallery-context-menu-copy', { defer: true });
 });
-export const GalleryContextMenuDemo$div_keydown = handler((event, ctx) => {
+export const GalleryContextMenuDemo$ContextMenuTrigger_keydown = handler((event, ctx) => {
   const result = _contextMenuTriggerKeyDown(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -48,7 +48,7 @@ export const GalleryContextMenuDemo$div_keydown = handler((event, ctx) => {
   if (result.open)
     _contextMenuFocusElement(Object(event), 'gallery-context-menu-copy', { defer: true });
 });
-export const GalleryContextMenuDemo$button_keydown = handler((event, ctx) => {
+export const GalleryContextMenuDemo$ContextMenuItem_keydown = handler((event, ctx) => {
   const result = _contextMenuItemKeyDown(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     itemValue: 'copy',
@@ -134,7 +134,7 @@ export const GalleryContextMenuDemo$button_keydown = handler((event, ctx) => {
       : 'gallery-context-menu-copy',
   );
 });
-export const GalleryContextMenuDemo$button_click = handler((event, ctx) => {
+export const GalleryContextMenuDemo$ContextMenuItem_click = handler((event, ctx) => {
   const result = _contextMenuItemClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     itemValue: 'copy',
@@ -152,7 +152,7 @@ export const GalleryContextMenuDemo$button_click = handler((event, ctx) => {
   ctx.state.value = result.value;
   _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
 });
-export const GalleryContextMenuDemo$button_keydown_2 = handler((event, ctx) => {
+export const GalleryContextMenuDemo$ContextMenuItem_keydown_2 = handler((event, ctx) => {
   const result = _contextMenuItemKeyDown(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     itemValue: 'inspect',
@@ -238,7 +238,7 @@ export const GalleryContextMenuDemo$button_keydown_2 = handler((event, ctx) => {
       : 'gallery-context-menu-copy',
   );
 });
-export const GalleryContextMenuDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryContextMenuDemo$ContextMenuItem_click_2 = handler((event, ctx) => {
   const result = _contextMenuItemClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     itemValue: 'inspect',
@@ -257,43 +257,51 @@ export const GalleryContextMenuDemo$button_click_2 = handler((event, ctx) => {
   _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
 });
 
-export const GalleryContextMenuDemo$section_data_state_derive = derive(['state'], (state) =>
+export const GalleryContextMenuDemo$ContextMenu_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryContextMenuDemo$div_aria_expanded_derive = derive(['state'], (state) =>
-  state.open ? 'true' : 'false',
+export const GalleryContextMenuDemo$ContextMenuTrigger_aria_expanded_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'true' : 'false'),
 );
-export const GalleryContextMenuDemo$div_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
+export const GalleryContextMenuDemo$ContextMenuTrigger_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
 );
-export const GalleryContextMenuDemo$div_data_anchor_x_derive = derive(['state'], (state) =>
-  String(state.point.x),
+export const GalleryContextMenuDemo$ContextMenuContent_data_anchor_x_derive = derive(
+  ['state'],
+  (state) => String(state.point.x),
 );
-export const GalleryContextMenuDemo$div_data_anchor_y_derive = derive(['state'], (state) =>
-  String(state.point.y),
+export const GalleryContextMenuDemo$ContextMenuContent_data_anchor_y_derive = derive(
+  ['state'],
+  (state) => String(state.point.y),
 );
-export const GalleryContextMenuDemo$div_data_state_derive_2 = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
+export const GalleryContextMenuDemo$ContextMenuContent_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
 );
-export const GalleryContextMenuDemo$div_hidden_derive = derive(['state'], (state) =>
+export const GalleryContextMenuDemo$ContextMenuContent_hidden_derive = derive(['state'], (state) =>
   !state.open ? '' : null,
 );
-export const GalleryContextMenuDemo$button_data_highlighted_derive = derive(['state'], (state) =>
-  state.highlightedValue === 'copy' ? '' : null,
+export const GalleryContextMenuDemo$ContextMenuItem_data_highlighted_derive = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'copy' ? '' : null),
 );
-export const GalleryContextMenuDemo$button_data_state_derive = derive(['state'], (state) =>
+export const GalleryContextMenuDemo$ContextMenuItem_data_state_derive = derive(['state'], (state) =>
   state.highlightedValue === 'copy' ? 'active' : 'inactive',
 );
-export const GalleryContextMenuDemo$button_tabIndex_derive = derive(['state'], (state) =>
+export const GalleryContextMenuDemo$ContextMenuItem_tabIndex_derive = derive(['state'], (state) =>
   state.highlightedValue === 'copy' ? 0 : -1,
 );
-export const GalleryContextMenuDemo$button_data_highlighted_derive_2 = derive(['state'], (state) =>
-  state.highlightedValue === 'inspect' ? '' : null,
+export const GalleryContextMenuDemo$ContextMenuItem_data_highlighted_derive_2 = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'inspect' ? '' : null),
 );
-export const GalleryContextMenuDemo$button_data_state_derive_2 = derive(['state'], (state) =>
-  state.highlightedValue === 'inspect' ? 'active' : 'inactive',
+export const GalleryContextMenuDemo$ContextMenuItem_data_state_derive_2 = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'inspect' ? 'active' : 'inactive'),
 );
-export const GalleryContextMenuDemo$button_tabIndex_derive_2 = derive(['state'], (state) =>
+export const GalleryContextMenuDemo$ContextMenuItem_tabIndex_derive_2 = derive(['state'], (state) =>
   state.highlightedValue === 'inspect' ? 0 : -1,
 );
 export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (state) =>

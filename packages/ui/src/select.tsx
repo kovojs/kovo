@@ -12,6 +12,8 @@ import {
 } from '@kovojs/headless-ui/select';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface SelectStyleOverrides {
@@ -67,6 +69,7 @@ export interface SelectContentProps extends SelectStateProps {
 
 export interface SelectItemProps extends SelectStateProps {
   children?: string;
+  id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;
   itemValue: string;
@@ -189,6 +192,7 @@ export const Select = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-placeholder={attrs['data-placeholder']}
@@ -226,6 +230,7 @@ export const SelectTrigger = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
@@ -260,6 +265,7 @@ export const SelectHiddenInput = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         disabled={attrs.disabled}
         form={attrs.form}
         id={props.id}
@@ -292,6 +298,7 @@ export const SelectContent = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-labelledby={attrs['aria-labelledby']}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
@@ -313,6 +320,7 @@ export const SelectItem = component({
     const attrs = selectItemAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
+      ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),
       ...(props.itemLabel === undefined ? {} : { itemLabel: props.itemLabel }),
@@ -330,6 +338,7 @@ export const SelectItem = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-disabled={attrs['aria-disabled']}
         aria-selected={attrs['aria-selected']}
         data-disabled={attrs['data-disabled']}
@@ -364,9 +373,16 @@ export const SelectValue = component({
     const styleAttrs = style.attrs(selectStyles.value, props.styles?.value);
 
     return (
-      <span {...styleAttrs} data-placeholder={attrs['data-placeholder']} id={attrs.id}>
+      <span
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        data-placeholder={attrs['data-placeholder']}
+        id={attrs.id}
+      >
         {escapeHtml(selectValueText(props))}
       </span>
     );
   },
 });
+
+export * from '@kovojs/headless-ui/select';

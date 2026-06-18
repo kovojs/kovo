@@ -4,9 +4,9 @@ import { derive, handler } from '@kovojs/runtime/generated';
 import {
   toggleGroupItemClick as _toggleGroupItemClick,
   toggleGroupKeyDown as _toggleGroupKeyDown,
-} from '@kovojs/headless-ui/toggle-group';
+} from '@kovojs/ui/toggle-group';
 
-export const GalleryToggleGroupDemo$section_keydown = handler((event, ctx) => {
+export const GalleryToggleGroupDemo$ToggleGroup_keydown = handler((event, ctx) => {
   const result = _toggleGroupKeyDown(Object(event), {
     activeValue: ctx.state.activeValue,
     items: [{ value: 'bold' }, { disabled: true, value: 'strike' }, { value: 'italic' }],
@@ -24,7 +24,7 @@ export const GalleryToggleGroupDemo$section_keydown = handler((event, ctx) => {
   const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
   Object(next)['focus']?.call(next);
 });
-export const GalleryToggleGroupDemo$button_click = handler((event, ctx) => {
+export const GalleryToggleGroupDemo$ToggleGroupButton_click = handler((event, ctx) => {
   const result = _toggleGroupItemClick(Object(event), {
     itemValue: 'bold',
     items: [{ value: 'bold' }, { disabled: true, value: 'strike' }, { value: 'italic' }],
@@ -40,7 +40,7 @@ export const GalleryToggleGroupDemo$button_click = handler((event, ctx) => {
   ctx.state.activeValue = 'bold';
   ctx.state.value = result.value?.toString() ?? '';
 });
-export const GalleryToggleGroupDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryToggleGroupDemo$ToggleGroupButton_click_2 = handler((event, ctx) => {
   const result = _toggleGroupItemClick(Object(event), {
     itemValue: 'italic',
     items: [{ value: 'bold' }, { disabled: true, value: 'strike' }, { value: 'italic' }],
@@ -57,23 +57,28 @@ export const GalleryToggleGroupDemo$button_click_2 = handler((event, ctx) => {
   ctx.state.value = result.value?.toString() ?? '';
 });
 
-export const GalleryToggleGroupDemo$button_aria_pressed_derive = derive(['state'], (state) =>
-  String(state.value === 'bold' || state.value === 'bold,italic'),
+export const GalleryToggleGroupDemo$ToggleGroupButton_aria_pressed_derive = derive(
+  ['state'],
+  (state) => String(state.value === 'bold' || state.value === 'bold,italic'),
 );
-export const GalleryToggleGroupDemo$button_data_state_derive = derive(['state'], (state) =>
-  state.value === 'bold' || state.value === 'bold,italic' ? 'pressed' : 'off',
+export const GalleryToggleGroupDemo$ToggleGroupButton_data_state_derive = derive(
+  ['state'],
+  (state) => (state.value === 'bold' || state.value === 'bold,italic' ? 'pressed' : 'off'),
 );
-export const GalleryToggleGroupDemo$button_tabIndex_derive = derive(['state'], (state) =>
+export const GalleryToggleGroupDemo$ToggleGroupButton_tabIndex_derive = derive(['state'], (state) =>
   state.activeValue === 'bold' ? 0 : -1,
 );
-export const GalleryToggleGroupDemo$button_aria_pressed_derive_2 = derive(['state'], (state) =>
-  String(state.value === 'italic' || state.value === 'bold,italic'),
+export const GalleryToggleGroupDemo$ToggleGroupButton_aria_pressed_derive_2 = derive(
+  ['state'],
+  (state) => String(state.value === 'italic' || state.value === 'bold,italic'),
 );
-export const GalleryToggleGroupDemo$button_data_state_derive_2 = derive(['state'], (state) =>
-  state.value === 'italic' || state.value === 'bold,italic' ? 'pressed' : 'off',
+export const GalleryToggleGroupDemo$ToggleGroupButton_data_state_derive_2 = derive(
+  ['state'],
+  (state) => (state.value === 'italic' || state.value === 'bold,italic' ? 'pressed' : 'off'),
 );
-export const GalleryToggleGroupDemo$button_tabIndex_derive_2 = derive(['state'], (state) =>
-  state.activeValue === 'italic' ? 0 : -1,
+export const GalleryToggleGroupDemo$ToggleGroupButton_tabIndex_derive_2 = derive(
+  ['state'],
+  (state) => (state.activeValue === 'italic' ? 0 : -1),
 );
 export const GalleryToggleGroupDemo$output_text_derive = derive(
   ['state'],

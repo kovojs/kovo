@@ -1,8 +1,23 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { readCompiledDemo, readGenerated } from './interactive-gallery-harness.js';
+import { galleryRoot, readCompiledDemo, readGenerated } from './interactive-gallery-harness.js';
 
 describe('compiled interactive gallery demos', () => {
+  it('keeps app-authored interactive demos on the styled UI surface', () => {
+    const interactiveRoot = resolve(galleryRoot, 'src/interactive');
+    const sources = readdirSync(interactiveRoot)
+      .filter((fileName) => fileName.endsWith('.tsx'))
+      .map((fileName) => [fileName, readFileSync(resolve(interactiveRoot, fileName), 'utf8')]);
+
+    for (const [fileName, source] of sources) {
+      expect(source, `${fileName} imports styled @kovojs/ui modules`).not.toContain(
+        '@kovojs/headless-ui',
+      );
+    }
+  });
+
   it('compiles stateful gallery demos into server TSX and client handler modules', () => {
     const accordion = readCompiledDemo('accordion-demo.tsx');
     const accordionClient = readGenerated('accordion-demo.client.js');
@@ -57,32 +72,32 @@ describe('compiled interactive gallery demos', () => {
 
     expect(accordion).toContain('data-gallery-interactive="accordion"');
     expect(accordion).toContain('kovo-state=\'{"activeValue":"shipping","value":"shipping"}\'');
-    expect(accordion).toContain('accordionTriggerAttributes({');
+    expect(accordion).toContain('<AccordionTrigger');
     expect(accordion).toContain('accordionKeyDown as _accordionKeyDown');
     expect(accordion).toContain('accordionTriggerClick as _accordionTriggerClick');
-    expect(accordion).toContain('data-bind:aria-expanded=');
+    expect(accordion).toContain('data-bind:value=');
     expect(accordion).toContain('data-bind:tabIndex=');
-    expect(accordion).toContain('data-bind:hidden=');
+    expect(accordion).toContain('<AccordionContent');
     expect(accordionClient).toContain('accordionKeyDown as _accordionKeyDown');
     expect(accordionClient).toContain('accordionTriggerClick as _accordionTriggerClick');
     expect(accordionClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(accordion).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$section_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_keydown"/,
     );
     expect(accordion).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_click"/,
     );
     expect(accordion).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$button_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(alertDialog).toContain('data-gallery-interactive="alert-dialog"');
     expect(alertDialog).toContain('kovo-state=\'{"open":false}\'');
-    expect(alertDialog).toContain('alertDialogTriggerAttributes({ contentId, open: state.open })');
-    expect(alertDialog).toContain('alertDialogCancelAttributes({');
-    expect(alertDialog).toContain("intent: 'destructive'");
+    expect(alertDialog).toContain('<AlertDialogTrigger');
+    expect(alertDialog).toContain('<AlertDialogCancel');
+    expect(alertDialog).toContain('intent="destructive"');
     expect(alertDialog).toContain('alertDialogTriggerClick as _alertDialogTriggerClick');
     expect(alertDialog).toContain('alertDialogCancel as _alertDialogCancel');
     expect(alertDialog).toContain('alertDialogActionClick as _alertDialogActionClick');
@@ -90,42 +105,38 @@ describe('compiled interactive gallery demos', () => {
     expect(alertDialog).toContain('data-bind:open=');
     expect(alertDialog).not.toContain('closedby');
     expect(alertDialog).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$[A-Za-z]+_click"/,
     );
     expect(alertDialog).toMatch(
-      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$dialog_cancel"/,
+      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$[A-Za-z]+_cancel"/,
     );
     expect(alertDialog).not.toContain('on:keydown=');
-    expect(alertDialog).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$button_click_2"/,
-    );
-    expect(alertDialog).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$button_click_3"/,
-    );
+    expect(alertDialog).toContain('GalleryAlertDialogDemo$AlertDialogCancel_click');
+    expect(alertDialog).toContain('GalleryAlertDialogDemo$AlertDialogAction_click');
 
     expect(autocomplete).toContain('data-gallery-interactive="autocomplete"');
     expect(autocomplete).toContain(
       'kovo-state=\'{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}\'',
     );
-    expect(autocomplete).toContain('autocompleteInputAttributes({');
+    expect(autocomplete).toContain('<AutocompleteInput');
     expect(autocomplete).toContain(
       'id="gallery-autocomplete-form" data-gallery-form="autocomplete"',
     );
     expect(autocomplete).toContain("form: 'gallery-autocomplete-form'");
-    expect(autocomplete).toContain('autocompleteListAttributes({');
-    expect(autocomplete).toContain('autocompleteOptionAttributes({');
+    expect(autocomplete).toContain('<AutocompleteList');
+    expect(autocomplete).toContain('<AutocompleteOption');
     expect(autocomplete).not.toContain('<datalist');
     expect(autocomplete).toContain('data-bind:aria-expanded=');
     expect(autocomplete).toContain('data-bind:aria-activedescendant=');
     expect(autocomplete).toContain('data-bind:hidden=');
     expect(autocomplete).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$input_input"/,
+      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_input"/,
     );
     expect(autocomplete).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$input_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_keydown"/,
     );
     expect(autocomplete).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$button_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_click_2"/,
     );
     expect(autocompleteClient).toContain('autocompleteInput as _autocompleteInput');
     expect(autocompleteClient).toContain('autocompleteKeyDown as _autocompleteKeyDown');
@@ -137,48 +148,45 @@ describe('compiled interactive gallery demos', () => {
     expect(toggle).toContain('data-gallery-interactive="toggle"');
     expect(toggle).toContain('kovo-state=\'{"pressed":false}\'');
     expect(toggle).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toggle-demo\.client\.js#GalleryToggleDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toggle-demo\.client\.js#GalleryToggleDemo\$[A-Za-z]+_click"/,
     );
 
     expect(checkbox).toContain('data-gallery-interactive="checkbox"');
     expect(checkbox).toContain('kovo-state=\'{"checked":"indeterminate"}\'');
     expect(checkbox).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/checkbox-demo\.client\.js#GalleryCheckboxDemo\$input_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/checkbox-demo\.client\.js#GalleryCheckboxDemo\$[A-Za-z]+_click"/,
     );
 
     expect(checkboxGroup).toContain('data-gallery-interactive="checkbox-group"');
     expect(checkboxGroup).toContain('kovo-state=\'{"activeValue":"updates","value":"updates"}\'');
     expect(checkboxGroup).toContain('id="gallery-checkbox-group-form"');
     expect(checkboxGroup).toContain("form: 'gallery-checkbox-group-form'");
-    expect(checkboxGroup).toContain('checkboxGroupControlAttributes({');
+    expect(checkboxGroup).toContain('<CheckboxGroupControl');
     expect(checkboxGroup).toContain('id="gallery-checkbox-group-all"');
     expect(checkboxGroup).toContain('data-bind:indeterminate=');
-    expect(checkboxGroup).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/checkbox-group-demo\.client\.js#GalleryCheckboxGroupDemo\$input_click_2"/,
-    );
-    expect(checkboxGroup).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/checkbox-group-demo\.client\.js#GalleryCheckboxGroupDemo\$input_click_3"/,
-    );
+    expect(checkboxGroup).toContain('GalleryCheckboxGroupDemo$input_click');
+    expect(checkboxGroup).toContain('GalleryCheckboxGroupDemo$CheckboxGroupControl_click');
+    expect(checkboxGroup).toContain('GalleryCheckboxGroupDemo$CheckboxGroupControl_click_2');
 
     expect(combobox).toContain('data-gallery-interactive="combobox"');
     expect(combobox).toContain(
       'kovo-state=\'{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}\'',
     );
-    expect(combobox).toContain('comboboxInputAttributes({');
+    expect(combobox).toContain('<ComboboxInput');
     expect(combobox).toContain('id="gallery-combobox-form" data-gallery-form="combobox"');
     expect(combobox).toContain("form: 'gallery-combobox-form'");
-    expect(combobox).toContain('comboboxListboxAttributes({');
+    expect(combobox).toContain('<ComboboxListbox');
     expect(combobox).toContain('data-bind:aria-expanded=');
     expect(combobox).toContain('data-bind:aria-activedescendant=');
     expect(combobox).toContain('data-bind:hidden=');
     expect(combobox).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$input_input"/,
+      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_input"/,
     );
     expect(combobox).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$input_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_keydown"/,
     );
     expect(combobox).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_click"/,
     );
     expect(comboboxClient).toContain('comboboxInput as _comboboxInput');
     expect(comboboxClient).toContain('comboboxKeyDown as _comboboxKeyDown');
@@ -200,19 +208,19 @@ describe('compiled interactive gallery demos', () => {
     expect(command).toContain("form: 'gallery-command-form'");
     expect(command).toContain("name: 'gallery-command-query'");
     expect(command).toContain('required: true');
-    expect(command).toContain('commandDialogAttributes({');
+    expect(command).toContain('<CommandDialog');
     expect(command).toContain('data-bind:aria-expanded=');
     expect(command).toContain('data-bind:aria-activedescendant=');
     expect(command).toContain('data-bind:hidden=');
     expect(command).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$input_input"/,
+      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$[A-Za-z]+_input"/,
     );
     expect(command).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$input_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(command).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$button_click_3"/,
-    );
+    expect(command).toContain('GalleryCommandDemo$CommandItem_click');
+    expect(command).toContain('GalleryCommandDemo$CommandItem_click_2');
+    expect(command).toContain('GalleryCommandDemo$CommandClose_click');
     expect(commandClient).toContain('commandInput as _commandInput');
     expect(commandClient).toContain('commandKeyDown as _commandKeyDown');
     expect(commandClient).toContain('commandItemClick as _commandItemClick');
@@ -224,7 +232,7 @@ describe('compiled interactive gallery demos', () => {
     expect(contextMenu).toContain(
       'kovo-state=\'{"highlightedValue":"copy","open":false,"point":{"x":24,"y":40},"value":"copy"}\'',
     );
-    expect(contextMenu).toContain('contextMenuTriggerAttributes({');
+    expect(contextMenu).toContain('<ContextMenuTrigger');
     expect(contextMenu).toContain('contextMenuFocusElement as _contextMenuFocusElement');
     expect(contextMenu).toContain('contextMenuItemClick as _contextMenuItemClick');
     expect(contextMenu).toContain('contextMenuItemKeyDown as _contextMenuItemKeyDown');
@@ -250,52 +258,47 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(contextMenu).toMatch(
-      /on:contextmenu="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$div_contextmenu"/,
+      /on:contextmenu="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_contextmenu"/,
     );
     expect(contextMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_click"/,
     );
     expect(contextMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$button_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_keydown"/,
     );
     expect(contextMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$button_keydown_2"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_keydown_2"/,
     );
     expect(contextMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$button_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(disclosure).toContain('data-gallery-interactive="disclosure"');
     expect(disclosure).toContain('kovo-state=\'{"open":false}\'');
     expect(disclosure).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/disclosure-demo\.client\.js#GalleryDisclosureDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/disclosure-demo\.client\.js#GalleryDisclosureDemo\$[A-Za-z]+_click"/,
     );
 
     expect(dialog).toContain('data-gallery-interactive="dialog"');
     expect(dialog).toContain('kovo-state=\'{"open":false}\'');
-    expect(dialog).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
-    expect(dialog).toContain('dialogCloseAttributes({ contentId, open: state.open })');
+    expect(dialog).toContain('<DialogTrigger');
+    expect(dialog).toContain('<DialogClose');
     expect(dialog).toContain('dialogTriggerClick as _dialogTriggerClick');
     expect(dialog).toContain('dialogCloseClick as _dialogCloseClick');
-    expect(dialog).toContain('data-bind:aria-expanded=');
-    expect(dialog).toContain('data-bind:data-state=');
     expect(dialog).toContain('data-bind:open=');
     expect(dialog).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$[A-Za-z]+_click"/,
     );
     expect(dialog).toMatch(
-      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$dialog_cancel"/,
+      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$[A-Za-z]+_cancel"/,
     );
     expect(dialog).not.toContain('on:keydown=');
-    expect(dialog).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$button_click_2"/,
-    );
 
     expect(drawer).toContain('data-gallery-interactive="drawer"');
     expect(drawer).toContain('data-side="bottom"');
     expect(drawer).toContain('kovo-state=\'{"open":false}\'');
-    expect(drawer).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
-    expect(drawer).toContain('dialogCloseAttributes({ contentId, open: state.open })');
+    expect(drawer).toContain('<DrawerTrigger');
+    expect(drawer).toContain('<DrawerClose');
     expect(drawer).toContain('dialogTriggerClick as _dialogTriggerClick');
     expect(drawer).toContain('data-bind:aria-expanded=');
     expect(drawer).toContain('data-bind:data-state=');
@@ -303,21 +306,20 @@ describe('compiled interactive gallery demos', () => {
     expect(drawer).toContain('Vaul drag, snap, and background-scale gestures are not');
     expect(drawer).toContain('modeled.');
     expect(drawer).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$[A-Za-z]+_click"/,
     );
     expect(drawer).toMatch(
-      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$dialog_cancel"/,
+      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$[A-Za-z]+_cancel"/,
     );
     expect(drawer).not.toContain('on:keydown=');
-    expect(drawer).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$button_click_2"/,
-    );
+    expect(drawer).toContain('GalleryDrawerDemo$DrawerTrigger_click');
+    expect(drawer).toContain('GalleryDrawerDemo$DrawerClose_click');
 
     expect(dropdownMenu).toContain('data-gallery-interactive="dropdown-menu"');
     expect(dropdownMenu).toContain(
       'kovo-state=\'{"highlightedValue":"duplicate","open":false,"value":"duplicate"}\'',
     );
-    expect(dropdownMenu).toContain('dropdownMenuContentAttributes({');
+    expect(dropdownMenu).toContain('<DropdownMenuContent');
     expect(dropdownMenu).toContain('dropdownMenuFocusElement as _dropdownMenuFocusElement');
     expect(dropdownMenu).toContain('dropdownMenuItemClick as _dropdownMenuItemClick');
     expect(dropdownMenu).toContain('dropdownMenuItemKeyDown as _dropdownMenuItemKeyDown');
@@ -340,31 +342,29 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(dropdownMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_click"/,
     );
     expect(dropdownMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$button_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_keydown"/,
     );
     expect(dropdownMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$button_keydown_2"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_keydown_2"/,
     );
     expect(dropdownMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$button_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_click_2"/,
     );
-    expect(dropdownMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$button_keydown_3"/,
-    );
-    expect(dropdownMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$button_click_3"/,
-    );
+    expect(dropdownMenu).toContain('GalleryDropdownMenuDemo$DropdownMenuItem_keydown');
+    expect(dropdownMenu).toContain('GalleryDropdownMenuDemo$DropdownMenuItem_keydown_2');
+    expect(dropdownMenu).toContain('GalleryDropdownMenuDemo$DropdownMenuItem_click');
+    expect(dropdownMenu).toContain('GalleryDropdownMenuDemo$DropdownMenuItem_click_2');
 
     expect(field).toContain('data-gallery-interactive="field"');
     expect(field).toContain(
       'kovo-state=\'{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}\'',
     );
-    expect(field).toContain('fieldControlAttributes({');
-    expect(field).toContain('fieldsetRootAttributes({');
-    expect(field).toContain("name: 'gallery-shipping'");
+    expect(field).toContain('<FieldControl');
+    expect(field).toContain('<Fieldset');
+    expect(field).toContain('name="gallery-shipping"');
     expect(field).toContain('name="gallery-seat"');
     expect(field).toContain('data-bind:aria-describedby=');
     expect(field).toContain('data-bind:aria-invalid=');
@@ -377,18 +377,18 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(field).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$input_input"/,
+      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_input"/,
     );
     expect(field).toMatch(
-      /on:change="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$select_change"/,
+      /on:change="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_change"/,
     );
     expect(field).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$input_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_click"/,
     );
 
     expect(hoverCard).toContain('data-gallery-interactive="hover-card"');
     expect(hoverCard).toContain('kovo-state=\'{"open":false}\'');
-    expect(hoverCard).toContain('hoverCardTriggerAttributes({ contentId, open: state.open })');
+    expect(hoverCard).toContain('<HoverCardTrigger');
     expect(hoverCard).toContain('hoverCardContentPointerEnter as _hoverCardContentPointerEnter');
     expect(hoverCard).toContain('data-bind:data-state=');
     expect(hoverCard).toContain('data-bind:hidden=');
@@ -405,18 +405,18 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(hoverCard).toMatch(
-      /on:focus="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$a_focus"/,
+      /on:focus="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_focus"/,
     );
     expect(hoverCard).toMatch(
-      /on:pointerenter="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$a_pointerenter"/,
+      /on:pointerenter="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_pointerenter"/,
     );
     expect(hoverCard).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$a_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_keydown"/,
     );
 
     expect(menubar).toContain('data-gallery-interactive="menubar"');
     expect(menubar).toContain('kovo-state=\'{"activeValue":"file","openValue":"","value":"new"}\'');
-    expect(menubar).toContain('menubarSubmenuAttributes({');
+    expect(menubar).toContain('<MenubarSubmenu');
     expect(menubar).toContain('menubarFocusElement as _menubarFocusElement');
     expect(menubar).toContain('menubarItemClick as _menubarItemClick');
     expect(menubar).toContain('menubarItemKeyDown as _menubarItemKeyDown');
@@ -436,36 +436,36 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(menubar).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$section_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown"/,
     );
     expect(menubar).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click"/,
     );
     expect(menubar).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$button_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown"/,
     );
     expect(menubar).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$button_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click_2"/,
     );
     expect(menubar).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$button_keydown_2"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown_2"/,
     );
     expect(menubar).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$button_click_3"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click_3"/,
     );
 
     expect(meter).toContain('data-gallery-interactive="meter"');
     expect(meter).toContain('kovo-state=\'{"dataState":"suboptimum","value":72}\'');
-    expect(meter).toContain('meterRootAttributes(meterState)');
+    expect(meter).toContain('<Meter');
     expect(meter).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/meter-demo\.client\.js#GalleryMeterDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/meter-demo\.client\.js#GalleryMeterDemo\$[A-Za-z]+_click"/,
     );
 
     expect(navigationMenu).toContain('data-gallery-interactive="navigation-menu"');
     expect(navigationMenu).toContain(
       'kovo-state=\'{"activeValue":"products","openValue":"","value":"none"}\'',
     );
-    expect(navigationMenu).toContain('navigationMenuTriggerAttributes({');
+    expect(navigationMenu).toContain('<NavigationMenuTrigger');
     expect(navigationMenu).toContain('navigationMenuFocusElement as _navigationMenuFocusElement');
     expect(navigationMenu).toContain('navigationMenuKeyDown as _navigationMenuKeyDown');
     expect(navigationMenu).toContain('navigationMenuLinkClick as _navigationMenuLinkClick');
@@ -489,22 +489,22 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(navigationMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$section_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_keydown"/,
     );
     expect(navigationMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_click"/,
     );
     expect(navigationMenu).toMatch(
-      /on:focus="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$button_focus"/,
+      /on:focus="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_focus"/,
     );
     expect(navigationMenu).toMatch(
-      /on:pointerenter="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$button_pointerenter"/,
+      /on:pointerenter="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_pointerenter"/,
     );
     expect(navigationMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$a_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_click"/,
     );
     expect(navigationMenu).toMatch(
-      /on:focus="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$a_focus"/,
+      /on:focus="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_focus"/,
     );
 
     expect(numberField).toContain('data-gallery-interactive="number-field"');
@@ -520,49 +520,44 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(numberField).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$input_input"/,
+      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$[A-Za-z]+_input"/,
     );
     expect(numberField).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$input_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(numberField).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$button_click"/,
-    );
-    expect(numberField).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$button_click_2"/,
-    );
+    expect(numberField).toContain('GalleryNumberFieldDemo$NumberFieldDecrement_click');
+    expect(numberField).toContain('GalleryNumberFieldDemo$NumberFieldIncrement_click');
 
     expect(otpField).toContain('data-gallery-interactive="otp-field"');
     expect(otpField).toContain('kovo-state=\'{"activeSlot":2,"value":"12"}\'');
     expect(otpField).toContain("const formId = 'gallery-otp-form'");
     expect(otpField).toContain('<form id={formId} data-gallery-form="otp-field" />');
-    expect(otpField).toContain('otpFieldHiddenInputAttributes({');
+    expect(otpField).toContain('<OtpFieldHiddenInput');
     expect(otpField).toContain('form: formId');
     expect(otpField).toContain('otpFieldInput as _otpFieldInput');
     expect(otpField).toContain('data-bind:value=');
     expect(otpField).toContain('data-bind:data-filled=');
     expect(otpField).toContain('data-bind:tabIndex=');
     expect(otpField).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/otp-field-demo\.client\.js#GalleryOtpFieldDemo\$input_input"/,
+      /on:input="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/otp-field-demo\.client\.js#GalleryOtpFieldDemo\$[A-Za-z]+_input"/,
     );
     expect(otpField).toMatch(
-      /on:paste="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/otp-field-demo\.client\.js#GalleryOtpFieldDemo\$input_paste_4"/,
+      /on:paste="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/otp-field-demo\.client\.js#GalleryOtpFieldDemo\$[A-Za-z]+_paste_4"/,
     );
 
     expect(collapsible).toContain('data-gallery-interactive="collapsible"');
     expect(collapsible).toContain('kovo-state=\'{"open":false}\'');
-    expect(collapsible).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/collapsible-demo\.client\.js#GalleryCollapsibleDemo\$summary_click"/,
-    );
+    expect(collapsible).toContain('GalleryCollapsibleDemo$CollapsibleTrigger_click');
 
     expect(popover).toContain('data-gallery-interactive="popover"');
     expect(popover).toContain('kovo-state=\'{"open":false}\'');
+    expect(popover).toContain('<PopoverTrigger');
+    expect(popover).toContain('<PopoverContent');
     expect(popover).toContain('data-demo-state="popover-open"');
     expect(popover).toContain('popoverBeforeToggle as _popoverBeforeToggle');
-    expect(popover).toContain('data-bind:aria-expanded=');
-    expect(popover).toContain('data-bind:data-state=');
+    expect(popover).toContain('data-bind:open=');
     expect(popover).toMatch(
-      /on:beforetoggle="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js#GalleryPopoverDemo\$div_beforetoggle"/,
+      /on:beforetoggle="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js#GalleryPopoverDemo\$[A-Za-z]+_beforetoggle"/,
     );
     expect(popover).not.toContain('on:click=');
     expect(popover).not.toContain('on:keydown=');
@@ -573,14 +568,12 @@ describe('compiled interactive gallery demos', () => {
 
     expect(progress).toContain('data-gallery-interactive="progress"');
     expect(progress).toContain('kovo-state=\'{"value":40}\'');
-    expect(progress).toContain(
-      'progressRootAttributes({ max: 100, value: state.value, valueText })',
+    expect(progress).toContain('<Progress');
+    expect(progress).toMatch(
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$[A-Za-z]+_click"/,
     );
     expect(progress).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$button_click"/,
-    );
-    expect(progress).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$button_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(pureMarkup).toContain('data-gallery-interactive="pure-markup"');
@@ -594,20 +587,20 @@ describe('compiled interactive gallery demos', () => {
     expect(radioGroup).toContain('id="gallery-radio-form" data-gallery-form="radio-group"');
     expect(radioGroup).toContain("form: 'gallery-radio-form'");
     expect(radioGroup).toContain('kovo-state=\'{"value":"email"}\'');
-    expect(radioGroup).toContain('radioGroupRadioAttributes({');
+    expect(radioGroup).toContain('<RadioGroupRadio');
     expect(radioGroup).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js#GalleryRadioGroupDemo\$div_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js#GalleryRadioGroupDemo\$[A-Za-z]+_keydown"/,
     );
     expect(radioGroup).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js#GalleryRadioGroupDemo\$input_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js#GalleryRadioGroupDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(scrollArea).toContain('data-gallery-interactive="scroll-area"');
     expect(scrollArea).toContain(
       'kovo-state=\'{"dragging":false,"dragPointerStart":0,"dragScrollTop":0,"dragThumbSize":28,"dragTrackSize":72,"hasOverflowY":true,"hovering":false,"scrolling":false,"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}\'',
     );
-    expect(scrollArea).toContain('scrollAreaViewportAttributes({');
-    expect(scrollArea).toContain('scrollAreaThumbAttributes({');
+    expect(scrollArea).toContain('<ScrollAreaViewport');
+    expect(scrollArea).toContain('<ScrollAreaThumb');
     expect(scrollArea).toContain('scrollAreaViewportScroll as _scrollAreaViewportScroll');
     expect(scrollArea).toContain('scrollAreaThumbDrag as _scrollAreaThumbDrag');
     expect(scrollArea).toContain('scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown');
@@ -616,13 +609,13 @@ describe('compiled interactive gallery demos', () => {
     expect(scrollArea).toContain('data-bind:scrollTop=');
     expect(scrollArea).toContain('data-bind:style=');
     expect(scrollArea).toMatch(
-      /on:scroll="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$div_scroll"/,
+      /on:scroll="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_scroll"/,
     );
     expect(scrollArea).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_click"/,
     );
     expect(scrollArea).toMatch(
-      /on:pointerdown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$span_pointerdown"/,
+      /on:pointerdown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_pointerdown"/,
     );
 
     expect(select).toContain('data-gallery-interactive="select"');
@@ -631,38 +624,37 @@ describe('compiled interactive gallery demos', () => {
     expect(select).toContain(
       'kovo-state=\'{"highlightedValue":"standard","open":false,"value":"standard"}\'',
     );
-    expect(select).toContain('selectHiddenInputAttributes(selectState)');
-    expect(select).toContain('selectTriggerAttributes({');
-    expect(select).toContain('selectItemAttributes({');
+    expect(select).toContain('<SelectHiddenInput');
+    expect(select).toContain('<SelectTrigger');
+    expect(select).toContain('<SelectItem');
     expect(select).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/select-demo\.client\.js#GallerySelectDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/select-demo\.client\.js#GallerySelectDemo\$[A-Za-z]+_click"/,
     );
     expect(select).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/select-demo\.client\.js#GallerySelectDemo\$button_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/select-demo\.client\.js#GallerySelectDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(select).toContain('selectContentAttributes({');
+    expect(select).toContain('<SelectContent');
     expect(select).toContain('selectItemClick as _selectItemClick');
     expect(select).toContain('data-bind:aria-selected=');
 
     expect(sheet).toContain('data-gallery-interactive="sheet"');
     expect(sheet).toContain('data-side="right"');
     expect(sheet).toContain('kovo-state=\'{"open":false}\'');
-    expect(sheet).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
-    expect(sheet).toContain('dialogCloseAttributes({ contentId, open: state.open })');
+    expect(sheet).toContain('<SheetTrigger');
+    expect(sheet).toContain('<SheetClose');
     expect(sheet).toContain('dialogTriggerClick as _dialogTriggerClick');
     expect(sheet).toContain('data-bind:aria-expanded=');
     expect(sheet).toContain('data-bind:data-state=');
     expect(sheet).toContain('data-bind:open=');
     expect(sheet).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$[A-Za-z]+_click"/,
     );
     expect(sheet).toMatch(
-      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$dialog_cancel"/,
+      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$[A-Za-z]+_cancel"/,
     );
     expect(sheet).not.toContain('on:keydown=');
-    expect(sheet).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$button_click_2"/,
-    );
+    expect(sheet).toContain('GallerySheetDemo$SheetTrigger_click');
+    expect(sheet).toContain('GallerySheetDemo$SheetClose_click');
 
     expect(slider).toContain('data-gallery-interactive="slider"');
     expect(slider).toContain('id="gallery-slider-form" data-gallery-form="slider"');
@@ -670,43 +662,43 @@ describe('compiled interactive gallery demos', () => {
     expect(slider).toContain(
       'kovo-state=\'{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}\'',
     );
-    expect(slider).toContain('sliderHiddenInputAttributes(sliderState)');
-    expect(slider).toContain('sliderThumbAttributes(sliderState)');
+    expect(slider).toContain('<SliderInput');
+    expect(slider).toContain('<SliderThumb');
     expect(slider).toContain('data-bind:aria-valuenow=');
     expect(slider).toMatch(
-      /on:pointerdown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$div_pointerdown"/,
+      /on:pointerdown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_pointerdown"/,
     );
     expect(slider).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$span_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_keydown"/,
     );
     expect(slider).toMatch(
-      /on:pointermove="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$span_pointermove"/,
+      /on:pointermove="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_pointermove"/,
     );
 
     expect(switchDemo).toContain('data-gallery-interactive="switch"');
     expect(switchDemo).toContain('form="gallery-switch-form"');
     expect(switchDemo).toContain('kovo-state=\'{"checked":false}\'');
     expect(switchDemo).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/switch-demo\.client\.js#GallerySwitchDemo\$input_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/switch-demo\.client\.js#GallerySwitchDemo\$[A-Za-z]+_click"/,
     );
 
     expect(tabs).toContain('data-gallery-interactive="tabs"');
     expect(tabs).toContain('kovo-state=\'{"activeValue":"overview","value":"overview"}\'');
     expect(tabs).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/tabs-demo\.client\.js#GalleryTabsDemo\$section_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/tabs-demo\.client\.js#GalleryTabsDemo\$[A-Za-z]+_keydown"/,
     );
     expect(tabs).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/tabs-demo\.client\.js#GalleryTabsDemo\$button_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/tabs-demo\.client\.js#GalleryTabsDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(toolbar).toContain('data-gallery-interactive="toolbar"');
     expect(toolbar).toContain('kovo-state=\'{"activeValue":"bold","pressedValue":"bold"}\'');
-    expect(toolbar).toContain('toolbarButtonAttributes({');
+    expect(toolbar).toContain('<ToolbarButton');
     expect(toolbar).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js#GalleryToolbarDemo\$div_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js#GalleryToolbarDemo\$[A-Za-z]+_keydown"/,
     );
     expect(toolbar).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js#GalleryToolbarDemo\$button_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js#GalleryToolbarDemo\$[A-Za-z]+_click_2"/,
     );
     expect(toolbar).toContain('data-bind:aria-pressed=');
     expect(toolbar).toContain('data-bind:data-pressed=');
@@ -718,11 +710,10 @@ describe('compiled interactive gallery demos', () => {
 
     expect(tooltip).toContain('data-gallery-interactive="tooltip"');
     expect(tooltip).toContain('kovo-state=\'{"open":false}\'');
-    expect(tooltip).toContain('tooltipTriggerAttributes({ contentId, open: state.open })');
+    expect(tooltip).toContain('<TooltipTrigger');
     expect(tooltip).toContain('tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter');
     expect(tooltip).toContain('data-bind:aria-describedby=');
-    expect(tooltip).toContain('data-bind:data-state=');
-    expect(tooltip).toContain('data-bind:hidden=');
+    expect(tooltip).toContain('data-bind:open=');
     expect(tooltip).not.toContain('popover=');
     expect(tooltipClient).toContain('tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter');
     expect(tooltipClient).toContain('tooltipEscapeKeyDown as _tooltipEscapeKeyDown');
@@ -730,23 +721,23 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(tooltip).toMatch(
-      /on:focus="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$button_focus"/,
+      /on:focus="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_focus"/,
     );
     expect(tooltip).toMatch(
-      /on:pointerenter="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$button_pointerenter"/,
+      /on:pointerenter="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_pointerenter"/,
     );
     expect(tooltip).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$button_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_keydown"/,
     );
 
     expect(toggleGroup).toContain('data-gallery-interactive="toggle-group"');
     expect(toggleGroup).toContain('kovo-state=\'{"activeValue":"bold","value":"bold"}\'');
-    expect(toggleGroup).toContain('toggleGroupButtonAttributes({');
+    expect(toggleGroup).toContain('<ToggleGroupButton');
     expect(toggleGroup).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toggle-group-demo\.client\.js#GalleryToggleGroupDemo\$section_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toggle-group-demo\.client\.js#GalleryToggleGroupDemo\$[A-Za-z]+_keydown"/,
     );
     expect(toggleGroup).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toggle-group-demo\.client\.js#GalleryToggleGroupDemo\$button_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toggle-group-demo\.client\.js#GalleryToggleGroupDemo\$[A-Za-z]+_click_2"/,
     );
     expect(toggleGroup).toContain('data-bind:aria-pressed=');
     expect(toggleGroup).toContain('data-bind:data-state=');
@@ -761,8 +752,8 @@ describe('compiled interactive gallery demos', () => {
     expect(toast).toContain(
       'kovo-state=\'{"activeCount":0,"activeOpen":false,"previousCount":0,"previousOpen":false}\'',
     );
-    expect(toast).toContain('toastRootAttributes(activeToastState)');
-    expect(toast).toContain('toastRootAttributes(previousToastState)');
+    expect(toast).toContain('<Toast');
+    expect(toast).toContain('<ToastViewport');
     expect(toast).toContain('data-toast-show=""');
     expect(toast).toContain('data-toast-duration-ms={durationMs}');
     expect(toast).toContain('normalizeToastDuration(5000)');
@@ -772,20 +763,18 @@ describe('compiled interactive gallery demos', () => {
     expect(toast).toContain('data-bind:data-state=');
     expect(toast).toContain('data-demo-state="toast-count"');
     expect(toast).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$section_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_keydown"/,
     );
     expect(toast).toMatch(
-      /on:animationend="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$div_animationend"/,
+      /on:animationend="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_animationend"/,
     );
     expect(toast).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$button_click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_click"/,
     );
-    expect(toast).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$button_click_3"/,
-    );
-    expect(toast).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$button_click_4"/,
-    );
+    expect(toast).toContain('GalleryToastDemo$ToastAction_click');
+    expect(toast).toContain('GalleryToastDemo$ToastAction_click_2');
+    expect(toast).toContain('GalleryToastDemo$ToastClose_click_2');
+    expect(toast).toContain('GalleryToastDemo$ToastAction_click_3');
     expect(toast).toContain('data-toast-cancel-dismiss=""');
     expect(toast).toContain('data-toast-disabled-action=""');
     expect(toast).toContain('dismissOnAction: false');

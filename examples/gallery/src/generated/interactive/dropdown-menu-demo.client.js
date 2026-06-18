@@ -10,9 +10,9 @@ import {
   dropdownMenuTriggerClick as _dropdownMenuTriggerClick,
   dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown,
   dropdownMenuTypeahead as _dropdownMenuTypeahead,
-} from '@kovojs/headless-ui/dropdown-menu';
+} from '@kovojs/ui/dropdown-menu';
 
-export const GalleryDropdownMenuDemo$button_click = handler((event, ctx) => {
+export const GalleryDropdownMenuDemo$DropdownMenuTrigger_click = handler((event, ctx) => {
   const result = _dropdownMenuTriggerClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -30,7 +30,7 @@ export const GalleryDropdownMenuDemo$button_click = handler((event, ctx) => {
       defer: true,
     });
 });
-export const GalleryDropdownMenuDemo$button_keydown = handler((event, ctx) => {
+export const GalleryDropdownMenuDemo$DropdownMenuTrigger_keydown = handler((event, ctx) => {
   const result = _dropdownMenuTriggerKeyDown(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -53,7 +53,7 @@ export const GalleryDropdownMenuDemo$button_keydown = handler((event, ctx) => {
     );
   }
 });
-export const GalleryDropdownMenuDemo$button_keydown_2 = handler((event, ctx) => {
+export const GalleryDropdownMenuDemo$DropdownMenuItem_keydown = handler((event, ctx) => {
   const result = _dropdownMenuItemKeyDown(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     itemValue: 'duplicate',
@@ -135,7 +135,7 @@ export const GalleryDropdownMenuDemo$button_keydown_2 = handler((event, ctx) => 
       : 'gallery-dropdown-menu-duplicate',
   );
 });
-export const GalleryDropdownMenuDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryDropdownMenuDemo$DropdownMenuItem_click = handler((event, ctx) => {
   const result = _dropdownMenuItemClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     itemValue: 'duplicate',
@@ -152,7 +152,7 @@ export const GalleryDropdownMenuDemo$button_click_2 = handler((event, ctx) => {
   ctx.state.value = result.value;
   _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-trigger');
 });
-export const GalleryDropdownMenuDemo$button_keydown_3 = handler((event, ctx) => {
+export const GalleryDropdownMenuDemo$DropdownMenuItem_keydown_2 = handler((event, ctx) => {
   const result = _dropdownMenuItemKeyDown(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     itemValue: 'rename',
@@ -234,7 +234,7 @@ export const GalleryDropdownMenuDemo$button_keydown_3 = handler((event, ctx) => 
       : 'gallery-dropdown-menu-duplicate',
   );
 });
-export const GalleryDropdownMenuDemo$button_click_3 = handler((event, ctx) => {
+export const GalleryDropdownMenuDemo$DropdownMenuItem_click_2 = handler((event, ctx) => {
   const result = _dropdownMenuItemClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     itemValue: 'rename',
@@ -252,38 +252,47 @@ export const GalleryDropdownMenuDemo$button_click_3 = handler((event, ctx) => {
   _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-trigger');
 });
 
-export const GalleryDropdownMenuDemo$section_data_state_derive = derive(['state'], (state) =>
+export const GalleryDropdownMenuDemo$DropdownMenu_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryDropdownMenuDemo$button_aria_expanded_derive = derive(['state'], (state) =>
-  state.open ? 'true' : 'false',
+export const GalleryDropdownMenuDemo$DropdownMenuTrigger_aria_expanded_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'true' : 'false'),
 );
-export const GalleryDropdownMenuDemo$button_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
+export const GalleryDropdownMenuDemo$DropdownMenuTrigger_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
 );
-export const GalleryDropdownMenuDemo$div_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
+export const GalleryDropdownMenuDemo$DropdownMenuContent_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
 );
-export const GalleryDropdownMenuDemo$div_hidden_derive = derive(['state'], (state) =>
-  !state.open ? '' : null,
+export const GalleryDropdownMenuDemo$DropdownMenuContent_hidden_derive = derive(
+  ['state'],
+  (state) => (!state.open ? '' : null),
 );
-export const GalleryDropdownMenuDemo$button_data_highlighted_derive = derive(['state'], (state) =>
-  state.highlightedValue === 'duplicate' ? '' : null,
+export const GalleryDropdownMenuDemo$DropdownMenuItem_data_highlighted_derive = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'duplicate' ? '' : null),
 );
-export const GalleryDropdownMenuDemo$button_data_state_derive_2 = derive(['state'], (state) =>
-  state.highlightedValue === 'duplicate' ? 'active' : 'inactive',
+export const GalleryDropdownMenuDemo$DropdownMenuItem_data_state_derive = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'duplicate' ? 'active' : 'inactive'),
 );
-export const GalleryDropdownMenuDemo$button_tabIndex_derive = derive(['state'], (state) =>
+export const GalleryDropdownMenuDemo$DropdownMenuItem_tabIndex_derive = derive(['state'], (state) =>
   state.highlightedValue === 'duplicate' ? 0 : -1,
 );
-export const GalleryDropdownMenuDemo$button_data_highlighted_derive_2 = derive(['state'], (state) =>
-  state.highlightedValue === 'rename' ? '' : null,
+export const GalleryDropdownMenuDemo$DropdownMenuItem_data_highlighted_derive_2 = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'rename' ? '' : null),
 );
-export const GalleryDropdownMenuDemo$button_data_state_derive_3 = derive(['state'], (state) =>
-  state.highlightedValue === 'rename' ? 'active' : 'inactive',
+export const GalleryDropdownMenuDemo$DropdownMenuItem_data_state_derive_2 = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'rename' ? 'active' : 'inactive'),
 );
-export const GalleryDropdownMenuDemo$button_tabIndex_derive_2 = derive(['state'], (state) =>
-  state.highlightedValue === 'rename' ? 0 : -1,
+export const GalleryDropdownMenuDemo$DropdownMenuItem_tabIndex_derive_2 = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'rename' ? 0 : -1),
 );
 export const GalleryDropdownMenuDemo$output_text_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',

@@ -1,6 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
+
+import { passThroughProps } from './pass-through.js';
 import { meterRootAttributes } from '@kovojs/headless-ui/meter';
 
 import { uiTheme } from './theme.js';
@@ -52,6 +54,7 @@ export const Meter = component({
     return (
       <meter
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-valuetext={attrs['aria-valuetext']}
         data-high={attrs['data-high']}
         data-low={attrs['data-low']}
@@ -72,3 +75,5 @@ export const Meter = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/meter';

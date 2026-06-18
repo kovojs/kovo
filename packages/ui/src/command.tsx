@@ -14,6 +14,8 @@ import {
 } from '@kovojs/headless-ui/command';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface CommandStyleOverrides {
@@ -297,6 +299,7 @@ export const Command = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -322,6 +325,7 @@ export const CommandTrigger = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         aria-haspopup={attrs['aria-haspopup']}
@@ -353,6 +357,7 @@ export const CommandDialog = component({
     return (
       <dialog
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-modal={attrs['aria-modal']}
@@ -382,6 +387,7 @@ export const CommandInput = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-activedescendant={attrs['aria-activedescendant']}
         aria-autocomplete={attrs['aria-autocomplete']}
         aria-controls={attrs['aria-controls']}
@@ -420,6 +426,7 @@ export const CommandListbox = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-labelledby={attrs['aria-labelledby']}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
@@ -447,6 +454,7 @@ export const CommandItem = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-disabled={attrs['aria-disabled']}
         aria-selected={attrs['aria-selected']}
         data-disabled={attrs['data-disabled']}
@@ -476,6 +484,7 @@ export const CommandClose = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         command={attrs.command}
         commandfor={attrs.commandfor}
         data-disabled={attrs['data-disabled']}
@@ -533,3 +542,5 @@ function toCommandState(props: CommandStateProps & { id?: string }) {
     ...(props.value === undefined ? {} : { value: props.value }),
   };
 }
+
+export * from '@kovojs/headless-ui/command';

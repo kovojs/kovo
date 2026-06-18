@@ -11,6 +11,8 @@ import {
 } from '@kovojs/headless-ui/combobox';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface ComboboxStyleOverrides {
@@ -190,6 +192,7 @@ export const Combobox = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-placeholder={attrs['data-placeholder']}
@@ -227,6 +230,7 @@ export const ComboboxInput = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-activedescendant={attrs['aria-activedescendant']}
         aria-autocomplete={attrs['aria-autocomplete']}
         aria-controls={attrs['aria-controls']}
@@ -276,6 +280,7 @@ export const ComboboxListbox = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-labelledby={attrs['aria-labelledby']}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
@@ -316,6 +321,7 @@ export const ComboboxOption = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-disabled={attrs['aria-disabled']}
         aria-selected={attrs['aria-selected']}
         data-disabled={attrs['data-disabled']}
@@ -350,9 +356,16 @@ export const ComboboxValue = component({
     const styleAttrs = style.attrs(comboboxStyles.value, props.styles?.value);
 
     return (
-      <span {...styleAttrs} data-placeholder={attrs['data-placeholder']} id={attrs.id}>
+      <span
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        data-placeholder={attrs['data-placeholder']}
+        id={attrs.id}
+      >
         {escapeHtml(comboboxValueText(props))}
       </span>
     );
   },
 });
+
+export * from '@kovojs/headless-ui/combobox';

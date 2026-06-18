@@ -2,29 +2,18 @@
 /** @jsxImportSource @kovojs/server */
 import { derive } from '@kovojs/runtime/generated';
 
-export const GalleryDisclosureDemo$button_aria_expanded_derive = derive(['state'], (state: any) =>
-  String(state.open),
+export const GalleryDisclosureDemo$Disclosure_open_derive = derive(['state'], (state: any) =>
+  state.open ? '' : null,
 );
-export const GalleryDisclosureDemo$button_data_state_derive = derive(['state'], (state: any) =>
-  state.open ? 'open' : 'closed',
+export const GalleryDisclosureDemo$DisclosureTrigger_open_derive = derive(['state'], (state: any) =>
+  state.open ? '' : null,
 );
-export const GalleryDisclosureDemo$div_data_state_derive = derive(['state'], (state: any) =>
-  state.open ? 'open' : 'closed',
-);
-export const GalleryDisclosureDemo$div_hidden_derive = derive(['state'], (state: any) =>
-  !state.open ? '' : null,
+export const GalleryDisclosureDemo$DisclosureContent_open_derive = derive(['state'], (state: any) =>
+  state.open ? '' : null,
 );
 
 import { component } from '@kovojs/core';
-import {
-  disclosureClasses,
-  disclosureTriggerClasses,
-  disclosureContentClasses,
-} from '@kovojs/ui/disclosure';
-
-const ROOT_CLASS = disclosureClasses.join(' ');
-const TRIGGER_CLASS = disclosureTriggerClasses.join(' ');
-const CONTENT_CLASS = disclosureContentClasses.join(' ');
+import { Disclosure, DisclosureContent, DisclosureTrigger } from '@kovojs/ui/disclosure';
 
 export interface GalleryDisclosureDemoState {
   open: boolean;
@@ -35,35 +24,28 @@ export interface GalleryDisclosureDemoState {
 export const GalleryDisclosureDemo = component({
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryDisclosureDemoState) => (
-    <section
-      class={ROOT_CLASS}
+    <Disclosure
       data-gallery-interactive="disclosure"
-      kovo-c="gallery-disclosure-demo"
+      open={state.open}
+      data-bind:open="/c/__v/7a0d11dc/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$Disclosure_open_derive"
       kovo-state='{"open":false}'
     >
-      <button
-        aria-controls="gallery-interactive-disclosure-panel"
-        class={TRIGGER_CLASS}
-        on:click="/c/__v/c6b93550/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$button_click"
-        type="button"
-        aria-expanded={String(state.open)}
-        data-bind:aria-expanded="/c/__v/c6b93550/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$button_aria_expanded_derive"
-        data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/__v/c6b93550/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$button_data_state_derive"
+      <DisclosureTrigger
+        contentId="gallery-interactive-disclosure-panel"
+        on:click="/c/__v/7a0d11dc/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_click"
+        open={state.open}
+        data-bind:open="/c/__v/7a0d11dc/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_open_derive"
       >
         Shipping rules
-      </button>
-      <div
-        class={CONTENT_CLASS}
-        id="gallery-interactive-disclosure-panel"
-        data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/__v/c6b93550/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$div_data_state_derive"
-        hidden={!state.open}
-        data-bind:hidden="/c/__v/c6b93550/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$div_hidden_derive"
+      </DisclosureTrigger>
+      <DisclosureContent
+        contentId="gallery-interactive-disclosure-panel"
+        open={state.open}
+        data-bind:open="/c/__v/7a0d11dc/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureContent_open_derive"
       >
         Orders over $50 ship free.
-      </div>
-    </section>
+      </DisclosureContent>
+    </Disclosure>
   ),
 });
 GalleryDisclosureDemo.name = 'generated/interactive/disclosure-demo/gallery-disclosure-demo';

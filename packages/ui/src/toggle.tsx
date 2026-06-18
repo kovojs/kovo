@@ -3,6 +3,8 @@ import { component } from '@kovojs/core';
 import { toggleRootAttributes } from '@kovojs/headless-ui/toggle';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export type ToggleVariant = 'outline' | 'subtle';
@@ -97,6 +99,7 @@ export const Toggle = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-pressed={attrs['aria-pressed']}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
@@ -108,3 +111,5 @@ export const Toggle = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/toggle';

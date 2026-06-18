@@ -9,29 +9,29 @@ import {
   hoverCardTriggerFocus as _hoverCardTriggerFocus,
   hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
   hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
-} from '@kovojs/headless-ui/hover-card';
+} from '@kovojs/ui/hover-card';
 
-export const GalleryHoverCardDemo$a_blur = handler((event, ctx) => {
+export const GalleryHoverCardDemo$HoverCardTrigger_blur = handler((event, ctx) => {
   const result = _hoverCardTriggerBlur(Object(event), { open: ctx.state.open });
   if (!result) return;
   ctx.state.open = result.open;
 });
-export const GalleryHoverCardDemo$a_focus = handler((event, ctx) => {
+export const GalleryHoverCardDemo$HoverCardTrigger_focus = handler((event, ctx) => {
   const result = _hoverCardTriggerFocus(Object(event), { open: ctx.state.open });
   if (!result) return;
   ctx.state.open = result.open;
 });
-export const GalleryHoverCardDemo$a_keydown = handler((event, ctx) => {
+export const GalleryHoverCardDemo$HoverCardTrigger_keydown = handler((event, ctx) => {
   const result = _hoverCardEscapeKeyDown(Object(event), { open: ctx.state.open });
   if (!result) return;
   ctx.state.open = result.open;
 });
-export const GalleryHoverCardDemo$a_pointerenter = handler((event, ctx) => {
+export const GalleryHoverCardDemo$HoverCardTrigger_pointerenter = handler((event, ctx) => {
   const result = _hoverCardTriggerPointerEnter(Object(event), { open: ctx.state.open });
   if (!result) return;
   ctx.state.open = result.open;
 });
-export const GalleryHoverCardDemo$a_pointerleave = handler((event, ctx) => {
+export const GalleryHoverCardDemo$HoverCardTrigger_pointerleave = handler((event, ctx) => {
   return new Promise((resolve) => {
     setTimeout(() => {
       const result = _hoverCardTriggerPointerLeave(Object(event), { open: ctx.state.open });
@@ -40,28 +40,37 @@ export const GalleryHoverCardDemo$a_pointerleave = handler((event, ctx) => {
     }, 150);
   });
 });
-export const GalleryHoverCardDemo$aside_pointerenter = handler((event, ctx) => {
+export const GalleryHoverCardDemo$HoverCardContent_pointerenter = handler((event, ctx) => {
   const result = _hoverCardContentPointerEnter(Object(event), { open: ctx.state.open });
   if (!result) return;
   ctx.state.open = result.open;
 });
-export const GalleryHoverCardDemo$aside_pointerleave = handler((event, ctx) => {
+export const GalleryHoverCardDemo$HoverCardContent_pointerleave = handler((event, ctx) => {
   const result = _hoverCardContentPointerLeave(Object(event), { open: ctx.state.open });
   if (!result) return;
   ctx.state.open = result.open;
 });
 
-export const GalleryHoverCardDemo$section_data_state_derive = derive(['state'], (state) =>
+export const GalleryHoverCardDemo$HoverCard_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryHoverCardDemo$a_data_state_derive = derive(['state'], (state) =>
+export const GalleryHoverCardDemo$HoverCard_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
+);
+export const GalleryHoverCardDemo$HoverCardTrigger_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryHoverCardDemo$aside_data_state_derive = derive(['state'], (state) =>
+export const GalleryHoverCardDemo$HoverCardTrigger_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
+);
+export const GalleryHoverCardDemo$HoverCardContent_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryHoverCardDemo$aside_hidden_derive = derive(['state'], (state) =>
+export const GalleryHoverCardDemo$HoverCardContent_hidden_derive = derive(['state'], (state) =>
   !state.open ? '' : null,
+);
+export const GalleryHoverCardDemo$HoverCardContent_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
 );
 export const GalleryHoverCardDemo$output_text_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',

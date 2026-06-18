@@ -10,6 +10,8 @@ import {
 import type { TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface ToolbarStyleOverrides {
@@ -138,6 +140,7 @@ export const Toolbar = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-label={attrs['aria-label']}
@@ -171,7 +174,12 @@ export const ToolbarItem = component({
     const styleAttrs = style.attrs(toolbarStyles.item, props.styles?.item);
 
     return (
-      <span {...styleAttrs} data-disabled={attrs['data-disabled']} id={attrs.id}>
+      <span
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        data-disabled={attrs['data-disabled']}
+        id={attrs.id}
+      >
         {props.children}
       </span>
     );
@@ -198,6 +206,7 @@ export const ToolbarButton = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-pressed={attrs['aria-pressed']}
         data-disabled={attrs['data-disabled']}
         data-pressed={attrs['data-pressed']}
@@ -212,3 +221,5 @@ export const ToolbarButton = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/toolbar';

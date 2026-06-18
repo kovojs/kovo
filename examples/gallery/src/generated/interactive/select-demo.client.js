@@ -6,9 +6,9 @@ import {
   selectKeyDown as _selectKeyDown,
   selectMove as _selectMove,
   selectTriggerClick as _selectTriggerClick,
-} from '@kovojs/headless-ui/select';
+} from '@kovojs/ui/select';
 
-export const GallerySelectDemo$button_click = handler((event, ctx) => {
+export const GallerySelectDemo$SelectTrigger_click = handler((event, ctx) => {
   const result = _selectTriggerClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -23,7 +23,7 @@ export const GallerySelectDemo$button_click = handler((event, ctx) => {
   ctx.state.open = result.open;
   ctx.state.highlightedValue = ctx.state.value;
 });
-export const GallerySelectDemo$button_keydown = handler((event, ctx) => {
+export const GallerySelectDemo$SelectTrigger_keydown = handler((event, ctx) => {
   const keyResult = _selectKeyDown(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -55,7 +55,7 @@ export const GallerySelectDemo$button_keydown = handler((event, ctx) => {
     return;
   }
 });
-export const GallerySelectDemo$div_keydown = handler((event, ctx) => {
+export const GallerySelectDemo$SelectContent_keydown = handler((event, ctx) => {
   const move = _selectMove(
     {
       highlightedValue: ctx.state.highlightedValue,
@@ -73,7 +73,7 @@ export const GallerySelectDemo$div_keydown = handler((event, ctx) => {
   if (!move) return;
   ctx.state.highlightedValue = move.highlightedValue ?? ctx.state.highlightedValue;
 });
-export const GallerySelectDemo$div_click = handler((event, ctx) => {
+export const GallerySelectDemo$SelectItem_click = handler((event, ctx) => {
   const result = _selectItemClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -90,7 +90,7 @@ export const GallerySelectDemo$div_click = handler((event, ctx) => {
   ctx.state.highlightedValue = result.value.value ?? ctx.state.highlightedValue;
   ctx.state.open = result.open.open;
 });
-export const GallerySelectDemo$div_click_2 = handler((event, ctx) => {
+export const GallerySelectDemo$SelectItem_click_2 = handler((event, ctx) => {
   const result = _selectItemClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -107,7 +107,7 @@ export const GallerySelectDemo$div_click_2 = handler((event, ctx) => {
   ctx.state.highlightedValue = result.value.value ?? ctx.state.highlightedValue;
   ctx.state.open = result.open.open;
 });
-export const GallerySelectDemo$div_click_3 = handler((event, ctx) => {
+export const GallerySelectDemo$SelectItem_click_3 = handler((event, ctx) => {
   const result = _selectItemClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -126,49 +126,49 @@ export const GallerySelectDemo$div_click_3 = handler((event, ctx) => {
   ctx.state.open = result.open.open;
 });
 
-export const GallerySelectDemo$input_value_derive = derive(['state'], (state) => state.value);
-export const GallerySelectDemo$button_aria_expanded_derive = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectHiddenInput_value_derive = derive(
+  ['state'],
+  (state) => state.value,
+);
+export const GallerySelectDemo$SelectTrigger_aria_expanded_derive = derive(['state'], (state) =>
   String(state.open),
 );
-export const GallerySelectDemo$button_data_state_derive = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectTrigger_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GallerySelectDemo$div_data_state_derive = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectContent_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GallerySelectDemo$div_hidden_derive = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectContent_hidden_derive = derive(['state'], (state) =>
   !state.open ? '' : null,
 );
-export const GallerySelectDemo$div_aria_selected_derive = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectItem_aria_selected_derive = derive(['state'], (state) =>
   state.value === 'standard' ? 'true' : 'false',
 );
-export const GallerySelectDemo$div_data_highlighted_derive = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectItem_data_highlighted_derive = derive(['state'], (state) =>
   state.highlightedValue === 'standard' ? '' : null,
 );
-export const GallerySelectDemo$div_data_state_derive_2 = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectItem_data_state_derive = derive(['state'], (state) =>
   state.value === 'standard' ? 'checked' : 'unchecked',
 );
-export const GallerySelectDemo$div_aria_selected_derive_2 = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectItem_aria_selected_derive_2 = derive(['state'], (state) =>
   state.value === 'express' ? 'true' : 'false',
 );
-export const GallerySelectDemo$div_data_highlighted_derive_2 = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectItem_data_highlighted_derive_2 = derive(['state'], (state) =>
   state.highlightedValue === 'express' ? '' : null,
 );
-export const GallerySelectDemo$div_data_state_derive_3 = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectItem_data_state_derive_2 = derive(['state'], (state) =>
   state.value === 'express' ? 'checked' : 'unchecked',
 );
-export const GallerySelectDemo$div_aria_selected_derive_3 = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectItem_aria_selected_derive_3 = derive(['state'], (state) =>
   state.value === 'drone' ? 'true' : 'false',
 );
-export const GallerySelectDemo$div_data_highlighted_derive_3 = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectItem_data_highlighted_derive_3 = derive(['state'], (state) =>
   state.highlightedValue === 'drone' ? '' : null,
 );
-export const GallerySelectDemo$div_data_state_derive_4 = derive(['state'], (state) =>
+export const GallerySelectDemo$SelectItem_data_state_derive_3 = derive(['state'], (state) =>
   state.value === 'drone' ? 'checked' : 'unchecked',
 );
 export const GallerySelectDemo$span_text_derive = derive(['state'], (state) =>
-  state.value === 'express' ? 'Express' : 'Standard',
-);
-export const GallerySelectDemo$output_text_derive = derive(['state'], (state) =>
   state.value === 'express' ? 'Express' : 'Standard',
 );

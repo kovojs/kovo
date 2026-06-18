@@ -7,9 +7,9 @@ import {
   toastCloseClick as _toastCloseClick,
   toastEscapeKeyDown as _toastEscapeKeyDown,
   toastViewportKeyDown as _toastViewportKeyDown,
-} from '@kovojs/headless-ui/toast';
+} from '@kovojs/ui/toast';
 
-export const GalleryToastDemo$section_keydown = handler((event, ctx) => {
+export const GalleryToastDemo$ToastViewport_keydown = handler((event, ctx) => {
   if (_toastViewportKeyDown(Object(event))) return;
 
   if (ctx.state.activeOpen) {
@@ -37,7 +37,7 @@ export const GalleryToastDemo$button_click = handler((_event, ctx) => {
   ctx.state.activeCount = ctx.state.activeCount + 1;
   ctx.state.activeOpen = true;
 });
-export const GalleryToastDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryToastDemo$ToastClose_click = handler((event, ctx) => {
   const result = _toastCloseClick(Object(event), {
     id: 'gallery-toast-previous',
     open: ctx.state.previousOpen,
@@ -45,7 +45,7 @@ export const GalleryToastDemo$button_click_2 = handler((event, ctx) => {
   if (!result?.changed) return;
   ctx.state.previousOpen = result.open;
 });
-export const GalleryToastDemo$div_animationend = handler((event, ctx) => {
+export const GalleryToastDemo$Toast_animationend = handler((event, ctx) => {
   const result = _toastAnimationEnd(
     Object(event),
     { id: 'gallery-toast', open: ctx.state.activeOpen },
@@ -54,7 +54,7 @@ export const GalleryToastDemo$div_animationend = handler((event, ctx) => {
   if (!result?.changed) return;
   ctx.state.activeOpen = result.open;
 });
-export const GalleryToastDemo$button_click_3 = handler((event, ctx) => {
+export const GalleryToastDemo$ToastAction_click = handler((event, ctx) => {
   const result = _toastActionClick(Object(event), {
     id: 'gallery-toast',
     open: ctx.state.activeOpen,
@@ -62,7 +62,7 @@ export const GalleryToastDemo$button_click_3 = handler((event, ctx) => {
   if (!result?.changed) return;
   ctx.state.activeOpen = result.open;
 });
-export const GalleryToastDemo$button_click_4 = handler((event, ctx) => {
+export const GalleryToastDemo$ToastAction_click_2 = handler((event, ctx) => {
   const result = _toastActionClick(
     Object(event),
     { id: 'gallery-toast', open: ctx.state.activeOpen },
@@ -70,7 +70,7 @@ export const GalleryToastDemo$button_click_4 = handler((event, ctx) => {
   );
   if (result?.changed) ctx.state.activeOpen = result.open;
 });
-export const GalleryToastDemo$button_click_5 = handler((event, ctx) => {
+export const GalleryToastDemo$ToastClose_click_2 = handler((event, ctx) => {
   const result = _toastCloseClick(Object(event), {
     id: 'gallery-toast',
     open: ctx.state.activeOpen,
@@ -78,7 +78,7 @@ export const GalleryToastDemo$button_click_5 = handler((event, ctx) => {
   if (!result?.changed) return;
   ctx.state.activeOpen = result.open;
 });
-export const GalleryToastDemo$button_click_6 = handler((event, ctx) => {
+export const GalleryToastDemo$ToastAction_click_3 = handler((event, ctx) => {
   _toastActionClick(Object(event), {
     disabled: true,
     id: 'gallery-toast',
@@ -86,31 +86,23 @@ export const GalleryToastDemo$button_click_6 = handler((event, ctx) => {
   });
 });
 
-export const GalleryToastDemo$div_data_state_derive = derive(['state'], (state) =>
+export const GalleryToastDemo$Toast_data_state_derive = derive(['state'], (state) =>
   state.previousOpen ? 'open' : 'closed',
 );
-export const GalleryToastDemo$div_hidden_derive = derive(['state'], (state) =>
+export const GalleryToastDemo$Toast_hidden_derive = derive(['state'], (state) =>
   !state.previousOpen ? '' : null,
 );
-export const GalleryToastDemo$button_data_state_derive = derive(['state'], (state) =>
+export const GalleryToastDemo$ToastClose_data_state_derive = derive(['state'], (state) =>
   state.previousOpen ? 'open' : 'closed',
 );
-export const GalleryToastDemo$div_data_state_derive_2 = derive(['state'], (state) =>
+export const GalleryToastDemo$Toast_data_state_derive_2 = derive(['state'], (state) =>
   state.activeOpen ? 'open' : 'closed',
 );
-export const GalleryToastDemo$div_hidden_derive_2 = derive(['state'], (state) =>
+export const GalleryToastDemo$Toast_hidden_derive_2 = derive(['state'], (state) =>
   !state.activeOpen ? '' : null,
 );
-export const GalleryToastDemo$button_data_state_derive_2 = derive(['state'], (state) =>
+export const GalleryToastDemo$ToastClose_data_state_derive_2 = derive(['state'], (state) =>
   state.activeOpen ? 'open' : 'closed',
-);
-export const GalleryToastDemo$p_text_derive = derive(
-  ['state'],
-  (state) => 'Gallery settings update #' + state.previousCount,
-);
-export const GalleryToastDemo$p_text_derive_2 = derive(
-  ['state'],
-  (state) => 'Gallery settings update #' + state.activeCount,
 );
 export const GalleryToastDemo$output_text_derive = derive(['state'], (state) =>
   state.activeOpen ? 'open' : state.previousOpen ? 'stacked' : 'empty',

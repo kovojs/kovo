@@ -1,23 +1,20 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/headless-ui/disclosure';
+import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/ui/disclosure';
 
-export const GalleryDisclosureDemo$button_click = handler((event, ctx) => {
+export const GalleryDisclosureDemo$DisclosureTrigger_click = handler((event, ctx) => {
   const result = _disclosureTriggerClick(Object(event), { open: ctx.state.open });
   if (!result) return;
   ctx.state.open = result.open;
 });
 
-export const GalleryDisclosureDemo$button_aria_expanded_derive = derive(['state'], (state) =>
-  String(state.open),
+export const GalleryDisclosureDemo$Disclosure_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
 );
-export const GalleryDisclosureDemo$button_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
+export const GalleryDisclosureDemo$DisclosureTrigger_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
 );
-export const GalleryDisclosureDemo$div_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
-);
-export const GalleryDisclosureDemo$div_hidden_derive = derive(['state'], (state) =>
-  !state.open ? '' : null,
+export const GalleryDisclosureDemo$DisclosureContent_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
 );

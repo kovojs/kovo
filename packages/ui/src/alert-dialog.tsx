@@ -10,6 +10,8 @@ import {
 } from '@kovojs/headless-ui/alert-dialog';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface AlertDialogStyleOverrides {
@@ -226,6 +228,7 @@ export const AlertDialog = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -247,6 +250,7 @@ export const AlertDialogTrigger = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         aria-haspopup={attrs['aria-haspopup']}
@@ -277,6 +281,7 @@ export const AlertDialogContent = component({
     return (
       <dialog
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-modal={attrs['aria-modal']}
@@ -303,6 +308,7 @@ export const AlertDialogCancel = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         autofocus={attrs.autofocus}
         command={attrs.command}
         commandfor={attrs.commandfor}
@@ -331,6 +337,7 @@ export const AlertDialogAction = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         command={attrs.command}
         commandfor={attrs.commandfor}
         data-disabled={attrs['data-disabled']}
@@ -345,3 +352,5 @@ export const AlertDialogAction = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/alert-dialog';

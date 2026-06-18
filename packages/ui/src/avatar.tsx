@@ -8,6 +8,8 @@ import {
 } from '@kovojs/headless-ui/avatar';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface AvatarStyleOverrides {
@@ -100,6 +102,7 @@ export const Avatar = component({
     return (
       <span
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-label={attrs['aria-label']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -129,6 +132,7 @@ export const AvatarImage = component({
       <img
         alt={attrs.alt}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-state={attrs['data-state']}
         decoding={attrs.decoding}
         hidden={attrs.hidden}
@@ -154,6 +158,7 @@ export const AvatarFallback = component({
     return (
       <span
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-delay={attrs['data-delay']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}

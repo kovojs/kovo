@@ -1,20 +1,11 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  toolbarButtonAttributes,
-  toolbarItemAttributes,
+  Toolbar,
+  ToolbarButton,
+  ToolbarItem,
   toolbarKeyDown as _toolbarKeyDown,
-  toolbarRootAttributes,
-} from '@kovojs/headless-ui/toolbar';
-import {
-  toolbarClasses,
-  toolbarItemClasses,
-  toolbarButtonClasses,
 } from '@kovojs/ui/toolbar';
-
-const TOOLBAR_CLASS = toolbarClasses.join(' ');
-const ITEM_CLASS = toolbarItemClasses.join(' ');
-const BUTTON_CLASS = toolbarButtonClasses.join(' ');
 
 export interface GalleryToolbarDemoState {
   activeValue: string;
@@ -42,75 +33,64 @@ export const GalleryToolbarDemo = component({
     const linkState = { ...rootState, itemValue: 'link' };
 
     return (
-      <div
-        {...toolbarRootAttributes(rootState)}
-        class="grid gap-2"
-        data-gallery-interactive="toolbar"
-        onKeyDown={() => {
-          const result = _toolbarKeyDown(Object(event), {
-            activeValue: state.activeValue,
-            items: [{ value: 'bold' }, { disabled: true, value: 'italic' }, { value: 'link' }],
-          });
-          if (!result?.value) return;
-          state.activeValue = result.value;
-          const root = Object(event)['target']?.closest?.('[role="toolbar"]');
-          const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
-          Object(next)['focus']?.call(next);
-        }}
-      >
-        <div class={TOOLBAR_CLASS}>
-          <span {...toolbarItemAttributes(boldState)} class={ITEM_CLASS}>
-            <button
-              {...toolbarButtonAttributes({
-                ...boldState,
-                id: 'gallery-toolbar-bold',
-                pressed: state.pressedValue === 'bold',
-              })}
+      <div class="grid gap-2" data-gallery-interactive="toolbar">
+        <Toolbar
+          {...rootState}
+          onKeyDown={() => {
+            const result = _toolbarKeyDown(Object(event), {
+              activeValue: state.activeValue,
+              items: [{ value: 'bold' }, { disabled: true, value: 'italic' }, { value: 'link' }],
+            });
+            if (!result?.value) return;
+            state.activeValue = result.value;
+            const root = Object(event)['target']?.closest?.('[role="toolbar"]');
+            const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
+            Object(next)['focus']?.call(next);
+          }}
+        >
+          <ToolbarItem {...boldState}>
+            <ToolbarButton
+              {...boldState}
               aria-pressed={String(state.pressedValue === 'bold')}
-              class={BUTTON_CLASS}
               data-pressed={String(state.pressedValue === 'bold')}
+              id="gallery-toolbar-bold"
               onClick={() => {
                 state.activeValue = 'bold';
                 state.pressedValue = state.pressedValue === 'bold' ? '' : 'bold';
               }}
+              pressed={state.pressedValue === 'bold'}
               tabIndex={state.activeValue === 'bold' ? 0 : -1}
             >
               Bold
-            </button>
-          </span>
-          <span {...toolbarItemAttributes(italicState)} class={ITEM_CLASS}>
-            <button
-              {...toolbarButtonAttributes({
-                ...italicState,
-                id: 'gallery-toolbar-italic',
-                pressed: false,
-              })}
-              class={BUTTON_CLASS}
+            </ToolbarButton>
+          </ToolbarItem>
+          <ToolbarItem {...italicState}>
+            <ToolbarButton
+              {...italicState}
+              id="gallery-toolbar-italic"
+              pressed={false}
               tabIndex={-1}
             >
               Italic
-            </button>
-          </span>
-          <span {...toolbarItemAttributes(linkState)} class={ITEM_CLASS}>
-            <button
-              {...toolbarButtonAttributes({
-                ...linkState,
-                id: 'gallery-toolbar-link',
-                pressed: state.pressedValue === 'link',
-              })}
+            </ToolbarButton>
+          </ToolbarItem>
+          <ToolbarItem {...linkState}>
+            <ToolbarButton
+              {...linkState}
               aria-pressed={String(state.pressedValue === 'link')}
-              class={BUTTON_CLASS}
               data-pressed={String(state.pressedValue === 'link')}
+              id="gallery-toolbar-link"
               onClick={() => {
                 state.activeValue = 'link';
                 state.pressedValue = state.pressedValue === 'link' ? '' : 'link';
               }}
+              pressed={state.pressedValue === 'link'}
               tabIndex={state.activeValue === 'link' ? 0 : -1}
             >
               Link
-            </button>
-          </span>
-        </div>
+            </ToolbarButton>
+          </ToolbarItem>
+        </Toolbar>
         <output data-demo-state="toolbar-active">{state.activeValue}</output>
         <output data-demo-state="toolbar-pressed">{state.pressedValue || 'none'}</output>
       </div>

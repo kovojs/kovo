@@ -11,6 +11,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface MenubarStyleOverrides {
@@ -181,6 +183,7 @@ export const Menubar = component({
         aria-labelledby={attrs['aria-labelledby']}
         aria-orientation={attrs['aria-orientation']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         id={attrs.id}
@@ -218,6 +221,7 @@ export const MenubarItem = component({
         aria-expanded={attrs['aria-expanded']}
         aria-haspopup={attrs['aria-haspopup']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -254,6 +258,7 @@ export const MenubarSubmenu = component({
       <div
         aria-labelledby={attrs['aria-labelledby']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
@@ -286,6 +291,7 @@ export const MenubarGroup = component({
       <div
         aria-labelledby={attrs['aria-labelledby']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         id={attrs.id}
@@ -305,3 +311,5 @@ export const MenubarSeparator = component({
     return <div {...styleAttrs} id={attrs.id} role={attrs.role} />;
   },
 });
+
+export * from '@kovojs/headless-ui/menubar';

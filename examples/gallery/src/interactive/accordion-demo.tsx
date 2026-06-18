@@ -1,26 +1,14 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  accordionContentAttributes,
-  accordionHeaderAttributes,
-  accordionItemAttributes,
+  Accordion,
+  AccordionContent,
+  AccordionHeader,
+  AccordionItem,
   accordionKeyDown as _accordionKeyDown,
-  accordionRootAttributes,
-  accordionTriggerAttributes,
+  AccordionTrigger,
   accordionTriggerClick as _accordionTriggerClick,
-} from '@kovojs/headless-ui/accordion';
-import {
-  accordionClasses,
-  accordionItemClasses,
-  accordionHeaderClasses,
-  accordionTriggerClasses,
-  accordionContentClasses,
 } from '@kovojs/ui/accordion';
-
-const ITEM_CLASS = accordionItemClasses.join(' ');
-const HEADER_CLASS = accordionHeaderClasses.join(' ');
-const TRIGGER_CLASS = accordionTriggerClasses.join(' ');
-const CONTENT_CLASS = accordionContentClasses.join(' ');
 
 export interface GalleryAccordionDemoState {
   activeValue: string;
@@ -39,13 +27,10 @@ export const GalleryAccordionDemo = component({
       type: 'single' as const,
       value: state.value || undefined,
     };
-    const shippingState = { ...rootState, itemValue: 'shipping' };
-    const billingState = { ...rootState, itemValue: 'billing' };
 
     return (
-      <section
-        {...accordionRootAttributes(rootState)}
-        class={accordionClasses.join(' ')}
+      <Accordion
+        collapsible
         data-gallery-interactive="accordion"
         onKeyDown={() => {
           const result = _accordionKeyDown(Object(event), {
@@ -57,25 +42,29 @@ export const GalleryAccordionDemo = component({
           if (!result?.value) return;
           state.activeValue = result.value;
           const root = Object(event)['target']?.closest?.('[data-gallery-interactive="accordion"]');
-          const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
+          const next = Object(root)?.querySelector?.(`#gallery-accordion-${result.value}-trigger`);
           Object(next)['focus']?.call(next);
         }}
+        type="single"
+        value={state.value || undefined}
       >
-        <section
-          {...accordionItemAttributes(shippingState)}
-          class={ITEM_CLASS}
-          data-state={state.value === 'shipping' ? 'open' : 'closed'}
+        <AccordionItem
+          collapsible
+          itemValue="shipping"
+          type="single"
+          value={state.value || undefined}
         >
-          <h3 {...accordionHeaderAttributes({ ...shippingState, level: 3 })} class={HEADER_CLASS}>
-            <button
-              {...accordionTriggerAttributes({
-                ...shippingState,
-                contentId: 'gallery-accordion-shipping-content',
-                triggerId: 'gallery-accordion-shipping-trigger',
-              })}
-              aria-expanded={String(state.value === 'shipping')}
-              class={TRIGGER_CLASS}
-              data-state={state.value === 'shipping' ? 'open' : 'closed'}
+          <AccordionHeader
+            collapsible
+            itemValue="shipping"
+            level={3}
+            type="single"
+            value={state.value || undefined}
+          >
+            <AccordionTrigger
+              collapsible
+              contentId="gallery-accordion-shipping-content"
+              itemValue="shipping"
               onClick={() => {
                 const result = _accordionTriggerClick(Object(event), {
                   collapsible: true,
@@ -88,39 +77,41 @@ export const GalleryAccordionDemo = component({
                 state.value = result.value?.toString() ?? '';
               }}
               tabIndex={state.activeValue === 'shipping' ? 0 : -1}
-              value="shipping"
+              triggerId="gallery-accordion-shipping-trigger"
+              type="single"
+              value={state.value || undefined}
             >
               Shipping
-            </button>
-          </h3>
-          <div
-            {...accordionContentAttributes({
-              ...shippingState,
-              contentId: 'gallery-accordion-shipping-content',
-              triggerId: 'gallery-accordion-shipping-trigger',
-            })}
-            class={CONTENT_CLASS}
-            data-state={state.value === 'shipping' ? 'open' : 'closed'}
-            hidden={state.value !== 'shipping'}
+            </AccordionTrigger>
+          </AccordionHeader>
+          <AccordionContent
+            collapsible
+            contentId="gallery-accordion-shipping-content"
+            itemValue="shipping"
+            triggerId="gallery-accordion-shipping-trigger"
+            type="single"
+            value={state.value || undefined}
           >
             Shipping windows are selected during checkout.
-          </div>
-        </section>
-        <section
-          {...accordionItemAttributes(billingState)}
-          class={ITEM_CLASS}
-          data-state={state.value === 'billing' ? 'open' : 'closed'}
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem
+          collapsible
+          itemValue="billing"
+          type="single"
+          value={state.value || undefined}
         >
-          <h3 {...accordionHeaderAttributes({ ...billingState, level: 3 })} class={HEADER_CLASS}>
-            <button
-              {...accordionTriggerAttributes({
-                ...billingState,
-                contentId: 'gallery-accordion-billing-content',
-                triggerId: 'gallery-accordion-billing-trigger',
-              })}
-              aria-expanded={String(state.value === 'billing')}
-              class={TRIGGER_CLASS}
-              data-state={state.value === 'billing' ? 'open' : 'closed'}
+          <AccordionHeader
+            collapsible
+            itemValue="billing"
+            level={3}
+            type="single"
+            value={state.value || undefined}
+          >
+            <AccordionTrigger
+              collapsible
+              contentId="gallery-accordion-billing-content"
+              itemValue="billing"
               onClick={() => {
                 const result = _accordionTriggerClick(Object(event), {
                   collapsible: true,
@@ -133,28 +124,28 @@ export const GalleryAccordionDemo = component({
                 state.value = result.value?.toString() ?? '';
               }}
               tabIndex={state.activeValue === 'billing' ? 0 : -1}
-              value="billing"
+              triggerId="gallery-accordion-billing-trigger"
+              type="single"
+              value={state.value || undefined}
             >
               Billing
-            </button>
-          </h3>
-          <div
-            {...accordionContentAttributes({
-              ...billingState,
-              contentId: 'gallery-accordion-billing-content',
-              triggerId: 'gallery-accordion-billing-trigger',
-            })}
-            class={CONTENT_CLASS}
-            data-state={state.value === 'billing' ? 'open' : 'closed'}
-            hidden={state.value !== 'billing'}
+            </AccordionTrigger>
+          </AccordionHeader>
+          <AccordionContent
+            collapsible
+            contentId="gallery-accordion-billing-content"
+            itemValue="billing"
+            triggerId="gallery-accordion-billing-trigger"
+            type="single"
+            value={state.value || undefined}
           >
             Billing contacts receive invoice updates.
-          </div>
-        </section>
+          </AccordionContent>
+        </AccordionItem>
         <output class="text-xs text-neutral-500" data-demo-state="accordion-value">
           {state.value || 'none'}
         </output>
-      </section>
+      </Accordion>
     );
   },
 });

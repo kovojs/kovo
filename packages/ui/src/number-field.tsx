@@ -9,6 +9,8 @@ import {
 } from '@kovojs/headless-ui/number-field';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface NumberFieldStyleOverrides {
@@ -178,6 +180,7 @@ export const NumberField = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -207,6 +210,7 @@ export const NumberFieldControl = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -241,6 +245,7 @@ export const NumberFieldInput = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
         aria-label={attrs['aria-label']}
@@ -283,6 +288,7 @@ export const NumberFieldDecrement = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-label={attrs['aria-label']}
         data-action={attrs['data-action']}
@@ -319,6 +325,7 @@ export const NumberFieldIncrement = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-label={attrs['aria-label']}
         data-action={attrs['data-action']}
@@ -334,3 +341,5 @@ export const NumberFieldIncrement = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/number-field';

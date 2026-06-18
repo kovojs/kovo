@@ -2,31 +2,19 @@
 import { component } from '@kovojs/core';
 import {
   dialogCancel as _dialogCancel,
-  dialogCloseAttributes,
   dialogCloseClick as _dialogCloseClick,
-  dialogContentAttributes,
-  dialogRootAttributes,
   dialogTriggerClick as _dialogTriggerClick,
-  dialogTriggerAttributes,
-} from '@kovojs/headless-ui/dialog';
+} from '@kovojs/ui/dialog';
 import {
-  drawerTriggerClasses,
-  drawerContentClasses,
-  drawerHandleClasses,
-  drawerHeaderClasses,
-  drawerTitleClasses,
-  drawerDescriptionClasses,
-  drawerCloseClasses,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHandle,
+  DrawerHeader,
+  DrawerRoot,
+  DrawerTitle,
+  DrawerTrigger,
 } from '@kovojs/ui/drawer';
-
-// CONTENT_CLASS is drawerContentClassNames base + the `bottom` side variant.
-const TRIGGER_CLASS = drawerTriggerClasses.join(' ');
-const CONTENT_CLASS = drawerContentClasses.join(' ');
-const HANDLE_CLASS = drawerHandleClasses.join(' ');
-const HEADER_CLASS = drawerHeaderClasses.join(' ');
-const TITLE_CLASS = drawerTitleClasses.join(' ');
-const DESCRIPTION_CLASS = drawerDescriptionClasses.join(' ');
-const CLOSE_CLASS = drawerCloseClasses.join(' ');
 
 export interface GalleryDrawerDemoState {
   open: boolean;
@@ -42,18 +30,17 @@ export const GalleryDrawerDemo = component({
     const descriptionId = 'gallery-interactive-drawer-description';
 
     return (
-      <section
-        {...dialogRootAttributes({ open: state.open })}
-        class="grid gap-2"
+      <DrawerRoot
         data-gallery-interactive="drawer"
         data-side="bottom"
         data-state={state.open ? 'open' : 'closed'}
+        open={state.open}
       >
-        <button
-          {...dialogTriggerAttributes({ contentId, open: state.open })}
-          class={TRIGGER_CLASS}
+        <DrawerTrigger
           aria-expanded={state.open ? 'true' : 'false'}
+          contentId={contentId}
           data-state={state.open ? 'open' : 'closed'}
+          open={state.open}
           onClick={() => {
             const result = _dialogTriggerClick(Object(event), { open: state.open });
             if (!result?.changed) return;
@@ -61,33 +48,35 @@ export const GalleryDrawerDemo = component({
           }}
         >
           Open drawer
-        </button>
-        <dialog
-          {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
-          class={CONTENT_CLASS}
+        </DrawerTrigger>
+        <DrawerContent
+          contentId={contentId}
           data-side="bottom"
           data-state={state.open ? 'open' : 'closed'}
+          descriptionId={descriptionId}
           open={state.open}
           onCancel={() => {
             const result = _dialogCancel(Object(event), { open: state.open });
             if (!result?.changed) return;
             state.open = result.open;
           }}
+          side="bottom"
+          titleId={titleId}
         >
-          <div aria-hidden="true" class={HANDLE_CLASS} />
-          <header class={HEADER_CLASS}>
-            <h2 class={TITLE_CLASS} id={titleId}>
+          <DrawerHandle />
+          <DrawerHeader>
+            <DrawerTitle id={titleId}>
               Mobile actions
-            </h2>
-            <p class={DESCRIPTION_CLASS} id={descriptionId}>
+            </DrawerTitle>
+            <DrawerDescription id={descriptionId}>
               Directional sheet drawer; Vaul drag, snap, and background-scale gestures are not
               modeled.
-            </p>
-          </header>
-          <button
-            {...dialogCloseAttributes({ contentId, open: state.open })}
-            class={CLOSE_CLASS}
+            </DrawerDescription>
+          </DrawerHeader>
+          <DrawerClose
+            contentId={contentId}
             data-state={state.open ? 'open' : 'closed'}
+            open={state.open}
             onClick={() => {
               const result = _dialogCloseClick(Object(event), { open: state.open });
               if (!result?.changed) return;
@@ -95,10 +84,10 @@ export const GalleryDrawerDemo = component({
             }}
           >
             Close drawer
-          </button>
-        </dialog>
+          </DrawerClose>
+        </DrawerContent>
         <output data-demo-state="drawer-open">{state.open ? 'open' : 'closed'}</output>
-      </section>
+      </DrawerRoot>
     );
   },
 });
