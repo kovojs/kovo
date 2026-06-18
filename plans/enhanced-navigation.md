@@ -308,15 +308,17 @@ through client navigation.
     no-JS/full-load versus enhanced-navigation render-equivalence is proven.
   - Evidence: `SPEC.md` §8 now states navigation partials are not a v1 protocol
     and app authors cannot opt into or hand-author them.
-- [ ] **7. Example and docs proof.**
+- [x] **7. Example and docs proof.**
   - Demonstrate one real example, preferably Commerce or StackOverflow: JS-on
     preserves unchanged layout media/state, JS-off performs full navigations to
     the same URLs, and docs teach the feature as an enhancement.
-  - Evidence so far: `examples/commerce/src/app-shell.test.ts` proves Commerce
-    no-JS full-document route loads; `site/content/docs/mental-model.md`,
+  - Evidence: `examples/commerce/src/app-shell.test.ts` proves Commerce no-JS
+    full-document route loads and proves `/` plus `/cart` render a shared
+    compiler-derived layout navigation segment with distinct page segments;
+    `packages/runtime/src/inline-loader-navigation.browser.test.ts` proves the
+    loader preserves unchanged layout DOM for that segment shape; `site/content/docs/mental-model.md`,
     `site/content/docs/why-kovo.md`, and `site/content/tutorial/01-first-page.md`
     teach enhanced navigation as a full-document progressive enhancement.
-    Remaining gap: real-example JS-on preservation proof.
 
 ## Verification Targets
 

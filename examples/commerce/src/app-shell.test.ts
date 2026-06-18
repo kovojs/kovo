@@ -352,6 +352,31 @@ describe('commerce app shell HTTP entry', () => {
     }
   });
 
+  it('renders home and cart with a shared navigation layout segment', async () => {
+    const shell = createCommerceAppShell();
+
+    server = createServer(shell.nodeHandler);
+    await listen(server);
+    const origin = serverOrigin(server);
+
+    const home = await fetch(`${origin}/`);
+    const homeHtml = await home.text();
+    const cart = await fetch(`${origin}/cart`);
+    const cartHtml = await cart.text();
+
+    expect(home.status, homeHtml).toBe(200);
+    expect(cart.status, cartHtml).toBe(200);
+    expect(homeHtml).toContain('kovo-nav-segment="layout:');
+    expect(cartHtml).toContain('kovo-nav-segment="layout:');
+    expect(homeHtml).toContain('kovo-nav-segment="page:/"');
+    expect(cartHtml).toContain('kovo-nav-segment="page:/cart"');
+
+    const homeLayout = /kovo-nav-segment="(layout:[^"]+)"/.exec(homeHtml)?.[1];
+    const cartLayout = /kovo-nav-segment="(layout:[^"]+)"/.exec(cartHtml)?.[1];
+    expect(homeLayout).toBeTruthy();
+    expect(cartLayout).toBe(homeLayout);
+  });
+
   it('dispatches enhanced and no-JS cart mutations through the shared app shell over HTTP', async () => {
     const shell = createCommerceAppShell();
     const sessionCookie = await signInCookie(shell.db);
