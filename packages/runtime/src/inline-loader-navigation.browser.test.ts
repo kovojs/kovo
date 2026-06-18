@@ -141,6 +141,49 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.querySelector('[kovo-nav-segment="page:/slow"]')).toBeNull();
   });
 
+  it('morphs a layout segment when target-document layout chrome changes', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Start</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<nav>Old nav</nav>',
+      '<a id="to-cart" href="/cart">Cart</a>',
+      '<section kovo-nav-segment="page:/start" kovo-nav-kind="page" kovo-nav-name="page">Start</section>',
+      '</main>',
+    ].join('');
+    const currentLayout = document.querySelector('main');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>Cart</title>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+          '<nav>New nav</nav>',
+          '<a id="to-cart" href="/cart">Cart</a>',
+          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/cart', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installInlineKovoLoader(async () => ({}));
+    document.querySelector('#to-cart')?.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+
+    await vi.waitFor(() => expect(document.querySelector('nav')?.textContent).toBe('New nav'));
+
+    expect(document.querySelector('main')).not.toBe(currentLayout);
+    expect(document.querySelector('[kovo-nav-segment="page:/cart"]')?.textContent).toBe('Cart');
+  });
+
   it('collects mutation live targets from the post-navigation DOM', async () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Start</title>';
     document.body.innerHTML = [

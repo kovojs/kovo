@@ -245,6 +245,11 @@ function installInlineKovoLoader(im) {
       el.getAttribute('kovo-nav-queries') || '',
       el.getAttribute('kovo-nav-components') || '',
     ].join('|');
+  const nc = (el) => {
+    const copy = el.cloneNode(true);
+    for (const child of qa(copy, '[kovo-nav-segment]')) child.remove();
+    return copy.outerHTML;
+  };
   const ng = (href) => {
     if (location.assign) location.assign(href);
     else location.href = href;
@@ -271,7 +276,8 @@ function installInlineKovoLoader(im) {
         ;
         index < currentSegments.length &&
         index < nextSegments.length &&
-        nk(currentSegments[index]) === nk(nextSegments[index]);
+        nk(currentSegments[index]) === nk(nextSegments[index]) &&
+        nc(currentSegments[index]) === nc(nextSegments[index]);
         index += 1
       );
 

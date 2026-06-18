@@ -62,12 +62,15 @@ through client navigation.
     proves an eligible same-origin anchor fetches the target full HTML document,
     parses its head/body, preserves the unchanged layout segment, and replaces
     the changed page segment from the target document.
-- [ ] **Only unchanged layout segments persist.**
+- [x] **Only unchanged layout segments persist.**
   - "Only the leaf changes" is an optimization, not a promise. Active nav state,
     breadcrumbs, route/search-dependent chrome, auth state, layout queries,
     document attrs, or guard/boundary changes may require morphing a layout
     segment or falling back to a full GET.
-  - Evidence: pending segment-dependency fixture.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves a shared layout segment persists when its target-document chrome is
+    equivalent and the route leaf changes, and proves the layout segment morphs
+    from the target document when same-id layout chrome changes.
 - [ ] **The server remains authoritative for target route and guard results.**
   - Any client-supplied current chain is an optimization hint only. The server or
     full target document determines the destination layout chain and rendered
@@ -119,11 +122,14 @@ through client navigation.
     app-authored `kovo-nav-*`; `packages/cli/src/index.kovo-explain.test.ts`
     proves `kovo explain page --layouts` lists navigation segment ids and
     metadata.
-- [ ] **Segment preservation is based on target-document equivalence.**
+- [x] **Segment preservation is based on target-document equivalence.**
   - The runtime compares the current and target layout chains. Shared unchanged
     prefixes can persist; divergent or changed suffixes morph from the target
     document. If equivalence cannot be proven, full GET.
-  - Evidence: pending chain-compare tests.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    covers unchanged-prefix preservation, changed leaf morphing, stale response
+    suppression, and changed layout chrome morphing from the parsed target
+    document.
 - [ ] **Island lifecycle follows the existing morph rules.**
   - Islands inside preserved segments keep DOM identity and client state. Islands
     removed by a morphed segment have `ctx.signal` aborted. Islands inserted by a
@@ -158,7 +164,7 @@ through client navigation.
     SPEC must deliberately change that budget with acceptance evidence.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
     `node --experimental-strip-types - <<'NODE' ...` reported
-    `inline-loader-gzip=5219/8192`.
+    `inline-loader-gzip=5267/8192`.
 
 ## Implementation Plan
 
@@ -262,4 +268,4 @@ through client navigation.
 - [x] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
       budget change is explicitly accepted.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
-    the measured shipped source was `inline-loader-gzip=5219/8192`.
+    the measured shipped source was `inline-loader-gzip=5267/8192`.
