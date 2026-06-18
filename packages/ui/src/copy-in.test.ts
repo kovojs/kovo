@@ -58,6 +58,13 @@ const COMPONENTS = [
 
 describe('@kovojs/ui copy-in model', () => {
   it('a copied component typechecks against the PUBLIC @kovojs deps alone', () => {
+    const registry = JSON.parse(readFileSync(join(pkgRoot, 'registry.json'), 'utf8')) as {
+      components: {
+        name: string;
+        uiComponents: string[];
+      }[];
+    };
+    const registryByName = new Map(registry.components.map((entry) => [entry.name, entry]));
     const tempParent = join(pkgRoot, 'node_modules', '.tmp');
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'kovo-ui-copy-in-'));
@@ -68,9 +75,14 @@ describe('@kovojs/ui copy-in model', () => {
       const componentsDir = join(root, 'src', 'components', 'ui');
       mkdirSync(componentsDir, { recursive: true });
       for (const { file } of COMPONENTS) {
+        const componentName = file.replace(/\.tsx$/, '');
+        const registryEntry = registryByName.get(componentName);
         const source = readFileSync(join(srcDir, file), 'utf8');
         // Copy verbatim — the point is that the unmodified source compiles.
         execFileSync('cp', [join(srcDir, file), join(componentsDir, file)]);
+        for (const sibling of registryEntry?.uiComponents ?? []) {
+          execFileSync('cp', [join(srcDir, `${sibling}.ts`), join(componentsDir, `${sibling}.ts`)]);
+        }
         // Sanity: the copied source must NOT import @kovojs/ui itself.
         expect(source).not.toMatch(/from '@kovojs\/ui/);
       }

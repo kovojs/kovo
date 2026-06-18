@@ -43,7 +43,9 @@ export function Toolbar() {
 
 Use this mode when the versioned package behavior and styling are close to what your app needs. The
 root `@kovojs/ui` entry is reserved for package-wide helpers; component symbols live on component
-subpaths so each symbol has one public home.
+subpaths so each symbol has one public home. Styled components use the `@kovojs/style` system token
+contract by default, so changing the app theme seed changes their surface, foreground, border, and
+state colors without editing each component.
 
 ## Copy-in components
 
@@ -79,7 +81,8 @@ A copied component depends only on public, versioned packages:
    npm install @kovojs/style @kovojs/headless-ui @kovojs/core @kovojs/server
    ```
 
-2. Copy the component source:
+2. Copy the component source and any sibling files listed by the registry, such as the shared
+   `theme.ts` token adapter used by styled components:
 
    ```sh
    kovo add button
@@ -89,11 +92,15 @@ A copied component depends only on public, versioned packages:
 
    ```tsx
    /** @jsxImportSource @kovojs/server */
+   import { tokens } from '@kovojs/style';
    import * as style from '@kovojs/style';
    import { Button } from './components/ui/button.js';
 
    const styles = style.create({
-     danger: { backgroundColor: 'var(--danger)', color: 'white' },
+     danger: {
+       backgroundColor: tokens.sys.color.errorContainer,
+       color: tokens.sys.color.onErrorContainer,
+     },
    });
 
    export function Toolbar() {
@@ -117,18 +124,25 @@ A static component imports `@kovojs/style` and `component()`:
 ```tsx
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 export const buttonStyles = style.create({
   root: {
     alignItems: 'center',
-    borderRadius: 6,
+    borderRadius: tokens.sys.shape.cornerMedium,
     display: 'inline-flex',
     fontSize: 14,
     justifyContent: 'center',
   },
-  primary: { backgroundColor: 'var(--accent)', color: 'var(--on-accent)' },
-  ghost: { backgroundColor: 'transparent', color: 'var(--text)' },
+  primary: {
+    backgroundColor: tokens.sys.color.primary,
+    color: tokens.sys.color.onPrimary,
+  },
+  ghost: {
+    backgroundColor: 'transparent',
+    color: tokens.sys.color.onSurface,
+  },
 });
 
 export interface ButtonProps {

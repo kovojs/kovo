@@ -43,6 +43,7 @@ describe('create-kovo starter', () => {
       'docs/deployment.md',
       'docs/framework-rules.md',
       'src/styles.css',
+      'src/theme.ts',
       'src/client.ts',
       'index.html',
       'src/app.tsx',
@@ -204,6 +205,7 @@ describe('create-kovo starter', () => {
       expect(existsSync(join(root, 'src/app.fixpoint.test.ts'))).toBe(false);
       const appSource = readFileSync(join(root, 'src/app.tsx'), 'utf8');
       expect(appSource).toContain('@jsxImportSource @kovojs/server');
+      expect(appSource).toContain("import { tokens } from '@kovojs/style';");
       expect(appSource).toContain("import * as style from '@kovojs/style';");
       expect(appSource).toContain('style.create(');
       expect(appSource).toContain('style.attrs(appStyles.root)');
@@ -214,16 +216,19 @@ describe('create-kovo starter', () => {
       expect(appSource).toContain('on:click="/c/starter.client.js?v=starter-r7#Starter$announce"');
       expect(appSource).not.toContain('mx-auto');
       expect(appSource).not.toContain('text-kovo-accent');
+      expect(appSource).toContain('tokens.sys.color.primary');
+      expect(appSource).toContain("tokens.customColor('success').colorContainer");
       expect(appSource).not.toMatch(/render:\s*\(\)\s*=>\s*['"`]</);
       const appShellSource = readFileSync(join(root, 'src/app-shell.ts'), 'utf8');
       expect(appShellSource).toContain("from '@kovojs/server'");
+      expect(appShellSource).toContain("from './theme.js'");
       expect(appShellSource).toContain('createMemoryVersionedClientModuleRegistry');
       expect(appShellSource).toContain('createRequestHandler');
       expect(appShellSource).toContain('layout');
       expect(appShellSource).toContain('route');
       expect(appShellSource).not.toContain('@kovojs/server/app-shell/core');
       expect(appShellSource).not.toContain('@kovojs/server/app-shell/client-modules');
-      expect(appShellSource).toContain('criticalCss: starterAppStyleCss');
+      expect(appShellSource).toContain('criticalCss: starterCriticalCss');
       expect(appShellSource).toContain('export const starterLayout = layout<StarterRequest>');
       expect(appShellSource).toContain('data-session="${request.session?.user.id ?? \'guest\'}"');
       expect(appShellSource).toContain('db: () => starterDb');
@@ -273,8 +278,15 @@ describe('create-kovo starter', () => {
       expect(authSource).not.toContain('@better-auth/client');
       expect(authSource).not.toContain('border-slate-200');
       expect(authSource).not.toContain('bg-kovo-accent');
+      const themeSource = readFileSync(join(root, 'src/theme.ts'), 'utf8');
+      expect(themeSource).toContain('defineTheme');
+      expect(themeSource).toContain("seed: '#0f8b8d'");
+      expect(themeSource).toContain('starterThemeCss');
       expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).toContain(
         '@layer kovo-starter-base',
+      );
+      expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).toContain(
+        'var(--kovo-theme-sys-color-surface)',
       );
       expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).not.toContain(
         legacyCssSourceDirective,
@@ -540,6 +552,7 @@ describe('create-kovo starter', () => {
 
       const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
       expect(sourceCss).toContain('@layer kovo-starter-base');
+      expect(sourceCss).toContain('var(--kovo-theme-sys-color-surface)');
       expect(sourceCss).not.toContain(legacyCssTool);
 
       const sourceEntry = await fetchTextWhenReady(`${origin}/index.html`, output);
@@ -574,6 +587,7 @@ describe('create-kovo starter', () => {
 
         const documentBody = await fetchTextWhenReady(`${origin}/`, output);
         expect(output()).toContain('starter-serve/v1');
+        expect(documentBody).toContain('--kovo-theme-sys-color-primary');
         expect(documentBody).toContain(
           'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
         );
@@ -586,6 +600,7 @@ describe('create-kovo starter', () => {
 
         const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
         expect(sourceCss).toContain('@layer kovo-starter-base');
+        expect(sourceCss).toContain('var(--kovo-theme-sys-color-surface)');
         expect(sourceCss).not.toContain(legacyCssTool);
       } finally {
         await stopProcess(serveServer);
@@ -623,6 +638,7 @@ describe('create-kovo starter', () => {
         expect(output).toContain('manifest-html=1\nmanifest-client-modules=1\nmanifest-assets=1\n');
         expect(distIndex).toContain(`href="/assets/${cssFile}"`);
         expect(distIndex).toContain('<style data-kovo-critical-href="/assets/');
+        expect(distIndex).toContain('--kovo-theme-sys-color-primary');
         expect(distIndex).toContain('kv-starter-app-');
         expect(distIndex).toContain(
           'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
@@ -632,6 +648,7 @@ describe('create-kovo starter', () => {
         expect(distIndex).not.toContain('Build-only Vite asset entry');
         const exportedCss = readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8');
         expect(exportedCss).toContain('@layer kovo-starter-base');
+        expect(exportedCss).toContain('var(--kovo-theme-sys-color-surface)');
         expect(exportedCss).not.toContain(legacyCssTool);
         expect(readFileSync(join(root, 'dist/c/starter.client.js'), 'utf8')).toContain(
           'Starter$announce',
@@ -661,6 +678,7 @@ describe('create-kovo starter', () => {
 
         expect(previewOutput()).toContain('starter-static-preview/v1');
         expect(previewDocument).toContain(`href="/assets/${cssFile}"`);
+        expect(previewDocument).toContain('--kovo-theme-sys-color-primary');
         expect(previewDocument).toContain('kv-starter-app-');
         expect(previewDocument).toContain(
           'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
@@ -669,6 +687,7 @@ describe('create-kovo starter', () => {
 
         const previewCss = await fetchTextWhenReady(`${origin}/assets/${cssFile}`, previewOutput);
         expect(previewCss).toContain('@layer kovo-starter-base');
+        expect(previewCss).toContain('var(--kovo-theme-sys-color-surface)');
         expect(previewCss).not.toContain(legacyCssTool);
 
         const previewClientModule = await fetchTextWhenReady(
@@ -755,7 +774,7 @@ describe('create-kovo starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-kovo: wrote 23 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-kovo: wrote 24 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });

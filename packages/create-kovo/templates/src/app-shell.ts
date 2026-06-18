@@ -6,9 +6,11 @@ import {
   route,
 } from '@kovojs/server';
 import { App, starterAppStyleCss } from './app.js';
+import { starterThemeCss } from './theme.js';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
 const starterStylesheetHref = process.env.KOVO_STARTER_STYLESHEET_HREF ?? '/src/styles.css';
+const starterCriticalCss = `${starterThemeCss}\n${starterAppStyleCss}`;
 
 export interface StarterDb {
   cartCount: number;
@@ -65,7 +67,7 @@ export const homeRoute = route('/', {
   page(_context, request: StarterRequest) {
     return App.definition.render({ cartCount: request.db.cartCount });
   },
-  stylesheets: [{ href: starterStylesheetHref, criticalCss: starterAppStyleCss }],
+  stylesheets: [{ href: starterStylesheetHref, criticalCss: starterCriticalCss }],
 });
 
 export const app = createApp({

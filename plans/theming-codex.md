@@ -228,19 +228,36 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
 
 ## Part D — Copy-in and app ergonomics
 
-- [ ] **D1. Update the UI registry.** Ensure copied components include any shared theme/token file
+- [x] **D1. Update the UI registry.** Ensure copied components include any shared theme/token file
       they need, and that registry dependencies remain public (`@kovojs/style`,
       `@kovojs/headless-ui`, `@kovojs/core`, `@kovojs/server`).
-- [ ] **D2. Add starter theme CSS wiring.** Update create-kovo/examples so a generated app has a
+  - Evidence: `packages/ui/registry.json` lists `theme` as a sibling
+    `uiComponents` dependency for components that import the shared UI token
+    adapter, and `packages/ui/src/copy-in.test.ts` copies registry-listed
+    siblings before typechecking copied components. Verification: `node
+    packages/ui/scripts/build-registry.mjs`; `corepack pnpm exec vitest --run
+    packages/ui/src/copy-in.test.ts`.
+- [x] **D2. Add starter theme CSS wiring.** Update create-kovo/examples so a generated app has a
       seed theme stylesheet or generated `theme.ts` path from day one.
-- [ ] **D3. Document theme selection.** Show server-selected light/dark, user-selected
+  - Evidence: `packages/create-kovo/templates/src/theme.ts` defines the starter
+    seed theme, `src/app-shell.ts` inlines `starterThemeCss` with critical CSS,
+    and scaffold tests assert the theme file plus rendered theme variables.
+    Verification: `corepack pnpm exec vitest --run packages/create-kovo/src/index.test.ts`.
+- [x] **D3. Document theme selection.** Show server-selected light/dark, user-selected
       `[data-theme]`, and no-flash script placement without introducing a core runtime theme store.
-- [ ] **D4. Add a seed-color recipe.** Document how an app changes one seed/custom-color list and
+  - Evidence: `site/content/guides/styling.md` documents selecting themes with
+    document attributes/classes and explicitly avoids a runtime theme store.
+- [x] **D4. Add a seed-color recipe.** Document how an app changes one seed/custom-color list and
       regenerates or emits theme CSS for all UI components.
-- [ ] **D5. Document derived themes with `base`.** Show the pattern:
+  - Evidence: `site/content/guides/styling.md` shows `defineTheme({ seed,
+    colors, shape })`, and the create-kovo README points app authors to
+    `src/theme.ts` for seed/custom color changes.
+- [x] **D5. Document derived themes with `base`.** Show the pattern:
       `const base = defineTheme({ seed }); export const theme = defineTheme({
 base, sys: { color: { outline: base.sys.color.primary } } });` for apps that want precise
       token changes without a callback.
+  - Evidence: `site/content/guides/styling.md` documents the `base` composition
+    pattern with `sys.color.outline` and `shape.cornerSmall` overrides.
 
 ## Part E — SPEC, docs, and plan closure
 
@@ -255,8 +272,11 @@ base, sys: { color: { outline: base.sys.color.primary } } });` for apps that wan
     generated reference/system variables, custom colors, `tokens`, and `base`
     composition. Verification: `node site/scripts/api-examples-check.mjs`;
     `corepack pnpm --filter @kovojs/site run build`.
-- [ ] **E3. Update component docs.** Explain that `@kovojs/ui` components use system tokens by
+- [x] **E3. Update component docs.** Explain that `@kovojs/ui` components use system tokens by
       default and remain overrideable through `style`/`styles`.
+  - Evidence: `site/content/guides/components.md` says styled components use
+    `@kovojs/style` system tokens by default, shows token-based overrides, and
+    documents registry-copied sibling token adapter files.
 - [x] **E4. API reference coverage.** Add public JSDoc for the new root `@kovojs/style` theme
       symbols and keep api-surface gates clean.
   - Evidence: public theme exports in `packages/style/src/theme.ts` have JSDoc

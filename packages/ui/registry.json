@@ -89,7 +89,9 @@
           "component"
         ]
       },
-      "uiComponents": []
+      "uiComponents": [
+        "theme"
+      ]
     },
     {
       "name": "autocomplete",
@@ -168,7 +170,9 @@
           "component"
         ]
       },
-      "uiComponents": []
+      "uiComponents": [
+        "theme"
+      ]
     },
     {
       "name": "breadcrumb",
@@ -214,7 +218,9 @@
           "component"
         ]
       },
-      "uiComponents": []
+      "uiComponents": [
+        "theme"
+      ]
     },
     {
       "name": "card",
@@ -234,7 +240,9 @@
           "component"
         ]
       },
-      "uiComponents": []
+      "uiComponents": [
+        "theme"
+      ]
     },
     {
       "name": "checkbox-group",
@@ -615,7 +623,9 @@
           "component"
         ]
       },
-      "uiComponents": []
+      "uiComponents": [
+        "theme"
+      ]
     },
     {
       "name": "menubar",
@@ -815,7 +825,9 @@
           "component"
         ]
       },
-      "uiComponents": []
+      "uiComponents": [
+        "theme"
+      ]
     },
     {
       "name": "radio-group",
@@ -937,7 +949,9 @@
           "component"
         ]
       },
-      "uiComponents": []
+      "uiComponents": [
+        "theme"
+      ]
     },
     {
       "name": "sheet",
@@ -946,8 +960,7 @@
         "src/sheet.tsx"
       ],
       "exports": [
-        "Sheet",
-        "Drawer"
+        "Sheet"
       ],
       "dependencies": {
         "@kovojs/headless-ui": [
@@ -983,7 +996,9 @@
           "component"
         ]
       },
-      "uiComponents": []
+      "uiComponents": [
+        "theme"
+      ]
     },
     {
       "name": "slider",

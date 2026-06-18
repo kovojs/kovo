@@ -40,6 +40,7 @@ const templateFiles = [
   'docs/deployment.md',
   'docs/framework-rules.md',
   'src/styles.css',
+  'src/theme.ts',
   'src/client.ts',
   'index.html',
   'src/app.tsx',

@@ -1,16 +1,17 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 const appStyles = style.create(
   {
     action: {
-      backgroundColor: '#ecfdf5',
-      borderColor: '#a7f3d0',
-      borderRadius: 6,
+      backgroundColor: tokens.customColor('success').colorContainer,
+      borderColor: tokens.customColor('success').color,
+      borderRadius: tokens.sys.shape.cornerMedium,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#047857',
+      color: tokens.customColor('success').onColorContainer,
       fontWeight: 500,
       paddingBlock: 8,
       paddingInline: 16,
@@ -21,13 +22,13 @@ const appStyles = style.create(
       maxWidth: 576,
     },
     eyebrow: {
-      color: '#52606d',
+      color: tokens.sys.color.onSurfaceVariant,
       fontSize: 14,
       fontWeight: 500,
       textTransform: 'uppercase',
     },
     heading: {
-      color: '#0f8b8d',
+      color: tokens.sys.color.primary,
       fontSize: 30,
       fontWeight: 600,
       letterSpacing: 0,
@@ -35,7 +36,7 @@ const appStyles = style.create(
       margin: 0,
     },
     root: {
-      color: '#17202a',
+      color: tokens.sys.color.onSurface,
       display: 'grid',
       marginInline: 'auto',
       maxWidth: 768,
@@ -48,7 +49,7 @@ const appStyles = style.create(
       rowGap: 20,
     },
     status: {
-      color: '#52606d',
+      color: tokens.sys.color.onSurfaceVariant,
       fontSize: 14,
     },
     toolbar: {

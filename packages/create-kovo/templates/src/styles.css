@@ -1,7 +1,7 @@
 @layer kovo-starter-base {
   :root {
-    color: #17202a;
-    background: #f8fafc;
+    color: var(--kovo-theme-sys-color-on-surface);
+    background: var(--kovo-theme-sys-color-surface);
     font-family:
       Inter,
       ui-sans-serif,
