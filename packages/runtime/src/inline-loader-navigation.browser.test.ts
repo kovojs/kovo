@@ -692,7 +692,7 @@ describe('browser inline loader enhanced navigation', () => {
 
       await vi.waitFor(() => expect(document.title).toBe('Cart'));
 
-      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView).toHaveBeenCalled();
       expect(scrollTo).not.toHaveBeenCalledWith(0, 0);
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
@@ -740,7 +740,8 @@ describe('browser inline loader enhanced navigation', () => {
       await vi.waitFor(() => expect(document.title).toBe('API Core'));
 
       expect(location.href).toBe(new URL('/api/core/#symbols%2Ffragment', initialUrl).href);
-      expect(scrolledIds).toEqual(['symbols/fragment']);
+      expect(scrolledIds.length).toBeGreaterThanOrEqual(1);
+      expect(scrolledIds.every((id) => id === 'symbols/fragment')).toBe(true);
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
     }
@@ -792,7 +793,8 @@ describe('browser inline loader enhanced navigation', () => {
 
       await vi.waitFor(() => expect(document.title).toBe('API'));
 
-      expect(scrolledIds).toEqual(['symbols/property value']);
+      expect(scrolledIds.length).toBeGreaterThanOrEqual(1);
+      expect(scrolledIds.every((id) => id === 'symbols/property value')).toBe(true);
       expect(scrollTo).not.toHaveBeenCalledWith(0, 0);
       expect(pushState).toHaveBeenCalledWith(
         {},
@@ -869,7 +871,8 @@ describe('browser inline loader enhanced navigation', () => {
       await vi.waitFor(() => expect(document.title).toBe('API'));
 
       expect(location.href).toBe(new URL('/api#symbols%2Fproperty%20value', initialUrl).href);
-      expect(scrolledIds).toEqual(['symbols/property value']);
+      expect(scrolledIds.length).toBeGreaterThanOrEqual(1);
+      expect(scrolledIds.every((id) => id === 'symbols/property value')).toBe(true);
       expect(scrollTo).not.toHaveBeenCalledWith(56, 78);
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
@@ -963,6 +966,93 @@ describe('browser inline loader enhanced navigation', () => {
     }
   });
 
+  it('retries target-document hash scrolling after post-morph layout shifts', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-symbol" href="/api#symbols%2Fshifted">Symbol</a>',
+      '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+      '</main>',
+    ].join('');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>API</title>',
+          '</head><body>',
+          '<header id="fixed-docs-header">Docs</header>',
+          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+          '<h2 id="symbols/shifted">Shifted target</h2>',
+          '</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/api#symbols%2Fshifted', location.href).href,
+    }));
+    const originalGetComputedStyle = globalThis.getComputedStyle;
+    const originalGetBoundingClientRect = currentElementGetBoundingClientRect();
+    let targetReads = 0;
+    Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      if ((this as Element).id === 'fixed-docs-header') {
+        return {
+          bottom: 72,
+          height: 72,
+          left: 0,
+          right: 800,
+          toJSON: () => ({}),
+          top: 0,
+          width: 800,
+          x: 0,
+          y: 0,
+        };
+      }
+      if ((this as Element).id === 'symbols/shifted') {
+        targetReads += 1;
+        const top = targetReads === 1 ? 5000 : 220;
+        return {
+          bottom: top + 30,
+          height: 30,
+          left: 0,
+          right: 400,
+          toJSON: () => ({}),
+          top,
+          width: 400,
+          x: 0,
+          y: top,
+        };
+      }
+      return originalGetBoundingClientRect.call(this);
+    };
+    vi.stubGlobal('getComputedStyle', (element: Element) => {
+      if (element.id === 'fixed-docs-header') {
+        return { position: 'sticky', top: '0px' } as CSSStyleDeclaration;
+      }
+      return { position: 'static', top: 'auto' } as CSSStyleDeclaration;
+    });
+    const scrollTo = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', scrollTo);
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    try {
+      installNavigationLoader();
+      dispatchAnchorLikeClick('/api#symbols%2Fshifted');
+
+      await vi.waitFor(() => expect(document.title).toBe('API'));
+      await vi.waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 148));
+
+      expect(scrollTo).toHaveBeenCalledWith(0, 4928);
+      expect(targetReads).toBeGreaterThanOrEqual(2);
+    } finally {
+      Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+      vi.stubGlobal('getComputedStyle', originalGetComputedStyle);
+    }
+  });
+
   it('scrolls to encoded-id and named hash anchors from target documents', async () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
     document.body.innerHTML = [
@@ -1008,13 +1098,13 @@ describe('browser inline loader enhanced navigation', () => {
       installNavigationLoader();
       dispatchAnchorLikeClick('/api#symbols%252Fencoded');
       await vi.waitFor(() => expect(document.title).toBe('API'));
-      expect(scrolledTargets).toEqual(['symbols%2Fencoded']);
+      expect(scrolledTargets.length).toBeGreaterThanOrEqual(1);
+      expect(scrolledTargets.every((target) => target === 'symbols%2Fencoded')).toBe(true);
 
       document.title = 'Docs';
       dispatchAnchorLikeClick('/api#legacy-symbol');
-      await vi.waitFor(() =>
-        expect(scrolledTargets).toEqual(['symbols%2Fencoded', 'legacy-symbol']),
-      );
+      await vi.waitFor(() => expect(scrolledTargets.at(-1)).toBe('legacy-symbol'));
+      expect(scrolledTargets).toContain('symbols%2Fencoded');
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
     }
@@ -1091,7 +1181,8 @@ describe('browser inline loader enhanced navigation', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(document.title).toBe('Fast');
-      expect(scrolledIds).toEqual(['fast']);
+      expect(scrolledIds.length).toBeGreaterThanOrEqual(1);
+      expect(scrolledIds.every((id) => id === 'fast')).toBe(true);
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
     }
@@ -1152,7 +1243,8 @@ describe('browser inline loader enhanced navigation', () => {
       dispatchAnchorLikeClick('/api#symbols%2Fproperty%20value');
       await vi.waitFor(() => expect(document.title).toBe('API'));
 
-      expect(scrolledTargets).toEqual(['symbols/property value']);
+      expect(scrolledTargets.length).toBeGreaterThanOrEqual(1);
+      expect(scrolledTargets.every((target) => target === 'symbols/property value')).toBe(true);
       expect(location.href).toBe(new URL('/api#symbols%2Fproperty%20value', initialUrl).href);
 
       vi.stubGlobal('scrollX', 56);
@@ -1169,7 +1261,8 @@ describe('browser inline loader enhanced navigation', () => {
 
       expect(location.href).toBe(new URL('/api#symbols%2Fproperty%20value', initialUrl).href);
       expect(scrollTo).toHaveBeenCalledWith(56, 78);
-      expect(scrolledTargets).toEqual(['symbols/property value']);
+      expect(scrolledTargets.length).toBeGreaterThanOrEqual(1);
+      expect(scrolledTargets.every((target) => target === 'symbols/property value')).toBe(true);
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
     }
@@ -1217,7 +1310,8 @@ describe('browser inline loader enhanced navigation', () => {
 
       await vi.waitFor(() => expect(document.title).toBe('API'));
 
-      expect(scrolledIds).toEqual(['symbols/fresh-popstate']);
+      expect(scrolledIds.length).toBeGreaterThanOrEqual(1);
+      expect(scrolledIds.every((id) => id === 'symbols/fresh-popstate')).toBe(true);
       expect(scrollTo).not.toHaveBeenCalledWith(0, 0);
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
@@ -1295,7 +1389,8 @@ describe('browser inline loader enhanced navigation', () => {
 
       expect(click.defaultPrevented).toBe(true);
       expect(fetch).toHaveBeenCalledTimes(1);
-      expect(scrolledIds).toEqual(['symbols/details']);
+      expect(scrolledIds.length).toBeGreaterThanOrEqual(1);
+      expect(scrolledIds.every((id) => id === 'symbols/details')).toBe(true);
       expect(pushState).toHaveBeenCalledWith(
         {},
         '',

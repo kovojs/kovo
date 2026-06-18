@@ -162,13 +162,6 @@ export const PrevNext = component({
 // Source-link glyph for a symbol row (links to the defining file + line).
 const SOURCE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
 
-// Scroll-spy for the API rail: highlight the symbol currently under the header,
-// expand its category, and keep it scrolled into view. A single
-// IntersectionObserver over the heading ids; degrades to the plain linked list
-// with no JS. Inlined (not an island) because scroll-spy is always-on page
-// behavior, not a lazy interaction.
-const API_NAV_SCRIPT = `<script>(function(){var n=document.querySelector('.api-nav');if(!n)return;var L={};n.querySelectorAll('a[href^="#"]').forEach(function(a){L[decodeURIComponent(a.getAttribute('href').slice(1))]=a;});var H=[].slice.call(document.querySelectorAll('.prose h2[id],.prose h3[id],.prose h4[id]'));if(!H.length)return;var cur;function set(id){if(!id||id===cur)return;var p=L[cur];if(p)p.classList.remove('active');var c=L[id];if(c){c.classList.add('active');var d=c.closest('details');if(d)d.open=true;c.scrollIntoView({block:'nearest'});}cur=id;}var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)set(e.target.id);});},{rootMargin:'-72px 0px -75% 0px'});H.forEach(function(h){io.observe(h);});})();</script>`;
-
 export interface ApiSidebarProps {
   apiSidebar: ApiSidebarData;
 }
@@ -221,7 +214,6 @@ export const ApiSidebar = component({
           ))}
         </details>
       ))}
-      {API_NAV_SCRIPT}
     </nav>
   ),
 });

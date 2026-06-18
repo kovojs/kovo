@@ -94,9 +94,74 @@ async function assertHashBelowHeader(page, hash, label) {
         document.getElementsByName(raw)[0];
       const header = document.querySelector('.site-bar');
       if (!target || !header) return false;
-      return target.getBoundingClientRect().top >= header.getBoundingClientRect().bottom - 1;
+      const targetTop = target.getBoundingClientRect().top;
+      return (
+        targetTop >= header.getBoundingClientRect().bottom - 1 && targetTop < window.innerHeight
+      );
     }, hash),
   );
+}
+
+async function assertApiRailState(page, hash, label) {
+  try {
+    await page.waitForFunction(
+      (expectedHash) =>
+        document
+          .querySelector(`.api-nav li > a:first-child[href="${expectedHash}"]`)
+          ?.classList.contains('active') === true,
+      hash,
+      { timeout: 1500 },
+    );
+  } catch {}
+  await check(label, () =>
+    page.evaluate((expectedHash) => {
+      const nav = document.querySelector('.api-nav');
+      if (!nav) return false;
+      const link = Array.from(nav.querySelectorAll('li > a:first-child')).find(
+        (candidate) => candidate.getAttribute('href') === expectedHash,
+      );
+      const raw = expectedHash.slice(1);
+      let decoded = raw;
+      try {
+        decoded = decodeURIComponent(raw);
+      } catch {}
+      const target =
+        document.getElementById(decoded) ??
+        document.getElementById(raw) ??
+        document.getElementsByName(decoded)[0] ??
+        document.getElementsByName(raw)[0];
+      const header = document.querySelector('.site-bar');
+      const linkRect = link?.getBoundingClientRect();
+      const navRect = nav.getBoundingClientRect();
+      const targetRect = target?.getBoundingClientRect();
+      const headerBottom = header?.getBoundingClientRect().bottom ?? 0;
+      const detailsOpen =
+        link !== undefined &&
+        Array.from(nav.querySelectorAll('details'))
+          .filter((details) => details.contains(link))
+          .every((details) => details.open);
+
+      return (
+        link?.classList.contains('active') === true &&
+        detailsOpen &&
+        linkRect !== undefined &&
+        linkRect.top >= navRect.top - 1 &&
+        linkRect.bottom <= navRect.bottom + 1 &&
+        targetRect !== undefined &&
+        targetRect.top >= headerBottom - 1 &&
+        targetRect.top < window.innerHeight
+      );
+    }, hash),
+  );
+}
+
+async function deepApiRailHashFor(page, path) {
+  return page.evaluate(async (urlPath) => {
+    const html = await fetch(urlPath).then((response) => response.text());
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const links = Array.from(doc.querySelectorAll('.api-nav li > a:first-child'));
+    return links.at(-1)?.getAttribute('href');
+  }, path);
 }
 
 const server = createServer(async (request, response) => {
@@ -161,7 +226,7 @@ try {
     );
     await railLink.click();
     await page.waitForFunction((expectedHash) => location.hash === expectedHash, hash);
-    await check('same-page API rail hash remains native', () =>
+    await check('same-page API rail hash stays local to the current document', () =>
       page.evaluate(
         ({ expectedHash, expectedCount }) =>
           location.pathname === '/api/core/' &&
@@ -171,24 +236,42 @@ try {
       ),
     );
     await assertHashBelowHeader(page, hash, 'same-page API rail hash lands below sticky header');
+    await assertApiRailState(
+      page,
+      hash,
+      'same-page API rail marks active symbol, opens details, and scrolls the rail',
+    );
 
     await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
     await installNavigationProbe(page);
+    const serverHash = await deepApiRailHashFor(page, '/api/server/');
+    if (!serverHash) {
+      failures.push('API server rail exposes a symbol hash');
+    }
     await page.evaluate((targetHash) => {
       const link = document.createElement('a');
       link.id = 'synthetic-api-symbol-link';
-      link.href = `/api/core/${targetHash}`;
+      link.href = `/api/server/${targetHash}`;
       link.textContent = 'API symbol';
       document.body.append(link);
-    }, hash);
+    }, serverHash);
     await assertEnhancedClick(
       page,
       () => page.click('#synthetic-api-symbol-link'),
-      '/api/core/',
+      '/api/server/',
       'cross-page API symbol click',
     );
-    await page.waitForFunction((expectedHash) => location.hash === expectedHash, hash);
-    await assertHashBelowHeader(page, hash, 'cross-page API rail hash lands below sticky header');
+    await page.waitForFunction((expectedHash) => location.hash === expectedHash, serverHash);
+    await assertHashBelowHeader(
+      page,
+      serverHash,
+      'cross-page API rail hash lands below sticky header',
+    );
+    await assertApiRailState(
+      page,
+      serverHash,
+      'cross-page API rail reinitializes active symbol, details, and rail scroll',
+    );
 
     await page.click('.site-nav a[href="/docs/why-kovo/"]');
     await page.waitForFunction(() => location.pathname === '/docs/why-kovo/');
@@ -197,18 +280,27 @@ try {
       document.querySelector('#synthetic-api-symbol-link')?.remove();
       const link = document.createElement('a');
       link.id = 'synthetic-api-symbol-link';
-      link.href = `/api/core/${targetHash}`;
+      link.href = `/api/server/${targetHash}`;
       link.textContent = 'API symbol';
       document.body.append(link);
-    }, hash);
+    }, serverHash);
     await assertEnhancedClick(
       page,
       () => page.click('#synthetic-api-symbol-link'),
-      '/api/core/',
+      '/api/server/',
       'fresh API symbol click',
     );
-    await page.waitForFunction((expectedHash) => location.hash === expectedHash, hash);
-    await assertHashBelowHeader(page, hash, 'fresh API symbol click ignores stale saved scroll');
+    await page.waitForFunction((expectedHash) => location.hash === expectedHash, serverHash);
+    await assertHashBelowHeader(
+      page,
+      serverHash,
+      'fresh API symbol click ignores stale saved scroll',
+    );
+    await assertApiRailState(
+      page,
+      serverHash,
+      'fresh API symbol click keeps rail active after stale scroll exists',
+    );
 
     const apiScroll = await page.evaluate(() => window.scrollY);
     await page.click('.site-nav a[href="/docs/why-kovo/"]');
@@ -219,8 +311,8 @@ try {
     });
     await page.evaluate(() => history.back());
     await page.waitForFunction(
-      (expectedHash) => location.pathname === '/api/core/' && location.hash === expectedHash,
-      hash,
+      (expectedHash) => location.pathname === '/api/server/' && location.hash === expectedHash,
+      serverHash,
     );
     await page.waitForFunction((expectedY) => Math.abs(window.scrollY - expectedY) <= 2, apiScroll);
     await check('back restores API symbol scroll below sticky header', () =>
@@ -241,11 +333,17 @@ try {
             Math.abs(window.scrollY - expectedY) <= 2 &&
             target &&
             header &&
-            target.getBoundingClientRect().top >= header.getBoundingClientRect().bottom - 1
+            target.getBoundingClientRect().top >= header.getBoundingClientRect().bottom - 1 &&
+            target.getBoundingClientRect().top < window.innerHeight
           );
         },
-        { expectedHash: hash, expectedY: apiScroll },
+        { expectedHash: serverHash, expectedY: apiScroll },
       ),
+    );
+    await assertApiRailState(
+      page,
+      serverHash,
+      'back restoration keeps API rail active and visible',
     );
     await page.evaluate(() => history.forward());
     await page.waitForFunction(() => location.pathname === '/docs/why-kovo/');

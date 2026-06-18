@@ -43,6 +43,11 @@ const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label
 // logic stays L1-lazy, SPEC §4.4/§7 L1). Esc is handled natively by <dialog>.
 const SEARCH_HOTKEY = `(()=>{addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&!e.altKey&&(e.key==='k'||e.key==='K')){e.preventDefault();const d=document.getElementById('site-search');if(d&&!d.open){d.showModal();const i=d.querySelector('input');if(i)i.focus();}}})})()`;
 
+// The API symbol rail is page content, but its behavior must survive enhanced
+// navigation (SPEC §8) because scripts inserted by DOM morphing do not execute.
+// Install one document-level observer and re-bind it after Kovo swaps pages.
+const API_NAV_SCRIPT = `(()=>{let observer,setActive;const all=(selector,root=document)=>Array.from(root.querySelectorAll(selector));const decode=(value)=>{try{return decodeURIComponent(value)}catch{return value}};const targetFor=(hash)=>{const raw=hash.slice(1);const decoded=decode(raw);return document.getElementById(decoded)||document.getElementById(raw)||document.getElementsByName(decoded)[0]||document.getElementsByName(raw)[0]};const stickyOffset=()=>document.querySelector('.site-bar')?.getBoundingClientRect().bottom||0;const scrollHash=(hash)=>{const target=targetFor(hash);if(!target)return false;const rect=target.getBoundingClientRect();scrollTo(scrollX,scrollY+rect.top-stickyOffset());return true};function init(){observer?.disconnect();observer=undefined;const nav=document.querySelector('.api-nav');if(!nav){setActive=undefined;return}const links={};all('a[href^="#"]',nav).forEach((link)=>{const raw=link.getAttribute('href').slice(1);links[raw]=link;links[decode(raw)]=link});let current;function set(id){if(!id||id===current)return;links[current]?.classList.remove('active');const link=links[id]||links[decode(id)];if(link){link.classList.add('active');for(let parent=link.parentElement;parent&&parent!==nav.parentElement;parent=parent.parentElement){if(parent.tagName==='DETAILS')parent.open=true}link.scrollIntoView({block:'nearest'})}current=id}setActive=set;function syncHash(){if(!location.hash)return false;const raw=location.hash.slice(1);const id=decode(raw);if(links[id]||links[raw]){set(id);return true}return false}const headings=all('.prose h2[id],.prose h3[id],.prose h4[id]');if(!syncHash()&&headings[0])set(headings[0].id);if(!headings.length||!('IntersectionObserver'in window))return;observer=new IntersectionObserver((entries)=>{entries.forEach((entry)=>{if(entry.isIntersecting)set(entry.target.id)})},{rootMargin:'-72px 0px -75% 0px'});headings.forEach((heading)=>observer.observe(heading))}addEventListener('click',(event)=>{if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;const link=event.target?.closest?.('.api-nav a[href^="#"]');if(!link)return;const hash=link.getAttribute('href');if(!hash||!scrollHash(hash))return;event.preventDefault();history.pushState(null,'',hash);setActive?.(decode(hash.slice(1)))},{capture:true});addEventListener('kovo:navigate',()=>setTimeout(init));addEventListener('hashchange',()=>setTimeout(()=>{scrollHash(location.hash);init()}));if(document.readyState==='loading')addEventListener('DOMContentLoaded',init,{once:true});else init()})()`;
+
 export const siteDocumentTemplate: DocumentTemplate = ({ parts }) =>
   [
     '<!doctype html>',
@@ -52,6 +57,7 @@ export const siteDocumentTemplate: DocumentTemplate = ({ parts }) =>
     '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
     `<script>${THEME_SCRIPT}</script>`,
     `<script>${SEARCH_HOTKEY}</script>`,
+    `<script>${API_NAV_SCRIPT}</script>`,
     FONT_PRELOADS,
     parts.head,
     parts.queryScripts.join(''),
