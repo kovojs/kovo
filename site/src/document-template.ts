@@ -20,7 +20,7 @@ const FONT_PRELOADS = [
   '<link rel="preload" href="/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>',
 ].join('');
 
-const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label="Search documentation"><input type="search" class="search-input" placeholder="Search docs&hellip;" on:input="${clientHrefs.search}#query" kovo-state="{}"><ul class="search-results" id="site-search-results"></ul></dialog>`;
+const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label="Search documentation"><input type="search" class="search-input" placeholder="Search docs&hellip;" on:input="${clientHrefs.search}#query" on:keydown="${clientHrefs.search}#navigate" kovo-state="{}"><ul class="search-results" id="site-search-results"></ul></dialog>`;
 
 // ⌘K / Ctrl-K opens the search dialog. This must be an always-present inline
 // listener, not part of the lazy search island: the island only loads on first

@@ -110,6 +110,22 @@ try {
   );
   const firstResult = await page.locator('#site-search-results a').first().getAttribute('href');
   check(Boolean(firstResult?.startsWith('/')), 'JS: search returns linked results');
+  const secondResult = await page.locator('#site-search-results a').nth(1).getAttribute('href');
+  await page.keyboard.press('ArrowDown');
+  await page.waitForFunction(
+    (href) => document.querySelector('#site-search-results li.active a')?.getAttribute('href') === href,
+    secondResult,
+  );
+  check(
+    (await page.locator('#site-search-results li.active a').getAttribute('href')) === secondResult,
+    'JS: search keyboard ArrowDown selects next result',
+  );
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(
+    (href) => location.pathname + location.hash === href,
+    secondResult,
+  );
+  check(true, 'JS: search keyboard Enter opens active result');
   check(scriptRequests.includes('/search-index.json'), 'JS: index fetched on demand');
 
   await page.keyboard.press('Escape');

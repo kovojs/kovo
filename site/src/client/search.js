@@ -11,6 +11,7 @@
  */
 
 let indexPromise;
+let selectedIndex = -1;
 
 function loadIndex() {
   indexPromise ??= fetch('/search-index.json').then((response) => response.json());
@@ -50,12 +51,39 @@ function score(entry, terms) {
 /** A result row: kind/section badge, the symbol-or-page title, and the section
  * path. API-symbol rows deep-link straight to the symbol anchor. */
 function renderResults(element, entries) {
+  selectedIndex = entries.length > 0 ? 0 : -1;
   element.innerHTML = entries
-    .map((entry) => {
+    .map((entry, index) => {
       const badge = entry.kind ? entry.kind : 'page';
-      return `<li><a href="${escapeHtml(entry.url)}"><span class="result-kind" data-kind="${escapeHtml(badge)}">${escapeHtml(badge)}</span><span class="result-body"><span class="result-title">${escapeHtml(entry.title)}</span><span class="result-section">${escapeHtml(entry.section)}</span></span></a></li>`;
+      const active = index === selectedIndex;
+      return `<li${active ? ' class="active"' : ''}><a href="${escapeHtml(entry.url)}"${active ? ' aria-current="true"' : ''}><span class="result-kind" data-kind="${escapeHtml(badge)}">${escapeHtml(badge)}</span><span class="result-body"><span class="result-title">${escapeHtml(entry.title)}</span><span class="result-section">${escapeHtml(entry.section)}</span></span></a></li>`;
     })
     .join('');
+}
+
+function resultItems() {
+  return [...(document.getElementById('site-search-results')?.querySelectorAll('li') ?? [])];
+}
+
+function setSelectedIndex(nextIndex) {
+  const items = resultItems();
+  if (items.length === 0) {
+    selectedIndex = -1;
+    return;
+  }
+
+  selectedIndex = (nextIndex + items.length) % items.length;
+  for (const [index, item] of items.entries()) {
+    const active = index === selectedIndex;
+    item.classList.toggle('active', active);
+    const link = item.querySelector('a');
+    if (active) {
+      link?.setAttribute('aria-current', 'true');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      link?.removeAttribute('aria-current');
+    }
+  }
 }
 
 export function open(event) {
@@ -72,6 +100,7 @@ export async function query(event) {
   const results = document.getElementById('site-search-results');
   if (!results) return;
   if (terms.length === 0) {
+    selectedIndex = -1;
     results.innerHTML = '';
     return;
   }
@@ -83,4 +112,28 @@ export async function query(event) {
     .slice(0, 12)
     .map((match) => match.entry);
   renderResults(results, matches);
+}
+
+export function navigate(event) {
+  const items = resultItems();
+  if (items.length === 0) return;
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    setSelectedIndex(selectedIndex + 1);
+    return;
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    setSelectedIndex(selectedIndex - 1);
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    const link = items[selectedIndex < 0 ? 0 : selectedIndex]?.querySelector('a');
+    if (!link) return;
+    event.preventDefault();
+    window.location.href = link.href;
+  }
 }
