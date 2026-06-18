@@ -22,7 +22,8 @@ with documented workarounds.
       design: priority hints between deferred fragments and query-JSON placement
       guarantees under HTTP/1.1 fallbacks.
 - [x] **13.4 Persistent cross-navigation elements.** Resolved for framework v1 by
-      `SPEC.md` §8 and `plans/enhanced-navigation.md`: authors still write real
+      `SPEC.md` §8 and the archived `plans/enhanced-navigation.md` ledger:
+      authors still write real
       routes and anchors, and JS-off navigation is a full document. JS-on enhanced
       navigation may preserve only unchanged compiler-stamped layout DOM after
       fetching the canonical target document; this is not app-authored persistent

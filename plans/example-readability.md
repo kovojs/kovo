@@ -128,8 +128,8 @@ Example source should prioritize the app-author mental model:
     fixtures (`packages/conformance-fixtures/src/server-fixtures.ts`) and
     webhook verification remains covered by core/server tests; this session did
     not run the full webhook/storage suites, so this risk stays open.
-- [x] `plans/app-authoring-ergonomics.md` item 7 already tracks retiring static
-      export from interactive examples; do not double-implement that work without
-      updating both ledgers.
+- [x] The archived `plans/app-authoring-ergonomics.md` ledger item 7 tracked
+      retiring static export from interactive examples; do not double-implement
+      that work without opening a new active ledger.
   - Evidence: item 7 is updated with the static-export/read-only removal and
     verification evidence.

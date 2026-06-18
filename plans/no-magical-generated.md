@@ -132,6 +132,14 @@ internals, emit/check scripts, and narrowly named artifact tests.
     add page-specific CSS while remaining visible to page hints, fragments,
     static export, and `kovo explain page`.
 
+## Docs Site
+
+- [ ] Migrate the docs site to the same authored styling format as the examples.
+  - Component-specific styles should live next to the component that owns them,
+    authored JSX should use `style={styles.foo}` / `style={[...]}`, and
+    `style.attrs(...)` should remain a low-level runtime or package-internal
+    escape hatch rather than the app-author-facing pattern.
+
 ## Verification
 
 - [ ] Add/extend a guard command that proves authored example source has no
