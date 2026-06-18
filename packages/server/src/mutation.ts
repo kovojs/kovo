@@ -1101,7 +1101,8 @@ async function renderFragmentChunks(
   return chunks;
 }
 
-async function renderLiveTargetChunks<Request>(
+/** @internal Render server-owned live-target fragment wire for dev HMR and mutation refresh. */
+export async function renderLiveTargetChunks<Request>(
   renderers: readonly LiveTargetRenderer<Request>[],
   targets: readonly MutationLiveTargetDescriptor[],
   input: unknown,

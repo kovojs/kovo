@@ -7,10 +7,22 @@ import {
   renderDiagnosticDocument,
   type DiagnosticDocumentDiagnostic,
 } from './document-diagnostics.js';
-import { toNodeHandler, writeWebResponseToNode, type NodeRequestHandler } from './node.js';
+import {
+  nodeRequestToWebRequest,
+  toNodeHandler,
+  writeWebResponseToNode,
+  type NodeRequestHandler,
+} from './node.js';
+import { renderLiveTargetChunks } from './mutation.js';
+import { readMutationWireHeaders } from './mutation-wire.js';
 import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
 import { renderFragmentWireHtml } from './wire-html.js';
+
+const kovoHmrClientPath = '/@kovo/hmr-client';
+const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
+const kovoHmrLiveTargetRefreshPath = '/@kovo/hmr/refresh/live-targets';
+const kovoHmrClientScript = `<script type="module" src="${kovoHmrClientPath}"></script>`;
 
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Minimal Vite dev-server
@@ -236,24 +248,36 @@ export function kovoAppShellViteDevPlugin(
             return;
           }
 
+          const hmrResponse = renderKovoAppShellViteDevHmrResponse(app, request);
+          if (hmrResponse) {
+            return hmrResponse
+              .then((webResponse) =>
+                writeWebResponseToNode(webResponse, response, request.method ?? 'GET'),
+              )
+              .catch(next);
+          }
+
           const diagnosticResponse = renderKovoAppShellViteDevDiagnosticResponse(
             app,
             request,
             options.devDiagnostics,
           );
           if (diagnosticResponse) {
-            return writeKovoAppShellViteDevRouteResponse(diagnosticResponse, request, response).catch(
-              next,
-            );
+            return writeKovoAppShellViteDevRouteResponse(
+              injectKovoHmrScriptIntoRouteResponse(diagnosticResponse),
+              request,
+              response,
+            ).catch(next);
           }
 
+          const devResponse = injectKovoHmrScriptIntoNodeResponse(response, request);
           return readKovoAppShellViteDevNodeHandler(
             module,
             app,
             options,
             options.nodeHandlerExportName,
             moduleId,
-          )(request, response, next);
+          )(request, devResponse, next);
         })
         .catch(next);
     });
@@ -280,6 +304,444 @@ async function writeKovoAppShellViteDevRouteResponse(
   );
 }
 
+function renderKovoAppShellViteDevHmrResponse(
+  app: KovoApp,
+  request: IncomingMessage,
+): Promise<Response> | undefined {
+  if (!request.url) return undefined;
+
+  const url = new URL(request.url, 'http://kovo.local');
+  if (url.pathname === kovoHmrClientPath) return Promise.resolve(renderKovoHmrClientResponse());
+  if (url.pathname === kovoHmrRouteRefreshPath) {
+    return renderKovoHmrRouteRefreshResponse(app, request, url);
+  }
+  if (url.pathname === kovoHmrLiveTargetRefreshPath) {
+    return renderKovoHmrLiveTargetRefreshResponse(app, request, url);
+  }
+
+  return undefined;
+}
+
+function renderKovoHmrClientResponse(): Response {
+  return new Response(kovoHmrClientSource(), {
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/javascript; charset=utf-8',
+    },
+    status: 200,
+  });
+}
+
+async function renderKovoHmrRouteRefreshResponse(
+  app: KovoApp,
+  request: IncomingMessage,
+  endpointUrl: URL,
+): Promise<Response> {
+  if (!requestMethodIs(request, 'GET', 'HEAD')) {
+    return hmrRefreshTextResponse('Kovo HMR route refresh only accepts GET or HEAD.', 405, app, {
+      refreshKind: 'route',
+    });
+  }
+
+  const webRequest = nodeRequestToWebRequest(request);
+  const targetUrl = hmrRefreshTargetUrl(endpointUrl, webRequest, request);
+  if (targetUrl instanceof Response) return targetUrl;
+
+  const routeResponse = await createRequestHandler(app)(
+    new Request(targetUrl, { headers: webRequest.headers, method: 'GET' }),
+  );
+
+  return withKovoHmrRefreshHeaders(
+    await injectKovoHmrScriptIntoWebResponse(routeResponse),
+    app,
+    'route',
+    previousHmrBuildToken(endpointUrl, request),
+  );
+}
+
+async function renderKovoHmrLiveTargetRefreshResponse(
+  app: KovoApp,
+  request: IncomingMessage,
+  endpointUrl: URL,
+): Promise<Response> {
+  if (!requestMethodIs(request, 'GET', 'HEAD', 'POST')) {
+    return hmrRefreshTextResponse(
+      'Kovo HMR live-target refresh only accepts GET, HEAD, or POST.',
+      405,
+      app,
+      {
+        refreshKind: 'live-targets',
+      },
+    );
+  }
+
+  const wireHeaders = readMutationWireHeaders(request.headers);
+  if (wireHeaders.liveTargetDescriptors.length === 0) {
+    return hmrRefreshTextResponse(
+      'Kovo HMR live-target refresh requires Kovo-Live-Targets.',
+      400,
+      app,
+      {
+        fallback: 'full-reload',
+        refreshKind: 'live-targets',
+      },
+    );
+  }
+
+  const webRequest = nodeRequestToWebRequest(request);
+  const targetUrl = hmrRefreshTargetUrl(endpointUrl, webRequest, request);
+  if (targetUrl instanceof Response) return targetUrl;
+
+  const chunks = await renderLiveTargetChunks(
+    app.liveTargetRenderers,
+    wireHeaders.liveTargetDescriptors,
+    {},
+    new Request(targetUrl, { headers: webRequest.headers, method: 'GET' }),
+    undefined,
+  );
+
+  if (chunks.length === 0) {
+    return hmrRefreshTextResponse(
+      'Kovo HMR live-target refresh found no matching renderers.',
+      409,
+      app,
+      {
+        fallback: 'full-reload',
+        refreshKind: 'live-targets',
+      },
+    );
+  }
+
+  return new Response(chunks.join('\n'), {
+    headers: hmrRefreshHeaders(
+      app,
+      'live-targets',
+      {
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      },
+      previousHmrBuildToken(endpointUrl, request),
+    ),
+    status: 200,
+  });
+}
+
+function hmrRefreshTargetUrl(
+  endpointUrl: URL,
+  request: Request,
+  nodeRequest: IncomingMessage,
+): URL | Response {
+  const target =
+    endpointUrl.searchParams.get('url') ??
+    readHeader(nodeRequest.headers, 'Kovo-Current-Url') ??
+    readHeader(nodeRequest.headers, 'Referer');
+  if (!target) {
+    return hmrRefreshTextResponse(
+      'Kovo HMR refresh requires a current document URL.',
+      400,
+      undefined,
+      {
+        fallback: 'full-reload',
+        refreshKind: 'route',
+      },
+    );
+  }
+
+  const targetUrl = new URL(target, request.url);
+  if (targetUrl.origin !== new URL(request.url).origin || isKovoHmrRequest(targetUrl)) {
+    return hmrRefreshTextResponse(
+      'Kovo HMR refresh current document URL is not refreshable.',
+      400,
+      undefined,
+      {
+        fallback: 'full-reload',
+        refreshKind: 'route',
+      },
+    );
+  }
+
+  return targetUrl;
+}
+
+function requestMethodIs(request: IncomingMessage, ...methods: readonly string[]): boolean {
+  return methods.includes(request.method ?? 'GET');
+}
+
+function withKovoHmrRefreshHeaders(
+  response: Response,
+  app: KovoApp,
+  refreshKind: 'live-targets' | 'route',
+  previousBuildToken: string | undefined,
+): Response {
+  return new Response(response.body, {
+    headers: hmrRefreshHeaders(app, refreshKind, response.headers, previousBuildToken),
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
+
+function hmrRefreshTextResponse(
+  message: string,
+  status: 400 | 405 | 409,
+  app: KovoApp | undefined,
+  options: {
+    fallback?: 'full-reload';
+    refreshKind: 'live-targets' | 'route';
+  },
+): Response {
+  const headers = hmrRefreshHeaders(app, options.refreshKind, {
+    'Content-Type': 'text/plain; charset=utf-8',
+  });
+  if (options.fallback) headers.set('Kovo-HMR-Fallback', options.fallback);
+
+  return new Response(message, { headers, status });
+}
+
+function hmrRefreshHeaders(
+  app: KovoApp | undefined,
+  refreshKind: 'live-targets' | 'route' | undefined,
+  initialHeaders: HeadersInit = {},
+  previousBuildToken?: string,
+): Headers {
+  const headers = new Headers(initialHeaders);
+  const buildToken = app?.clientModules.buildToken() ?? '';
+
+  if (refreshKind) headers.set('Kovo-HMR-Refresh', refreshKind);
+  if (buildToken !== '') headers.set('Kovo-Build', buildToken);
+  if (previousBuildToken) headers.set('Kovo-Previous-Build', previousBuildToken);
+
+  return headers;
+}
+
+function previousHmrBuildToken(endpointUrl: URL, request: IncomingMessage): string | undefined {
+  return (
+    endpointUrl.searchParams.get('oldBuild') ??
+    endpointUrl.searchParams.get('build') ??
+    readHeader(request.headers, 'Kovo-Build')
+  );
+}
+
+function injectKovoHmrScriptIntoRouteResponse(response: RoutePageResponse): RoutePageResponse {
+  if (!shouldInjectKovoHmrScript(response.status, response.headers['Content-Type'], response.body)) {
+    return response;
+  }
+
+  return {
+    ...response,
+    body: injectKovoHmrScript(String(response.body)),
+  };
+}
+
+async function injectKovoHmrScriptIntoWebResponse(response: Response): Promise<Response> {
+  const contentType = response.headers.get('Content-Type') ?? response.headers.get('content-type');
+  if (!shouldInjectKovoHmrScript(response.status, contentType, null)) return response;
+
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+
+  return new Response(injectKovoHmrScript(await response.text()), {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
+
+function injectKovoHmrScriptIntoNodeResponse(
+  response: ServerResponse,
+  request: IncomingMessage,
+): ServerResponse {
+  if (request.method === 'HEAD') return response;
+
+  const chunks: Buffer[] = [];
+  const write = response.write;
+  const writeHead = response.writeHead;
+  const end = response.end;
+
+  response.writeHead = function writeHeadPatched(
+    statusCode: number,
+    statusMessageOrHeaders?: string | Record<string, number | readonly string[] | string>,
+    headers?: Record<string, number | readonly string[] | string>,
+  ): ServerResponse {
+    response.statusCode = statusCode;
+    if (typeof statusMessageOrHeaders === 'string') {
+      response.statusMessage = statusMessageOrHeaders;
+      setNodeResponseHeaders(response, headers);
+    } else {
+      setNodeResponseHeaders(response, statusMessageOrHeaders);
+    }
+    return response;
+  } as ServerResponse['writeHead'];
+
+  response.write = function writePatched(
+    chunk: unknown,
+    encodingOrCallback?: BufferEncoding | ((error?: Error) => void),
+    callback?: (error?: Error) => void,
+  ): boolean {
+    appendNodeResponseChunk(chunks, chunk, encodingOrCallback);
+    if (typeof encodingOrCallback === 'function') encodingOrCallback();
+    else callback?.();
+    return true;
+  } as ServerResponse['write'];
+
+  response.end = function endPatched(
+    chunk?: unknown,
+    encodingOrCallback?: BufferEncoding | (() => void),
+    callback?: () => void,
+  ): ServerResponse {
+    appendNodeResponseChunk(chunks, chunk, encodingOrCallback);
+    response.write = write;
+    response.writeHead = writeHead;
+    response.end = end;
+
+    const contentType = String(response.getHeader('Content-Type') ?? '');
+    const status = response.statusCode;
+    const body = Buffer.concat(chunks).toString('utf8');
+    const nextBody = shouldInjectKovoHmrScript(status, contentType, body)
+      ? injectKovoHmrScript(body)
+      : body;
+    if (nextBody !== body) response.removeHeader('Content-Length');
+
+    const writeEnd = end as unknown as (
+      this: ServerResponse,
+      chunk: string,
+      encodingOrCallback?: BufferEncoding | (() => void),
+      callback?: () => void,
+    ) => ServerResponse;
+    if (typeof encodingOrCallback === 'function') {
+      return writeEnd.call(response, nextBody, encodingOrCallback);
+    }
+    return writeEnd.call(response, nextBody, encodingOrCallback, callback);
+  } as ServerResponse['end'];
+
+  return response;
+}
+
+function setNodeResponseHeaders(
+  response: ServerResponse,
+  headers: Record<string, number | readonly string[] | string> | undefined,
+): void {
+  for (const [name, value] of Object.entries(headers ?? {})) response.setHeader(name, value);
+}
+
+function appendNodeResponseChunk(
+  chunks: Buffer[],
+  chunk: unknown,
+  encodingOrCallback: BufferEncoding | ((error?: Error) => void) | (() => void) | undefined,
+): void {
+  if (chunk === undefined || chunk === null) return;
+  if (Buffer.isBuffer(chunk)) {
+    chunks.push(chunk);
+    return;
+  }
+  if (chunk instanceof Uint8Array) {
+    chunks.push(Buffer.from(chunk));
+    return;
+  }
+  chunks.push(
+    Buffer.from(String(chunk), typeof encodingOrCallback === 'string' ? encodingOrCallback : 'utf8'),
+  );
+}
+
+function shouldInjectKovoHmrScript(
+  status: number,
+  contentType: string | null | undefined,
+  body: unknown,
+): boolean {
+  if (status < 200 || status >= 300) return false;
+  if (typeof body === 'string' && body.includes(kovoHmrClientPath)) return false;
+  return (contentType ?? '').toLowerCase().includes('text/html');
+}
+
+function injectKovoHmrScript(html: string): string {
+  if (html.includes(kovoHmrClientPath)) return html;
+  if (html.includes('</head>')) return html.replace('</head>', `${kovoHmrClientScript}</head>`);
+  return `${kovoHmrClientScript}${html}`;
+}
+
+function kovoHmrClientSource(): string {
+  return String.raw`
+import { createHotContext } from "/@vite/client";
+
+const hot = createHotContext("${kovoHmrClientPath}");
+const reload = () => location.reload();
+const qa = (root, selector) => root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
+const rd = (value) => (value || "").split(/[\s,]+/).map((dep) => dep.trim()).filter(Boolean);
+const targetIdentity = (el) => el.getAttribute("kovo-fragment-target") || el.id || el.getAttribute("kovo-c") || "";
+const liveTargetIdentity = (el) => el.getAttribute("kovo-live-component") || el.getAttribute("kovo-c") || targetIdentity(el);
+const liveProps = (el) => {
+  try {
+    const props = JSON.parse(el.getAttribute("kovo-props") || "{}");
+    return props && typeof props === "object" && !Array.isArray(props) ? props : {};
+  } catch {
+    return {};
+  }
+};
+const currentBuild = () => document.querySelector('meta[name="kovo-build"]')?.getAttribute("content") || "";
+const liveTargets = () => {
+  const seen = new Set();
+  const targets = [];
+  for (const el of qa(document, "[kovo-deps]")) {
+    const target = targetIdentity(el);
+    if (!target || seen.has(target)) continue;
+    seen.add(target);
+    targets.push(target + "#" + liveTargetIdentity(el) + ":" + JSON.stringify(liveProps(el)));
+  }
+  return targets;
+};
+const dependencyTargets = () => [
+  ...new Set(
+    qa(document, "[kovo-deps]")
+      .map((el) => {
+        const target = targetIdentity(el);
+        const deps = rd(el.getAttribute("kovo-deps"));
+        return target && (deps.length ? target + "=" + deps.join(" ") : target);
+      })
+      .filter(Boolean),
+  ),
+];
+
+async function refreshLiveTargets(event) {
+  const apply = globalThis.__kovo_a;
+  const live = liveTargets();
+  if (typeof apply !== "function" || live.length === 0) return reload();
+
+  const url = new URL("${kovoHmrLiveTargetRefreshPath}", location.href);
+  url.searchParams.set("url", location.href);
+  const build = currentBuild();
+  if (build) url.searchParams.set("oldBuild", build);
+  if (event?.oldFactHash) url.searchParams.set("oldFactHash", event.oldFactHash);
+
+  const response = await fetch(url, {
+    headers: {
+      "Kovo-Current-Url": location.href,
+      "Kovo-Fragment": "true",
+      "Kovo-Live-Targets": live.join(","),
+      "Kovo-Targets": dependencyTargets().join(";"),
+    },
+    method: "POST",
+  });
+
+  const previousBuild = response.headers.get("Kovo-Previous-Build") || "";
+  const nextBuild = response.headers.get("Kovo-Build") || "";
+  if (!response.ok || (previousBuild && currentBuild() && previousBuild !== currentBuild())) {
+    return reload();
+  }
+
+  apply(await response.text());
+  if (nextBuild) {
+    const meta = document.querySelector('meta[name="kovo-build"]');
+    meta?.setAttribute("content", nextBuild);
+  }
+}
+
+hot.on("kovo:component-render", (event) => {
+  refreshLiveTargets(event).catch(reload);
+});
+hot.on("kovo:diagnostics", reload);
+hot.on("kovo:route-shell", reload);
+hot.on("kovo:full-reload", reload);
+`;
+}
+
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Default predicate deciding
  * whether a dev request should be claimed by the app shell instead of Vite.
@@ -292,6 +754,7 @@ export function shouldHandleKovoAppShellViteRequest(
   if (!request.url) return false;
 
   const url = new URL(request.url, 'http://kovo.local');
+  if (isKovoHmrRequest(url)) return true;
   if (isUnversionedKovoAppShellClientModuleRequest(url)) return false;
 
   const match = matchShellDispatch({
@@ -314,9 +777,18 @@ function shouldHandleKovoAppShellViteDevRequest(
   if (!request.url) return false;
 
   const url = new URL(request.url, 'http://kovo.local');
+  if (isKovoHmrRequest(url)) return true;
   if (isUnversionedKovoAppShellClientModuleRequest(url)) return false;
 
   return shouldHandleRequest?.(request, app) ?? shouldHandleKovoAppShellViteRequest(request, app);
+}
+
+function isKovoHmrRequest(url: URL): boolean {
+  return (
+    url.pathname === kovoHmrClientPath ||
+    url.pathname === kovoHmrRouteRefreshPath ||
+    url.pathname === kovoHmrLiveTargetRefreshPath
+  );
 }
 
 function isUnversionedKovoAppShellClientModuleRequest(url: URL): boolean {

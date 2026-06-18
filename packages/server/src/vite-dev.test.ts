@@ -3,8 +3,9 @@ import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 
-import { createApp } from './app.js';
+import { createApp, createRequestHandler } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import type { LiveTargetRenderer } from './mutation-wire.js';
 import { route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
@@ -44,6 +45,24 @@ describe('server app shell Vite dev seam', () => {
     expect(shouldHandleKovoAppShellViteRequest(request('/c/dev.client.js?v=r7'), app)).toBe(true);
     expect(shouldHandleKovoAppShellViteRequest(request('/c/dev.client.js'), app)).toBe(false);
     expect(shouldHandleKovoAppShellViteRequest(request('/src/styles.css'), app)).toBe(false);
+    expect(shouldHandleKovoAppShellViteRequest(request('/@kovo/hmr-client'), app)).toBe(true);
+    expect(
+      shouldHandleKovoAppShellViteRequest(
+        request('/@kovo/hmr/refresh/route?url=/products/p1'),
+        app,
+      ),
+    ).toBe(true);
+    expect(
+      shouldHandleKovoAppShellViteRequest(
+        request('/@kovo/hmr/refresh/live-targets', {
+          headers: {
+            'Kovo-Live-Targets': 'product-card#src/components/ProductCard:{"id":"p1"}',
+          },
+          method: 'POST',
+        }),
+        app,
+      ),
+    ).toBe(true);
   });
 
   it('renders route diagnostics directly from the dev ledger', () => {
@@ -293,6 +312,7 @@ describe('server app shell Vite dev seam', () => {
       expect(documentResponse.status).toBe(200);
       expect(documentResponse.headers.get('content-type')).toContain('text/html');
       expect(documentBody).toContain('<main>dev app shell</main>');
+      expect(documentBody).toContain('<script type="module" src="/@kovo/hmr-client"></script>');
 
       const moduleResponse = await fetch(`${origin}${moduleHref}`);
       const moduleBody = await moduleResponse.text();
@@ -414,6 +434,256 @@ describe('server app shell Vite dev seam', () => {
       }),
     ).resolves.toBeUndefined();
     expect(customPredicateCalls).toBe(0);
+  });
+
+  it('serves and injects the dev-only HMR client through Vite middleware', async () => {
+    const app = createApp({
+      routes: [route('/cart', { page: () => '<main>Cart</main>' })],
+    });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({
+      moduleId: '/src/app-shell.ts',
+      nodeHandlerExportName: 'shopNodeHandler',
+    });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule() {
+        return {
+          default: app,
+          shopNodeHandler(
+            _request: unknown,
+            response: {
+              end(body: string): void;
+              setHeader(name: string, value: string): void;
+            },
+          ) {
+            response.setHeader('Content-Type', 'text/html; charset=utf-8');
+            response.end('<!doctype html><html><head></head><body><main>Cart</main></body></html>');
+          },
+        };
+      },
+    });
+
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const documentResponse = await fetch(`${origin}/cart`);
+      const documentBody = await documentResponse.text();
+      const clientResponse = await fetch(`${origin}/@kovo/hmr-client`);
+      const clientBody = await clientResponse.text();
+
+      expect(documentResponse.status).toBe(200);
+      expect(documentBody).toContain(
+        '<script type="module" src="/@kovo/hmr-client"></script></head>',
+      );
+      expect(clientResponse.status).toBe(200);
+      expect(clientResponse.headers.get('cache-control')).toBe('no-store');
+      expect(clientBody).toContain('createHotContext("/@kovo/hmr-client")');
+      expect(clientBody).toContain('hot.on("kovo:component-render"');
+      expect(clientBody).toContain('/@kovo/hmr/refresh/live-targets');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('serves dev-only HMR route refresh through the Vite app-shell middleware', async () => {
+    const clientModules = createMemoryVersionedClientModuleRegistry();
+    clientModules.put({
+      path: '/c/cart.client.js',
+      source: 'export const cart = true;',
+      version: 'cart-v1',
+    });
+    const app = createApp({
+      clientModules,
+      routes: [
+        route('/cart', {
+          page() {
+            return '<main>Cart refresh</main>';
+          },
+        }),
+      ],
+    });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule() {
+        return { default: app };
+      },
+    });
+
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const response = await fetch(
+        `http://127.0.0.1:${(server.address() as AddressInfo).port}/@kovo/hmr/refresh/route?url=/cart&oldBuild=old-build`,
+      );
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(response.headers.get('kovo-hmr-refresh')).toBe('route');
+      expect(response.headers.get('kovo-previous-build')).toBe('old-build');
+      expect(response.headers.get('kovo-build')).toBe(clientModules.buildToken());
+      expect(body).toContain('<meta name="kovo-build" content="');
+      expect(body).toContain('<script type="module" src="/@kovo/hmr-client"></script>');
+      expect(body).toContain('<main>Cart refresh</main>');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('serves dev-only HMR live-target refresh through fragment wire', async () => {
+    const clientModules = createMemoryVersionedClientModuleRegistry();
+    clientModules.put({
+      path: '/c/cart.client.js',
+      source: 'export const cart = true;',
+      version: 'cart-v1',
+    });
+    const cartRenderer: LiveTargetRenderer<Request> = {
+      component: 'src/components/CartBadge',
+      async render(context) {
+        expect(new URL(context.request.url).pathname).toBe('/cart');
+        return `<cart-badge data-target="${context.target}">${String(context.props.count)}</cart-badge>`;
+      },
+      stylesheets: ['/assets/cart.css'],
+    };
+    const app = createApp({
+      clientModules,
+      liveTargetRenderers: [cartRenderer],
+    });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule() {
+        return { default: app };
+      },
+    });
+
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const response = await fetch(
+        `http://127.0.0.1:${(server.address() as AddressInfo).port}/@kovo/hmr/refresh/live-targets?oldBuild=old-build`,
+        {
+          headers: {
+            'Kovo-Current-Url': '/cart?tab=summary',
+            'Kovo-Live-Targets': 'cart-badge#src/components/CartBadge:{"count":3}',
+          },
+          method: 'POST',
+        },
+      );
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe(
+        'text/vnd.kovo.fragment+html; charset=utf-8',
+      );
+      expect(response.headers.get('kovo-hmr-refresh')).toBe('live-targets');
+      expect(response.headers.get('kovo-previous-build')).toBe('old-build');
+      expect(response.headers.get('kovo-build')).toBe(clientModules.buildToken());
+      expect(body).toBe(
+        '<kovo-fragment target="cart-badge"><link rel="stylesheet" href="/assets/cart.css"><cart-badge data-target="cart-badge">3</cart-badge></kovo-fragment>',
+      );
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('does not expose HMR refresh endpoints through the production request handler', async () => {
+    const handler = createRequestHandler(
+      createApp({
+        routes: [
+          route('/cart', {
+            page() {
+              return '<main>Cart production page</main>';
+            },
+          }),
+        ],
+      }),
+    );
+
+    const routeResponse = await handler(
+      new Request('http://kovo.test/@kovo/hmr/refresh/route?url=/cart'),
+    );
+    const liveTargetResponse = await handler(
+      new Request('http://kovo.test/@kovo/hmr/refresh/live-targets', {
+        headers: {
+          'Kovo-Live-Targets': 'cart-badge#src/components/CartBadge:{"count":3}',
+        },
+        method: 'POST',
+      }),
+    );
+    const clientResponse = await handler(new Request('http://kovo.test/@kovo/hmr-client'));
+
+    expect(routeResponse.status).toBe(404);
+    expect(routeResponse.headers.get('kovo-hmr-refresh')).toBeNull();
+    expect(await routeResponse.text()).not.toContain('Cart production page');
+    expect(liveTargetResponse.status).toBe(404);
+    expect(liveTargetResponse.headers.get('kovo-hmr-refresh')).toBeNull();
+    expect(clientResponse.status).toBe(404);
   });
 
   it('rejects Request -> Response exports at the explicit node handler boundary', async () => {

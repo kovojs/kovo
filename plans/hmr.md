@@ -181,11 +181,11 @@ render-plan version skew checks.
   - Evidence: `packages/compiler/src/vite.ts` now records previous
     `hmrImpact` facts per component source, implements `handleHotUpdate()`,
     sends `kovo:component-render`, `kovo:route-shell`, `kovo:diagnostics`, or
-    `kovo:full-reload` over the Vite websocket, and currently pairs every
-    claimed Kovo hot update with Vite `{ type: "full-reload" }` until the
-    dev-only refresh client/endpoints are implemented. `packages/compiler/src/vite.test.ts`
-    covers component-refresh, diagnostic, and full-reload websocket events plus
-    the conservative reload fallback.
+    `kovo:full-reload` over the Vite websocket. Proven component-refresh and
+    diagnostic events are no longer paired with Vite `{ type: "full-reload" }`;
+    unsafe route/full-reload classes still delegate to Vite reload.
+    `packages/compiler/src/vite.test.ts` covers component-refresh, diagnostic,
+    and full-reload websocket events plus the conservative reload fallback.
     Verification: `corepack pnpm exec vitest --run
     packages/compiler/src/vite.test.ts packages/compiler/src/hmr-impact.test.ts`;
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`; `node
@@ -221,6 +221,18 @@ render-plan version skew checks.
   - For `kovo:diagnostics`, render the server-produced teaching document or
     fragment through the same path used by failed dev requests.
   - For unsafe classes, delegate to Vite full reload.
+  - Partial evidence: `packages/server/src/vite-dev.ts` serves and injects the
+    dev-only `/@kovo/hmr-client` module from the Vite dev middleware, including
+    generated Node handler exports, and the client subscribes to
+    `kovo:component-render`, `kovo:route-shell`, `kovo:diagnostics`, and
+    `kovo:full-reload`. Component-render events POST current live-target
+    descriptors to `/@kovo/hmr/refresh/live-targets` and apply the returned
+    fragment wire with the existing inline loader `globalThis.__kovo_a`.
+    Diagnostics and unsafe classes currently reload. Verification:
+    `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts
+    packages/server/src/vite-dev-middleware.test.ts packages/compiler/src/vite.test.ts
+    packages/compiler/src/hmr-impact.test.ts`; `corepack pnpm exec tsc -p
+    tsconfig.json --noEmit --pretty false`; `git diff --check`.
 - [ ] **6. Dev refresh endpoints.**
   - Add dev-only shell endpoints for current-route refresh and live-target
     refresh. They should be available only in Vite dev middleware, not production
@@ -229,6 +241,16 @@ render-plan version skew checks.
     fragment wire code instead of adding a client render path.
   - Include old/new build tokens so the HMR client can reject stale patches and
     full reload.
+  - Partial evidence: `packages/server/src/vite-dev.ts` adds Vite-dev-only
+    `/@kovo/hmr/refresh/route` and `/@kovo/hmr/refresh/live-targets` handlers.
+    Route refresh replays the current document through `createRequestHandler()`;
+    live-target refresh reuses `renderLiveTargetChunks()` and fragment wire.
+    Responses include `Kovo-HMR-Refresh`, `Kovo-Build`, and
+    `Kovo-Previous-Build` when the client supplies the current build token.
+    `packages/server/src/vite-dev.test.ts` covers route document replay,
+    live-target fragment refresh, explicit generated Node handler client
+    injection, build-token headers, and absence from production
+    `createRequestHandler()`. Query-specific HMR refresh remains unproven.
 - [ ] **7. Verification matrix.**
   - Unit test impact classification in the compiler package.
   - Unit test Vite websocket event emission with fake dev-server objects.
@@ -239,6 +261,11 @@ render-plan version skew checks.
     verify focus/input survival or documented reload fallback.
   - Add a static export/build assertion that HMR modules and endpoints are absent
     outside dev.
+  - Partial evidence: endpoint and transport coverage is current as listed under
+    items 5 and 6. `corepack pnpm --filter @kovojs/site run build` passes
+    (with the pre-existing Vite websocket port warning), and `rg -n
+    "@kovo/hmr|Kovo-HMR-Refresh" site/dist site/dist-css` finds no production
+    HMR endpoint/client strings. Browser fixture coverage remains open.
 
 ## First Milestone Slice
 
