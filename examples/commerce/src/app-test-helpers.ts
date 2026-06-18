@@ -230,7 +230,6 @@ export interface CommerceScenarioClient {
 
 export interface CommerceScenarioRequestOptions {
   headers?: HeadersInit;
-  renderProductGridFault?: Error;
 }
 
 export interface CommerceScenarioEnhancedOptions extends CommerceScenarioRequestOptions {
@@ -265,15 +264,6 @@ export function createCommerceScenarioClient(
       headers,
       redirect: 'manual',
     });
-    if (options.renderProductGridFault) {
-      Object.defineProperty(request, 'renderFaults', {
-        configurable: true,
-        value: {
-          productGrid: () => options.renderProductGridFault,
-        },
-      });
-    }
-
     const response = await shell.requestHandler(request);
     rememberSetCookies(cookies, response);
     return response;
@@ -341,7 +331,13 @@ export function createCommerceScenarioClient(
     input: AddToCartInput,
     options?: CommerceScenarioRequestOptions,
   ): Promise<Response> {
-    return postForm('/_m/cart/add', await addToCartFields(input), options);
+    return postForm('/_m/cart/add', await addToCartFields(input), {
+      ...options,
+      headers: {
+        ...headersRecord(options?.headers),
+        referer: `${commerceOrigin}/cart`,
+      },
+    });
   }
 
   async function addToCartEnhanced(
@@ -350,7 +346,11 @@ export function createCommerceScenarioClient(
   ): Promise<Response> {
     const targetHeaders =
       options.target === 'form'
-        ? { 'Kovo-Targets': `add-to-cart:${input.productId}` }
+        ? {
+            'Kovo-Form-Target': 'product-grid',
+            'Kovo-Live-Targets': cartPageLiveTargets,
+            'Kovo-Targets': 'product-grid=productGrid',
+          }
         : {
             'Kovo-Live-Targets': cartPageLiveTargets,
             'Kovo-Targets': cartPageTargets,
@@ -360,6 +360,7 @@ export function createCommerceScenarioClient(
       headers: {
         ...headersRecord(options.headers),
         'Kovo-Fragment': 'true',
+        referer: `${commerceOrigin}/cart`,
         ...targetHeaders,
       },
     });
@@ -367,9 +368,15 @@ export function createCommerceScenarioClient(
 
   async function addToCartFields(input: AddToCartInput): Promise<Record<string, string | number>> {
     const cartPage = await get('/cart');
-    const csrf = await formFieldValue(cartPage, '/_m/cart/add', 'csrf', input.productId);
+    const html = await cartPage.text();
+    const fields = formFieldsByName(html, '/_m/cart/add', input.productId);
+    const csrf = fields.csrf?.value;
+    const formKey = fields['kovo-form-key']?.value;
+    if (csrf === undefined) throw new Error('Expected add-to-cart CSRF field');
+    if (formKey === undefined) throw new Error('Expected add-to-cart form key field');
     return {
       csrf,
+      'kovo-form-key': formKey,
       productId: input.productId,
       quantity: input.quantity,
     };
@@ -393,16 +400,24 @@ async function formFieldValue(
   productId?: string,
 ): Promise<string> {
   const html = await response.text();
+  const value = formFieldsByName(html, action, productId)[name]?.value;
+  if (value === undefined) {
+    throw new Error(`Expected ${action} form field ${name} in response status ${response.status}`);
+  }
+  return value;
+}
+
+function formFieldsByName(
+  html: string,
+  action: string,
+  productId?: string,
+): ReturnType<typeof htmlFormFieldsByName> {
   const form = htmlFormFacts(html).find((candidate) => {
     if (candidate.action !== action) return false;
     if (!productId) return true;
     return htmlFormFieldsByName(candidate).productId?.value === productId;
   });
-  const value = htmlFormFieldsByName(form)[name]?.value;
-  if (value === undefined) {
-    throw new Error(`Expected ${action} form field ${name} in response status ${response.status}`);
-  }
-  return value;
+  return htmlFormFieldsByName(form);
 }
 
 function rememberSetCookies(cookies: Map<string, string>, response: Response): void {

@@ -13,7 +13,6 @@ import {
   type RequestHandler,
 } from '@kovojs/server/app-shell/core';
 import { toNodeHandler, type NodeRequestHandler } from '@kovojs/server/app-shell/node';
-import { eq } from 'drizzle-orm';
 
 import {
   addToCart,
@@ -24,19 +23,14 @@ import {
   commerceSignOut,
   commerceStylesheets,
   createCommerceDb,
-  renderAddToCartMutationFailureError,
-  renderAddToCartMutationFailureForm,
-  renderCartPage,
   renderCommerceLoginForm,
   type CommerceAuthRequest,
   type CommerceDb,
-  type CommerceRequest,
   type CommerceSession,
 } from './app.js';
 import { CartBadge } from './components/cart-badge.js';
 import { OrderHistory } from './components/order-history.js';
 import { ProductGrid } from './components/product-grid.js';
-import { products } from './schema.js';
 
 export type CommerceShellRequest = Request & CommerceAuthRequest;
 
@@ -167,23 +161,6 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}): C
           redirectTo: (result) => authRedirectTo(result.value),
         };
       },
-      [addToCart.key]: ({ rawInput, request }) => {
-        const productId = productIdFromRawInput(rawInput);
-        return {
-          redirectTo: '/cart',
-          renderFailureFragment: (failure) =>
-            renderAddToCartFailureFragment(db, rawInput, failure, request as CommerceShellRequest),
-          renderFailurePage: (failure) =>
-            renderCartPage(
-              db,
-              {
-                failure,
-                ...(productId ? { productId } : {}),
-              },
-              request as CommerceShellRequest,
-            ),
-        };
-      },
     },
     mutations: [addToCart, commerceSignIn, commerceSignOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
@@ -207,35 +184,6 @@ function routeValueToHtml(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === undefined || value === null) return '';
   return JSON.stringify(value);
-}
-
-async function renderAddToCartFailureFragment(
-  db: CommerceDb,
-  rawInput: unknown,
-  failure: Parameters<typeof renderAddToCartMutationFailureError>[0],
-  request: CommerceRequest,
-): Promise<string> {
-  const productId = productIdFromRawInput(rawInput);
-  const product = productId
-    ? (await db.select().from(products).where(eq(products.id, productId)).limit(1))[0]
-    : undefined;
-
-  if (!product) return renderAddToCartMutationFailureError(failure);
-  return renderAddToCartMutationFailureForm(product, failure, request);
-}
-
-function productIdFromRawInput(rawInput: unknown): string | undefined {
-  if (rawInput instanceof FormData) {
-    const productId = rawInput.get('productId');
-    return typeof productId === 'string' ? productId : undefined;
-  }
-
-  if (typeof rawInput !== 'object' || rawInput === null || !('productId' in rawInput)) {
-    return undefined;
-  }
-
-  const productId = rawInput.productId;
-  return typeof productId === 'string' ? productId : undefined;
 }
 
 function nextFromRawInput(rawInput: unknown): string | undefined {

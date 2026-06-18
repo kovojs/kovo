@@ -112,17 +112,17 @@ describe('route JSX pages', () => {
     >('cart/add');
     const AddToCartForm = component({
       mutations: { addToCart: addToCartForm },
-      render: (_queries, _state, { forms }) => (
+      render: () => (
         <form enhance mutation={addToCart}>
           <input type="hidden" name="productId" value="p1" />
           <input name="quantity" value="1" />
-          {FieldError({ name: 'quantity', failure: forms.addToCart.failure })}
-          {FormError({
-            code: 'OUT_OF_STOCK',
-            failure: forms.addToCart.failure,
-            message: (failure: { payload: { availableQuantity: number } }) =>
-              `Only ${failure.payload.availableQuantity} left.`,
-          })}
+          <FieldError name="quantity" />
+          <FormError
+            code="OUT_OF_STOCK"
+            message={(failure: { payload: { availableQuantity: number } }) =>
+              `Only ${failure.payload.availableQuantity} left.`
+            }
+          />
         </form>
       ),
     });

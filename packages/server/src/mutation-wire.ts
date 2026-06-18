@@ -105,6 +105,7 @@ export interface LiveTargetRenderer<Request = unknown> {
 
 /** @internal Context passed to a generated live-target renderer (SPEC §9.1). */
 export interface LiveTargetRenderContext<Request = unknown> {
+  csrf?: CsrfValidationOptions<Request>;
   failure?: MutationFail;
   input: unknown;
   mutationKey?: string;

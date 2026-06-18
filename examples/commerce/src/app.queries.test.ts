@@ -10,7 +10,7 @@ import {
   htmlKeyValues,
   htmlTextContent,
 } from '@kovojs/test/html-fragment';
-import type { QueryDefinition } from '@kovojs/server';
+import { csrfToken, type QueryDefinition } from '@kovojs/server';
 
 import type { TouchGraph } from '@kovojs/core/internal/graph';
 import { morphStructuralTree } from '@kovojs/runtime';
@@ -18,7 +18,6 @@ import { morphStructuralTree } from '@kovojs/runtime';
 import {
   addToCart,
   commerceCsrf,
-  commerceCsrfInput,
   commerceAuthCsrf,
   createCommerceDb,
   cartQuery,
@@ -106,14 +105,14 @@ describe('commerce example', () => {
       },
     });
 
+    const request = { db: harness.dbHandle(), session: { id: 's1', user: { id: 'u1' } } };
+
     await expect(
-      harness.exec(
-        addToCart,
-        commerceCsrfInput(
-          { productId: 'p1', quantity: 2 },
-          { db: harness.dbHandle(), session: { id: 's1', user: { id: 'u1' } } },
-        ),
-      ),
+      harness.exec(addToCart, {
+        csrf: csrfToken(request, commerceCsrf),
+        productId: 'p1',
+        quantity: 2,
+      }),
     ).resolves.toMatchObject({
       changes: [
         { domain: 'cart', input: { productId: 'p1', quantity: 2 } },

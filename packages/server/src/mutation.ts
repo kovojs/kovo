@@ -588,6 +588,7 @@ export async function renderMutationResponse<
           selection.liveTargetDescriptors,
           renderInput,
           wireRequest.request,
+          wireRequest.csrf,
         )),
         ...fragmentChunks,
       ];
@@ -1097,6 +1098,7 @@ async function renderLiveTargetChunks<Request>(
   targets: readonly MutationLiveTargetDescriptor[],
   input: unknown,
   request: Request,
+  csrf: MutationWireRequest<Request>['csrf'] | undefined,
 ): Promise<string[]> {
   const renderersByComponent = liveTargetRenderersByComponent(renderers);
   const chunks: string[] = [];
@@ -1109,6 +1111,7 @@ async function renderLiveTargetChunks<Request>(
       chunks.push(
         renderFragmentWireHtml({
           html: await renderer.render({
+            ...(csrf === undefined ? {} : { csrf }),
             input,
             props: target.props,
             request,
@@ -1146,10 +1149,10 @@ function liveTargetRenderersByComponent<Request>(
   return byComponent;
 }
 
-interface MutationResponseSelectionInput {
+interface MutationResponseSelectionInput<Request> {
   fragmentRenderers: readonly FragmentRenderer[];
   liveTargetDescriptors: readonly MutationLiveTargetDescriptor[];
-  liveTargetRenderers: readonly LiveTargetRenderer[];
+  liveTargetRenderers: readonly LiveTargetRenderer<Request>[];
   liveTargets?: readonly MutationLiveTarget[] | undefined;
   rerunQueries: readonly QueryRerun[];
   targets: readonly string[];
@@ -1161,8 +1164,8 @@ interface MutationResponseSelection {
   rerunQueries: readonly QueryRerun[];
 }
 
-function selectMutationResponseTargets(
-  input: MutationResponseSelectionInput,
+function selectMutationResponseTargets<Request>(
+  input: MutationResponseSelectionInput<Request>,
 ): MutationResponseSelection {
   if (input.liveTargets === undefined) {
     return {
@@ -1294,6 +1297,7 @@ async function renderDefaultFailureFragment<Request>(
     return renderer.render({
       failure,
       input: wireRequest.rawInput,
+      ...(wireRequest.csrf === undefined ? {} : { csrf: wireRequest.csrf }),
       ...(wireRequest.mutationKey === undefined ? {} : { mutationKey: wireRequest.mutationKey }),
       props: descriptor.props,
       request: wireRequest.request,

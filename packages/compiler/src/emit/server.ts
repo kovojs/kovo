@@ -303,7 +303,8 @@ function semanticMutationFormErrorExpression(
   const binding = form ? enhancedMutationFormBinding(form) : null;
   const slotsParam = componentRenderSlotsParam(model);
   const slotName = binding ? componentMutationSlotName(model, binding.localName) : null;
-  if (!form || !binding || !slotsParam || !slotName) return '';
+  if (!form || !binding || !slotName) return '';
+  if (!slotsParam) return null;
 
   return `{${element.tag}(${mutationFormErrorProps(element, form, slotName, slotsParam.name)})}`;
 }
@@ -692,17 +693,6 @@ function mutationFormErrorRenderLowering(
 
     const slotsParam = componentRenderSlotsParam(model);
     const slotName = componentMutationSlotName(model, binding.localName);
-    if (!slotsParam) {
-      diagnostics.push(
-        formFieldDiagnostic(
-          options,
-          element.openingTagNameStart,
-          element.openingTagNameEnd - element.openingTagNameStart,
-          `<${element.tag}> requires the component render slots parameter so the compiler can bind forms.${binding.localName}.failure`,
-        ),
-      );
-      continue;
-    }
     if (!slotName) {
       diagnostics.push(
         formFieldDiagnostic(
@@ -718,6 +708,7 @@ function mutationFormErrorRenderLowering(
     if (element.tag === 'FieldError') {
       diagnostics.push(...fieldErrorDiagnostics(model, element, binding.localName, options));
     }
+    if (!slotsParam) continue;
 
     const lowered = lowerMutationFormErrorElement(
       model,
@@ -1115,8 +1106,12 @@ function enhancedMutationFormLowering(
   const methodAttribute = element.attributes.find((attribute) => attribute.name === 'method');
   const keyAttribute = element.attributes.find((attribute) => attribute.name === 'key');
   if (!keyAttribute && element.repeatable) return null;
+  const preserveRuntimeMutation = !componentRenderSlotsParam(model);
   const targetBase = kebabCase(mutationAttribute.expressionBareIdentifierName);
   const generatedInMutationSlot = [
+    ...(preserveRuntimeMutation
+      ? [`mutation={${mutationAttribute.expressionBareIdentifierName}}`]
+      : []),
     ...(methodAttribute ? [] : ['method="post"']),
     `action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
     `data-mutation="${escapeAttribute(mutationKey)}"`,

@@ -533,6 +533,39 @@ export interface FormErrorProps<Failure = unknown> {
   [attribute: string]: unknown;
 }
 
+type MutationFormHelperKind = 'field' | 'form';
+
+interface MutationFormHelperPlaceholder {
+  kind: MutationFormHelperKind;
+  props: Record<string, unknown>;
+}
+
+interface MutationFormHelperRegistry {
+  nextId: number;
+  placeholders: Map<number, MutationFormHelperPlaceholder>;
+}
+
+const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
+
+function mutationFormHelperRegistry(): MutationFormHelperRegistry {
+  const global = globalThis as typeof globalThis & Record<symbol, unknown>;
+  global[mutationFormHelperRegistryKey] ??= {
+    nextId: 0,
+    placeholders: new Map(),
+  };
+  return global[mutationFormHelperRegistryKey] as MutationFormHelperRegistry;
+}
+
+function deferMutationFormHelper(
+  kind: MutationFormHelperKind,
+  props: Record<string, unknown>,
+): string {
+  const registry = mutationFormHelperRegistry();
+  registry.nextId += 1;
+  registry.placeholders.set(registry.nextId, { kind, props });
+  return `<!--kovo-form-helper:${registry.nextId}-->`;
+}
+
 interface SchemaLike<Value> {
   parse(input: unknown): Value;
 }
@@ -668,6 +701,10 @@ export function formFields<
  * mutation input schema (SPEC §6.3 / §9.2).
  */
 export function FieldError<Failure = unknown>(props: FieldErrorProps<Failure>): string {
+  if (props.failure === undefined) {
+    return deferMutationFormHelper('field', props as Record<string, unknown>);
+  }
+
   const failure = props.failure;
   if (!isRecord(failure)) return '';
 
@@ -682,6 +719,10 @@ export function FieldError<Failure = unknown>(props: FieldErrorProps<Failure>): 
  * field-scoped; declared coded failures render here by default (SPEC §9.2).
  */
 export function FormError<Failure = unknown>(props: FormErrorProps<Failure>): string {
+  if (props.failure === undefined) {
+    return deferMutationFormHelper('form', props as Record<string, unknown>);
+  }
+
   const failure = props.failure;
   if (!isRecord(failure)) return '';
   if (failure.code === 'VALIDATION') return '';

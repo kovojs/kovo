@@ -2,12 +2,15 @@ import type {
   Component,
   ComponentDefinitionInput,
   ComponentRenderSlots,
+  FieldErrorProps,
+  FormErrorProps,
   JsonValue,
 } from '@kovojs/core';
+import { FieldError, FormError } from '@kovojs/core';
 import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/runtime';
 
 import { componentMutationFailureSlots } from './component-render.js';
-import { csrfField } from './csrf.js';
+import { csrfField, type CsrfValidationOptions } from './csrf.js';
 import { escapeAttribute } from './html.js';
 import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
@@ -42,6 +45,9 @@ const voidElements = new Set([
   'wbr',
 ]);
 
+const kovoFormKeyFieldName = 'kovo-form-key';
+const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
+
 export type JsxNode = JsxNode[] | boolean | null | number | Promise<JsxNode> | string | undefined;
 
 export interface JsxProps {
@@ -55,6 +61,18 @@ export type JsxComponent = (props: JsxProps) => MaybePromise<string>;
 
 type KovoJsxComponent = Component<ComponentDefinitionInput>;
 
+type MutationFormHelperKind = 'field' | 'form';
+
+interface MutationFormHelperPlaceholder {
+  kind: MutationFormHelperKind;
+  props: JsxProps;
+}
+
+interface MutationFormHelperRegistry {
+  nextId: number;
+  placeholders: Map<number, MutationFormHelperPlaceholder>;
+}
+
 export function Fragment(props: JsxProps): MaybePromise<string> {
   return renderJsxChildren(props.children);
 }
@@ -64,6 +82,12 @@ export function jsx(
   props: JsxProps,
   key?: unknown,
 ): MaybePromise<string> {
+  if (isMutationFormHelperComponent(type, FieldError, 'FieldError')) {
+    return renderMutationFormHelper('field', props);
+  }
+  if (isMutationFormHelperComponent(type, FormError, 'FormError')) {
+    return renderMutationFormHelper('form', props);
+  }
   if (typeof type === 'function') return type(props);
   if (isKovoComponent(type)) return renderKovoComponent(type, props);
 
@@ -71,10 +95,21 @@ export function jsx(
   if (voidElements.has(type)) return `<${type}${attributes}>`;
 
   const children = renderJsxChildren(renderJsxContent(props));
-  const csrf = type === 'form' ? renderFormCsrfContent(props) : '';
+  const afterChildren = type === 'form' ? renderFormAfterChildrenContent(props, key) : '';
   return isPromiseLike(children)
-    ? children.then((html) => `<${type}${attributes}>${html}${csrf}</${type}>`)
-    : `<${type}${attributes}>${children}${csrf}</${type}>`;
+    ? children.then(
+        (html) =>
+          `<${type}${attributes}>${renderFormChildrenContent(type, props, key, html)}${afterChildren}</${type}>`,
+      )
+    : `<${type}${attributes}>${renderFormChildrenContent(type, props, key, children)}${afterChildren}</${type}>`;
+}
+
+function isMutationFormHelperComponent(
+  type: JsxComponent | KovoJsxComponent | string,
+  helper: unknown,
+  name: string,
+): boolean {
+  return type === helper || (typeof type === 'function' && type.name === name);
 }
 
 export const jsxs = jsx;
@@ -124,20 +159,177 @@ function renderMutationFormAttributes(key: string, props: JsxProps): string {
   ].join('');
 }
 
+function renderFormAfterChildrenContent(props: JsxProps, jsxKey?: unknown): string {
+  return `${renderFormKeyContent(props, jsxKey)}${renderFormCsrfContent(props)}`;
+}
+
+function renderFormKeyContent(props: JsxProps, jsxKey?: unknown): string {
+  if (!isMutationDefinitionLike(props.mutation)) return '';
+  const key = formKeyValue(props, jsxKey);
+  if (key === undefined) return '';
+
+  return `<input type="hidden" name="${kovoFormKeyFieldName}" value="${escapeAttribute(key)}">`;
+}
+
 function renderFormCsrfContent(props: JsxProps): string {
   if (!isMutationDefinitionLike(props.mutation)) return '';
   if (props.mutation.csrf === false) return '';
   const context = currentJsxFrameworkContext();
-  if (!context?.csrf) return '';
-  return csrfField(context.request, context.csrf);
+  const csrf = props.mutation.csrf ?? context?.csrf;
+  if (!context || !csrf) return '';
+  if (!csrf.sessionId(context.request)) return '';
+  return csrfField(context.request, csrf);
 }
 
-function isMutationDefinitionLike(value: unknown): value is { csrf?: false; key: string } {
+function isMutationDefinitionLike(
+  value: unknown,
+): value is { csrf?: CsrfValidationOptions<unknown> | false; key: string } {
   return (
     typeof value === 'object' &&
     value !== null &&
     typeof (value as { key?: unknown }).key === 'string'
   );
+}
+
+function renderFormChildrenContent(
+  type: string,
+  props: JsxProps,
+  jsxKey: unknown,
+  html: string,
+): string {
+  if (type !== 'form') return html;
+  return resolveMutationFormHelperPlaceholders(html, props, jsxKey);
+}
+
+function renderMutationFormHelper(kind: MutationFormHelperKind, props: JsxProps): string {
+  if (props.failure !== undefined) {
+    return renderMutationFormHelperNow(kind, props, props.failure);
+  }
+
+  const registry = mutationFormHelperRegistry();
+  registry.nextId += 1;
+  registry.placeholders.set(registry.nextId, { kind, props });
+  return `<!--kovo-form-helper:${registry.nextId}-->`;
+}
+
+function resolveMutationFormHelperPlaceholders(
+  html: string,
+  formProps: JsxProps,
+  jsxKey: unknown,
+): string {
+  if (!html.includes('<!--kovo-form-helper:')) return html;
+  const failure = mutationFailureForForm(formProps, jsxKey);
+
+  return html.replace(/<!--kovo-form-helper:(\d+)-->/g, (_match, idText: string) => {
+    const id = Number(idText);
+    const registry = mutationFormHelperRegistry();
+    const placeholder = registry.placeholders.get(id);
+    registry.placeholders.delete(id);
+    if (!placeholder) return '';
+
+    return renderMutationFormHelperNow(placeholder.kind, placeholder.props, failure);
+  });
+}
+
+function mutationFormHelperRegistry(): MutationFormHelperRegistry {
+  const global = globalThis as typeof globalThis & Record<symbol, unknown>;
+  global[mutationFormHelperRegistryKey] ??= {
+    nextId: 0,
+    placeholders: new Map(),
+  };
+  return global[mutationFormHelperRegistryKey] as MutationFormHelperRegistry;
+}
+
+function renderMutationFormHelperNow(
+  kind: MutationFormHelperKind,
+  props: JsxProps,
+  failure: unknown,
+): string {
+  const helperProps = { ...props, failure };
+  return kind === 'field'
+    ? FieldError(helperProps as FieldErrorProps)
+    : FormError(helperProps as FormErrorProps);
+}
+
+function mutationFailureForForm(formProps: JsxProps, jsxKey: unknown): unknown {
+  const mutation = formProps.mutation;
+  if (!isMutationDefinitionLike(mutation)) return null;
+
+  const failureContext = currentJsxFrameworkContext()?.mutationFailure;
+  if (!failureContext || failureContext.mutationKey !== mutation.key) return null;
+
+  const key = formKeyValue(formProps, jsxKey);
+  if (key === undefined) return formFailureFromMutationFailure(failureContext.failure);
+
+  const submittedKey = submittedFormKey(failureContext.input);
+  if (submittedKey !== undefined) {
+    return submittedKey === key ? formFailureFromMutationFailure(failureContext.failure) : null;
+  }
+  if (failureContext.target && failureContext.target.endsWith(`:${key}`)) {
+    return formFailureFromMutationFailure(failureContext.failure);
+  }
+
+  return submittedInputContainsValue(failureContext.input, key)
+    ? formFailureFromMutationFailure(failureContext.failure)
+    : null;
+}
+
+function formFailureFromMutationFailure(failure: unknown): unknown {
+  if (!isRecord(failure)) return failure;
+  const error = failure.error;
+  if (!isRecord(error) || typeof error.code !== 'string') return failure;
+  if (error.code === 'VALIDATION') {
+    return {
+      code: 'VALIDATION',
+      fieldErrors: validationFieldErrors(error.payload),
+    };
+  }
+  return {
+    code: error.code,
+    payload: error.payload,
+  };
+}
+
+function validationFieldErrors(payload: unknown): Record<string, string> {
+  if (!isRecord(payload) || !Array.isArray(payload.issues)) return {};
+  const fieldErrors: Record<string, string> = {};
+  for (const issue of payload.issues) {
+    if (!isRecord(issue) || typeof issue.message !== 'string' || !Array.isArray(issue.path)) {
+      continue;
+    }
+    const path = issue.path.map((part) => String(part)).join('.');
+    if (path) fieldErrors[path] = issue.message;
+  }
+  return fieldErrors;
+}
+
+function formKeyValue(props: JsxProps, jsxKey?: unknown): string | undefined {
+  const key = props['kovo-key'] ?? props.key ?? jsxKey;
+  if (key === false || key === null || key === undefined) return undefined;
+  return attributeText('kovo-key', key);
+}
+
+function submittedFormKey(input: unknown): string | undefined {
+  if (input instanceof FormData) {
+    const value = input.get(kovoFormKeyFieldName);
+    return typeof value === 'string' ? value : undefined;
+  }
+  if (isRecord(input)) {
+    const value = input[kovoFormKeyFieldName];
+    return typeof value === 'string' ? value : undefined;
+  }
+  return undefined;
+}
+
+function submittedInputContainsValue(input: unknown, value: string): boolean {
+  if (input instanceof FormData) {
+    for (const submitted of input.values()) {
+      if (submitted === value) return true;
+    }
+    return false;
+  }
+  if (!isRecord(input)) return false;
+  return Object.values(input).some((submitted) => submitted === value);
 }
 
 function renderJsxContent(props: JsxProps): JsxNode {

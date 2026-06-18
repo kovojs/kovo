@@ -59,6 +59,7 @@ export async function handleAppMutationRequest(
     mutationRequest,
     sourceUrl,
     mutation.key,
+    rawInput,
   );
   const requestMutation = mutationWithAppQueries(
     mutation as unknown as MutationDefinition<
@@ -188,6 +189,7 @@ function defaultAppMutationFailurePageRenderer(
   request: Request,
   sourceUrl: URL,
   mutationKey: string,
+  rawInput: unknown,
 ): ((failure: MutationFail) => Promise<string>) | undefined {
   const match = matchShellDispatch({
     endpoints: app.endpoints,
@@ -203,7 +205,7 @@ function defaultAppMutationFailurePageRenderer(
   return async (failure) => {
     const response = await renderAppRouteDocumentResponse({
       app,
-      jsxContext: { mutationFailure: { failure, mutationKey } },
+      jsxContext: { mutationFailure: { failure, input: rawInput, mutationKey } },
       params: match.params,
       request,
       route: match.route,

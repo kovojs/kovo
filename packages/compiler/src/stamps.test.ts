@@ -210,9 +210,9 @@ export const addToCart = mutation('cart/add', {
 });
 
 export const AddToCartForm = component({
-  render: (_queries, _state, { productId }) => (
-    <form enhance mutation={addToCart} key={productId} class="add">
-      <input type="hidden" name="productId" value={productId} />
+  render: (_queries, _state, slots) => (
+    <form enhance mutation={addToCart} key={slots.productId} class="add">
+      <input type="hidden" name="productId" value={slots.productId} />
     </form>
   ),
 });
@@ -221,10 +221,10 @@ export const AddToCartForm = component({
 
     expect(result.diagnostics).toEqual([]);
     expect(result.loweredSource).toContain(
-      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${productId}`} kovo-key={productId} class="add"',
+      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId} class="add"',
     );
     expect(result.loweredSource).not.toContain('mutation={addToCart}');
-    expect(result.loweredSource).not.toMatch(/\skey=\{productId\}/);
+    expect(result.loweredSource).not.toMatch(/\skey=\{slots\.productId\}/);
     expect(result.outputContextFacts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -238,12 +238,12 @@ export const AddToCartForm = component({
           writer: 'typed mutation form lowering',
         }),
         expect.objectContaining({
-          expression: 'add-to-cart:${productId}',
+          expression: 'add-to-cart:${slots.productId}',
           sink: 'kovo-fragment-target',
           writer: 'typed mutation form lowering',
         }),
         expect.objectContaining({
-          expression: 'productId',
+          expression: 'slots.productId',
           sink: 'kovo-key',
           writer: 'typed mutation form lowering',
         }),
@@ -264,9 +264,9 @@ export const AddToCartForm = component({
 import { addToCart } from '../app.js';
 
 export const ProductGrid = component({
-  render: (_queries, _state, { productId }) => (
-    <form enhance mutation={addToCart} key={productId}>
-      <input type="hidden" name="productId" value={productId} />
+  render: (_queries, _state, slots) => (
+    <form enhance mutation={addToCart} key={slots.productId}>
+      <input type="hidden" name="productId" value={slots.productId} />
     </form>
   ),
 });
@@ -275,7 +275,7 @@ export const ProductGrid = component({
 
     expect(result.diagnostics).toEqual([]);
     expect(result.loweredSource).toContain(
-      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${productId}`} kovo-key={productId}',
+      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId}',
     );
     expect(() => assertRenderEquivalence(result)).not.toThrow();
     expect(() => assertFixpoint(result)).not.toThrow();

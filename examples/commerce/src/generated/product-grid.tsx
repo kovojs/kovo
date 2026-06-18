@@ -6,15 +6,13 @@ import {
   FieldError,
   form,
   FormError,
-  type ComponentRenderSlots,
   type FormFailure,
 } from '@kovojs/core';
-import { componentMutationFailureSlots, csrfField, type MutationFail } from '@kovojs/server';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
-import { commerceCsrf, type CommerceRequest, type ProductGridResult } from '../app.js';
+import { addToCart, type ProductGridResult } from '../app.js';
 import { productGridQuery } from '../queries.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
@@ -26,37 +24,21 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 // keyed per-item markup with request-scoped forms is beyond paths, derives,
 // and keyed lists), so product grid refresh remains a server fragment.
 //
-// Render slots carry request-only CSRF data and SPEC.md §6.3 mutation form
-// state. The lowered IR is committed at src/generated/product-grid.tsx for the
+// The lowered IR is committed at src/generated/product-grid.tsx for the
 // generated route/runtime artifacts.
 
 const addToCartForm = form('cart/add');
 
 export type AddToCartFailure = FormFailure<typeof addToCartForm>;
 
-type ProductGridMutationSlots = ComponentRenderSlots<{ addToCart: typeof addToCartForm }>;
-
-export type ProductGridRenderSlots = ProductGridMutationSlots & {
-  productId?: string | undefined;
-  request?: CommerceRequest | undefined;
-};
-
-const defaultProductGridRenderSlots: ProductGridRenderSlots = {
-  forms: { addToCart: { failure: null } },
-};
-
 export const ProductGrid = component({
   mutations: { addToCart: addToCartForm },
   queries: { productGrid: productGridQuery },
-  render: (
-    { productGrid }: { productGrid: ProductGridResult },
-    _state,
-    slots: ProductGridRenderSlots = defaultProductGridRenderSlots,
-  ) => {
+  render: ({ productGrid }: { productGrid: ProductGridResult }) => {
     const { nextCursor } = productGrid;
     return (
       <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid" kovo-fragment-target="product-grid" kovo-live-component="components/product-grid/product-grid">
-        {renderProductGridItems(productGrid, slots, slots.request)}
+        {renderProductGridItems(productGrid)}
       </section>
     );
   },
@@ -67,12 +49,8 @@ ProductGrid.name = "components/product-grid/product-grid";
 // mode="append" pagination fragment (which morphs into the existing host).
 export function renderProductGridItems(
   result: ProductGridResult,
-  slots: ProductGridRenderSlots = defaultProductGridRenderSlots,
-  request?: CommerceRequest,
 ): string {
-  const cards = result.items.map((item) =>
-    renderProductCard(item, productGridItemSlots(slots, item.id), request),
-  );
+  const cards = result.items.map((item) => renderProductCard(item));
   const cursor = result.nextCursor;
   return (
     <>
@@ -113,8 +91,6 @@ function stockBadge(stock: number): string {
 
 function renderProductCard(
   item: ProductItem,
-  slots: ProductGridRenderSlots,
-  request?: CommerceRequest,
 ): string {
   const body = (
     <div class="grid gap-4">
@@ -131,7 +107,7 @@ function renderProductCard(
         <span class="text-lg font-semibold tabular-nums">{priceLabel(item.unitPrice)}</span>
         {stockBadge(item.stock)}
       </div>
-      {renderAddToCartForm(item, slots, request)}
+      {renderAddToCartForm(item)}
     </div>
   );
   // `kovo-key` stays on the keyed child of the grid fragment host (§9.1 morph);
@@ -144,13 +120,10 @@ function renderProductCard(
 // standalone as the failure-rerender fragment (kovo-fragment-target).
 export function renderAddToCartForm(
   item: { id: string; stock: number },
-  slots: ProductGridRenderSlots = defaultProductGridRenderSlots,
-  request?: CommerceRequest,
 ): string {
   const soldOut = item.stock === 0;
   return (
-    <form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${item.id}`} kovo-key={item.id} class="flex flex-wrap items-end gap-2">
-      {request?.session?.id ? csrfField(request, commerceCsrf) : ''}
+    <form enhance mutation={addToCart} method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${item.id}`} kovo-key={item.id} class="flex flex-wrap items-end gap-2">
       <input type="hidden" name="productId" value={item.id} />
       <label class="grid gap-1 text-xs font-medium text-slate-700">
         <span>Qty</span>
@@ -161,8 +134,8 @@ export function renderAddToCartForm(
           min="1"
           max={item.stock}
           value="1"
-         aria-describedby={`add-to-cart-quantity-error-${item.id}`}/>
-        {FieldError({ "failure": slots.forms.addToCart.failure, "name": "quantity", "class": "basis-full text-sm text-red-700", "id": `add-to-cart-quantity-error-${item.id}` })}
+        />
+        <FieldError name="quantity" class="basis-full text-sm text-red-700" />
       </label>
       {Button.definition.render({
         children: soldOut ? 'Sold out' : 'Add to cart',
@@ -170,72 +143,15 @@ export function renderAddToCartForm(
         type: 'submit',
         variant: 'primary',
       })}
-      {FormError({ "failure": slots.forms.addToCart.failure, "code": "OUT_OF_STOCK", "class": "basis-full text-sm text-red-700", "message": (failure: Extract<AddToCartFailure, { code: 'OUT_OF_STOCK' }>) =>
-          `Only ${failure.payload.availableQuantity} available.` })}
+      <FormError
+        code="OUT_OF_STOCK"
+        class="basis-full text-sm text-red-700"
+        message={(failure: Extract<AddToCartFailure, { code: 'OUT_OF_STOCK' }>) =>
+          `Only ${failure.payload.availableQuantity} available.`
+        }
+      />
     </form>
   );
-}
-
-export function renderAddToCartMutationFailureForm(
-  item: { id: string; stock: number },
-  failure: MutationFail,
-  request?: CommerceRequest,
-): string {
-  return renderAddToCartForm(
-    item,
-    productGridItemSlots(addToCartFailureSlots(failure, item.id), item.id),
-    request,
-  );
-}
-
-export function renderAddToCartMutationFailureError(failure: MutationFail): string {
-  return FormError({
-    class: 'basis-full text-sm text-red-700',
-    code: 'OUT_OF_STOCK',
-    failure: addToCartFailureFromMutation(failure),
-    message: (formFailure: Extract<AddToCartFailure, { code: 'OUT_OF_STOCK' }>) =>
-      `Only ${formFailure.payload.availableQuantity} available.`,
-  });
-}
-
-function addToCartFailureFromMutation(failure: MutationFail): AddToCartFailure {
-  const slots = addToCartFailureSlots(failure);
-  const formFailure = slots.forms.addToCart.failure;
-  if (!formFailure) {
-    throw new Error('Expected add-to-cart mutation failure slot');
-  }
-
-  return formFailure;
-}
-
-function addToCartFailureSlots(
-  failure: MutationFail,
-  productId?: string,
-): ProductGridRenderSlots {
-  const slots = componentMutationFailureSlots(
-    'addToCart',
-    failure,
-    productGridItemSlots(defaultProductGridRenderSlots, productId),
-  ) as unknown as ProductGridRenderSlots;
-
-  return slots;
-}
-
-function productGridItemSlots(
-  slots: ProductGridRenderSlots,
-  productId?: string,
-): ProductGridRenderSlots {
-  if (!productId) return slots;
-  const failure = slots.productId === productId ? slots.forms.addToCart.failure : null;
-
-  return {
-    ...slots,
-    forms: {
-      ...slots.forms,
-      addToCart: { failure },
-    },
-    productId,
-  };
 }
 
 export const ProductGrid$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({

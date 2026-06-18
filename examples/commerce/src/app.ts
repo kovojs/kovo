@@ -1,27 +1,21 @@
 import { form, FormError, type FormInput } from '@kovojs/core';
 import {
-  componentMutationFailureSlots,
   csrfField,
-  csrfToken,
   guards,
   i18n,
   metaFromQuery,
   mutation,
   renderComponent,
-  renderComponentMutationFailure,
   renderDeferredStream,
-  renderMutationEndpointResponse,
   renderMutationFormAttributes,
   renderPageHints,
   renderRoutePageResponse,
   route,
   s,
   session,
-  type MutationFail,
 } from '@kovojs/server';
 import { Fragment, jsx, jsxs } from '@kovojs/server/jsx-runtime';
 import { escapeAttribute } from '@kovojs/server/internal/html';
-import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 import {
   authed as betterAuthAuthed,
   betterAuthSession,
@@ -248,11 +242,6 @@ export { cart, order, product, cartQuery, orderHistoryQuery, productGridQuery };
 export const addToCartForm = form('cart/add');
 export type AddToCartInput = FormInput<typeof addToCartForm>;
 
-export interface AddToCartFailureState {
-  failure: MutationFail<string, unknown>;
-  productId?: string;
-}
-
 const addToCartInferredTouches = [
   { domain: 'cart', keys: null },
   { domain: 'order', keys: null },
@@ -261,6 +250,7 @@ const addToCartInferredTouches = [
 
 export const addToCart = mutation('cart/add', {
   csrf: commerceCsrf,
+  defaultRedirectTo: '/cart',
   errors: {
     OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
   },
@@ -326,50 +316,16 @@ export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
 export const {
   ProductGrid,
   renderAddToCartForm,
-  renderAddToCartMutationFailureError,
-  renderAddToCartMutationFailureForm,
   renderProductGridItems,
 } = productGridComponent;
 export type AddToCartFailure = productGridComponent.AddToCartFailure;
 
-export function renderProductGrid(
-  result: ProductGridResult,
-  request?: CommerceRequest,
-  addToCartFailure?: AddToCartFailureState,
-): string {
-  const slots = productGridRenderSlots(request, addToCartFailure?.productId);
-
-  if (addToCartFailure) {
-    return renderComponentMutationFailure(
-      ProductGrid,
-      { productGrid: result },
-      addToCartFailure.failure,
-      {
-        formName: 'addToCart',
-        slots,
-      },
-    );
-  }
-
-  return renderComponent(ProductGrid, { productGrid: result }, { slots });
+export function renderProductGrid(result: ProductGridResult): string {
+  return renderComponent(ProductGrid, { productGrid: result });
 }
 
-function productGridRenderSlots(
-  request?: CommerceRequest,
-  productId?: string,
-): productGridComponent.ProductGridRenderSlots {
-  return {
-    forms: { addToCart: { failure: null } },
-    ...(productId === undefined ? {} : { productId }),
-    ...(request === undefined ? {} : { request }),
-  };
-}
-
-export function renderProductGridAppend(
-  result: ProductGridResult,
-  request?: CommerceRequest,
-): string {
-  return renderProductGridItems(result, productGridRenderSlots(request), request);
+export function renderProductGridAppend(result: ProductGridResult): string {
+  return renderProductGridItems(result);
 }
 
 export async function renderProductGridPageFragment(
@@ -428,7 +384,6 @@ export const commercePageHints = renderCommercePageHints();
 
 export async function renderCartPage(
   db = createCommerceDb(),
-  addToCartFailure?: AddToCartFailureState,
   request?: CommerceRequest,
 ): Promise<string> {
   const pageHints = renderCommercePageHints(await loadCartQuery(db));
@@ -439,7 +394,7 @@ export async function renderCartPage(
         jsxs(Fragment, {
           children: [
             jsx(CartBadge, {}),
-            jsx(ProductGrid, productGridCartPageSlots(addToCartFailure)),
+            jsx(ProductGrid, {}),
             routeRequest.session?.user?.id
               ? jsx(OrderHistory, {})
               : OrderHistory.definition.render({ orderHistory: { items: [] } }),
@@ -464,60 +419,10 @@ function commerceCartMain(children: unknown): Promise<string> | string {
     : `<main class="mx-auto max-w-4xl">${children}</main>`;
 }
 
-function productGridCartPageSlots(
-  addToCartFailure: AddToCartFailureState | undefined,
-): productGridComponent.ProductGridRenderSlots {
-  if (!addToCartFailure) return {};
-  return componentMutationFailureSlots(
-    'addToCart',
-    addToCartFailure.failure,
-    productGridRenderSlots(undefined, addToCartFailure.productId),
-  ) as productGridComponent.ProductGridRenderSlots;
-}
-
 function commerceCartPageRequest(db: CommerceDb, request?: CommerceRequest): CommerceRequest {
   const pageRequest = request ?? ({ db } as CommerceRequest);
   Object.defineProperty(pageRequest, 'db', { configurable: true, value: db });
   return pageRequest;
-}
-
-export function submitAddToCartNoJs(rawInput: unknown, request: CommerceRequest) {
-  return submitAddToCart(rawInput, request, {});
-}
-
-export function submitAddToCart(
-  rawInput: unknown,
-  request: CommerceRequest,
-  headers: MutationWireHeaderSource,
-) {
-  const productId = productIdFromRawInput(rawInput);
-  const submittedInput = appendCommerceCsrf(rawInput, request);
-  return renderMutationEndpointResponse(addToCart, {
-    csrf: commerceCsrf,
-    failureStylesheets: commerceStylesheets,
-    headers,
-    rawInput: submittedInput,
-    redirectTo: '/cart',
-    renderFailureFragment: (failure) =>
-      renderAddToCartFailureFragment(request.db, rawInput, failure, request),
-    renderFailurePage: (failure) =>
-      renderCartPage(
-        request.db,
-        {
-          failure,
-          ...(productId ? { productId } : {}),
-        },
-        request,
-      ),
-    request,
-  });
-}
-
-async function loadProductForFailure(
-  db: CommerceDb,
-  productId: string,
-): Promise<{ id: string; stock: number; unitPrice: number } | undefined> {
-  return (await db.select().from(products).where(eq(products.id, productId)).limit(1))[0];
 }
 
 export function renderCommerceLoginForm(
@@ -552,84 +457,6 @@ export function renderCommerceLogoutForm(request: CommerceAuthRequest): string {
     '<button class="text-sm font-medium text-slate-900" type="submit">Sign out</button>',
     '</form>',
   ].join('');
-}
-
-export function submitCommerceSignInNoJs(rawInput: unknown, request: CommerceAuthRequest) {
-  const next = nextFromRawInput(rawInput);
-
-  return renderMutationEndpointResponse(commerceSignIn, {
-    csrf: commerceAuthCsrf,
-    headers: {},
-    rawInput,
-    redirectTo: (result) => result.value.redirectTo,
-    renderFailurePage: (failure) => {
-      const failureState =
-        failure.error.code === 'INVALID_CREDENTIALS'
-          ? ({ failure: { code: 'INVALID_CREDENTIALS' } } as const)
-          : {};
-
-      return `<!doctype html><html><body>${renderCommerceLoginForm(request, {
-        ...failureState,
-        ...(next === undefined ? {} : { next }),
-      })}</body></html>`;
-    },
-    request,
-  });
-}
-
-export function submitCommerceSignOutNoJs(request: CommerceAuthRequest) {
-  return renderMutationEndpointResponse(commerceSignOut, {
-    csrf: commerceAuthCsrf,
-    headers: {},
-    rawInput: { csrf: csrfToken(request, commerceAuthCsrf) },
-    redirectTo: (result) => result.value.redirectTo,
-    request,
-    sessionProvider: commerceSessionProvider,
-  });
-}
-
-export function commerceCsrfInput(rawInput: unknown, request: CommerceRequest): unknown {
-  return appendCommerceCsrf(rawInput, request);
-}
-
-function appendCommerceCsrf(rawInput: unknown, request: CommerceRequest): unknown {
-  if (typeof rawInput !== 'object' || rawInput === null) return rawInput;
-  if ('csrf' in rawInput) return rawInput;
-  if (!request.session?.id) return rawInput;
-  return {
-    ...rawInput,
-    csrf: csrfToken(request, commerceCsrf),
-  };
-}
-
-async function renderAddToCartFailureFragment(
-  db: CommerceDb,
-  rawInput: unknown,
-  failure: MutationFail,
-  request: CommerceRequest,
-): Promise<string> {
-  const productId = productIdFromRawInput(rawInput);
-  const product = productId ? await loadProductForFailure(db, productId) : undefined;
-
-  if (!product) return renderAddToCartMutationFailureError(failure);
-
-  return renderAddToCartMutationFailureForm(product, failure, request);
-}
-
-function productIdFromRawInput(rawInput: unknown): string | undefined {
-  if (typeof rawInput !== 'object' || rawInput === null || !('productId' in rawInput)) {
-    return undefined;
-  }
-  const productId = rawInput.productId;
-  return typeof productId === 'string' ? productId : undefined;
-}
-
-function nextFromRawInput(rawInput: unknown): string | undefined {
-  if (typeof rawInput !== 'object' || rawInput === null || !('next' in rawInput)) {
-    return undefined;
-  }
-  const next = rawInput.next;
-  return typeof next === 'string' ? next : undefined;
 }
 
 function readCookie(headers: Headers, name: string): string | undefined {

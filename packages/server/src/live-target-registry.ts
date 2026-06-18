@@ -51,7 +51,7 @@ export function collectGeneratedLiveTargetRenderers<Request = unknown>(
   for (const module of modules) {
     for (const [exportName, value] of Object.entries(module)) {
       if (!exportName.endsWith('$liveTargetRenderer')) continue;
-      if (!isLiveTargetRenderer(value)) continue;
+      if (!isLiveTargetRenderer<Request>(value)) continue;
 
       const existing = renderersByComponent.get(value.component);
       if (existing === value) continue;

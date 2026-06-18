@@ -7,7 +7,9 @@ type MaybePromise<Value> = Promise<Value> | Value;
 
 export interface JsxMutationFailureContext {
   failure: MutationFail;
+  input?: unknown;
   mutationKey: string;
+  target?: string;
 }
 
 export interface JsxFrameworkContext {

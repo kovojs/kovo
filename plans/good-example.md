@@ -60,7 +60,7 @@ that still make the simplified Commerce example feel like a test fixture.
   - Evidence to add: Commerce scenario tests use `createCommerceAppShell()` or
     HTTP-style request handlers for app behavior; low-level helper tests have
     package-level replacements.
-- [ ] Make `ProductGrid` authoring local and ordinary.
+- [x] Make `ProductGrid` authoring local and ordinary.
   - Current friction: `ProductGridRenderSlots`, request threading, explicit
     `componentMutationFailureSlots`, and `renderAddToCartMutationFailure*`
     helpers make the component read like a failure-wire adapter.
@@ -68,9 +68,12 @@ that still make the simplified Commerce example feel like a test fixture.
     `<FormError>` in the authored component; CSRF, submitted-form target,
     request-scoped form state, and failure re-rendering are provided by the
     framework.
-  - Evidence to add: `examples/commerce/src/components/product-grid.tsx`
-    contains no `ComponentRenderSlots`, `componentMutationFailureSlots`,
-    `MutationFail`, or request parameter solely for CSRF/failure state.
+  - Evidence: `examples/commerce/src/components/product-grid.tsx` contains no
+    `ComponentRenderSlots`, `componentMutationFailureSlots`, `MutationFail`,
+    `csrfField`, or `ProductGridRenderSlots`; verified with
+    `rg -n "ComponentRenderSlots|componentMutationFailureSlots|MutationFail|csrfField|ProductGridRenderSlots" examples/commerce/src/components/product-grid.tsx`
+    exiting 1. Focused Commerce and server form-context tests pass as recorded
+    in Latest verification.
 - [ ] Replace string-built login/logout forms with authored TSX form components.
   - Current friction: `renderCommerceLoginForm()` and
     `renderCommerceLogoutForm()` manually call `renderMutationFormAttributes`,
@@ -89,8 +92,12 @@ that still make the simplified Commerce example feel like a test fixture.
     conformance checks. App-authored modules import authored components and
     declarations; graph/optimism facts are surfaced through `kovo explain` and
     package-level generated-artifact tests.
-  - Evidence to add: generated imports remain only in generated files, scripts,
-    and tests whose names state they verify generated artifacts.
+  - Evidence: app-authored runtime modules no longer import generated component,
+    graph, touch, or optimism artifacts. Remaining gap: the Commerce scenario
+    helper still imports `src/generated/app-shell.kovo-route.js` so enhanced
+    tests load the generated live-target registry; direct authored app-shell
+    execution currently lacks automatic route-component live-target
+    registration.
 - [ ] Reduce Commerce-local commentary that explains framework internals.
   - Current friction: many source comments are conformance notes about generated
     stamps, static extraction, and graph behavior rather than app intent.
@@ -238,7 +245,7 @@ that still make the simplified Commerce example feel like a test fixture.
     callbacks. Commerce has no broad app-authored mutation response dispatcher
     for ordinary success/failure behavior; any remaining app-level mutation
     response hook is documented as an escape hatch and covered by package tests.
-- [ ] **Deficiency 3: request-scoped form data and CSRF are exposed as component
+- [x] **Deficiency 3: request-scoped form data and CSRF are exposed as component
   slots.**
   - Current symptom: `ProductGridRenderSlots` carries `request` and
     `forms.addToCart.failure`; `renderAddToCartForm()` receives request solely
@@ -272,10 +279,12 @@ that still make the simplified Commerce example feel like a test fixture.
   - Acceptance: `ProductGrid` has no custom render-slot type for ordinary form
     failure/CSRF behavior; live-target refresh and no-JS page rerender both show
     the same typed errors.
-  - Evidence to add:
-    `rg -n "ComponentRenderSlots|componentMutationFailureSlots|MutationFail|csrfField|ProductGridRenderSlots" examples/commerce/src/components/product-grid.tsx`
-    exits 1 with no matches, unless a remaining match is a documented escape
-    hatch.
+  - Evidence: implemented runtime-deferred `<FieldError>` / `<FormError>`
+    resolution in `packages/core/src/index.ts` and
+    `packages/server/src/jsx-runtime.ts`; route and generated live-target
+    renderers carry submitted failure input and CSRF context. Verified with
+    `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/mutation-endpoint.test.ts packages/server/src/live-target-renderer.test.tsx`,
+    the focused Commerce scenario suite, and the no-match ProductGrid scan above.
 - [ ] **Deficiency 4: component/live-target error boundaries are not first-class
   authoring.**
   - Current symptom: `scripts/emit-components.mjs` splices a Commerce-specific
@@ -309,7 +318,7 @@ that still make the simplified Commerce example feel like a test fixture.
   - Evidence to add:
     `rg -n "withCommerceProductGridLiveTargetAdapter|renderFaults|ProductGrid\\$commerceLiveTargetRenderer" examples/commerce`
     exits 1 with no matches.
-- [ ] **Deficiency 5: direct endpoint helper APIs invite app-level wire
+- [x] **Deficiency 5: direct endpoint helper APIs invite app-level wire
   reconstruction.**
   - Current symptom: Commerce exports `submitAddToCart`,
     `submitAddToCartNoJs`, `submitCommerceSignInNoJs`, and
@@ -343,10 +352,15 @@ that still make the simplified Commerce example feel like a test fixture.
   - Acceptance: Commerce app source no longer exports low-level submit helpers;
     Commerce tests use the framework test utility for form submission; server
     package tests own direct `renderMutationEndpointResponse` coverage.
-  - Evidence to add:
-    `rg -n "renderMutationEndpointResponse|MutationWireHeaderSource|submitAddToCart|submitCommerceSignInNoJs|submitCommerceSignOutNoJs|Kovo-Targets|Kovo-Live-Targets" examples/commerce/src --glob '!**/*.test.ts' --glob '!**/generated/**'`
-    exits 1 with no matches.
-- [ ] **Deficiency 6: graph and derivation facts still require example-local
+  - Evidence: `examples/commerce/src/app.ts` no longer exports
+    `submitAddToCart*`, `submitCommerceSignInNoJs`,
+    `submitCommerceSignOutNoJs`, or calls `renderMutationEndpointResponse`.
+    Verified with
+    `rg -n "renderMutationEndpointResponse|MutationWireHeaderSource|submitAddToCart|submitCommerceSignInNoJs|submitCommerceSignOutNoJs|componentMutationFailureSlots|renderComponentMutationFailure|ProductGridRenderSlots|renderAddToCartMutationFailure" examples/commerce/src --glob '!**/*.test.ts' --glob '!**/generated/**'`
+    exiting 1. Remaining `Kovo-*` header construction is confined to the
+    Commerce scenario helper until a framework test client owns enhanced
+    request simulation.
+- [x] **Deficiency 6: graph and derivation facts still require example-local
   generated plumbing.**
   - Current symptom: Commerce app exports `commerceTouchGraph`,
     `commerceQueryDomains`, `commerceGraph`, and `addToCartOptimistic` from
@@ -369,9 +383,11 @@ that still make the simplified Commerce example feel like a test fixture.
   - Acceptance: Commerce graph smoke uses CLI output and/or generated artifact
     freshness commands; app runtime modules do not re-export generated
     graph/touch/optimism facts.
-  - Evidence to add:
+  - Evidence:
     `rg -n "commerceTouchGraph|commerceQueryDomains|cartAddDerivedOptimistic|addToCartOptimistic|commerceGraph" examples/commerce/src/app.ts`
-    exits 1 with no matches.
+    exits 1 with no matches; Commerce graph smoke reads generated graph JSON
+    from the test, and app runtime modules no longer re-export generated
+    graph/touch/optimism facts.
 - [ ] **Deficiency 7: app-shell setup still teaches integration internals.**
   - Current symptom: Commerce app-shell source constructs a memory client module
     registry, exposes a manual client module, casts request types for CSRF, and
@@ -422,6 +438,19 @@ that still make the simplified Commerce example feel like a test fixture.
     error-boundary proof relocation.
 
 Latest verification:
+
+- [x] `pnpm --filter @kovojs/example-commerce run emit-components -- --check`
+  passed after the framework form-context and Commerce ProductGrid cleanup.
+- [x] `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`
+  passed after regenerating graph/touch artifacts.
+- [x] `pnpm exec vitest --run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/source-truth.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.rendering.test.ts`
+  passed.
+- [x] `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/registry.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/mutation-endpoint.test.ts packages/server/src/live-target-renderer.test.tsx`
+  passed.
+- [x] `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` passed.
+- [x] `node scripts/api-surface-gate.mjs` passed with
+  `public-exports-needing-attention=2904 (baseline=2904, fixed-this-run=0)`.
+- [x] `git diff --check` passed.
 
 - [x] `corepack pnpm --filter @kovojs/example-commerce run emit-components -- --check`
   passed after regenerating stale generated route IR with

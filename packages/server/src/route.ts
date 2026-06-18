@@ -299,7 +299,9 @@ export interface RouteJsxContextOptions<Request> {
   csrf?: CsrfValidationOptions<Request>;
   mutationFailure?: {
     failure: MutationFail;
+    input?: unknown;
     mutationKey: string;
+    target?: string;
   };
 }
 

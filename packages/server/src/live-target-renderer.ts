@@ -9,6 +9,7 @@ import {
   renderComponent,
   type ComponentRenderOptions,
 } from './component-render.js';
+import { runWithJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
 import type { LiveTargetRenderContext, LiveTargetRenderer } from './mutation-wire.js';
 
@@ -61,7 +62,23 @@ export function componentLiveTargetRenderer<
     async render(context) {
       const queries = await loadLiveTargetQueries(queryBindings, context);
       const renderOptions = await componentLiveTargetRenderOptions(options, context);
-      return renderComponent(options.component, { ...context.props, ...queries }, renderOptions);
+      return runWithJsxRequestContext(
+        context.request,
+        {
+          ...(context.csrf === undefined ? {} : { csrf: context.csrf }),
+          ...(context.failure === undefined || context.mutationKey === undefined
+            ? {}
+            : {
+                mutationFailure: {
+                  failure: context.failure,
+                  input: context.input,
+                  mutationKey: context.mutationKey,
+                  target: context.target,
+                },
+              }),
+        },
+        () => renderComponent(options.component, { ...context.props, ...queries }, renderOptions),
+      );
     },
   };
 }
@@ -142,9 +159,9 @@ async function componentLiveTargetRenderOptions<
   };
 }
 
-function componentLiveTargetDefaultSlots(
+function componentLiveTargetDefaultSlots<Request>(
   component: Component<ComponentDefinitionInput>,
-  context: LiveTargetRenderContext<unknown>,
+  context: LiveTargetRenderContext<Request>,
 ): ComponentRenderSlots {
   const forms = isRecord(component.definition.mutations)
     ? Object.fromEntries(

@@ -173,7 +173,8 @@ describe('commerce example', () => {
     );
     expect(
       htmlElementFacts(body, {
-        attrs: { 'kovo-fragment-target': 'add-to-cart:p2' },
+        attrs: { target: 'product-grid' },
+        tag: 'kovo-fragment',
       }),
     ).toHaveLength(1);
     expect(
