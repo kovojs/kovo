@@ -53,7 +53,10 @@ through client navigation.
 - [ ] **`<Link>` and `href()` still lower to real `<a href>`.**
   - JS-off, modified clicks, context-menu open, copy-link, crawlers, and external
     tools all see the canonical URL.
-  - Evidence: pending route/link fixture and JS-off browser route walk.
+  - Evidence so far: `packages/core/src/index.test.ts` and
+    `packages/compiler/src/navigation-lowering.test.ts` prove `href()` and
+    `<Link>` produce real URL/anchor output. Remaining gap: JS-off browser route
+    walk.
 - [x] **Full-document GET is the oracle, not just the fallback.**
   - Phase 1 enhanced navigation fetches the full target document, parses it, and
     morphs from that document. Partial responses are forbidden until the
@@ -94,7 +97,10 @@ through client navigation.
     new-tab/window targets, downloads, hash-only same-document movement,
     `respond.file()`, `respond.stream()`, non-GET outcomes, and unknown content
     types. These use native navigation.
-  - Evidence: pending browser tests for each ineligible class.
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.test.ts`
+    proves cross-origin, modified-click, target, download, hash-only, and nested
+    `on:click` anchors are not intercepted by any inline installer artifact.
+    Remaining gap: file/stream/non-HTML outcome fixtures.
 - [ ] **Redirects and non-200 route outcomes are server-owned.**
   - Enhanced navigation may follow same-origin HTML redirects only when the final
     response passes the same eligibility checks. 403/404/500 shells are target
@@ -242,9 +248,13 @@ through client navigation.
 
 - [ ] **JS-off route walk:** every app route loads and navigates as full documents.
   - Evidence: pending.
-- [ ] **Anchor semantics:** `<Link>` emits `<a href>` and modified/external/hash/
+- [x] **Anchor semantics:** `<Link>` emits `<a href>` and modified/external/hash/
       download navigations remain native.
-  - Evidence: pending.
+  - Evidence: `packages/core/src/index.test.ts` and
+    `packages/compiler/src/navigation-lowering.test.ts` prove typed `href()` and
+    `<Link>` lower to real URL/anchor output; `packages/runtime/src/inline-loader-navigation.test.ts`
+    proves modified, cross-origin, hash-only, target, and download anchor clicks
+    are not intercepted.
 - [ ] **Full-document MVP:** JS-on fetches canonical HTML, morphs compatible
       segments, and falls back on unsupported document-shell drift.
   - Evidence: pending.

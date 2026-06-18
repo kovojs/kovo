@@ -4,6 +4,106 @@ import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
 
 describe('inline loader enhanced navigation fallback', () => {
   it.each(inlineSourceInstallCases)(
+    'leaves ineligible anchor clicks native through %s',
+    async (_name, installSource) => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        history: globalRecord.history,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+        setTimeout: globalRecord.setTimeout,
+      };
+      const listeners = new Map<string, (event: unknown) => Promise<void>>();
+      const fetch = vi.fn();
+
+      try {
+        globalRecord.addEventListener = (
+          type: string,
+          listener: (event: unknown) => Promise<void>,
+        ) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          querySelectorAll: () => [],
+        };
+        globalRecord.fetch = fetch;
+        globalRecord.history = {};
+        globalRecord.location = {
+          href: 'http://app.test/products',
+          origin: 'http://app.test',
+          pathname: '/products',
+          search: '',
+        };
+        globalRecord.setTimeout = vi.fn();
+
+        installSource(async () => ({}), globalRecord);
+
+        const dispatch = async (
+          anchor: { hasAttribute?: (name: string) => boolean; href: string; target?: string },
+          eventOptions: Record<string, unknown> = {},
+          closestOnClick: unknown = null,
+        ) => {
+          const preventDefault = vi.fn();
+          const target = {
+            closest(selector: string) {
+              if (selector === 'a[href]') return anchor;
+              if (selector === '[on\\:click]') return closestOnClick;
+              return null;
+            },
+          };
+          await listeners.get('click')?.({
+            button: 0,
+            defaultPrevented: false,
+            preventDefault,
+            target,
+            type: 'click',
+            ...eventOptions,
+          });
+          return preventDefault;
+        };
+
+        await expect(
+          dispatch({ href: 'https://example.com/out', target: '' }),
+        ).resolves.not.toHaveBeenCalled();
+        await expect(
+          dispatch({ href: 'http://app.test/cart', target: '' }, { metaKey: true }),
+        ).resolves.not.toHaveBeenCalled();
+        await expect(
+          dispatch({ href: 'http://app.test/cart', target: '_blank' }),
+        ).resolves.not.toHaveBeenCalled();
+        await expect(
+          dispatch({ hasAttribute: (name) => name === 'download', href: 'http://app.test/file' }),
+        ).resolves.not.toHaveBeenCalled();
+        await expect(
+          dispatch({ href: 'http://app.test/products#details', target: '' }),
+        ).resolves.not.toHaveBeenCalled();
+        await expect(
+          dispatch({ href: 'http://app.test/cart', target: '' }, {}, { getAttribute: () => null }),
+        ).resolves.not.toHaveBeenCalled();
+
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        Object.assign(globalRecord, {
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+          history: originals.history,
+          location: originals.location,
+          setTimeout: originals.setTimeout,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'falls back to native navigation on build-token mismatch through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
