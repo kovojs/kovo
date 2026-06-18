@@ -2368,13 +2368,8 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
   try {
     const loadedConfig = await loadKovoBuildConfig(process.cwd());
     const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
-    if (selectedPreset.name !== 'node' && selectedPreset.name !== 'vercel') {
-      throw new Error(
-        `kovo build preset ${selectedPreset.name} is not implemented yet; use --preset node or --preset vercel for the current output.`,
-      );
-    }
     const resolvedAppModulePath = resolve(options.appModulePath);
-    const [{ node, vercel, writeKovoNeutralBuild }, appModule] = await Promise.all([
+    const [{ cloudflare, node, vercel, writeKovoNeutralBuild }, appModule] = await Promise.all([
       import('@kovojs/server/build'),
       loadBuildAppModule(resolvedAppModulePath, process.cwd()),
     ]);
@@ -2391,7 +2386,13 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       outDir: join(outDir, '.kovo'),
       serverHandlerSource,
     });
-    const preset = selectedPreset.preset ?? (selectedPreset.name === 'vercel' ? vercel() : node());
+    const preset =
+      selectedPreset.preset ??
+      (selectedPreset.name === 'cloudflare'
+        ? cloudflare()
+        : selectedPreset.name === 'vercel'
+          ? vercel()
+          : node());
     const presetOutDir = buildPresetOutDir(outDir, selectedPreset.name);
     const presetLogs: string[] = [];
     if (typeof preset.emit !== 'function') {
@@ -2423,7 +2424,9 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
 }
 
 function buildPresetOutDir(outDir: string, preset: KovoBuildPresetName): string {
-  return preset === 'vercel' ? join(outDir, '.vercel/output') : join(outDir, 'server');
+  if (preset === 'cloudflare') return join(outDir, 'cloudflare');
+  if (preset === 'vercel') return join(outDir, '.vercel/output');
+  return join(outDir, 'server');
 }
 
 function selectedKovoBuildPreset(

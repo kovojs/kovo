@@ -9,10 +9,11 @@ import * as packageBuildApi from '@kovojs/server/build';
 import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
-import { node, vercel, writeKovoNeutralBuild } from './build.js';
+import { cloudflare, node, vercel, writeKovoNeutralBuild } from './build.js';
 
 describe('server build-time deployment API', () => {
   it('exposes the build subpath without promoting it to the runtime root', () => {
+    expect(packageBuildApi.cloudflare).toBe(cloudflare);
     expect(packageBuildApi.node).toBe(node);
     expect(packageBuildApi.vercel).toBe(vercel);
     expect(packageBuildApi.writeKovoNeutralBuild).toBe(writeKovoNeutralBuild);
@@ -24,6 +25,10 @@ describe('server build-time deployment API', () => {
     expect(vercel({ maxDuration: 10, regions: ['iad1'] })).toMatchObject({
       name: 'vercel',
       options: { maxDuration: 10, regions: ['iad1'] },
+    });
+    expect(cloudflare({ compatibilityDate: '2026-06-18', name: 'kovo-test' })).toMatchObject({
+      name: 'cloudflare',
+      options: { compatibilityDate: '2026-06-18', name: 'kovo-test' },
     });
   });
 
@@ -439,6 +444,116 @@ export default async function handler(request) {
       } finally {
         await close(server);
       }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('emits a Cloudflare Workers project with assets binding and node compatibility', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-preset-'));
+
+    try {
+      const neutralDir = join(root, 'dist', '.kovo');
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/hello', {
+              page() {
+                return '<main>Hello</main>';
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            source: 'export const cart = true;',
+            version: 'cart-v1',
+          },
+        ],
+        outDir: neutralDir,
+        serverHandlerSource: `
+export default async function handler(request) {
+  const url = new URL(request.url);
+  return new Response('cloudflare:' + url.pathname, {
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  });
+}
+`,
+      });
+
+      const logs: string[] = [];
+      const cloudflareOutDir = join(root, 'cloudflare-output');
+      await cloudflare({ compatibilityDate: '2026-06-18', name: 'kovo-test' }).emit(build, {
+        declaredEnv: [],
+        log(message) {
+          logs.push(message);
+        },
+        outDir: cloudflareOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      expect(logs).toEqual([`Emitted Kovo cloudflare preset output to ${cloudflareOutDir}`]);
+      await expect(
+        readFile(join(cloudflareOutDir, 'client/c/cart.client.js'), 'utf8'),
+      ).resolves.toBe('export const cart = true;');
+      await expect(
+        readFile(join(cloudflareOutDir, 'server/handler.mjs'), 'utf8'),
+      ).resolves.toContain('cloudflare:');
+      await expect(readFile(join(cloudflareOutDir, 'wrangler.toml'), 'utf8')).resolves.toBe(
+        [
+          'name = "kovo-test"',
+          'main = "./worker.mjs"',
+          'compatibility_date = "2026-06-18"',
+          'compatibility_flags = ["nodejs_compat"]',
+          '',
+          '[assets]',
+          'directory = "./client"',
+          'binding = "ASSETS"',
+          'run_worker_first = true',
+          '',
+        ].join('\n'),
+      );
+
+      const workerModule = (await import(
+        `${pathToFileURL(join(cloudflareOutDir, 'worker.mjs')).href}?t=${Date.now()}`
+      )) as {
+        default: {
+          fetch(
+            request: Request,
+            env: { ASSETS?: { fetch(request: Request): Promise<Response> } },
+          ): Promise<Response> | Response;
+        };
+      };
+
+      const assetResponse = await workerModule.default.fetch(
+        new Request('https://worker.test/c/cart.client.js?v=cart-v1'),
+        {
+          ASSETS: {
+            fetch: async () =>
+              new Response('export const asset = true;', {
+                headers: { 'content-type': 'text/javascript; charset=utf-8' },
+              }),
+          },
+        },
+      );
+      await expect(assetResponse.text()).resolves.toBe('export const asset = true;');
+      expect(assetResponse.headers.get('cache-control')).toBe(
+        'public, max-age=31536000, immutable',
+      );
+
+      const routeResponse = await workerModule.default.fetch(
+        new Request('https://worker.test/hello'),
+        {
+          ASSETS: {
+            fetch: async () => new Response('Not Found', { status: 404 }),
+          },
+        },
+      );
+      await expect(routeResponse.text()).resolves.toBe('cloudflare:/hello');
+      expect(routeResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
     } finally {
       await rm(root, { force: true, recursive: true });
     }

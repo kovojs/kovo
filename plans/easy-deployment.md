@@ -397,9 +397,28 @@ build.test.ts` and `packages/cli/src/index.kovo-build.test.ts` for
 
 - [ ] Worker entry + `wrangler.toml` with `nodejs_compat`; Workers Assets for
       static; `inspect()` TCP-DB warning + Containers/Hyperdrive guidance.
-- [ ] Auto-detect on `CF_PAGES` env.
+  - Partial evidence: `packages/server/src/build.ts` exposes `cloudflare()` from
+    `@kovojs/server/build`; `cloudflare().emit()` writes `worker.mjs`,
+    `server/handler.mjs`, `client/`, and `wrangler.toml` with
+    `compatibility_flags = ["nodejs_compat"]`, `assets.binding = "ASSETS"`, and
+    `run_worker_first = true`. `packages/server/src/build.test.ts` verifies the
+    emitted layout, immutable asset header behavior through a fake `ASSETS`
+    binding, and dynamic fallback to the bundled Web handler. The item remains
+    partial for TCP-DB warning / Containers / Hyperdrive diagnostics.
+- [x] Auto-detect on `CF_PAGES` env.
+  - Evidence: `packages/cli/src/index.ts` selects the Cloudflare preset for
+    `CF_PAGES` / `CLOUDFLARE`, and `packages/cli/src/index.kovo-build.test.ts`
+    verifies `CF_PAGES=1` emits `dist/cloudflare/wrangler.toml` and that
+    `KOVO_PRESET=cloudflare` wins over `VERCEL=1`.
 - [ ] Evidence: `wrangler deploy --dry-run` validates; `inspect()` unit tests for
       the banned-API and DB-driver diagnostics.
+  - Partial evidence: a repo-local temporary app was built with
+    `node_modules/.bin/jiti packages/cli/src/bin.ts build <app> --out <dir>
+--preset cloudflare`, then `corepack pnpm dlx wrangler deploy --dry-run
+--outdir <dir>/wrangler-out` was run from the emitted `dist/cloudflare`
+    directory. Wrangler 4.101.0 read the emitted assets, reported the `ASSETS`
+    binding, and exited due to `--dry-run`. The diagnostics half of this item
+    remains open.
 
 ### Phase 4 — Templates, docs, examples
 

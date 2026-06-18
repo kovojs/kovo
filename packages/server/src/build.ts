@@ -84,6 +84,24 @@ export interface VercelPreset extends KovoPreset {
   options: VercelPresetOptions;
 }
 
+/** Options for the built-in Cloudflare Workers preset. */
+export interface CloudflarePresetOptions {
+  /** Worker compatibility date; defaults to the first date that supports `nodejs_compat` v2. */
+  compatibilityDate?: string;
+  /** Generated Worker name in `wrangler.toml`; defaults to `kovo-app`. */
+  name?: string;
+}
+
+/** Built-in Cloudflare Workers preset descriptor returned by `cloudflare()`. */
+export interface CloudflarePreset extends KovoPreset {
+  /** Emit a Wrangler project from Kovo's neutral build artifact. */
+  emit(build: KovoNeutralBuild, context: PresetContext): Promise<void>;
+  /** Return blocking diagnostics when the neutral build lacks a request handler. */
+  inspect(build: KovoNeutralBuild): readonly PresetDiagnostic[];
+  /** Options captured by `cloudflare()`. */
+  options: CloudflarePresetOptions;
+}
+
 /** Build-time project configuration loaded from `kovo.config.ts`. */
 export interface KovoConfig {
   /** Platform preset used by `kovo build` when CLI/env overrides are absent. */
@@ -147,6 +165,33 @@ export function vercel(options: VercelPresetOptions = {}): VercelPreset {
         : [];
     },
     name: 'vercel',
+    options,
+  };
+}
+
+/**
+ * Create the built-in Cloudflare Workers preset descriptor.
+ *
+ * The emitted output is a Wrangler project with a module Worker, static assets
+ * binding, and `nodejs_compat` enabled for the current Node-first request path.
+ */
+export function cloudflare(options: CloudflarePresetOptions = {}): CloudflarePreset {
+  return {
+    emit(build, context) {
+      return emitCloudflarePreset(build, context, options);
+    },
+    inspect(build) {
+      return build.serverHandlerPath === undefined
+        ? [
+            {
+              code: 'cloudflare-missing-handler',
+              message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
+              severity: 'error',
+            },
+          ]
+        : [];
+    },
+    name: 'cloudflare',
     options,
   };
 }
@@ -334,6 +379,26 @@ async function emitVercelPreset(
   context.log(`Emitted Kovo vercel preset output to ${outDir}`);
 }
 
+async function emitCloudflarePreset(
+  build: KovoNeutralBuild,
+  context: PresetContext,
+  options: CloudflarePresetOptions,
+): Promise<void> {
+  if (build.serverHandlerPath === undefined) {
+    throw new Error('The cloudflare preset requires a neutral build with server/handler.mjs.');
+  }
+
+  const outDir = resolvedFileSystemPath(context.outDir);
+  await mkdir(outDir, { recursive: true });
+  await cp(build.clientDir, path.join(outDir, 'client'), { recursive: true });
+  await mkdir(path.join(outDir, 'server'), { recursive: true });
+  await copyFile(build.serverHandlerPath, path.join(outDir, 'server/handler.mjs'));
+  await writeFile(path.join(outDir, 'worker.mjs'), cloudflareWorkerSource(), 'utf8');
+  await writeFile(path.join(outDir, 'wrangler.toml'), wranglerTomlSource(options), 'utf8');
+
+  context.log(`Emitted Kovo cloudflare preset output to ${outDir}`);
+}
+
 async function copyNeutralStaticAssets(
   assets: readonly KovoNeutralBuild['staticAssets'][number][],
   clientDir: string,
@@ -471,6 +536,54 @@ function firstHeaderValue(value) {
   return Array.isArray(value) ? value[0] : value;
 }
 `;
+}
+
+function cloudflareWorkerSource(): string {
+  return `import handler from './server/handler.mjs';
+
+const immutableCacheControl = ${JSON.stringify(immutableCacheControl)};
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if ((url.pathname.startsWith('/assets/') || url.pathname.startsWith('/c/')) && env.ASSETS) {
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (assetResponse.status !== 404) {
+        const headers = new Headers(assetResponse.headers);
+        headers.set('cache-control', immutableCacheControl);
+        return new Response(assetResponse.body, {
+          headers,
+          status: assetResponse.status,
+          statusText: assetResponse.statusText,
+        });
+      }
+    }
+
+    return handler(request);
+  },
+};
+`;
+}
+
+function wranglerTomlSource(options: CloudflarePresetOptions): string {
+  const name = options.name ?? 'kovo-app';
+  const compatibilityDate = options.compatibilityDate ?? '2024-09-23';
+  return [
+    `name = ${tomlString(name)}`,
+    'main = "./worker.mjs"',
+    `compatibility_date = ${tomlString(compatibilityDate)}`,
+    'compatibility_flags = ["nodejs_compat"]',
+    '',
+    '[assets]',
+    'directory = "./client"',
+    'binding = "ASSETS"',
+    'run_worker_first = true',
+    '',
+  ].join('\n');
+}
+
+function tomlString(value: string): string {
+  return JSON.stringify(value);
 }
 
 function nodeServerSource(): string {

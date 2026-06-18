@@ -389,22 +389,74 @@ describe('kovo build', () => {
   });
 
   it('uses KOVO_PRESET before host auto-detection', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cloudflare-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      const exitCode = await withEnv({ KOVO_PRESET: 'cloudflare', VERCEL: '1' }, () =>
-        mainAsync(['build', 'missing-app.mjs']),
-      );
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(appPath, appModuleSource(), 'utf8');
+      writeClientEntry(root);
 
-      expect(exitCode).toBe(1);
-      expect(stdout).not.toHaveBeenCalled();
-      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
-        'kovo build preset cloudflare is not implemented yet',
+      const exitCode = await withEnv({ KOVO_PRESET: 'cloudflare', VERCEL: '1' }, () =>
+        mainAsync(['build', appPath, '--out', outDir]),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('SUMMARY preset=cloudflare');
+      expect(output).toContain(`serverOutDir=${JSON.stringify(join(outDir, 'cloudflare'))}`);
+      expect(readFileSync(join(outDir, 'cloudflare/wrangler.toml'), 'utf8')).toContain(
+        'compatibility_flags = ["nodejs_compat"]',
+      );
+      expect(readFileSync(join(outDir, 'cloudflare/worker.mjs'), 'utf8')).toContain(
+        "import handler from './server/handler.mjs';",
+      );
+      expect(readFileSync(join(outDir, 'cloudflare/client/c/cart.client.js'), 'utf8')).toBe(
+        'export const cartClient = true;',
       );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('auto-detects Cloudflare Pages and emits Wrangler output', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cloudflare-auto-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(appPath, appModuleSource(), 'utf8');
+      writeClientEntry(root);
+
+      const exitCode = await withEnv({ CF_PAGES: '1' }, () =>
+        mainAsync(['build', appPath, '--out', outDir]),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'SUMMARY preset=cloudflare',
+      );
+      expect(readFileSync(join(outDir, 'cloudflare/wrangler.toml'), 'utf8')).toContain(
+        'run_worker_first = true',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
     }
   });
 });
