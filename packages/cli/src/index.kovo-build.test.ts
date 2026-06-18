@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import type { Server } from 'node:http';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -57,6 +65,74 @@ describe('kovo build', () => {
         await expect(queryResponse.text()).resolves.toBe(
           '<kovo-query name="cart">{"count":2}</kovo-query>',
         );
+      } finally {
+        await close(server);
+      }
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('boots emitted node preset output from production dependencies with dev-package guards', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-prod-deps-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const runtimeDir = join(root, 'runtime');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(process.cwd(), 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(appPath, appModuleSource(), 'utf8');
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      cpSync(join(outDir, 'server'), runtimeDir, { recursive: true });
+      writeProductionOnlyRuntimeNodeModules(runtimeDir);
+      mkdirSync(join(runtimeDir, 'client/assets'), { recursive: true });
+      writeFileSync(join(runtimeDir, 'client/assets/prod-proof.txt'), 'asset:prod\n', 'utf8');
+
+      const handlerSource = readFileSync(join(runtimeDir, 'server/handler.mjs'), 'utf8');
+      expect(handlerSource).not.toContain('vite');
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(runtimeDir, 'server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const origin = await listen(server);
+
+      try {
+        const document = await fetch(`${origin}/cart`);
+        await expect(document.text()).resolves.toContain('<main>Cart 0</main>');
+        expect(document.status).toBe(200);
+
+        const mutationResponse = await fetch(`${origin}/_m/cart/add`, {
+          body: new URLSearchParams({ quantity: '3' }),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          method: 'POST',
+          redirect: 'manual',
+        });
+        expect(mutationResponse.status).toBe(303);
+
+        const updatedDocument = await fetch(`${origin}/cart`);
+        await expect(updatedDocument.text()).resolves.toContain('<main>Cart 3</main>');
+        expect(updatedDocument.status).toBe(200);
+
+        const assetResponse = await fetch(`${origin}/assets/prod-proof.txt`);
+        await expect(assetResponse.text()).resolves.toBe('asset:prod\n');
+        expect(assetResponse.status).toBe(200);
+        expect(assetResponse.headers.get('cache-control')).toBe(
+          'public, max-age=31536000, immutable',
+        );
+        expect(assetResponse.headers.get('content-type')).toBe('application/octet-stream');
       } finally {
         await close(server);
       }
@@ -126,4 +202,44 @@ async function close(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
+}
+
+function writeProductionOnlyRuntimeNodeModules(runtimeDir: string): void {
+  const packageRoot = join(runtimeDir, 'node_modules');
+  const kovoRoot = join(packageRoot, '@kovojs');
+  mkdirSync(kovoRoot, { recursive: true });
+
+  for (const name of ['core', 'runtime', 'server']) {
+    cpSync(join(process.cwd(), 'packages', name), join(kovoRoot, name), {
+      recursive: true,
+    });
+  }
+
+  writeThrowingPackage(packageRoot, 'vite');
+  writeThrowingPackage(packageRoot, 'vite-plus');
+}
+
+function writeThrowingPackage(packageRoot: string, packageName: string): void {
+  const packageDir = join(packageRoot, packageName);
+  mkdirSync(packageDir, { recursive: true });
+  writeFileSync(
+    join(packageDir, 'package.json'),
+    JSON.stringify({
+      exports: {
+        '.': './index.mjs',
+        './*': './index.mjs',
+      },
+      name: packageName,
+      type: 'module',
+      version: '0.0.0-dev-guard',
+    }),
+    'utf8',
+  );
+  writeFileSync(
+    join(packageDir, 'index.mjs'),
+    `throw new Error(${JSON.stringify(
+      `${packageName} must not be imported by emitted kovo build output at request time`,
+    )});\n`,
+    'utf8',
+  );
 }

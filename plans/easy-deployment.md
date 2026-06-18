@@ -264,8 +264,14 @@ Design decisions to lock in code review:
     `dist/server/server.mjs`, and verifies a route, `/_m/` mutation, and `/_q/`
     query response without Vite in the request path. The full item remains open
     because `kovo build` does not yet run the client build/manifest pipeline, so
-    `/c/` modules from the CLI build path and a prod-deps-only `node_modules`
-    boot are not proven.
+    `/c/` modules from the CLI build path are not proven.
+  - Additional evidence: `packages/cli/src/index.kovo-build.test.ts` boots the
+    emitted node preset output copied into a runtime root with only production
+    Kovo package roots (`@kovojs/core`, `@kovojs/runtime`, `@kovojs/server`) plus
+    throwing `vite`/`vite-plus` guard packages, then verifies a route, a `/_m/`
+    mutation, and an immutable `/assets/*` response. The `/c/` modules from the
+    CLI build path remain unproven until `kovo build` owns the client
+    build/manifest pipeline.
 - [ ] Wire `kovo build` into `packages/cli` (a thin wrapper, exactly like
       `kovo export` over `exportStaticApp`); it reads `kovo.config.ts` + host env,
       runs client build → server bundle → neutral emit → preset.
@@ -277,8 +283,13 @@ Design decisions to lock in code review:
     `vite-plus` dependency needed by the build command. The full item remains open
     because config loading, host-env preset selection, client build/manifest
     orchestration, and non-node presets are not implemented.
-- [ ] Evidence target: a test that boots `server/handler.mjs` in a clean
+- [x] Evidence target: a test that boots `server/handler.mjs` in a clean
       `node_modules` (prod deps only) and asserts route/mutation/asset responses.
+  - Evidence: `corepack pnpm exec vitest --run
+    packages/cli/src/index.kovo-build.test.ts` covers the emitted node preset
+    `server.mjs` importing `server/handler.mjs` from a runtime root with only
+    production Kovo package roots and throwing `vite`/`vite-plus` guard packages;
+    it verifies route, mutation, and immutable asset responses.
 
 ### Phase 1 — Preset interface + `node` preset (in `@kovojs/server/build`)
 
@@ -366,7 +377,9 @@ Design decisions to lock in code review:
   --noEmit --pretty false`; `corepack pnpm run check:exports`; `corepack pnpm
   run check:imports`; `corepack pnpm run check:api-surface`; `corepack pnpm run
   check:publish`; `git diff --check`.
-- Neutral build prod-dep boot test: _(Phase 0)_
+- Neutral build prod-dep boot test: `corepack pnpm exec vitest --run
+  packages/cli/src/index.kovo-build.test.ts`; `corepack pnpm exec tsc -p
+  tsconfig.json --noEmit --pretty false`; `git diff --check`.
 - Node preset emitted-server smoke: `corepack pnpm exec vitest --run
   packages/server/src/build.test.ts`; `corepack pnpm exec tsc -p tsconfig.json
   --noEmit --pretty false`; `corepack pnpm run check:exports`; `corepack pnpm run
