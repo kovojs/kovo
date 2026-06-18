@@ -257,6 +257,13 @@ internals, emit/check scripts, and narrowly named artifact tests.
     --filter @kovojs/site test`, and `git diff --check` passed. Keep open for
     remaining class-based docs components, especially `chrome.tsx` and
     `landing.tsx`.
+  - Current progress: tutorial authored component snippets now co-locate
+    component styles with `@kovojs/style`, generated tutorial component
+    artifacts were refreshed, and `rg -n "class=|style\\.attrs"
+    site/tutorial/steps/*/src --glob '!**/generated/**' -S`, `pnpm --filter
+    @kovojs/site test`, `pnpm exec vitest --run site/tutorial/steps`, and `git
+    diff --check` passed. Keep open for remaining class-based docs site
+    components.
 
 ## Verification
 
