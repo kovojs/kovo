@@ -360,6 +360,16 @@ item inherits from rather than re-deciding it:
       `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
       `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`;
       `pnpm exec vitest --run packages/server/src/component-render.test.tsx`.
+    - Follow-up audit removed the remaining StackOverflow and CRM app-authored
+      `mutationResponses` failure-display overrides; duplicate-title and
+      duplicate-email failures now rerender through the generated live-target
+      path and the authored `<FormError>` components. Verification:
+      `rg -n "mutationResponses|renderComponentMutationFailure|renderFailureFragment|failureTarget|questionList\.load|questionScore\.load|contactListQuery\.load" examples/stackoverflow/src/interactive-app.tsx examples/stackoverflow/src/generated/interactive-app.kovo-route.tsx examples/crm/src/interactive-app.tsx examples/crm/src/generated/interactive-app.kovo-route.tsx`
+      exits 1 with no hits; `pnpm --filter @kovojs/example-stackoverflow run
+      emit-components -- --check`; `pnpm --filter @kovojs/example-crm run
+      emit-components -- --check`; `pnpm --filter @kovojs/example-stackoverflow
+      test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-crm test
+      -- interactive-app.test.ts`.
     - Root gates pass: `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
       `node scripts/api-surface-gate.mjs`; `git diff --check`.
 
