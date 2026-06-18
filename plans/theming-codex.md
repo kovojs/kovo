@@ -142,9 +142,14 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
       `packages/headless-ui/src/lib/token-sheet.ts` and decide whether the M3 sheet preserves
       existing document aliases such as `--color-*` / `@theme inline`, replaces them, or emits both
       during a migration window. Evidence: token-sheet test updates.
-- [ ] **A9. Type-level and unit tests.** Assert token names, generated CSS variable names,
+- [x] **A9. Type-level and unit tests.** Assert token names, generated CSS variable names,
       light/dark role presence, custom-color groups, deterministic output, and exact known outputs
       for a canonical seed such as `#6750A4`.
+  - Evidence: `packages/style/src/index.test.ts` pins public token var names,
+    exact `#6750A4` generated values, custom color groups, CSS variable names,
+    `base` composition, unsupported contrast behavior, and generated on-role
+    contrast pairs. Verification: `corepack pnpm --filter @kovojs/style test`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 - [x] **A10. Keep callback overrides out of v1.** Document in JSDoc/design notes that derived themes
       should use the `base` form; do not expose a placeholder callback option.
   - Evidence: `packages/style/src/theme.ts` exposes only seed and `base` object
@@ -225,9 +230,13 @@ base, sys: { color: { outline: base.sys.color.primary } } });` for apps that wan
     and Kovo-owned public types; `node scripts/api-surface-gate.mjs && node
     site/scripts/api-ref.mjs && node site/scripts/api-examples-check.mjs` passes
     with `api-ref/v1 packages=8 exports=641 documented=465`.
-- [ ] **E5. Accessibility proof.** Add a focused conformance note/test for important `on-*` role
+- [x] **E5. Accessibility proof.** Add a focused conformance note/test for important `on-*` role
       foreground/background pairs using the generated contrast level, following
       `rules/accessibility-conformance.md`. Do not claim WCAG coverage without the cited evidence.
+  - Evidence: `packages/style/src/index.test.ts` verifies canonical generated
+    light and dark `on-*` foreground/background role pairs have contrast ratio
+    at least 4.5, without making broader primitive accessibility claims.
+    Verification: `corepack pnpm --filter @kovojs/style test`.
 
 ---
 

@@ -238,7 +238,54 @@ describe('@kovojs/style phase 1 runtime fork', () => {
       'theme.themeFromSeed supports only contrast: 0 in this release.',
     );
   });
+
+  it('keeps generated on-* role pairs at readable contrast for the canonical seed', () => {
+    const theme = themeFromSeed('#6750A4');
+    const pairs = [
+      ['primary', 'onPrimary'],
+      ['primaryContainer', 'onPrimaryContainer'],
+      ['secondary', 'onSecondary'],
+      ['secondaryContainer', 'onSecondaryContainer'],
+      ['tertiary', 'onTertiary'],
+      ['tertiaryContainer', 'onTertiaryContainer'],
+      ['error', 'onError'],
+      ['errorContainer', 'onErrorContainer'],
+      ['surface', 'onSurface'],
+      ['background', 'onBackground'],
+    ] as const;
+
+    for (const scheme of [theme.light, theme.dark]) {
+      for (const [background, foreground] of pairs) {
+        expect(
+          contrastRatio(scheme.sys.color[background], scheme.sys.color[foreground]),
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
 });
+
+function contrastRatio(background: string, foreground: string): number {
+  const bg = relativeLuminance(background);
+  const fg = relativeLuminance(foreground);
+  const lighter = Math.max(bg, fg);
+  const darker = Math.min(bg, fg);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function relativeLuminance(hex: string): number {
+  const channels = hex
+    .slice(1)
+    .match(/../g)
+    ?.map((channel) => Number.parseInt(channel, 16) / 255);
+  const red = channels?.[0] ?? 0;
+  const green = channels?.[1] ?? 0;
+  const blue = channels?.[2] ?? 0;
+  return 0.2126 * linearize(red) + 0.7152 * linearize(green) + 0.0722 * linearize(blue);
+}
+
+function linearize(channel: number): number {
+  return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+}
 
 describe('ported upstream StyleX runtime fixtures', () => {
   it('snapshots supported upstream error handling for missing inputs', () => {
