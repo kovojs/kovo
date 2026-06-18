@@ -113,10 +113,15 @@ internals, emit/check scripts, and narrowly named artifact tests.
     --run src/interactive-app.test.ts` and `pnpm --filter
     @kovojs/example-stackoverflow exec vitest --run src/interactive-app.test.ts`
     passed and assert authored CSS does not contain `./generated/`.
-- [ ] Audit public demo modules that export generated graph/optimistic artifacts.
+- [x] Audit public demo modules that export generated graph/optimistic artifacts.
   - Decision needed: either keep them behind explicitly named artifact exports or
     move them to package/conformance coverage so the public demo surface stays
     authored-first.
+  - Evidence: `examples/crm/src/index.ts` and
+    `examples/stackoverflow/src/app.ts` no longer import or re-export generated
+    graph/optimistic artifacts; `rg "generated/" examples/crm/src/index.ts
+    examples/stackoverflow/src/app.ts -n` returned no matches, and focused CRM
+    graph/optimistic plus StackOverflow interactive tests passed.
 
 ## Vite Config Simplification
 
