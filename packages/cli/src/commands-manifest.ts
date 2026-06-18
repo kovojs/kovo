@@ -43,7 +43,7 @@ export const EXPLAIN_USAGE_LINE =
 export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
 
 /** @internal Usage line emitted for `kovo build` (see `buildUsage`). */
-export const BUILD_USAGE = 'usage: kovo build <app-module> [--out <dir>] [--preset node]';
+export const BUILD_USAGE = 'usage: kovo build <app-module> [--out <dir>] [--preset <name>]';
 
 /** @internal Usage forms emitted for `kovo compile` (see `compileUsage`). */
 export const COMPILE_USAGE = [
@@ -156,8 +156,9 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
     flags: [
       { flag: '--out <dir>', description: 'Output directory for the neutral and preset artifacts.' },
       {
-        flag: '--preset node',
-        description: 'Select the built-in Node/VPS preset. Other presets land in later phases.',
+        flag: '--preset <name>',
+        description:
+          'Preset override. Current emitter: node; vercel/cloudflare fail loudly until their emitters land.',
       },
     ],
     examples: ['kovo build ./src/app-shell.ts --out dist'],

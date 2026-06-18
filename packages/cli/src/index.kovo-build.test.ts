@@ -28,7 +28,9 @@ describe('kovo build', () => {
       symlinkSync(join(process.cwd(), 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(appPath, appModuleSource(), 'utf8');
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withEnv({ VERCEL: '1' }, () =>
+        mainAsync(['build', appPath, '--out', outDir, '--preset', 'node']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
 
@@ -142,6 +144,46 @@ describe('kovo build', () => {
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  it('fails loudly for detected presets that do not have emitters yet', async () => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      const exitCode = await withEnv({ VERCEL: '1' }, () =>
+        mainAsync(['build', 'missing-app.mjs']),
+      );
+
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'kovo build preset vercel is not implemented yet',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
+
+  it('uses KOVO_PRESET before host auto-detection', async () => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      const exitCode = await withEnv({ CF_PAGES: '1', KOVO_PRESET: 'vercel' }, () =>
+        mainAsync(['build', 'missing-app.mjs']),
+      );
+
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'kovo build preset vercel is not implemented yet',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
 });
 
 function appModuleSource(): string {
@@ -242,4 +284,25 @@ function writeThrowingPackage(packageRoot: string, packageName: string): void {
     )});\n`,
     'utf8',
   );
+}
+
+async function withEnv<T>(
+  values: Record<string, string | undefined>,
+  run: () => Promise<T>,
+): Promise<T> {
+  const previous = Object.fromEntries(
+    Object.keys(values).map((key) => [key, process.env[key]] as const),
+  );
+  try {
+    for (const [key, value] of Object.entries(values)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    return await run();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 }

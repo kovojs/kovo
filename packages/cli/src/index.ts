@@ -743,10 +743,12 @@ type ExportArgParseResult =
   | { ok: true; options: KovoExportOptions }
   | { message: string; ok: false };
 
+type KovoBuildPresetName = 'cloudflare' | 'node' | 'vercel';
+
 interface KovoBuildOptions {
   appModulePath: string;
   outDir: string;
-  preset: 'node';
+  preset?: KovoBuildPresetName;
 }
 
 type BuildArgParseResult =
@@ -2034,7 +2036,7 @@ function siteLineNumber(site: string): number {
 function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
   let appModulePath: string | undefined;
   let outDir = 'dist';
-  let preset: KovoBuildOptions['preset'] = 'node';
+  let preset: KovoBuildPresetName | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -2061,10 +2063,11 @@ function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
     if (arg === '--preset') {
       const value = args[index + 1];
       if (!value) return { message: 'kovo: build --preset requires a preset name.\n', ok: false };
-      if (value !== 'node') {
+      const parsedPreset = parseKovoBuildPresetName(value);
+      if (!parsedPreset) {
         return { message: `kovo: unsupported build preset ${stableValue(value)}.\n`, ok: false };
       }
-      preset = value;
+      preset = parsedPreset;
       index += 1;
       continue;
     }
@@ -2072,10 +2075,11 @@ function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
     if (arg.startsWith('--preset=')) {
       const value = arg.slice('--preset='.length);
       if (!value) return { message: 'kovo: build --preset requires a preset name.\n', ok: false };
-      if (value !== 'node') {
+      const parsedPreset = parseKovoBuildPresetName(value);
+      if (!parsedPreset) {
         return { message: `kovo: unsupported build preset ${stableValue(value)}.\n`, ok: false };
       }
-      preset = value;
+      preset = parsedPreset;
       continue;
     }
 
@@ -2101,9 +2105,13 @@ function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
     options: {
       appModulePath,
       outDir,
-      preset,
+      ...(preset === undefined ? {} : { preset }),
     },
   };
+}
+
+function parseKovoBuildPresetName(value: string): KovoBuildPresetName | undefined {
+  return value === 'node' || value === 'vercel' || value === 'cloudflare' ? value : undefined;
 }
 
 function buildUsage(): string {
@@ -2280,6 +2288,12 @@ function exportUsage(): string {
 
 async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandResult> {
   try {
+    const presetName = selectedKovoBuildPreset(options);
+    if (presetName !== 'node') {
+      throw new Error(
+        `kovo build preset ${presetName} is not implemented yet; use --preset node for the current Node/VPS output.`,
+      );
+    }
     const resolvedAppModulePath = resolve(options.appModulePath);
     const [{ node, writeKovoNeutralBuild }, appModule] = await Promise.all([
       import('@kovojs/server/build'),
@@ -2311,13 +2325,28 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       appModulePath: resolvedAppModulePath,
       neutralOutDir: neutralBuild.outDir,
       outDir,
-      preset: options.preset,
+      preset: presetName,
       presetLogs,
       serverOutDir: join(outDir, 'server'),
     });
   } catch (error) {
     return buildErrorResult(error);
   }
+}
+
+function selectedKovoBuildPreset(options: KovoBuildOptions): KovoBuildPresetName {
+  if (options.preset !== undefined) return options.preset;
+
+  const envPreset = process.env.KOVO_PRESET;
+  if (envPreset) {
+    const parsedPreset = parseKovoBuildPresetName(envPreset);
+    if (!parsedPreset) throw new Error(`unsupported KOVO_PRESET ${stableValue(envPreset)}`);
+    return parsedPreset;
+  }
+
+  if (process.env.VERCEL) return 'vercel';
+  if (process.env.CF_PAGES || process.env.CLOUDFLARE) return 'cloudflare';
+  return 'node';
 }
 
 async function bundleKovoServerHandler(appModulePath: string): Promise<string> {
