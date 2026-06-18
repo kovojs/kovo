@@ -18,14 +18,12 @@ import {
   renderQueryRegistryEndpointResponse,
   renderRoutePageResponse,
   route,
-  runMutation,
-  runQuery,
-  runRoutePage,
   session,
   s,
   stylesheetsForTargets,
   t,
 } from '@kovojs/server';
+import { runMutation, runQuery, runRoutePage } from '@kovojs/server/internal/execution';
 import { createQueryStore, submitEnhancedMutation } from '@kovojs/runtime';
 
 import {

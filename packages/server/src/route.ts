@@ -305,6 +305,11 @@ export interface RouteJsxContextOptions<Request> {
   };
 }
 
+/**
+ * Run a route page directly for framework dispatch and conformance fixtures.
+ *
+ * @internal
+ */
 export async function runRoutePage<
   const Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>>,

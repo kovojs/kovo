@@ -1,4 +1,4 @@
-import { endpointMatches, runEndpoint } from '@kovojs/server';
+import { endpointMatches, runEndpoint } from '@kovojs/server/internal/execution';
 import { mount } from '@kovojs/better-auth';
 import { getAuthTables } from 'better-auth';
 import { deviceAuthorization, oidcProvider, twoFactor } from 'better-auth/plugins';

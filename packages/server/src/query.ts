@@ -231,6 +231,7 @@ export type QueryResult<Query> = Query extends { load: (...args: never[]) => inf
  * @param request - The per-request value passed to `load`.
  * @param options - Optional session provider and error hook.
  * @returns A `QueryEndpointResult`: a success with the value, or a typed failure.
+ * @internal
  */
 export async function runQuery<const Key extends string, Value, Input, Request>(
   definition: QueryDefinition<Key, Value, Input, Request>,

@@ -329,6 +329,7 @@ export function errorBoundary<Renderer extends FragmentRenderer>(
  * @param request - The per-request value passed to the handler.
  * @param options - Optional CSRF, session provider, and error hook.
  * @returns A `MutationResult`: a success with changes/value, or a typed failure.
+ * @internal
  */
 export async function runMutation<
   const Key extends string,

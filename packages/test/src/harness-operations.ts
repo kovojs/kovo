@@ -5,7 +5,7 @@ import type {
   QueryDefinition,
   Schema,
 } from '@kovojs/server';
-import { runMutation } from '@kovojs/server';
+import { runMutation } from '@kovojs/server/internal/execution';
 import { createPageAssertion, type PageAssertion } from './page.js';
 import { diagnosticMessage } from './verifier-diagnostics.js';
 import type { ObservedDbOperation } from './verifier-observation.js';

@@ -1,4 +1,5 @@
-import { renderRoutePageResponse, route, runMutation } from '@kovojs/server';
+import { renderRoutePageResponse, route } from '@kovojs/server';
+import { runMutation } from '@kovojs/server/internal/execution';
 import { createKovoTestHarness } from '@kovojs/test/harness';
 import { describe, expect, it } from 'vitest';
 

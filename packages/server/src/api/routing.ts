@@ -12,7 +12,7 @@ export type {
   Route,
 } from '@kovojs/core';
 export type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
-export { endpoint, endpointMatches, runEndpoint } from '../endpoint.js';
+export { endpoint } from '../endpoint.js';
 export type {
   EndpointDeclaration,
   EndpointDefinition,
@@ -61,7 +61,6 @@ export {
   notFound,
   renderRoutePageResponse,
   route,
-  runRoutePage,
 } from '../route.js';
 export type {
   LayoutDeclaration,

@@ -433,7 +433,7 @@ packages/create-kovo/src/index.test.ts`.
       `@kovojs/server/internal/static-export`. Verification:
       `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
       `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
-- [ ] **Move request-shell execution helpers internal-only.**
+- [x] **Move request-shell execution helpers internal-only.**
   - Remove these from public `@kovojs/server` exports unless a concrete app-authored
     use case is documented: `runEndpoint`, `runMutation`, `runQuery`,
     `runRoutePage`, `runWebhook`, `parseRouteRequest`, and `endpointMatches`.
@@ -448,6 +448,22 @@ packages/create-kovo/src/index.test.ts`.
       `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/api-ref.test.mjs scripts/exported-symbols.test.mjs`;
       `corepack pnpm run check:exports`; `node scripts/api-surface-gate.mjs`;
       `node site/scripts/api-ref.mjs`; `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
+  - [x] Move `runEndpoint`, `endpointMatches`, `runMutation`, `runQuery`, and
+        `runRoutePage` behind `@kovojs/server/internal/execution`.
+    - Evidence: `packages/server/src/api/data.ts` no longer exports
+      `runMutation` or `runQuery`; `packages/server/src/api/routing.ts` no
+      longer exports `runEndpoint`, `endpointMatches`, or `runRoutePage`;
+      `packages/server/src/internal/execution.ts` exports the moved helpers with
+      `@internal` source declarations. App-authored `examples/reference/src/app.ts`
+      no longer exports direct no-JS submit helpers that call `runMutation`.
+      Repo test/conformance fixtures import the runners from
+      `@kovojs/server/internal/execution`. Verification:
+      `rg -n "from ['\\\"]@kovojs/server['\\\"][^;]*(runEndpoint|endpointMatches|runMutation|runQuery|runRoutePage)|import \\{[^}]*\\b(runEndpoint|endpointMatches|runMutation|runQuery|runRoutePage)\\b[^}]*\\} from ['\\\"]@kovojs/server['\\\"]" . --glob '!**/node_modules/**' --glob '!**/dist/**' --glob '!**/generated/**'`
+      exits 1; `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/better-auth/src/index.session.test.ts packages/better-auth/src/index.credential-mutations.test.ts conformance/better-auth-pin/src/index.verifier.test.ts conformance/better-auth-pin/src/index.session-credentials.test.ts packages/conformance-fixtures/src/server-fixtures.test.ts packages/test/src/harness-operations.test.ts examples/commerce/src/app.auth.test.ts examples/commerce/src/app-shell.test.ts examples/reference/src/app.test.ts`;
+      `corepack pnpm exec vitest --run scripts/public-packages.test.mjs`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
+      `corepack pnpm run check:imports`; `corepack pnpm run check:exports`.
 - [ ] **Move mutation/query/route response renderers internal-only.**
   - Remove these from public `@kovojs/server` exports unless a concrete app-authored
     use case is documented: `renderMutationEndpointResponse`,

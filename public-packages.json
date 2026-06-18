@@ -37,6 +37,7 @@
         "internal": [
           "./internal/app-shell-vite",
           "./internal/client-modules",
+          "./internal/execution",
           "./internal/html",
           "./internal/route",
           "./internal/static-export",

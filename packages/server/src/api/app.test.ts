@@ -7,6 +7,7 @@ import * as packageNodeApi from '@kovojs/server/app-shell/node';
 import * as packageStaticExportApi from '@kovojs/server/app-shell/static-export';
 import * as packageViteApi from '@kovojs/server/app-shell/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
+import * as packageInternalExecutionApi from '@kovojs/server/internal/execution';
 import * as packageInternalStaticExportApi from '@kovojs/server/internal/static-export';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
@@ -16,6 +17,7 @@ import * as publicApi from '../index.js';
 import * as clientModulesApi from './app-shell/client-modules.js';
 import * as coreApi from './app-shell/core.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
+import * as internalExecutionApi from '../internal/execution.js';
 import * as nodeApi from './app-shell/node.js';
 import * as nodeSourceApi from '../node.js';
 import * as staticExportApi from './app-shell/static-export.js';
@@ -448,8 +450,18 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
     expect(publicApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
     expect(publicValues).not.toHaveProperty('parseRouteRequest');
+    expect(publicValues).not.toHaveProperty('endpointMatches');
+    expect(publicValues).not.toHaveProperty('runEndpoint');
+    expect(publicValues).not.toHaveProperty('runMutation');
+    expect(publicValues).not.toHaveProperty('runQuery');
+    expect(publicValues).not.toHaveProperty('runRoutePage');
     expect(publicValues).not.toHaveProperty('runWebhook');
+    expect(dataApi).not.toHaveProperty('runMutation');
+    expect(dataApi).not.toHaveProperty('runQuery');
+    expect(routingApi).not.toHaveProperty('endpointMatches');
     expect(routingApi).not.toHaveProperty('parseRouteRequest');
+    expect(routingApi).not.toHaveProperty('runEndpoint');
+    expect(routingApi).not.toHaveProperty('runRoutePage');
     expect(routingApi).not.toHaveProperty('runWebhook');
 
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell');
@@ -464,6 +476,14 @@ describe('server app-shell public API barrels', () => {
       'renderVersionedClientModuleResponse',
       'versionedClientModuleHref',
     ]);
+    expect(moduleValueKeys(packageInternalExecutionApi)).toEqual([
+      'endpointMatches',
+      'runEndpoint',
+      'runMutation',
+      'runQuery',
+      'runRoutePage',
+    ]);
+    expect(packageInternalExecutionApi).toEqual(internalExecutionApi);
     expect(moduleValueKeys(packageCoreApi)).toEqual([]);
     expect(moduleValueKeys(packageNodeApi)).toEqual([]);
     expect(moduleValueKeys(packageStaticExportApi)).toEqual([]);
@@ -589,6 +609,7 @@ describe('server app-shell public API barrels', () => {
     });
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
       './internal/client-modules': './src/internal/client-modules.ts',
+      './internal/execution': './src/internal/execution.ts',
     });
   });
 

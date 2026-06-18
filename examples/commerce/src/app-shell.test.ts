@@ -3,7 +3,8 @@ import type { AddressInfo } from 'node:net';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { csrfToken, runMutation } from '@kovojs/server';
+import { csrfToken } from '@kovojs/server';
+import { runMutation } from '@kovojs/server/internal/execution';
 import { cookiePair, enhancedMutationHeaders, firstSetCookiePair } from '@kovojs/test/headers';
 import {
   kovoQueryJsonValues,

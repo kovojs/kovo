@@ -191,9 +191,6 @@ import {
   renderMutationEndpointResponse,
   renderPageHints,
   renderQueryScript,
-  runMutation,
-  runQuery,
-  runRoutePage,
   renderRoutePageResponse,
   route as serverRoute,
   session,
@@ -202,6 +199,11 @@ import {
   t,
   exportStaticApp,
 } from '../dist/server/src/index.mjs';
+import {
+  runMutation,
+  runQuery,
+  runRoutePage,
+} from '../dist/server/src/internal/execution.mjs';
 import { fragmentTarget, href, Link, redirect, route } from '../dist/core/src/index.mjs';
 
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');

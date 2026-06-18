@@ -9,7 +9,6 @@ export {
   renderMutationEndpointResponse,
   renderMutationResponse,
   renderNoJsMutationResponse,
-  runMutation,
   write,
 } from '../mutation.js';
 /** Build JSX-spread attributes for a SPEC §6.3 enhanced mutation form. */
@@ -50,7 +49,6 @@ export {
   query,
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
-  runQuery,
 } from '../query.js';
 export { createMemoryMutationReplayStore } from '../replay.js';
 export type { MutationReplayReservation, MutationReplayStore } from '../replay.js';

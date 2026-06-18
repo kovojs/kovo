@@ -92,6 +92,7 @@ export function endpoint<
  * @param definition - The endpoint to run.
  * @param request - The incoming request.
  * @returns The handler's `Response`.
+ * @internal
  */
 export async function runEndpoint(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
@@ -107,6 +108,7 @@ export async function runEndpoint(
  * @param definition - The endpoint to test.
  * @param input - The incoming `pathname` and optional `method`.
  * @returns `true` when the endpoint matches.
+ * @internal
  */
 export function endpointMatches(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,

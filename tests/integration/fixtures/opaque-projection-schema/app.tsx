@@ -4,10 +4,10 @@ import {
   query,
   renderQueryScript,
   route,
-  runQuery,
   s,
   type Schema,
 } from '@kovojs/server';
+import { runQuery } from '@kovojs/server/internal/execution';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const product = domain('product');

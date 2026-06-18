@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
+import { runMutation } from '@kovojs/server/internal/execution';
 
 import { kovoCheck, kovoExplain } from '../../../packages/cli/src/index.js';
 import {
   createReferenceAuth,
+  referenceAuth,
+  referenceAuthCsrf,
   referenceGraph,
   referenceAuthRequest,
   referenceAuthToken,
@@ -13,8 +16,8 @@ import {
   renderReferenceAdminRoute,
   renderReferenceLoginForm,
   renderReferenceLogoutForm,
-  submitReferenceSignInNoJs,
-  submitReferenceSignOutNoJs,
+  type ReferenceAuthBindings,
+  type ReferenceRequest,
 } from './app.js';
 
 function headerValues(headers: Record<string, string | string[]>, name: string): string[] {
@@ -26,6 +29,74 @@ function headerValues(headers: Record<string, string | string[]>, name: string):
 
 function cookiePair(setCookie: string): string {
   return setCookie.split(';')[0] ?? setCookie;
+}
+
+async function submitReferenceSignInNoJs(
+  input: { csrf: string; email: string; next?: string; password: string },
+  request: ReferenceRequest,
+  auth: ReferenceAuthBindings = referenceAuth,
+) {
+  const result = await runMutation(auth.signIn, input, request, {
+    csrf: referenceAuthCsrf,
+  });
+
+  if (!result.ok) {
+    const formOptions: { failure?: 'INVALID_CREDENTIALS'; next?: string } = {};
+    if (result.error.code === 'INVALID_CREDENTIALS') {
+      formOptions.failure = 'INVALID_CREDENTIALS';
+    }
+    if (typeof input.next === 'string') {
+      formOptions.next = input.next;
+    }
+
+    return {
+      body: renderReferenceLoginForm(request, formOptions),
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: result.status,
+    };
+  }
+
+  return {
+    body: '',
+    headers: {
+      'Cache-Control': 'no-store',
+      Location: result.value.redirectTo,
+      ...result.responseHeaders,
+    },
+    status: 303,
+  };
+}
+
+async function submitReferenceSignOutNoJs(
+  request: ReferenceRequest,
+  auth: ReferenceAuthBindings = referenceAuth,
+) {
+  const result = await runMutation(
+    auth.signOut,
+    { csrf: referenceAuthToken(request) },
+    request,
+    {
+      sessionProvider: auth.sessionProvider,
+    },
+  );
+
+  if (!result.ok) {
+    return {
+      body: 'Unauthorized',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: result.status,
+    };
+  }
+
+  return {
+    body: '',
+    headers: {
+      'Cache-Control': 'no-store',
+      Location: result.value.redirectTo,
+      ...result.responseHeaders,
+    },
+    status: 303,
+  };
 }
 
 describe('reference auth adoption', () => {

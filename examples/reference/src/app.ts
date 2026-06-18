@@ -4,7 +4,6 @@ import {
   renderMutationFormAttributes,
   renderRoutePageResponse,
   route,
-  runMutation,
   s,
   session,
 } from '@kovojs/server';
@@ -309,74 +308,6 @@ export async function renderReferenceAdminRoute(
     renderForbidden: () => '<main>Forbidden</main>',
     sessionProvider: auth.sessionProvider,
   });
-}
-
-export async function submitReferenceSignInNoJs(
-  input: { csrf: string; email: string; next?: string; password: string },
-  request: ReferenceRequest,
-  auth: ReferenceAuthBindings = referenceAuth,
-) {
-  const result = await runMutation(auth.signIn, input, request, {
-    csrf: referenceAuthCsrf,
-  });
-
-  if (!result.ok) {
-    const formOptions: { failure?: 'INVALID_CREDENTIALS'; next?: string } = {};
-    if (result.error.code === 'INVALID_CREDENTIALS') {
-      formOptions.failure = 'INVALID_CREDENTIALS';
-    }
-    if (typeof input.next === 'string') {
-      formOptions.next = input.next;
-    }
-
-    return {
-      body: renderReferenceLoginForm(request, formOptions),
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      status: result.status,
-    };
-  }
-
-  return {
-    body: '',
-    headers: {
-      'Cache-Control': 'no-store',
-      Location: result.value.redirectTo,
-      ...result.responseHeaders,
-    },
-    status: 303,
-  };
-}
-
-export async function submitReferenceSignOutNoJs(
-  request: ReferenceRequest,
-  auth: ReferenceAuthBindings = referenceAuth,
-) {
-  const result = await runMutation(
-    auth.signOut,
-    { csrf: csrfToken(request, referenceAuthCsrf) },
-    request,
-    {
-      sessionProvider: auth.sessionProvider,
-    },
-  );
-
-  if (!result.ok) {
-    return {
-      body: 'Unauthorized',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      status: result.status,
-    };
-  }
-
-  return {
-    body: '',
-    headers: {
-      'Cache-Control': 'no-store',
-      Location: result.value.redirectTo,
-      ...result.responseHeaders,
-    },
-    status: 303,
-  };
 }
 
 export function referenceAuthRequest(cookie?: string): ReferenceRequest {

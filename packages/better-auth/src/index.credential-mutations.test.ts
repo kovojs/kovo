@@ -1,4 +1,4 @@
-import { runMutation } from '@kovojs/server';
+import { runMutation } from '@kovojs/server/internal/execution';
 import { describe, expect, it } from 'vitest';
 import {
   betterAuthSignInEmailMutation,

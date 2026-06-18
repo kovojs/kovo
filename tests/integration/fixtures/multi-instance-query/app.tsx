@@ -5,9 +5,9 @@ import {
   query,
   renderQueryScript,
   route,
-  runQuery,
   s,
 } from '@kovojs/server';
+import { runQuery } from '@kovojs/server/internal/execution';
 import { escapeAttribute, escapeHtml } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 

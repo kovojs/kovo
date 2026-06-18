@@ -1,9 +1,8 @@
 import {
   type EndpointDeclaration,
   type SessionProvider,
-  endpointMatches,
-  runEndpoint,
 } from '@kovojs/server';
+import { endpointMatches, runEndpoint } from '@kovojs/server/internal/execution';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { betterAuthSession, mount } from './index.js';
 import {

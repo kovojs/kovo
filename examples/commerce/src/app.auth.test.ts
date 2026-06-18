@@ -7,7 +7,8 @@ import {
   htmlFormFields,
   htmlTextContent,
 } from '@kovojs/test/html-fragment';
-import { csrfToken, runMutation } from '@kovojs/server';
+import { csrfToken } from '@kovojs/server';
+import { runMutation } from '@kovojs/server/internal/execution';
 
 import {
   addToCart,
