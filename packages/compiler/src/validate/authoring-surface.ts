@@ -103,7 +103,8 @@ function appLocalGeneratedImportDiagnostic({
       'Fixes: import the authored component/module; generated route/runtime artifacts are compiler-owned.',
       'SPEC.md §5.2 and §9.5: app-authored source does not wire generated route IR or live-target registries by hand.',
     ].join('\n'),
-    message: 'App source imports an app-local generated artifact; import the authored source instead.',
+    message:
+      'App source imports an app-local generated artifact; import the authored source instead.',
   };
 }
 

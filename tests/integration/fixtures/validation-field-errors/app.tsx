@@ -50,13 +50,14 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [reserve],
   routes: [homeRoute],
-  mutationResponse: ({ key }) => {
-    if (key !== reserve.key) return undefined;
-    return {
-      failureTarget: 'reservation-form',
-      redirectTo: '/',
-      renderFailureFragment: renderReservationForm,
-    };
+  mutationResponses: {
+    [reserve.key]: () => {
+      return {
+        failureTarget: 'reservation-form',
+        redirectTo: '/',
+        renderFailureFragment: renderReservationForm,
+      };
+    },
   },
 });
 

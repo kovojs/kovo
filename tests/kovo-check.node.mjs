@@ -189,11 +189,7 @@ import {
   t,
   exportStaticApp,
 } from '../dist/server/src/index.mjs';
-import {
-  runMutation,
-  runQuery,
-  runRoutePage,
-} from '../dist/server/src/internal/execution.mjs';
+import { runMutation, runQuery, runRoutePage } from '../dist/server/src/internal/execution.mjs';
 import {
   renderDeferredStream,
   renderDocument,

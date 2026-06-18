@@ -50,18 +50,19 @@ export function soGraphDeclarations(queries: readonly InvalidationQueryInput[]) 
         writes: ['vote', 'question'],
       },
     ],
-    optimistic: DERIVED_OPTIMISTIC.map((pair) => ({
-      derivation: { status: 'derived' as const },
-      mutation: pair.mutation,
-      query: pair.query,
-      status: 'derived' as const,
-    })).concat(
-      AWAIT_FRAGMENT_OPTIMISTIC.map((pair) => ({
+    optimistic: [
+      ...DERIVED_OPTIMISTIC.map((pair) => ({
+        derivation: { status: 'derived' as const },
+        mutation: pair.mutation,
+        query: pair.query,
+        status: 'derived' as const,
+      })),
+      ...AWAIT_FRAGMENT_OPTIMISTIC.map((pair) => ({
         mutation: pair.mutation,
         query: pair.query,
         status: 'await-fragment' as const,
       })),
-    ),
+    ],
     queries,
   } satisfies Omit<KovoExplainInput, 'touchGraph'>;
 }

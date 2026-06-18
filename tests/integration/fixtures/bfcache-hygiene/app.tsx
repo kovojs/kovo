@@ -75,12 +75,13 @@ const app = createApp({
   mutations: [increment],
   queries: [counterQuery],
   routes: [homeRoute, awayRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== increment.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderCounterPanel(db), target: 'counter-panel' }],
-    };
+  mutationResponses: {
+    [increment.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderCounterPanel(db), target: 'counter-panel' }],
+      };
+    },
   },
 });
 

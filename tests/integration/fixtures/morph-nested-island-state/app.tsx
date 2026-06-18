@@ -42,12 +42,13 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [refreshParent],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== refreshParent.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderPanel(db), target: 'parent-panel' }],
-    };
+  mutationResponses: {
+    [refreshParent.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderPanel(db), target: 'parent-panel' }],
+      };
+    },
   },
 });
 

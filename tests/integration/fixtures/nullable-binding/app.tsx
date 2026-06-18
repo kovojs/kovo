@@ -79,13 +79,21 @@ const app = createApp({
   mutations: [fillDeal, clearDeal],
   queries: [dealQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== fillDeal.key && key !== clearDeal.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderDeal(db), target: 'deal-card' }],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [fillDeal.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderDeal(db), target: 'deal-card' }],
+        redirectTo: '/',
+      };
+    },
+    [clearDeal.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderDeal(db), target: 'deal-card' }],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

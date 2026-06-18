@@ -47,12 +47,13 @@ export default defineFixture({
     csrf,
     mutationReplayStore: createMemoryMutationReplayStore(),
     mutations: [slowRecord],
-    mutationResponse: ({ key, request }) => {
-      if (key !== slowRecord.key) return undefined;
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderStatus(db), target: 'idem-concurrent-status' }],
-      };
+    mutationResponses: {
+      [slowRecord.key]: ({ request }) => {
+        const db = (request as unknown as KovoFixtureRequest).db;
+        return {
+          fragmentRenderers: [{ render: () => renderStatus(db), target: 'idem-concurrent-status' }],
+        };
+      },
     },
     routes: [homeRoute],
   }),

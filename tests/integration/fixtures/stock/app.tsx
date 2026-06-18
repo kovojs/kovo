@@ -42,17 +42,18 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [buy],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== buy.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      failureTarget: 'buy-error',
-      fragmentRenderers: [{ render: () => renderBadge(db), target: 'stock-badge' }],
-      renderFailureFragment: (failure: MutationFail) => {
-        const available = (failure.error.payload as { available?: number }).available ?? 0;
-        return `<div kovo-fragment-target="buy-error" role="alert" data-error-code="${failure.error.code}" data-error-path="quantity">Sold out (${available} left)</div>`;
-      },
-    };
+  mutationResponses: {
+    [buy.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        failureTarget: 'buy-error',
+        fragmentRenderers: [{ render: () => renderBadge(db), target: 'stock-badge' }],
+        renderFailureFragment: (failure: MutationFail) => {
+          const available = (failure.error.payload as { available?: number }).available ?? 0;
+          return `<div kovo-fragment-target="buy-error" role="alert" data-error-code="${failure.error.code}" data-error-path="quantity">Sold out (${available} left)</div>`;
+        },
+      };
+    },
   },
 });
 

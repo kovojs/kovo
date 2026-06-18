@@ -1,4 +1,4 @@
-import type { Form, FormInput, InvalidationSets, JsonValue, QueryRegistry } from '@kovojs/core';
+import type { Form, FormInput, InvalidationSets, QueryRegistry } from '@kovojs/core';
 import { queryIdentityFromStoreKey, queryStoreKey } from './query-store.js';
 import type { QuerySnapshot, QueryStore } from './query-store.js';
 
@@ -7,6 +7,11 @@ export type OptimisticTransform<Input = unknown, Value = unknown> = (
   current: Value,
   input: Input,
 ) => Value;
+
+/** One query's optimistic policy: a transform, or `'await-fragment'` to wait for server truth. */
+export type OptimisticEntry<Input = unknown, Value = unknown> =
+  | OptimisticTransform<Input, Value>
+  | 'await-fragment';
 
 /** A client-side record of one domain a mutation changed, optionally key-scoped. */
 export interface MutationChangeRecord {
@@ -29,16 +34,10 @@ export type OptimisticQueryKey<Input = unknown> =
 export interface OptimisticPlan<Input = unknown> {
   keys?: Readonly<Record<string, OptimisticQueryKey<Input>>>;
   queue?: string;
-  transforms: Record<string, OptimisticTransform<Input>>;
+  transforms: Record<string, OptimisticEntry<Input>>;
 }
 
-/** One query's optimistic policy: a transform, or `'await-fragment'` to wait for server truth. */
-export type OptimisticEntry<Input = unknown, Value = unknown> =
-  | OptimisticTransform<Input, Value>
-  | 'await-fragment';
-
-type MutationKey<Definition> =
-  Definition extends Form<infer Key, Record<string, JsonValue>, JsonValue> ? Key : never;
+type MutationKey<Definition> = Definition extends Form<infer Key, any, any> ? Key : never;
 
 type InvalidatedQueryNames<Definition> =
   MutationKey<Definition> extends keyof InvalidationSets
@@ -69,7 +68,7 @@ type InvalidatedQueryValues<Definition> = {
  * } satisfies OptimisticFor<typeof addToCart>;
  */
 export type OptimisticFor<
-  Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
+  Definition extends Form<string, any, any>,
   QueryValues extends Record<string, unknown> = InvalidatedQueryValues<Definition>,
 > = Omit<OptimisticPlan<FormInput<Definition>>, 'transforms'> & {
   transforms: {
@@ -129,6 +128,8 @@ export class OptimisticRebaser {
 
   addChange<Input>(id: string, change: OptimisticChange<Input>, plan: OptimisticPlan<Input>): void {
     for (const [queryName, transform] of Object.entries(plan.transforms)) {
+      if (transform === 'await-fragment') continue;
+
       const key = optimisticQueryKey(plan, queryName, change);
       const storeKey = queryStoreKey(queryName, key);
       const pending = this.#pendingByQuery.get(storeKey) ?? [];
@@ -261,7 +262,7 @@ export function applyOptimisticTransforms<Input>(
 
   for (const queryName of queryNames) {
     const transform = plan.transforms[queryName];
-    if (!transform) continue;
+    if (!transform || transform === 'await-fragment') continue;
     const key = keys[queryName];
 
     store.set(queryName, transform(store.get(queryName, key), change.input), key);

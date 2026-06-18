@@ -1,11 +1,4 @@
-import {
-  createApp,
-  domain,
-  mutation,
-  query,
-  route,
-  s,
-} from '@kovojs/server';
+import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -88,13 +81,14 @@ const app = createApp({
   mutations: [reorderBoard],
   queries: [boardQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== reorderBoard.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderBoardList(db), target: 'board-list' }],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [reorderBoard.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderBoardList(db), target: 'board-list' }],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

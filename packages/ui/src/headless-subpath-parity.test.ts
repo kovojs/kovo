@@ -83,9 +83,10 @@ describe('@kovojs/ui headless-ui subpath parity', () => {
 
     for (const [family, files] of directImports) {
       const subpath = `./${family}`;
-      expect(headlessPackage.exports, `${family} imported by ${[...files].join(', ')}`).toHaveProperty(
-        subpath,
-      );
+      expect(
+        headlessPackage.exports,
+        `${family} imported by ${[...files].join(', ')}`,
+      ).toHaveProperty(subpath);
       expect(publicSubpaths, `${family} must be public in public-packages.json`).toContain(subpath);
     }
   });

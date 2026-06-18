@@ -56,12 +56,13 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [swapIsland],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== swapIsland.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderShell(db), target: 'lifecycle-shell' }],
-    };
+  mutationResponses: {
+    [swapIsland.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderShell(db), target: 'lifecycle-shell' }],
+      };
+    },
   },
 });
 

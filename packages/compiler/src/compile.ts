@@ -174,9 +174,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       firstComponentModel(originalModel)?.localName,
       mutationFormExplainFacts(model, {
         fileName: options.fileName,
-        ...(compileOptions.registryFacts
-          ? { registryFacts: compileOptions.registryFacts }
-          : {}),
+        ...(compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {}),
         source,
       }),
     ),

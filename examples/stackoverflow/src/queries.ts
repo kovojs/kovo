@@ -62,7 +62,10 @@ export const answerList = query('answerList', {
 
 export const questionDetail = query('questionDetail', {
   args: s.object({ id: s.string() }),
-  load: async (input: { id: string }, context?: SoQueryLoadContext): Promise<QuestionDetailResult | null> => {
+  load: async (
+    input: { id: string },
+    context?: SoQueryLoadContext,
+  ): Promise<QuestionDetailResult | null> => {
     const db = requireSoQueryDb(context);
     const [row] = await db
       .select({

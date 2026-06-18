@@ -68,14 +68,15 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [submitOrder],
   routes: [homeRoute],
-  mutationResponse: ({ key, rawInput }) => {
-    if (key !== submitOrder.key) return undefined;
-    const formData = rawInput as FormData;
-    return {
-      fragmentRenderers: [
-        { render: () => renderSubmittedReport(formData), target: 'submit-controls-report' },
-      ],
-    };
+  mutationResponses: {
+    [submitOrder.key]: ({ rawInput }) => {
+      const formData = rawInput as FormData;
+      return {
+        fragmentRenderers: [
+          { render: () => renderSubmittedReport(formData), target: 'submit-controls-report' },
+        ],
+      };
+    },
   },
 });
 

@@ -37,7 +37,6 @@ describe('commerce example', () => {
     const cartResponse = await createCommerceScenarioClient().get('/cart');
     const cartPage = await cartResponse.text();
     const pageHints = htmlDocumentFacts(commercePageHints.html);
-    const cartDocument = htmlDocumentFacts(cartPage);
 
     expect(commerceMessageCatalog).toEqual({
       cartLabel: 'Cart',
@@ -113,5 +112,4 @@ describe('commerce example', () => {
     expect(css).toContain('.bg-teal-600');
     expect(css).toContain('.border-slate-200');
   });
-
 });

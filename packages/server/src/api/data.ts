@@ -2,12 +2,7 @@ export { csrfField, csrfToken } from '../csrf.js';
 export type { CsrfOptions, CsrfValidationOptions } from '../csrf.js';
 export { domain, tag } from '../domain.js';
 export type { Domain, Tag } from '../domain.js';
-export {
-  errorBoundary,
-  invalidate,
-  mutation,
-  write,
-} from '../mutation.js';
+export { errorBoundary, invalidate, mutation, write } from '../mutation.js';
 /** Build JSX-spread attributes for a SPEC §6.3 enhanced mutation form. */
 export { mutationFormAttributes } from '../mutation.js';
 /** Render string-template attributes for a SPEC §6.3 enhanced mutation form. */

@@ -22,9 +22,9 @@
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
+    "@kovojs/cli": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
     "@kovojs/test": "workspace:*",
-    "@kovojs/cli": "workspace:*",
     "vite": "8.0.16",
     "vite-plus": "^0.1.24",
     "vitest": "4.1.8"

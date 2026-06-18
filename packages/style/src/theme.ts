@@ -42,9 +42,7 @@ export interface ThemeCustomColorInput {
 }
 
 /** Custom semantic color map, such as `{ success: '#16a34a' }`. */
-export type ThemeCustomColorsInput = Readonly<
-  Record<string, ThemeSeed | ThemeCustomColorInput>
->;
+export type ThemeCustomColorsInput = Readonly<Record<string, ThemeSeed | ThemeCustomColorInput>>;
 
 /** Shape tokens emitted beside color tokens for copied UI components. */
 export interface ThemeShapeInput {
@@ -602,7 +600,9 @@ function paletteHex(palette: { tone: (tone: number) => number }, toneValue: numb
   return hexFromArgb(palette.tone(toneValue));
 }
 
-function paletteTones(palette: { tone: (tone: number) => number }): Readonly<Record<number, string>> {
+function paletteTones(palette: {
+  tone: (tone: number) => number;
+}): Readonly<Record<number, string>> {
   const values: Record<number, string> = {};
   for (const toneValue of REFERENCE_TONES) {
     values[toneValue] = hexFromArgb(palette.tone(toneValue));
@@ -697,7 +697,8 @@ function referenceTokenVars(): ThemeReferencePalettes {
   for (const palette of REFERENCE_PALETTE_NAMES) {
     const tones: Record<number, string> = {};
     for (const toneValue of REFERENCE_TONES) {
-      tones[toneValue] = `var(${themeVar('ref', 'palette', toKebabCase(palette), String(toneValue))})`;
+      tones[toneValue] =
+        `var(${themeVar('ref', 'palette', toKebabCase(palette), String(toneValue))})`;
     }
     palettes[palette] = tones;
   }

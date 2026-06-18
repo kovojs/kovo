@@ -58,11 +58,12 @@ const app = createApp({
   mutations: [updateCard],
   queries: [cardQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key }) => {
-    if (key !== updateCard.key) return undefined;
-    return {
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [updateCard.key]: () => {
+      return {
+        redirectTo: '/',
+      };
+    },
   },
 });
 

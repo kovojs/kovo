@@ -62,20 +62,21 @@ export default defineFixture({
     mutations: [guardedIncrement],
     routes: [homeRoute],
     sessionProvider: (request) => readSessionCookie(request),
-    mutationResponse: ({ key, request }) => {
-      if (key !== guardedIncrement.key) return undefined;
-      return {
-        failureTarget: 'guarded-error',
-        fragmentRenderers: [
-          {
-            render: () => renderStatus((request as unknown as KovoFixtureRequest).db),
-            target: 'guarded-count',
-          },
-        ],
-        redirectTo: '/',
-        renderFailureFragment: (failure) =>
-          `<div kovo-fragment-target="guarded-error" role="alert" data-error-code="${failure.error.code}">Sign in required</div>`,
-      };
+    mutationResponses: {
+      [guardedIncrement.key]: ({ request }) => {
+        return {
+          failureTarget: 'guarded-error',
+          fragmentRenderers: [
+            {
+              render: () => renderStatus((request as unknown as KovoFixtureRequest).db),
+              target: 'guarded-count',
+            },
+          ],
+          redirectTo: '/',
+          renderFailureFragment: (failure) =>
+            `<div kovo-fragment-target="guarded-error" role="alert" data-error-code="${failure.error.code}">Sign in required</div>`,
+        };
+      },
     },
   }),
   schema: 'create table guarded_counter (id integer primary key, count integer not null default 0)',

@@ -67,13 +67,13 @@ export async function buildExampleRoutePages(): Promise<ExampleRoutePageData[]> 
     content: {
       kind: 'section-index',
       section: {
-          key: 'examples',
-          pages: examples.map((example) => ({
-            description: example.blurb,
-            title: example.title,
-            url: examplePagePath(example.name),
-          })),
-          title: 'Examples',
+        key: 'examples',
+        pages: examples.map((example) => ({
+          description: example.blurb,
+          title: example.title,
+          url: examplePagePath(example.name),
+        })),
+        title: 'Examples',
       },
     },
     meta: {

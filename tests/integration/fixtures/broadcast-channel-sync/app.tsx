@@ -65,12 +65,13 @@ const app = createApp({
   mutations: [publishPresence],
   queries: [presenceQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== publishPresence.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderPresence(db), target: 'presence-panel' }],
-    };
+  mutationResponses: {
+    [publishPresence.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderPresence(db), target: 'presence-panel' }],
+      };
+    },
   },
 });
 

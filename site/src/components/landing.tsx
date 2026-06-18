@@ -102,9 +102,9 @@ function Hero({ clients }: { clients: ClientHrefs }): string {
         <pre>
           <span class="t-dim">$ git diff db/schema.ts</span>
           {'\n'}
-          <span class="t-del">-  price: integer('price'),</span>
+          <span class="t-del">- price: integer('price'),</span>
           {'\n'}
-          <span class="t-add">+  priceCents: integer('price_cents'),</span>
+          <span class="t-add">+ priceCents: integer('price_cents'),</span>
           {'\n\n'}
           <span class="t-dim">$ {BRAND_CLI} check</span>
           {'\n\n'}
@@ -115,20 +115,17 @@ function Hero({ clients }: { clients: ClientHrefs }): string {
           {'\n  '}
           <span class="t-fix">-&gt; select priceCents, or alias: price: products.priceCents</span>
           {'\n\n'}
-          <span class="t-err">&#10007;</span>{' '}
-          <span class="t-loc">src/product-card.tsx:13</span>{' '}
+          <span class="t-err">&#10007;</span> <span class="t-loc">src/product-card.tsx:13</span>{' '}
           <span class="badge b-bind">BINDING</span>
           {'\n  '}data-bind <b>"product.price"</b> has no source in the query
           {'\n  '}
           <span class="t-fix">-&gt; bind product.priceCents -- format in a derive</span>
           {'\n\n'}
-          <span class="t-err">&#10007;</span>{' '}
-          <span class="t-loc">src/cart/checkout.tsx:31</span>{' '}
+          <span class="t-err">&#10007;</span> <span class="t-loc">src/cart/checkout.tsx:31</span>{' '}
           <span class="badge b-form">FORM</span>
           {'\n  '}field <b>price</b> is not in the cart/add mutation schema
           {'\n\n'}
-          <span class="t-err">&#10007;</span>{' '}
-          <span class="t-loc">src/routes/sale.ts:8</span>{' '}
+          <span class="t-err">&#10007;</span> <span class="t-loc">src/routes/sale.ts:8</span>{' '}
           <span class="badge b-route">ROUTE</span>
           {'\n  '}redirect builds <b>/sale?max=price</b> against a dropped param
           {'\n\n'}
@@ -315,10 +312,9 @@ function Split(): string {
         <h3>Errors worth reading</h3>
         <p class="lead">
           Every diagnostic teaches: the line, the reason, the fixes -- so the loop is{' '}
-          <b>edit -&gt; check -&gt; fixed</b>, not edit -&gt; deploy -&gt; bug report. The
-          behavior graph is queryable too:{' '}
-          <code>{BRAND_CLI} explain mutation cart/add</code> answers "what refreshes?" with diffable
-          output for CI.
+          <b>edit -&gt; check -&gt; fixed</b>, not edit -&gt; deploy -&gt; bug report. The behavior
+          graph is queryable too: <code>{BRAND_CLI} explain mutation cart/add</code> answers "what
+          refreshes?" with diffable output for CI.
         </p>
         <div class="term">
           <div class="term-head">$ {BRAND_CLI} check</div>
@@ -327,8 +323,7 @@ function Split(): string {
             <span class="sq">details.name</span>
             {'}'}&lt;/h2&gt;
             {'\n\n'}
-            <span class="t-err">&#10007; KV227</span> --{' '}
-            <b>product.details can be null here</b>
+            <span class="t-err">&#10007; KV227</span> -- <b>product.details can be null here</b>
             {'\n  '}
             <span class="t-fix">fix 1</span> {'{'}product.details
             <span class="t-ok">?.</span>name{'}'}
@@ -414,7 +409,10 @@ function LedgerStrip({ loaderGzipBytes }: { loaderGzipBytes: number }): string {
 function LandingFooter(): string {
   return (
     <footer class="l-footer">
-      <span>{BRAND} -- interactive at first paint &middot; legible at every layer &middot; statically verifiable</span>
+      <span>
+        {BRAND} -- interactive at first paint &middot; legible at every layer &middot; statically
+        verifiable
+      </span>
       <span class="links">
         <a href="/spec/">Spec</a>
         <a href="/llms.txt">llms.txt</a>

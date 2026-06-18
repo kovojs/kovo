@@ -1,11 +1,7 @@
 import { loadSiteContent, type DocPage, type DocSection } from './content.js';
 import { buildExampleRoutePages } from './examples.js';
 import { buildGalleryRoutePages } from './gallery.js';
-import {
-  sectionIndexInput,
-  type DocsRoutePageData,
-  type SectionIndexInput,
-} from './route-data.js';
+import { sectionIndexInput, type DocsRoutePageData, type SectionIndexInput } from './route-data.js';
 import { link, routePath } from './route-kit.js';
 
 export interface SiteRoutePage {
@@ -56,7 +52,13 @@ export async function buildSiteRouteData({
 
     for (const [position, page] of section.pages.entries()) {
       pages.push(
-        markdownPage(section, page, section.pages[position - 1], section.pages[position + 1], groups),
+        markdownPage(
+          section,
+          page,
+          section.pages[position - 1],
+          section.pages[position + 1],
+          groups,
+        ),
       );
     }
   }
@@ -178,12 +180,14 @@ function referenceHubIndex(): SectionIndexInput {
       {
         title: 'API Reference',
         url: '/api/',
-        description: 'Generated reference for every public package — types, functions, and contracts.',
+        description:
+          'Generated reference for every public package — types, functions, and contracts.',
       },
       {
         title: 'Diagnostics',
         url: '/reference/diagnostics/',
-        description: 'Every framework diagnostic (KV###) and its fix, kept in sync with the registry.',
+        description:
+          'Every framework diagnostic (KV###) and its fix, kept in sync with the registry.',
       },
       {
         title: 'Specification',

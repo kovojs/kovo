@@ -16,7 +16,7 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
-export type SubmitFormDefinition = Form<string, Record<string, JsonValue>, JsonValue>;
+export type SubmitFormDefinition = Form<string, any, any>;
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure> {

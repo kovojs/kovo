@@ -68,15 +68,16 @@ const app = createApp({
   mutations: [addItem],
   queries: [cartQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key }) => {
-    if (key !== addItem.key) return undefined;
-    return {
-      failureTarget: 'cart-error',
-      renderFailureFragment: (failure: MutationFail) => {
-        const available = (failure.error.payload as { available?: number }).available ?? 0;
-        return `<div id="cart-error" kovo-fragment-target="cart-error" role="alert" data-error-code="${failure.error.code}">Only ${available} available</div>`;
-      },
-    };
+  mutationResponses: {
+    [addItem.key]: () => {
+      return {
+        failureTarget: 'cart-error',
+        renderFailureFragment: (failure: MutationFail) => {
+          const available = (failure.error.payload as { available?: number }).available ?? 0;
+          return `<div id="cart-error" kovo-fragment-target="cart-error" role="alert" data-error-code="${failure.error.code}">Only ${available} available</div>`;
+        },
+      };
+    },
   },
 });
 

@@ -17,7 +17,7 @@ export async function createSiteServeServer({
   host = process.env.HOST ?? '127.0.0.1',
   port = Number(process.env.PORT ?? 4173),
   strictPort = false,
-  } = {}) {
+} = {}) {
   await runContentPipeline();
   await emitSiteRoutes({ skipPipeline: true });
 

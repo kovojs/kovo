@@ -37,13 +37,14 @@ const app = createApp({
   mutations: [deposit],
   queries: [balanceQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== deposit.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      redirectTo: '/',
-      fragmentRenderers: [{ render: () => renderBalanceShell(db), target: 'balance-shell' }],
-    };
+  mutationResponses: {
+    [deposit.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        redirectTo: '/',
+        fragmentRenderers: [{ render: () => renderBalanceShell(db), target: 'balance-shell' }],
+      };
+    },
   },
 });
 

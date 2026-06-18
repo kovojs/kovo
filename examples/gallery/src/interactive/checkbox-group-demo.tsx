@@ -1,12 +1,12 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/headless-ui/checkbox';
 import {
   checkboxGroupItemClick as _checkboxGroupItemClick,
   checkboxGroupControlAttributes,
   checkboxGroupItemAttributes,
   checkboxGroupLabelAttributes,
   checkboxGroupRootAttributes,
-  checkboxTriggerClick as _checkboxTriggerClick,
 } from '@kovojs/headless-ui/checkbox-group';
 
 // Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/checkbox-group.tsx)

@@ -32,16 +32,12 @@ const graph = {
     { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
     { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
   ],
-  mutations: [
-    { invalidates: ['cart', 'product'], key: 'cart/add' },
-  ],
+  mutations: [{ invalidates: ['cart', 'product'], key: 'cart/add' }],
   optimistic: [
     { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
     { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
   ],
-  pages: [
-    { queries: ['cart', 'productGrid'], route: '/cart' },
-  ],
+  pages: [{ queries: ['cart', 'productGrid'], route: '/cart' }],
   queries: [
     { domains: ['cart'], query: 'cart' },
     { domains: ['product'], query: 'productGrid' },
@@ -136,9 +132,7 @@ describe('@kovojs/test graph fixture seam', () => {
         { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
         { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
       ],
-      mutations: [
-        { invalidates: ['cart', 'product', 'order'], key: 'cart/add', writes: ['cart'] },
-      ],
+      mutations: [{ invalidates: ['cart', 'product', 'order'], key: 'cart/add', writes: ['cart'] }],
       optimistic: [
         { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
         { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },

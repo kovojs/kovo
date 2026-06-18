@@ -1,9 +1,5 @@
 import { getPriority } from './internal.js';
-export {
-  defineTheme,
-  themeFromSeed,
-  tokens,
-} from './theme.js';
+export { defineTheme, themeFromSeed, tokens } from './theme.js';
 export type {
   DefineThemeFromBaseOptions,
   DefineThemeOptions,

@@ -299,7 +299,8 @@ function mergeGraphPages(
 ): CoreGraph.PageExplain[] {
   const result = [...authoredPages];
   const routeCounts = new Map<string, number>();
-  for (const page of routePages) routeCounts.set(page.route, (routeCounts.get(page.route) ?? 0) + 1);
+  for (const page of routePages)
+    routeCounts.set(page.route, (routeCounts.get(page.route) ?? 0) + 1);
 
   for (const page of routePages) {
     const authoredMatches = result
@@ -418,10 +419,7 @@ function queryBindingFromExpression(
 function queryArgsArrowFacts(
   sourceFile: ts.SourceFile,
   arrow: ts.ArrowFunction,
-): Pick<
-  LiveTargetQueryBindingFact,
-  'argsExpression' | 'argsParam' | 'argsPropertyAccesses'
-> {
+): Pick<LiveTargetQueryBindingFact, 'argsExpression' | 'argsParam' | 'argsPropertyAccesses'> {
   const param = arrow.parameters[0];
   const argsParam = param && ts.isIdentifier(param.name) ? param.name.text : undefined;
   const body = arrow.body;

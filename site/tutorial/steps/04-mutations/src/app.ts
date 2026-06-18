@@ -1,9 +1,4 @@
-import {
-  mutation,
-  route,
-  s,
-  type MutationFail,
-} from '@kovojs/server';
+import { mutation, route, s, type MutationFail } from '@kovojs/server';
 
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
 import { cart, product } from './domains.js';

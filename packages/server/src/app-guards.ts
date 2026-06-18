@@ -102,6 +102,7 @@ function isMutationResponseOptions(value: unknown): boolean {
     isOptionalFunction(value.renderFailurePage) &&
     (value.failureTarget === undefined || typeof value.failureTarget === 'string') &&
     (value.failureStylesheets === undefined || Array.isArray(value.failureStylesheets)) &&
+    (value.fragmentRenderers === undefined || Array.isArray(value.fragmentRenderers)) &&
     (value.csrf === undefined || isOptionalCsrfOptions(value.csrf))
   );
 }

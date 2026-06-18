@@ -189,10 +189,7 @@ export const ApiSidebar = component({
             <span>{escapeHtml(subpath.importPath)}</span>
             <span class="api-nav-count">
               {String(
-                subpath.categories.reduce(
-                  (count, category) => count + category.symbols.length,
-                  0,
-                ),
+                subpath.categories.reduce((count, category) => count + category.symbols.length, 0),
               )}
             </span>
           </summary>

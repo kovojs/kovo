@@ -150,7 +150,7 @@ Description`** only — no type. JSDoc `@param` carries no type; the only type i
 - [x] `renderResults` shows a kind badge + symbol + section and deep-links the anchor; `score()`
       weights exact/prefix title matches and symbol entries. Styled `.result-kind`/`.result-body`.
       (Browser-verified first result `{href:"/api/server/#createapp", kind:"function",
-    title:"createApp"}`.)
+title:"createApp"}`.)
 - [x] `search-index.json` parity: emitted by `aux.ts` at export (498 entries) **and** served live in
       dev via a new `vite.config.ts` middleware, so search works in `serve` too (was 404 before).
 

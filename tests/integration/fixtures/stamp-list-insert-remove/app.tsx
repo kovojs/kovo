@@ -1,11 +1,4 @@
-import {
-  createApp,
-  domain,
-  mutation,
-  query,
-  route,
-  s,
-} from '@kovojs/server';
+import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -98,13 +91,14 @@ const app = createApp({
   mutations: [changeCart],
   queries: [cartQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== changeCart.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderCartList(db), target: 'cart-list' }],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [changeCart.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderCartList(db), target: 'cart-list' }],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

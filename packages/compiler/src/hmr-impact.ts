@@ -33,9 +33,7 @@ interface HmrImpactMetadataInput {
  * post-parse source-string heuristics, so this surface intentionally stores canonical fact hashes
  * and emitted hrefs instead of rescanning authored source text.
  */
-export function createComponentHmrImpactMetadata(
-  input: HmrImpactMetadataInput,
-): HmrImpactMetadata {
+export function createComponentHmrImpactMetadata(input: HmrImpactMetadataInput): HmrImpactMetadata {
   const component = singleComponentFact(input.componentGraphFacts);
   const diagnostics = input.diagnostics.map((diagnostic) => ({
     code: diagnostic.code,
@@ -110,7 +108,8 @@ export function classifyHmrImpact(
   }
   if (previous.sourceFileName !== next.sourceFileName) return fullReload('topology');
   if (previous.sourceKind !== next.sourceKind) return fullReload('topology');
-  if (next.sourceKind === 'route-shell') return { impact: 'routeRefresh', reasons: ['route-shell'] };
+  if (next.sourceKind === 'route-shell')
+    return { impact: 'routeRefresh', reasons: ['route-shell'] };
   if (!previous.component || !next.component) return fullReload('missing-facts');
   if (
     previous.component.registryKey !== next.component.registryKey ||
@@ -140,9 +139,7 @@ export function classifyHmrImpact(
   return { impact: 'componentRefresh', reasons: [] };
 }
 
-function singleComponentFact(
-  facts: readonly ComponentGraphFact[],
-): HmrImpactMetadata['component'] {
+function singleComponentFact(facts: readonly ComponentGraphFact[]): HmrImpactMetadata['component'] {
   if (facts.length !== 1) return null;
   const [fact] = facts;
   if (!fact) return null;

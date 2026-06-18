@@ -485,11 +485,13 @@ function hmrRefreshTargetUrl(
 }
 
 function hmrTargetNodeRequest(request: IncomingMessage, targetUrl: URL): IncomingMessage {
-  return {
-    ...request,
-    method: 'GET',
-    url: `${targetUrl.pathname}${targetUrl.search}`,
-  } as IncomingMessage;
+  const targetRequest = Object.assign(
+    Object.create(Object.getPrototypeOf(request)) as IncomingMessage,
+    request,
+  );
+  targetRequest.method = 'GET';
+  targetRequest.url = `${targetUrl.pathname}${targetUrl.search}`;
+  return targetRequest;
 }
 
 function requestMethodIs(request: IncomingMessage, ...methods: readonly string[]): boolean {
@@ -551,13 +553,16 @@ function previousHmrBuildToken(endpointUrl: URL, request: IncomingMessage): stri
 }
 
 function injectKovoHmrScriptIntoRouteResponse(response: RoutePageResponse): RoutePageResponse {
-  if (!shouldInjectKovoHmrScript(response.status, response.headers['Content-Type'], response.body)) {
+  if (
+    typeof response.body !== 'string' ||
+    !shouldInjectKovoHmrScript(response.status, response.headers['Content-Type'], response.body)
+  ) {
     return response;
   }
 
   return {
     ...response,
-    body: injectKovoHmrScript(String(response.body)),
+    body: injectKovoHmrScript(response.body),
   };
 }
 
@@ -582,9 +587,9 @@ function injectKovoHmrScriptIntoNodeResponse(
   if (request.method === 'HEAD') return response;
 
   const chunks: Buffer[] = [];
-  const write = response.write;
-  const writeHead = response.writeHead;
-  const end = response.end;
+  const write = Reflect.get(response, 'write') as ServerResponse['write'];
+  const writeHead = Reflect.get(response, 'writeHead') as ServerResponse['writeHead'];
+  const end = Reflect.get(response, 'end') as ServerResponse['end'];
 
   response.writeHead = function writeHeadPatched(
     statusCode: number,
@@ -666,8 +671,9 @@ function appendNodeResponseChunk(
     chunks.push(Buffer.from(chunk));
     return;
   }
+  if (typeof chunk !== 'string') return;
   chunks.push(
-    Buffer.from(String(chunk), typeof encodingOrCallback === 'string' ? encodingOrCallback : 'utf8'),
+    Buffer.from(chunk, typeof encodingOrCallback === 'string' ? encodingOrCallback : 'utf8'),
   );
 }
 

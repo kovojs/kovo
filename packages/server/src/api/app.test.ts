@@ -91,8 +91,7 @@ type RootKovoAppShellViteDevIntegrationFactory =
 type RootKovoAppShellViteCompilerModuleDiagnosticReport =
   import('@kovojs/server').KovoAppShellViteCompilerModuleDiagnosticReport;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootKovoAppShellViteDevIntegration =
-  import('@kovojs/server').KovoAppShellViteDevIntegration;
+type RootKovoAppShellViteDevIntegration = import('@kovojs/server').KovoAppShellViteDevIntegration;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootKovoAppShellViteDevPlugin = import('@kovojs/server').KovoAppShellViteDevPlugin;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.

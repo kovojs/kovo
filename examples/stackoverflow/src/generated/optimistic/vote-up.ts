@@ -23,5 +23,6 @@ export const voteUpDerivedOptimistic = {
       next.score = (next.score ?? 0) + 1;
       return next;
     },
+    questionDetail: 'await-fragment',
   },
 } satisfies OptimisticFor<typeof voteUpForm>;

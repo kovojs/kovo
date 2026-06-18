@@ -47,16 +47,17 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [advance],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== advance.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [
-        { render: () => renderLauncher(db), target: 'launcher' },
-        { render: () => renderDynamic(db), target: 'dynamic-panel' },
-      ],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [advance.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [
+          { render: () => renderLauncher(db), target: 'launcher' },
+          { render: () => renderDynamic(db), target: 'dynamic-panel' },
+        ],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

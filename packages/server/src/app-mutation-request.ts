@@ -68,7 +68,7 @@ export async function handleAppMutationRequest(
       Record<string, Schema<unknown>>,
       Request
     >,
-    app.queries,
+    app.queries as readonly RegisteredQueryDefinition[],
   );
   // Derive the build token from the app's client-module registry so it is
   // identical for the page render and this mutation response (SPEC §5.1, §9.1.1).
@@ -86,6 +86,9 @@ export async function handleAppMutationRequest(
     ...(mutationResponseOptions?.failureStylesheets === undefined
       ? {}
       : { failureStylesheets: mutationResponseOptions.failureStylesheets }),
+    ...(mutationResponseOptions?.fragmentRenderers === undefined
+      ? {}
+      : { fragmentRenderers: mutationResponseOptions.fragmentRenderers }),
     headers: request.headers,
     liveTargetRenderers: app.liveTargetRenderers,
     rawInput,

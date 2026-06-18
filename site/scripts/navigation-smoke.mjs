@@ -196,11 +196,7 @@ try {
       'fresh API symbol click',
     );
     await page.waitForFunction((expectedHash) => location.hash === expectedHash, hash);
-    await assertHashBelowHeader(
-      page,
-      hash,
-      'fresh API symbol click ignores stale saved scroll',
-    );
+    await assertHashBelowHeader(page, hash, 'fresh API symbol click ignores stale saved scroll');
 
     const apiScroll = await page.evaluate(() => window.scrollY);
     await page.click('.site-nav a[href="/docs/why-kovo/"]');

@@ -1,10 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
-import {
-  separatorRootAttributes,
-  type SeparatorOrientation,
-} from '@kovojs/headless-ui/separator';
+import { separatorRootAttributes, type SeparatorOrientation } from '@kovojs/headless-ui/separator';
 
 import { uiTheme } from './theme.js';
 

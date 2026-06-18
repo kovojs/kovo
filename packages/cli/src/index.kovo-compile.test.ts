@@ -349,9 +349,7 @@ route('/', {
         'utf8',
       );
 
-      await expect(
-        mainAsync(['compile', 'graph', inputPath, '--out', outPath]),
-      ).resolves.toBe(0);
+      await expect(mainAsync(['compile', 'graph', inputPath, '--out', outPath])).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       expect(JSON.parse(readFileSync(outPath, 'utf8'))).toEqual({
@@ -544,9 +542,7 @@ export const addToCart = mutation('cart/add', {
       ).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
-      expect(readFileSync(outPath, 'utf8')).toContain(
-        'export const cartAddDerivedOptimistic = {',
-      );
+      expect(readFileSync(outPath, 'utf8')).toContain('export const cartAddDerivedOptimistic = {');
       expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
         { derivation: { status: 'derived' }, query: 'cart', status: 'derived' },
       ]);

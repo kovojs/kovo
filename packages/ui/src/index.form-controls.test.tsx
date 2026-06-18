@@ -50,24 +50,11 @@ import {
   otpFieldHiddenInputClasses,
   otpFieldInputClasses,
 } from './otp-field.js';
-import {
-  RadioGroup,
-  RadioGroupItem,
-  RadioGroupLabel,
-  RadioGroupRadio,
-} from './radio-group.js';
+import { RadioGroup, RadioGroupItem, RadioGroupLabel, RadioGroupRadio } from './radio-group.js';
 import { Switch } from './switch.js';
 import { Toggle } from './toggle.js';
-import {
-  ToggleGroup,
-  ToggleGroupButton,
-  ToggleGroupItem,
-} from './toggle-group.js';
-import {
-  Toolbar,
-  ToolbarButton,
-  ToolbarItem,
-} from './toolbar.js';
+import { ToggleGroup, ToggleGroupButton, ToggleGroupItem } from './toggle-group.js';
+import { Toolbar, ToolbarButton, ToolbarItem } from './toolbar.js';
 
 describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless checkbox-group primitive as styled native checkboxes', () => {

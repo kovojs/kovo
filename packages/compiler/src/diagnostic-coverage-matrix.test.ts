@@ -1,4 +1,8 @@
-import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core/internal/diagnostics';
+import {
+  diagnosticDefinitions,
+  type DiagnosticCode,
+  type DiagnosticSeverity,
+} from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule, deriveAppGraph } from './index.js';

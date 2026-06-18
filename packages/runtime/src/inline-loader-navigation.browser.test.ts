@@ -41,6 +41,23 @@ function comparableBodyMarkup(source: Document | string): string {
   return clone.innerHTML;
 }
 
+function currentElementScrollIntoView(): Element['scrollIntoView'] {
+  return Reflect.get(Element.prototype, 'scrollIntoView') as Element['scrollIntoView'];
+}
+
+function currentElementGetBoundingClientRect(): Element['getBoundingClientRect'] {
+  return Reflect.get(
+    Element.prototype,
+    'getBoundingClientRect',
+  ) as Element['getBoundingClientRect'];
+}
+
+function requestInputHref(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
 afterEach(() => {
   document.head.innerHTML = '';
   for (const attribute of Array.from(document.documentElement.attributes)) {
@@ -666,7 +683,7 @@ describe('browser inline loader enhanced navigation', () => {
     vi.stubGlobal('fetch', fetch);
     vi.stubGlobal('scrollTo', vi.fn());
     vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const originalScrollIntoView = currentElementScrollIntoView();
     Element.prototype.scrollIntoView = scrollIntoView;
 
     try {
@@ -709,7 +726,7 @@ describe('browser inline loader enhanced navigation', () => {
       },
       url: new URL('/api/core/', location.href).href,
     }));
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const originalScrollIntoView = currentElementScrollIntoView();
     Element.prototype.scrollIntoView = function scrollIntoView() {
       scrolledIds.push((this as Element).id);
     };
@@ -760,7 +777,7 @@ describe('browser inline loader enhanced navigation', () => {
       },
       url: new URL('/api#symbols%2Fproperty%20value', location.href).href,
     }));
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const originalScrollIntoView = currentElementScrollIntoView();
     Element.prototype.scrollIntoView = function scrollIntoView() {
       scrolledIds.push((this as Element).id);
     };
@@ -800,7 +817,7 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     const scrolledIds: string[] = [];
     const fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input), location.href);
+      const url = new URL(requestInputHref(input), location.href);
       const isApi = url.pathname === '/api';
       return {
         headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
@@ -831,7 +848,7 @@ describe('browser inline loader enhanced navigation', () => {
         url: url.href,
       };
     });
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const originalScrollIntoView = currentElementScrollIntoView();
     Element.prototype.scrollIntoView = function scrollIntoView() {
       scrolledIds.push((this as Element).id);
     };
@@ -887,8 +904,8 @@ describe('browser inline loader enhanced navigation', () => {
       url: new URL('/api#symbols%2Fsticky', location.href).href,
     }));
     const originalGetComputedStyle = globalThis.getComputedStyle;
-    const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const originalGetBoundingClientRect = currentElementGetBoundingClientRect();
+    const originalScrollIntoView = currentElementScrollIntoView();
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
     Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
@@ -955,7 +972,7 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     const scrolledTargets: string[] = [];
     const fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input), location.href);
+      const url = new URL(requestInputHref(input), location.href);
       return {
         headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
         async text() {
@@ -979,7 +996,7 @@ describe('browser inline loader enhanced navigation', () => {
         url: url.href,
       };
     });
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const originalScrollIntoView = currentElementScrollIntoView();
     Element.prototype.scrollIntoView = function scrollIntoView() {
       scrolledTargets.push((this as Element).id || (this as Element).getAttribute('name') || '');
     };
@@ -1013,7 +1030,7 @@ describe('browser inline loader enhanced navigation', () => {
     const scrolledIds: string[] = [];
     let resolveSlowText: ((html: string) => void) | undefined;
     const fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input), location.href);
+      const url = new URL(requestInputHref(input), location.href);
       if (url.hash === '#slow') {
         return {
           headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
@@ -1043,7 +1060,7 @@ describe('browser inline loader enhanced navigation', () => {
         url: url.href,
       };
     });
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const originalScrollIntoView = currentElementScrollIntoView();
     Element.prototype.scrollIntoView = function scrollIntoView() {
       scrolledIds.push((this as Element).id);
     };
@@ -1091,7 +1108,7 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     const scrolledTargets: string[] = [];
     const fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input), location.href);
+      const url = new URL(requestInputHref(input), location.href);
       const isApi = url.pathname === '/api';
       return {
         headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
@@ -1120,7 +1137,7 @@ describe('browser inline loader enhanced navigation', () => {
         url: url.href,
       };
     });
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const originalScrollIntoView = currentElementScrollIntoView();
     Element.prototype.scrollIntoView = function scrollIntoView() {
       scrolledTargets.push((this as Element).id || (this as Element).getAttribute('name') || '');
     };
@@ -1286,22 +1303,14 @@ describe('browser inline loader enhanced navigation', () => {
     const mutationRequest = fetch.mock.calls.find(
       ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
     )?.[1] as RequestInit | undefined;
-    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Form-Target']).toBe(
-      'cart-form',
-    );
-    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Targets']).toContain(
-      'cart-badge=cart',
-    );
-    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Targets']).toContain(
-      'layout-shell=viewer',
-    );
-    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Targets']).not.toContain(
-      'old-target',
-    );
-    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Live-Targets']).toContain(
-      'cart-badge#cart-badge/cart-badge:{}',
-    );
-    expect((mutationRequest?.headers as Record<string, string>)['Kovo-Live-Targets']).toContain(
+    expect(mutationRequest).toBeDefined();
+    const mutationHeaders = mutationRequest!.headers as Record<string, string>;
+    expect(mutationHeaders['Kovo-Form-Target']).toBe('cart-form');
+    expect(mutationHeaders['Kovo-Targets']).toContain('cart-badge=cart');
+    expect(mutationHeaders['Kovo-Targets']).toContain('layout-shell=viewer');
+    expect(mutationHeaders['Kovo-Targets']).not.toContain('old-target');
+    expect(mutationHeaders['Kovo-Live-Targets']).toContain('cart-badge#cart-badge/cart-badge:{}');
+    expect(mutationHeaders['Kovo-Live-Targets']).toContain(
       'layout-shell#layout-shell/layout-shell:{}',
     );
   });

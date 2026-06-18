@@ -6,7 +6,6 @@ import {
   FieldError,
   form,
   FormError,
-  type FormFailure,
 } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
@@ -19,7 +18,10 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 
 const addToCartForm = form('cart/add');
 
-export type AddToCartFailure = FormFailure<typeof addToCartForm>;
+export interface OutOfStockFailure {
+  code: 'OUT_OF_STOCK';
+  payload: { availableQuantity: number };
+}
 
 export const ProductGrid = component({
   errorBoundary: {
@@ -144,7 +146,7 @@ export function renderAddToCartForm(
       <FormError
         code="OUT_OF_STOCK"
         class="basis-full text-sm text-red-700"
-        message={(failure: Extract<AddToCartFailure, { code: 'OUT_OF_STOCK' }>) =>
+        message={(failure: OutOfStockFailure) =>
           `Only ${failure.payload.availableQuantity} available.`
         }
       />

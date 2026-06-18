@@ -20,7 +20,13 @@ export function mutationInputFactsFromSource(
   fileName: string,
   source: string,
 ): ReadonlyMap<string, LocalMutationInputFact> {
-  const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
   const facts = new Map<string, LocalMutationInputFact>();
 
   const visit = (node: ts.Node): void => {

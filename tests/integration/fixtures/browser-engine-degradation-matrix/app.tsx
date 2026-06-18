@@ -73,16 +73,17 @@ const app = createApp({
   mutations: [submitMatrixForm],
   queries: [engineQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, rawInput }) => {
-    if (key !== submitMatrixForm.key) return undefined;
-    return {
-      fragmentRenderers: [
-        {
-          render: () => renderSubmittedReport(rawInput as FormData),
-          target: 'engine-matrix-report',
-        },
-      ],
-    };
+  mutationResponses: {
+    [submitMatrixForm.key]: ({ rawInput }) => {
+      return {
+        fragmentRenderers: [
+          {
+            render: () => renderSubmittedReport(rawInput as FormData),
+            target: 'engine-matrix-report',
+          },
+        ],
+      };
+    },
   },
 });
 

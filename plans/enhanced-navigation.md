@@ -125,7 +125,7 @@ through client navigation.
     attrs, stylesheet/modulepreload hints, speculation rules, and route-level
     document state. Unsupported shell drift falls back to full GET.
   - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts` passed 63
+packages/runtime/src/inline-loader-navigation.browser.test.ts` passed 63
     browser tests and proves target document updates `<title>`, meta, html/body
     attrs, stylesheet/modulepreload hints, and speculation rules. It
     also proves docs theme state from `localStorage.theme` (`dark` and `light`)
@@ -153,8 +153,8 @@ through client navigation.
     app-authored `kovo-nav-*`; `packages/cli/src/index.kovo-explain.test.ts`
     proves `kovo explain page --layouts` lists navigation segment ids and
     metadata. Latest: `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx
-    packages/runtime/src/inline-loader-delegated.test.ts
-    packages/runtime/src/inline-loader-navigation.test.ts` passed with 93 tests
+packages/runtime/src/inline-loader-delegated.test.ts
+packages/runtime/src/inline-loader-navigation.test.ts` passed with 93 tests
     and proves render-time stamping also falls back to compiler-attached
     `page.kovoRoutePage` metadata when the route declaration's WeakMap metadata
     was created by another server module instance.
@@ -167,7 +167,7 @@ through client navigation.
     covers divergent layout chrome body replacement from the parsed target
     document across all inline installer artifacts. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts` passed with
+packages/runtime/src/inline-loader-navigation.browser.test.ts` passed with
     63 browser tests; `pnpm --filter @kovojs/site run smoke:navigation` passed
     after the site build and proves exported docs/reference/API pages expose
     `kovo-nav-segment` stamps, fire `kovo:navigate`, and preserve the route
@@ -178,13 +178,13 @@ through client navigation.
     morph remain inert until their declared trigger fires and are observed for
     `on:visible`, `on:idle`, and `on:load` exactly like mutation fragments.
   - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
+packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
     passed and proves preserved layout island signals survive, removed page
     island signals abort, inserted page `on:load`/`on:idle`/`on:visible`
     triggers start once after enhanced navigation, and already-triggered
     preserved layout `on:load` listeners do not replay. `pnpm exec vitest --run
-    packages/runtime/src/inline-loader-delegated.test.ts
-    packages/runtime/src/delegated-loader-lifecycle.test.ts` is included in the
+packages/runtime/src/inline-loader-delegated.test.ts
+packages/runtime/src/delegated-loader-lifecycle.test.ts` is included in the
     106-test runtime gate and proves the underlying ctx.signal reuse/disposal
     contract.
 - [x] **Duplicate IDREF and parser-stability guarantees remain intact.**
@@ -192,9 +192,9 @@ through client navigation.
     and a morphed segment, and it must preserve the KV225 parser-stability
     assumptions that fragment morphing relies on.
   - Evidence: `pnpm exec vitest --run packages/compiler/src/id-content-model.test.ts
-    packages/runtime/src/inline-loader-navigation.test.ts
-    packages/runtime/src/inline-loader-build.test.ts
-    packages/runtime/src/inline-loader-artifact-minifier.test.ts` passed 64
+packages/runtime/src/inline-loader-navigation.test.ts
+packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-artifact-minifier.test.ts` passed 64
     tests and proves compiler KV224 duplicate-id/IDREF rejection, compiler KV225
     parser-reparenting rejection, and enhanced-navigation fallback when a morphed
     segment would duplicate an id from preserved layout chrome across all inline
@@ -213,7 +213,7 @@ through client navigation.
     encoded-id anchors, and named anchors into view, and leaves same-document
     hash anchors to native browser navigation. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts`
+packages/runtime/src/inline-loader-navigation.browser.test.ts`
     passed with 63 browser tests and proves target-document API hashes scroll
     after morphing, preserve request fragments when real `fetch()` response URLs
     omit hashes, offset below sticky document chrome, update `location.href`, and
@@ -249,13 +249,13 @@ through client navigation.
   - No `unload` handlers, no global session heap, and no listeners that block the
     existing bfcache acceptance gates.
   - Evidence: `pnpm exec vitest --run packages/runtime/src/query-visible-return-refetch.test.ts
-    packages/runtime/src/mutation-optimistic-pagehide.test.ts
-    packages/conformance-fixtures/src/runtime-fixtures.test.ts` passed as part of
+packages/runtime/src/mutation-optimistic-pagehide.test.ts
+packages/conformance-fixtures/src/runtime-fixtures.test.ts` passed as part of
     the 71-test runtime gate and proves visible-return/pageshow refetch,
     pagehide optimistic cleanup, and `afterInstall: { pagehide: true, unload:
-    false }` conformance behavior. `rg -n "unload|beforeunload|pagehide|pageshow|visibilitychange|popstate"
-    packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts
-    packages/runtime/src/*.test.ts packages/conformance-fixtures/src/runtime-fixtures.test.ts`
+false }` conformance behavior. `rg -n "unload|beforeunload|pagehide|pageshow|visibilitychange|popstate"
+packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts
+packages/runtime/src/*.test.ts packages/conformance-fixtures/src/runtime-fixtures.test.ts`
     shows the inline enhanced-navigation loader registers `popstate`, while
     bfcache-sensitive runtime paths use `pagehide`/`pageshow`/`visibilitychange`
     and keep `unload` out of the loader.
@@ -301,7 +301,7 @@ through client navigation.
     covers build-token mismatch fallback across all inline installer artifacts;
     `packages/runtime/src/inline-loader-artifact-minifier.test.ts` pins the
     minified navigation parser/segment hooks; `pnpm --filter @kovojs/runtime run
-    check:inline-loader` passed under the 8KB gzip budget.
+check:inline-loader` passed under the 8KB gzip budget.
 - [x] **3. History/focus/scroll/concurrency hardening.**
   - Add `pushState`/`popstate`, scroll/hash restoration, focus movement,
     route-change announcement, in-flight cancellation, and bfcache-safe teardown.
@@ -324,7 +324,7 @@ through client navigation.
     targets after navigation, inserted leaf targets are discoverable, and stale
     targets do not double-morph.
   - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63359`
+packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63359`
     passed and proves an integrated enhanced navigation followed by an enhanced
     mutation sends preserved layout and inserted leaf entries in
     `Kovo-Targets`/`Kovo-Live-Targets`, excludes the stale pre-navigation target,

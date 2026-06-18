@@ -1,11 +1,4 @@
-import {
-  createApp,
-  domain,
-  mutation,
-  query,
-  route,
-  s,
-} from '@kovojs/server';
+import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import { runQuery } from '@kovojs/server/internal/execution';
 import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -88,12 +81,13 @@ const app = createApp({
   mutations: [restockProduct],
   queries: [productQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key }) => {
-    if (key !== restockProduct.key) return undefined;
-    return {
-      fragmentRenderers: [],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [restockProduct.key]: () => {
+      return {
+        fragmentRenderers: [],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

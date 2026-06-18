@@ -1,9 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import {
-  checkboxRootAttributes,
-  type CheckboxCheckedState,
-} from '@kovojs/headless-ui/checkbox';
+import { checkboxRootAttributes, type CheckboxCheckedState } from '@kovojs/headless-ui/checkbox';
 import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';

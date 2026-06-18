@@ -1,4 +1,4 @@
-import type { Form, FormInput, InvalidationSets, JsonValue, QueryRegistry } from '@kovojs/core';
+import type { Form, FormInput, InvalidationSets, QueryRegistry } from '@kovojs/core';
 import type { OptimisticEntry, OptimisticPlan } from '@kovojs/runtime';
 
 // SPEC.md §10.4 (the override path): a PARTIALLY-derived mutation ships a
@@ -12,8 +12,7 @@ import type { OptimisticEntry, OptimisticPlan } from '@kovojs/runtime';
 // what merges the derived plan with the hand-written transforms and re-checks the
 // full `OptimisticFor<...>` exhaustiveness.
 
-type MutationKey<Definition> =
-  Definition extends Form<infer Key, Record<string, JsonValue>, JsonValue> ? Key : never;
+type MutationKey<Definition> = Definition extends Form<infer Key, any, any> ? Key : never;
 
 type InvalidatedQueryValues<Definition> = {
   [QueryName in MutationKey<Definition> extends keyof InvalidationSets
@@ -29,7 +28,7 @@ type InvalidatedQueryValues<Definition> = {
  * `OptimisticFor<typeof form>`.
  */
 export type CrmDerivedSubset<
-  Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
+  Definition extends Form<string, any, any>,
   Keys extends keyof InvalidatedQueryValues<Definition>,
 > = Omit<OptimisticPlan<FormInput<Definition>>, 'transforms'> & {
   transforms: {

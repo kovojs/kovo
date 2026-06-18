@@ -96,8 +96,7 @@ describe('mutation targets', () => {
     // live Kovo-Targets snapshot, not separate compatibility serialization passes.
     expect(snapshot).toEqual({
       header: 'cart=cart; reviews:p1=reviews',
-      liveHeader:
-        'cart#cart:{}; reviews:p1#components/reviews/reviews:{"productId":"p1"}',
+      liveHeader: 'cart#cart:{}; reviews:p1#components/reviews/reviews:{"productId":"p1"}',
       liveTargets: [
         { component: 'cart', props: {}, target: 'cart' },
         {

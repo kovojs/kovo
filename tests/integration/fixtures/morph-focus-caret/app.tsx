@@ -41,13 +41,14 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [saveDraft],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== saveDraft.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      redirectTo: '/',
-      fragmentRenderers: [{ render: () => renderEditor(db), target: 'profile-editor' }],
-    };
+  mutationResponses: {
+    [saveDraft.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        redirectTo: '/',
+        fragmentRenderers: [{ render: () => renderEditor(db), target: 'profile-editor' }],
+      };
+    },
   },
 });
 

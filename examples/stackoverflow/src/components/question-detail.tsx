@@ -8,13 +8,7 @@ import { Card } from '@kovojs/ui/card';
 import { postAnswerMutation, soCsrf } from '../mutations.js';
 import { questionAnswers, questionDetail } from '../queries.js';
 import type { QuestionAnswersResult, QuestionDetailResult, SoRequest } from '../model.js';
-import {
-  freshId,
-  parseTags,
-  renderAuthor,
-  renderTags,
-  voteButton,
-} from '../components/chrome.js';
+import { freshId, parseTags, renderAuthor, renderTags, voteButton } from '../components/chrome.js';
 
 // Question detail for `/questions/:id`: the question, answers, and answer form.
 
@@ -81,15 +75,17 @@ export const QuestionDetailRegion = component({
     answers: questionAnswers.args((props) => ({ questionId: props.questionId })),
     question: questionDetail.args((props) => ({ id: props.questionId })),
   },
-  render: ({
-    answers,
-    question,
-    questionId,
-  }: {
-    answers: QuestionAnswersResult;
-    question: QuestionDetailResult | null;
-    questionId: string;
-  }, _state, slots: { request?: SoRequest | undefined } = {}) => {
+  render: (
+    {
+      answers,
+      question,
+    }: {
+      answers: QuestionAnswersResult;
+      question: QuestionDetailResult | null;
+    },
+    _state,
+    slots: { request?: SoRequest | undefined } = {},
+  ) => {
     if (!question) {
       return (
         <div class="so-stack">
@@ -115,7 +111,7 @@ export const QuestionDetailRegion = component({
           &larr; All questions
         </a>
 
-          {renderQuestionCard(question, slots.request)}
+        {renderQuestionCard(question, slots.request)}
 
         <section class="so-stack">
           <h2 class="so-answers-head">

@@ -37,18 +37,19 @@ export default defineFixture({
   app: createApp({
     mutations: [revealLateCard],
     routes: [homeRoute],
-    mutationResponse: ({ key }) => {
-      if (key !== revealLateCard.key) return undefined;
-      return {
-        fragmentRenderers: [
-          {
-            mode: 'append',
-            render: () => LateCard.definition.render() as string,
-            stylesheets: lateCardStylesheets,
-            target: 'late-card',
-          },
-        ],
-      };
+    mutationResponses: {
+      [revealLateCard.key]: () => {
+        return {
+          fragmentRenderers: [
+            {
+              mode: 'append',
+              render: () => LateCard.definition.render() as string,
+              stylesheets: lateCardStylesheets,
+              target: 'late-card',
+            },
+          ],
+        };
+      },
     },
   }),
 });

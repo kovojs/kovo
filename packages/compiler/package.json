@@ -47,8 +47,8 @@
   },
   "devDependencies": {
     "@kovojs/headless-ui": "workspace:*",
-    "@kovojs/server": "workspace:*",
     "@kovojs/runtime": "workspace:*",
+    "@kovojs/server": "workspace:*",
     "vitest": "4.1.8"
   }
 }

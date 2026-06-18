@@ -1,12 +1,5 @@
 import { form, type FormInput } from '@kovojs/core';
-import {
-  guards,
-  i18n,
-  metaFromQuery,
-  mutation,
-  s,
-  session,
-} from '@kovojs/server';
+import { guards, i18n, metaFromQuery, mutation, s, session } from '@kovojs/server';
 import {
   authed as betterAuthAuthed,
   betterAuthSession,
@@ -15,16 +8,9 @@ import {
 } from '@kovojs/better-auth';
 import { count, eq, sql } from 'drizzle-orm';
 
-import { createCommerceDb, type CommerceDb } from './db.js';
-import { commerceCartPageMeta, commerceStylesheets } from './graph.js';
-import {
-  cart,
-  cartQuery,
-  order,
-  orderHistoryQuery,
-  product,
-  productGridQuery,
-} from './queries.js';
+import type { CommerceDb } from './db.js';
+import { commerceCartPageMeta } from './graph.js';
+import { cart, cartQuery, order, orderHistoryQuery, product, productGridQuery } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 
 export { commerceCartPageMeta, commerceStylesheets } from './graph.js';
@@ -300,7 +286,10 @@ function readCookie(headers: Headers, name: string): string | undefined {
   return undefined;
 }
 
-function commerceAuthResponse(cookies: readonly string[], status = 204): CommerceBetterAuthResponse {
+function commerceAuthResponse(
+  cookies: readonly string[],
+  status = 204,
+): CommerceBetterAuthResponse {
   const headers = new Headers();
 
   Object.defineProperty(headers, 'getSetCookie', {

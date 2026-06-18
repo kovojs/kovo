@@ -63,7 +63,8 @@ describe('server build-time deployment API', () => {
         routeEntryMap: {
           '/cart': 'src/cart.client.ts',
         },
-        serverHandlerSource: 'export default async function handler() { return new Response("ok"); }\n',
+        serverHandlerSource:
+          'export default async function handler() { return new Response("ok"); }\n',
       });
 
       await expect(readFile(join(outDir, 'client/c/cart.client.js'), 'utf8')).resolves.toBe(
@@ -241,7 +242,8 @@ export default async function handler(request) {
           ],
         }),
         outDir: join(root, '.kovo'),
-        serverHandlerSource: 'export default async function handler() { return new Response("ok"); }\n',
+        serverHandlerSource:
+          'export default async function handler() { return new Response("ok"); }\n',
       });
       const nodeOutDir = join(root, 'node-output');
 

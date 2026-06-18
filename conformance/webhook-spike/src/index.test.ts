@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { stripeSignature } from '@kovojs/core';
+import {
+  hmacSignature,
+  type HmacSecret,
+  type HmacSignatureVerifier,
+  type WebhookPayload,
+} from '@kovojs/core';
 import { createMemoryMutationReplayStore, type MutationReplayStore } from '@kovojs/server';
 import type { MutationWireResponse } from '@kovojs/server/internal/wire';
 
@@ -8,7 +13,7 @@ const stripePayload =
   '{"id":"evt_payment_succeeded_001","object":"event","type":"payment_intent.succeeded","data":{"object":{"id":"pi_123","metadata":{"orderId":"order_123"}}},"livemode":false,"pending_webhooks":1}';
 const stripeTimestamp = 1_674_087_231;
 const stripeNow = stripeTimestamp * 1000;
-const stripeSignatureHeader =
+const stripeHeader =
   't=1674087231,v1=16de56e1424fa5548a47dee454c8718c66241d4b9e62668bb2fe43355842d3cf';
 const rotatedStripeSignatureHeader = [
   't=1674087231',
@@ -57,7 +62,7 @@ describe('S7 Stripe-format webhook lifecycle spike', () => {
   it('captures raw bytes once, then verifies, parses, writes in a tx, records changes, and replays duplicates', async () => {
     const replayStore = createMemoryMutationReplayStore();
     const state = createSpikeState();
-    const firstRequest = countingStripeRequest(stripePayload, stripeSignatureHeader);
+    const firstRequest = countingStripeRequest(stripePayload, stripeHeader);
     const first = await runStripeWebhookSpike(firstRequest.request, {
       replayStore,
       state,
@@ -96,7 +101,7 @@ describe('S7 Stripe-format webhook lifecycle spike', () => {
       ],
     });
 
-    const duplicateRequest = countingStripeRequest(stripePayload, stripeSignatureHeader);
+    const duplicateRequest = countingStripeRequest(stripePayload, stripeHeader);
     const duplicate = await runStripeWebhookSpike(duplicateRequest.request, {
       replayStore,
       state,
@@ -111,7 +116,7 @@ describe('S7 Stripe-format webhook lifecycle spike', () => {
 
   it('rejects semantically equivalent but byte-tampered JSON before parsing can normalize it', async () => {
     const tamperedPayload = JSON.stringify(JSON.parse(stripePayload), null, 2);
-    const request = countingStripeRequest(tamperedPayload, stripeSignatureHeader);
+    const request = countingStripeRequest(tamperedPayload, stripeHeader);
     const state = createSpikeState();
 
     await expect(
@@ -132,7 +137,7 @@ describe('S7 Stripe-format webhook lifecycle spike', () => {
     const state = createSpikeState();
 
     await expect(
-      runStripeWebhookSpike(countingStripeRequest(stripePayload, stripeSignatureHeader).request, {
+      runStripeWebhookSpike(countingStripeRequest(stripePayload, stripeHeader).request, {
         now: stripeNow + 301_000,
         replayStore: createMemoryMutationReplayStore(),
         state,
@@ -171,7 +176,7 @@ async function runStripeWebhookSpike(
   options: StripeSpikeOptions,
 ): Promise<SpikeResponse> {
   const rawBody = new Uint8Array(await request.arrayBuffer());
-  const verifier = stripeSignature({ secret: options.secret ?? 'whsec_test_secret' });
+  const verifier = stripeFixtureSignature({ secret: options.secret ?? 'whsec_test_secret' });
   const verified = await verifier.verify({
     headers: request.headers,
     now: options.now ?? stripeNow,
@@ -241,6 +246,55 @@ function parseStripeFixtureEvent(rawBody: Uint8Array): StripeFixtureEvent {
   }
 
   return parsed as StripeFixtureEvent;
+}
+
+function stripeFixtureSignature(options: {
+  secret: HmacSecret | readonly HmacSecret[];
+}): HmacSignatureVerifier {
+  return hmacSignature({
+    encoding: 'hex',
+    header: 'stripe-signature',
+    multiSig: stripeV1Signatures,
+    name: 'stripe-fixture',
+    payload: (request, context) => {
+      const timestamp = stripeHeaderPart(context.signatureHeader, 't');
+      if (timestamp === undefined) return '';
+      return `${timestamp}.${webhookPayloadToString(request.payload)}`;
+    },
+    scheme: 'stripe:v1:hmac-sha256',
+    secret: options.secret,
+    tolerance: {
+      seconds: 5 * 60,
+      timestamp: (_request, context) => stripeHeaderPart(context.signatureHeader, 't'),
+    },
+  });
+}
+
+function stripeV1Signatures(header: string): readonly string[] {
+  const signatures: string[] = [];
+  for (const part of header.split(',')) {
+    const [name, value] = part.split('=', 2);
+    if (name?.trim() === 'v1' && value !== undefined && value.length > 0) {
+      signatures.push(value);
+    }
+  }
+  return signatures;
+}
+
+function stripeHeaderPart(header: string, partName: string): string | undefined {
+  for (const part of header.split(',')) {
+    const [name, value] = part.split('=', 2);
+    if (name?.trim() === partName && value !== undefined && value.length > 0) return value;
+  }
+  return undefined;
+}
+
+function webhookPayloadToString(payload: WebhookPayload): string {
+  if (typeof payload === 'string') return payload;
+  if (payload instanceof ArrayBuffer) return new TextDecoder().decode(payload);
+  return new TextDecoder().decode(
+    payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength),
+  );
 }
 
 function createOrderTx(state: SpikeState) {

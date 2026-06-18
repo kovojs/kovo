@@ -47,16 +47,17 @@ const homeRoute = route('/', {
 export default defineFixture({
   app: createApp({
     mutations: [refreshTargets],
-    mutationResponse: ({ key, request }) => {
-      if (key !== refreshTargets.key) return undefined;
-      const db = (request as unknown as KovoFixtureRequest).db;
-      const fragmentRenderers = [
-        { render: () => renderPublic(db), target: 'public-status' },
-        ...(userId(request)
-          ? [{ render: () => renderPrivate(request), target: 'private-panel' }]
-          : []),
-      ];
-      return { fragmentRenderers };
+    mutationResponses: {
+      [refreshTargets.key]: ({ request }) => {
+        const db = (request as unknown as KovoFixtureRequest).db;
+        const fragmentRenderers = [
+          { render: () => renderPublic(db), target: 'public-status' },
+          ...(userId(request)
+            ? [{ render: () => renderPrivate(request), target: 'private-panel' }]
+            : []),
+        ];
+        return { fragmentRenderers };
+      },
     },
     routes: [homeRoute],
   }),

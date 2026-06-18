@@ -45,13 +45,14 @@ const app = createApp({
   mutations: [deposit],
   queries: [balanceQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== deposit.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      redirectTo: '/',
-      fragmentRenderers: [{ render: () => renderBadge(db), target: 'balance-badge' }],
-    };
+  mutationResponses: {
+    [deposit.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        redirectTo: '/',
+        fragmentRenderers: [{ render: () => renderBadge(db), target: 'balance-badge' }],
+      };
+    },
   },
 });
 

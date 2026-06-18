@@ -105,8 +105,7 @@ for (const file of files) {
   for (const { module, symbols } of imports) {
     if (module === '@kovojs/headless-ui' || module.startsWith('@kovojs/headless-ui/')) {
       symbols.forEach((s) => headlessUiSymbols.add(s));
-    }
-    else if (module === '@kovojs/style') {
+    } else if (module === '@kovojs/style') {
       if (symbols.length > 0) {
         symbols.forEach((s) => styleSymbols.add(s));
       } else {

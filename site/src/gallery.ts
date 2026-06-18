@@ -186,7 +186,9 @@ function rewriteGalleryClientImports(source: string, support: SupportRegistratio
           `/c/packages/headless-ui/src/primitives/${family}.js`,
         );
         if (href === undefined) {
-          throw new Error(`site app shell: missing gallery headless UI client module for ${family}.`);
+          throw new Error(
+            `site app shell: missing gallery headless UI client module for ${family}.`,
+          );
         }
         return `from '${href}';`;
       },
@@ -284,12 +286,12 @@ export async function buildGalleryRoutePages({
     content: {
       kind: 'section-index',
       section: {
-          key: 'gallery',
-          pages: galleryRoutes.map((galleryRoute) => ({
-            title: galleryRoute.title,
-            url: galleryUrl(galleryRoute.path),
-          })),
-          title: 'Gallery',
+        key: 'gallery',
+        pages: galleryRoutes.map((galleryRoute) => ({
+          title: galleryRoute.title,
+          url: galleryUrl(galleryRoute.path),
+        })),
+        title: 'Gallery',
       },
     },
     meta: {
@@ -347,10 +349,10 @@ export async function buildGalleryRoutePages({
       activePath: url,
       content: {
         gallery: {
-            demoHtml,
-            interactive: Boolean(interactive),
-            route: { path: galleryRoute.path, title: galleryRoute.title },
-            routes: routeViews,
+          demoHtml,
+          interactive: Boolean(interactive),
+          route: { path: galleryRoute.path, title: galleryRoute.title },
+          routes: routeViews,
         },
         kind: 'gallery',
       },

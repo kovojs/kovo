@@ -1,10 +1,7 @@
 import type { LiveTargetRenderer } from './mutation-wire.js';
 
 /** @internal Compiler-emitted module namespace that may contain live-target renderer exports. */
-export type GeneratedLiveTargetModule<Request = unknown> = Record<
-  string,
-  LiveTargetRenderer<Request> | unknown
->;
+export type GeneratedLiveTargetModule<_Request = unknown> = Record<string, unknown>;
 
 const registeredRenderersByComponent = new Map<string, LiveTargetRenderer<unknown>>();
 
@@ -20,13 +17,12 @@ export function registerGeneratedLiveTargetRenderer<Request = unknown>(
   renderer: LiveTargetRenderer<Request>,
 ): LiveTargetRenderer<Request> {
   if (!isLiveTargetRenderer(renderer)) {
-    throw new TypeError('Generated live target renderer registration received an invalid renderer.');
+    throw new TypeError(
+      'Generated live target renderer registration received an invalid renderer.',
+    );
   }
 
-  registeredRenderersByComponent.set(
-    renderer.component,
-    renderer as LiveTargetRenderer<unknown>,
-  );
+  registeredRenderersByComponent.set(renderer.component, renderer as LiveTargetRenderer<unknown>);
   return renderer;
 }
 

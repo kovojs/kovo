@@ -28,10 +28,10 @@ type QuestionScoreQueryResult = Awaited<ReturnType<typeof questionScore.load>>;
 type QuestionListRenderSlots = ComponentRenderSlots<{ postQuestion: typeof postQuestionForm }> & {
   request?: SoRequest | undefined;
 };
-type DuplicateTitleFailure = Extract<
-  NonNullable<QuestionListRenderSlots['forms']['postQuestion']['failure']>,
-  { code: 'DUPLICATE_TITLE' }
->;
+interface DuplicateTitleFailure {
+  code: 'DUPLICATE_TITLE';
+  payload: { title: string };
+}
 
 const defaultQuestionListRenderSlots: QuestionListRenderSlots = {
   forms: { postQuestion: { failure: null } },

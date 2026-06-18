@@ -58,7 +58,7 @@ export interface JsxProps {
 
 type MaybePromise<Value> = Promise<Value> | Value;
 
-export type JsxComponent = (props: JsxProps) => MaybePromise<string>;
+export type JsxComponent = (props: any) => any;
 
 type KovoJsxComponent = Component<ComponentDefinitionInput>;
 
@@ -92,8 +92,8 @@ export function jsx(
   if (isMutationFormHelperComponent(type, FormError, 'FormError')) {
     return renderMutationFormHelper('form', props);
   }
-  if (typeof type === 'function') return type(props);
   if (isKovoComponent(type)) return renderKovoComponent(type, props);
+  if (typeof type === 'function') return type(props);
 
   const attributes = renderJsxAttributes(type, props, key);
   if (voidElements.has(type)) return `<${type}${attributes}>`;
@@ -413,8 +413,10 @@ function renderJsxChildren(children: JsxNode): MaybePromise<string> {
   if (Array.isArray(children)) {
     const rendered = children.map((child) => renderJsxChildren(child));
     return rendered.some(isPromiseLike)
-      ? Promise.all(rendered).then((values) => values.join(''))
-      : rendered.join('');
+      ? Promise.all(rendered.map((value) => Promise.resolve(value))).then((values) =>
+          values.join(''),
+        )
+      : (rendered as string[]).join('');
   }
 
   return String(children);
@@ -527,7 +529,7 @@ function isPromiseLike<Value>(value: MaybePromise<Value>): value is Promise<Valu
 }
 
 export declare namespace JSX {
-  type Element = MaybePromise<string>;
+  type Element = any;
   type ElementType = JsxComponent | KovoJsxComponent | string;
   interface ElementChildrenAttribute {
     children: unknown;

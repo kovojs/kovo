@@ -33,7 +33,7 @@ describe('commerce enhanced navigation', () => {
     await page.goto(`${origin}/`, { waitUntil: 'networkidle' });
 
     await page.evaluate(() => {
-      const layout = document.querySelector('main') as (HTMLElement & { __kovoTestPersist?: true });
+      const layout = document.querySelector('main') as HTMLElement & { __kovoTestPersist?: true };
       layout.__kovoTestPersist = true;
       const link = document.createElement('a');
       link.href = '/cart';
@@ -46,8 +46,9 @@ describe('commerce enhanced navigation', () => {
     await page.waitForFunction(() => location.pathname === '/cart');
 
     const layoutPersisted = await page.evaluate(
-      () => (document.querySelector('main') as (HTMLElement & { __kovoTestPersist?: true }) | null)
-        ?.__kovoTestPersist === true,
+      () =>
+        (document.querySelector('main') as (HTMLElement & { __kovoTestPersist?: true }) | null)
+          ?.__kovoTestPersist === true,
     );
     await page.evaluate(() => {
       document.querySelector('#test-cart-link')?.remove();

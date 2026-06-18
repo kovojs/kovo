@@ -82,7 +82,13 @@ export function validateHandAuthoredNavigationSegmentStamps(
     for (const attribute of element.attributes) {
       if (!navigationSegmentStampAttributes.has(attribute.name)) continue;
       diagnostics.push({
-        ...diagnosticFor(fileName, 'KV235', source, attribute.start, attribute.end - attribute.start),
+        ...diagnosticFor(
+          fileName,
+          'KV235',
+          source,
+          attribute.start,
+          attribute.end - attribute.start,
+        ),
         help: [
           diagnosticDefinitions.KV235.help,
           'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',

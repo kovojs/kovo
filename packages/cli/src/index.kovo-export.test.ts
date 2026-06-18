@@ -251,7 +251,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/', page: () => `<link href=\"${process.env.KOVO_TEST_STYLESHEET_HREF}\"><main>Home</main>` }",
+            '{ path: \'/\', page: () => `<link href="${process.env.KOVO_TEST_STYLESHEET_HREF}"><main>Home</main>` }',
         }),
         'utf8',
       );
@@ -340,9 +340,7 @@ describe('kovo export', () => {
       expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
         '<main data-vite-export>/assets/vite.css</main>',
       );
-      expect(readFileSync(join(outDir, 'assets', 'vite.css'), 'utf8')).toBe(
-        'main{display:block}',
-      );
+      expect(readFileSync(join(outDir, 'assets', 'vite.css'), 'utf8')).toBe('main{display:block}');
     } finally {
       delete process.env.KOVO_TEST_VITE_STYLESHEET;
       stdout.mockRestore();

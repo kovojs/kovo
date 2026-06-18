@@ -39,13 +39,7 @@ process.on('exit', () => rmSync(tempRoot, { force: true, recursive: true }));
 // The source files the §10.5 extractors analyze. db.ts/model.ts are included so
 // ts-morph can resolve cross-module types (SoDb, request/result shapes, the
 // domain registry), but they carry no Drizzle writes.
-const sourceFileNames = [
-  'schema.ts',
-  'db.ts',
-  'model.ts',
-  'queries.ts',
-  'mutations.ts',
-];
+const sourceFileNames = ['schema.ts', 'db.ts', 'model.ts', 'queries.ts', 'mutations.ts'];
 const sourceByName = new Map(
   sourceFileNames.map((name) => [name, readFileSync(resolve(srcDir, name), 'utf8')]),
 );

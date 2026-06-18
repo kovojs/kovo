@@ -106,7 +106,8 @@ export const liveTargetRenderers = collectGeneratedLiveTargetRenderers([
   const routeSourcePath = resolve(soRoot, 'src/interactive-app.tsx');
   const routeGeneratedPath = resolve(soRoot, 'src/generated/interactive-app.kovo-route.tsx');
   const routeFileName = 'examples/stackoverflow/src/interactive-app.tsx';
-  const routeArtifactFileName = 'examples/stackoverflow/src/generated/interactive-app.kovo-route.tsx';
+  const routeArtifactFileName =
+    'examples/stackoverflow/src/generated/interactive-app.kovo-route.tsx';
 
   runKovo([
     'compile',

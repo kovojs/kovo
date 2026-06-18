@@ -12,7 +12,7 @@ export async function postQuestion(
   { id, title, body, authorId }: { id: string; title: string; body: string; authorId: string },
   request: SoRequest,
   context: MutationContext<{ DUPLICATE_TITLE: typeof duplicateTitleError }>,
-): Promise<{ id: string }> {
+) {
   const db = request.db;
   const [existing] = await db.select().from(questions).where(eq(questions.title, title)).limit(1);
   if (existing) {

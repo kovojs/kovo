@@ -320,7 +320,7 @@ describe('create-kovo starter', () => {
       expect(exportStaticScript).toContain("'--vite'");
       expect(exportStaticScript).toContain("'/src/app-shell.ts'");
       expect(exportStaticScript).not.toContain("server.ssrLoadModule('@kovojs/server')");
-      expect(exportStaticScript).not.toContain("@kovojs/server/app-shell/vite");
+      expect(exportStaticScript).not.toContain('@kovojs/server/app-shell/vite');
       expect(exportStaticScript).not.toContain('@kovojs/server/app-shell/core');
       expect(exportStaticScript).not.toContain('@kovojs/server/app-shell/static-export');
       expect(exportStaticScript).not.toContain('kovoAppShellViteManifestStylesheetHrefFromFile');

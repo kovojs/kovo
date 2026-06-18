@@ -1,7 +1,12 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, compileComponentModule, compileRouteModule, deriveAppGraph } from './index.js';
+import {
+  assertFixpoint,
+  compileComponentModule,
+  compileRouteModule,
+  deriveAppGraph,
+} from './index.js';
 import { deriveRegistryFactsFromGraph } from './internal-graph.js';
 
 const cartBadgeSource = `
@@ -118,7 +123,8 @@ export const ProductDetail = component({
     expect(registry).toContain(`export interface LiveTargetRegistry {
   'components/products/product-detail/product-detail': { component: 'components/products/product-detail/product-detail'; targetBase: 'product-detail'; identityProps: readonly ['productId']; queries: readonly ['product']; queryBindings: readonly [{ name: 'product'; queryExpression: "productQuery"; argsExpression: "({ id: props.productId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId'] }]; props: { productId: string }; coverage: readonly [{ query: 'product.name'; position: "binding"; status: 'plan' }]; };
 }`);
-    expect(result.loweredSource).toContain(`export const ProductDetail$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
+    expect(result.loweredSource)
+      .toContain(`export const ProductDetail$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductDetail,
   componentId: "components/products/product-detail/product-detail",
 }));`);
@@ -171,7 +177,8 @@ export const detail = route('/questions/:id', {
     expect(registry).toContain(
       `'components/questions/question-detail/question-detail': { component: 'components/questions/question-detail/question-detail'; targetBase: 'question-detail'; identityProps: readonly ['questionId']; queries: readonly ['question', 'answers']; queryBindings: readonly [{ name: 'question'; queryExpression: "questionQuery"; argsExpression: "({ id: props.questionId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.questionId'] }, { name: 'answers'; queryExpression: "answerListQuery"; argsExpression: "({ questionId: props.questionId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.questionId'] }]; props: { questionId: string }; coverage: readonly [{ query: 'question.title'; position: "binding"; status: 'plan' }, { query: 'answers.items.length'; position: "binding"; status: 'plan' }]; };`,
     );
-    expect(component.loweredSource).toContain(`export const QuestionDetail$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
+    expect(component.loweredSource)
+      .toContain(`export const QuestionDetail$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: QuestionDetail,
   componentId: "components/questions/question-detail/question-detail",
 }));`);
@@ -224,7 +231,8 @@ export const products = route('/products', {
       propsExpression: '{ productId: product.id }',
       serializedPropsExpression: 'JSON.stringify({ productId: product.id })',
     });
-    expect(component.loweredSource).toContain(`export const ProductCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
+    expect(component.loweredSource)
+      .toContain(`export const ProductCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductCard,
   componentId: "components/products/product-card/product-card",
 }));`);

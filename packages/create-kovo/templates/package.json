@@ -20,9 +20,9 @@
     "@kovojs/style": "workspace:*"
   },
   "devDependencies": {
+    "@kovojs/cli": "workspace:*",
     "@types/node": "^25.0.0",
     "@typescript/native-preview": "^7.0.0-dev.20260610.1",
-    "@kovojs/cli": "workspace:*",
     "typescript": "^6.0.0",
     "vite": "^8.0.16",
     "vite-plus": "^0.1.24",

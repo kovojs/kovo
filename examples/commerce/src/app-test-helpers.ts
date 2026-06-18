@@ -11,10 +11,7 @@ import {
   type CommerceDb,
   type ProductGridInput,
 } from './app.js';
-import {
-  createCommerceAppShell,
-  type CommerceAppShell,
-} from './generated/app-shell.kovo-route.js';
+import { createCommerceAppShell, type CommerceAppShell } from './generated/app-shell.kovo-route.js';
 import { cartItems, orders, products } from './schema.js';
 
 export type ProductRow = { id: string; stock: number; unitPrice: number };
@@ -161,10 +158,7 @@ export interface CommerceScenarioClient {
     input: AddToCartInput,
     options?: CommerceScenarioEnhancedOptions,
   ): Promise<Response>;
-  addToCartNoJs(
-    input: AddToCartInput,
-    options?: CommerceScenarioRequestOptions,
-  ): Promise<Response>;
+  addToCartNoJs(input: AddToCartInput, options?: CommerceScenarioRequestOptions): Promise<Response>;
 }
 
 export interface CommerceScenarioRequestOptions {

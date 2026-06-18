@@ -238,9 +238,7 @@ function compileComponentCapture({ allowedDiagnostics = [], fileName, queryShape
 function parseCompileWarnings(output) {
   return output
     .split('\n')
-    .map((line) =>
-      line.match(/^WARN (KV\d+) file="([^"]+)" (.+)$/)?.slice(1),
-    )
+    .map((line) => line.match(/^WARN (KV\d+) file="([^"]+)" (.+)$/)?.slice(1))
     .filter(Boolean)
     .map(([code, fileName, message]) => ({
       code,

@@ -319,11 +319,7 @@ export interface HmrImpactStylesheetFact {
 }
 
 /** Conservative hot-update action class selected from compiler-owned typed facts. */
-export type HmrImpactClass =
-  | 'componentRefresh'
-  | 'diagnosticError'
-  | 'fullReload'
-  | 'routeRefresh';
+export type HmrImpactClass = 'componentRefresh' | 'diagnosticError' | 'fullReload' | 'routeRefresh';
 
 /** Machine-readable reason explaining why an HMR action class was selected. */
 export type HmrImpactReason =

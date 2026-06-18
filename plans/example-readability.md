@@ -9,22 +9,22 @@ not production-hardening showcases or exhaustive conformance ledgers.
 Example source should prioritize the app-author mental model:
 
 - [x] Keep examples focused on ordinary app authoring: routes, layouts, components,
-  queries, mutations, forms, guards, and generated refresh.
+      queries, mutations, forms, guards, and generated refresh.
   - Evidence: Commerce/CRM/StackOverflow no longer carry static export scripts,
     broad source-truth matrices, or production-hardening demo routes; focused
     example tests passed for all three examples in this session.
 - [x] Remove production-hardening demonstrations from example apps when they make
-  the app harder to read: signed webhooks, CSV/spreadsheet hardening, attachment
-  storage/download ownership checks, static-export variants, replay/security
-  edge cases, and broad source-truth acceptance matrices.
+      the app harder to read: signed webhooks, CSV/spreadsheet hardening, attachment
+      storage/download ownership checks, static-export variants, replay/security
+      edge cases, and broad source-truth acceptance matrices.
   - Evidence: Commerce removed upload/webhook/CSV/admin surfaces; CRM and
     StackOverflow removed proof-style matrix tests and unused conformance-fixture
     dependencies.
 - [ ] Preserve framework coverage by moving removed behavior into package-level
-  conformance fixtures or focused server/core tests before deleting example tests.
+      conformance fixtures or focused server/core tests before deleting example tests.
 - [x] Prefer a handful of cohesive files over many tiny files, but cap mega-files.
-  Target authored source files around 100-400 lines where practical; tests can be
-  larger but should be scenario-focused.
+      Target authored source files around 100-400 lines where practical; tests can be
+      larger but should be scenario-focused.
   - Evidence: Workers simplified example-local tests without splitting app code
     into extra tiny modules; Commerce `app.ts` is 698 lines after removing
     non-demo surfaces, while CRM/SO keep cohesive component/query/mutation files.
@@ -34,7 +34,7 @@ Example source should prioritize the app-author mental model:
     `src/model.ts` (78 lines); `wc -l` over authored TS/TSX now reports 7,297
     total lines across Commerce/CRM/StackOverflow.
 - [x] Keep generated artifacts inspectable, but do not optimize example readability
-  around generated files.
+      around generated files.
   - Evidence: generated artifacts were regenerated/checked for Commerce, CRM,
     and StackOverflow with each example's `emit-components -- --check` and
     `emit-graph -- --check`.
@@ -42,7 +42,7 @@ Example source should prioritize the app-author mental model:
 ## Phase 1: Commerce
 
 - [x] Reduce `examples/commerce/src/app.ts` from a kitchen-sink app into a readable
-  cart demo.
+      cart demo.
   - Keep: product grid, cart badge, order history, add-to-cart mutation, simple
     session/auth shape if needed for guarded form behavior.
   - Remove or move to framework fixtures: receipt uploads, attachment downloads,
@@ -73,8 +73,8 @@ Example source should prioritize the app-author mental model:
   - Evidence: `pnpm --filter @kovojs/example-commerce run emit-components -- --check`
     and `pnpm --filter @kovojs/example-commerce run emit-graph -- --check` passed.
 - [x] Verification: Commerce generated artifacts check, focused Commerce tests,
-  root typecheck, API surface gate, and no-match checks for removed hardening
-  surfaces in authored Commerce source.
+      root typecheck, API surface gate, and no-match checks for removed hardening
+      surfaces in authored Commerce source.
   - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/commerce-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts packages/conformance-fixtures/src/graph-fixtures.test.ts` passed 3 files / 17 tests.
   - Evidence: `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, `node scripts/api-surface-gate.mjs`, `pnpm run check:build`, and `git diff --check` passed.
   - Evidence: `pnpm exec vp run kovo-check` is blocked before assertions by missing publish-layout artifact `dist/compiler/src/internal.mjs`; `pnpm run check:build` reproduced the root `dist/` layout but still only emitted `dist/compiler/src/index.mjs`.
@@ -82,13 +82,13 @@ Example source should prioritize the app-author mental model:
 ## Phase 2: CRM
 
 - [x] Keep CRM as the focused derived-vs-custom optimism example, but reduce
-  commentary and test breadth that reads like conformance documentation.
+      commentary and test breadth that reads like conformance documentation.
   - Evidence: `examples/crm/src/graph.test.ts` is now a focused graph smoke and
     `examples/crm/src/optimistic.test.ts` replaces the deleted
     `custom-optimism.test.ts` and `derivation-commuting.test.ts`.
   - Evidence: `pnpm --filter @kovojs/example-crm test` passed 3 files / 10 tests.
 - [x] Decide whether `activityList`/deal detail is necessary for the teaching goal;
-  remove it if it only exists to exercise graph edge cases.
+      remove it if it only exists to exercise graph edge cases.
   - Evidence: no `activityList` surface remains in `examples/crm`; deal detail
     stays as part of the live CRM navigation demo.
 - [x] Keep files cohesive rather than splitting into many tiny modules.
@@ -104,7 +104,7 @@ Example source should prioritize the app-author mental model:
   - Evidence: StackOverflow now keeps focused app and graph smoke tests after
     deleting proof-style `derivation-pglite.test.ts` and `registry-facts.test.ts`.
 - [x] Reduce graph/registry tests to scenario evidence and move exhaustive optimism
-  matrix assertions to conformance fixtures when possible.
+      matrix assertions to conformance fixtures when possible.
   - Evidence: `examples/stackoverflow/src/kovo-graph.test.ts` now checks demo
     mutation/query connectivity plus `kovoCheck`, not every explain matrix row.
   - Evidence: `pnpm --filter @kovojs/example-stackoverflow test` passed 2 files /
@@ -119,8 +119,8 @@ Example source should prioritize the app-author mental model:
 ## Open Risks
 
 - [ ] Static export, file upload, webhook, attachment download, CSV, replay, and
-  security-hardening behavior currently get meaningful coverage from Commerce.
-  Removing them from the example must not create framework coverage gaps.
+      security-hardening behavior currently get meaningful coverage from Commerce.
+      Removing them from the example must not create framework coverage gaps.
   - Evidence: static export coverage now lives in `docs/static-export.md` and
     passed via `pnpm exec vitest --run packages/conformance-fixtures/src/kovo-export-fixtures.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-endpoints.test.ts`
     plus `pnpm exec vitest --run examples/reference/src/app-shell.test.ts examples/gallery/src/interactive-gallery.static-export.test.ts`.
@@ -129,7 +129,7 @@ Example source should prioritize the app-author mental model:
     webhook verification remains covered by core/server tests; this session did
     not run the full webhook/storage suites, so this risk stays open.
 - [x] `plans/app-authoring-ergonomics.md` item 7 already tracks retiring static
-  export from interactive examples; do not double-implement that work without
-  updating both ledgers.
+      export from interactive examples; do not double-implement that work without
+      updating both ledgers.
   - Evidence: item 7 is updated with the static-export/read-only removal and
     verification evidence.

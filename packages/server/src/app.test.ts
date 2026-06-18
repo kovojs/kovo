@@ -77,7 +77,7 @@ describe('server createApp request shell', () => {
     const accountLayout = layout({
       queries: { profile: profileQuery },
       render: ({ profile }, _state, { children }) =>
-        `<main data-profile="${profile.name}">${children}</main>`,
+        `<main data-profile="${profile.name}">${String(children)}</main>`,
     });
 
     const app = createApp({
@@ -516,7 +516,7 @@ describe('server createApp request shell', () => {
     const CartLayout = layout({
       queries: { cart: cartQuery },
       render: ({ cart }, _state, { children }) =>
-        `<main><output data-bind="cart.count">${cart.count}</output>${children}</main>`,
+        `<main><output data-bind="cart.count">${cart.count}</output>${String(children)}</main>`,
     });
     const handler = createRequestHandler(
       createApp({
@@ -674,7 +674,7 @@ describe('server createApp request shell', () => {
       },
     });
     const renderCartPanel = vi.fn(({ props }: { props: Record<string, unknown> }) => {
-      return `<cart-panel>${props.cartId}</cart-panel>`;
+      return `<cart-panel>${String(props.cartId)}</cart-panel>`;
     });
     const handler = createRequestHandler(
       createApp({

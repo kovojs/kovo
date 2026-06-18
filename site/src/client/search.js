@@ -89,9 +89,9 @@ function renderNoResults(element) {
 }
 
 function resultItems() {
-  return [
-    ...(document.getElementById('site-search-results')?.querySelectorAll('li') ?? []),
-  ].filter((item) => item.querySelector('a'));
+  return [...(document.getElementById('site-search-results')?.querySelectorAll('li') ?? [])].filter(
+    (item) => item.querySelector('a'),
+  );
 }
 
 function setSelectedIndex(nextIndex) {

@@ -25,7 +25,10 @@ describe('kovo build', () => {
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
-      symlinkSync(join(process.cwd(), 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(
+        join(process.cwd(), 'packages/server'),
+        join(root, 'node_modules/@kovojs/server'),
+      );
       writeFileSync(appPath, appModuleSource(), 'utf8');
 
       const exitCode = await withEnv({ VERCEL: '1' }, () =>
@@ -38,9 +41,7 @@ describe('kovo build', () => {
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('kovo-build/v1\nAPP module=');
       expect(output).toContain(`SUMMARY preset=node outDir=${JSON.stringify(outDir)}`);
-      expect(readFileSync(join(outDir, '.kovo/server/handler.mjs'), 'utf8')).not.toContain(
-        'vite',
-      );
+      expect(readFileSync(join(outDir, '.kovo/server/handler.mjs'), 'utf8')).not.toContain('vite');
 
       const serverModule = (await import(
         `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
@@ -87,7 +88,10 @@ describe('kovo build', () => {
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
-      symlinkSync(join(process.cwd(), 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(
+        join(process.cwd(), 'packages/server'),
+        join(root, 'node_modules/@kovojs/server'),
+      );
       writeFileSync(appPath, appModuleSource(), 'utf8');
 
       const exitCode = await mainAsync(['build', appPath, '--out', outDir]);

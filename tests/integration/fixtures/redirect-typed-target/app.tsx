@@ -44,11 +44,12 @@ export default defineFixture({
   app: createApp({
     mutations: [placeOrder],
     routes: [homeRoute, orderRoute],
-    mutationResponse: ({ key }) => {
-      if (key !== placeOrder.key) return undefined;
-      return {
-        redirectTo: (result) => (result.value as Redirect).location,
-      };
+    mutationResponses: {
+      [placeOrder.key]: () => {
+        return {
+          redirectTo: (result) => (result.value as Redirect).location,
+        };
+      },
     },
   }),
 });

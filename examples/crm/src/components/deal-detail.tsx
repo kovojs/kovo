@@ -31,17 +31,21 @@ export const DealDetailRegion = component({
     contactList: contactListQuery,
     dealList: dealListQuery,
   },
-  render: ({
-    activityList,
-    contactList,
-    dealId,
-    dealList,
-  }: {
-    activityList: ActivityListResult;
-    contactList: ContactListResult;
-    dealId: string;
-    dealList: DealListResult;
-  }, _state, slots: DealDetailRenderSlots = {}) => {
+  render: (
+    {
+      activityList,
+      contactList,
+      dealId,
+      dealList,
+    }: {
+      activityList: ActivityListResult;
+      contactList: ContactListResult;
+      dealId: string;
+      dealList: DealListResult;
+    },
+    _state,
+    slots: DealDetailRenderSlots = {},
+  ) => {
     const deal = dealList.items.find((item) => item.id === dealId);
     const contact = contactList.items.find((item) => item.id === deal?.contactId);
     const activities = activityList.items.filter((item) => item.dealId === dealId);

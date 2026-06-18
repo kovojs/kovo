@@ -126,11 +126,7 @@ export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> 
   ([DbValue] extends [never] ? {} : { db: DbValue });
 
 /** Per-request options shared across the lifecycle: error hook plus session/db providers. */
-export interface RequestLifecycleOptions<
-  RawRequest,
-  SessionValue = unknown,
-  DbValue = unknown,
-> {
+export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbValue = unknown> {
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   onError?: ServerErrorHandler;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;

@@ -18,6 +18,7 @@ import {
   productGridQuery,
   type CartQueryResult,
 } from './app.js';
+import { queryContext } from './app-test-helpers.js';
 import { resetProducts } from './app-test-helpers.js';
 
 const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -84,7 +85,9 @@ describe('commerce graph', () => {
       { id: 'custom-c', stock: 5, unitPrice: 300 },
     ]);
 
-    await expect(productGridQuery.load({ after: 'custom-a', limit: 2 }, { db })).resolves.toEqual({
+    await expect(
+      productGridQuery.load({ after: 'custom-a', limit: 2 }, queryContext(db)),
+    ).resolves.toEqual({
       items: [
         {
           category: 'General',
@@ -121,7 +124,7 @@ function authoredGraphFacts(graph: KovoExplainInput): KovoExplainInput {
 
   return {
     ...rest,
-    pages: pages?.map(authoredPageFacts),
+    ...(pages === undefined ? {} : { pages: pages.map(authoredPageFacts) }),
   };
 }
 

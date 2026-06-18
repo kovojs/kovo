@@ -217,7 +217,9 @@ function liveTargetCoverageFact(fact: LiveTargetFact['coverage'][number]): strin
 
 function liveTargetQueryBindingFact(fact: LiveTargetFact['queryBindings'][number]): string {
   return `{ name: '${fact.name}'; queryExpression: ${JSON.stringify(fact.queryExpression)}${
-    fact.argsExpression === undefined ? '' : `; argsExpression: ${JSON.stringify(fact.argsExpression)}`
+    fact.argsExpression === undefined
+      ? ''
+      : `; argsExpression: ${JSON.stringify(fact.argsExpression)}`
   }${fact.argsParam === undefined ? '' : `; argsParam: '${fact.argsParam}'`}${
     fact.argsPropertyAccesses === undefined
       ? ''

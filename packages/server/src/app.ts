@@ -62,17 +62,20 @@ export function createApp<
   DbValue = never,
   RawRequest extends globalThis.Request = globalThis.Request,
   AppRequest = AppLifecycleRequest<RawRequest, SessionValue, DbValue>,
->(options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest> = {}): KovoApp<
-  SessionValue,
-  DbValue,
-  RawRequest,
-  AppRequest
-> {
+>(
+  options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest> = {},
+): KovoApp<SessionValue, DbValue, RawRequest, AppRequest> {
   const authoringContext = appAuthoringContext<AppRequest>();
   const routes = resolveAppAuthoringDeclarations(options.routes, authoringContext);
-  const liveTargetRenderers = options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers();
+  const liveTargetRenderers =
+    options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers();
   const queries = appQueryRegistry(
-    resolveAppAuthoringDeclarations(options.queries, authoringContext),
+    resolveAppAuthoringDeclarations(options.queries, authoringContext) as readonly QueryDefinition<
+      string,
+      unknown,
+      unknown,
+      AppRequest
+    >[],
     liveTargetRendererQueries(liveTargetRenderers),
     routeLayoutQueries(routes),
   );

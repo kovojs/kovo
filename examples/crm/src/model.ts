@@ -1,4 +1,4 @@
-import { form, type FormInput } from '@kovojs/core';
+import { form } from '@kovojs/core';
 import { domain } from '@kovojs/server';
 
 // Small shared authoring facts for the CRM demo: invalidation domains plus the
@@ -12,7 +12,26 @@ export const createDealForm = form('createDeal');
 export const moveDealForm = form('moveDeal');
 export const closeDealForm = form('closeDeal');
 
-export type AddContactInput = FormInput<typeof addContactForm>;
-export type CreateDealInput = FormInput<typeof createDealForm>;
-export type MoveDealInput = FormInput<typeof moveDealForm>;
-export type CloseDealInput = FormInput<typeof closeDealForm>;
+export interface AddContactInput {
+  email: string;
+  id: string;
+  name: string;
+  ownerId: string;
+}
+
+export interface CreateDealInput {
+  amount: number;
+  contactId: string;
+  id: string;
+  ownerId: string;
+  stage: string;
+}
+
+export interface MoveDealInput {
+  dealId: string;
+  stage: string;
+}
+
+export interface CloseDealInput {
+  dealId: string;
+}

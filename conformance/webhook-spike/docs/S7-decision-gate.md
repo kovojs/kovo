@@ -5,7 +5,7 @@ Status: proven by `conformance/webhook-spike/src/index.test.ts`.
 This is a spike artifact, not the `webhook()` primitive implementation. It models the fixed lifecycle from SPEC §9.1 against a recorded Stripe-format fixture:
 
 1. Capture the request body once as raw bytes.
-2. Verify `stripe-signature` over those exact bytes with `stripeSignature()`.
+2. Verify `stripe-signature` over those exact bytes with a local Stripe recipe built from `hmacSignature()`.
 3. Parse the provider payload loosely only after verification.
 4. Look up replay by provider event id in the existing Kovo-Idem store.
 5. Run the handler in a transaction-shaped context.
@@ -17,7 +17,7 @@ This is a spike artifact, not the `webhook()` primitive implementation. It model
 - Raw-body capture belongs at the server shell boundary that dispatches `endpoint()`/future `webhook()` requests. It should expose one byte buffer to verifier and parser instead of calling `request.json()`/`request.text()` separately. The spike asserts one `arrayBuffer()` read, verifies a prettified JSON body with the original signature is rejected, and parses from the same captured bytes.
 - The provider replay scope should be machine scoped, not session scoped. For Stripe this spike uses `webhook:stripe` plus `event.id`, reusing `createMemoryMutationReplayStore()` shape without a browser session or CSRF token.
 - Replay lookup happens after verification and loose parse because SPEC §9.1 defines idempotency as `idempotency(input)`. Redelivery still verifies current request authenticity but does not re-enter the transaction/handler once a response is stored.
-- The verifier preset remains the source of Stripe timestamp tolerance, raw-byte HMAC payload construction, constant-time comparison, and rotated-secret handling. The spike covers tamper rejection, stale timestamp rejection, and multiple `v1` signatures with rotated secrets.
+- The local verifier recipe owns Stripe timestamp tolerance, raw-byte HMAC payload construction, and rotated-secret `v1` parsing while `hmacSignature()` provides constant-time HMAC verification. The spike covers tamper rejection, stale timestamp rejection, and multiple `v1` signatures with rotated secrets.
 - The transaction boundary is `BEGIN` before domain writes, `COMMIT` before change-record publication. The spike records the write and only appends `{ domain, keys, input }` after commit.
 
 ## Caveats

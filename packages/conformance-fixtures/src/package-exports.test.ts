@@ -10,8 +10,6 @@
 // surface and its own fixtures while keeping the dependency graph acyclic.
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
-  assertMutationError,
-  propertyTest,
   type MutationErrorExpectation,
   type PropertyTestOptions,
   type PropertyTestResult,
@@ -255,7 +253,6 @@ import {
   type ProjectGraphFixture,
 } from '@kovojs/conformance-fixtures/graph-fixtures';
 import {
-  createKovoTestHarness,
   type KovoTestContext,
   type KovoTestExecOptions,
   type KovoTestHarnessOptions,
@@ -330,7 +327,7 @@ import {
   type McpJsonRpcResponseFact,
 } from '@kovojs/conformance-fixtures/mcp-fixtures';
 import { createPageAssertion, type PageAssertion } from '@kovojs/test/page';
-import { createPgliteTestDb, type PgliteTestDb } from '@kovojs/test/pglite';
+import type { PgliteTestDb } from '@kovojs/test/pglite';
 import {
   enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
@@ -419,7 +416,7 @@ import {
   observeSqlStatementIfString,
   sqlStatementText,
 } from '@kovojs/test/sql-observer';
-import { kovoTest, type KovoTestCase, type KovoTestRunner } from '@kovojs/test/test-case';
+import type { KovoTestCase, KovoTestRunner } from '@kovojs/test/test-case';
 import {
   touchGraphProvenanceFact,
   touchGraphProvenanceHonestyFact,
@@ -437,7 +434,6 @@ import {
   typeScriptInterfaceMemberTypes,
 } from '@kovojs/conformance-fixtures/typescript-fixtures';
 import {
-  createDbVerifier,
   type DbObservationOptions,
   type DbVerificationConfig,
   type DbVerifier,
@@ -446,7 +442,6 @@ import {
 import {
   diagnosticMessage,
   diagnosticsForObservations,
-  type DiagnosticCode,
   type DbVerificationDiagnostic,
 } from '@kovojs/test/verifier-diagnostics';
 import {

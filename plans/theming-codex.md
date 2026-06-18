@@ -88,7 +88,7 @@ helpers. It is Apache-2.0 and published as `@material/material-color-utilities`.
   - Evidence: `packages/style/src/index.ts` explicitly re-exports `defineTheme`,
     `themeFromSeed`, `tokens`, and public Kovo-owned theme types from
     `packages/style/src/theme.ts`; `node site/scripts/api-ref.mjs && node
-    site/scripts/api-examples-check.mjs` passes with
+site/scripts/api-examples-check.mjs` passes with
     `api-ref/v1 packages=8 exports=641 documented=465`.
 - [x] **A2. Add the Material Color Utilities dependency.** Declare
       `@material/material-color-utilities` as a real dependency of `@kovojs/style`; pin the version
@@ -117,8 +117,8 @@ helpers. It is Apache-2.0 and published as `@material/material-color-utilities`.
     `#6750A4` output, dynamic nonzero contrast output, non-default `vibrant`
     variant output, and absence of missing system-role CSS values. Verification:
     `corepack pnpm --filter @kovojs/style test`; `corepack pnpm exec tsc -p
-    tsconfig.json --noEmit --pretty false`; `node scripts/api-surface-gate.mjs
-    && node site/scripts/api-ref.mjs && node site/scripts/api-examples-check.mjs`;
+tsconfig.json --noEmit --pretty false`; `node scripts/api-surface-gate.mjs
+&& node site/scripts/api-ref.mjs && node site/scripts/api-examples-check.mjs`;
     `git diff --check`.
 - [x] **A5. Add the ergonomic single-theme API.** Implement `defineTheme({ seed, shape,
 colors, variant?, contrast? })` as the common app-facing entry point. It should return the
@@ -172,18 +172,18 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
       variable declarations contribute CSS rules to component/package CSS assets, not just runtime
       objects.
   - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/style.test.ts
-    packages/compiler/src/package-styles.test.ts` passes; `style.test.ts` asserts same-file
+packages/compiler/src/package-styles.test.ts` passes; `style.test.ts` asserts same-file
     `style.defineVars(...)` emits `:root` custom-property CSS and style-rule provenance.
 - [x] **B2. Extract `style.createTheme(...)` rules.** Ensure theme override classes/attributes emit
       custom-property CSS and carry provenance in CSS manifests.
   - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/style.test.ts
-    packages/compiler/src/package-styles.test.ts` passes; `style.test.ts` asserts same-file
+packages/compiler/src/package-styles.test.ts` passes; `style.test.ts` asserts same-file
     `style.createTheme(...)` emits theme override CSS and manifest provenance.
 - [x] **B3. Resolve token references in `style.create(...)`.** Teach the static style object resolver
       to fold module-local and imported token values that are known `defineVars`/Material token
       exports, so UI code can say `color: tokens.sys.color.onPrimary` instead of a raw string.
   - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/style.test.ts
-    packages/compiler/src/package-styles.test.ts` passes; `style.test.ts` asserts
+packages/compiler/src/package-styles.test.ts` passes; `style.test.ts` asserts
     `tokens.sys.color.primary`, `tokens.sys.shape.cornerMedium`, and
     `style.tokens.sys.color.onPrimary` imported from root `@kovojs/style` lower
     into atomic CSS. It also proves a bounded same-package static adapter import
@@ -195,7 +195,7 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
     `theme.color.primary` in a `style.create(...)` object yields the static style
     extraction teaching diagnostic instead of a silent missing CSS asset.
     Verification: `corepack pnpm exec vitest --run packages/compiler/src/style.test.ts
-    packages/compiler/src/package-styles.test.ts`.
+packages/compiler/src/package-styles.test.ts`.
 - [x] **B5. Tests for cross-file and package extraction.** Cover app-local tokens, imported public
       Material tokens, package component CSS extraction, theme class CSS, and failure diagnostics.
   - Evidence: `packages/compiler/src/style.test.ts` covers same-file
@@ -203,7 +203,7 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
     adapters, and unresolved token diagnostics; `packages/compiler/src/package-styles.test.ts`
     proves `@kovojs/ui` package CSS extraction still emits migrated component
     CSS. Verification: `corepack pnpm exec vitest --run
-    packages/compiler/src/style.test.ts packages/compiler/src/package-styles.test.ts`.
+packages/compiler/src/style.test.ts packages/compiler/src/package-styles.test.ts`.
 
 ## Part C — UI component migration
 
@@ -218,52 +218,52 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
   - Evidence: `packages/ui/src/{button,card,badge,alert,kbd,separator,progress,skeleton}.tsx`
     import `./theme.js` and use semantic theme tokens instead of hard-coded component color
     literals; `corepack pnpm exec vitest run packages/ui/src/button.stylex.test.tsx
-    packages/ui/src/card.stylex.test.tsx packages/ui/src/badge.stylex.test.tsx
-    packages/ui/src/alert.stylex.test.tsx packages/ui/src/kbd.stylex.test.tsx
-    packages/ui/src/separator.stylex.test.tsx packages/ui/src/progress.stylex.test.tsx
-    packages/ui/src/skeleton.stylex.test.tsx -u`, `corepack pnpm exec tsc -p tsconfig.json
-    --noEmit --pretty false`, and `git diff --check` all pass.
+packages/ui/src/card.stylex.test.tsx packages/ui/src/badge.stylex.test.tsx
+packages/ui/src/alert.stylex.test.tsx packages/ui/src/kbd.stylex.test.tsx
+packages/ui/src/separator.stylex.test.tsx packages/ui/src/progress.stylex.test.tsx
+packages/ui/src/skeleton.stylex.test.tsx -u`, `corepack pnpm exec tsc -p tsconfig.json
+--noEmit --pretty false`, and `git diff --check` all pass.
 - [x] **C3. Migrate form controls.** Convert Checkbox, Switch, RadioGroup, Field, NumberField,
       Select, Combobox, Autocomplete, Slider, OTP, Meter to system tokens and state-specific roles.
   - Evidence: `packages/ui/src/{checkbox,checkbox-group,switch,radio-group,field,number-field,select,combobox,autocomplete,slider,otp-field,meter}.tsx`
     now import `./theme.js` and map control surface/foreground/border/accent/error colors to
     semantic `uiTheme` roles per `SPEC.md` §13.1; `corepack pnpm exec vitest run
-    packages/ui/src/checkbox.stylex.test.tsx packages/ui/src/switch.stylex.test.tsx
-    packages/ui/src/radio-group.stylex.test.tsx packages/ui/src/field.stylex.test.tsx
-    packages/ui/src/number-field.stylex.test.tsx packages/ui/src/select.stylex.test.tsx
-    packages/ui/src/combobox.stylex.test.tsx packages/ui/src/autocomplete.stylex.test.tsx
-    packages/ui/src/slider.stylex.test.tsx packages/ui/src/otp-field.stylex.test.tsx
-    packages/ui/src/meter.stylex.test.tsx packages/ui/src/checkbox-group.stylex.test.tsx -u`
+packages/ui/src/checkbox.stylex.test.tsx packages/ui/src/switch.stylex.test.tsx
+packages/ui/src/radio-group.stylex.test.tsx packages/ui/src/field.stylex.test.tsx
+packages/ui/src/number-field.stylex.test.tsx packages/ui/src/select.stylex.test.tsx
+packages/ui/src/combobox.stylex.test.tsx packages/ui/src/autocomplete.stylex.test.tsx
+packages/ui/src/slider.stylex.test.tsx packages/ui/src/otp-field.stylex.test.tsx
+packages/ui/src/meter.stylex.test.tsx packages/ui/src/checkbox-group.stylex.test.tsx -u`
     updated 24 snapshots and passed.
   - Follow-up evidence: `packages/ui/src/{toggle,toggle-group}.tsx` now also
     import `./theme.js`; `corepack pnpm exec vitest --run
-    packages/ui/src/toggle.stylex.test.tsx packages/ui/src/toggle-group.stylex.test.tsx
-    packages/ui/src/theme-contract.test.tsx` passed.
+packages/ui/src/toggle.stylex.test.tsx packages/ui/src/toggle-group.stylex.test.tsx
+packages/ui/src/theme-contract.test.tsx` passed.
 - [x] **C4. Migrate overlays/navigation.** Convert Dialog, AlertDialog, Drawer, Sheet, Popover,
       HoverCard, Tooltip, DropdownMenu, ContextMenu, Menubar, NavigationMenu, Command, Tabs,
       Toolbar, Accordion, Collapsible, Disclosure, Toast, Table, Avatar, Breadcrumb, ScrollArea.
   - Evidence: `packages/ui/src/{dialog,alert-dialog,drawer,sheet,popover,hover-card,tooltip,dropdown-menu,context-menu,menubar,navigation-menu,command,tabs,toolbar,accordion,collapsible,disclosure,toast,table,avatar,breadcrumb,scroll-area}.tsx`
     now use `uiTheme` semantic tokens instead of hard-coded component surface/foreground/border/status
     colors; `corepack pnpm exec vitest run packages/ui/src/dialog.stylex.test.tsx
-    packages/ui/src/alert-dialog.stylex.test.tsx packages/ui/src/drawer.stylex.test.tsx
-    packages/ui/src/sheet.stylex.test.tsx packages/ui/src/popover.stylex.test.tsx
-    packages/ui/src/hover-card.stylex.test.tsx packages/ui/src/tooltip.stylex.test.tsx
-    packages/ui/src/dropdown-menu.stylex.test.tsx packages/ui/src/context-menu.stylex.test.tsx
-    packages/ui/src/menubar.stylex.test.tsx packages/ui/src/navigation-menu.stylex.test.tsx
-    packages/ui/src/command.stylex.test.tsx packages/ui/src/tabs.stylex.test.tsx
-    packages/ui/src/toolbar.stylex.test.tsx packages/ui/src/accordion.stylex.test.tsx
-    packages/ui/src/collapsible.stylex.test.tsx packages/ui/src/disclosure.stylex.test.tsx
-    packages/ui/src/toast.stylex.test.tsx packages/ui/src/table.stylex.test.tsx
-    packages/ui/src/avatar.stylex.test.tsx packages/ui/src/breadcrumb.stylex.test.tsx
-    packages/ui/src/navigation-menu.test.tsx packages/ui/src/hover-card.test.tsx
-    packages/ui/src/breadcrumb.test.tsx -u`, `corepack pnpm exec tsc -p tsconfig.json --noEmit
-    --pretty false`, and `git diff --check` all pass.
+packages/ui/src/alert-dialog.stylex.test.tsx packages/ui/src/drawer.stylex.test.tsx
+packages/ui/src/sheet.stylex.test.tsx packages/ui/src/popover.stylex.test.tsx
+packages/ui/src/hover-card.stylex.test.tsx packages/ui/src/tooltip.stylex.test.tsx
+packages/ui/src/dropdown-menu.stylex.test.tsx packages/ui/src/context-menu.stylex.test.tsx
+packages/ui/src/menubar.stylex.test.tsx packages/ui/src/navigation-menu.stylex.test.tsx
+packages/ui/src/command.stylex.test.tsx packages/ui/src/tabs.stylex.test.tsx
+packages/ui/src/toolbar.stylex.test.tsx packages/ui/src/accordion.stylex.test.tsx
+packages/ui/src/collapsible.stylex.test.tsx packages/ui/src/disclosure.stylex.test.tsx
+packages/ui/src/toast.stylex.test.tsx packages/ui/src/table.stylex.test.tsx
+packages/ui/src/avatar.stylex.test.tsx packages/ui/src/breadcrumb.stylex.test.tsx
+packages/ui/src/navigation-menu.test.tsx packages/ui/src/hover-card.test.tsx
+packages/ui/src/breadcrumb.test.tsx -u`, `corepack pnpm exec tsc -p tsconfig.json --noEmit
+--pretty false`, and `git diff --check` all pass.
   - Follow-up evidence: `packages/ui/src/theme.ts` exposes static focus-ring
     shadow token aliases used by `packages/ui/src/{command,scroll-area}.tsx`,
     keeping package CSS extraction static. Verification: `corepack pnpm exec
-    vitest --run packages/compiler/src/style.test.ts
-    packages/compiler/src/package-styles.test.ts
-    packages/headless-ui/src/lib/token-sheet.test.ts` passed.
+vitest --run packages/compiler/src/style.test.ts
+packages/compiler/src/package-styles.test.ts
+packages/headless-ui/src/lib/token-sheet.test.ts` passed.
 - [x] **C5. Keep override props author-last.** Verify all `style`/`styles` override surfaces still
       win by StyleX property merge order after token migration.
   - Evidence: `packages/ui/src/theme-contract.test.tsx` parses UI TSX source
@@ -278,8 +278,8 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
     two seed themes emit different system token values and that Button, Field,
     and Dialog styles consume `--kovo-theme-sys-*` variables across display,
     form, and overlay families. Verification: `corepack pnpm exec vitest --run
-    packages/ui/src -u` updated the remaining package snapshots, and `corepack
-    pnpm exec vitest --run packages/ui/src` passed 55 files / 186 tests.
+packages/ui/src -u` updated the remaining package snapshots, and `corepack
+pnpm exec vitest --run packages/ui/src` passed 55 files / 186 tests.
 - [x] **C7. Add a hex-literal migration gate.** After the UI migration, add or document a grep/lint
       gate proving no component color hex literals remain except intentional non-color values or
       test fixtures.
@@ -287,7 +287,7 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
     non-test UI TSX sources and fails on raw `#[0-9a-fA-F]` color literals.
     Verification: `corepack pnpm exec vitest --run packages/ui/src/theme-contract.test.tsx`;
     `rg -n "#[0-9a-fA-F]{3,8}\\b" packages/ui/src --glob "*.tsx" --glob
-    "!*.test.tsx"` returns no matches.
+"!*.test.tsx"` returns no matches.
 
 ## Part D — Copy-in and app ergonomics
 
@@ -298,8 +298,8 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
     `uiComponents` dependency for components that import the shared UI token
     adapter, and `packages/ui/src/copy-in.test.ts` copies registry-listed
     siblings before typechecking copied components. Verification: `node
-    packages/ui/scripts/build-registry.mjs`; `corepack pnpm exec vitest --run
-    packages/ui/src/copy-in.test.ts`.
+packages/ui/scripts/build-registry.mjs`; `corepack pnpm exec vitest --run
+packages/ui/src/copy-in.test.ts`.
 - [x] **D2. Add starter theme CSS wiring.** Update create-kovo/examples so a generated app has a
       seed theme stylesheet or generated `theme.ts` path from day one.
   - Evidence: `packages/create-kovo/templates/src/theme.ts` defines the starter
@@ -313,7 +313,7 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
 - [x] **D4. Add a seed-color recipe.** Document how an app changes one seed/custom-color list and
       regenerates or emits theme CSS for all UI components.
   - Evidence: `site/content/guides/styling.md` shows `defineTheme({ seed,
-    colors, shape })`, and the create-kovo README points app authors to
+colors, shape })`, and the create-kovo README points app authors to
     `src/theme.ts` for seed/custom color changes.
 - [x] **D5. Document derived themes with `base`.** Show the pattern:
       `const base = defineTheme({ seed }); export const theme = defineTheme({
@@ -344,7 +344,7 @@ base, sys: { color: { outline: base.sys.color.primary } } });` for apps that wan
       symbols and keep api-surface gates clean.
   - Evidence: public theme exports in `packages/style/src/theme.ts` have JSDoc
     and Kovo-owned public types; `node scripts/api-surface-gate.mjs && node
-    site/scripts/api-ref.mjs && node site/scripts/api-examples-check.mjs` passes
+site/scripts/api-ref.mjs && node site/scripts/api-examples-check.mjs` passes
     with `api-ref/v1 packages=8 exports=641 documented=465`.
 - [x] **E5. Accessibility proof.** Add a focused conformance note/test for important `on-*` role
       foreground/background pairs using the generated contrast level, following

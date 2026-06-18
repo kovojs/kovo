@@ -11,10 +11,7 @@ import { kovoCheck, main } from './index.js';
 describe('kovo check', () => {
   it('publishes as @kovojs/cli while preserving the kovo bin command', () => {
     const packageJson = JSON.parse(
-      readFileSync(
-        join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'),
-        'utf8',
-      ),
+      readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8'),
     ) as {
       bin?: Record<string, string>;
       name?: string;

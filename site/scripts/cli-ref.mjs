@@ -103,8 +103,8 @@ function transform(source) {
   const programmatic = programmaticRaw
     .split('\n')
     .map((line) => {
-      if (/^### /.test(line)) return `#${line}`; // ### `kovoCheck` -> #### `kovoCheck`
-      if (/^## /.test(line)) return `#${line}`; // ## Functions     -> ### Functions
+      if (line.startsWith('### ')) return `#${line}`; // ### `kovoCheck` -> #### `kovoCheck`
+      if (line.startsWith('## ')) return `#${line}`; // ## Functions     -> ### Functions
       return line;
     })
     .join('\n');

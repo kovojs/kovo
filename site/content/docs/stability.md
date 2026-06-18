@@ -24,11 +24,11 @@ this site's generated [API reference](/api) keep that line visible.
 
 ## Public vs internal packages
 
-| Public (depend on these)                                                                                             | Internal / special                                                                                                                                                          |
-| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public (depend on these)                                                                                             | Internal / special                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@kovojs/core`, `@kovojs/server`, `@kovojs/runtime`, `@kovojs/drizzle`, `@kovojs/better-auth`, `@kovojs/headless-ui` | `@kovojs/compiler` — framework build machinery used behind the `kovo` CLI; app projects should run `kovo compile`, `kovo check`, or `kovo explain`, not import compiler APIs |
-| `@kovojs/style`                                                                                                      | `@kovojs/test` (harness only; fixtures live in the private `@kovojs/conformance-fixtures`)                                                                                  |
-| `@kovojs/cli`, `create-kovo` (CLIs — the `kovo` executable contract, plus `@kovojs/cli`'s `kovoCheck`/`kovoExplain`)  | `@kovojs/ui` — **not** a versioned dependency: copy components in shadcn-style (see [Components & copy-in UI](/guides/components)); copied source builds on public packages |
+| `@kovojs/style`                                                                                                      | `@kovojs/test` (harness only; fixtures live in the private `@kovojs/conformance-fixtures`)                                                                                   |
+| `@kovojs/cli`, `create-kovo` (CLIs — the `kovo` executable contract, plus `@kovojs/cli`'s `kovoCheck`/`kovoExplain`) | `@kovojs/ui` — **not** a versioned dependency: copy components in shadcn-style (see [Components & copy-in UI](/guides/components)); copied source builds on public packages  |
 
 ## Versioning
 

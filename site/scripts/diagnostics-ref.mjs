@@ -34,14 +34,14 @@ const CORE_DIAGNOSTICS_SOURCE = new URL('packages/core/src/diagnostics.ts', repo
  * registry on the app-facing root API. */
 async function loadDiagnosticDefinitions() {
   if (!existsSync(fileURLToPath(CORE_DIAGNOSTICS_SOURCE))) {
-    throw new Error(
-      'diagnostics-ref: packages/core/src/diagnostics.ts is missing',
-    );
+    throw new Error('diagnostics-ref: packages/core/src/diagnostics.ts is missing');
   }
   const core = await import(CORE_DIAGNOSTICS_SOURCE.href);
   const definitions = core.diagnosticDefinitions;
   if (!definitions || typeof definitions !== 'object') {
-    throw new Error('diagnostics-ref: core internal diagnostics do not export diagnosticDefinitions');
+    throw new Error(
+      'diagnostics-ref: core internal diagnostics do not export diagnosticDefinitions',
+    );
   }
   return definitions;
 }

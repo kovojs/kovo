@@ -3,9 +3,7 @@ import {
   kovoExplainListField,
   kovoExplainOptimisticStatuses,
   kovoExplainUpdateConsumerMap,
-  kovoExplainUpdateConsumers,
   type KovoExplainResultLike,
-  type KovoExplainUpdateConsumerFact,
 } from './kovo-explain-fixtures.js';
 import { graphFragmentTargetForQuery, type KovoGraphFixture } from './graph-fixtures.js';
 import { kovoResponseBodyFact } from '@kovojs/test/html-fragment';

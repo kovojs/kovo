@@ -2,6 +2,7 @@ import type {
   Component,
   ComponentErrorBoundary,
   ComponentDefinitionInput,
+  ComponentRenderResult,
   ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
@@ -103,10 +104,18 @@ function componentLiveTargetErrorBoundary<
       render(error) {
         const fallback =
           typeof boundary.fallback === 'function' ? boundary.fallback(error) : boundary.fallback;
-        return String(fallback ?? '');
+        return renderBoundaryFallback(fallback);
       },
     },
   };
+}
+
+function renderBoundaryFallback(fallback: ComponentRenderResult): string {
+  if (fallback === null || fallback === undefined || typeof fallback === 'boolean') return '';
+  if (typeof fallback === 'string') return fallback;
+  if (typeof fallback === 'number') return `${fallback}`;
+  if (Array.isArray(fallback)) return fallback.map(renderBoundaryFallback).join('');
+  return '';
 }
 
 function componentLiveTargetQueryBindings<Request>(

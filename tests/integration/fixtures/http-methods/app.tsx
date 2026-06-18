@@ -28,9 +28,10 @@ export default defineFixture({
   app: createApp({
     mutations: [record],
     routes: [homeRoute, doneRoute],
-    mutationResponse: ({ key }) => {
-      if (key !== record.key) return undefined;
-      return { redirectTo: '/done' };
+    mutationResponses: {
+      [record.key]: () => {
+        return { redirectTo: '/done' };
+      },
     },
   }),
   schema: 'create table method_events (id serial primary key, kind text not null)',

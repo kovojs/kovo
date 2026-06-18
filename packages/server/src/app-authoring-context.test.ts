@@ -35,7 +35,7 @@ describe('createApp provider-typed authoring context', () => {
             context?.request.db.cart.push(context.request.session?.user.id ?? 'anonymous');
 
             // @ts-expect-error provider shape exposes `stock`, not a renamed `inventory`.
-            const stock: number = context?.request.db.inventory;
+            void context?.request.db.inventory;
 
             return { count: context?.request.db.cart.length ?? 0 };
           },
@@ -46,17 +46,15 @@ describe('createApp provider-typed authoring context', () => {
         const CartLayout = layout({
           guard(request) {
             const stock: number = request.db.stock;
-            return request.session?.user.id || stock > 0
-              ? true
-              : { kind: 'unauthenticated' };
+            return request.session?.user.id || stock > 0 ? true : { kind: 'unauthenticated' };
           },
           render(_queries, _state, { children, request }) {
             const userId: string | undefined = request.session?.user.id;
 
             // @ts-expect-error provider shape exposes `stock`, not a renamed `inventory`.
-            const inventory: number = request.db.inventory;
+            void request.db.inventory;
 
-            return `${children}:${userId}:${request.db.stock}`;
+            return `${String(children)}:${userId}:${request.db.stock}`;
           },
         });
 
@@ -70,7 +68,7 @@ describe('createApp provider-typed authoring context', () => {
               const count: number = request.db.cart.length;
 
               // @ts-expect-error provider shape exposes `user.id`, not a renamed `user.uuid`.
-              const userUuid: string = request.session?.user.uuid;
+              void request.session?.user.uuid;
 
               return `${count}:${request.session?.user.id}`;
             },

@@ -264,12 +264,7 @@ function collectStyleEnvironment(
         continue;
       }
 
-      const created = styleCreateCall(
-        node.initializer,
-        styleImports,
-        localObjects,
-        staticValues,
-      );
+      const created = styleCreateCall(node.initializer, styleImports, localObjects, staticValues);
       if (created) {
         const result = createAtomicStyles(created.styles, {
           namespace: created.options.namespace ?? node.name.text,
@@ -462,7 +457,12 @@ function styleCreateCall(
   const [stylesArgument, optionsArgument] = initializer.arguments;
   if (!stylesArgument || !ts.isObjectLiteralExpression(stylesArgument)) return null;
 
-  const styles = styleNamespacesFromObject(stylesArgument, localObjects, staticValues, styleImports);
+  const styles = styleNamespacesFromObject(
+    stylesArgument,
+    localObjects,
+    staticValues,
+    styleImports,
+  );
   if (!styles) return null;
 
   return {
@@ -485,12 +485,10 @@ function isStyleCreateCall(
 function styleDefineVarsCall(
   initializer: ts.Expression | undefined,
   styleNamespaces: ReadonlySet<string>,
-):
-  | {
-      readonly options: CreateOptions;
-      readonly tokens: ts.ObjectLiteralExpression;
-    }
-  | null {
+): {
+  readonly options: CreateOptions;
+  readonly tokens: ts.ObjectLiteralExpression;
+} | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
   if (!ts.isPropertyAccessExpression(initializer.expression)) return null;
   if (initializer.expression.name.text !== 'defineVars') return null;
@@ -504,13 +502,11 @@ function styleDefineVarsCall(
 function styleCreateThemeCall(
   initializer: ts.Expression | undefined,
   styleNamespaces: ReadonlySet<string>,
-):
-  | {
-      readonly baseTokens: ts.Expression;
-      readonly options: CreateOptions;
-      readonly overrides: ts.ObjectLiteralExpression;
-    }
-  | null {
+): {
+  readonly baseTokens: ts.Expression;
+  readonly options: CreateOptions;
+  readonly overrides: ts.ObjectLiteralExpression;
+} | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
   if (!ts.isPropertyAccessExpression(initializer.expression)) return null;
   if (initializer.expression.name.text !== 'createTheme') return null;
@@ -539,7 +535,12 @@ function styleNamespacesFromObject(
     if (!ts.isPropertyAssignment(property)) return null;
     const key = propertyNameText(property.name);
     if (!key || !ts.isObjectLiteralExpression(property.initializer)) return null;
-    const value = styleObjectFromObject(property.initializer, localObjects, staticValues, styleImports);
+    const value = styleObjectFromObject(
+      property.initializer,
+      localObjects,
+      staticValues,
+      styleImports,
+    );
     if (!value) return null;
     styles[key] = value;
   }

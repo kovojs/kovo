@@ -9,9 +9,7 @@ import {
 } from '@kovojs/test/html-fragment';
 
 import { renderAddToCartForm } from './components/product-grid.js';
-import {
-  createCommerceScenarioClient,
-} from './app-test-helpers.js';
+import { createCommerceScenarioClient } from './app-test-helpers.js';
 
 describe('commerce example', () => {
   it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', async () => {

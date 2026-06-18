@@ -75,10 +75,9 @@ export interface QueryDefinition<
 
 /** A query input schema that also binds component props to query args in app-authored TSX. */
 export type QueryArgsSchema<Input> = Schema<Input> & {
-  <Props extends Record<string, unknown>>(mapper: (props: Props) => Input): QueryArgsBinding<
-    Input,
-    Props
-  >;
+  <Props extends Record<string, unknown>>(
+    mapper: (props: Props) => Input,
+  ): QueryArgsBinding<Input, Props>;
 };
 
 export interface QueryArgsBinding<Input, Props extends Record<string, unknown>> {
@@ -150,7 +149,10 @@ export interface QueryFactory<Request = unknown> {
     const Key extends string,
     Input,
     Value,
-    const Definition extends Omit<QueryArgsDeclarationDefinition<Key, Value, Input, Request>, 'key'>,
+    const Definition extends Omit<
+      QueryArgsDeclarationDefinition<Key, Value, Input, Request>,
+      'key'
+    >,
   >(
     key: Key,
     definition: Definition,

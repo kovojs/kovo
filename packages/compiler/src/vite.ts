@@ -179,9 +179,16 @@ export function createKovoVitePlugin(
       if (!isViteComponentSource(id, source)) return null;
 
       const fileName = viteComponentFileName(id, root);
-      const result = compileViteComponentModule(compileComponentModule, options, root, fileName, source);
+      const result = compileViteComponentModule(
+        compileComponentModule,
+        options,
+        root,
+        fileName,
+        source,
+      );
       const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
-      if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
+      if (errorDiagnostics.length > 0)
+        throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
       recordViteCompileResult(clientModules, hmrImpacts, fileName, result);
 
       return {
@@ -195,7 +202,13 @@ export function createKovoVitePlugin(
 
       const fileName = viteComponentFileName(context.file, root);
       const previous = hmrImpacts.get(fileName) ?? null;
-      const result = compileViteComponentModule(compileComponentModule, options, root, fileName, source);
+      const result = compileViteComponentModule(
+        compileComponentModule,
+        options,
+        root,
+        fileName,
+        source,
+      );
       const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
       const next = result.hmrImpact ?? null;
 

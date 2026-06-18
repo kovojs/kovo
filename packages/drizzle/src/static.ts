@@ -1,10 +1,7 @@
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { JsonValue } from '@kovojs/core';
-import {
-  diagnosticDefinitionText,
-  diagnosticDefinitions,
-} from '@kovojs/core/internal/diagnostics';
+import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type {
   AlgebraicField,
   AlgebraicQueryShape,
@@ -65,6 +62,8 @@ import {
   type KovoDomainTableAnnotation,
   type KovoTableAnnotation,
 } from './drizzle-surface.js';
+/** @internal */
+export { kovo } from './drizzle-surface.js';
 /** @internal */
 export type {
   InvalidationQueryInput,

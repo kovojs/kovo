@@ -22,7 +22,7 @@ import {
   seedCartItems,
   seedOrders,
 } from './app-test-helpers.js';
-import { cartItems, orders, products } from './schema.js';
+import { cartItems } from './schema.js';
 
 describe('commerce example queries', () => {
   it('marks demo-only CSRF secrets as example-only source', () => {

@@ -46,9 +46,7 @@ interface StarterBetterAuthResponse {
 
 export interface StarterBetterAuth {
   api: {
-    getSession(options: {
-      headers: Headers;
-    }): MaybePromise<
+    getSession(options: { headers: Headers }): MaybePromise<
       | {
           session: StarterBetterAuthSession;
           user: StarterBetterAuthUser;

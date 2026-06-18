@@ -106,12 +106,7 @@ import {
   NumberFieldIncrement,
   NumberFieldInput,
 } from '@kovojs/ui/number-field';
-import {
-  OtpField,
-  OtpFieldGroup,
-  OtpFieldHiddenInput,
-  OtpFieldInput,
-} from '@kovojs/ui/otp-field';
+import { OtpField, OtpFieldGroup, OtpFieldHiddenInput, OtpFieldInput } from '@kovojs/ui/otp-field';
 import { Popover, PopoverContent, PopoverTrigger } from '@kovojs/ui/popover';
 import { Progress } from '@kovojs/ui/progress';
 import {

@@ -16,10 +16,7 @@ import {
   outputContextForAttribute,
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
-import {
-  mutationInputFactsFromSource,
-  type LocalMutationInputFact,
-} from '../mutation-inputs.js';
+import { mutationInputFactsFromSource, type LocalMutationInputFact } from '../mutation-inputs.js';
 import {
   componentOptionObjectEntries,
   componentOptionObjectKeys,
@@ -286,7 +283,8 @@ function renderSemanticAttributes(
       viewTransitionStyle && !element.attributes.some((attribute) => attribute.name === 'style')
         ? [` style="${escapeAttribute(viewTransitionStyle)}"`]
         : [],
-      fieldErrorDescribedBy && !element.attributes.some((attribute) => attribute.name === 'aria-describedby')
+      fieldErrorDescribedBy &&
+        !element.attributes.some((attribute) => attribute.name === 'aria-describedby')
         ? [fieldErrorDescribedBy]
         : [],
     )
@@ -334,8 +332,9 @@ function semanticFieldErrorDescribedByAttribute(
       element.tag === 'FieldError' &&
       element.start >= form.openingEnd &&
       element.end <= form.closingStart &&
-      staticStringAttributeValue(element.attributes.find((attribute) => attribute.name === 'name')) ===
-        name,
+      staticStringAttributeValue(
+        element.attributes.find((attribute) => attribute.name === 'name'),
+      ) === name,
   );
   if (!fieldError) return null;
 
@@ -710,13 +709,7 @@ function mutationFormErrorRenderLowering(
     }
     if (!slotsParam) continue;
 
-    const lowered = lowerMutationFormErrorElement(
-      model,
-      element,
-      form,
-      slotName,
-      slotsParam.name,
-    );
+    const lowered = lowerMutationFormErrorElement(model, element, form, slotName, slotsParam.name);
     replacements.push(...lowered.replacements);
   }
 
@@ -926,7 +919,8 @@ function mutationFormErrorProps(
     const name = staticStringAttributeValue(
       element.attributes.find((attribute) => attribute.name === 'name'),
     );
-    if (name) entries.push(`"id": ${mutationFormErrorIdExpression(form, localName, name).expression}`);
+    if (name)
+      entries.push(`"id": ${mutationFormErrorIdExpression(form, localName, name).expression}`);
   }
   const children = jsxElementChildrenExpression(element);
   if (children) entries.push(`"children": ${children}`);
@@ -984,8 +978,9 @@ function formControlElements(
     )?.toLowerCase();
     if (element.tag === 'input' && type === 'hidden') return false;
     return (
-      staticStringAttributeValue(element.attributes.find((attribute) => attribute.name === 'name')) ===
-      name
+      staticStringAttributeValue(
+        element.attributes.find((attribute) => attribute.name === 'name'),
+      ) === name
     );
   });
 }
@@ -1179,9 +1174,7 @@ function repeatableMutationFormDiagnostic(
 
   const binding = enhancedMutationFormBinding(element);
   if (!binding) return null;
-  if (
-    !localMutationKey(model, binding.localName, options.registryFacts)
-  ) {
+  if (!localMutationKey(model, binding.localName, options.registryFacts)) {
     return null;
   }
 
@@ -1241,7 +1234,7 @@ function mutationFormFieldDiagnostics(
   const controls = successfulFormControls(model, element, options);
   const fieldNames = new Set(mutation.fields.map((field) => field.name));
   const controlNames = new Set(controls.map((control) => control.name));
-  const diagnostics: CompilerDiagnostic[] = [...controls.flatMap((control) => control.diagnostics)];
+  const diagnostics: CompilerDiagnostic[] = controls.flatMap((control) => control.diagnostics);
 
   for (const control of controls) {
     if (!control.name) continue;
@@ -1306,11 +1299,15 @@ function mutationInputFactForForm(
   localName: string,
   options: { fileName: string; registryFacts?: RegistryFacts; source: string },
 ): MutationInputFact | null {
-  const localMutation = mutationInputFactsFromSource(options.fileName, options.source).get(localName);
+  const localMutation = mutationInputFactsFromSource(options.fileName, options.source).get(
+    localName,
+  );
   if (localMutation) return localMutation;
 
   const mutationKey = localMutationKey(model, localName, options.registryFacts);
-  const registryFields = mutationKey ? options.registryFacts?.mutationInputs?.[mutationKey] : undefined;
+  const registryFields = mutationKey
+    ? options.registryFacts?.mutationInputs?.[mutationKey]
+    : undefined;
   if (!mutationKey || !registryFields) return null;
 
   return {

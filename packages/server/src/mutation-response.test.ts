@@ -110,7 +110,7 @@ describe('server mutation primitives', () => {
         request: unknown;
         target: string;
       }) =>
-        `<cart-panel data-target="${target}">${(request as { tenant: string }).tenant}:${props.cartId}</cart-panel>`,
+        `<cart-panel data-target="${target}">${(request as { tenant: string }).tenant}:${String(props.cartId)}</cart-panel>`,
     );
 
     await expect(

@@ -69,12 +69,13 @@ const app = createApp({
   mutations: [addItem],
   queries: [cartQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== addItem.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderCartPanel(db), target: 'cart-panel' }],
-    };
+  mutationResponses: {
+    [addItem.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderCartPanel(db), target: 'cart-panel' }],
+      };
+    },
   },
 });
 

@@ -8,13 +8,7 @@ import { Card } from '@kovojs/ui/card';
 import { postQuestionMutation, soCsrf } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
 import { postQuestionForm, type QuestionListItem, type SoRequest } from '../model.js';
-import {
-  freshId,
-  parseTags,
-  renderAuthor,
-  renderTags,
-  voteButton,
-} from '../components/chrome.js';
+import { freshId, parseTags, renderAuthor, renderTags, voteButton } from '../components/chrome.js';
 
 // Question list for `/`. It reads the question rowset and total vote score, then
 // renders the ask form and question cards.
@@ -24,10 +18,10 @@ type QuestionScoreQueryResult = Awaited<ReturnType<typeof questionScore.load>>;
 type QuestionListRenderSlots = ComponentRenderSlots<{ postQuestion: typeof postQuestionForm }> & {
   request?: SoRequest | undefined;
 };
-type DuplicateTitleFailure = Extract<
-  NonNullable<QuestionListRenderSlots['forms']['postQuestion']['failure']>,
-  { code: 'DUPLICATE_TITLE' }
->;
+interface DuplicateTitleFailure {
+  code: 'DUPLICATE_TITLE';
+  payload: { title: string };
+}
 
 const defaultQuestionListRenderSlots: QuestionListRenderSlots = {
   forms: { postQuestion: { failure: null } },
@@ -62,13 +56,17 @@ function renderQuestionRow(question: QuestionListItem, request?: SoRequest): str
 export const QuestionListRegion = component({
   mutations: { postQuestion: postQuestionForm },
   queries: { questionList, questionScore },
-  render: ({
-    questionList,
-    questionScore,
-  }: {
-    questionList: QuestionListQueryResult;
-    questionScore: QuestionScoreQueryResult;
-  }, _state, slots: QuestionListRenderSlots = defaultQuestionListRenderSlots) => {
+  render: (
+    {
+      questionList,
+      questionScore,
+    }: {
+      questionList: QuestionListQueryResult;
+      questionScore: QuestionScoreQueryResult;
+    },
+    _state,
+    slots: QuestionListRenderSlots = defaultQuestionListRenderSlots,
+  ) => {
     const questions = questionList.items;
     const totalVotes = questionScore.score;
     const askButton = Button.definition.render({

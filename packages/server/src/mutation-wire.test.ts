@@ -45,7 +45,10 @@ describe('mutation wire headers', () => {
           ['Kovo-Fragment', 'true'],
           ['Kovo-Form-Target', 'product-form:p1'],
           ['Kovo-Idem', 'idem_01HY'],
-          ['Kovo-Live-Targets', 'product-form:p1#components/product-form/product-form:{"productId":"p1"}'],
+          [
+            'Kovo-Live-Targets',
+            'product-form:p1#components/product-form/product-form:{"productId":"p1"}',
+          ],
           ['Kovo-Targets', 'product-form:p1=product:p1'],
         ]),
         rawInput: { productId: 'p1', quantity: 99 },

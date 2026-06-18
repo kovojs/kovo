@@ -54,9 +54,10 @@ const homeRoute = route('/', {
 export default defineFixture({
   app: createApp({
     mutations: [failAfterWrite],
-    mutationResponse: ({ key }) => {
-      if (key !== failAfterWrite.key) return undefined;
-      return { failureTarget: 'rollback-status' };
+    mutationResponses: {
+      [failAfterWrite.key]: () => {
+        return { failureTarget: 'rollback-status' };
+      },
     },
     routes: [homeRoute],
   }),

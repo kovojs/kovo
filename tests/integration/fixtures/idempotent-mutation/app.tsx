@@ -47,13 +47,14 @@ const app = createApp({
   mutationReplayStore: createMemoryMutationReplayStore(),
   mutations: [recordEntry],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== recordEntry.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderStatus(db), target: 'idem-status' }],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [recordEntry.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderStatus(db), target: 'idem-status' }],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

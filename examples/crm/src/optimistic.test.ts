@@ -14,7 +14,7 @@ import { contacts, deals } from './schema.js';
 
 async function beforeAndAfter<Value>(
   load: (db: CrmDb) => Promise<Value>,
-  change: (db: CrmDb) => Promise<void>,
+  change: (db: CrmDb) => unknown,
 ): Promise<{ before: Value; after: Value }> {
   const db = await createCrmDb();
   const before = await load(db);

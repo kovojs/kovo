@@ -1,11 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import {
-  component,
-  FieldError,
-  form,
-  FormError,
-  type FormFailure,
-} from '@kovojs/core';
+import { component, FieldError, form, FormError } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
@@ -15,7 +9,10 @@ import { productGridQuery } from '../queries.js';
 
 const addToCartForm = form('cart/add');
 
-export type AddToCartFailure = FormFailure<typeof addToCartForm>;
+export interface OutOfStockFailure {
+  code: 'OUT_OF_STOCK';
+  payload: { availableQuantity: number };
+}
 
 export const ProductGrid = component({
   errorBoundary: {
@@ -27,9 +24,7 @@ export const ProductGrid = component({
   render: ({ productGrid }: { productGrid: ProductGridResult }) => {
     const { nextCursor } = productGrid;
     return (
-      <section data-page-cursor={nextCursor ?? ''}>
-        {renderProductGridItems(productGrid)}
-      </section>
+      <section data-page-cursor={nextCursor ?? ''}>{renderProductGridItems(productGrid)}</section>
     );
   },
 });
@@ -46,9 +41,7 @@ function renderProductGridError(): string {
   );
 }
 
-export function renderProductGridItems(
-  result: ProductGridResult,
-): string {
+export function renderProductGridItems(result: ProductGridResult): string {
   const cards = result.items.map((item) => renderProductCard(item));
   const cursor = result.nextCursor;
   return (
@@ -87,9 +80,7 @@ function stockBadge(stock: number): string {
   return Badge.definition.render({ variant: 'success', children: `${stock} in stock` });
 }
 
-function renderProductCard(
-  item: ProductItem,
-): string {
+function renderProductCard(item: ProductItem): string {
   const body = (
     <div class="grid gap-4">
       <div class="flex items-center gap-4">
@@ -111,9 +102,7 @@ function renderProductCard(
   return <article kovo-key={item.id}>{Card.definition.render({ children: body })}</article>;
 }
 
-export function renderAddToCartForm(
-  item: { id: string; stock: number },
-): string {
+export function renderAddToCartForm(item: { id: string; stock: number }): string {
   const soldOut = item.stock === 0;
   return (
     <form enhance mutation={addToCart} key={item.id} class="flex flex-wrap items-end gap-2">
@@ -139,7 +128,7 @@ export function renderAddToCartForm(
       <FormError
         code="OUT_OF_STOCK"
         class="basis-full text-sm text-red-700"
-        message={(failure: Extract<AddToCartFailure, { code: 'OUT_OF_STOCK' }>) =>
+        message={(failure: OutOfStockFailure) =>
           `Only ${failure.payload.availableQuantity} available.`
         }
       />

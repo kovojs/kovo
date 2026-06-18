@@ -275,7 +275,7 @@ export const home = route('/', {
       expect.objectContaining({
         code: 'KV235',
         message:
-          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. app-local generated component import \'./generated/question-list.js\' in route/layout source.',
+          "App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. app-local generated component import './generated/question-list.js' in route/layout source.",
         help: expect.stringContaining('Route/layout source should import the authored component'),
       }),
     ]);

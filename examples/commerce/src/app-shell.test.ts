@@ -14,11 +14,7 @@ import {
   htmlFormFields,
 } from '@kovojs/test/html-fragment';
 
-import {
-  commerceAuthCsrf,
-  commerceCsrf,
-  commerceSignIn,
-} from './app.js';
+import { commerceAuthCsrf, commerceCsrf, commerceSignIn } from './app.js';
 import { createCommerceAppShell } from './generated/app-shell.kovo-route.js';
 
 let server: Server | undefined;
@@ -252,7 +248,6 @@ describe('commerce app shell HTTP entry', () => {
     expect(logout.headers.get('location')).toBe('/login');
     expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
   });
-
 });
 
 function expectCommerceShellDocument(html: string): void {

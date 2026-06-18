@@ -1,11 +1,5 @@
 export { Link, href, redirect } from '@kovojs/core';
-export type {
-  DiagnosticCode,
-  JsonValue,
-  LinkDescriptor,
-  Redirect,
-  Route,
-} from '@kovojs/core';
+export type { DiagnosticCode, JsonValue, LinkDescriptor, Redirect, Route } from '@kovojs/core';
 export type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
 export { endpoint } from '../endpoint.js';
 export type {
@@ -56,11 +50,7 @@ export type {
   ServerResponseBase,
 } from '../response.js';
 export { respond } from '../response.js';
-export {
-  layout,
-  notFound,
-  route,
-} from '../route.js';
+export { layout, notFound, route } from '../route.js';
 export type {
   LayoutDeclaration,
   LayoutDefinition,

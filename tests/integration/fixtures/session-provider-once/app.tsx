@@ -74,10 +74,11 @@ export default defineFixture({
       );
       return session;
     },
-    mutationResponse: async ({ key, request }) => {
-      if (key !== sessionOnceMutation.key) return undefined;
-      await record(request as unknown as AppRequest, 'response:mutation');
-      return { redirectTo: '/route' };
+    mutationResponses: {
+      [sessionOnceMutation.key]: async ({ request }) => {
+        await record(request as unknown as AppRequest, 'response:mutation');
+        return { redirectTo: '/route' };
+      },
     },
   }),
   schema: [

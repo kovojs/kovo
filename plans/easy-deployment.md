@@ -286,13 +286,13 @@ Design decisions to lock in code review:
     `vite-plus` dependency needed by the build command. The full item remains open
     because `kovo.config.ts` loading, client build/manifest orchestration, and
     non-node presets are not implemented. Verification: `corepack pnpm exec
-    vitest --run packages/cli/src/index.kovo-build.test.ts
-    packages/cli/src/commands-manifest.test.ts`; `corepack pnpm exec tsc -p
-    tsconfig.json --noEmit --pretty false`; `git diff --check`.
+vitest --run packages/cli/src/index.kovo-build.test.ts
+packages/cli/src/commands-manifest.test.ts`; `corepack pnpm exec tsc -p
+tsconfig.json --noEmit --pretty false`; `git diff --check`.
 - [x] Evidence target: a test that boots `server/handler.mjs` in a clean
       `node_modules` (prod deps only) and asserts route/mutation/asset responses.
   - Evidence: `corepack pnpm exec vitest --run
-    packages/cli/src/index.kovo-build.test.ts` covers the emitted node preset
+packages/cli/src/index.kovo-build.test.ts` covers the emitted node preset
     `server.mjs` importing `server/handler.mjs` from a runtime root with only
     production Kovo package roots and throwing `vite`/`vite-plus` guard packages;
     it verifies route, mutation, and immutable asset responses.
@@ -379,24 +379,24 @@ Design decisions to lock in code review:
 ## Proving commands (fill as phases land)
 
 - Neutral build layout smoke: `corepack pnpm exec vitest --run
-  packages/server/src/build.test.ts packages/server/src/api/app.test.ts
-  scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs
-  site/scripts/api-ref.test.mjs`; `corepack pnpm exec tsc -p tsconfig.json
-  --noEmit --pretty false`; `corepack pnpm run check:exports`; `corepack pnpm
-  run check:imports`; `corepack pnpm run check:api-surface`; `corepack pnpm run
-  check:publish`; `git diff --check`.
+packages/server/src/build.test.ts packages/server/src/api/app.test.ts
+scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs
+site/scripts/api-ref.test.mjs`; `corepack pnpm exec tsc -p tsconfig.json
+--noEmit --pretty false`; `corepack pnpm run check:exports`; `corepack pnpm
+run check:imports`; `corepack pnpm run check:api-surface`; `corepack pnpm run
+check:publish`; `git diff --check`.
 - Neutral build prod-dep boot test: `corepack pnpm exec vitest --run
-  packages/cli/src/index.kovo-build.test.ts`; `corepack pnpm exec tsc -p
-  tsconfig.json --noEmit --pretty false`; `git diff --check`.
+packages/cli/src/index.kovo-build.test.ts`; `corepack pnpm exec tsc -p
+tsconfig.json --noEmit --pretty false`; `git diff --check`.
 - Node preset emitted-server smoke: `corepack pnpm exec vitest --run
-  packages/server/src/build.test.ts`; `corepack pnpm exec tsc -p tsconfig.json
-  --noEmit --pretty false`; `corepack pnpm run check:exports`; `corepack pnpm run
-  check:api-surface`; `corepack pnpm exec vitest --run
-  scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs
-  site/scripts/api-ref.test.mjs`; `corepack pnpm run check:publish`;
+packages/server/src/build.test.ts`; `corepack pnpm exec tsc -p tsconfig.json
+--noEmit --pretty false`; `corepack pnpm run check:exports`; `corepack pnpm run
+check:api-surface`; `corepack pnpm exec vitest --run
+scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs
+site/scripts/api-ref.test.mjs`; `corepack pnpm run check:publish`;
   `git diff --check`.
 - `kovo build` route/query/mutation smoke: `corepack pnpm exec vitest --run
-  packages/cli/src/index.kovo-build.test.ts packages/cli/src/commands-manifest.test.ts`;
+packages/cli/src/index.kovo-build.test.ts packages/cli/src/commands-manifest.test.ts`;
   `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 - `kovo build` + node preset container, pruned deps: _(Phase 1, still open)_
 - `vercel build --prebuilt` dry-run + golden config: _(Phase 2)_

@@ -20,6 +20,7 @@ import { addContactDerivedOptimistic } from './generated/optimistic/add-contact.
 import { createDealDerivedOptimistic } from './generated/optimistic/create-deal.js';
 import { moveDealDerivedOptimistic } from './generated/optimistic/move-deal.js';
 import { closeDealDerivedOptimistic } from './generated/optimistic/close-deal.js';
+import type { ContactListResult, OpenDealsResult, PipelineByStageResult } from './queries.js';
 
 /**
  * The per-request value handed to every CRM mutation: a Drizzle/PGlite db plus
@@ -118,13 +119,13 @@ export const createDealOptimistic = {
   ...createDealDerivedOptimistic,
   transforms: {
     ...createDealDerivedOptimistic.transforms,
-    contactList: (current, $input) => {
+    contactList: (current: ContactListResult, $input: CreateDealInput) => {
       const next = structuredClone(current);
       const target = next.items.find((item) => item.id === $input.contactId);
       if (target) target.dealCount += 1;
       return next;
     },
-    pipelineByStage: (current, $input) => {
+    pipelineByStage: (current: PipelineByStageResult, $input: CreateDealInput) => {
       const next = structuredClone(current);
       const bucket = next.buckets.find((entry) => entry.stage === $input.stage);
       if (bucket) bucket.total += $input.amount;
@@ -210,7 +211,7 @@ export const closeDealOptimistic = {
   ...closeDealDerivedOptimistic,
   transforms: {
     ...closeDealDerivedOptimistic.transforms,
-    openDeals: (current, $input) => {
+    openDeals: (current: OpenDealsResult, $input: CloseDealInput) => {
       const next = structuredClone(current);
       const index = next.items.findIndex((item) => item.id === $input.dealId);
       if (index >= 0) next.items.splice(index, 1);

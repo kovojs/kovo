@@ -177,16 +177,14 @@ describe('server app document boundary', () => {
       boundaries: {
         notFound: ({ status }) => `<main data-layout-boundary="404">layout:${status}</main>`,
       },
-      render: (_queries, _state, { children }) => `<section>${children}</section>`,
+      render: (_queries, _state, { children }) => `<section>${String(children)}</section>`,
     });
     const AdminLayout = layout<Request & { session?: { user?: { roles?: readonly string[] } } }>({
       boundaries: {
         unauthorized: ({ status }) => `<main data-layout-boundary="403">layout:${status}</main>`,
       },
-      guard: guards.role<Request & { session?: { user?: { roles?: readonly string[] } } }>(
-        'admin',
-      ),
-      render: (_queries, _state, { children }) => `<section>${children}</section>`,
+      guard: guards.role<Request & { session?: { user?: { roles?: readonly string[] } } }>('admin'),
+      render: (_queries, _state, { children }) => `<section>${String(children)}</section>`,
     });
     const missingRoute = route('/admin/missing', {
       layout: NotFoundLayout,

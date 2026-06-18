@@ -52,16 +52,17 @@ const app = createApp({
   mutations: [publishProfile],
   queries: [profileQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== publishProfile.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [
-        { render: () => renderSummary(db), target: 'profile-summary' },
-        { render: () => renderStatus(db), target: 'profile-status' },
-      ],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [publishProfile.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [
+          { render: () => renderSummary(db), target: 'profile-summary' },
+          { render: () => renderStatus(db), target: 'profile-status' },
+        ],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

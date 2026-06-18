@@ -22,23 +22,23 @@ Every item below is graded by **(a) the authored artifact the author writes,
 (b) the teaching diagnostic when they get it wrong, and (c) a no-match check that
 the old seam is gone** — not by the no-match check alone. In a compiler-first
 framework whose thesis is statically-verifiable end-to-end authoring
-(`SPEC.md` §1.1), the diagnostics *are* the DX.
+(`SPEC.md` §1.1), the diagnostics _are_ the DX.
 
 ## Author mental model (target)
 
 A request flows through one obvious tool per stage. This plan exists to make each
 stage a first-class surface instead of example glue:
 
-| Stage | Tool | SPEC | Today's seam |
-| --- | --- | --- | --- |
-| Request provisioning | `createApp({ sessionProvider, db })` → typed `req.session` / `req.db` | §6.5, §9.5, §10.2/§10.3 | `Object.defineProperty(request, …)` |
-| Authorization | `guard` on route/query/mutation/layout | §10.3 | ad hoc `request.session?.user?.id` branches |
-| Data | `query()` declared once | §10.2 | split presentational loaders (closed in AER) |
-| Page chrome | nested `layout()` + `<Shell>` components; document via `documentTemplate` | §4.5, §9.5 | `renderSoShell`/`renderCartPageBody` strings |
-| Render | `component()` / `route().page` JSX | §4.1, §6.4 | app-local `./generated/*` imports |
-| Write | `mutation()` | §10.3 | — |
-| Expected failure | `<FieldError>` / `<FormError>` over typed `forms.<m>.failure` | §6.3, §9.2 | broad `mutationResponse` switch |
-| Unexpected error | per-island error boundary (§13.5 adopt list) | §9.2, §13.5 | none |
+| Stage                | Tool                                                                      | SPEC                    | Today's seam                                 |
+| -------------------- | ------------------------------------------------------------------------- | ----------------------- | -------------------------------------------- |
+| Request provisioning | `createApp({ sessionProvider, db })` → typed `req.session` / `req.db`     | §6.5, §9.5, §10.2/§10.3 | `Object.defineProperty(request, …)`          |
+| Authorization        | `guard` on route/query/mutation/layout                                    | §10.3                   | ad hoc `request.session?.user?.id` branches  |
+| Data                 | `query()` declared once                                                   | §10.2                   | split presentational loaders (closed in AER) |
+| Page chrome          | nested `layout()` + `<Shell>` components; document via `documentTemplate` | §4.5, §9.5              | `renderSoShell`/`renderCartPageBody` strings |
+| Render               | `component()` / `route().page` JSX                                        | §4.1, §6.4              | app-local `./generated/*` imports            |
+| Write                | `mutation()`                                                              | §10.3                   | —                                            |
+| Expected failure     | `<FieldError>` / `<FormError>` over typed `forms.<m>.failure`             | §6.3, §9.2              | broad `mutationResponse` switch              |
+| Unexpected error     | per-island error boundary (§13.5 adopt list)                              | §9.2, §13.5             | none                                         |
 
 Gaps this model exposes that the old 7-item plan did not name: there was no clear
 stage for **unexpected errors** (kept separate from expected failures below), and
@@ -56,7 +56,7 @@ item inherits from rather than re-deciding it:
   6, and the redirect half of the old failure switch are AER residue.
 - `plans/better-dx.md` — `disableServerRefresh` as the only refresh escape hatch,
   derived `kovo-fragment-target`/`kovo-key`, typed `mutation={…}` binding, and
-  typed `forms.<m>.failure` (all `[x]`). Item 5 builds *on top of* this, not
+  typed `forms.<m>.failure` (all `[x]`). Item 5 builds _on top of_ this, not
   beside it.
 - Archived Better forms ledger — KV242 (`name` ∈ schema), `MutationRegistry` inference,
   the single failure shape `{ code; payload; fieldErrors? }`, CSRF-on. Item 5
@@ -73,7 +73,7 @@ item inherits from rather than re-deciding it:
     from the interactive examples while `docs/static-export.md` points at the
     package-level fixture and static-output coverage.
 - [x] **Do not regress archived automatic enhanced refresh behavior.** This
-  follow-up starts after AER and must preserve its generated live-target path.
+      follow-up starts after AER and must preserve its generated live-target path.
   - Evidence: enhanced mutation/live-target regression checks pass:
     `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app.rendering.test.ts app-shell.test.ts`;
     `pnpm exec vitest --run packages/server/src/mutation-endpoint.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/app.test.ts`.
@@ -86,7 +86,7 @@ item inherits from rather than re-deciding it:
     out of scope here and is tracked separately in
     `plans/enhanced-navigation.md`, which depends on this item's `layout()`
     composition and must keep `<Link>`→`<a href>`, full-document GET as canonical
-    + fallback, and no-JS↔enhanced render-equivalence.
+    - fallback, and no-JS↔enhanced render-equivalence.
   - Evidence: `SPEC.md` §4.5 now states first-class `layout()` is route chrome
     while every navigation still renders a full document; `plans/enhanced-navigation.md`
     keeps persistence work separate; `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/app.test.ts` passes.
@@ -120,8 +120,8 @@ item inherits from rather than re-deciding it:
     `context.session`.**
     - Session: `createApp({ sessionProvider })` (§9.5) resolves once before route/
       query/mutation guards; `req.session` is typed from the session schema (§6.5).
-      The examples' `Object.defineProperty(request, 'session', …)` is simply *not
-      using `sessionProvider`*.
+      The examples' `Object.defineProperty(request, 'session', …)` is simply _not
+      using `sessionProvider`_.
     - Database: `query(db, req)` / mutation `req.db` are already Tx-typed in the
       request context (§10.2/§10.3). The genuine gap is **who populates `req.db` at
       the `createApp` level** — there is no declared app-side `db`/transaction
@@ -129,9 +129,10 @@ item inherits from rather than re-deciding it:
   - Target authoring:
     ```ts
     const app = createApp({
-      sessionProvider: (req) => auth.session(req),   // §9.5 — session only
-      db: (req) => database,                          // NEW: typed tx/db provider seam
-      routes, mutations,
+      sessionProvider: (req) => auth.session(req), // §9.5 — session only
+      db: (req) => database, // NEW: typed tx/db provider seam
+      routes,
+      mutations,
     });
     ```
   - Framework direction: add a typed `db` provider on `createApp()` that populates
@@ -152,23 +153,17 @@ item inherits from rather than re-deciding it:
       rename propagates red to consumers.
     - A live-target refresh test proves the generated fragment re-render receives
       the same `db`/session as the originating request.
-  - Evidence:
-    - `createApp({ db })` is implemented in the app shell lifecycle and dispatches
-      through route pages, query endpoints, mutation handlers/live-target refresh,
-      and session-free endpoints; `pnpm exec vitest --run packages/server/src/app.test.ts`
-      covers these paths.
-    - `createApp()` now accepts app-scoped declaration callbacks (`queries:
-      ({ query }) => ...`, `mutations: ({ mutation }) => ...`, `routes:
-      ({ route }) => ...`) whose helpers contextually type query loaders,
-      mutation handlers, route pages, and guards from configured `db` and
-      `sessionProvider`; `pnpm exec vitest --run packages/server/src/app-authoring-context.test.ts packages/server/src/app.test.ts` passes.
-    - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` passes with
-      `packages/server/src/app-authoring-context.test.ts` proving zero-annotation
-      `request.db` / `request.session` inference and `@ts-expect-error` provider
-      shape rename failures.
-    - `rg -n "Object\.defineProperty\(request, '(db|session)'|attachCommerceRequestContext|withCommerceRequestContext" examples/stackoverflow/src examples/crm/src examples/commerce/src` exits 1 with no hits after regenerating example route artifacts.
-    - Example checks pass: `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`; `pnpm --filter @kovojs/example-crm run emit-components -- --check`; `pnpm --filter @kovojs/example-commerce run emit-components -- --check`; `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.rendering.test.ts`.
-    - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
+  - Evidence: - `createApp({ db })` is implemented in the app shell lifecycle and dispatches
+    through route pages, query endpoints, mutation handlers/live-target refresh,
+    and session-free endpoints; `pnpm exec vitest --run packages/server/src/app.test.ts`
+    covers these paths. - `createApp()` now accepts app-scoped declaration callbacks (`queries:
+({ query }) => ...`, `mutations: ({ mutation }) => ...`, `routes:
+({ route }) => ...`) whose helpers contextually type query loaders,
+    mutation handlers, route pages, and guards from configured `db` and
+    `sessionProvider`; `pnpm exec vitest --run packages/server/src/app-authoring-context.test.ts packages/server/src/app.test.ts` passes. - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` passes with
+    `packages/server/src/app-authoring-context.test.ts` proving zero-annotation
+    `request.db` / `request.session` inference and `@ts-expect-error` provider
+    shape rename failures. - `rg -n "Object\.defineProperty\(request, '(db|session)'|attachCommerceRequestContext|withCommerceRequestContext" examples/stackoverflow/src examples/crm/src examples/commerce/src` exits 1 with no hits after regenerating example route artifacts. - Example checks pass: `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`; `pnpm --filter @kovojs/example-crm run emit-components -- --check`; `pnpm --filter @kovojs/example-commerce run emit-components -- --check`; `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.rendering.test.ts`. - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
 
 - [x] **3. First-class nested layouts (supersedes the old "no layouts yet" item).**
   - Decision 2026-06-17: ship nested layouts for authoring parity with peer
@@ -176,16 +171,21 @@ item inherits from rather than re-deciding it:
     routing — that would contradict §6.4's static route table). Layouts are the
     first-class form of `SPEC.md` §4.5 component-composition chrome.
   - Target authoring:
+
     ```tsx
     const AppLayout = layout({
-      queries: { viewer: viewerQuery, cart: cartQuery },   // loaded once/request
-      render: ({ viewer, cart }, _state, { children }) =>
-        <Shell><Nav viewer={viewer} cartCount={cart.count} />{children}</Shell>,
+      queries: { viewer: viewerQuery, cart: cartQuery }, // loaded once/request
+      render: ({ viewer, cart }, _state, { children }) => (
+        <Shell>
+          <Nav viewer={viewer} cartCount={cart.count} />
+          {children}
+        </Shell>
+      ),
     });
 
     const AdminLayout = layout({
-      parent: AppLayout,                       // explicit nesting chain
-      guard: role('admin'),                    // segment guard, composes with route guard
+      parent: AppLayout, // explicit nesting chain
+      guard: role('admin'), // segment guard, composes with route guard
       boundaries: { unauthorized: (req) => <AdminDenied /> },
       render: ({}, _s, { children }) => <AdminFrame>{children}</AdminFrame>,
     });
@@ -195,6 +195,7 @@ item inherits from rather than re-deciding it:
       page: ({ params }) => <UserDetail userId={params.id} />,
     });
     ```
+
   - Framework direction:
     - Compiler composes `AppLayout > AdminLayout > page` into each route's server
       IR (extends the AER route-JSX lowering one nesting level; `children` lowers
@@ -219,51 +220,42 @@ item inherits from rather than re-deciding it:
       refresh, per-segment boundary selection, and segment-guard composition.
     - A `kovo explain page <path>` (or `--layouts`) surface shows the composed
       layout chain and which queries belong to which segment.
-  - Current evidence:
-    - Server authoring now exposes `layout({ parent, guard, queries, render })`
-      and `route(..., { layout })`; `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/route.test.ts packages/server/src/app.test.ts`
-      passes with nested parent output, layout query loading from the route
-      request, and layout guard composition.
-    - `createApp()` app-scoped authoring now exposes a provider-typed `layout`
-      factory alongside `query`, `mutation`, and `route`; `pnpm exec vitest
-      --run packages/server/src/app-authoring-context.test.ts` and `pnpm exec
-      tsc -p tsconfig.json --noEmit --pretty false` prove layout guards/renders
-      see inferred `db`/`session` request providers.
-    - Route compilation derives parent-first layout-chain facts from local
-      `layout({ parent, queries })` declarations; `pnpm exec vitest --run
-      packages/compiler/src/route-pages.test.ts` passes with a fixture asserting
-      layout names and query keys in the emitted route IR fact.
-    - `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts` also
-      passes negative fixtures proving unresolved and cyclic local layout chains
-      produce KV303 teaching diagnostics instead of silently dropping layout
-      facts.
-    - `kovo explain page --layouts` now surfaces compiler-derived route layout
-      chains and each layout segment's query keys through graph page facts;
-      `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts
-      packages/compiler/src/registry.test.ts packages/core/src/graph.test.ts`
-      passes with fixtures for graph-threaded layout facts, in-process page
-      explain output, and CLI `page --layouts` parsing.
-    - Layout/route segment boundaries now support `boundaries.notFound`,
-      `boundaries.unauthorized`, and `boundaries.error`; `pnpm exec vitest
-      --run packages/server/src/route-jsx.test.tsx packages/server/src/app-document.test.ts
-      packages/server/src/route.test.ts packages/server/src/route-query-guards.test.ts
-      packages/server/src/app.test.ts` passes with fixtures proving nearest
-      segment boundary selection and override of app-level 404/403 shells.
-    - Query-backed layouts now stamp generated `kovo-deps`/target metadata so
-      enhanced mutations rerun affected layout query chunks without app-authored
-      fragment renderers; `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx
-      packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts
-      packages/runtime/src/mutation-targets.test.ts` passes with an app-shell
-      fixture where `Kovo-Targets: <generated-layout-target>=cart` returns the
-      refreshed `cart` query chunk.
-    - Route lowering now derives navigation segment facts for each layout and
-      page leaf and threads them into `kovo explain page --layouts`; `pnpm exec
-      vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts
-      packages/cli/src/index.kovo-explain.test.ts packages/core/src/graph.test.ts`
-      passes with fixtures for emitted route IR facts, graph page facts, and
-      explain output.
-    - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
-      `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
+  - Current evidence: - Server authoring now exposes `layout({ parent, guard, queries, render })`
+    and `route(..., { layout })`; `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/route.test.ts packages/server/src/app.test.ts`
+    passes with nested parent output, layout query loading from the route
+    request, and layout guard composition. - `createApp()` app-scoped authoring now exposes a provider-typed `layout`
+    factory alongside `query`, `mutation`, and `route`; `pnpm exec vitest
+--run packages/server/src/app-authoring-context.test.ts` and `pnpm exec
+tsc -p tsconfig.json --noEmit --pretty false` prove layout guards/renders
+    see inferred `db`/`session` request providers. - Route compilation derives parent-first layout-chain facts from local
+    `layout({ parent, queries })` declarations; `pnpm exec vitest --run
+packages/compiler/src/route-pages.test.ts` passes with a fixture asserting
+    layout names and query keys in the emitted route IR fact. - `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts` also
+    passes negative fixtures proving unresolved and cyclic local layout chains
+    produce KV303 teaching diagnostics instead of silently dropping layout
+    facts. - `kovo explain page --layouts` now surfaces compiler-derived route layout
+    chains and each layout segment's query keys through graph page facts;
+    `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts
+packages/compiler/src/registry.test.ts packages/core/src/graph.test.ts`
+    passes with fixtures for graph-threaded layout facts, in-process page
+    explain output, and CLI `page --layouts` parsing. - Layout/route segment boundaries now support `boundaries.notFound`,
+    `boundaries.unauthorized`, and `boundaries.error`; `pnpm exec vitest
+--run packages/server/src/route-jsx.test.tsx packages/server/src/app-document.test.ts
+packages/server/src/route.test.ts packages/server/src/route-query-guards.test.ts
+packages/server/src/app.test.ts` passes with fixtures proving nearest
+    segment boundary selection and override of app-level 404/403 shells. - Query-backed layouts now stamp generated `kovo-deps`/target metadata so
+    enhanced mutations rerun affected layout query chunks without app-authored
+    fragment renderers; `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx
+packages/server/src/app.test.ts packages/server/src/mutation-response.test.ts
+packages/runtime/src/mutation-targets.test.ts` passes with an app-shell
+    fixture where `Kovo-Targets: <generated-layout-target>=cart` returns the
+    refreshed `cart` query chunk. - Route lowering now derives navigation segment facts for each layout and
+    page leaf and threads them into `kovo explain page --layouts`; `pnpm exec
+vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts
+packages/cli/src/index.kovo-explain.test.ts packages/core/src/graph.test.ts`
+    passes with fixtures for emitted route IR facts, graph page facts, and
+    explain output. - `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+    `node scripts/api-surface-gate.mjs`, and `git diff --check` pass.
 
 - [x] **4. Replace string shell helpers with layouts + `documentTemplate`.**
   - Framework direction: convert document-level shells to
@@ -299,7 +291,7 @@ item inherits from rather than re-deciding it:
       failures contradict §9.2's exhaustive coded union).
     - **Primary surface: field-bound components** `<FieldError name="…" />` and
       `<FormError />`, compiler-bound to the enclosing `<form mutation={m}>`:
-      - `name` is checked ∈ the mutation input schema (this *is* KV242 from
+      - `name` is checked ∈ the mutation input schema (this _is_ KV242 from
         the archived Better forms ledger — do not invent a second check).
       - a11y auto-wired: `role="alert"` + `aria-describedby` from the input to its
         `<FieldError>`.
@@ -308,7 +300,7 @@ item inherits from rather than re-deciding it:
         default, with optional explicit field targeting.
     - **Raw `forms.<m>.failure` (§6.3) stays the escape hatch** for custom UI.
     - **Expected vs unexpected stay separate:** `<FieldError>/<FormError>` handle
-      422 typed failures; *unexpected* render/runtime errors go to a per-island
+      422 typed failures; _unexpected_ render/runtime errors go to a per-island
       **error boundary** (unify with the §13.5 adopt-don't-invent list), not a
       failure outlet. No `<Failure>` ancestor-bubbling for expected failures.
     - **Redirects/auth response policy are not this item:** they are AER #9's
@@ -318,8 +310,10 @@ item inherits from rather than re-deciding it:
   - Target authoring:
     ```tsx
     <form enhance mutation={signIn}>
-      <input name="email" /><FieldError name="email" />
-      <input name="password" type="password" /><FieldError name="password" />
+      <input name="email" />
+      <FieldError name="email" />
+      <input name="password" type="password" />
+      <FieldError name="password" />
       <FormError />
       <button>Sign in</button>
     </form>
@@ -334,44 +328,36 @@ item inherits from rather than re-deciding it:
       a CRM or SO form gains a declared `errors:` schema and renders it (proving the
       §9.2 typed path beyond commerce — closes the archived Better forms C4 gap).
     - Existing auth redirect, CSRF, no-JS, and enhanced failure tests still pass.
-  - Evidence:
-    - Core exports `FieldError` and `FormError`; `pnpm exec vitest --run
-      packages/core/src/index.test.ts` covers validation `fieldErrors`, coded
-      failures, `role="alert"`, `data-error-code`, and callback messages.
-    - Compiler lowering binds `<FieldError>/<FormError>` to the enclosing typed
-      mutation form's `slots.forms.<name>.failure`, derives field error IDs, and
-      injects `aria-describedby`; `pnpm exec vitest --run
-      packages/compiler/src/stamps.test.ts packages/compiler/src/scan/parse.test.ts`
-      covers successful lowering plus KV242 for unknown fields and helpers outside
-      enhanced mutation forms.
-    - Commerce add-to-cart renders validation/coded failures through generated
-      `FieldError`/`FormError`; sign-in renders through `FormError`. CRM contacts
-      uses `FormError` for `DUPLICATE_EMAIL`; StackOverflow question list uses
-      `FormError` for `DUPLICATE_TITLE`. Generated artifacts were refreshed.
-    - No app-authored example source keeps the old display branches:
-      `rg -n "renderAddToCartError|failure\?\.code|data-error-code=\"(DUPLICATE_TITLE|DUPLICATE_EMAIL|OUT_OF_STOCK|INVALID_CREDENTIALS)" examples/commerce/src examples/crm/src examples/stackoverflow/src --glob '!**/generated/**'`
-      reports only test assertions.
-    - Example emit checks pass:
-      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`;
-      `pnpm --filter @kovojs/example-crm run emit-components -- --check`;
-      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`.
-    - Existing focused failure/auth paths pass:
-      `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app-shell.test.ts app.rendering.test.ts app.auth.test.ts`;
-      `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
-      `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`;
-      `pnpm exec vitest --run packages/server/src/component-render.test.tsx`.
-    - Follow-up audit removed the remaining StackOverflow and CRM app-authored
-      `mutationResponses` failure-display overrides; duplicate-title and
-      duplicate-email failures now rerender through the generated live-target
-      path and the authored `<FormError>` components. Verification:
-      `rg -n "mutationResponses|renderComponentMutationFailure|renderFailureFragment|failureTarget|questionList\.load|questionScore\.load|contactListQuery\.load" examples/stackoverflow/src/interactive-app.tsx examples/stackoverflow/src/generated/interactive-app.kovo-route.tsx examples/crm/src/interactive-app.tsx examples/crm/src/generated/interactive-app.kovo-route.tsx`
-      exits 1 with no hits; `pnpm --filter @kovojs/example-stackoverflow run
-      emit-components -- --check`; `pnpm --filter @kovojs/example-crm run
-      emit-components -- --check`; `pnpm --filter @kovojs/example-stackoverflow
-      test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-crm test
-      -- interactive-app.test.ts`.
-    - Root gates pass: `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
-      `node scripts/api-surface-gate.mjs`; `git diff --check`.
+  - Evidence: - Core exports `FieldError` and `FormError`; `pnpm exec vitest --run
+packages/core/src/index.test.ts` covers validation `fieldErrors`, coded
+    failures, `role="alert"`, `data-error-code`, and callback messages. - Compiler lowering binds `<FieldError>/<FormError>` to the enclosing typed
+    mutation form's `slots.forms.<name>.failure`, derives field error IDs, and
+    injects `aria-describedby`; `pnpm exec vitest --run
+packages/compiler/src/stamps.test.ts packages/compiler/src/scan/parse.test.ts`
+    covers successful lowering plus KV242 for unknown fields and helpers outside
+    enhanced mutation forms. - Commerce add-to-cart renders validation/coded failures through generated
+    `FieldError`/`FormError`; sign-in renders through `FormError`. CRM contacts
+    uses `FormError` for `DUPLICATE_EMAIL`; StackOverflow question list uses
+    `FormError` for `DUPLICATE_TITLE`. Generated artifacts were refreshed. - No app-authored example source keeps the old display branches:
+    `rg -n "renderAddToCartError|failure\?\.code|data-error-code=\"(DUPLICATE_TITLE|DUPLICATE_EMAIL|OUT_OF_STOCK|INVALID_CREDENTIALS)" examples/commerce/src examples/crm/src examples/stackoverflow/src --glob '!**/generated/**'`
+    reports only test assertions. - Example emit checks pass:
+    `pnpm --filter @kovojs/example-commerce run emit-components -- --check`;
+    `pnpm --filter @kovojs/example-crm run emit-components -- --check`;
+    `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`. - Existing focused failure/auth paths pass:
+    `pnpm --filter @kovojs/example-commerce test -- app.add-to-cart.test.ts app-shell.test.ts app.rendering.test.ts app.auth.test.ts`;
+    `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
+    `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`;
+    `pnpm exec vitest --run packages/server/src/component-render.test.tsx`. - Follow-up audit removed the remaining StackOverflow and CRM app-authored
+    `mutationResponses` failure-display overrides; duplicate-title and
+    duplicate-email failures now rerender through the generated live-target
+    path and the authored `<FormError>` components. Verification:
+    `rg -n "mutationResponses|renderComponentMutationFailure|renderFailureFragment|failureTarget|questionList\.load|questionScore\.load|contactListQuery\.load" examples/stackoverflow/src/interactive-app.tsx examples/stackoverflow/src/generated/interactive-app.kovo-route.tsx examples/crm/src/interactive-app.tsx examples/crm/src/generated/interactive-app.kovo-route.tsx`
+    exits 1 with no hits; `pnpm --filter @kovojs/example-stackoverflow run
+emit-components -- --check`; `pnpm --filter @kovojs/example-crm run
+emit-components -- --check`; `pnpm --filter @kovojs/example-stackoverflow
+test -- interactive-app.test.ts`; `pnpm --filter @kovojs/example-crm test
+-- interactive-app.test.ts`. - Root gates pass: `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `node scripts/api-surface-gate.mjs`; `git diff --check`.
 
 - [x] **6. Derive the app query registry from routes/components/layouts.**
   - Framework direction: the build emits the query registry from queries reachable
@@ -389,28 +375,28 @@ item inherits from rather than re-deciding it:
     so "renders but won't refresh" is never silent.
   - Acceptance evidence:
     - [x] Runtime app/query registry is derived from live-target renderer query
-      definitions and route layout query declarations. Evidence:
-      `packages/server/src/app.test.ts` covers explicit-query precedence plus
-      renderer/layout-derived query inclusion; `packages/server/src/live-target-renderer.test.tsx`
-      proves compiler-owned live-target renderers expose query definitions.
+          definitions and route layout query declarations. Evidence:
+          `packages/server/src/app.test.ts` covers explicit-query precedence plus
+          renderer/layout-derived query inclusion; `packages/server/src/live-target-renderer.test.tsx`
+          proves compiler-owned live-target renderers expose query definitions.
     - [x] Standalone mutation endpoint rendering derives rerun query metadata from
-      live-target renderer query definitions, so direct helper paths no longer
-      need mutation-local query arrays. Evidence:
-      `packages/server/src/mutation.ts` merges live-target query definitions before
-      fragment/no-JS rendering; `pnpm exec vitest --run packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts`
-      passes.
+          live-target renderer query definitions, so direct helper paths no longer
+          need mutation-local query arrays. Evidence:
+          `packages/server/src/mutation.ts` merges live-target query definitions before
+          fragment/no-JS rendering; `pnpm exec vitest --run packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-response.test.ts packages/server/src/app.test.ts`
+          passes.
     - [x] Focused examples no longer hand-register app query arrays or Commerce
-      mutation `registry.queries` arrays. Evidence:
-      `rg -n "queries:\s*\[(cartQuery|questionList|questionScore|questionDetail|questionAnswers)|queries:\s*crmQueries|queries:\s*\[cartQuery|queries:\s*\[productGridQuery|queries:\s*\[orderHistoryQuery" examples/commerce/src examples/crm/src examples/stackoverflow/src --glob '!**/graph.ts'`
-      exits 1 with no hits; regenerated route artifacts also have no `queries: [...]`
-      app registry entries.
+          mutation `registry.queries` arrays. Evidence:
+          `rg -n "queries:\s*\[(cartQuery|questionList|questionScore|questionDetail|questionAnswers)|queries:\s*crmQueries|queries:\s*\[cartQuery|queries:\s*\[productGridQuery|queries:\s*\[orderHistoryQuery" examples/commerce/src examples/crm/src examples/stackoverflow/src --glob '!**/graph.ts'`
+          exits 1 with no hits; regenerated route artifacts also have no `queries: [...]`
+          app registry entries.
     - [x] Enhanced mutation and public query endpoints still work without the
-      removed app-authored arrays. Evidence:
-      `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.add-to-cart.test.ts app.rendering.test.ts app.auth.test.ts`;
-      `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
-      `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`.
+          removed app-authored arrays. Evidence:
+          `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.add-to-cart.test.ts app.rendering.test.ts app.auth.test.ts`;
+          `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
+          `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`.
     - [x] App shells, mutation registries, and `graph.ts` no longer carry manual
-      query arrays for route/component/layout queries.
+          query arrays for route/component/layout queries.
       - Evidence: runtime app-shell and mutation registry arrays are removed;
         graph query-domain facts now come from `extractQueryFactsFromProject()`
         in the example graph emitters and are exported as generated
@@ -430,7 +416,7 @@ item inherits from rather than re-deciding it:
         exits 1 with no hits; `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/route-pages.test.ts packages/core/src/graph.test.ts packages/cli/src/index.kovo-explain.test.ts`;
         `pnpm --filter @kovojs/example-commerce test -- source-truth.test.ts app-shell.test.ts app.rendering.test.ts`.
     - [x] Per-component generated live-target query key arrays are inferred from
-      component declarations rather than emitted as explicit generated metadata.
+          component declarations rather than emitted as explicit generated metadata.
       - Evidence: `componentLiveTargetRenderer()` now normalizes
         `component.definition.queries` into live-target query bindings; compiler
         live-target exports call the helper with only `component` and

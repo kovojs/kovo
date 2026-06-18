@@ -38,13 +38,14 @@ const app = createApp({
       </main>`,
     }),
   ],
-  mutationResponse: ({ key, request }) => {
-    if (key !== addToCart.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderCartSection(db), target: 'cart-badge' }],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [addToCart.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderCartSection(db), target: 'cart-badge' }],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

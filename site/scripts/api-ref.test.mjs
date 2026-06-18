@@ -113,9 +113,7 @@ describe('api-ref generator', () => {
           },
         }),
       ]).map((pkg) => [pkg.name, pkg.slug, pkg.entries.map((entry) => entry.entryPath)]),
-    ).toEqual([
-      ['@kovojs/fixture', 'fixture', ['.', './build']],
-    ]);
+    ).toEqual([['@kovojs/fixture', 'fixture', ['.', './build']]]);
 
     expect(() =>
       documentedApiEntries([

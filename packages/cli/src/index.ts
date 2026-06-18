@@ -751,9 +751,7 @@ interface KovoBuildOptions {
   preset?: KovoBuildPresetName;
 }
 
-type BuildArgParseResult =
-  | { ok: true; options: KovoBuildOptions }
-  | { message: string; ok: false };
+type BuildArgParseResult = { ok: true; options: KovoBuildOptions } | { message: string; ok: false };
 
 interface AddComponentOptions {
   components: readonly AddComponentName[];
@@ -992,7 +990,10 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
     if (arg === '--allow-diagnostic') {
       const value = args[index + 1];
       if (!value)
-        return { message: 'kovo: compile component --allow-diagnostic requires a code.\n', ok: false };
+        return {
+          message: 'kovo: compile component --allow-diagnostic requires a code.\n',
+          ok: false,
+        };
       if (!isDiagnosticCode(value)) {
         return {
           message: `kovo: compile component --allow-diagnostic received unknown code ${stableValue(value)}.\n`,
@@ -1006,7 +1007,10 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
     if (arg.startsWith('--allow-diagnostic=')) {
       const value = arg.slice('--allow-diagnostic='.length);
       if (!value)
-        return { message: 'kovo: compile component --allow-diagnostic requires a code.\n', ok: false };
+        return {
+          message: 'kovo: compile component --allow-diagnostic requires a code.\n',
+          ok: false,
+        };
       if (!isDiagnosticCode(value)) {
         return {
           message: `kovo: compile component --allow-diagnostic received unknown code ${stableValue(value)}.\n`,
@@ -1025,7 +1029,8 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
     }
     if (arg.startsWith('--out=')) {
       outPath = arg.slice('--out='.length);
-      if (!outPath) return { message: 'kovo: compile component --out requires a path.\n', ok: false };
+      if (!outPath)
+        return { message: 'kovo: compile component --out requires a path.\n', ok: false };
       continue;
     }
     if (arg === '--file-name') {
@@ -1045,7 +1050,10 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
     if (arg === '--facts-out') {
       const value = args[index + 1];
       if (!value)
-        return { message: 'kovo: compile component --facts-out requires a JSON path.\n', ok: false };
+        return {
+          message: 'kovo: compile component --facts-out requires a JSON path.\n',
+          ok: false,
+        };
       factsOutPath = value;
       index += 1;
       continue;
@@ -1053,7 +1061,10 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
     if (arg.startsWith('--facts-out=')) {
       factsOutPath = arg.slice('--facts-out='.length);
       if (!factsOutPath)
-        return { message: 'kovo: compile component --facts-out requires a JSON path.\n', ok: false };
+        return {
+          message: 'kovo: compile component --facts-out requires a JSON path.\n',
+          ok: false,
+        };
       continue;
     }
     if (arg === '--registry-facts') {
@@ -1112,7 +1123,10 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
   }
 
   if (!sourcePath)
-    return { message: `kovo: compile component requires a source path.\n${compileUsage()}`, ok: false };
+    return {
+      message: `kovo: compile component requires a source path.\n${compileUsage()}`,
+      ok: false,
+    };
   if (!outPath)
     return { message: `kovo: compile component requires --out.\n${compileUsage()}`, ok: false };
 
@@ -1166,20 +1180,25 @@ function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
     }
     if (arg === '--file-name') {
       const value = args[index + 1];
-      if (!value) return { message: 'kovo: compile route --file-name requires a name.\n', ok: false };
+      if (!value)
+        return { message: 'kovo: compile route --file-name requires a name.\n', ok: false };
       fileName = value;
       index += 1;
       continue;
     }
     if (arg.startsWith('--file-name=')) {
       fileName = arg.slice('--file-name='.length);
-      if (!fileName) return { message: 'kovo: compile route --file-name requires a name.\n', ok: false };
+      if (!fileName)
+        return { message: 'kovo: compile route --file-name requires a name.\n', ok: false };
       continue;
     }
     if (arg === '--artifact-file-name') {
       const value = args[index + 1];
       if (!value)
-        return { message: 'kovo: compile route --artifact-file-name requires a name.\n', ok: false };
+        return {
+          message: 'kovo: compile route --artifact-file-name requires a name.\n',
+          ok: false,
+        };
       artifactFileName = value;
       index += 1;
       continue;
@@ -1187,12 +1206,16 @@ function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
     if (arg.startsWith('--artifact-file-name=')) {
       artifactFileName = arg.slice('--artifact-file-name='.length);
       if (!artifactFileName)
-        return { message: 'kovo: compile route --artifact-file-name requires a name.\n', ok: false };
+        return {
+          message: 'kovo: compile route --artifact-file-name requires a name.\n',
+          ok: false,
+        };
       continue;
     }
     if (arg === '--facts-out') {
       const value = args[index + 1];
-      if (!value) return { message: 'kovo: compile route --facts-out requires a JSON path.\n', ok: false };
+      if (!value)
+        return { message: 'kovo: compile route --facts-out requires a JSON path.\n', ok: false };
       factsOutPath = value;
       index += 1;
       continue;
@@ -1205,7 +1228,8 @@ function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
     }
     if (arg === '--rewrite') {
       const value = args[index + 1];
-      if (!value) return { message: 'kovo: compile route --rewrite requires Local=specifier.\n', ok: false };
+      if (!value)
+        return { message: 'kovo: compile route --rewrite requires Local=specifier.\n', ok: false };
       const rewrite = parseRouteRewrite(value);
       if (!rewrite.ok) return rewrite;
       componentImportRewrites.push(rewrite.value);
@@ -1225,14 +1249,18 @@ function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
       };
     }
     if (sourcePath) {
-      return { message: `kovo: compile route accepts one source path.\n${compileUsage()}`, ok: false };
+      return {
+        message: `kovo: compile route accepts one source path.\n${compileUsage()}`,
+        ok: false,
+      };
     }
     sourcePath = arg;
   }
 
   if (!sourcePath)
     return { message: `kovo: compile route requires a source path.\n${compileUsage()}`, ok: false };
-  if (!outPath) return { message: `kovo: compile route requires --out.\n${compileUsage()}`, ok: false };
+  if (!outPath)
+    return { message: `kovo: compile route requires --out.\n${compileUsage()}`, ok: false };
 
   return {
     ok: true,
@@ -1281,14 +1309,18 @@ function parseCompileGraphArgs(args: readonly string[]): CompileArgParseResult {
       };
     }
     if (inputPath) {
-      return { message: `kovo: compile graph accepts one input path.\n${compileUsage()}`, ok: false };
+      return {
+        message: `kovo: compile graph accepts one input path.\n${compileUsage()}`,
+        ok: false,
+      };
     }
     inputPath = arg;
   }
 
   if (!inputPath)
     return { message: `kovo: compile graph requires an input path.\n${compileUsage()}`, ok: false };
-  if (!outPath) return { message: `kovo: compile graph requires --out.\n${compileUsage()}`, ok: false };
+  if (!outPath)
+    return { message: `kovo: compile graph requires --out.\n${compileUsage()}`, ok: false };
 
   return { ok: true, options: { check, inputPath, outPath, target: 'graph' } };
 }
@@ -1324,7 +1356,10 @@ function parseCompileMutationInputsArgs(args: readonly string[]): CompileArgPars
     if (arg === '--file-name') {
       const value = args[index + 1];
       if (!value)
-        return { message: 'kovo: compile mutation-inputs --file-name requires a name.\n', ok: false };
+        return {
+          message: 'kovo: compile mutation-inputs --file-name requires a name.\n',
+          ok: false,
+        };
       fileName = value;
       index += 1;
       continue;
@@ -1332,7 +1367,10 @@ function parseCompileMutationInputsArgs(args: readonly string[]): CompileArgPars
     if (arg.startsWith('--file-name=')) {
       fileName = arg.slice('--file-name='.length);
       if (!fileName)
-        return { message: 'kovo: compile mutation-inputs --file-name requires a name.\n', ok: false };
+        return {
+          message: 'kovo: compile mutation-inputs --file-name requires a name.\n',
+          ok: false,
+        };
       continue;
     }
     if (arg.startsWith('-')) {
@@ -1356,7 +1394,10 @@ function parseCompileMutationInputsArgs(args: readonly string[]): CompileArgPars
       ok: false,
     };
   if (!outPath)
-    return { message: `kovo: compile mutation-inputs requires --out.\n${compileUsage()}`, ok: false };
+    return {
+      message: `kovo: compile mutation-inputs requires --out.\n${compileUsage()}`,
+      ok: false,
+    };
 
   return {
     ok: true,
@@ -1543,7 +1584,10 @@ function parseCompilePackageCssArgs(args: readonly string[]): CompileArgParseRes
     if (arg === '--entry') {
       const value = args[index + 1];
       if (!value)
-        return { message: 'kovo: compile package-css --entry requires a source path.\n', ok: false };
+        return {
+          message: 'kovo: compile package-css --entry requires a source path.\n',
+          ok: false,
+        };
       entryPath = value;
       index += 1;
       continue;
@@ -1551,7 +1595,10 @@ function parseCompilePackageCssArgs(args: readonly string[]): CompileArgParseRes
     if (arg.startsWith('--entry=')) {
       entryPath = arg.slice('--entry='.length);
       if (!entryPath)
-        return { message: 'kovo: compile package-css --entry requires a source path.\n', ok: false };
+        return {
+          message: 'kovo: compile package-css --entry requires a source path.\n',
+          ok: false,
+        };
       continue;
     }
     if (arg.startsWith('-')) {
@@ -1642,26 +1689,27 @@ async function runCompileCommand(options: CompileCommandOptions): Promise<CliCom
 async function runCompileComponentCommand(
   options: CompileComponentCommandOptions,
 ): Promise<CliCommandResult> {
-  const { assertFixpoint, assertRenderEquivalence, compileComponentModule } = await import(
-    '@kovojs/compiler'
-  );
+  const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
+    await import('@kovojs/compiler');
   const compileOptions: CompileComponentOptions = {
     fileName: options.fileName ?? options.sourcePath,
     source: readFileSync(options.sourcePath, 'utf8'),
   };
   if (options.registryFactsPath !== undefined) {
-    compileOptions.registryFacts = readJsonFile(
-      options.registryFactsPath,
-    ) as NonNullable<CompileComponentOptions['registryFacts']>;
+    compileOptions.registryFacts = readJsonFile(options.registryFactsPath) as NonNullable<
+      CompileComponentOptions['registryFacts']
+    >;
   }
   if (options.queryShapeFactsPath !== undefined) {
-    compileOptions.queryShapeFacts = readJsonFile(
-      options.queryShapeFactsPath,
-    ) as NonNullable<CompileComponentOptions['queryShapeFacts']>;
+    compileOptions.queryShapeFacts = readJsonFile(options.queryShapeFactsPath) as NonNullable<
+      CompileComponentOptions['queryShapeFacts']
+    >;
   }
   const result = compileComponentModule(compileOptions);
   const allowedDiagnosticCodes = new Set(options.allowedDiagnosticCodes);
-  const warnings = result.diagnostics.filter((diagnostic) => allowedDiagnosticCodes.has(diagnostic.code));
+  const warnings = result.diagnostics.filter((diagnostic) =>
+    allowedDiagnosticCodes.has(diagnostic.code),
+  );
   const blockingDiagnostics = result.diagnostics.filter(
     (diagnostic) => !allowedDiagnosticCodes.has(diagnostic.code),
   );
@@ -1696,7 +1744,9 @@ async function runCompileRouteCommand(
 ): Promise<CliCommandResult> {
   const { compileRouteModule } = await import('@kovojs/compiler');
   const result = compileRouteModule({
-    ...(options.artifactFileName === undefined ? {} : { artifactFileName: options.artifactFileName }),
+    ...(options.artifactFileName === undefined
+      ? {}
+      : { artifactFileName: options.artifactFileName }),
     ...(options.componentImportRewrites === undefined ||
     options.componentImportRewrites.length === 0
       ? {}
@@ -1719,9 +1769,13 @@ async function runCompileRouteCommand(
   return compileArtifactsResult(options.check, artifacts);
 }
 
-async function runCompileGraphCommand(options: CompileGraphCommandOptions): Promise<CliCommandResult> {
+async function runCompileGraphCommand(
+  options: CompileGraphCommandOptions,
+): Promise<CliCommandResult> {
   const { deriveAppGraph } = await import('@kovojs/compiler/graph');
-  const result = deriveAppGraph(readJsonFile(options.inputPath) as Parameters<typeof deriveAppGraph>[0]);
+  const result = deriveAppGraph(
+    readJsonFile(options.inputPath) as Parameters<typeof deriveAppGraph>[0],
+  );
   if (result.diagnostics.length > 0) return compileDiagnosticResult(result.diagnostics);
   return compileArtifactResult(options, `${JSON.stringify(result.graph, null, 2)}\n`, 'graph');
 }
@@ -1731,15 +1785,18 @@ async function runCompileMutationInputsCommand(
 ): Promise<CliCommandResult> {
   const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
   const facts = Object.fromEntries(
-    [...mutationInputFactsFromSource(options.fileName ?? options.sourcePath, readFileSync(options.sourcePath, 'utf8')).values()].map(
-      (fact) => [
-        fact.key,
-        fact.fields.map((field) => ({
-          ...field,
-          provenance: 'registry' as const,
-        })),
-      ],
-    ),
+    [
+      ...mutationInputFactsFromSource(
+        options.fileName ?? options.sourcePath,
+        readFileSync(options.sourcePath, 'utf8'),
+      ).values(),
+    ].map((fact) => [
+      fact.key,
+      fact.fields.map((field) => ({
+        ...field,
+        provenance: 'registry' as const,
+      })),
+    ]),
   );
   return compileArtifactResult(options, `${JSON.stringify(facts, null, 2)}\n`, 'mutation-inputs');
 }
@@ -1775,7 +1832,9 @@ async function runCompileDrizzleStaticCommand(
     serializeTouchGraph,
   } = await import('@kovojs/drizzle/internal/static');
   const input = readJsonFile(options.inputPath) as DrizzleStaticCommandInput;
-  const files = input.files as Parameters<typeof extractTouchGraphFromProject>[0]['files'] | undefined;
+  const files = input.files as
+    | Parameters<typeof extractTouchGraphFromProject>[0]['files']
+    | undefined;
   const output: Record<string, unknown> = { version: 'drizzle-static/v1' };
 
   if (files !== undefined) {
@@ -1801,10 +1860,13 @@ async function runCompileDrizzleStaticCommand(
     const queries = (input.invalidation.queries ?? output.queryDomains) as Parameters<
       typeof deriveInvalidationRegistry
     >[0]['queries'];
-    if (touchGraph === undefined) throw new Error('drizzle-static invalidation requires touchGraph');
+    if (touchGraph === undefined)
+      throw new Error('drizzle-static invalidation requires touchGraph');
     if (queries === undefined) throw new Error('drizzle-static invalidation requires queries');
     const invalidationRegistry = deriveInvalidationRegistry({
-      mutations: input.invalidation.mutations as Parameters<typeof deriveInvalidationRegistry>[0]['mutations'],
+      mutations: input.invalidation.mutations as Parameters<
+        typeof deriveInvalidationRegistry
+      >[0]['mutations'],
       queries,
       touchGraph,
     });
@@ -1819,19 +1881,19 @@ async function runCompileDrizzleStaticCommand(
     const touchGraph = (input.serializeTouchGraph.touchGraph ?? output.touchGraph) as Parameters<
       typeof serializeTouchGraph
     >[0];
-    if (touchGraph === undefined) throw new Error('drizzle-static serializeTouchGraph requires touchGraph');
+    if (touchGraph === undefined)
+      throw new Error('drizzle-static serializeTouchGraph requires touchGraph');
     const source = serializeTouchGraph(touchGraph);
     output.touchGraphSource =
       input.serializeTouchGraph.exportName === undefined
         ? source
-        : source.replace('export const touchGraph =', `export const ${input.serializeTouchGraph.exportName} =`);
+        : source.replace(
+            'export const touchGraph =',
+            `export const ${input.serializeTouchGraph.exportName} =`,
+          );
   }
 
-  return compileArtifactResult(
-    options,
-    `${JSON.stringify(output, null, 2)}\n`,
-    'drizzle-static',
-  );
+  return compileArtifactResult(options, `${JSON.stringify(output, null, 2)}\n`, 'drizzle-static');
 }
 
 interface DrizzleOptimisticCommandInput {
@@ -1989,7 +2051,9 @@ function compileArtifactActionLines(check: boolean, artifact: CompileArtifact): 
   }
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, artifact.source, 'utf8');
-  return [`WRITE ${artifact.kind} path=${JSON.stringify(target)} bytes=${byteLength(artifact.source)}`];
+  return [
+    `WRITE ${artifact.kind} path=${JSON.stringify(target)} bytes=${byteLength(artifact.source)}`,
+  ];
 }
 
 function warningLines(
@@ -2176,7 +2240,8 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
 
     if (arg.startsWith('--manifest=')) {
       manifestFile = arg.slice('--manifest='.length);
-      if (!manifestFile) return { message: 'kovo: export --manifest requires a file.\n', ok: false };
+      if (!manifestFile)
+        return { message: 'kovo: export --manifest requires a file.\n', ok: false };
       continue;
     }
 
@@ -2485,7 +2550,10 @@ async function staticExportManifestPlan(options: KovoExportOptions): Promise<Exp
     process.env[options.stylesheetEnv] = stylesheetHref;
   }
 
-  return { assets: [...assets.values()], ...(stylesheetHref === undefined ? {} : { stylesheetHref }) };
+  return {
+    assets: [...assets.values()],
+    ...(stylesheetHref === undefined ? {} : { stylesheetHref }),
+  };
 }
 
 interface ExportManifestChunk {

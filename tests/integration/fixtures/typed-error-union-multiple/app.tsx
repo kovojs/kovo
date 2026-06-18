@@ -48,13 +48,14 @@ function renderCheckoutFailure(failure: MutationFail): string {
 const app = createApp({
   mutations: [checkout],
   routes: [homeRoute],
-  mutationResponse: ({ key }) => {
-    if (key !== checkout.key) return undefined;
-    return {
-      failureTarget: 'checkout-error',
-      redirectTo: '/',
-      renderFailureFragment: renderCheckoutFailure,
-    };
+  mutationResponses: {
+    [checkout.key]: () => {
+      return {
+        failureTarget: 'checkout-error',
+        redirectTo: '/',
+        renderFailureFragment: renderCheckoutFailure,
+      };
+    },
   },
 });
 

@@ -48,13 +48,14 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [addIsland],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== addIsland.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      redirectTo: '/',
-      fragmentRenderers: [{ render: () => renderZone(db), target: 'patch-zone' }],
-    };
+  mutationResponses: {
+    [addIsland.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        redirectTo: '/',
+        fragmentRenderers: [{ render: () => renderZone(db), target: 'patch-zone' }],
+      };
+    },
   },
 });
 

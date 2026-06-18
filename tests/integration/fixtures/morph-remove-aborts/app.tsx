@@ -55,12 +55,13 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [removeIsland],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== removeIsland.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [{ render: () => renderShell(db), target: 'morph-abort-shell' }],
-    };
+  mutationResponses: {
+    [removeIsland.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [{ render: () => renderShell(db), target: 'morph-abort-shell' }],
+      };
+    },
   },
 });
 

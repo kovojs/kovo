@@ -187,10 +187,10 @@ render-plan version skew checks.
     `packages/compiler/src/vite.test.ts` covers component-refresh, diagnostic,
     and full-reload websocket events plus the conservative reload fallback.
     Verification: `corepack pnpm exec vitest --run
-    packages/compiler/src/vite.test.ts packages/compiler/src/hmr-impact.test.ts`;
+packages/compiler/src/vite.test.ts packages/compiler/src/hmr-impact.test.ts`;
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`; `node
-    scripts/exported-symbols.mjs --duplicates --check && node
-    scripts/api-surface-gate.mjs`; `git diff --check`.
+scripts/exported-symbols.mjs --duplicates --check && node
+scripts/api-surface-gate.mjs`; `git diff --check`.
 - [x] **4. Shared app-shell dev integration.**
   - Add a public app-shell dev wrapper that wires compiler diagnostics into
     `createKovoAppShellDevDiagnosticLedger()` and keeps route/mutation diagnostic
@@ -208,12 +208,12 @@ render-plan version skew checks.
     `examples/{commerce,crm,stackoverflow}/vite.config.ts`,
     `site/vite.config.ts`, and `packages/create-kovo/templates/vite.config.ts`
     now use the integration wrapper. Verification: `corepack pnpm exec vitest
-    --run packages/server/src/vite-dev.test.ts
-    packages/server/src/vite-dev-middleware.test.ts
-    packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
+--run packages/server/src/vite-dev.test.ts
+packages/server/src/vite-dev-middleware.test.ts
+packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`; `node
-    scripts/api-surface-gate.mjs && node site/scripts/api-ref.mjs && node
-    site/scripts/api-examples-check.mjs`; `git diff --check`.
+scripts/api-surface-gate.mjs && node site/scripts/api-ref.mjs && node
+site/scripts/api-examples-check.mjs`; `git diff --check`.
 - [x] **5. Dev-only HMR client runtime.**
   - Emit or serve a small dev module that subscribes to Kovo HMR events.
   - For `kovo:component-render`, call a dev refresh endpoint and feed returned
@@ -233,11 +233,11 @@ render-plan version skew checks.
     route; route-shell and full-reload classes still delegate to page reload.
     Verification:
     `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts
-    packages/server/src/vite-dev-middleware.test.ts packages/compiler/src/vite.test.ts
-    packages/compiler/src/hmr-impact.test.ts`; `corepack pnpm --filter
-    @kovojs/integration-tests exec playwright test specs/hmr-dev-client.spec.ts
-    --project=chromium`; `corepack pnpm exec tsc -p tsconfig.json --noEmit
-    --pretty false`; `git diff --check`.
+packages/server/src/vite-dev-middleware.test.ts packages/compiler/src/vite.test.ts
+packages/compiler/src/hmr-impact.test.ts`; `corepack pnpm --filter
+@kovojs/integration-tests exec playwright test specs/hmr-dev-client.spec.ts
+--project=chromium`; `corepack pnpm exec tsc -p tsconfig.json --noEmit
+--pretty false`; `git diff --check`.
 - [x] **6. Dev refresh endpoints.**
   - Add dev-only shell endpoints for current-route refresh and live-target
     refresh. They should be available only in Vite dev middleware, not production
@@ -261,7 +261,7 @@ render-plan version skew checks.
     state into the DOM, and preserves focused user input. Verification:
     `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts`;
     `corepack pnpm --filter @kovojs/integration-tests exec playwright test
-    specs/hmr-dev-client.spec.ts --project=chromium`.
+specs/hmr-dev-client.spec.ts --project=chromium`.
 - [ ] **7. Verification matrix.**
   - Unit test impact classification in the compiler package.
   - Unit test Vite websocket event emission with fake dev-server objects.
@@ -276,7 +276,7 @@ render-plan version skew checks.
     items 5 and 6, including a browser query-backed live-target refresh through
     `componentLiveTargetRenderer()`. `corepack pnpm --filter @kovojs/site run build` passes
     (with the pre-existing Vite websocket port warning), and `rg -n
-    "@kovo/hmr|Kovo-HMR-Refresh" site/dist site/dist-css` finds no production
+"@kovo/hmr|Kovo-HMR-Refresh" site/dist site/dist-css` finds no production
     HMR endpoint/client strings. `tests/integration/specs/hmr-dev-client.spec.ts`
     covers the browser dev client applying a server-rendered live-target fragment,
     sending current `Kovo-Live-Targets`/`Kovo-Targets` headers, preserving focused
@@ -294,12 +294,12 @@ render-plan version skew checks.
     verifies the conservative `kovo:full-reload` recovery path reaches fresh
     server output. Actual route-table source edits remain open. Verification:
     `corepack pnpm --filter
-    @kovojs/integration-tests exec playwright test specs/hmr-dev-client.spec.ts
-    --project=chromium`; `corepack pnpm exec vitest --run
-    packages/server/src/vite-dev.test.ts packages/server/src/vite-dev-middleware.test.ts
-    packages/compiler/src/vite.test.ts packages/compiler/src/hmr-impact.test.ts`;
+@kovojs/integration-tests exec playwright test specs/hmr-dev-client.spec.ts
+--project=chromium`; `corepack pnpm exec vitest --run
+packages/server/src/vite-dev.test.ts packages/server/src/vite-dev-middleware.test.ts
+packages/compiler/src/vite.test.ts packages/compiler/src/hmr-impact.test.ts`;
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`; `git
-    diff --check`.
+diff --check`.
 
 ## First Milestone Slice
 

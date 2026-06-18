@@ -37,14 +37,15 @@ const app = createApp({
   csrf,
   mutations: [deposit],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== deposit.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      failureTarget: 'csrf-total',
-      fragmentRenderers: [{ render: () => renderTotal(db), target: 'csrf-total' }],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [deposit.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        failureTarget: 'csrf-total',
+        fragmentRenderers: [{ render: () => renderTotal(db), target: 'csrf-total' }],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

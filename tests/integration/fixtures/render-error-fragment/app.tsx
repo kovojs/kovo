@@ -33,20 +33,21 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [createReceipt],
   routes: [homeRoute],
-  mutationResponse: ({ key }) => {
-    if (key !== createReceipt.key) return undefined;
-    return {
-      failureTarget: 'receipt',
-      fragmentRenderers: [
-        {
-          render: () => {
-            throw new Error('receipt renderer leaked details');
+  mutationResponses: {
+    [createReceipt.key]: () => {
+      return {
+        failureTarget: 'receipt',
+        fragmentRenderers: [
+          {
+            render: () => {
+              throw new Error('receipt renderer leaked details');
+            },
+            target: 'receipt',
           },
-          target: 'receipt',
-        },
-      ],
-      redirectTo: '/',
-    };
+        ],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

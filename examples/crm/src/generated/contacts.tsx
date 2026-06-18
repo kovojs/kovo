@@ -51,10 +51,10 @@ function renderContactCard(contact: ContactRow): string {
 type ContactsRenderSlots = ComponentRenderSlots<{ addContact: typeof addContactForm }> & {
   request?: CrmRequest | undefined;
 };
-type DuplicateEmailFailure = Extract<
-  NonNullable<ContactsRenderSlots['forms']['addContact']['failure']>,
-  { code: 'DUPLICATE_EMAIL' }
->;
+interface DuplicateEmailFailure {
+  code: 'DUPLICATE_EMAIL';
+  payload: { email: string };
+}
 
 const defaultContactsRenderSlots: ContactsRenderSlots = {
   forms: { addContact: { failure: null } },

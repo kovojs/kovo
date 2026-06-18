@@ -95,7 +95,7 @@ state as the final UI.
   - Evidence: pending public API baseline diff and server unit tests.
 - [ ] **Form opt-in syntax.**
   - Define author TSX syntax, tentatively `<form enhance stream
-    mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
+mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     submit path. The absence of `stream` uses today's buffered enhanced mutation
     apply.
   - Evidence: pending compiler fixture and runtime submit test.

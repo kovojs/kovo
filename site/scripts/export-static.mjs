@@ -86,8 +86,8 @@ export async function exportSiteStaticApp({
 async function captureKovoCommandOutput(run) {
   const stdoutChunks = [];
   const stderrChunks = [];
-  const stdoutWrite = process.stdout.write;
-  const stderrWrite = process.stderr.write;
+  const stdoutWrite = process.stdout.write.bind(process.stdout);
+  const stderrWrite = process.stderr.write.bind(process.stderr);
 
   try {
     process.stdout.write = (chunk) => {
@@ -111,11 +111,7 @@ async function captureKovoCommandOutput(run) {
 }
 
 function siteExportResultFromKovoOutput(output) {
-  const count = (prefix) =>
-    output
-      .split(/\r?\n/)
-      .filter((line) => line.startsWith(prefix))
-      .length;
+  const count = (prefix) => output.split(/\r?\n/).filter((line) => line.startsWith(prefix)).length;
   const diagnostics = output
     .split(/\r?\n/)
     .filter((line) => line.startsWith('WARN '))

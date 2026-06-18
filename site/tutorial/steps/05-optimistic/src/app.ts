@@ -1,11 +1,6 @@
 import { form, type FormInput } from '@kovojs/core';
 import type { OptimisticFor } from '@kovojs/runtime';
-import {
-  mutation,
-  route,
-  s,
-  type MutationFail,
-} from '@kovojs/server';
+import { mutation, route, s, type MutationFail } from '@kovojs/server';
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';

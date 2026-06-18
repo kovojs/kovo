@@ -51,7 +51,9 @@ function renderProductRoute(id: string) {
 }
 
 const repoRoot = fileURLToPath(new URL('../../../../../', import.meta.url));
-const kovoBin = fileURLToPath(new URL('../../../../../site/node_modules/.bin/kovo', import.meta.url));
+const kovoBin = fileURLToPath(
+  new URL('../../../../../site/node_modules/.bin/kovo', import.meta.url),
+);
 const productActionsSourcePath = fileURLToPath(
   new URL('./components/product-actions.tsx', import.meta.url),
 );

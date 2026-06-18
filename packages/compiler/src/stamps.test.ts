@@ -414,7 +414,9 @@ export const ProductGrid = component({
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
       expect.objectContaining({
-        message: expect.stringContaining('<FieldError> must be rendered inside an enhanced mutation form'),
+        message: expect.stringContaining(
+          '<FieldError> must be rendered inside an enhanced mutation form',
+        ),
       }),
       expect.objectContaining({
         message: expect.stringContaining(

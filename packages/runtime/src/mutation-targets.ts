@@ -56,7 +56,8 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
 
     if (liveTargets.has(target)) continue;
     liveTargets.set(target, {
-      component: element.getAttribute('kovo-live-component') ?? element.getAttribute('kovo-c') ?? target,
+      component:
+        element.getAttribute('kovo-live-component') ?? element.getAttribute('kovo-c') ?? target,
       props: readLiveProps(element.getAttribute('kovo-props')),
       target,
     });

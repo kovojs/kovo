@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@kovojs/cli": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/test": "workspace:*",
-    "axe-core": "4.12.1",
-    "@kovojs/cli": "workspace:*"
+    "axe-core": "4.12.1"
   },
   "devDependencies": {
     "@kovojs/compiler": "workspace:*",

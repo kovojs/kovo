@@ -44,12 +44,13 @@ function renderAlreadySubscribedPage(code: string): string {
 const app = createApp({
   mutations: [subscribe],
   routes: [homeRoute, thanksRoute],
-  mutationResponse: ({ key }) => {
-    if (key !== subscribe.key) return undefined;
-    return {
-      redirectTo: '/thanks',
-      renderFailurePage: (failure) => renderAlreadySubscribedPage(failure.error.code),
-    };
+  mutationResponses: {
+    [subscribe.key]: () => {
+      return {
+        redirectTo: '/thanks',
+        renderFailurePage: (failure) => renderAlreadySubscribedPage(failure.error.code),
+      };
+    },
   },
 });
 

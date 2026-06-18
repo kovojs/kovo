@@ -73,7 +73,9 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
 
   visit(sourceFile);
   const routePageFacts = routePages.map((routePage) => routePage.fact);
-  diagnostics.push(...routeAuthoringSurfaceDiagnostics(options.fileName, options.source, sourceFile));
+  diagnostics.push(
+    ...routeAuthoringSurfaceDiagnostics(options.fileName, options.source, sourceFile),
+  );
 
   const artifactFileName = options.artifactFileName ?? routeArtifactFileName(options.fileName);
 
@@ -125,7 +127,14 @@ function routePageFromCall(
     diagnostics,
   );
   if (components.length === 0 && !containsJsx(pageHandler.node)) return null;
-  const routeLayouts = routeLayoutFacts(fileName, source, sourceFile, definitionArg, layouts, diagnostics);
+  const routeLayouts = routeLayoutFacts(
+    fileName,
+    source,
+    sourceFile,
+    definitionArg,
+    layouts,
+    diagnostics,
+  );
   const navigationSegments = routeNavigationSegments(pathArg.text, components, routeLayouts);
   const fact = {
     components,
@@ -183,7 +192,9 @@ function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, Route
         const parent = layoutParentName(definition);
         layouts.set(node.name.text, {
           localName: node.name.text,
-          ...(parent === null ? {} : { parent: parent.name, parentLength: parent.length, parentStart: parent.start }),
+          ...(parent === null
+            ? {}
+            : { parent: parent.name, parentLength: parent.length, parentStart: parent.start }),
           queries: layoutQueryNames(definition),
           start: node.name.getStart(sourceFile),
         });
@@ -345,7 +356,9 @@ function methodDeclarationFunctionExpression(
   method: ts.MethodDeclaration,
   sourceFile: ts.SourceFile,
 ): string {
-  const asyncKeyword = method.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)
+  const asyncKeyword = method.modifiers?.some(
+    (modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword,
+  )
     ? 'async '
     : '';
   const typeParameters =
@@ -428,23 +441,21 @@ function routePageComponentSpreadDiagnostics(
   localName: string,
   attributes: ts.JsxAttributes,
 ): CompilerDiagnostic[] {
-  return attributes.properties
-    .filter(ts.isJsxSpreadAttribute)
-    .map((attribute) => ({
-      ...diagnosticFor(
-        fileName,
-        'KV303',
-        source,
-        attribute.getStart(sourceFile),
-        attribute.getWidth(sourceFile),
-      ),
-      help: [
-        diagnosticDefinitions.KV303.help,
-        'Route component props must be statically reconstructible so route query, live target, and navigation segment metadata can be derived.',
-        'Fix: pass named props directly, for example `<QuestionDetail questionId={params.id} />`, instead of spreading an object.',
-      ].join('\n'),
-      message: `${diagnosticDefinitions.KV303.message} Route component '${localName}' uses spread props that cannot be represented in generated route metadata.`,
-    }));
+  return attributes.properties.filter(ts.isJsxSpreadAttribute).map((attribute) => ({
+    ...diagnosticFor(
+      fileName,
+      'KV303',
+      source,
+      attribute.getStart(sourceFile),
+      attribute.getWidth(sourceFile),
+    ),
+    help: [
+      diagnosticDefinitions.KV303.help,
+      'Route component props must be statically reconstructible so route query, live target, and navigation segment metadata can be derived.',
+      'Fix: pass named props directly, for example `<QuestionDetail questionId={params.id} />`, instead of spreading an object.',
+    ].join('\n'),
+    message: `${diagnosticDefinitions.KV303.message} Route component '${localName}' uses spread props that cannot be represented in generated route metadata.`,
+  }));
 }
 
 function routePageComponentFact(
@@ -480,7 +491,13 @@ function routePageComponentProps(
     }
 
     if (ts.isStringLiteral(attribute.initializer)) {
-      return [{ expression: attribute.initializer.getText(sourceFile), name, staticValue: attribute.initializer.text }];
+      return [
+        {
+          expression: attribute.initializer.getText(sourceFile),
+          name,
+          staticValue: attribute.initializer.text,
+        },
+      ];
     }
 
     if (!ts.isJsxExpression(attribute.initializer) || !attribute.initializer.expression) return [];
@@ -701,8 +718,7 @@ function routeImportReplacements(
         ? componentImportRewriteSpecifier(node, rewriteByLocalName)
         : null;
       const rebased =
-        rewritten ??
-        rebaseRelativeSpecifier(specifier, sourceFile.fileName, artifactFileName);
+        rewritten ?? rebaseRelativeSpecifier(specifier, sourceFile.fileName, artifactFileName);
       if (rebased && rebased !== specifier) {
         replacements.push({
           end: node.moduleSpecifier.getEnd(),

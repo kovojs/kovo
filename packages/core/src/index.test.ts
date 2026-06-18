@@ -74,7 +74,6 @@ declare module './index.js' {
       typeof route<'/products/:id', { id: string }, { max: number; sort: string }>
     >;
   }
-
 }
 
 describe('core authoring APIs', () => {

@@ -683,7 +683,9 @@ describe('compiler conformance corpus', () => {
 
     expect(generatedSource).toContain("interface MutationRegistry {\n    'cart/add':");
     expect(generatedSource).toContain("typeof import('../app.js').addToCart;");
-    expect(generatedSource).toContain('interface InvalidationSets extends CommerceInvalidationSets');
+    expect(generatedSource).toContain(
+      'interface InvalidationSets extends CommerceInvalidationSets',
+    );
   });
 });
 

@@ -20,7 +20,11 @@ function withCsrf(fields: Record<string, string>): Record<string, string> {
   };
 }
 
-function liveHeader(target: string, component: string, props: Record<string, unknown> = {}): string {
+function liveHeader(
+  target: string,
+  component: string,
+  props: Record<string, unknown> = {},
+): string {
   return `${target}#${component}:${JSON.stringify(props)}`;
 }
 

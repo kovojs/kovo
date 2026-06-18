@@ -41,13 +41,14 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [increment],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== increment.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      redirectTo: '/',
-      fragmentRenderers: [{ render: () => renderBadge(db), target: 'count-badge' }],
-    };
+  mutationResponses: {
+    [increment.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        redirectTo: '/',
+        fragmentRenderers: [{ render: () => renderBadge(db), target: 'count-badge' }],
+      };
+    },
   },
 });
 

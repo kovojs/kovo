@@ -17,10 +17,10 @@
     "@kovojs/ui": "workspace:*"
   },
   "devDependencies": {
+    "@kovojs/cli": "workspace:*",
     "@kovojs/conformance-fixtures": "workspace:*",
     "@kovojs/test": "workspace:*",
     "axe-core": "^4.12.1",
-    "@kovojs/cli": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "4.1.8"
   },

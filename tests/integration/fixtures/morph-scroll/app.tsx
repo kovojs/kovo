@@ -53,13 +53,14 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [refreshScroll],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== refreshScroll.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      redirectTo: '/',
-      fragmentRenderers: [{ render: () => renderPanel(db), target: 'scroll-panel' }],
-    };
+  mutationResponses: {
+    [refreshScroll.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        redirectTo: '/',
+        fragmentRenderers: [{ render: () => renderPanel(db), target: 'scroll-panel' }],
+      };
+    },
   },
 });
 

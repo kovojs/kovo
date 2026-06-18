@@ -61,13 +61,14 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [loadMore],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
-    if (key !== loadMore.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      redirectTo: '/',
-      fragmentRenderers: [{ mode: 'append', render: () => renderLastRow(db), target: 'feed' }],
-    };
+  mutationResponses: {
+    [loadMore.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        redirectTo: '/',
+        fragmentRenderers: [{ mode: 'append', render: () => renderLastRow(db), target: 'feed' }],
+      };
+    },
   },
 });
 

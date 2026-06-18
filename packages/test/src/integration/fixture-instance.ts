@@ -125,7 +125,7 @@ function verifyRequestOperations(
     if (!query) return;
     verifier.assertReadsCoveredOperations(
       observed,
-      query.reads.map((domain) => domain.key),
+      query.reads.map((domain: { key: string }) => domain.key),
     );
   }
 }

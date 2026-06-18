@@ -119,10 +119,13 @@ fixed-this-run=0)`.
 - [x] **The CLI package currently uses the unscoped package name `kovo`.**
   - Evidence: `packages/cli/package.json` has `"name": "kovo"` and `bin.kovo`;
     workspace dependencies and template devDependencies refer to `kovo`.
-- [x] **`@kovojs/core` currently exposes Stripe-specific webhook symbols.**
-  - Evidence: `packages/core/src/index.ts` exports `stripeSignature` and
-    `StripeSignatureOptions`; `pnpm symbols --json` reports both from
-    `@kovojs/core`.
+- [x] **`@kovojs/core` no longer exposes Stripe-specific webhook symbols.**
+  - Evidence: `packages/core/src/index.ts` exports generic webhook helpers only;
+    `corepack pnpm run check:api-surface` reports
+    `public-exports-needing-attention=1713 (baseline=1737, fixed-this-run=24)`,
+    and `rg "stripeSignature|StripeSignatureOptions" SPEC.md packages docs site
+examples scripts conformance tests --glob '!**/node_modules/**' --glob
+'!**/dist/**'` exits 1.
 
 ## Decisions
 
@@ -228,23 +231,25 @@ packages/server/src/api/app.test.ts packages/server/src/vite-plugin-boundary.tes
   - Evidence: no export-map rewrite was needed in this slice;
     `node scripts/build-publish.mjs` passes and confirms every `publishConfig`
     target exists for the current export maps.
-- [ ] **Run focused verification, then broad gates.**
+- [x] **Run focused verification, then broad gates.**
   - Focused: `pnpm --filter @kovojs/server exec vitest run` plus tests for
     `packages/create-kovo` template expectations.
   - Broad: `pnpm run check:api-surface`, `pnpm run check:publish`, and
     `pnpm run check`.
-  - Evidence: `corepack pnpm --filter @kovojs/server exec vitest run` passes
-    with 67 files / 442 tests after updating stale assertions for keyed mutation
-    form output and Vite diagnostic middleware fallback detection.
-    `corepack pnpm exec vitest --run packages/create-kovo/src/index.test.ts
-scripts/exported-symbols.test.mjs scripts/public-packages.test.mjs
-site/scripts/api-ref.test.mjs`, `corepack pnpm run check:api-surface`,
-    `corepack pnpm run check:publish`, `corepack pnpm run check:exports`,
-    `corepack pnpm run check:imports`, and `corepack pnpm exec tsc -p
-tsconfig.json --noEmit --pretty false` pass for the current checkpoint.
-    Full `corepack pnpm run check` remains open: it gets through
-    `check:imports` but fails in repo-wide `vp check` with formatting plus
-    unrelated lint/type findings outside this export-surface slice.
+  - Evidence: `corepack pnpm exec vitest --run packages/core/src/index.test.ts
+packages/core/src/verifier.test.ts`,
+    `corepack pnpm exec vitest --run packages/runtime/src/optimism-typing.test.ts
+packages/runtime/src/submit-context-apply.test.ts
+packages/runtime/src/inline-loader-navigation.test.ts
+packages/runtime/src/inline-loader-navigation.browser.test.ts`,
+    `corepack pnpm exec vitest --run packages/server/src/app.test.ts
+packages/server/src/mutation-response.test.ts
+packages/server/src/app-document.test.ts`,
+    `corepack pnpm --filter @kovojs/example-stackoverflow test -- --run`, and
+    `corepack pnpm --filter @kovojs/conformance-webhook-spike test` pass.
+    Broad gates pass: `corepack pnpm run check`, `corepack pnpm run
+check:api-surface`, `corepack pnpm run check:exports`, and `corepack pnpm
+run check:publish`.
 
 ## Server Root Canonicalization
 
@@ -1233,16 +1238,21 @@ check:exports` passed; `node scripts/build-publish.mjs` passed.
   - Evidence: `packages/core/src/index.ts` exports `customVerifier`,
     `hmacSignature`, and `standardWebhooks`, but not `stripeSignature` or
     `StripeSignatureOptions`. Verification:
-    `pnpm exec vitest --run packages/core/src/verifier.test.ts scripts/exported-symbols.test.mjs`;
-    `node scripts/exported-symbols.mjs --json` plus a no-`stripe` symbol scan.
-- [x] **Inline Stripe verification in examples that need it.**
+    `corepack pnpm exec vitest --run packages/core/src/index.test.ts
+packages/core/src/verifier.test.ts`; `corepack pnpm run check:api-surface`;
+    `corepack pnpm run check:exports`; `corepack pnpm run check:publish`.
+- [x] **Inline Stripe verification in conformance/examples that need it.**
   - Move Stripe-specific signing/verification logic into example app code or
     example-local helpers.
   - Ensure examples import only generic Kovo webhook primitives from framework
     packages.
-  - Evidence: no example currently needs a Stripe webhook recipe. Verification:
-    `rg -n "stripeSignature|StripeSignatureOptions|stripeSignature\\(|Stripe preset|blessed presets" SPEC.md packages docs site examples scripts --glob '!**/node_modules/**' --glob '!**/dist/**'`
-    exits 1 after the public export removal.
+  - Evidence: `conformance/webhook-spike/src/index.test.ts` now implements its
+    Stripe-format verifier locally on top of `hmacSignature`; no app/example code
+    imports provider-specific framework helpers. Verification:
+    `corepack pnpm --filter @kovojs/conformance-webhook-spike test`; `rg
+"stripeSignature|StripeSignatureOptions" SPEC.md packages docs site examples
+scripts conformance tests --glob '!**/node_modules/**' --glob '!**/dist/**'`
+    exits 1.
 - [x] **Update docs away from Stripe framework API.**
   - Remove or rewrite references that present Stripe as a first-class Kovo export.
   - If Stripe remains in docs, show it as app-owned code built from generic

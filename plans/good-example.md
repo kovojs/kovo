@@ -21,35 +21,35 @@ that still make the simplified Commerce example feel like a test fixture.
 ## Target Shape
 
 - [x] Commerce authored source imports authored components, queries, mutations,
-  layouts, and framework APIs only; app modules do not import app-local
-  `src/generated/*` artifacts except in scripts, generated files, or tests that
-  explicitly check generated artifacts.
+      layouts, and framework APIs only; app modules do not import app-local
+      `src/generated/*` artifacts except in scripts, generated files, or tests that
+      explicitly check generated artifacts.
   - Evidence: `rg -n "from './generated/|from \"\\./generated/" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts' --glob '!app-test-helpers.ts'`
     exits 1. `examples/commerce/src/app-test-helpers.ts` is a test/runtime
     fixture and imports the compiled route artifact so scenario tests exercise
     the same generated route module served by dev/build. `packages/compiler/src/compile-component.test.ts`
     covers KV235 for app-authored app-local generated imports.
 - [x] Commerce app code keeps direct framework/wire helpers out of the happy
-  path: no app-authored `renderMutationEndpointResponse`,
-  `renderComponentMutationFailure`, `componentMutationFailureSlots`,
-  `MutationWireHeaderSource`, or direct `Kovo-*` header construction outside
-  tests or package-level fixtures.
+      path: no app-authored `renderMutationEndpointResponse`,
+      `renderComponentMutationFailure`, `componentMutationFailureSlots`,
+      `MutationWireHeaderSource`, or direct `Kovo-*` header construction outside
+      tests or package-level fixtures.
   - Evidence: `rg -n "Kovo-|renderMutationEndpointResponse|renderComponentMutationFailure|componentMutationFailureSlots|MutationWireHeaderSource|mutationResponses" examples/commerce/src --glob '!**/*.test.ts' --glob '!**/generated/**'`
     exits 1. Enhanced scenario header construction and target descriptor
     formatting now live in `packages/test/src/headers.ts`, verified with
     `corepack pnpm exec vitest run packages/test/src/headers.test.ts examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.auth.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/app.rendering.test.ts`.
 - [x] Commerce tests are scenario tests, not proof matrices: keep route rendering,
-  auth/session, no-JS add-to-cart, enhanced add-to-cart, and one graph/explain
-  smoke; move generated-IR freshness, derived-optimism commuting diagrams,
-  app-shell middleware command matrices, delta-wire internals, and broad graph
-  source-truth assertions to package/conformance tests.
+      auth/session, no-JS add-to-cart, enhanced add-to-cart, and one graph/explain
+      smoke; move generated-IR freshness, derived-optimism commuting diagrams,
+      app-shell middleware command matrices, delta-wire internals, and broad graph
+      source-truth assertions to package/conformance tests.
   - Evidence: the inventory table maps each removed assertion group to package
     owners. Focused Commerce scenario tests pass as
     `corepack pnpm exec vitest run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.auth.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/app.rendering.test.ts examples/commerce/src/enhanced-navigation.test.ts`.
 - [x] Commerce remains an end-to-end demo of `SPEC.md` §6.3 typed mutation
-  forms, §9.1 enhanced mutation round-trips, §9.2 expected failures vs
-  unexpected errors, §9.5 request shell provisioning, and §10.5 derived
-  optimism, but package tests own the exhaustive proof for each contract.
+      forms, §9.1 enhanced mutation round-trips, §9.2 expected failures vs
+      unexpected errors, §9.5 request shell provisioning, and §10.5 derived
+      optimism, but package tests own the exhaustive proof for each contract.
   - Evidence: Commerce scenario tests above cover typed forms, no-JS/enhanced
     add-to-cart, auth/session shell dispatch, and visible failures. Package
     owners pass as `corepack pnpm exec vitest run packages/server/src/live-target-renderer.test.tsx packages/server/src/component-render.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/mutation-response.test.ts packages/test/src/headers.test.ts packages/runtime/src/mutation-targets.test.ts packages/runtime/src/fragment-targets.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts`.
@@ -57,7 +57,7 @@ that still make the simplified Commerce example feel like a test fixture.
 ## Track A: Readable Commerce
 
 - [x] Remove legacy direct-render entry points from Commerce app source or move
-  them behind package/conformance fixtures.
+      them behind package/conformance fixtures.
   - Current friction: `examples/commerce/src/app.ts` still exports direct helpers
     such as `renderCartPage`, `renderProductGrid`, `submitAddToCart`, and
     no-JS submit helpers that duplicate app-shell responsibilities.
@@ -142,15 +142,15 @@ that still make the simplified Commerce example feel like a test fixture.
     `corepack pnpm exec vitest run packages/conformance-fixtures/src/derivation-fixtures.test.ts packages/drizzle/src/derive.test.ts packages/runtime/src/apply-mutation-response-delta.test.ts packages/server/src/mutation-delta.test.ts packages/test/src/derivation-pglite.test.ts`,
     and `corepack pnpm exec vitest run examples/commerce/src/source-truth.test.ts`.
 
-| Commerce assertion | new owner | command | reason it is no longer example-local |
-| --- | --- | --- | --- |
-| Generated component IR freshness from `examples/commerce/src/app.rendering.test.ts` | `packages/compiler/src/compiler-conformance.test.ts` | `corepack pnpm exec vitest run packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/spec-coverage-map.test.ts` | `SPEC.md` §5.2 makes TSX lowering, fixpoint, and render equivalence compiler behavior; Commerce now relies on `emit-components -- --check` for artifact freshness. |
-| Broad generated graph equality and `kovo-check` facts from `examples/commerce/src/source-truth.test.ts` | `packages/conformance-fixtures/src/graph-fixtures.test.ts`, `packages/compiler/src/spec-coverage-map.test.ts`, and CLI kovo-check coverage | `corepack pnpm exec vitest run packages/compiler/src/spec-coverage-map.test.ts packages/conformance-fixtures/src/graph-fixtures.test.ts packages/cli/src/index.kovo-check.test.ts` | Static graph shape and diagnostic acceptance are framework proof surfaces; Commerce keeps one `cart/add` explain smoke showing the example is wired. |
-| Derived optimism commuting diagrams from `examples/commerce/src/derivation-commuting.test.ts` | `packages/conformance-fixtures/src/derivation-fixtures.test.ts`, `packages/drizzle/src/derive.test.ts`, and `packages/test/src/derivation-pglite.test.ts` | `corepack pnpm exec vitest run packages/conformance-fixtures/src/derivation-fixtures.test.ts packages/drizzle/src/derive.test.ts packages/test/src/derivation-pglite.test.ts` | `SPEC.md` §10.5 assigns algebra soundness to the deriver; Commerce only needs the explain summary `total=3 derived=3`. |
-| Query-delta internals from `examples/commerce/src/queries-delta.test.ts` | `packages/server/src/mutation-delta.test.ts` and `packages/runtime/src/apply-mutation-response-delta.test.ts` | `corepack pnpm exec vitest run packages/runtime/src/apply-mutation-response-delta.test.ts packages/server/src/mutation-delta.test.ts` | `SPEC.md` §9.1.1 delta selection, merge, and build-token fallback are protocol/runtime behavior, not Commerce scenario behavior. |
-| App-shell command matrix and Vite delegation in `examples/commerce/src/app-shell.test.ts` | `packages/server/src/vite-dev-middleware.test.ts`, `packages/server/src/node.test.ts`, and server app dispatch tests | `corepack pnpm exec vitest run packages/server/src/vite-dev-middleware.test.ts packages/server/src/node.test.ts examples/commerce/src/app-shell.test.ts` | `SPEC.md` §9.5 makes request-shell dispatch and dev middleware package behavior; Commerce now keeps HTTP user-flow smokes only. |
-| Fragment header grammar and live-target internals in Commerce shell/add-to-cart tests | `packages/test/src/headers.test.ts`, `packages/runtime/src/mutation-targets.test.ts`, `packages/runtime/src/fragment-targets.test.ts`, `packages/server/src/live-target-registry.test.ts`, `packages/server/src/mutation-wire.test.ts`, and `packages/server/src/mutation-response.test.ts` | `corepack pnpm exec vitest run packages/test/src/headers.test.ts packages/runtime/src/mutation-targets.test.ts packages/runtime/src/fragment-targets.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts` | `SPEC.md` §9.1 owns `Kovo-Targets` / `Kovo-Live-Targets`; app examples assert visible cart, stock, order, and validation behavior while `@kovojs/test` owns scenario header construction. |
-| Expected vs unexpected fragment error-boundary proof using `renderFaults` | `packages/server/src/live-target-renderer.test.tsx`, `packages/server/src/component-render.test.tsx`, `packages/server/src/route-jsx.test.tsx`, and `packages/server/src/mutation-response.test.ts` | `corepack pnpm exec vitest run packages/server/src/live-target-renderer.test.tsx packages/server/src/component-render.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/mutation-response.test.ts` | `SPEC.md` §9.2 makes expected failure forms typed and unexpected render failures server/component behavior; Commerce request types no longer carry test-only fault hooks. |
+| Commerce assertion                                                                                      | new owner                                                                                                                                                                                                                                                                                   | command                                                                                                                                                                                                                                                                                                | reason it is no longer example-local                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generated component IR freshness from `examples/commerce/src/app.rendering.test.ts`                     | `packages/compiler/src/compiler-conformance.test.ts`                                                                                                                                                                                                                                        | `corepack pnpm exec vitest run packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/spec-coverage-map.test.ts`                                                                                                                                                                     | `SPEC.md` §5.2 makes TSX lowering, fixpoint, and render equivalence compiler behavior; Commerce now relies on `emit-components -- --check` for artifact freshness.                        |
+| Broad generated graph equality and `kovo-check` facts from `examples/commerce/src/source-truth.test.ts` | `packages/conformance-fixtures/src/graph-fixtures.test.ts`, `packages/compiler/src/spec-coverage-map.test.ts`, and CLI kovo-check coverage                                                                                                                                                  | `corepack pnpm exec vitest run packages/compiler/src/spec-coverage-map.test.ts packages/conformance-fixtures/src/graph-fixtures.test.ts packages/cli/src/index.kovo-check.test.ts`                                                                                                                     | Static graph shape and diagnostic acceptance are framework proof surfaces; Commerce keeps one `cart/add` explain smoke showing the example is wired.                                      |
+| Derived optimism commuting diagrams from `examples/commerce/src/derivation-commuting.test.ts`           | `packages/conformance-fixtures/src/derivation-fixtures.test.ts`, `packages/drizzle/src/derive.test.ts`, and `packages/test/src/derivation-pglite.test.ts`                                                                                                                                   | `corepack pnpm exec vitest run packages/conformance-fixtures/src/derivation-fixtures.test.ts packages/drizzle/src/derive.test.ts packages/test/src/derivation-pglite.test.ts`                                                                                                                          | `SPEC.md` §10.5 assigns algebra soundness to the deriver; Commerce only needs the explain summary `total=3 derived=3`.                                                                    |
+| Query-delta internals from `examples/commerce/src/queries-delta.test.ts`                                | `packages/server/src/mutation-delta.test.ts` and `packages/runtime/src/apply-mutation-response-delta.test.ts`                                                                                                                                                                               | `corepack pnpm exec vitest run packages/runtime/src/apply-mutation-response-delta.test.ts packages/server/src/mutation-delta.test.ts`                                                                                                                                                                  | `SPEC.md` §9.1.1 delta selection, merge, and build-token fallback are protocol/runtime behavior, not Commerce scenario behavior.                                                          |
+| App-shell command matrix and Vite delegation in `examples/commerce/src/app-shell.test.ts`               | `packages/server/src/vite-dev-middleware.test.ts`, `packages/server/src/node.test.ts`, and server app dispatch tests                                                                                                                                                                        | `corepack pnpm exec vitest run packages/server/src/vite-dev-middleware.test.ts packages/server/src/node.test.ts examples/commerce/src/app-shell.test.ts`                                                                                                                                               | `SPEC.md` §9.5 makes request-shell dispatch and dev middleware package behavior; Commerce now keeps HTTP user-flow smokes only.                                                           |
+| Fragment header grammar and live-target internals in Commerce shell/add-to-cart tests                   | `packages/test/src/headers.test.ts`, `packages/runtime/src/mutation-targets.test.ts`, `packages/runtime/src/fragment-targets.test.ts`, `packages/server/src/live-target-registry.test.ts`, `packages/server/src/mutation-wire.test.ts`, and `packages/server/src/mutation-response.test.ts` | `corepack pnpm exec vitest run packages/test/src/headers.test.ts packages/runtime/src/mutation-targets.test.ts packages/runtime/src/fragment-targets.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts` | `SPEC.md` §9.1 owns `Kovo-Targets` / `Kovo-Live-Targets`; app examples assert visible cart, stock, order, and validation behavior while `@kovojs/test` owns scenario header construction. |
+| Expected vs unexpected fragment error-boundary proof using `renderFaults`                               | `packages/server/src/live-target-renderer.test.tsx`, `packages/server/src/component-render.test.tsx`, `packages/server/src/route-jsx.test.tsx`, and `packages/server/src/mutation-response.test.ts`                                                                                         | `corepack pnpm exec vitest run packages/server/src/live-target-renderer.test.tsx packages/server/src/component-render.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/mutation-response.test.ts`                                                                                   | `SPEC.md` §9.2 makes expected failure forms typed and unexpected render failures server/component behavior; Commerce request types no longer carry test-only fault hooks.                 |
 
 - [x] Move generated component/route IR freshness checks out of Commerce tests.
   - SPEC link: `SPEC.md` §5.2 requires lowered IR to stay authorable and
@@ -175,7 +175,7 @@ that still make the simplified Commerce example feel like a test fixture.
     `examples/commerce/src/app.add-to-cart.test.ts`. Package commands above
     prove the contract fixtures and real-PGlite commuting suite, while
     `examples/commerce/src/source-truth.test.ts` keeps the `OPTIMISTIC-SUMMARY
-    total=3 derived=3` smoke.
+total=3 derived=3` smoke.
 - [x] Move app-shell middleware and command-matrix proof to server/app-shell tests.
   - SPEC link: `SPEC.md` §9.5 defines the request shell and app entry behavior.
   - Remedy: package/server tests own Vite delegation, Node handler conversion,
@@ -238,7 +238,7 @@ that still make the simplified Commerce example feel like a test fixture.
     exits 1 with no matches. `corepack pnpm exec vitest run packages/compiler/src/compile-component.test.ts --testNamePattern "app-local generated|non-public Kovo|dynamic imports"`
     passes, covering KV235 for app-authored app-local generated imports.
 - [x] **Deficiency 2: mutation failure response policy is too broad and too
-  manual.**
+      manual.**
   - Current symptom: `createCommerceAppShell()` has a key switch for sign-in,
     sign-out, and add-to-cart response policy; direct helpers repeat
     `renderFailurePage` and `renderFailureFragment` logic.
@@ -257,10 +257,10 @@ that still make the simplified Commerce example feel like a test fixture.
     - form/route-local defaults for expected failure rendering,
     - app-level overrides only as an escape hatch for unusual cross-cutting
       response behavior.
-    Enhanced and no-JS failure rendering should default to the submitted
-    form/route context. Add a route/form-local failure-page default that can
-    reconstruct the containing route and bind `forms.<mutation>.failure` without
-    bespoke `renderFailurePage` / `renderFailureFragment` functions.
+      Enhanced and no-JS failure rendering should default to the submitted
+      form/route context. Add a route/form-local failure-page default that can
+      reconstruct the containing route and bind `forms.<mutation>.failure` without
+      bespoke `renderFailurePage` / `renderFailureFragment` functions.
   - Handler return-value rule: mutation handlers should return domain/change
     values and typed failures (`context.fail(...)`) by default. Allow
     `context.redirect(...)` only as an explicit escape hatch for dynamic
@@ -283,7 +283,7 @@ that still make the simplified Commerce example feel like a test fixture.
     `rg -n "mutationResponses|commerceClientModuleHref|createMemoryVersionedClientModuleRegistry|CsrfValidationOptions|authRedirectTo|clientModules," examples/commerce/src/app-shell.tsx examples/commerce/src/generated/app-shell.kovo-route.tsx`
     exiting 1.
 - [x] **Deficiency 3: request-scoped form data and CSRF are exposed as component
-  slots.**
+      slots.**
   - Current symptom: `ProductGridRenderSlots` carries `request` and
     `forms.addToCart.failure`; `renderAddToCartForm()` receives request solely
     to emit CSRF and failure UI.
@@ -323,7 +323,7 @@ that still make the simplified Commerce example feel like a test fixture.
     `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/mutation-endpoint.test.ts packages/server/src/live-target-renderer.test.tsx`,
     the focused Commerce scenario suite, and the no-match ProductGrid scan above.
 - [x] **Deficiency 4: component/live-target error boundaries are not first-class
-  authoring.**
+      authoring.**
   - Current symptom: `scripts/emit-components.mjs` splices a Commerce-specific
     ProductGrid live-target adapter with an error boundary and a test fault hook.
   - Why it matters: `SPEC.md` §9.2 distinguishes expected mutation failures from
@@ -354,7 +354,7 @@ that still make the simplified Commerce example feel like a test fixture.
     tests prove per-island fragment error boundaries.
   - Evidence: `examples/commerce/src/app-shell.tsx` authors `<ErrorBoundary fallback={<ProductGridError />}>`; `examples/commerce/src/components/product-grid.tsx` declares the same fallback for generated live-target rendering. `corepack pnpm exec vitest run packages/server/src/live-target-renderer.test.tsx packages/server/src/component-render.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/mutation-response.test.ts` passes, including per-island generated live-target fragment fallback. `corepack pnpm --filter @kovojs/example-commerce run emit-components -- --check` passes. `rg -n "withCommerceProductGridLiveTargetAdapter|renderFaults|ProductGrid\\$commerceLiveTargetRenderer" examples/commerce packages scripts` exits 1.
 - [x] **Deficiency 5: direct endpoint helper APIs invite app-level wire
-  reconstruction.**
+      reconstruction.**
   - Current symptom: Commerce exports `submitAddToCart`,
     `submitAddToCartNoJs`, `submitCommerceSignInNoJs`, and
     `submitCommerceSignOutNoJs`, each manually passing CSRF, headers, redirects,
@@ -367,6 +367,7 @@ that still make the simplified Commerce example feel like a test fixture.
     drives the real app `RequestHandler` instead of bypassing it. Commerce tests
     should express user actions such as route render, form submit, enhanced form
     submit, login, and logout through that utility:
+
     ```ts
     const testApp = createKovoTestClient(createCommerceAppShell().requestHandler);
 
@@ -377,9 +378,11 @@ that still make the simplified Commerce example feel like a test fixture.
       session: userSession,
     });
     ```
+
     The utility may automate form encoding, cookies, CSRF extraction/submission,
     and enhanced headers, but it must still send `Request` objects through the
     app handler so tests cover the same path users hit.
+
   - Package-test ownership: server/runtime tests own direct
     `renderMutationEndpointResponse` behavior, `Kovo-Targets` /
     `Kovo-Live-Targets` grammar, no-JS 303s, enhanced fragment envelopes, 422
@@ -395,8 +398,9 @@ that still make the simplified Commerce example feel like a test fixture.
     exiting 1. Commerce scenario tests now use
     `enhancedMutationHeaders()` from `@kovojs/test/headers`, so generated
     enhanced request header names are package-owned.
+
 - [x] **Deficiency 6: graph and derivation facts still require example-local
-  generated plumbing.**
+      generated plumbing.**
   - Current symptom: Commerce app exports `commerceTouchGraph`,
     `commerceQueryDomains`, `commerceGraph`, and `addToCartOptimistic` from
     generated files so tests and docs can prove graph behavior.
@@ -463,72 +467,72 @@ that still make the simplified Commerce example feel like a test fixture.
 ## Verification Gate
 
 - [x] Run focused Commerce checks after each simplification slice:
-  `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
-  `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`, and the
-  reduced Commerce scenario suite.
+      `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+      `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`, and the
+      reduced Commerce scenario suite.
   - Evidence: focused scenario checks ran as
     `corepack pnpm exec vitest run examples/commerce/src/source-truth.test.ts examples/commerce/src/app.rendering.test.ts`;
     emit freshness commands are recorded in latest verification below.
 - [x] Run the moved package/conformance checks named by Track B before deleting
-  or weakening any Commerce-local proof assertion.
+      or weakening any Commerce-local proof assertion.
   - Evidence: package owner commands named in the completed Track B items passed
     before deleting Commerce-local generated-artifact proof files, including
     `examples/commerce/src/form-registry.test.ts`.
 - [x] Run root gates before marking this plan complete:
-  `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
-  `node scripts/api-surface-gate.mjs`, and `git diff --check`.
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+      `node scripts/api-surface-gate.mjs`, and `git diff --check`.
   - Evidence: latest verification below records all three commands passing.
 
 Latest verification:
 
 - [x] `pnpm --filter @kovojs/example-commerce run emit-components -- --check`
-  passed after the framework form-context and Commerce ProductGrid cleanup.
+      passed after the framework form-context and Commerce ProductGrid cleanup.
 - [x] `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`
-  passed after regenerating graph/touch artifacts.
+      passed after regenerating graph/touch artifacts.
 - [x] `pnpm exec vitest --run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/source-truth.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.rendering.test.ts examples/commerce/src/app.auth.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/registry.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/mutation-endpoint.test.ts packages/server/src/live-target-renderer.test.tsx`
-  passed.
+      passed.
 - [x] `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` passed.
 - [x] `node scripts/api-surface-gate.mjs` passed with
-  `public-exports-needing-attention=2002 (baseline=2007, fixed-this-run=5)`.
+      `public-exports-needing-attention=2002 (baseline=2007, fixed-this-run=5)`.
 - [x] `git diff --check` passed.
 
 - [x] `corepack pnpm --filter @kovojs/example-commerce run emit-components -- --check`
-  passed after regenerating stale generated route IR with
-  `corepack pnpm --filter @kovojs/example-commerce run emit-components`.
+      passed after regenerating stale generated route IR with
+      `corepack pnpm --filter @kovojs/example-commerce run emit-components`.
 - [x] `corepack pnpm --filter @kovojs/example-commerce run emit-graph -- --check`
-  passed.
+      passed.
 - [x] `corepack pnpm exec vitest run examples/commerce/src/source-truth.test.ts examples/commerce/src/app.rendering.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/spec-coverage-map.test.ts`
-  passed.
+      passed.
 - [x] `corepack pnpm exec vitest run packages/conformance-fixtures/src/derivation-fixtures.test.ts packages/drizzle/src/derive.test.ts packages/runtime/src/apply-mutation-response-delta.test.ts packages/server/src/mutation-delta.test.ts packages/test/src/derivation-pglite.test.ts`
-  passed.
+      passed.
 - [x] `corepack pnpm exec vitest run packages/server/src/vite-dev-middleware.test.ts packages/server/src/node.test.ts examples/commerce/src/app-shell.test.ts`
-  passed after moving app-shell command-matrix proof into server tests.
+      passed after moving app-shell command-matrix proof into server tests.
 - [x] `git diff --check` passed.
 - [x] `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`
-  passed.
+      passed.
 - [x] `node scripts/api-surface-gate.mjs` passed with
-  `public-exports-needing-attention=2002 (baseline=2007, fixed-this-run=5)`.
+      `public-exports-needing-attention=2002 (baseline=2007, fixed-this-run=5)`.
 - [x] `corepack pnpm exec vitest run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/enhanced-navigation.test.ts`
-  passed after removing the Commerce-local generated optimism proof and reducing
-  the shell HTTP test to visible enhanced/no-JS behavior.
+      passed after removing the Commerce-local generated optimism proof and reducing
+      the shell HTTP test to visible enhanced/no-JS behavior.
 - [x] `corepack pnpm exec vitest run packages/test/src/headers.test.ts examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts packages/compiler/src/spec-coverage-map.test.ts`
-  passed after moving enhanced target header formatting behind structured
-  `@kovojs/test/headers` options.
+      passed after moving enhanced target header formatting behind structured
+      `@kovojs/test/headers` options.
 - [x] `corepack pnpm exec vitest run examples/commerce/src/app.auth.test.ts`
-  passed with the Commerce scenario helper exercising the compiled route
-  artifact used by dev/build.
+      passed with the Commerce scenario helper exercising the compiled route
+      artifact used by dev/build.
 - [x] `corepack pnpm exec vitest run packages/compiler/src/compile-component.test.ts --testNamePattern "app-local generated|non-public Kovo|dynamic imports"`
-  passed, covering KV235 for app-authored app-local generated imports.
+      passed, covering KV235 for app-authored app-local generated imports.
 - [x] `corepack pnpm --filter @kovojs/example-commerce run emit-components -- --check`
-  passed after moving login rendering to `LoginForm` and regenerating the
-  compiled route artifact.
+      passed after moving login rendering to `LoginForm` and regenerating the
+      compiled route artifact.
 - [x] `corepack pnpm --filter @kovojs/example-commerce run emit-graph -- --check`
-  passed after moving graph construction out of app-authored Commerce source and
-  regenerating graph/touch artifacts.
+      passed after moving graph construction out of app-authored Commerce source and
+      regenerating graph/touch artifacts.
 - [x] `corepack pnpm exec vitest run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.auth.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/app.rendering.test.ts examples/commerce/src/enhanced-navigation.test.ts examples/commerce/src/source-truth.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/spec-coverage-map.test.ts packages/conformance-fixtures/src/graph-fixtures.test.ts packages/cli/src/index.kovo-check.test.ts`
-  passed, covering Commerce scenarios plus the package owners for generated
-  component/route IR, graph fixtures, and CLI graph checks.
+      passed, covering Commerce scenarios plus the package owners for generated
+      component/route IR, graph fixtures, and CLI graph checks.
 - [x] `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false` passed.
 - [x] `node scripts/api-surface-gate.mjs` passed with
-  `public-exports-needing-attention=1993 (baseline=2007, fixed-this-run=14)`.
+      `public-exports-needing-attention=1993 (baseline=2007, fixed-this-run=14)`.
 - [x] `git diff --check` passed.

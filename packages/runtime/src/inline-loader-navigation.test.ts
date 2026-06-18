@@ -101,16 +101,7 @@ async function withEnhancedNavigationHarness(
     importModule: () => Promise<Record<string, unknown>>,
     globalRecord: Record<string, unknown>,
   ) => void,
-  {
-    assert,
-    act,
-    currentDocument,
-    documents,
-    fetch,
-    href = 'http://app.test/cart',
-    hrefs,
-    locationHref = 'http://app.test/products',
-  }: {
+  options: {
     assert(args: {
       assign: ReturnType<typeof vi.fn>;
       dispatchEvent: ReturnType<typeof vi.fn>;
@@ -136,6 +127,14 @@ async function withEnhancedNavigationHarness(
     locationHref?: string;
   },
 ): Promise<void> {
+  const {
+    currentDocument,
+    documents,
+    fetch,
+    href = 'http://app.test/cart',
+    hrefs,
+    locationHref = 'http://app.test/products',
+  } = options;
   const globalRecord = globalThis as unknown as Record<string, unknown>;
   const originals = {
     addEventListener: globalRecord.addEventListener,
@@ -191,8 +190,8 @@ async function withEnhancedNavigationHarness(
     globalRecord.setTimeout = vi.fn();
 
     installSource(async () => ({}), globalRecord);
-    if (act) {
-      await act({ listeners, location: locationRecord, preventDefault });
+    if (options.act) {
+      await options.act({ listeners, location: locationRecord, preventDefault });
     } else {
       for (const clickHref of hrefs ?? [href]) {
         await listeners.get('click')?.({
@@ -212,7 +211,7 @@ async function withEnhancedNavigationHarness(
       }
     }
 
-    await assert({ assign, dispatchEvent, preventDefault, pushState, scrollTo });
+    await options.assert({ assign, dispatchEvent, preventDefault, pushState, scrollTo });
   } finally {
     Object.assign(globalRecord, {
       addEventListener: originals.addEventListener,
@@ -622,11 +621,7 @@ describe('inline loader enhanced navigation fallback', () => {
             expect(replaceWith).toHaveBeenCalledWith(targetDocument.body);
           });
           expect(preventDefault).toHaveBeenCalledTimes(1);
-          expect(pushState).toHaveBeenCalledWith(
-            {},
-            '',
-            'http://app.test/login?next=%2Fadmin',
-          );
+          expect(pushState).toHaveBeenCalledWith({}, '', 'http://app.test/login?next=%2Fadmin');
         },
       });
     },
@@ -634,64 +629,59 @@ describe('inline loader enhanced navigation fallback', () => {
 
   it.each(
     inlineSourceInstallCases.flatMap(([name, installSource]) =>
-      [403, 404, 500].map(
-        (status) => [status, name, installSource] as const,
-      ),
+      [403, 404, 500].map((status) => [status, name, installSource] as const),
     ),
-  )(
-    'morphs server-rendered %i HTML shells through %s',
-    async (status, _name, installSource) => {
-      const replaceWith = vi.fn();
-      const currentLayout = new TestNavSegment(
-        {
-          'kovo-nav-components': '',
-          'kovo-nav-kind': 'layout',
-          'kovo-nav-name': 'Admin',
-          'kovo-nav-queries': '',
-          'kovo-nav-segment': 'layout:Admin',
-        },
-        '<main><section>Admin</section></main>',
-      );
-      const targetLayout = new TestNavSegment(
-        {
-          'kovo-nav-components': '',
-          'kovo-nav-kind': 'layout',
-          'kovo-nav-name': 'Boundary',
-          'kovo-nav-queries': '',
-          'kovo-nav-segment': `layout:Boundary:${status}`,
-        },
-        `<main><section>${status}</section></main>`,
-      );
-      const targetDocument = createTestShell({ segments: [targetLayout] });
-      let currentDocument: ReturnType<typeof createTestShell>;
-      currentDocument = createTestShell({
-        replaceWith: (nextBody) => {
-          replaceWith(nextBody);
-          currentDocument.body = nextBody as typeof currentDocument.body;
-        },
-        segments: [currentLayout],
-      });
+  )('morphs server-rendered %i HTML shells through %s', async (status, _name, installSource) => {
+    const replaceWith = vi.fn();
+    const currentLayout = new TestNavSegment(
+      {
+        'kovo-nav-components': '',
+        'kovo-nav-kind': 'layout',
+        'kovo-nav-name': 'Admin',
+        'kovo-nav-queries': '',
+        'kovo-nav-segment': 'layout:Admin',
+      },
+      '<main><section>Admin</section></main>',
+    );
+    const targetLayout = new TestNavSegment(
+      {
+        'kovo-nav-components': '',
+        'kovo-nav-kind': 'layout',
+        'kovo-nav-name': 'Boundary',
+        'kovo-nav-queries': '',
+        'kovo-nav-segment': `layout:Boundary:${status}`,
+      },
+      `<main><section>${status}</section></main>`,
+    );
+    const targetDocument = createTestShell({ segments: [targetLayout] });
+    let currentDocument: ReturnType<typeof createTestShell>;
+    currentDocument = createTestShell({
+      replaceWith: (nextBody) => {
+        replaceWith(nextBody);
+        currentDocument.body = nextBody as typeof currentDocument.body;
+      },
+      segments: [currentLayout],
+    });
 
-      await withEnhancedNavigationHarness(installSource, {
-        currentDocument,
-        documents: [targetDocument],
-        fetch: vi.fn(async () => ({
-          headers: { get: () => 'text/html' },
-          status,
-          text: async () => '<!doctype html><html></html>',
-          url: 'http://app.test/admin',
-        })),
-        href: 'http://app.test/admin',
-        async assert({ preventDefault, pushState }) {
-          await vi.waitFor(() => {
-            expect(replaceWith).toHaveBeenCalledWith(targetDocument.body);
-          });
-          expect(preventDefault).toHaveBeenCalledTimes(1);
-          expect(pushState).toHaveBeenCalledWith({}, '', 'http://app.test/admin');
-        },
-      });
-    },
-  );
+    await withEnhancedNavigationHarness(installSource, {
+      currentDocument,
+      documents: [targetDocument],
+      fetch: vi.fn(async () => ({
+        headers: { get: () => 'text/html' },
+        status,
+        text: async () => '<!doctype html><html></html>',
+        url: 'http://app.test/admin',
+      })),
+      href: 'http://app.test/admin',
+      async assert({ preventDefault, pushState }) {
+        await vi.waitFor(() => {
+          expect(replaceWith).toHaveBeenCalledWith(targetDocument.body);
+        });
+        expect(preventDefault).toHaveBeenCalledTimes(1);
+        expect(pushState).toHaveBeenCalledWith({}, '', 'http://app.test/admin');
+      },
+    });
+  });
 
   it.each(inlineSourceInstallCases)(
     'ignores stale target documents when a newer navigation wins through %s',

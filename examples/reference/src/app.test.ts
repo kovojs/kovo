@@ -18,6 +18,7 @@ import {
   renderReferenceLoginForm,
   renderReferenceLogoutForm,
   type ReferenceAuthBindings,
+  type ReferenceBetterAuth,
   type ReferenceRequest,
 } from './app.js';
 
@@ -72,14 +73,9 @@ async function submitReferenceSignOutNoJs(
   request: ReferenceRequest,
   auth: ReferenceAuthBindings = referenceAuth,
 ) {
-  const result = await runMutation(
-    auth.signOut,
-    { csrf: referenceAuthToken(request) },
-    request,
-    {
-      sessionProvider: auth.sessionProvider,
-    },
-  );
+  const result = await runMutation(auth.signOut, { csrf: referenceAuthToken(request) }, request, {
+    sessionProvider: auth.sessionProvider,
+  });
 
   if (!result.ok) {
     return {
@@ -332,7 +328,7 @@ describe('reference auth adoption', () => {
 
   it('drives the reference app bindings with real pinned Better Auth', async () => {
     const realAuth = createRealReferenceAuth();
-    const auth = createReferenceAuth(realAuth);
+    const auth = createReferenceAuth(realAuth as unknown as ReferenceBetterAuth);
 
     await realAuth.api.signUpEmail({
       asResponse: true,

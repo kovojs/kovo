@@ -1,11 +1,4 @@
-import {
-  createApp,
-  domain,
-  mutation,
-  query,
-  route,
-  s,
-} from '@kovojs/server';
+import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { runQuery } from '@kovojs/server/internal/execution';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -97,22 +90,23 @@ const app = createApp({
   mutations: [bulkRestock],
   queries: [productP1Query, productP2Query],
   routes: [home],
-  mutationResponse: ({ key, request }) => {
-    if (key !== bulkRestock.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [
-        {
-          render: async () => renderPanel(await readProductPanel(db, 'p1', 'Pen')),
-          target: 'product-p1',
-        },
-        {
-          render: async () => renderPanel(await readProductPanel(db, 'p2', 'Notebook')),
-          target: 'product-p2',
-        },
-      ],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [bulkRestock.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [
+          {
+            render: async () => renderPanel(await readProductPanel(db, 'p1', 'Pen')),
+            target: 'product-p1',
+          },
+          {
+            render: async () => renderPanel(await readProductPanel(db, 'p2', 'Notebook')),
+            target: 'product-p2',
+          },
+        ],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

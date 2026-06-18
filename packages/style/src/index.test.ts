@@ -208,9 +208,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
 
     expect(tokens.sys.color.primary).toBe('var(--kovo-theme-sys-color-primary)');
     expect(tokens.ref.palette.primary[40]).toBe('var(--kovo-theme-ref-palette-primary-40)');
-    expect(tokens.customColor('success').onColor).toBe(
-      'var(--kovo-theme-custom-success-on-color)',
-    );
+    expect(tokens.customColor('success').onColor).toBe('var(--kovo-theme-custom-success-on-color)');
     expect(styles.root.__rules?.map((rule) => rule.value)).toContain(
       'var(--kovo-theme-sys-color-primary)',
     );

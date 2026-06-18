@@ -143,7 +143,8 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
     flags: [
       {
         flag: '--out <dir>',
-        description: 'Destination directory for the copied component (default: project components dir).',
+        description:
+          'Destination directory for the copied component (default: project components dir).',
       },
     ],
     examples: ['kovo add button', 'kovo add button card --out src/components/ui'],
@@ -154,7 +155,10 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
     usage: BUILD_USAGE,
     async: true,
     flags: [
-      { flag: '--out <dir>', description: 'Output directory for the neutral and preset artifacts.' },
+      {
+        flag: '--out <dir>',
+        description: 'Output directory for the neutral and preset artifacts.',
+      },
       {
         flag: '--preset <name>',
         description:
@@ -261,7 +265,8 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
       },
       {
         flag: '--stylesheet-env <name>',
-        description: 'Set an environment variable to the manifest stylesheet href before loading the app.',
+        description:
+          'Set an environment variable to the manifest stylesheet href before loading the app.',
       },
       {
         flag: '--skip-non-exportable',

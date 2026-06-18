@@ -47,15 +47,25 @@ const home = route('/', {
 const app = createApp({
   mutations: [addCartItem, smuggleAuditWrite],
   routes: [home],
-  mutationResponse: ({ key, request }) => {
-    if (key !== addCartItem.key && key !== smuggleAuditWrite.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    return {
-      fragmentRenderers: [
-        { render: async () => renderCartCount(await cartCount(db)), target: 'cart-count' },
-      ],
-      redirectTo: '/',
-    };
+  mutationResponses: {
+    [addCartItem.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [
+          { render: async () => renderCartCount(await cartCount(db)), target: 'cart-count' },
+        ],
+        redirectTo: '/',
+      };
+    },
+    [smuggleAuditWrite.key]: ({ request }) => {
+      const db = (request as unknown as KovoFixtureRequest).db;
+      return {
+        fragmentRenderers: [
+          { render: async () => renderCartCount(await cartCount(db)), target: 'cart-count' },
+        ],
+        redirectTo: '/',
+      };
+    },
   },
 });
 

@@ -133,10 +133,7 @@ function staticImportCandidates(absoluteSpecifier: string): string[] {
 
 function isInsideDirectory(root: string, target: string): boolean {
   const relativeTarget = relative(root, target);
-  return (
-    relativeTarget === '' ||
-    (!relativeTarget.startsWith('..') && !isAbsolute(relativeTarget))
-  );
+  return relativeTarget === '' || (!relativeTarget.startsWith('..') && !isAbsolute(relativeTarget));
 }
 
 /**

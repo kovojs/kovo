@@ -32,16 +32,7 @@ export function DocsRoutePage({
   clients: ClientHrefs;
   page: DocsRoutePageData;
 }): string {
-  const {
-    activePath,
-    apiSidebar,
-    content,
-    eyebrow,
-    groups,
-    headings = [],
-    next,
-    prev,
-  } = page;
+  const { activePath, apiSidebar, content, eyebrow, groups, headings = [], next, prev } = page;
   const sidebar = DocsSidebar.definition.render({ activePath, groups });
   const toc = apiSidebar ? ApiSidebar.definition.render({ apiSidebar }) : renderToc(headings);
 

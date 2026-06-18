@@ -1,7 +1,4 @@
-export type {
-  DiagnosticCode,
-  DiagnosticSeverity,
-} from './diagnostics.js';
+export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
 export type {
   FileSystemStorageOptions,
   MemoryStorageOptions,
@@ -57,8 +54,15 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
-/** Opaque result of a component's `render` — the compiler lowers it to HTML/IR. */
-export type ComponentRenderResult = unknown;
+/** Opaque non-callback result of a component's `render` — the compiler lowers it to HTML/IR. */
+export type ComponentRenderResult =
+  | boolean
+  | null
+  | number
+  | readonly ComponentRenderResult[]
+  | string
+  | undefined
+  | { readonly [key: string]: unknown };
 
 /** Props accepted by the server-bound `<ErrorBoundary />` render fallback helper. */
 export interface ErrorBoundaryProps {
@@ -73,10 +77,7 @@ export interface ComponentErrorBoundary {
   target?: string;
 }
 
-type ComponentMutationDefinitions = Record<
-  string,
-  Form<string, Record<string, JsonValue>, unknown>
->;
+type ComponentMutationDefinitions = Record<string, Form<string, any, any>>;
 type NoComponentMutations = Record<never, never>;
 type ComponentDefinitionMutations<Definition> = Definition extends { mutations: infer Mutations }
   ? Mutations extends ComponentMutationDefinitions
@@ -153,6 +154,7 @@ type ComponentDefinitionShape = Omit<ComponentDefinitionInput, 'mutations' | 're
 
 /** A component descriptor returned by `component()`; the compiler injects `name` after derivation. */
 export interface Component<Definition extends ComponentDefinitionInput> {
+  (props?: Record<string, unknown>): any;
   definition: Definition;
   name?: string;
 }
@@ -189,7 +191,15 @@ export function component<const Definition extends ComponentDefinitionShape>(
     ) => any;
   },
 ): Component<Definition> {
-  return { definition };
+  const descriptor = (() => undefined) as Component<Definition>;
+  Object.defineProperty(descriptor, 'name', {
+    configurable: true,
+    enumerable: true,
+    value: undefined,
+    writable: true,
+  });
+  descriptor.definition = definition;
+  return descriptor;
 }
 
 /**
@@ -492,7 +502,7 @@ export interface FieldErrorProps<Failure = unknown> {
   code?: string | readonly string[];
   failure?: Failure | null;
   id?: string;
-  message?: unknown | ((failure: Failure) => unknown);
+  message?: ComponentRenderResult | ((failure: any) => ComponentRenderResult);
   name: string;
   role?: string;
   [attribute: string]: unknown;
@@ -505,7 +515,7 @@ export interface FormErrorProps<Failure = unknown> {
   code?: string | readonly string[];
   failure?: Failure | null;
   id?: string;
-  message?: unknown | ((failure: Failure) => unknown);
+  message?: ComponentRenderResult | ((failure: any) => ComponentRenderResult);
   role?: string;
   [attribute: string]: unknown;
 }
@@ -564,10 +574,10 @@ type RegistryMutationInput<Key extends string> = Key extends keyof MutationRegis
   : Record<string, JsonValue>;
 
 type RegistryMutationFailure<Key extends string> = Key extends keyof MutationRegistry
-  ? MutationRegistry[Key] extends Form<string, Record<string, JsonValue>, infer Failure>
-    ? Failure
-    : MutationRegistry[Key] extends { errors?: infer Errors }
-      ? MutationErrorFailures<Errors>
+  ? MutationRegistry[Key] extends { errors: infer Errors }
+    ? MutationErrorFailures<Errors>
+    : MutationRegistry[Key] extends Form<string, any, infer Failure>
+      ? Failure
       : JsonValue
   : JsonValue;
 
@@ -587,20 +597,18 @@ export type FormInput<Definition> =
 
 /** Extract the failure type of a `Form`, unioned with the built-in validation failure. */
 export type FormFailure<Definition> =
-  Definition extends Form<string, Record<string, JsonValue>, infer Failure>
-    ? Failure | FormValidationFailure
-    : never;
+  Definition extends Form<string, any, infer Failure> ? Failure | FormValidationFailure : never;
 
 /** The string-literal union of a form's field names. */
 export type FormFieldName<Definition> = Extract<keyof FormInput<Definition>, string>;
 
 type MissingFormFields<
-  Definition extends Form<string, Record<string, JsonValue>, unknown>,
+  Definition extends Form<string, any, unknown>,
   Fields extends readonly string[],
 > = Exclude<FormFieldName<Definition>, Fields[number]>;
 
 type CompleteFormFields<
-  Definition extends Form<string, Record<string, JsonValue>, unknown>,
+  Definition extends Form<string, any, unknown>,
   Fields extends readonly FormFieldName<Definition>[],
 > =
   MissingFormFields<Definition, Fields> extends never
@@ -666,7 +674,7 @@ export const form = Object.assign(createMutationForm, {
  * @returns The same `fields` tuple, typed.
  */
 export function formFields<
-  Definition extends Form<string, Record<string, JsonValue>, unknown>,
+  Definition extends Form<string, any, unknown>,
   const Fields extends readonly FormFieldName<Definition>[],
 >(_form: Definition, fields: CompleteFormFields<Definition, Fields>): Fields {
   return fields as Fields;
@@ -711,7 +719,10 @@ export function FormError<Failure = unknown>(props: FormErrorProps<Failure>): st
   return renderFailureOutput(props, failure, message);
 }
 
-function fieldErrorMessage<Failure>(failure: Record<string, unknown>, props: FieldErrorProps<Failure>): unknown {
+function fieldErrorMessage<Failure>(
+  failure: Record<string, unknown>,
+  props: FieldErrorProps<Failure>,
+): unknown {
   if (!failureCodeMatches(failure, props.code)) return undefined;
   if (props.message !== undefined || props.children !== undefined) {
     return failureMessage(failure, props);
@@ -728,13 +739,17 @@ function failureMessage<Failure>(
   props: Pick<FieldErrorProps<Failure>, 'children' | 'message'>,
 ): unknown {
   const message = props.message ?? props.children;
-  if (typeof message === 'function') return (message as (failure: Failure) => unknown)(failure as Failure);
+  if (typeof message === 'function')
+    return (message as (failure: Failure) => unknown)(failure as Failure);
   if (message !== undefined) return message;
   if (failure.code === 'VALIDATION') return undefined;
   return typeof failure.code === 'string' ? failure.code : 'Form submission failed.';
 }
 
-function failureCodeMatches(failure: Record<string, unknown>, code: string | readonly string[] | undefined): boolean {
+function failureCodeMatches(
+  failure: Record<string, unknown>,
+  code: string | readonly string[] | undefined,
+): boolean {
   if (code === undefined) return true;
   if (typeof failure.code !== 'string') return false;
   return Array.isArray(code) ? code.includes(failure.code) : failure.code === code;
