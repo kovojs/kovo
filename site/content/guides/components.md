@@ -1,29 +1,54 @@
 ---
 title: Components & copy-in UI
-description: Build behavior on the public @kovojs/headless-ui primitives, and start from the @kovojs/ui starter by copying its source into your app — you own the code.
+description: Use public styled components from @kovojs/ui subpaths, or copy their source into your app when you want to own the styling.
 order: 11
 ---
 
 # Components & copy-in UI
 
-Kovo gives you two layers for building UI, with behavior and styling kept deliberately separate.
+Kovo gives you two supported ways to use styled components, with behavior and styling kept
+deliberately separate.
 
 - **`@kovojs/headless-ui`** is a public, versioned package. It ships the behavior: the accessible
   attribute builders (`selectTriggerAttributes`, `dialogContentAttributes`, …), URL helpers, and the
   headless types that describe a component's render inputs (`SelectItem`, `ComboboxItem`, …). You
   install it and import from it like any dependency.
-- **`@kovojs/ui`** is the styled component starter. Its components are authored with
-  `@kovojs/style` and expose typed `style` / `styles` override objects, but external apps do not
-  install it as a versioned dependency. `kovo add` copies the StyleX-authored source into your app so
-  you own it from then on.
+- **`@kovojs/ui`** is the public styled component package. Import direct component subpaths such as
+  `@kovojs/ui/button` when you want versioned components. The same source can also be copied into
+  your app with `kovo add` when you want to own the component implementation.
 
-This guide covers the copy-in flow, typed StyleX overrides, and the public packages copied
-components build on.
+This guide covers direct imports, the copy-in flow, typed StyleX overrides, and the public packages
+styled components build on.
+
+## Direct component imports
+
+Install the public packages and import each component from its component subpath:
+
+```sh
+npm install @kovojs/ui @kovojs/style @kovojs/headless-ui @kovojs/core @kovojs/server
+```
+
+```tsx
+import * as style from '@kovojs/style';
+import { Button } from '@kovojs/ui/button';
+
+const toolbarStyles = style.create({
+  saveButton: { minWidth: 112 },
+});
+
+export function Toolbar() {
+  return <Button style={toolbarStyles.saveButton}>Save</Button>;
+}
+```
+
+Use this mode when the versioned package behavior and styling are close to what your app needs. The
+root `@kovojs/ui` entry is reserved for package-wide helpers; component symbols live on component
+subpaths so each symbol has one public home.
 
 ## Copy-in components
 
-Copy a component when the default styled source is close to what you need. Customize it with typed
-StyleX objects instead of string class overrides:
+Copy a component when you want to own the component source. Customize it with typed StyleX objects
+instead of string class overrides:
 
 ```tsx
 import * as style from '@kovojs/style';
@@ -157,11 +182,10 @@ component and its dependencies into your app. It is also enforced: a copy-in smo
 representative component against the public packages alone, so a component can never start depending
 on a non-public symbol without the build catching it.
 
-## In-repo apps
+## Choosing a mode
 
-The examples and the docs site in this monorepo import `@kovojs/ui` directly via the workspace
-(`@kovojs/ui/button`, etc.). That workspace import is a repo convenience; external apps use the
-copied TSX source produced by `kovo add`.
+Use `@kovojs/ui/<component>` imports when you want package-managed updates. Use `kovo add` when the
+component is a starting point and future changes should live in your app.
 
 ## Next
 
@@ -174,8 +198,8 @@ copied TSX source produced by `kovo add`.
 <summary>Spec & diagnostics</summary>
 
 Component model and `component()`: SPEC §5. The styled components are emitted as TSX/JSX source and
-lowered by the compiler (SPEC §5.2); hand-authored lowered IR is KV235. The public/private package
-boundary that makes `@kovojs/headless-ui` a dependency and `@kovojs/ui` a copy-in starter is recorded
-in `plans/api-cleanup.md` Phase 7 and the repo `STABILITY.md`.
+lowered by the compiler (SPEC §5.2); hand-authored lowered IR is KV235. The public package boundary
+for `@kovojs/ui`, `@kovojs/headless-ui`, and `@kovojs/style` is recorded in
+`plans/api-export-cleanup.md` and the repo `STABILITY.md`.
 
 </details>

@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
+import { Checkbox } from './checkbox.js';
 import {
-  Checkbox,
   CheckboxGroup,
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
+  checkboxGroupControlClasses,
+  checkboxGroupItemClasses,
+  checkboxGroupLabelClasses,
+} from './checkbox-group.js';
+import {
   Field,
   FieldControl,
   FieldDescription,
@@ -16,30 +21,6 @@ import {
   FieldTextarea,
   Fieldset,
   FieldsetLegend,
-  NumberField,
-  NumberFieldControl,
-  NumberFieldDecrement,
-  NumberFieldIncrement,
-  NumberFieldInput,
-  OtpField,
-  OtpFieldGroup,
-  OtpFieldHiddenInput,
-  OtpFieldInput,
-  RadioGroup,
-  RadioGroupItem,
-  RadioGroupLabel,
-  RadioGroupRadio,
-  Switch,
-  Toggle,
-  ToggleGroup,
-  ToggleGroupButton,
-  ToggleGroupItem,
-  Toolbar,
-  ToolbarButton,
-  ToolbarItem,
-  checkboxGroupControlClasses,
-  checkboxGroupItemClasses,
-  checkboxGroupLabelClasses,
   fieldControlClasses,
   fieldDescriptionClasses,
   fieldErrorClasses,
@@ -49,13 +30,44 @@ import {
   fieldTextareaClasses,
   fieldsetClasses,
   fieldsetLegendClasses,
+} from './field.js';
+import {
+  NumberField,
+  NumberFieldControl,
+  NumberFieldDecrement,
+  NumberFieldIncrement,
+  NumberFieldInput,
   numberFieldButtonClasses,
   numberFieldControlClasses,
   numberFieldInputClasses,
+} from './number-field.js';
+import {
+  OtpField,
+  OtpFieldGroup,
+  OtpFieldHiddenInput,
+  OtpFieldInput,
   otpFieldGroupClasses,
   otpFieldHiddenInputClasses,
   otpFieldInputClasses,
-} from './index.js';
+} from './otp-field.js';
+import {
+  RadioGroup,
+  RadioGroupItem,
+  RadioGroupLabel,
+  RadioGroupRadio,
+} from './radio-group.js';
+import { Switch } from './switch.js';
+import { Toggle } from './toggle.js';
+import {
+  ToggleGroup,
+  ToggleGroupButton,
+  ToggleGroupItem,
+} from './toggle-group.js';
+import {
+  Toolbar,
+  ToolbarButton,
+  ToolbarItem,
+} from './toolbar.js';
 
 describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless checkbox-group primitive as styled native checkboxes', () => {

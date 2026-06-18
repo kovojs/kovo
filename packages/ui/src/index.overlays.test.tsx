@@ -10,18 +10,39 @@ import {
   CommandListbox,
   CommandTrigger,
   CommandValue,
+  commandDialogClasses,
+  commandInputClasses,
+  commandItemClasses,
+  commandListboxClasses,
+  commandTriggerClasses,
+} from './command.js';
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  Drawer,
+  contextMenuContentClasses,
+  contextMenuItemClasses,
+  contextMenuTriggerClasses,
+} from './context-menu.js';
+import { Drawer, drawerContentClasses } from './drawer.js';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  dropdownMenuContentClasses,
+  dropdownMenuItemClasses,
+  dropdownMenuTriggerClasses,
+} from './dropdown-menu.js';
+import {
   Menubar,
   MenubarItem,
   MenubarSubmenu,
+  menubarItemClasses,
+  menubarSubmenuClasses,
+} from './menubar.js';
+import {
   NavigationMenu,
   NavigationMenuContent,
   NavigationMenuItem,
@@ -29,38 +50,25 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
   NavigationMenuViewport,
-  Sheet,
+  navigationMenuContentClasses,
+  navigationMenuLinkClasses,
+  navigationMenuListClasses,
+  navigationMenuTriggerClasses,
+  navigationMenuViewportClasses,
+} from './navigation-menu.js';
+import { Sheet, sheetContentClasses } from './sheet.js';
+import {
   Toast,
   ToastAction,
   ToastClose,
   ToastDescription,
   ToastTitle,
   ToastViewport,
-  commandDialogClasses,
-  commandInputClasses,
-  commandItemClasses,
-  commandListboxClasses,
-  commandTriggerClasses,
-  contextMenuContentClasses,
-  contextMenuItemClasses,
-  contextMenuTriggerClasses,
-  dropdownMenuContentClasses,
-  dropdownMenuItemClasses,
-  dropdownMenuTriggerClasses,
-  menubarItemClasses,
-  menubarSubmenuClasses,
-  navigationMenuContentClasses,
-  navigationMenuLinkClasses,
-  navigationMenuListClasses,
-  navigationMenuTriggerClasses,
-  navigationMenuViewportClasses,
-  drawerContentClasses,
-  sheetContentClasses,
   toastActionClasses,
   toastCloseClasses,
   toastDescriptionClasses,
   toastTitleClasses,
-} from './index.js';
+} from './toast.js';
 
 describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless toast primitive as styled live-region markup', () => {

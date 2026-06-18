@@ -929,33 +929,53 @@ tsconfig.json --noEmit --pretty false`.
 
 ## UI Public Package Cleanup
 
-- [ ] **Classify `@kovojs/ui` as public in `public-packages.json`.**
+- [x] **Classify `@kovojs/ui` as public in `public-packages.json`.**
   - Change visibility from private/starter to public.
   - Add `apiBoundary.public` entries for the root and every direct component
     subpath.
   - Decide whether `apiRef` pages are generated immediately or staged behind a
     baseline due to the large component surface.
-  - Evidence:
-- [ ] **Remove `private: true` from `packages/ui/package.json`.**
+  - Evidence: `public-packages.json` marks `@kovojs/ui` public/library and lists
+    root plus all 44 component subpaths in `apiBoundary.public`; `corepack pnpm
+    exec vitest --run scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs`
+    passed. API reference pages are staged; `node scripts/api-surface-gate.mjs
+    --write` regenerated the ratchet baseline and `node scripts/api-surface-gate.mjs`
+    passes with `public-exports-needing-attention=2591`.
+- [x] **Remove `private: true` from `packages/ui/package.json`.**
   - Set a publishable version line consistent with other public packages.
   - Add/verify `files`, `publishConfig.exports`, and `build:dist` metadata through
     `scripts/build-publish.mjs`.
-  - Evidence:
-- [ ] **Document the two supported UI consumption modes.**
+  - Evidence: `packages/ui/package.json` is version `0.1.0`, has no
+    `private:true`, includes `files: ["dist"]`, `build:dist`, `prepack`, and 45
+    `publishConfig.exports` entries; `node scripts/build-publish.mjs` builds
+    all public packages and verifies 90 `@kovojs/ui` publish targets.
+- [x] **Document the two supported UI consumption modes.**
   - Direct dependency: `@kovojs/ui/<component>` as public versioned API.
   - Copy-in: optional starter workflow for apps that want to own component source.
   - Avoid describing copy-in as the only or primary reason the package exists.
-  - Evidence:
-- [ ] **Apply one-symbol-one-home to `@kovojs/ui`.**
+  - Evidence: `site/content/guides/components.md` documents direct
+    `@kovojs/ui/<component>` imports and `kovo add` copy-in as separate supported
+    modes; `git diff --check` passes.
+- [x] **Apply one-symbol-one-home to `@kovojs/ui`.**
   - Component/family symbols should live on component subpaths.
   - The root should expose only curated aggregate/package-wide symbols, not every
     component symbol also exported by subpaths.
-  - Evidence:
-- [ ] **Verify public UI package install/build behavior.**
+  - Evidence: `packages/ui/src/index.tsx` no longer re-exports component
+    symbols; `scripts/exported-symbols.test.mjs` proves the root has no symbols
+    while `@kovojs/ui/button` and behavior-backed `@kovojs/ui/select` own their
+    component symbols. The duplicate detector initially caught `Drawer` aliases
+    through `@kovojs/ui/sheet`; `packages/ui/src/sheet.tsx` now exports only
+    sheet symbols and `corepack pnpm run check:exports` passes.
+- [x] **Verify public UI package install/build behavior.**
   - Run package export checks, publish metadata checks, and a small app/import
-    smoke test that imports from `@kovojs/ui/button` and the matching
-    `@kovojs/headless-ui/button`.
-  - Evidence:
+    smoke test that imports from `@kovojs/ui/button` plus a behavior-backed
+    matching pair such as `@kovojs/ui/select` / `@kovojs/headless-ui/select`.
+  - Evidence: `corepack pnpm exec vitest --run scripts/public-packages.test.mjs
+    scripts/exported-symbols.test.mjs scripts/api-surface-gate.test.mjs
+    packages/ui/src/sheet.stylex.test.tsx packages/ui/src/xss-escaping.test.tsx`
+    passed; `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`
+    passed; `corepack pnpm run check:imports` passed; `corepack pnpm run
+    check:exports` passed; `node scripts/build-publish.mjs` passed.
 
 ## CLI Package Rename
 

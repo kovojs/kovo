@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import * as style from '@kovojs/style';
 
 import {
-  Drawer,
   Sheet,
   sheetBodyClasses,
   sheetClasses,
@@ -18,21 +17,13 @@ import {
 } from './sheet.js';
 
 describe('@kovojs/ui Sheet StyleX slots', () => {
-  it('matches sheet and drawer-facade markup with StyleX slot output', () => {
+  it('matches sheet markup with StyleX slot output', () => {
     expect({
       bodyClasses: sheetBodyClasses,
       classes: sheetClasses,
       closeClasses: sheetCloseClasses,
       contentClasses: sheetContentClasses,
       descriptionClasses: sheetDescriptionClasses,
-      drawer: Drawer.definition.render({
-        children: 'Drawer body',
-        contentId: 'mobile-actions',
-        description: 'Actions available on smaller screens.',
-        open: true,
-        title: 'Mobile actions',
-        trigger: 'Open drawer',
-      }),
       headerClasses: sheetHeaderClasses,
       sheet: Sheet.definition.render({
         children: 'Sheet body',

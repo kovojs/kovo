@@ -9,7 +9,6 @@ import {
 import * as style from '@kovojs/style';
 
 export type SheetSide = 'top' | 'right' | 'bottom' | 'left';
-export type DrawerSide = SheetSide;
 
 export interface SheetStyleOverrides {
   body?: style.StyleInput;
@@ -33,10 +32,6 @@ export interface SheetProps {
   styles?: SheetStyleOverrides;
   title: string;
   trigger?: string;
-}
-
-export interface DrawerProps extends SheetProps {
-  side?: DrawerSide;
 }
 
 function escapeHtml(value: string): string {
@@ -280,11 +275,5 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
 export const Sheet = component({
   render(props: SheetProps) {
     return renderDialogPanel(props, 'right');
-  },
-});
-
-export const Drawer = component({
-  render(props: DrawerProps) {
-    return renderDialogPanel(props, 'bottom');
   },
 });

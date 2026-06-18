@@ -6,7 +6,7 @@ import { CommandItem, CommandValue } from './command.js';
 import { Drawer as DrawerPanel } from './drawer.js';
 import { MenubarItem } from './menubar.js';
 import { SelectItem, SelectValue } from './select.js';
-import { Drawer, Sheet } from './sheet.js';
+import { Sheet } from './sheet.js';
 import { Table } from './table.js';
 
 // SECURITY_FINDINGS.md C1: the @kovojs/server JSX runtime emits text children verbatim
@@ -140,20 +140,6 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
     expect(rendered).not.toContain(PAYLOAD);
     expect(rendered).toContain(ESCAPED);
     // Body composition slot is left raw (app escapes it at the call site).
-    expect(rendered).toContain(RAW_CHILD);
-  });
-
-  it('escapes Drawer (sheet) title/description/trigger/closeLabel but passes the body slot through raw', () => {
-    const rendered = Drawer.definition.render({
-      children: RAW_CHILD,
-      closeLabel: PAYLOAD,
-      contentId: 'drawer-1',
-      description: PAYLOAD,
-      title: PAYLOAD,
-      trigger: PAYLOAD,
-    });
-    expect(rendered).not.toContain(PAYLOAD);
-    expect(rendered).toContain(ESCAPED);
     expect(rendered).toContain(RAW_CHILD);
   });
 

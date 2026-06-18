@@ -1,7 +1,9 @@
 {
   "name": "@kovojs/ui",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",
@@ -62,5 +64,193 @@
   "kovo": {
     "vendoredSource": true,
     "prefix": "kovo-ui-"
+  },
+  "scripts": {
+    "build:dist": "vp pack src/accordion.tsx src/alert-dialog.tsx src/alert.tsx src/autocomplete.tsx src/avatar.tsx src/badge.tsx src/breadcrumb.tsx src/button.tsx src/card.tsx src/checkbox-group.tsx src/checkbox.tsx src/collapsible.tsx src/combobox.tsx src/command.tsx src/context-menu.tsx src/dialog.tsx src/disclosure.tsx src/drawer.tsx src/dropdown-menu.tsx src/field.tsx src/hover-card.tsx src/index.tsx src/kbd.tsx src/menubar.tsx src/meter.tsx src/navigation-menu.tsx src/number-field.tsx src/otp-field.tsx src/popover.tsx src/progress.tsx src/radio-group.tsx src/scroll-area.tsx src/select.tsx src/separator.tsx src/sheet.tsx src/skeleton.tsx src/slider.tsx src/switch.tsx src/table.tsx src/tabs.tsx src/toast.tsx src/toggle-group.tsx src/toggle.tsx src/toolbar.tsx src/tooltip.tsx --dts",
+    "prepack": "pnpm run build:dist"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./accordion": {
+        "types": "./dist/accordion.d.mts",
+        "default": "./dist/accordion.mjs"
+      },
+      "./alert": {
+        "types": "./dist/alert.d.mts",
+        "default": "./dist/alert.mjs"
+      },
+      "./alert-dialog": {
+        "types": "./dist/alert-dialog.d.mts",
+        "default": "./dist/alert-dialog.mjs"
+      },
+      "./autocomplete": {
+        "types": "./dist/autocomplete.d.mts",
+        "default": "./dist/autocomplete.mjs"
+      },
+      "./avatar": {
+        "types": "./dist/avatar.d.mts",
+        "default": "./dist/avatar.mjs"
+      },
+      "./badge": {
+        "types": "./dist/badge.d.mts",
+        "default": "./dist/badge.mjs"
+      },
+      "./breadcrumb": {
+        "types": "./dist/breadcrumb.d.mts",
+        "default": "./dist/breadcrumb.mjs"
+      },
+      "./button": {
+        "types": "./dist/button.d.mts",
+        "default": "./dist/button.mjs"
+      },
+      "./card": {
+        "types": "./dist/card.d.mts",
+        "default": "./dist/card.mjs"
+      },
+      "./checkbox": {
+        "types": "./dist/checkbox.d.mts",
+        "default": "./dist/checkbox.mjs"
+      },
+      "./checkbox-group": {
+        "types": "./dist/checkbox-group.d.mts",
+        "default": "./dist/checkbox-group.mjs"
+      },
+      "./collapsible": {
+        "types": "./dist/collapsible.d.mts",
+        "default": "./dist/collapsible.mjs"
+      },
+      "./combobox": {
+        "types": "./dist/combobox.d.mts",
+        "default": "./dist/combobox.mjs"
+      },
+      "./command": {
+        "types": "./dist/command.d.mts",
+        "default": "./dist/command.mjs"
+      },
+      "./context-menu": {
+        "types": "./dist/context-menu.d.mts",
+        "default": "./dist/context-menu.mjs"
+      },
+      "./dialog": {
+        "types": "./dist/dialog.d.mts",
+        "default": "./dist/dialog.mjs"
+      },
+      "./disclosure": {
+        "types": "./dist/disclosure.d.mts",
+        "default": "./dist/disclosure.mjs"
+      },
+      "./drawer": {
+        "types": "./dist/drawer.d.mts",
+        "default": "./dist/drawer.mjs"
+      },
+      "./dropdown-menu": {
+        "types": "./dist/dropdown-menu.d.mts",
+        "default": "./dist/dropdown-menu.mjs"
+      },
+      "./field": {
+        "types": "./dist/field.d.mts",
+        "default": "./dist/field.mjs"
+      },
+      "./hover-card": {
+        "types": "./dist/hover-card.d.mts",
+        "default": "./dist/hover-card.mjs"
+      },
+      "./kbd": {
+        "types": "./dist/kbd.d.mts",
+        "default": "./dist/kbd.mjs"
+      },
+      "./menubar": {
+        "types": "./dist/menubar.d.mts",
+        "default": "./dist/menubar.mjs"
+      },
+      "./meter": {
+        "types": "./dist/meter.d.mts",
+        "default": "./dist/meter.mjs"
+      },
+      "./navigation-menu": {
+        "types": "./dist/navigation-menu.d.mts",
+        "default": "./dist/navigation-menu.mjs"
+      },
+      "./number-field": {
+        "types": "./dist/number-field.d.mts",
+        "default": "./dist/number-field.mjs"
+      },
+      "./otp-field": {
+        "types": "./dist/otp-field.d.mts",
+        "default": "./dist/otp-field.mjs"
+      },
+      "./popover": {
+        "types": "./dist/popover.d.mts",
+        "default": "./dist/popover.mjs"
+      },
+      "./progress": {
+        "types": "./dist/progress.d.mts",
+        "default": "./dist/progress.mjs"
+      },
+      "./radio-group": {
+        "types": "./dist/radio-group.d.mts",
+        "default": "./dist/radio-group.mjs"
+      },
+      "./scroll-area": {
+        "types": "./dist/scroll-area.d.mts",
+        "default": "./dist/scroll-area.mjs"
+      },
+      "./separator": {
+        "types": "./dist/separator.d.mts",
+        "default": "./dist/separator.mjs"
+      },
+      "./sheet": {
+        "types": "./dist/sheet.d.mts",
+        "default": "./dist/sheet.mjs"
+      },
+      "./select": {
+        "types": "./dist/select.d.mts",
+        "default": "./dist/select.mjs"
+      },
+      "./skeleton": {
+        "types": "./dist/skeleton.d.mts",
+        "default": "./dist/skeleton.mjs"
+      },
+      "./slider": {
+        "types": "./dist/slider.d.mts",
+        "default": "./dist/slider.mjs"
+      },
+      "./switch": {
+        "types": "./dist/switch.d.mts",
+        "default": "./dist/switch.mjs"
+      },
+      "./table": {
+        "types": "./dist/table.d.mts",
+        "default": "./dist/table.mjs"
+      },
+      "./tabs": {
+        "types": "./dist/tabs.d.mts",
+        "default": "./dist/tabs.mjs"
+      },
+      "./tooltip": {
+        "types": "./dist/tooltip.d.mts",
+        "default": "./dist/tooltip.mjs"
+      },
+      "./toggle": {
+        "types": "./dist/toggle.d.mts",
+        "default": "./dist/toggle.mjs"
+      },
+      "./toggle-group": {
+        "types": "./dist/toggle-group.d.mts",
+        "default": "./dist/toggle-group.mjs"
+      },
+      "./toast": {
+        "types": "./dist/toast.d.mts",
+        "default": "./dist/toast.mjs"
+      },
+      "./toolbar": {
+        "types": "./dist/toolbar.d.mts",
+        "default": "./dist/toolbar.mjs"
+      }
+    }
   }
 }

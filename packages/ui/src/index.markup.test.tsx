@@ -2,73 +2,54 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
+import { AccordionContent, AccordionHeader, AccordionItem, AccordionTrigger } from './accordion.js';
+import { Alert } from './alert.js';
 import {
-  AccordionContent,
-  AccordionHeader,
-  AccordionItem,
-  AccordionTrigger,
-  Alert,
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogTrigger,
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-  Badge,
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbSeparator,
-  Button,
-  Card,
-  CollapsibleContent,
-  CollapsibleTrigger,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
-  DisclosureContent,
-  DisclosureTrigger,
-  HoverCardContent,
-  HoverCardTrigger,
-  Kbd,
-  Meter,
-  PopoverContent,
-  PopoverTrigger,
-  Progress,
-  Separator,
-  Skeleton,
-  Table,
-  TableCell,
-  TableHeaderCell,
-  TooltipContent,
-  TooltipTrigger,
   alertDialogActionClasses,
   alertDialogClasses,
   alertDialogContentClasses,
-  autocompleteClasses,
-  autocompleteInputClasses,
-  checkboxGroupClasses,
-  comboboxClasses,
-  comboboxInputClasses,
-  comboboxListboxClasses,
-  commandClasses,
-  contextMenuClasses,
+} from './alert-dialog.js';
+import { autocompleteClasses, autocompleteInputClasses } from './autocomplete.js';
+import { Avatar, AvatarFallback, AvatarImage } from './avatar.js';
+import { Badge } from './badge.js';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from './breadcrumb.js';
+import { Button } from './button.js';
+import { Card } from './card.js';
+import { checkboxGroupClasses } from './checkbox-group.js';
+import { CollapsibleContent, CollapsibleTrigger } from './collapsible.js';
+import { comboboxClasses, comboboxInputClasses, comboboxListboxClasses } from './combobox.js';
+import { commandClasses } from './command.js';
+import { contextMenuClasses } from './context-menu.js';
+import {
+  DialogClose,
+  DialogContent,
+  DialogTrigger,
   dialogClasses,
   dialogContentClasses,
-  dropdownMenuClasses,
-  fieldClasses,
-  menubarClasses,
-  navigationMenuClasses,
-  numberFieldClasses,
-  otpFieldClasses,
-  selectClasses,
-  selectTriggerClasses,
-  sliderClasses,
-  sliderInputClasses,
-  toastClasses,
-  toastViewportClasses,
-} from './index.js';
+} from './dialog.js';
+import { DisclosureContent, DisclosureTrigger } from './disclosure.js';
+import { dropdownMenuClasses } from './dropdown-menu.js';
+import { fieldClasses } from './field.js';
+import { HoverCardContent, HoverCardTrigger } from './hover-card.js';
+import { Kbd } from './kbd.js';
+import { menubarClasses } from './menubar.js';
+import { Meter } from './meter.js';
+import { navigationMenuClasses } from './navigation-menu.js';
+import { numberFieldClasses } from './number-field.js';
+import { otpFieldClasses } from './otp-field.js';
+import { PopoverContent, PopoverTrigger } from './popover.js';
+import { Progress } from './progress.js';
+import { selectClasses, selectTriggerClasses } from './select.js';
+import { Separator } from './separator.js';
+import { Skeleton } from './skeleton.js';
+import { sliderClasses, sliderInputClasses } from './slider.js';
+import { Table, TableCell, TableHeaderCell } from './table.js';
+import { toastClasses, toastViewportClasses } from './toast.js';
+import { TooltipContent, TooltipTrigger } from './tooltip.js';
 import { readSource } from './test-source.js';
 
 describe('@kovojs/ui styled package foundation', () => {

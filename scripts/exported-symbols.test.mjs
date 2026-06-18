@@ -42,6 +42,26 @@ describe('exported-symbols script', () => {
     );
   });
 
+  it('keeps @kovojs/ui component symbols on component subpaths', () => {
+    const report = exportedSymbolsReport();
+    const uiPackage = report.packages.find((pkg) => pkg.name === '@kovojs/ui');
+    const uiRoot = uiPackage?.exports.find((entry) => entry.subpath === '.');
+    const uiButton = uiPackage?.exports.find((entry) => entry.subpath === './button');
+    const uiSelect = uiPackage?.exports.find((entry) => entry.subpath === './select');
+    const headlessSelect = report.packages
+      .find((pkg) => pkg.name === '@kovojs/headless-ui')
+      ?.exports.find((entry) => entry.subpath === './select');
+
+    expect(uiRoot?.symbols).toEqual([]);
+    expect(uiButton?.symbols).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'Button' })]),
+    );
+    expect(uiSelect?.symbols).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'Select' })]),
+    );
+    expect(headlessSelect?.importPath).toBe('@kovojs/headless-ui/select');
+  });
+
   it('keeps provider-specific names out of public package exports', () => {
     const publicPackageNames = new Set(publicPackages().map((pkg) => pkg.name));
     const providerNamePattern = /stripe/iu;

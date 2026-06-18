@@ -138,4 +138,22 @@ describe('public-packages manifest', () => {
     expect(internalEntrySubpaths(server)).not.toContain('./app-shell/vite');
     expect(publicEntrySubpaths(server)).not.toContain('./internal/app-shell-vite');
   });
+
+  it('classifies @kovojs/ui as public with component-owned subpaths', () => {
+    const ui = manifest.find((pkg) => pkg.name === '@kovojs/ui');
+    expect(ui?.visibility).toBe('public');
+    expect(ui?.kind).toBe('library');
+    expect(publicEntrySubpaths(ui)).toEqual(
+      expect.arrayContaining(['.', './button', './select', './dialog']),
+    );
+    expect(generatedEntrySubpaths(ui)).toEqual([]);
+    expect(internalEntrySubpaths(ui)).toEqual([]);
+
+    const uiPackage = packageJson('ui');
+    expect(uiPackage.private ?? false).toBe(false);
+    expect(uiPackage.publishConfig?.exports?.['./button']).toEqual({
+      types: './dist/button.d.mts',
+      default: './dist/button.mjs',
+    });
+  });
 });
