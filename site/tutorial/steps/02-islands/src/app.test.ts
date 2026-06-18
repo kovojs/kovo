@@ -97,7 +97,7 @@ describe('tutorial step 02 — islands', () => {
     const importedUrls: string[] = [];
     const importModule = async (url: string) => {
       importedUrls.push(url);
-      return import('./generated/product-actions.client.js');
+      return import('./generated-fixtures.js').then((module) => module.productActionsClient);
     };
 
     await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);

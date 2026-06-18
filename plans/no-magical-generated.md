@@ -55,15 +55,17 @@ internals, emit/check scripts, and narrowly named artifact tests.
     now stores app-wide styles inherited by route documents; `pnpm --filter
     @kovojs/server exec vitest --run src/app.test.ts src/app-document.test.ts
     src/static-export-assets.test.ts src/api/app.test.ts` passed.
-- [ ] Add a no-generated-import guard for app-authored source.
+- [x] Add a no-generated-import guard for app-authored source.
   - Scope: fail on `from './generated/*'`, `from '../generated/*'`, or dynamic
     generated imports outside `src/generated/**`, `scripts/**`, compiler-owned
     build helpers, and explicit artifact tests.
-  - Current progress: `scripts/import-boundary.mjs` now allows generated reads
+  - Evidence: `scripts/import-boundary.mjs` now allows generated reads
     only for emit/check scripts and explicitly named artifact/generated/graph
     tests or fixtures; ordinary tests no longer receive a blanket generated-read
-    exemption.
-  - Current progress: Gallery interactive docs now keep generated demo imports
+    exemption. `pnpm exec vitest --run scripts/import-boundary.test.mjs` and
+    `node scripts/import-boundary.mjs` passed after the direct app-source
+    generated imports were removed or moved into explicit generated fixtures.
+  - Evidence: Gallery interactive docs now keep generated demo imports
     inside `examples/gallery/src/interactive-docs.generated-fixtures.tsx`; the
     authored route shell imports the fixture instead of `src/generated/*`.
     `pnpm --filter @kovojs/example-gallery exec vitest --run
@@ -244,21 +246,20 @@ internals, emit/check scripts, and narrowly named artifact tests.
     --filter @kovojs/site exec node scripts/export-static.mjs`, and `rg -n
     "style\\.attrs" site/src --glob '!generated/**' -S` passed. Keep open for
     remaining class-based docs components and prose examples.
+  - Current progress: docs site and tutorial generated artifact imports now sit
+    behind explicit generated fixtures, and the islands guide imports
+    `handler` from the public `@kovojs/runtime` root in its snippet. `pnpm
+    --filter @kovojs/site test`, `pnpm --filter @kovojs/site exec node
+    scripts/export-static.mjs`, and `node scripts/import-boundary.mjs` passed.
 
 ## Verification
 
-- [ ] Add/extend a guard command that proves authored example source has no
+- [x] Add/extend a guard command that proves authored example source has no
       generated imports.
-  - Current evidence gap: `node scripts/import-boundary.mjs` now reports
-    app-local generated imports, but it still fails on site and tutorial files;
-    CSS generated-import violations, CRM optimistic generated imports,
-    Commerce/CRM/StackOverflow direct generated route imports, and Gallery
-    interactive-docs generated imports were removed from ordinary app
-    source/tests/app shells. Keep open until the remaining reported backlog is
-    removed or narrowed by an explicit artifact-test policy.
-  - Current guard-policy evidence: `pnpm exec vitest --run
-    scripts/import-boundary.test.mjs` passed after narrowing explicit artifact
-    allowances and renaming gallery artifact consumers.
+  - Evidence: `node scripts/import-boundary.mjs` passed. `pnpm exec vitest --run
+    scripts/import-boundary.test.mjs` passed and covers static imports,
+    re-exports, dynamic imports, explicit artifact tests, explicit generated
+    fixtures, and ordinary-test rejection.
 - [ ] Run focused Commerce tests after removing generated imports and deleting
       `source-truth.test.ts`.
   - Current progress: `pnpm --filter @kovojs/example-commerce exec vitest --run

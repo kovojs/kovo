@@ -1,12 +1,11 @@
 import { notFound, route, s } from '@kovojs/server';
 
-import { ProductActions } from './generated/product-actions.js';
+import { ProductActions } from './generated-fixtures.js';
 
 // Tutorial step 02 (chapter 2): the product page gains an interactive island.
-// The app imports the committed lowered IR (src/generated/), so served HTML
-// carries the compiler-derived stamps and handler references (SPEC.md
-// sections 4.2 and 4.8) — the authored sugar in src/components/ never runs in
-// production.
+// The app renders committed lowered artifacts through an explicit fixture, so
+// served HTML carries the compiler-derived stamps and handler references
+// (SPEC.md sections 4.2 and 4.8) while app code avoids direct generated imports.
 
 export interface Product {
   id: string;

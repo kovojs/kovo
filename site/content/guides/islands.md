@@ -82,7 +82,7 @@ this generated client module:
 
 ```js
 // generated — but valid, authorable Kovo source
-import { handler } from '@kovojs/runtime/generated';
+import { handler } from '@kovojs/runtime';
 
 export const GalleryToggleDemo$button_click = handler((event, ctx) => {
   ctx.state.pressed = !ctx.state.pressed;

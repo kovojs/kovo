@@ -49,7 +49,9 @@ describe('tutorial step 03 — queries & data binding', () => {
   // /snippet
 
   it('compiles a named update plan for the cart query into the client module', async () => {
-    const clientModule: Record<string, unknown> = await import('./generated/cart-badge.client.js');
+    const clientModule: Record<string, unknown> = await import('./generated-fixtures.js').then(
+      (module) => module.cartBadgeClient,
+    );
     const plans = clientModule['CartBadge$queryUpdatePlans'];
 
     expect(plans).toBeDefined();

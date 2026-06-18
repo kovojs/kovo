@@ -1,8 +1,7 @@
 import { route } from '@kovojs/server';
 
 import { createShopDb, type ShopDb } from './db.js';
-import { CartBadge } from './generated/cart-badge.js';
-import { ProductList } from './generated/product-list.js';
+import { CartBadge, ProductList } from './generated-fixtures.js';
 import { loadCart, loadProducts } from './queries.js';
 
 // Tutorial step 03 (chapter 3): components declare the queries they need and

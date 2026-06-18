@@ -17,8 +17,7 @@ import {
   type ShopRequest,
 } from './app.js';
 import { createShopDb } from './db.js';
-import { CartBadge } from './generated/cart-badge.js';
-import { ProductList } from './generated/product-list.js';
+import { CartBadge, ProductList } from './generated-fixtures.js';
 import { loadCart, loadProducts } from './queries.js';
 
 // Tutorial step 06: <kovo-defer> streams the product list out of order inside
