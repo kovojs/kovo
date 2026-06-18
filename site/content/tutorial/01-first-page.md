@@ -28,8 +28,11 @@ correctness checks are checks on TypeScript programs.
 ## Declare a catalog and a route
 
 Kovo is an MPA framework: each page is a complete document, there is no client router, and
-navigation is real navigation. A page starts on the server, with a route. You declare the route
-as a plain value, and the compiler captures its path string as a literal type:
+navigation starts as real navigation. When JavaScript is present, Kovo may enhance an eligible
+same-origin click by fetching the full target document and preserving only compiler-proven
+unchanged layouts. If that proof is missing, the browser performs the normal navigation. A page
+starts on the server, with a route. You declare the route as a plain value, and the compiler
+captures its path string as a literal type:
 
 {{snippet:01-first-page/src/app.ts#catalog}}
 

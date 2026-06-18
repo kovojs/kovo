@@ -192,14 +192,19 @@ through client navigation.
     `packages/runtime/src/inline-loader-navigation.test.ts` proves `popstate`
     restores saved scroll without pushing another history entry across all
     inline installer artifacts.
-- [ ] **Navigation concurrency is deterministic.**
+- [x] **Navigation concurrency is deterministic.**
   - A newer navigation cancels stale fetch/morph work. In-flight mutations keep
     the existing §8/§10.4 pagehide/keepalive semantics. Pending optimistic state
     must be reconciled from server truth, discarded on full GET, or explicitly
     diagnosed; it must not silently survive into an incompatible document.
-  - Evidence so far: `pnpm exec vitest --run packages/runtime/src/inline-loader-navigation.test.ts`
+  - Evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader-navigation.test.ts`
     proves stale target documents cannot override a newer navigation across all
-    inline installer artifacts. Remaining gap: pending mutation reconciliation.
+    inline installer artifacts; `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves mutation snapshots after enhanced navigation are taken from the
+    post-navigation DOM and exclude stale pre-navigation targets;
+    `packages/runtime/src/mutation-optimistic-pagehide.test.ts` proves pending
+    optimistic mutation state is discarded/reconciled through the bfcache-safe
+    `pagehide` cleanup path.
 - [x] **bfcache hygiene is preserved.**
   - No `unload` handlers, no global session heap, and no listeners that block the
     existing bfcache acceptance gates.
@@ -257,7 +262,7 @@ through client navigation.
     `packages/runtime/src/inline-loader-artifact-minifier.test.ts` pins the
     minified navigation parser/segment hooks; `pnpm --filter @kovojs/runtime run
     check:inline-loader` passed under the 8KB gzip budget.
-- [ ] **3. History/focus/scroll/concurrency hardening.**
+- [x] **3. History/focus/scroll/concurrency hardening.**
   - Add `pushState`/`popstate`, scroll/hash restoration, focus movement,
     route-change announcement, in-flight cancellation, and bfcache-safe teardown.
   - Evidence so far: `packages/runtime/src/inline-loader.test.ts` proves the
@@ -270,7 +275,10 @@ through client navigation.
     installer artifacts; `packages/runtime/src/query-visible-return-refetch.test.ts`,
     `packages/runtime/src/mutation-optimistic-pagehide.test.ts`, and
     `packages/conformance-fixtures/src/runtime-fixtures.test.ts` prove bfcache
-    hygiene. Remaining gap: pending mutation reconciliation.
+    hygiene; `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves post-navigation mutation snapshots exclude stale targets, and
+    `packages/runtime/src/mutation-optimistic-pagehide.test.ts` proves pending
+    optimistic state cleanup.
 - [x] **4. Mutation/live composition after enhanced navigation.**
   - Prove `Kovo-Targets`/`Kovo-Live-Targets` snapshots include preserved layout
     targets after navigation, inserted leaf targets are discoverable, and stale
@@ -291,18 +299,22 @@ through client navigation.
     proves Commerce `/`, `/cart`, and `/login` serve no-JS full HTML documents.
     Remaining gap: corpus-level no-JS/full-load versus enhanced-navigation
     equivalence gate.
-- [ ] **6. Partial response optimization, after MVP proof.**
-  - Only after phases 0-5 pass, introduce a cache-safe navigation fragment
-    variant if it is still worth the complexity. Define request/response headers,
-    `Vary`/cache behavior, server target-chain computation, render-plan token
-    checks, and full-GET fallback. The client-supplied current chain remains an
-    optimization hint only.
-  - Evidence: pending.
+- [x] **6. Partial response optimization is explicitly deferred.**
+  - V1 enhanced navigation keeps the full target document as the only navigation
+    oracle. Header-selected navigation fragments, target-chain hints, or
+    route-partial responses remain a later optimization only after corpus-level
+    no-JS/full-load versus enhanced-navigation render-equivalence is proven.
+  - Evidence: `SPEC.md` §8 now states navigation partials are not a v1 protocol
+    and app authors cannot opt into or hand-author them.
 - [ ] **7. Example and docs proof.**
   - Demonstrate one real example, preferably Commerce or StackOverflow: JS-on
     preserves unchanged layout media/state, JS-off performs full navigations to
     the same URLs, and docs teach the feature as an enhancement.
-  - Evidence: pending.
+  - Evidence so far: `examples/commerce/src/app-shell.test.ts` proves Commerce
+    no-JS full-document route loads; `site/content/docs/mental-model.md`,
+    `site/content/docs/why-kovo.md`, and `site/content/tutorial/01-first-page.md`
+    teach enhanced navigation as a full-document progressive enhancement.
+    Remaining gap: real-example JS-on preservation proof.
 
 ## Verification Targets
 
@@ -337,9 +349,9 @@ through client navigation.
     proves body markup equivalence to the fetched full target document after
     normalizing the loader-added focus tabindex. Remaining gap: corpus-level
     render-equivalence over real examples.
-- [ ] **Version and guard safety:** build-token mismatch, auth redirect, 403/404,
+- [x] **Version and guard safety:** build-token mismatch, auth redirect, 403/404,
       and morph failure fall back to full GET or morph the correct server shell.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.test.ts`
+  - Evidence: `packages/runtime/src/inline-loader-navigation.test.ts`
     proves build-token mismatch, non-HTML fallback, final same-origin HTML
     redirects, and 403/404/500 shell morphing across inline artifacts.
     It also proves duplicate-id morph failure falls back to full GET.

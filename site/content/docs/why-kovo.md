@@ -71,8 +71,10 @@ Kovo makes sharp choices, and they cost you things. Here's where it's the wrong 
   shell is the document, not a persistent runtime.
 - **Offline-first.** The server is unconditionally authoritative. There's no sync engine and no
   local-first story.
-- **Media that plays across navigations.** Because every navigation is a real navigation, audio or
-  video continuing across page loads isn't supported in v1.
+- **Media that must survive every navigation.** Kovo can preserve media inside an unchanged,
+  compiler-stamped layout when enhanced navigation proves the target document is compatible. That
+  is a progressive enhancement, not a client-router guarantee: JS-off, unsupported browsers, guard
+  changes, shell drift, or incompatible layouts still perform a normal full document navigation.
 - **Browser-uniform fancy transitions.** Instant prerendering and invoker commands are
   Chromium-led. Kovo degrades gracefully — real navigations, real forms — but it doesn't polyfill
   them, so non-Chromium users get the solid version, not the deluxe one.

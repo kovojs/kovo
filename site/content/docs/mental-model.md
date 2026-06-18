@@ -120,8 +120,13 @@ reading an attribute, not stepping through a framework.
 
 Kovo is a multi-page app. A `<Link to="/products/:id" params={{ id }}>` compiles to a plain
 `<a href="/products/p1">`. You get typed links — rename a route and every link to it turns red —
-with no router running in the browser. Every navigation is a real navigation, sped up with
-prerendering and cross-document View Transitions where the browser supports them.
+with no router running in the browser.
+
+When JavaScript is present, Kovo may enhance an eligible same-origin click by fetching the full
+target document, comparing compiler-stamped route/layout segments, and preserving only unchanged
+layout DOM. The fetched document is still the source of truth. If the loader cannot prove the
+target is compatible, the browser performs the normal full navigation. There is no app-authored
+navigation partial response or client route table to maintain.
 
 ### Interactions use the lowest layer that works
 
