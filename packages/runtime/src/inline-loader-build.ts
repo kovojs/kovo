@@ -70,7 +70,8 @@ function installInlineKovoLoader(im) {
   const ci = () =>
     crypto.randomUUID?.() ||
     'i' + Date.now().toString(36) + (ic += 1).toString(36);
-  const rh = (el) => el.closest?.('[kovo-state]') ?? el;
+  const rh = (el) =>
+    el.closest?.('[kovo-state]') ?? (el.getAttribute?.('kovo-state') === null ? null : el);
   const rs = (el) => {
     try {
       return JSON.parse(rh(el)?.getAttribute('kovo-state') ?? '{}');
@@ -396,7 +397,7 @@ function installInlineKovoLoader(im) {
       if (!body) throw Error();
       xa(body, nextBody);
       if (!pop) globalThis.history?.pushState?.({}, '', finalUrl.href);
-      const focusTarget = doc.querySelector('main,[kovo-nav-segment],h1');
+      const focusTarget = doc.querySelector('main,h1') ?? doc.querySelector('[kovo-nav-segment]');
       focusTarget?.setAttribute?.('tabindex', '-1');
       focusTarget?.focus?.({ preventScroll: true });
       const saved = sc[finalUrl.href];

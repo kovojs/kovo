@@ -16,7 +16,7 @@ import { ExampleSplit } from './example-split.js';
 import { GalleryPage } from './gallery.js';
 
 // The docs page shell: header + sidebar + article + on-this-page rail + footer,
-// composed at render time (SPEC §4.5). The mobile sidebar is an L0 disclosure —
+// composed at render time (SPEC §4.5). The mobile sidebar is an L0 disclosure -
 // zero JavaScript. Markdown prose arrives as a pre-rendered HTML string and is
 // spliced in as a verbatim child (the server JSX runtime inserts child strings
 // as written), keeping prose at the route boundary while chrome stays TSX.

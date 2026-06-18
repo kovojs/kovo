@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { dispatchDelegatedEvent } from './client.js';
 import {
   dispatchInlineDelegatedClick,
+  InlineTriggerElement,
   inlineSourceInstallCases,
 } from './inline-loader-test-utils.js';
 import { FakeElement, FakeStatefulBindingElement } from './runtime-test-fakes.js';
@@ -94,6 +95,23 @@ describe('inline loader delegated handlers', () => {
       await runDelegatedHandlers(inlineElement, (importModule) =>
         dispatchInlineDelegatedClick(inlineElement, importModule, installSource),
       );
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'does not stamp state onto stateless delegated handler elements through %s',
+    async (_name, installSource) => {
+      const element = new InlineTriggerElement({
+        'on:click': '/c/theme.js#toggle',
+      });
+      const toggle = vi.fn((_event, ctx: { state: { opened?: boolean } }) => {
+        ctx.state.opened = true;
+      });
+
+      await dispatchInlineDelegatedClick(element, async () => ({ toggle }), installSource);
+
+      expect(toggle).toHaveBeenCalledTimes(1);
+      expect(element.getAttribute('kovo-state')).toBeNull();
     },
   );
 

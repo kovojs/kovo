@@ -379,7 +379,7 @@ async function runRoutePageInternal<
           throw new RouteBoundaryRenderError(error, routeBoundaryFor('error', definition, layouts));
         }
         if (isNotFound(pageValue) || isRouteResponseOutcome(pageValue)) return pageValue;
-        const metadata = routePageMetadata.get(definition);
+        const metadata = getRoutePageMetadata(definition);
         return renderLayoutChain(
           layouts,
           stampRoutePageSegment(metadata, pageValue),
@@ -419,6 +419,16 @@ function routeGuardFailure(failure: ResolvedGuardFailure): RoutePageFailure {
     ...(failure.retryAfter === undefined ? {} : { retryAfter: failure.retryAfter }),
     status: failure.status,
   };
+}
+
+function getRoutePageMetadata(
+  definition: RouteDefinition<any, any, any, any, any, any>,
+): CompiledRoutePageMetadata | undefined {
+  const metadata =
+    routePageMetadata.get(definition) ??
+    (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage;
+  if (metadata) routePageMetadata.set(definition, metadata);
+  return metadata;
 }
 
 function routeLayoutChain(

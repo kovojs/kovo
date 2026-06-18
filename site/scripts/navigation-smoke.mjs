@@ -36,8 +36,46 @@ async function assertTheme(page, theme) {
   await check(`${theme} theme survives enhanced docs navigation`, () =>
     page.evaluate((expected) => {
       const dark = document.documentElement.classList.contains('dark');
-      return localStorage.getItem('theme') === expected && (expected === 'dark' ? dark : !dark);
+      return (
+        localStorage.getItem('theme') === expected &&
+        document.documentElement.dataset.theme === expected &&
+        (expected === 'dark' ? dark : !dark)
+      );
     }, theme),
+  );
+}
+
+async function installNavigationProbe(page) {
+  await page.evaluate(() => {
+    globalThis.__kovoNavigationSmokeEvents = [];
+    addEventListener('kovo:navigate', (event) => {
+      globalThis.__kovoNavigationSmokeEvents.push(event.detail.url);
+    });
+  });
+}
+
+async function assertEnhancedClick(page, click, expectedPath, label) {
+  const stampCount = await page.evaluate(
+    () => document.querySelectorAll('[kovo-nav-segment]').length,
+  );
+  await check(`${label} exposes navigation stamps`, () => Promise.resolve(stampCount > 0));
+  await page.evaluate(() => {
+    globalThis.__kovoNavigationSmokeLayout = document.querySelector('[data-site-route-layout]');
+  });
+  await click();
+  await page.waitForFunction((path) => location.pathname === path, expectedPath);
+  await check(`${label} fires kovo:navigate`, () =>
+    page.evaluate((path) => {
+      const events = globalThis.__kovoNavigationSmokeEvents ?? [];
+      return events.some((url) => new URL(url).pathname === path);
+    }, expectedPath),
+  );
+  await check(`${label} preserves route layout DOM identity`, () =>
+    page.evaluate(
+      () =>
+        document.querySelector('[data-site-route-layout]') ===
+        globalThis.__kovoNavigationSmokeLayout,
+    ),
   );
 }
 
@@ -82,14 +120,19 @@ try {
   const page = await browser.newPage();
 
   await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
+  await installNavigationProbe(page);
   await page.click('button[on\\:click^="/c/theme.js"]');
   await page.waitForFunction(
     () =>
       document.documentElement.classList.contains('dark') &&
       localStorage.getItem('theme') === 'dark',
   );
-  await page.click('.site-nav a[href="/reference/"]');
-  await page.waitForFunction(() => location.pathname === '/reference/');
+  await assertEnhancedClick(
+    page,
+    () => page.click('.site-nav a[href="/reference/"]'),
+    '/reference/',
+    'docs reference click',
+  );
   await assertTheme(page, 'dark');
 
   await page.click('button[on\\:click^="/c/theme.js"]');
@@ -98,11 +141,16 @@ try {
       !document.documentElement.classList.contains('dark') &&
       localStorage.getItem('theme') === 'light',
   );
-  await page.click('.site-nav a[href="/docs/why-kovo/"]');
-  await page.waitForFunction(() => location.pathname === '/docs/why-kovo/');
+  await assertEnhancedClick(
+    page,
+    () => page.click('.site-nav a[href="/docs/why-kovo/"]'),
+    '/docs/why-kovo/',
+    'docs page click',
+  );
   await assertTheme(page, 'light');
 
   await page.goto(`${origin}/api/core/`, { waitUntil: 'networkidle' });
+  await installNavigationProbe(page);
   const railLink = page.locator('.api-nav li > a:first-child').nth(10);
   const hash = await railLink.getAttribute('href');
   if (!hash) {
@@ -113,6 +161,7 @@ try {
     await assertHashBelowHeader(page, hash, 'same-page API rail hash lands below sticky header');
 
     await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
+    await installNavigationProbe(page);
     await page.evaluate((targetHash) => {
       const link = document.createElement('a');
       link.id = 'synthetic-api-symbol-link';
@@ -120,15 +169,18 @@ try {
       link.textContent = 'API symbol';
       document.body.append(link);
     }, hash);
-    await page.click('#synthetic-api-symbol-link');
-    await page.waitForFunction(
-      (expectedHash) => location.pathname === '/api/core/' && location.hash === expectedHash,
-      hash,
+    await assertEnhancedClick(
+      page,
+      () => page.click('#synthetic-api-symbol-link'),
+      '/api/core/',
+      'cross-page API symbol click',
     );
+    await page.waitForFunction((expectedHash) => location.hash === expectedHash, hash);
     await assertHashBelowHeader(page, hash, 'cross-page API rail hash lands below sticky header');
 
     await page.click('.site-nav a[href="/docs/why-kovo/"]');
     await page.waitForFunction(() => location.pathname === '/docs/why-kovo/');
+    await installNavigationProbe(page);
     await page.evaluate((targetHash) => {
       document.querySelector('#synthetic-api-symbol-link')?.remove();
       const link = document.createElement('a');
@@ -137,15 +189,64 @@ try {
       link.textContent = 'API symbol';
       document.body.append(link);
     }, hash);
-    await page.click('#synthetic-api-symbol-link');
-    await page.waitForFunction(
-      (expectedHash) => location.pathname === '/api/core/' && location.hash === expectedHash,
-      hash,
+    await assertEnhancedClick(
+      page,
+      () => page.click('#synthetic-api-symbol-link'),
+      '/api/core/',
+      'fresh API symbol click',
     );
+    await page.waitForFunction((expectedHash) => location.hash === expectedHash, hash);
     await assertHashBelowHeader(
       page,
       hash,
       'fresh API symbol click ignores stale saved scroll',
+    );
+
+    const apiScroll = await page.evaluate(() => window.scrollY);
+    await page.click('.site-nav a[href="/docs/why-kovo/"]');
+    await page.waitForFunction(() => location.pathname === '/docs/why-kovo/');
+    const docsScroll = await page.evaluate(() => {
+      window.scrollTo(0, 220);
+      return window.scrollY;
+    });
+    await page.evaluate(() => history.back());
+    await page.waitForFunction(
+      (expectedHash) => location.pathname === '/api/core/' && location.hash === expectedHash,
+      hash,
+    );
+    await page.waitForFunction((expectedY) => Math.abs(window.scrollY - expectedY) <= 2, apiScroll);
+    await check('back restores API symbol scroll below sticky header', () =>
+      page.evaluate(
+        ({ expectedHash, expectedY }) => {
+          const raw = expectedHash.slice(1);
+          let decoded = raw;
+          try {
+            decoded = decodeURIComponent(raw);
+          } catch {}
+          const target =
+            document.getElementById(decoded) ??
+            document.getElementById(raw) ??
+            document.getElementsByName(decoded)[0] ??
+            document.getElementsByName(raw)[0];
+          const header = document.querySelector('.site-bar');
+          return (
+            Math.abs(window.scrollY - expectedY) <= 2 &&
+            target &&
+            header &&
+            target.getBoundingClientRect().top >= header.getBoundingClientRect().bottom - 1
+          );
+        },
+        { expectedHash: hash, expectedY: apiScroll },
+      ),
+    );
+    await page.evaluate(() => history.forward());
+    await page.waitForFunction(() => location.pathname === '/docs/why-kovo/');
+    await page.waitForFunction(
+      (expectedY) => Math.abs(window.scrollY - expectedY) <= 2,
+      docsScroll,
+    );
+    await check('forward restores docs page scroll after API symbol popstate', () =>
+      page.evaluate((expectedY) => Math.abs(window.scrollY - expectedY) <= 2, docsScroll),
     );
   }
 } finally {
