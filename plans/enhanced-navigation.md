@@ -125,13 +125,14 @@ through client navigation.
     attrs, stylesheet/modulepreload hints, speculation rules, and route-level
     document state. Unsupported shell drift falls back to full GET.
   - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
-    passed 57 browser tests and proves target document updates `<title>`, meta,
-    html/body attrs, stylesheet/modulepreload hints, and speculation rules. It
+    packages/runtime/src/inline-loader-navigation.browser.test.ts` passed 63
+    browser tests and proves target document updates `<title>`, meta, html/body
+    attrs, stylesheet/modulepreload hints, and speculation rules. It
     also proves docs theme state from `localStorage.theme` (`dark` and `light`)
     survives enhanced navigation, including explicit `light`/`dark` html classes
-    and pending navigation responses that resolve after the user changes theme,
-    when target full-document shell classes would otherwise replace `html.class`.
+    and `html[data-theme]` attributes, plus pending navigation responses that
+    resolve after the user changes theme, when target full-document shell state
+    would otherwise replace the current theme.
     `node site/scripts/smoke.mjs` passed
     `site-smoke/v1 OK` after `pnpm --filter @kovojs/site run build` and proves
     the docs site's theme choice survives enhanced navigation from docs pages
