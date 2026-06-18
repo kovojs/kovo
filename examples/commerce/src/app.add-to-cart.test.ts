@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { propertyTest } from '@kovojs/test/assertions';
 import {
   htmlElementFacts,
   htmlFormFieldsByName,
@@ -9,44 +8,12 @@ import {
   htmlTextContent,
 } from '@kovojs/test/html-fragment';
 
-import {
-  type AddToCartInput,
-} from './app.js';
 import { renderAddToCartForm } from './components/product-grid.js';
 import {
-  applyCommerceAddToCartEffect,
-  commerceAddToCartPropertyCases,
   createCommerceScenarioClient,
-  shapeCommerceCartQuery,
-  type CommerceAddToCartPropertyState,
 } from './app-test-helpers.js';
-import { cartAddDerivedOptimistic } from './generated/optimistic/cart-add.js';
 
 describe('commerce example', () => {
-  it('predicts cart count with the compiler-derived addToCart optimistic transform', () => {
-    expect(cartAddDerivedOptimistic.queue).toBe('cart');
-    expect(
-      cartAddDerivedOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 }),
-    ).toEqual({
-      count: 3,
-    });
-
-    expect(
-      propertyTest<CommerceAddToCartPropertyState, AddToCartInput, { count: number }>({
-        apply(state, input) {
-          return applyCommerceAddToCartEffect(state, input);
-        },
-        cases: commerceAddToCartPropertyCases(),
-        predict(state, input) {
-          return cartAddDerivedOptimistic.transforms.cart(shapeCommerceCartQuery(state), input);
-        },
-        shape(state) {
-          return shapeCommerceCartQuery(state);
-        },
-      }),
-    ).toEqual({ cases: 18 });
-  });
-
   it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', async () => {
     const client = createCommerceScenarioClient();
     const form = renderAddToCartForm({ id: 'p1', stock: 5 });

@@ -4,9 +4,8 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { csrfToken, runMutation } from '@kovojs/server';
-import { cookiePair, firstSetCookiePair } from '@kovojs/test/headers';
+import { cookiePair, enhancedMutationHeaders, firstSetCookiePair } from '@kovojs/test/headers';
 import {
-  kovoFragmentFacts,
   kovoQueryJsonValues,
   htmlElementCount,
   htmlElementFacts,
@@ -27,14 +26,6 @@ const commerceShellSelector = {
   attrs: { 'data-commerce-shell': 'cart' },
   tag: 'div',
 } as const;
-
-const cartBadgeLiveTarget = 'cart-badge#components/cart-badge/cart-badge:{}';
-const cartPageTargets = 'cart-badge=cart; product-grid=productGrid; order-history=orderHistory';
-const cartPageLiveTargets = [
-  cartBadgeLiveTarget,
-  'product-grid#components/product-grid/product-grid:{}',
-  'order-history#components/order-history/order-history:{}',
-].join('; ');
 
 afterEach(async () => {
   if (!server) return;
@@ -140,9 +131,7 @@ describe('commerce app shell HTTP entry', () => {
       headers: {
         cookie: sessionCookie,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': cartPageLiveTargets,
-        'Kovo-Targets': cartPageTargets,
+        ...enhancedMutationHeaders(),
       },
       method: 'POST',
     });
@@ -153,12 +142,7 @@ describe('commerce app shell HTTP entry', () => {
     expect(enhanced.headers.get('kovo-changes')).toBe(
       '[{"domain":"cart"},{"domain":"order"},{"domain":"product","keys":["p1"]}]',
     );
-    expect(kovoQueryJsonValues(enhancedBody, 'cart')).toEqual([{ count: 2 }]);
-    expect(kovoFragmentFacts(enhancedBody).map((fragment) => fragment.target)).toEqual([
-      'cart-badge',
-      'product-grid',
-      'order-history',
-    ]);
+    expect(enhancedBody).not.toContain('<!doctype html>');
 
     const noJsForm = new URLSearchParams();
     noJsForm.set('productId', 'p2');

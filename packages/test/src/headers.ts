@@ -33,11 +33,26 @@ export function firstSetCookiePair(source: HeaderSource): string {
   return cookiePair(setCookieValues(source)[0]);
 }
 
+/** Structured mutation target selection for enhanced scenario requests. */
+export interface EnhancedMutationTarget {
+  queries?: readonly string[] | string;
+  target: string;
+}
+
+/** Structured live-target descriptor for enhanced scenario requests. */
+export interface EnhancedMutationLiveTarget {
+  component: string;
+  props?: Record<string, unknown>;
+  target: string;
+}
+
+type HeaderListItem = EnhancedMutationLiveTarget | EnhancedMutationTarget | string;
+
 /** Options for {@link enhancedMutationHeaders}; targets follow the mutation wire protocol in SPEC.md §9.1. */
 export interface EnhancedMutationHeaderOptions {
   formTarget?: string;
-  liveTargets?: readonly string[] | string;
-  targets?: readonly string[] | string;
+  liveTargets?: readonly (EnhancedMutationLiveTarget | string)[] | string;
+  targets?: readonly (EnhancedMutationTarget | string)[] | string;
 }
 
 /** Build the enhanced-mutation request headers used by app scenario tests (SPEC.md §9.1). */
@@ -56,7 +71,18 @@ function isHeaders(source: HeaderSource): source is Headers {
   return typeof (source as Headers | undefined)?.get === 'function';
 }
 
-function headerList(value: readonly string[] | string | undefined): string {
+function headerList(value: readonly HeaderListItem[] | string | undefined): string {
   if (value === undefined) return '';
-  return typeof value === 'string' ? value : value.join('; ');
+  return typeof value === 'string' ? value : value.map(headerListItem).join('; ');
+}
+
+function headerListItem(value: HeaderListItem): string {
+  if (typeof value === 'string') return value;
+  if ('component' in value) {
+    return `${value.target}#${value.component}:${JSON.stringify(value.props ?? {})}`;
+  }
+  const queries = value.queries;
+  if (queries === undefined) return value.target;
+  const queryList = typeof queries === 'string' ? queries : queries.join(' ');
+  return `${value.target}=${queryList}`;
 }

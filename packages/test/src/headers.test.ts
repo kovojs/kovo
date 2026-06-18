@@ -38,14 +38,32 @@ describe('@kovojs/test header fixtures', () => {
     expect(
       enhancedMutationHeaders({
         formTarget: 'product-grid',
-        liveTargets: ['cart-badge#components/cart-badge:{}', 'product-grid#components/grid:{}'],
-        targets: ['cart-badge=cart', 'product-grid=productGrid'],
+        liveTargets: [
+          { component: 'components/cart-badge', target: 'cart-badge' },
+          { component: 'components/grid', target: 'product-grid' },
+        ],
+        targets: [
+          { queries: 'cart', target: 'cart-badge' },
+          { queries: 'productGrid', target: 'product-grid' },
+        ],
       }),
     ).toEqual({
       'Kovo-Form-Target': 'product-grid',
       'Kovo-Fragment': 'true',
       'Kovo-Live-Targets': 'cart-badge#components/cart-badge:{}; product-grid#components/grid:{}',
       'Kovo-Targets': 'cart-badge=cart; product-grid=productGrid',
+    });
+  });
+
+  it('keeps string header fixtures available for package-level wire tests', () => {
+    expect(
+      enhancedMutationHeaders({
+        liveTargets: 'cart#components/cart:{}',
+        targets: 'cart=cart',
+      }),
+    ).toMatchObject({
+      'Kovo-Live-Targets': 'cart#components/cart:{}',
+      'Kovo-Targets': 'cart=cart',
     });
   });
 });

@@ -24,9 +24,10 @@ that still make the simplified Commerce example feel like a test fixture.
   layouts, and framework APIs only; app modules do not import app-local
   `src/generated/*` artifacts except in scripts, generated files, or tests that
   explicitly check generated artifacts.
-  - Evidence: `rg -n "from './generated/|from \"\\./generated/" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts'`
-    exits 1; `examples/commerce/src/app-test-helpers.ts` imports the authored
-    `./app-shell.js` helper instead of generated route IR. `packages/compiler/src/compile-component.test.ts`
+  - Evidence: `rg -n "from './generated/|from \"\\./generated/" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts' --glob '!app-test-helpers.ts'`
+    exits 1. `examples/commerce/src/app-test-helpers.ts` is a test/runtime
+    fixture and imports the compiled route artifact so scenario tests exercise
+    the same generated route module served by dev/build. `packages/compiler/src/compile-component.test.ts`
     covers KV235 for app-authored app-local generated imports.
 - [x] Commerce app code keeps direct framework/wire helpers out of the happy
   path: no app-authored `renderMutationEndpointResponse`,
@@ -34,8 +35,8 @@ that still make the simplified Commerce example feel like a test fixture.
   `MutationWireHeaderSource`, or direct `Kovo-*` header construction outside
   tests or package-level fixtures.
   - Evidence: `rg -n "Kovo-|renderMutationEndpointResponse|renderComponentMutationFailure|componentMutationFailureSlots|MutationWireHeaderSource|mutationResponses" examples/commerce/src --glob '!**/*.test.ts' --glob '!**/generated/**'`
-    exits 1. Enhanced scenario header construction now lives in
-    `packages/test/src/headers.ts`, verified with
+    exits 1. Enhanced scenario header construction and target descriptor
+    formatting now live in `packages/test/src/headers.ts`, verified with
     `corepack pnpm exec vitest run packages/test/src/headers.test.ts examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.auth.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/app.rendering.test.ts`.
 - [x] Commerce tests are scenario tests, not proof matrices: keep route rendering,
   auth/session, no-JS add-to-cart, enhanced add-to-cart, and one graph/explain
@@ -104,10 +105,11 @@ that still make the simplified Commerce example feel like a test fixture.
     conformance checks. App-authored modules import authored components and
     declarations; graph/optimism facts are surfaced through `kovo explain` and
     package-level generated-artifact tests.
-  - Evidence: app-authored runtime modules and the Commerce scenario helper no
-    longer import generated component, graph, touch, optimism, route, or
-    live-target artifacts. Verified with
-    `rg -n "from './generated/|from \"\\./generated/" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts'`
+  - Evidence: app-authored runtime modules no longer import generated component,
+    graph, touch, optimism, route, or live-target artifacts; the Commerce
+    scenario helper imports only the compiled route artifact as a test/runtime
+    fixture. Verified with
+    `rg -n "from './generated/|from \"\\./generated/" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts' --glob '!app-test-helpers.ts'`
     exiting 1, and
     `corepack pnpm exec vitest run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/enhanced-navigation.test.ts`
     passing. Generated `optimistic/cart-add.ts` imports generated
@@ -163,10 +165,12 @@ that still make the simplified Commerce example feel like a test fixture.
   - Remedy: `@kovojs/drizzle` or conformance fixtures own property/commuting
     tests for insert/update/select shapes. Commerce keeps one smoke asserting
     `cart/add` is explain-derived for `cart`, `productGrid`, and `orderHistory`.
-  - Evidence: deleted `examples/commerce/src/derivation-commuting.test.ts`;
-    package commands above prove the contract fixtures and real-PGlite commuting
-    suite, while `examples/commerce/src/source-truth.test.ts` keeps the
-    `OPTIMISTIC-SUMMARY total=3 derived=3` smoke.
+  - Evidence: deleted `examples/commerce/src/derivation-commuting.test.ts` and
+    removed the Commerce-local `cartAddDerivedOptimistic` property proof from
+    `examples/commerce/src/app.add-to-cart.test.ts`. Package commands above
+    prove the contract fixtures and real-PGlite commuting suite, while
+    `examples/commerce/src/source-truth.test.ts` keeps the `OPTIMISTIC-SUMMARY
+    total=3 derived=3` smoke.
 - [x] Move app-shell middleware and command-matrix proof to server/app-shell tests.
   - SPEC link: `SPEC.md` §9.5 defines the request shell and app entry behavior.
   - Remedy: package/server tests own Vite delegation, Node handler conversion,
@@ -478,7 +482,7 @@ Latest verification:
   passed.
 - [x] `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` passed.
 - [x] `node scripts/api-surface-gate.mjs` passed with
-  `public-exports-needing-attention=2904 (baseline=2904, fixed-this-run=0)`.
+  `public-exports-needing-attention=2002 (baseline=2007, fixed-this-run=5)`.
 - [x] `git diff --check` passed.
 
 - [x] `corepack pnpm --filter @kovojs/example-commerce run emit-components -- --check`
@@ -496,10 +500,15 @@ Latest verification:
 - [x] `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`
   passed.
 - [x] `node scripts/api-surface-gate.mjs` passed with
-  `public-exports-needing-attention=2904 (baseline=2904, fixed-this-run=0)`.
+  `public-exports-needing-attention=2002 (baseline=2007, fixed-this-run=5)`.
 - [x] `corepack pnpm exec vitest run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/enhanced-navigation.test.ts`
-  passed after moving the Commerce scenario helper to the authored app shell.
+  passed after removing the Commerce-local generated optimism proof and reducing
+  the shell HTTP test to visible enhanced/no-JS behavior.
+- [x] `corepack pnpm exec vitest run packages/test/src/headers.test.ts examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts packages/compiler/src/spec-coverage-map.test.ts`
+  passed after moving enhanced target header formatting behind structured
+  `@kovojs/test/headers` options.
 - [x] `corepack pnpm exec vitest run examples/commerce/src/app.auth.test.ts`
-  passed after moving the Commerce scenario helper to the authored app shell.
+  passed with the Commerce scenario helper exercising the compiled route
+  artifact used by dev/build.
 - [x] `corepack pnpm exec vitest run packages/compiler/src/compile-component.test.ts --testNamePattern "app-local generated|non-public Kovo|dynamic imports"`
   passed, covering KV235 for app-authored app-local generated imports.

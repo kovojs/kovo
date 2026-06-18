@@ -169,7 +169,7 @@ export const compilerSpecCoverageMap = [
     referenceApp: [
       {
         file: 'examples/commerce/src/app.queries.test.ts',
-        testName: 'renders cursor-paged product grid and order history with stable list keys',
+        testName: 'loads cursor-paged products and user-scoped order history',
       },
     ],
   },

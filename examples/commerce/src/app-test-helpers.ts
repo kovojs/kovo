@@ -14,7 +14,7 @@ import {
 import {
   createCommerceAppShell,
   type CommerceAppShell,
-} from './app-shell.js';
+} from './generated/app-shell.kovo-route.js';
 import { cartItems, orders, products } from './schema.js';
 
 export type ProductRow = { id: string; stock: number; unitPrice: number };
@@ -91,63 +91,6 @@ export async function seedCommerceState(
   for (const row of state.products ?? []) await db.insert(products).values(row);
   for (const row of state.cartItems ?? []) await db.insert(cartItems).values(row);
   for (const row of state.orders ?? []) await db.insert(orders).values(row);
-}
-
-export interface CommerceAddToCartPropertyState {
-  cartItems: { productId: string; qty: number }[];
-  products: Record<string, { stock: number }>;
-}
-
-export function applyCommerceAddToCartEffect(
-  state: CommerceAddToCartPropertyState,
-  input: AddToCartInput,
-): CommerceAddToCartPropertyState {
-  const product = state.products[input.productId];
-  if (!product || product.stock < input.quantity) {
-    throw new Error(`Invalid property case for ${input.productId}`);
-  }
-
-  return {
-    cartItems: [...state.cartItems, { productId: input.productId, qty: input.quantity }],
-    products: {
-      ...state.products,
-      [input.productId]: {
-        stock: product.stock - input.quantity,
-      },
-    },
-  };
-}
-
-export function shapeCommerceCartQuery(state: CommerceAddToCartPropertyState): { count: number } {
-  return {
-    count: state.cartItems.reduce((total, item) => total + item.qty, 0),
-  };
-}
-
-export function commerceAddToCartPropertyCases(): {
-  input: AddToCartInput;
-  state: CommerceAddToCartPropertyState;
-}[] {
-  const cases: { input: AddToCartInput; state: CommerceAddToCartPropertyState }[] = [];
-
-  for (const productId of ['p1', 'p2']) {
-    for (const quantity of [1, 2, 3]) {
-      for (const initialCount of [0, 1, 5]) {
-        cases.push({
-          input: { productId, quantity },
-          state: {
-            cartItems: initialCount === 0 ? [] : [{ productId: 'existing', qty: initialCount }],
-            products: {
-              p1: { stock: 6 },
-              p2: { stock: 4 },
-            },
-          },
-        });
-      }
-    }
-  }
-
-  return cases;
 }
 
 export function queryContext(db = createCommerceDb()) {
@@ -233,11 +176,15 @@ export interface CommerceScenarioEnhancedOptions extends CommerceScenarioRequest
 }
 
 const commerceOrigin = 'https://commerce.test';
-const cartPageTargets = ['cart-badge=cart', 'product-grid=productGrid', 'order-history=orderHistory'];
+const cartPageTargets = [
+  { queries: 'cart', target: 'cart-badge' },
+  { queries: 'productGrid', target: 'product-grid' },
+  { queries: 'orderHistory', target: 'order-history' },
+];
 const cartPageLiveTargets = [
-  'cart-badge#components/cart-badge/cart-badge:{}',
-  'product-grid#components/product-grid/product-grid:{}',
-  'order-history#components/order-history/order-history:{}',
+  { component: 'components/cart-badge/cart-badge', target: 'cart-badge' },
+  { component: 'components/product-grid/product-grid', target: 'product-grid' },
+  { component: 'components/order-history/order-history', target: 'order-history' },
 ];
 
 export function createCommerceScenarioClient(
@@ -346,7 +293,7 @@ export function createCommerceScenarioClient(
         ? enhancedMutationHeaders({
             formTarget: 'product-grid',
             liveTargets: cartPageLiveTargets,
-            targets: ['product-grid=productGrid'],
+            targets: [{ queries: 'productGrid', target: 'product-grid' }],
           })
         : enhancedMutationHeaders({
             liveTargets: cartPageLiveTargets,
