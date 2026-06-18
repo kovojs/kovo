@@ -293,6 +293,107 @@ describe('browser inline loader enhanced navigation', () => {
     expect(localStorage.getItem('theme')).toBe('light');
   });
 
+  it('preserves explicit light html theme class across target documents with dark defaults', async () => {
+    localStorage.setItem('theme', 'light');
+    document.documentElement.className = 'light stale-shell';
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Docs</title>',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-api" href="/api">API</a>',
+      '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+      '</main>',
+    ].join('');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html lang="en" class="dark target-shell"><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>API</title>',
+          '</head><body data-route="api">',
+          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+          '<a id="to-api" href="/api">API</a>',
+          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/api', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    dispatchAnchorLikeClick('/api');
+
+    await vi.waitFor(() => expect(document.title).toBe('API'));
+
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(document.documentElement.classList.contains('target-shell')).toBe(true);
+    expect(document.documentElement.classList.contains('stale-shell')).toBe(false);
+    expect(localStorage.getItem('theme')).toBe('light');
+  });
+
+  it('uses the latest user theme state when a pending enhanced navigation resolves', async () => {
+    localStorage.setItem('theme', 'dark');
+    document.documentElement.className = 'dark';
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Docs</title>',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-api" href="/api">API</a>',
+      '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+      '</main>',
+    ].join('');
+    let resolveText: ((html: string) => void) | undefined;
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      text: () =>
+        new Promise<string>((resolve) => {
+          resolveText = resolve;
+        }),
+      url: new URL('/api', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    dispatchAnchorLikeClick('/api');
+
+    await vi.waitFor(() => expect(resolveText).toBeTypeOf('function'));
+    localStorage.setItem('theme', 'light');
+    document.documentElement.classList.remove('dark');
+    document.documentElement.classList.add('light');
+    resolveText?.(
+      [
+        '<!doctype html><html lang="en" class="dark target-shell"><head>',
+        '<meta name="kovo-build" content="build-a">',
+        '<title>API</title>',
+        '</head><body data-route="api">',
+        '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+        '<a id="to-api" href="/api">API</a>',
+        '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
+        '</main>',
+        '</body></html>',
+      ].join(''),
+    );
+
+    await vi.waitFor(() => expect(document.title).toBe('API'));
+
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(document.documentElement.classList.contains('target-shell')).toBe(true);
+    expect(localStorage.getItem('theme')).toBe('light');
+  });
+
   it('preserves docs theme state toggled through delegated handlers across page morphs', async () => {
     const toggle = vi.fn((event: Event) => {
       event.preventDefault();

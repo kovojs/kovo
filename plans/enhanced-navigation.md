@@ -126,11 +126,13 @@ through client navigation.
     document state. Unsupported shell drift falls back to full GET.
   - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
     packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
-    passed 45 browser tests and proves target document updates `<title>`, meta,
+    passed 57 browser tests and proves target document updates `<title>`, meta,
     html/body attrs, stylesheet/modulepreload hints, and speculation rules. It
     also proves docs theme state from `localStorage.theme` (`dark` and `light`)
-    survives enhanced navigation when target full-document shell classes would
-    otherwise replace `html.class`. `node site/scripts/smoke.mjs` passed
+    survives enhanced navigation, including explicit `light`/`dark` html classes
+    and pending navigation responses that resolve after the user changes theme,
+    when target full-document shell classes would otherwise replace `html.class`.
+    `node site/scripts/smoke.mjs` passed
     `site-smoke/v1 OK` after `pnpm --filter @kovojs/site run build` and proves
     the docs site's theme choice survives enhanced navigation from docs pages
     through the API reference flow.
@@ -204,7 +206,7 @@ through client navigation.
     hash anchors to native browser navigation. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
     packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
-    passed with 51 browser tests and proves target-document API hashes scroll
+    passed with 57 browser tests and proves target-document API hashes scroll
     after morphing, preserve request fragments when real `fetch()` response URLs
     omit hashes, offset below sticky document chrome, update `location.href`, and
     restore saved scroll/hash URL state through browser `popstate`.
