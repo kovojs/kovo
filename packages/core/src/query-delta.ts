@@ -82,15 +82,6 @@ function rowKey(row: JsonValue, keyField: string): string | undefined {
  * @param affectedKeysByDomain - Change-record keys per touched domain (SPEC §9.1, `Kovo-Changes`).
  * @param listMeta - The query's delta-eligible collections.
  * @returns A `QueryDelta`, or `undefined` to fall back to the full value.
- * @example
- * import { buildQueryDelta } from '@kovojs/core/internal/query-delta';
- *
- * const delta = buildQueryDelta(
- *   { count: 3, items: [{ id: 'p1', qty: 2 }] },
- *   new Map([['cart', new Set(['p1'])]]),
- *   [{ domain: 'cart', key: 'id', path: 'items' }],
- * );
- * // delta.set === { count: 3 }; delta.lists.items.upsert === [{ id: 'p1', qty: 2 }]
  */
 export function buildQueryDelta(
   value: JsonValue,
@@ -165,14 +156,6 @@ export function queryDeltaIsSmaller(delta: QueryDelta, value: JsonValue): boolea
  * @param base - The client's currently held query value.
  * @param delta - The wire delta to apply.
  * @returns The reconstructed full query value.
- * @example
- * import { applyQueryDelta } from '@kovojs/core/internal/query-delta';
- *
- * const next = applyQueryDelta(
- *   { count: 2, items: [{ id: 'p1', qty: 1 }] },
- *   { set: { count: 3 }, lists: { items: { key: 'id', upsert: [{ id: 'p1', qty: 2 }] } } },
- * );
- * // next === { count: 3, items: [{ id: 'p1', qty: 2 }] }
  */
 export function applyQueryDelta(base: JsonValue | undefined, delta: QueryDelta): JsonValue {
   if (!isPlainObject(base)) {

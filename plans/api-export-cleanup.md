@@ -866,11 +866,11 @@ tsconfig.json --noEmit --pretty false`.
     helpers/types from `src/lib/index.ts` plus `kovoHeadlessUiPrefix`; it no
     longer re-exports `src/primitives/index.ts` or platform-audit tooling.
     Compiler merge fixtures, gallery harness import aggregation, and docs now
-    use direct family subpaths for primitive APIs. `node
-    scripts/exported-symbols.mjs --duplicates --json` reports 15 total
+    use direct family subpaths for primitive APIs. Current `node
+    scripts/exported-symbols.mjs --duplicates --json` reports 8 total
     duplicate public symbols and 0 for `@kovojs/headless-ui`; `node
     scripts/api-surface-gate.mjs` reports
-    `public-exports-needing-attention=1739` after removing 852 headless root
+    `public-exports-needing-attention=1737` after removing the headless root
     baseline entries. `corepack pnpm exec vitest --run packages/headless-ui/src
     packages/compiler/src/gallery-merge-fixtures*.test.tsx
     packages/ui/src/index.markup.test.tsx` passed; `corepack pnpm exec tsc -p
@@ -1168,9 +1168,11 @@ scripts/exported-symbols.mjs --duplicates --check` passes against the
   - Do not allow new duplicate root+subpath exports without editing the baseline
     and plan evidence.
   - Evidence: `scripts/exported-symbol-duplicates.baseline.json` records the
-    current 858 duplicate public symbols with a migration reason and removal
-    target; `node scripts/exported-symbols.mjs --duplicates --check` fails on
-    added/removed duplicate homes unless the baseline is updated deliberately.
+    current 8 duplicate public symbols with a migration reason and removal
+    target; all are the `@kovojs/server/jsx-runtime` /
+    `@kovojs/server/jsx-dev-runtime` TypeScript JSX runtime mirrors. `node
+    scripts/exported-symbols.mjs --duplicates --check` fails on added/removed
+    duplicate homes unless the baseline is updated deliberately.
 - [x] **Prefer subpath ownership for family/component symbols.**
   - For `@kovojs/headless-ui` and `@kovojs/ui`, component/family symbols should
     live on their direct family subpath. The root can export package-wide tokens,
