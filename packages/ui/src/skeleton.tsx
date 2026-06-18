@@ -2,6 +2,8 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface SkeletonProps {
   style?: style.StyleInput;
 }
@@ -21,8 +23,8 @@ export const skeletonStyles = style.create(
       animationIterationCount: 'infinite',
       animationName: pulse,
       animationTimingFunction: 'cubic-bezier(0.4, 0, 0.6, 1)',
-      backgroundColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      borderRadius: uiTheme.radius.md,
     },
   },
   { namespace: 'skeleton', source: 'skeleton.tsx' },

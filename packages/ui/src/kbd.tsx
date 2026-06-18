@@ -2,6 +2,8 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface KbdProps {
   children?: string;
   style?: style.StyleInput;
@@ -11,13 +13,13 @@ export const kbdStyles = style.create(
   {
     root: {
       alignItems: 'center',
-      backgroundColor: '#fafafa',
-      borderColor: '#d4d4d4',
-      borderRadius: 4,
+      backgroundColor: uiTheme.color.backgroundRaised,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.sm,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
       display: 'inline-flex',
       fontFamily:
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',

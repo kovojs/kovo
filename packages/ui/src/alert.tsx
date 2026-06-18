@@ -2,6 +2,8 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export type AlertVariant = 'info' | 'success' | 'warning' | 'danger';
 
 export interface AlertProps {
@@ -15,7 +17,7 @@ export interface AlertProps {
 const base = style.create(
   {
     root: {
-      borderRadius: 8,
+      borderRadius: uiTheme.radius.lg,
       borderStyle: 'solid',
       borderWidth: 1,
       display: 'grid',
@@ -33,24 +35,24 @@ const base = style.create(
 const variants = style.create(
   {
     danger: {
-      backgroundColor: '#fef2f2',
-      borderColor: '#fecaca',
-      color: '#450a0a',
+      backgroundColor: uiTheme.color.danger.background,
+      borderColor: uiTheme.color.danger.border,
+      color: uiTheme.color.danger.foreground,
     },
     info: {
-      backgroundColor: '#f0f9ff',
-      borderColor: '#bae6fd',
-      color: '#082f49',
+      backgroundColor: uiTheme.color.info.background,
+      borderColor: uiTheme.color.info.border,
+      color: uiTheme.color.info.foreground,
     },
     success: {
-      backgroundColor: '#ecfdf5',
-      borderColor: '#a7f3d0',
-      color: '#022c22',
+      backgroundColor: uiTheme.color.success.background,
+      borderColor: uiTheme.color.success.border,
+      color: uiTheme.color.success.foreground,
     },
     warning: {
-      backgroundColor: '#fffbeb',
-      borderColor: '#fde68a',
-      color: '#451a03',
+      backgroundColor: uiTheme.color.warning.background,
+      borderColor: uiTheme.color.warning.border,
+      color: uiTheme.color.warning.foreground,
     },
   },
   { namespace: 'alertVariant', source: 'alert.tsx' },

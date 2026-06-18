@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`@kovojs/ui Alert StyleX styles > accepts author-last StyleX overrides 1`] = `"<div class="kv-alert-bd-1mu636 kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-pad-1uhz8j kv-app-alert-bg-16nrlb kv-app-alert-bd-6vmi2g kv-app-alert-fg-sutien" data-style-src="alert.tsx#root; alert.tsx#warning; app-alert.tsx#root" role="status"><div>Custom</div></div>"`;
+exports[`@kovojs/ui Alert StyleX styles > accepts author-last StyleX overrides 1`] = `"<div class="kv-alert-bd-lc6y2t kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-pad-1uhz8j kv-app-alert-bg-16nrlb kv-app-alert-bd-6vmi2g kv-app-alert-fg-sutien" data-style-src="alert.tsx#root; alert.tsx#warning; app-alert.tsx#root" role="status"><div>Custom</div></div>"`;
 
 exports[`@kovojs/ui Alert StyleX styles > exports StyleX style groups instead of variant helpers 1`] = `
 {
@@ -30,14 +30,14 @@ exports[`@kovojs/ui Alert StyleX styles > exports StyleX style groups instead of
 exports[`@kovojs/ui Alert StyleX styles > renders default and variant StyleX classes 1`] = `
 {
   "classes": [
-    "kv-alert-bd-1mu636 kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-pad-1uhz8j kv-alert-variant-bg-7i42ef kv-alert-variant-bd-1iedij kv-alert-variant-fg-rtaxqw",
-    "kv-alert-variant-bg-8gq8ck kv-alert-variant-bd-2nb0ym kv-alert-variant-fg-tuol1b",
-    "kv-alert-variant-bg-117zeh kv-alert-variant-bd-1qwe52 kv-alert-variant-fg-1qeua4",
-    "kv-alert-variant-bg-1k6uwd kv-alert-variant-bd-w5o38u kv-alert-variant-fg-rzpmzf",
+    "kv-alert-bd-lc6y2t kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-pad-1uhz8j kv-alert-variant-bg-6duh3f kv-alert-variant-bd-1ne9im kv-alert-variant-fg-q4nzx2",
+    "kv-alert-variant-bg-1mzl57 kv-alert-variant-bd-171gf5 kv-alert-variant-fg-1kje95",
+    "kv-alert-variant-bg-4a9nc9 kv-alert-variant-bd-1m0o9z kv-alert-variant-fg-1e7t1n",
+    "kv-alert-variant-bg-1nqe2a kv-alert-variant-bd-1qv6s4 kv-alert-variant-fg-1g8pfe",
     "kv-alert-font-171eqm",
   ],
-  "danger": "<div class="kv-alert-bd-1mu636 kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-pad-1uhz8j kv-alert-variant-bg-1k6uwd kv-alert-variant-bd-w5o38u kv-alert-variant-fg-rzpmzf" data-style-src="alert.tsx#root; alert.tsx#danger" role="alert"><strong class="kv-alert-font-171eqm" data-style-src="alert.tsx#title">Billing issue</strong><div>Payment method required.</div></div>",
-  "info": "<div class="kv-alert-bd-1mu636 kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-pad-1uhz8j kv-alert-variant-bg-7i42ef kv-alert-variant-bd-1iedij kv-alert-variant-fg-rtaxqw" data-style-src="alert.tsx#root; alert.tsx#info" role="status"><div>Queued.</div></div>",
-  "success": "<div class="kv-alert-bd-1mu636 kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-pad-1uhz8j kv-alert-variant-bg-8gq8ck kv-alert-variant-bd-2nb0ym kv-alert-variant-fg-tuol1b" data-style-src="alert.tsx#root; alert.tsx#success" role="status"><strong class="kv-alert-font-171eqm" data-style-src="alert.tsx#title">Import complete</strong><div>Imported.</div></div>",
+  "danger": "<div class="kv-alert-bd-lc6y2t kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-pad-1uhz8j kv-alert-variant-bg-1nqe2a kv-alert-variant-bd-1qv6s4 kv-alert-variant-fg-1g8pfe" data-style-src="alert.tsx#root; alert.tsx#danger" role="alert"><strong class="kv-alert-font-171eqm" data-style-src="alert.tsx#title">Billing issue</strong><div>Payment method required.</div></div>",
+  "info": "<div class="kv-alert-bd-lc6y2t kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-pad-1uhz8j kv-alert-variant-bg-6duh3f kv-alert-variant-bd-1ne9im kv-alert-variant-fg-q4nzx2" data-style-src="alert.tsx#root; alert.tsx#info" role="status"><div>Queued.</div></div>",
+  "success": "<div class="kv-alert-bd-lc6y2t kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-pad-1uhz8j kv-alert-variant-bg-1mzl57 kv-alert-variant-bd-171gf5 kv-alert-variant-fg-1kje95" data-style-src="alert.tsx#root; alert.tsx#success" role="status"><strong class="kv-alert-font-171eqm" data-style-src="alert.tsx#title">Import complete</strong><div>Imported.</div></div>",
 }
 `;

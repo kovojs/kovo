@@ -190,12 +190,22 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
 
 ## Part C — UI component migration
 
-- [ ] **C1. Add a shared UI theme/token module.** Create the Kovo UI token adapter used by copied
+- [x] **C1. Add a shared UI theme/token module.** Create the Kovo UI token adapter used by copied
       components, importing root `@kovojs/style` theme exports and exporting typed token aliases for
       component authors where a local alias improves readability.
-- [ ] **C2. Pilot migrate core display primitives.** Convert Button, Card, Badge, Alert, Kbd,
+  - Evidence: `packages/ui/src/theme.ts` now re-exports local semantic aliases over
+    `@kovojs/style` `tokens` for StyleX-authored light-DOM components per `SPEC.md` §13.1.
+- [x] **C2. Pilot migrate core display primitives.** Convert Button, Card, Badge, Alert, Kbd,
       Separator, Progress, Skeleton to system/custom tokens while preserving class snapshots except
       for expected value hashes.
+  - Evidence: `packages/ui/src/{button,card,badge,alert,kbd,separator,progress,skeleton}.tsx`
+    import `./theme.js` and use semantic theme tokens instead of hard-coded component color
+    literals; `corepack pnpm exec vitest run packages/ui/src/button.stylex.test.tsx
+    packages/ui/src/card.stylex.test.tsx packages/ui/src/badge.stylex.test.tsx
+    packages/ui/src/alert.stylex.test.tsx packages/ui/src/kbd.stylex.test.tsx
+    packages/ui/src/separator.stylex.test.tsx packages/ui/src/progress.stylex.test.tsx
+    packages/ui/src/skeleton.stylex.test.tsx -u`, `corepack pnpm exec tsc -p tsconfig.json
+    --noEmit --pretty false`, and `git diff --check` all pass.
 - [ ] **C3. Migrate form controls.** Convert Checkbox, Switch, RadioGroup, Field, NumberField,
       Select, Combobox, Autocomplete, Slider, OTP, Meter to system tokens and state-specific roles.
 - [ ] **C4. Migrate overlays/navigation.** Convert Dialog, AlertDialog, Drawer, Sheet, Popover,

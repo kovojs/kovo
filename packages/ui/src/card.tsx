@@ -2,6 +2,8 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface CardProps {
   children?: string;
   style?: style.StyleInput;
@@ -10,13 +12,13 @@ export interface CardProps {
 export const cardStyles = style.create(
   {
     root: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 8,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.lg,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       padding: 16,
     },
   },

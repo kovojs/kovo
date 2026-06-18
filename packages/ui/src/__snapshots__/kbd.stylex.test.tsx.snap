@@ -9,13 +9,13 @@ exports[`@kovojs/ui Kbd StyleX styles > exports a StyleX style group 1`] = `
 }
 `;
 
-exports[`@kovojs/ui Kbd StyleX styles > matches author-last override output 1`] = `"<kbd class="kv-kbd-align-pcwyi kv-kbd-bd-112cr7 kv-kbd-bd-1s6qls kv-kbd-bd-17dppo kv-kbd-bd-5grtwb kv-kbd-box-xlni9o kv-kbd-d-1j551m kv-kbd-font-mbvnnm kv-kbd-font-6d48ri kv-kbd-font-pksaee kv-kbd-h-12eqfq kv-kbd-justify-1j5cpq kv-kbd-line-154t8i kv-kbd-min-bkq3y kv-kbd-pad-1e0rsx kv-app-kbd-bg-1c68yj kv-app-kbd-fg-sutien kv-app-kbd-text-n168zp" data-style-src="kbd.tsx#root; app-kbd.tsx#root">K</kbd>"`;
+exports[`@kovojs/ui Kbd StyleX styles > matches author-last override output 1`] = `"<kbd class="kv-kbd-align-pcwyi kv-kbd-bd-1gezg0 kv-kbd-bd-1cw6l8 kv-kbd-bd-17dppo kv-kbd-bd-5grtwb kv-kbd-box-xlni9o kv-kbd-d-1j551m kv-kbd-font-mbvnnm kv-kbd-font-6d48ri kv-kbd-font-pksaee kv-kbd-h-12eqfq kv-kbd-justify-1j5cpq kv-kbd-line-154t8i kv-kbd-min-bkq3y kv-kbd-pad-1e0rsx kv-app-kbd-bg-1c68yj kv-app-kbd-fg-sutien kv-app-kbd-text-n168zp" data-style-src="kbd.tsx#root; app-kbd.tsx#root">K</kbd>"`;
 
 exports[`@kovojs/ui Kbd StyleX styles > matches default rendered output 1`] = `
 {
   "classes": [
-    "kv-kbd-align-pcwyi kv-kbd-bg-z1u5sx kv-kbd-bd-112cr7 kv-kbd-bd-1s6qls kv-kbd-bd-17dppo kv-kbd-bd-5grtwb kv-kbd-box-xlni9o kv-kbd-fg-wtr7qj kv-kbd-d-1j551m kv-kbd-font-mbvnnm kv-kbd-font-6d48ri kv-kbd-font-pksaee kv-kbd-h-12eqfq kv-kbd-justify-1j5cpq kv-kbd-line-154t8i kv-kbd-min-bkq3y kv-kbd-pad-1e0rsx",
+    "kv-kbd-align-pcwyi kv-kbd-bg-n2unu1 kv-kbd-bd-1gezg0 kv-kbd-bd-1cw6l8 kv-kbd-bd-17dppo kv-kbd-bd-5grtwb kv-kbd-box-xlni9o kv-kbd-fg-1k3ppc kv-kbd-d-1j551m kv-kbd-font-mbvnnm kv-kbd-font-6d48ri kv-kbd-font-pksaee kv-kbd-h-12eqfq kv-kbd-justify-1j5cpq kv-kbd-line-154t8i kv-kbd-min-bkq3y kv-kbd-pad-1e0rsx",
   ],
-  "rendered": "<kbd class="kv-kbd-align-pcwyi kv-kbd-bg-z1u5sx kv-kbd-bd-112cr7 kv-kbd-bd-1s6qls kv-kbd-bd-17dppo kv-kbd-bd-5grtwb kv-kbd-box-xlni9o kv-kbd-fg-wtr7qj kv-kbd-d-1j551m kv-kbd-font-mbvnnm kv-kbd-font-6d48ri kv-kbd-font-pksaee kv-kbd-h-12eqfq kv-kbd-justify-1j5cpq kv-kbd-line-154t8i kv-kbd-min-bkq3y kv-kbd-pad-1e0rsx" data-style-src="kbd.tsx#root">Ctrl</kbd>",
+  "rendered": "<kbd class="kv-kbd-align-pcwyi kv-kbd-bg-n2unu1 kv-kbd-bd-1gezg0 kv-kbd-bd-1cw6l8 kv-kbd-bd-17dppo kv-kbd-bd-5grtwb kv-kbd-box-xlni9o kv-kbd-fg-1k3ppc kv-kbd-d-1j551m kv-kbd-font-mbvnnm kv-kbd-font-6d48ri kv-kbd-font-pksaee kv-kbd-h-12eqfq kv-kbd-justify-1j5cpq kv-kbd-line-154t8i kv-kbd-min-bkq3y kv-kbd-pad-1e0rsx" data-style-src="kbd.tsx#root">Ctrl</kbd>",
 }
 `;

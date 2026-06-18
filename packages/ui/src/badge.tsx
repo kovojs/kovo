@@ -2,6 +2,8 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export type BadgeVariant = 'neutral' | 'success' | 'warning';
 
 export interface BadgeProps {
@@ -14,7 +16,7 @@ const base = style.create(
   {
     root: {
       alignItems: 'center',
-      borderRadius: 6,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       display: 'inline-flex',
@@ -30,19 +32,19 @@ const base = style.create(
 const variants = style.create(
   {
     neutral: {
-      backgroundColor: '#f5f5f5',
-      borderColor: '#e5e5e5',
-      color: '#171717',
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      borderColor: uiTheme.color.border,
+      color: uiTheme.color.foreground,
     },
     success: {
-      backgroundColor: '#ecfdf5',
-      borderColor: '#a7f3d0',
-      color: '#065f46',
+      backgroundColor: uiTheme.color.success.background,
+      borderColor: uiTheme.color.success.border,
+      color: uiTheme.color.success.foreground,
     },
     warning: {
-      backgroundColor: '#fffbeb',
-      borderColor: '#fde68a',
-      color: '#78350f',
+      backgroundColor: uiTheme.color.warning.background,
+      borderColor: uiTheme.color.warning.border,
+      color: uiTheme.color.warning.foreground,
     },
   },
   { namespace: 'badgeVariant', source: 'badge.tsx' },

@@ -3,6 +3,8 @@ import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 import { progressRootAttributes } from '@kovojs/headless-ui/progress';
 
+import { uiTheme } from './theme.js';
+
 export interface ProgressProps {
   children?: string;
   max?: number;
@@ -22,14 +24,14 @@ const pulse = style.keyframes(
 export const progressStyles = style.create(
   {
     root: {
-      accentColor: '#0a0a0a',
-      backgroundColor: '#e5e5e5',
-      borderRadius: 9999,
+      accentColor: uiTheme.color.accent,
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      borderRadius: uiTheme.radius.full,
       height: 8,
       overflow: 'hidden',
       width: '100%',
       '[data-state=complete]': {
-        accentColor: '#059669',
+        accentColor: uiTheme.color.success.border,
       },
       '[data-state=indeterminate]': {
         animationDuration: '2s',

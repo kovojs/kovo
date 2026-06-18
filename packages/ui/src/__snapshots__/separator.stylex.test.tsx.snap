@@ -24,10 +24,10 @@ exports[`@kovojs/ui Separator StyleX styles > matches author-last override outpu
 exports[`@kovojs/ui Separator StyleX styles > matches default and semantic orientation output 1`] = `
 {
   "classes": [
-    "kv-separator-bg-lw8anm kv-separator-flex-1pwdgv kv-separator-orientation-h-1g00uh kv-separator-orientation-w-519kc1",
+    "kv-separator-bg-lh96d kv-separator-flex-1pwdgv kv-separator-orientation-h-1g00uh kv-separator-orientation-w-519kc1",
     "kv-separator-orientation-h-1evh3u kv-separator-orientation-w-ed5ea8",
   ],
-  "decorative": "<div class="kv-separator-bg-lw8anm kv-separator-flex-1pwdgv kv-separator-orientation-h-1g00uh kv-separator-orientation-w-519kc1" data-style-src="separator.tsx#root; separator.tsx#horizontal" data-orientation="horizontal" role="none"></div>",
-  "semanticVertical": "<div class="kv-separator-bg-lw8anm kv-separator-flex-1pwdgv kv-separator-orientation-h-1evh3u kv-separator-orientation-w-ed5ea8" data-style-src="separator.tsx#root; separator.tsx#vertical" aria-orientation="vertical" data-orientation="vertical" role="separator"></div>",
+  "decorative": "<div class="kv-separator-bg-lh96d kv-separator-flex-1pwdgv kv-separator-orientation-h-1g00uh kv-separator-orientation-w-519kc1" data-style-src="separator.tsx#root; separator.tsx#horizontal" data-orientation="horizontal" role="none"></div>",
+  "semanticVertical": "<div class="kv-separator-bg-lh96d kv-separator-flex-1pwdgv kv-separator-orientation-h-1evh3u kv-separator-orientation-w-ed5ea8" data-style-src="separator.tsx#root; separator.tsx#vertical" aria-orientation="vertical" data-orientation="vertical" role="separator"></div>",
 }
 `;

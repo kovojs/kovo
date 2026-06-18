@@ -2,6 +2,8 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
 export type ButtonSize = 'sm' | 'md';
 
@@ -21,7 +23,7 @@ const base = style.create(
   {
     root: {
       alignItems: 'center',
-      borderRadius: 6,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       display: 'inline-flex',
@@ -64,36 +66,36 @@ const variants = style.create(
     ghost: {
       backgroundColor: 'transparent',
       borderColor: 'transparent',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       ':focus-visible': {
-        outlineColor: '#a3a3a3',
+        outlineColor: uiTheme.color.borderStrong,
       },
       ':hover': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtle,
       },
     },
     primary: {
-      backgroundColor: '#0a0a0a',
-      borderColor: '#0a0a0a',
+      backgroundColor: uiTheme.color.accent,
+      borderColor: uiTheme.color.accentBorder,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#ffffff',
+      color: uiTheme.color.accentForeground,
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.accentBorder,
       },
       ':hover': {
-        backgroundColor: '#262626',
+        backgroundColor: uiTheme.color.accentHover,
       },
     },
     secondary: {
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       ':focus-visible': {
-        outlineColor: '#a3a3a3',
+        outlineColor: uiTheme.color.borderStrong,
       },
       ':hover': {
-        backgroundColor: '#fafafa',
+        backgroundColor: uiTheme.color.backgroundRaised,
       },
     },
   },

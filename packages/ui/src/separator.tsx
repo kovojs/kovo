@@ -6,6 +6,8 @@ import {
   type SeparatorOrientation,
 } from '@kovojs/headless-ui/separator';
 
+import { uiTheme } from './theme.js';
+
 export interface SeparatorProps {
   decorative?: boolean;
   orientation?: SeparatorOrientation;
@@ -15,7 +17,7 @@ export interface SeparatorProps {
 const base = style.create(
   {
     root: {
-      backgroundColor: '#e5e5e5',
+      backgroundColor: uiTheme.color.border,
       flexShrink: 0,
     },
   },
