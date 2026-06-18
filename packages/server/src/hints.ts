@@ -34,13 +34,20 @@ export interface StylesheetAsset {
   preload?: boolean;
 }
 
+/** Theme CSS accepted by {@link stylesheet}; usually a Kovo theme object from `@kovojs/style`. */
 export type StylesheetTheme = string | { readonly css: string };
 
+/** Options for declaring an authored stylesheet asset (SPEC.md §13.1). */
 export interface StylesheetDeclarationOptions {
+  /** Critical CSS to inline before the linked stylesheet identity. */
   criticalCss?: string | readonly string[];
+  /** Optional CSP hash for the inlined critical CSS. */
   cspHash?: string;
+  /** Public stylesheet href; local sources derive `/assets/<file>` when omitted. */
   href?: string;
+  /** Whether Early Hints should preload the linked stylesheet. */
   preload?: boolean;
+  /** Theme CSS to prepend to `criticalCss`. */
   theme?: StylesheetTheme;
 }
 
@@ -87,10 +94,14 @@ export function stylesheetsForTargets(
   );
 }
 
-export function stylesheet(
-  source: string,
-  options?: StylesheetDeclarationOptions,
-): StylesheetAsset;
+/**
+ * Declare a local or external stylesheet for route/page hints.
+ *
+ * Local paths derive `/assets/<file>` unless `options.href` overrides it; external
+ * and root-relative hrefs are preserved.
+ */
+export function stylesheet(source: string, options?: StylesheetDeclarationOptions): StylesheetAsset;
+/** Declare a theme-only or fully configured stylesheet asset for route/page hints. */
 export function stylesheet(options: StylesheetDeclarationOptions): StylesheetAsset;
 export function stylesheet(
   sourceOrOptions: string | StylesheetDeclarationOptions,
