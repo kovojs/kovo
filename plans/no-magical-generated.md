@@ -212,6 +212,14 @@ internals, emit/check scripts, and narrowly named artifact tests.
     authored JSX should use `style={styles.foo}` / `style={[...]}`, and
     `style.attrs(...)` should remain a low-level runtime or package-internal
     escape hatch rather than the app-author-facing pattern.
+  - Current progress: `site/src/components/docs-layout.tsx`,
+    `site/src/components/example-split.tsx`, and
+    `site/src/components/gallery.tsx` now co-locate authored style objects and
+    feed their emitted CSS through `siteStylesheets`; `pnpm --filter
+    @kovojs/site test`, `pnpm --filter @kovojs/site run build:css`, `pnpm
+    --filter @kovojs/site exec node scripts/export-static.mjs`, and `rg -n
+    "style\\.attrs" site/src --glob '!generated/**' -S` passed. Keep open for
+    remaining class-based docs components and prose examples.
 
 ## Verification
 
