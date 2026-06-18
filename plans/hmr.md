@@ -181,9 +181,11 @@ render-plan version skew checks.
   - Evidence: `packages/compiler/src/vite.ts` now records previous
     `hmrImpact` facts per component source, implements `handleHotUpdate()`,
     sends `kovo:component-render`, `kovo:route-shell`, `kovo:diagnostics`, or
-    `kovo:full-reload` over the Vite websocket, and delegates unsafe updates to
-    Vite `{ type: "full-reload" }`. `packages/compiler/src/vite.test.ts`
-    covers component-refresh, diagnostic, and full-reload websocket events.
+    `kovo:full-reload` over the Vite websocket, and currently pairs every
+    claimed Kovo hot update with Vite `{ type: "full-reload" }` until the
+    dev-only refresh client/endpoints are implemented. `packages/compiler/src/vite.test.ts`
+    covers component-refresh, diagnostic, and full-reload websocket events plus
+    the conservative reload fallback.
     Verification: `corepack pnpm exec vitest --run
     packages/compiler/src/vite.test.ts packages/compiler/src/hmr-impact.test.ts`;
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`; `node

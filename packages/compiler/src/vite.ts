@@ -205,6 +205,7 @@ export function createKovoVitePlugin(
           impact: 'diagnosticError',
           reasons: ['diagnostics'],
         });
+        context.server.ws?.send({ type: 'full-reload' });
         return [];
       }
 
@@ -212,7 +213,7 @@ export function createKovoVitePlugin(
       const classification = classifyHmrImpact(previous, next);
       const event = eventForHmrClassification(classification);
       sendKovoHmrEvent(context.server, event, previous, next, classification);
-      if (classification.impact === 'fullReload') context.server.ws?.send({ type: 'full-reload' });
+      context.server.ws?.send({ type: 'full-reload' });
 
       return [];
     },

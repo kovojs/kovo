@@ -386,6 +386,7 @@ export const CartBadge = component({
       event: 'kovo:component-render',
       type: 'custom',
     });
+    expect(ws.send).toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
   it('sends Kovo diagnostics HMR events for compiler errors without throwing', async () => {
@@ -436,6 +437,7 @@ export const CartBadge = component({
       event: 'kovo:diagnostics',
       type: 'custom',
     });
+    expect(ws.send).toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
   it('delegates unsafe Kovo hot updates to Vite full reload', async () => {
