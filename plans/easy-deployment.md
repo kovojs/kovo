@@ -486,9 +486,13 @@ packages/cli/src/index.kovo-build.test.ts`.
   - Partial evidence: golden-file coverage exists in `packages/server/src/
 build.test.ts` and `packages/cli/src/index.kovo-build.test.ts` for
     `config.json`, `.vc-config.json`, copied static assets, and the generated
-    Node function wrapper. Gap: `vercel --version` is not available in this
-    environment (`zsh: command not found: vercel`), so no Vercel CLI dry-run was
-    executed in this checkpoint.
+    Node function wrapper. `corepack pnpm dlx vercel --version` succeeded with
+    Vercel CLI 54.14.2 in this session. Gap: `corepack pnpm dlx vercel deploy
+    --prebuilt --no-wait --token dummy --cwd <generated dist> --yes --debug`
+    checks token validity before local prebuilt-output validation and exits with
+    `The token provided via --token argument is not valid`; this still needs a
+    real Vercel token/project or another local validator before the item can be
+    checked off.
 
 ### Phase 3 — `cloudflare` preset
 
