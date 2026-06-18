@@ -942,6 +942,35 @@ export const CartBadge = component({
     ]);
   });
 
+  it('reports KV235 for app-authored imports from app-local generated artifacts', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { CartBadge as GeneratedCartBadge } from '../generated/cart-badge.js';
+
+export const CartBadge = component({
+  render: () => <GeneratedCartBadge />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV235',
+        fileName: 'src/components/cart-badge.tsx',
+        help: expect.stringContaining(
+          'SPEC.md §5.2 and §9.5: app-authored source does not wire generated route IR or live-target registries by hand.',
+        ),
+        length: 28,
+        message:
+          'App source imports an app-local generated artifact; import the authored source instead.',
+        severity: 'error',
+        start: { column: 49, line: 3 },
+      },
+    ]);
+  });
+
   it('exempts compiler-emitted modules from non-public generated ABI import diagnostics', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.client.js',

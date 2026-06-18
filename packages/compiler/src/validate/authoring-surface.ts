@@ -36,6 +36,17 @@ export function validateAuthoringSurface(
           start: specifier.start,
         }),
       ),
+    ...(model?.moduleSpecifiers ?? [])
+      .filter((specifier) => isAppLocalGeneratedSpecifier(specifier.specifier))
+      .map((specifier) =>
+        appLocalGeneratedImportDiagnostic({
+          fileName: options.fileName,
+          length: specifier.end - specifier.start,
+          source: options.source,
+          specifier: specifier.specifier,
+          start: specifier.start,
+        }),
+      ),
     ...renderDiagnostics(options.fileName, options.source, renders),
   ];
 }
@@ -46,6 +57,10 @@ export function isNonPublicKovoSpecifier(specifier: string): boolean {
     specifier === 'kovo/internal' ||
     specifier.startsWith('kovo/internal/')
   );
+}
+
+export function isAppLocalGeneratedSpecifier(specifier: string): boolean {
+  return /^\.{1,2}\/(?:.*\/)?generated\//.test(specifier);
 }
 
 function nonPublicKovoImportDiagnostic({
@@ -69,6 +84,30 @@ function nonPublicKovoImportDiagnostic({
       'SPEC.md §5.2: app-authored source may import Kovo packages only through documented public entrypoints.',
     ].join('\n'),
     message: 'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+  };
+}
+
+function appLocalGeneratedImportDiagnostic({
+  fileName,
+  length,
+  source,
+  specifier,
+  start,
+}: {
+  fileName: string;
+  length: number;
+  source: string;
+  specifier: string;
+  start: number;
+}): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'KV235', source, start, length),
+    help: [
+      `Blocked reason: app source imports app-local generated artifact \`${specifier}\`.`,
+      'Fixes: import the authored component/module; generated route/runtime artifacts are compiler-owned.',
+      'SPEC.md §5.2 and §9.5: app-authored source does not wire generated route IR or live-target registries by hand.',
+    ].join('\n'),
+    message: 'App source imports an app-local generated artifact; import the authored source instead.',
   };
 }
 
