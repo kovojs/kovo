@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { eq, getTableName, sql } from 'drizzle-orm';
 import { boolean, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
+import { kovo } from '@kovojs/drizzle';
 import {
   createTouchGraphEntry,
   deriveInvalidationRegistry,
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
   extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
-  kovo,
   serializeInvalidationRegistry,
   serializeDomainRegistry,
   serializeTouchGraph,

@@ -1,4 +1,5 @@
-import { kovo, type SourceFileInput, type TouchGraphProjectOptions } from '@kovojs/drizzle/static';
+import { kovo } from '@kovojs/drizzle';
+import type { SourceFileInput, TouchGraphProjectOptions } from '@kovojs/drizzle/static';
 
 export function annotatedTable(name: string, annotation: ReturnType<typeof kovo>) {
   return {

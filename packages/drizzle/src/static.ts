@@ -1,4 +1,3 @@
-export type { DiagnosticCode } from '@kovojs/core';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { diagnosticDefinitionText, diagnosticDefinitions, type JsonValue } from '@kovojs/core';
@@ -53,12 +52,6 @@ import {
   type UnresolvedSummaryInput,
   type WriteSummaryInput,
 } from './graph.js';
-export type {
-  KovoDomainTableAnnotation,
-  KovoTableAnnotation,
-  KovoTableExtraConfig,
-} from './drizzle-surface.js';
-export { kovo } from './drizzle-surface.js';
 import {
   isDrizzleDatabaseTypeName,
   isDrizzleTableFactoryName,

@@ -793,7 +793,24 @@ tsconfig.json --noEmit --pretty false`.
     `extractSymbolicEffectsFromProject`, `extractQueryFactsFromProject`,
     diagnostics helpers, serializers, `createTouchGraphEntry`, and fact/input
     wrapper types.
-  - Evidence:
+  - Progress evidence 2026-06-18: removed the duplicate runtime annotation aliases
+    from `@kovojs/drizzle/static`; `DiagnosticCode`, `kovo`,
+    `KovoDomainTableAnnotation`, `KovoTableAnnotation`, and
+    `KovoTableExtraConfig` now have `@kovojs/drizzle` as their only public
+    drizzle home. Verification:
+    `pnpm --filter @kovojs/drizzle exec vitest run src/index src/runtime-surface.test.ts`,
+    `pnpm run check:exports`, and `node scripts/api-surface-gate.mjs`.
+  - Remaining audit: `@kovojs/drizzle/derive` is still app-build consumed by
+    `examples/{commerce,crm,stackoverflow}/scripts/emit-graph.mjs` for
+    `deriveOptimistic` and `serializeDerivedOptimistic`; `lowerTransform` is
+    currently only a repo test/conformance consumer. `@kovojs/drizzle/static` is
+    still app-build consumed by those graph scripts for touch graph, invalidation,
+    algebraic-shape, and symbolic-effect extraction/serialization. Proposed
+    follow-up export map after graph emission moves behind `@kovojs/cli`: keep
+    `.` public for annotations, keep `./derive` public only if
+    `deriveOptimistic` remains app-authored, and move graph/codegen helpers to
+    narrow internal subpaths such as `./internal/static-extraction` and
+    `./internal/derive-codegen`.
 - [x] **Shrink `@kovojs/headless-ui` root.**
   - After direct family subpaths exist, remove primitive-family exports from the
     root so family symbols have one canonical home.

@@ -51,6 +51,7 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect('extractQueryFactsFromSource' in staticExtraction).toBe(false);
     expect(staticExtraction.extractTouchGraphFromProject).toBeTypeOf('function');
     expect(staticExtraction.extractQueryFactsFromProject).toBeTypeOf('function');
+    expect('kovo' in staticExtraction).toBe(false);
     expect(packageJson.exports).toEqual({
       '.': './src/runtime.ts',
       // SPEC.md §10.5: the source-agnostic derivation algebra is a ts-morph-free
