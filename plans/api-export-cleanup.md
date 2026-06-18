@@ -83,7 +83,7 @@ integration. Framework packages should expose only generic webhook primitives.
 - [x] **The API gate has no new boundary failures, so this is a shape cleanup rather than a failing regression.**
   - Evidence: `node scripts/api-surface-gate.mjs` reports
     `api-surface/v1 public-exports-needing-attention=2904 (baseline=2904,
-    fixed-this-run=0)`.
+fixed-this-run=0)`.
 - [x] **Templates and examples already depend on the public-looking app-shell Vite path.**
   - Evidence: `site/vite.config.ts`, `examples/*/vite.config.ts`,
     `examples/*/scripts/export-static.mjs`, and
@@ -215,7 +215,7 @@ integration. Framework packages should expose only generic webhook primitives.
   - Evidence: `packages/server/src/internal/app-shell-vite.ts` owns the raw Vite
     plugin, build-output, client-module, manifest, static-asset, and dev
     diagnostic internals. `pnpm exec vitest --run packages/server/src/api/app.test.ts
-    packages/server/src/vite-plugin-boundary.test.ts` passes, including negative
+packages/server/src/vite-plugin-boundary.test.ts` passes, including negative
     assertions that raw build/plugin/manifest helpers are not exported from
     `@kovojs/server/app-shell/vite`.
 - [x] **Update docs/API reference for the public app-shell Vite API.**
@@ -241,15 +241,20 @@ integration. Framework packages should expose only generic webhook primitives.
 - [x] **Regenerate/check publish metadata after export-map changes.**
   - If package exports or entry files change, run
     `node scripts/build-publish.mjs --write` before verification.
-  - Evidence: no export-map rewrite was needed in this slice; `node
-    scripts/build-publish.mjs` passes and confirms every `publishConfig` target
-    exists for the current export maps.
+  - Evidence: no export-map rewrite was needed in this slice;
+    `node scripts/build-publish.mjs` passes and confirms every `publishConfig`
+    target exists for the current export maps.
 - [ ] **Run focused verification, then broad gates.**
   - Focused: `pnpm --filter @kovojs/server exec vitest run` plus tests for
     `packages/create-kovo` template expectations.
   - Broad: `pnpm run check:api-surface`, `pnpm run check:publish`, and
     `pnpm run check`.
-  - Evidence:
+  - Evidence: focused `scripts/exported-symbols.test.mjs` and
+    `packages/create-kovo/src/index.test.ts` pass, along with root typecheck,
+    API-surface, publish, import-boundary, export-duplicate, and diff-check
+    gates for the current checkpoint. Full `corepack pnpm run check` remains
+    open: it now gets through `check:imports` but fails in repo-wide `vp check`
+    formatting on pre-existing files outside this slice.
 
 ## Server Root Canonicalization
 
@@ -371,8 +376,8 @@ integration. Framework packages should expose only generic webhook primitives.
     `packages/server/src/internal/static-export.ts` re-exports the manifest,
     assertion, and output-plan helpers with `@internal` source declarations.
     Verification: `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts
-    packages/create-kovo/src/index.test.ts`; `corepack pnpm exec tsc -p
-    tsconfig.json --noEmit --pretty false`; `node scripts/api-surface-gate.mjs`;
+packages/create-kovo/src/index.test.ts`; `corepack pnpm exec tsc -p
+tsconfig.json --noEmit --pretty false`; `node scripts/api-surface-gate.mjs`;
     `git diff --check`.
 - [x] **Move static-export diagnostic formatting helpers behind an internal server subpath.**
   - Remove `formatStaticExportDiagnostic`, `formatStaticExportDiagnostics`,
@@ -384,7 +389,7 @@ integration. Framework packages should expose only generic webhook primitives.
     re-exports diagnostic formatter/guard helpers; the helpers are available from
     `packages/server/src/internal/static-export.ts` with `@internal` source
     declarations. Verification: `corepack pnpm exec vitest --run
-    packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
+packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
     `node scripts/api-surface-gate.mjs`.
 - [x] **Update starter/example export scripts not to import internal static-export helpers.**
   - Inline small formatting/type-guard logic in app-owned export scripts, or route
@@ -397,14 +402,14 @@ integration. Framework packages should expose only generic webhook primitives.
     `site/scripts/export-static.mjs` format/check static-export diagnostics with
     local helper functions instead of loading public or internal helper exports.
     Verification: `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts
-    packages/create-kovo/src/index.test.ts`.
+packages/create-kovo/src/index.test.ts`.
 - [x] **Add negative export tests for support helpers.**
   - Assert the moved client-module and static-export support helpers are not
     exported from public app-shell subpaths.
   - Assert any internal replacement subpath exports them only when framework tests
     require direct access.
   - [x] Client-module helper negative assertions are covered in
-    `packages/server/src/api/app.test.ts`.
+        `packages/server/src/api/app.test.ts`.
     - Evidence: the test asserts `@kovojs/server/app-shell/client-modules` lacks
       `renderVersionedClientModuleResponse` and `versionedClientModuleHref`, uses
       `@ts-expect-error` for `VersionedClientModuleRequest` and
@@ -413,7 +418,7 @@ integration. Framework packages should expose only generic webhook primitives.
       `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts`;
       `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
   - [x] Static-export support helper negative assertions are covered in
-    `packages/server/src/api/app.test.ts`.
+        `packages/server/src/api/app.test.ts`.
     - Evidence: the test asserts the manifest/assertion/output-plan and
       diagnostic formatter/guard helpers are absent from
       `@kovojs/server/app-shell/static-export` and present from
@@ -472,18 +477,18 @@ integration. Framework packages should expose only generic webhook primitives.
     generated file list, dependency assertions, and the starter proof test.
   - Evidence: `packages/create-kovo/templates/package.json` has no
     `@kovojs/compiler` devDependency, `packages/create-kovo/src/index.ts` no
-    longer lists `src/app.fixpoint.test.ts`, and `corepack pnpm exec vitest --run
-    packages/create-kovo/src/index.test.ts` passes with file-count and dependency
-    assertions.
+    longer lists `src/app.fixpoint.test.ts`, and
+    `packages/create-kovo/src/index.test.ts` passes with file-count and
+    dependency assertions.
 - [x] **Replace the starter `emit-graph.mjs` compiler import.**
   - The current starter graph is a literal static graph. Write that graph directly
     instead of importing `deriveAppGraph` from `@kovojs/compiler`.
   - Keep `kovo check graph.json` and `scripts/graph-assertions.mjs` as the starter
     verification path.
   - Evidence: `packages/create-kovo/templates/scripts/emit-graph.mjs` writes the
-    literal starter graph without importing `deriveAppGraph`; `corepack pnpm exec
-    vitest --run packages/create-kovo/src/index.test.ts` passes and validates the
-    emitted `graph.json` with `kovoCheck`/`kovoExplain`.
+    literal starter graph without importing `deriveAppGraph`;
+    `packages/create-kovo/src/index.test.ts` passes and validates the emitted
+    `graph.json` with `kovoCheck`/`kovoExplain`.
 - [x] **Adjust starter docs away from compiler API ownership.**
   - Update `docs/framework-rules.md` and any README/project-structure text that
     implies app authors should keep a compiler fixpoint test.
@@ -491,15 +496,21 @@ integration. Framework packages should expose only generic webhook primitives.
     starter apps should rely on `kovo check` plus app-shell/export tests.
   - Evidence: `packages/create-kovo/templates/README.md` and
     `packages/create-kovo/templates/docs/framework-rules.md` state that compiler
-    fixpoint/render-equivalence belongs to framework CI; `corepack pnpm exec
-    vitest --run packages/create-kovo/src/index.test.ts` passes and asserts the
-    generated docs text.
-- [ ] **Audit remaining app-owned compiler imports and classify them.**
+    fixpoint/render-equivalence belongs to framework CI;
+    `corepack pnpm exec vitest --run packages/create-kovo/src/index.test.ts`
+    passes and asserts the generated docs text.
+- [x] **Audit remaining app-owned compiler imports and classify them.**
   - Separate framework-owned tests/examples from app-template code.
   - For examples, decide whether direct compiler scripts remain acceptable as
     repo demonstration tooling or should be replaced by `kovo` commands before
     declaring "no app-author imports" complete.
-  - Evidence:
+  - Evidence: `rg -n "@kovojs/compiler" examples packages/create-kovo/templates site/tutorial site/content site/src --glob '!**/generated/**' --glob '!**/dist/**' --glob '!**/node_modules/**'`
+    finds no compiler imports in the create-kovo starter template; remaining
+    imports are repo-owned example, gallery, and tutorial artifact
+    generators/tests/docs plus example devDependencies.
+    `scripts/import-boundary.mjs` now explicitly classifies the internal
+    compiler/server imports in those artifact generators so app-authored runtime
+    source stays covered by `pnpm run check:imports`.
 - [ ] **Define the future public facade for compiler-backed app tasks.**
   - Track the required `kovo` command surface for component emit, graph emit, UI
     CSS extraction, and optional fixpoint checks so app authors do not import
@@ -750,23 +761,32 @@ integration. Framework packages should expose only generic webhook primitives.
 
 ## Export Uniqueness Enforcement
 
-- [ ] **Add a duplicate public-symbol detector.**
+- [x] **Add a duplicate public-symbol detector.**
   - Build a script or extend `scripts/exported-symbols.mjs` to compute, per
     package, symbols exported from more than one public import path.
   - Treat root+subpath duplication as a violation by default.
-  - Evidence:
-- [ ] **Wire duplicate detection into a check script.**
+  - Evidence: `scripts/exported-symbols.mjs` now supports `--duplicates` and
+    reports every symbol with more than one public home per package; `corepack
+pnpm exec vitest --run scripts/exported-symbols.test.mjs` passes with unit
+    coverage for duplicate detection and formatting.
+- [x] **Wire duplicate detection into a check script.**
   - Add a root script such as `check:exports` or fold the check into
     `check:api-surface`.
   - The check should print package, symbol, and every public import path that
     exposes it.
-  - Evidence:
-- [ ] **Classify compatibility exceptions before enforcing.**
+  - Evidence: root `package.json` defines `check:exports` as
+    `node scripts/exported-symbols.mjs --duplicates --check`; `node
+scripts/exported-symbols.mjs --duplicates --check` passes against the
+    committed baseline.
+- [x] **Classify compatibility exceptions before enforcing.**
   - If existing packages need temporary aliases, record each exception in a small
     baseline file with a reason and removal target.
   - Do not allow new duplicate root+subpath exports without editing the baseline
     and plan evidence.
-  - Evidence:
+  - Evidence: `scripts/exported-symbol-duplicates.baseline.json` records the
+    current 932 duplicate public symbols with a migration reason and removal
+    target; `node scripts/exported-symbols.mjs --duplicates --check` fails on
+    added/removed duplicate homes unless the baseline is updated deliberately.
 - [ ] **Prefer subpath ownership for family/component symbols.**
   - For `@kovojs/headless-ui` and `@kovojs/ui`, component/family symbols should
     live on their direct family subpath. The root can export package-wide tokens,

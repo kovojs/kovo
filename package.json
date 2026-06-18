@@ -15,6 +15,7 @@
     "check": "pnpm run check:inline-loader && pnpm run check:imports && vp check && vp run typecheck-examples",
     "check:api-surface": "node scripts/api-surface-gate.mjs",
     "check:build": "pnpm run check:inline-loader && vp run build",
+    "check:exports": "node scripts/exported-symbols.mjs --duplicates --check",
     "check:imports": "node scripts/import-boundary.mjs",
     "check:publish": "node scripts/build-publish.mjs",
     "check:kovo": "vp run kovo-check",

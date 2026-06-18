@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { exportedSymbolsReport, formatSymbolsText, packageExportEntries } from './exported-symbols.mjs';
+import {
+  duplicatePublicSymbolsReport,
+  exportedSymbolsReport,
+  formatDuplicateSymbolsText,
+  formatSymbolsText,
+  packageExportEntries,
+} from './exported-symbols.mjs';
 import { publicPackages } from './public-packages.mjs';
 
 describe('exported-symbols script', () => {
@@ -70,5 +76,68 @@ describe('exported-symbols script', () => {
         ],
       }),
     ).toBe('@example/pkg\n  @example/pkg (packages/pkg/src/index.ts)\n    thing [value]\n');
+  });
+
+  it('detects duplicate symbols across public import paths for the same package', () => {
+    expect(
+      duplicatePublicSymbolsReport({
+        packages: [
+          {
+            name: '@kovojs/server',
+            dir: 'packages/server',
+            exports: [
+              {
+                subpath: '.',
+                importPath: '@kovojs/server',
+                source: 'packages/server/src/index.ts',
+                symbols: [{ name: 'createApp', kind: 'value' }],
+              },
+              {
+                subpath: './app-shell/core',
+                importPath: '@kovojs/server/app-shell/core',
+                source: 'packages/server/src/api/app-shell/core.ts',
+                symbols: [{ name: 'createApp', kind: 'value' }],
+              },
+              {
+                subpath: './internal/app-shell-vite',
+                importPath: '@kovojs/server/internal/app-shell-vite',
+                source: 'packages/server/src/internal/app-shell-vite.ts',
+                symbols: [{ name: 'createApp', kind: 'value' }],
+              },
+            ],
+          },
+        ],
+      }).duplicates,
+    ).toEqual([
+      {
+        packageName: '@kovojs/server',
+        symbol: 'createApp',
+        homes: [
+          { importPath: '@kovojs/server', kind: 'value', subpath: '.' },
+          {
+            importPath: '@kovojs/server/app-shell/core',
+            kind: 'value',
+            subpath: './app-shell/core',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('formats duplicate public symbols with every public home', () => {
+    expect(
+      formatDuplicateSymbolsText({
+        duplicates: [
+          {
+            packageName: '@example/pkg',
+            symbol: 'Thing',
+            homes: [
+              { importPath: '@example/pkg', kind: 'type', subpath: '.' },
+              { importPath: '@example/pkg/thing', kind: 'type', subpath: './thing' },
+            ],
+          },
+        ],
+      }),
+    ).toBe('@example/pkg#Thing: @example/pkg [type], @example/pkg/thing [type]\n');
   });
 });

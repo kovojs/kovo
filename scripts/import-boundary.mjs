@@ -16,9 +16,16 @@ const checkedExtensions = new Set(['.js', '.jsx', '.mjs', '.md', '.ts', '.tsx'])
 const explicitlyAllowedInternalImports = new Set([
   'examples/commerce/src/app.ts -> @kovojs/server/internal/html',
   'examples/commerce/src/app.ts -> @kovojs/server/internal/wire',
+  'examples/commerce/scripts/emit-components.mjs -> @kovojs/compiler/internal',
+  'examples/commerce/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
+  'examples/commerce/scripts/emit-graph.mjs -> @kovojs/compiler/internal',
   'examples/commerce/src/graph.ts -> @kovojs/core/internal/graph',
+  'examples/crm/scripts/emit-components.mjs -> @kovojs/compiler/internal',
+  'examples/crm/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
   'examples/crm/scripts/emit-graph.mjs -> @kovojs/core/internal/derivation',
   'examples/crm/src/graph.ts -> @kovojs/core/internal/graph',
+  'examples/stackoverflow/scripts/emit-components.mjs -> @kovojs/compiler/internal',
+  'examples/stackoverflow/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
   'examples/reference/src/app.ts -> @kovojs/core/internal/graph',
   'examples/stackoverflow/src/graph.ts -> @kovojs/core/internal/graph',
   'site/content/guides/components.md -> @kovojs/server/internal/html',
@@ -31,6 +38,7 @@ const explicitlyAllowedInternalImports = new Set([
   'site/tutorial/steps/05-optimistic/src/app.ts -> @kovojs/server/internal/wire',
   'site/tutorial/steps/06-streaming/src/app.ts -> @kovojs/server/internal/wire',
   'site/tutorial/steps/07-verification/src/app.ts -> @kovojs/server/internal/wire',
+  'site/tutorial/run-steps.mjs -> @kovojs/compiler/internal',
 ]);
 
 const explicitlyAllowedGeneratedImports = new Set([

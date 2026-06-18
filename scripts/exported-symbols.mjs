@@ -4,10 +4,14 @@ import { pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
 
-import { repoRoot } from './public-packages.mjs';
+import { publicEntrySubpaths, publicPackages, repoRoot } from './public-packages.mjs';
 
 const tsconfigPath = path.join(repoRoot, 'tsconfig.json');
 const packagesRoot = path.join(repoRoot, 'packages');
+const duplicateBaselinePath = path.join(
+  repoRoot,
+  'scripts/exported-symbol-duplicates.baseline.json',
+);
 
 function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, 'utf8'));
@@ -123,6 +127,115 @@ export function exportedSymbolsReport() {
   return { packages };
 }
 
+/** Report public symbols exported from more than one public import path in the same package. */
+export function duplicatePublicSymbolsReport(report = exportedSymbolsReport()) {
+  const publicSubpathsByPackage = new Map(
+    publicPackages().map((pkg) => [pkg.name, new Set(publicEntrySubpaths(pkg))]),
+  );
+  const duplicates = [];
+
+  for (const pkg of report.packages) {
+    const publicSubpaths = publicSubpathsByPackage.get(pkg.name);
+    if (!publicSubpaths) continue;
+
+    const homesBySymbol = new Map();
+    for (const exportEntry of pkg.exports) {
+      if (!publicSubpaths.has(exportEntry.subpath)) continue;
+
+      for (const symbol of exportEntry.symbols) {
+        const homes = homesBySymbol.get(symbol.name) ?? [];
+        homes.push({
+          importPath: exportEntry.importPath,
+          kind: symbol.kind,
+          subpath: exportEntry.subpath,
+        });
+        homesBySymbol.set(symbol.name, homes);
+      }
+    }
+
+    for (const [symbol, homes] of homesBySymbol) {
+      if (homes.length <= 1) continue;
+      duplicates.push({
+        packageName: pkg.name,
+        symbol,
+        homes: homes.sort((left, right) => left.importPath.localeCompare(right.importPath)),
+      });
+    }
+  }
+
+  return {
+    duplicates: duplicates.sort((left, right) => {
+      const byPackage = left.packageName.localeCompare(right.packageName);
+      if (byPackage !== 0) return byPackage;
+      return left.symbol.localeCompare(right.symbol);
+    }),
+  };
+}
+
+export function formatDuplicateSymbolsText(report) {
+  if (report.duplicates.length === 0) return 'No duplicate public symbols.\n';
+
+  return `${report.duplicates
+    .map(
+      (duplicate) =>
+        `${duplicate.packageName}#${duplicate.symbol}: ${duplicate.homes
+          .map((home) => `${home.importPath} [${home.kind}]`)
+          .join(', ')}`,
+    )
+    .join('\n')}\n`;
+}
+
+function readDuplicateBaseline() {
+  return normalizeDuplicateReport(JSON.parse(readFileSync(duplicateBaselinePath, 'utf8')));
+}
+
+function duplicateKey(duplicate) {
+  return `${duplicate.packageName}#${duplicate.symbol}`;
+}
+
+function normalizeDuplicateReport(report) {
+  return {
+    duplicates: report.duplicates.map((duplicate) => ({
+      packageName: duplicate.packageName,
+      symbol: duplicate.symbol,
+      homes: duplicate.homes.map((home) => ({
+        importPath: home.importPath,
+        kind: home.kind,
+        subpath: home.subpath,
+      })),
+    })),
+  };
+}
+
+function baselineDiff(actual, expected) {
+  const actualKeys = new Set(actual.duplicates.map(duplicateKey));
+  const expectedKeys = new Set(expected.duplicates.map(duplicateKey));
+  return {
+    added: actual.duplicates.filter((duplicate) => !expectedKeys.has(duplicateKey(duplicate))),
+    removed: expected.duplicates.filter((duplicate) => !actualKeys.has(duplicateKey(duplicate))),
+  };
+}
+
+function assertDuplicateBaseline(actual, expected) {
+  const normalizedActual = normalizeDuplicateReport(actual);
+  const normalizedExpected = normalizeDuplicateReport(expected);
+  const actualText = JSON.stringify(normalizedActual, null, 2);
+  const expectedText = JSON.stringify(normalizedExpected, null, 2);
+  if (actualText === expectedText) return true;
+
+  const diff = baselineDiff(normalizedActual, normalizedExpected);
+  process.stderr.write(
+    [
+      `Duplicate public-symbol baseline changed: actual=${normalizedActual.duplicates.length} expected=${normalizedExpected.duplicates.length}`,
+      ...diff.added.slice(0, 20).map((duplicate) => `ADDED ${duplicateKey(duplicate)}`),
+      ...diff.removed.slice(0, 20).map((duplicate) => `REMOVED ${duplicateKey(duplicate)}`),
+      'Update scripts/exported-symbol-duplicates.baseline.json only after classifying the API aliases in plans/api-export-cleanup.md.',
+      '',
+    ].join('\n'),
+  );
+  return false;
+}
+
 export function formatSymbolsText(report) {
   const lines = [];
   for (const pkg of report.packages) {
@@ -143,21 +256,39 @@ export function formatSymbolsText(report) {
 
 export function run(args = process.argv.slice(2)) {
   const json = args.includes('--json');
+  const duplicates = args.includes('--duplicates');
+  const check = args.includes('--check');
   const help = args.includes('--help') || args.includes('-h');
   if (help) {
     process.stdout.write(
       [
-        'Usage: pnpm symbols [--json]',
+        'Usage: pnpm symbols [--json] [--duplicates] [--check]',
         '',
         'Lists TypeScript symbols exported by each package export path under packages/*.',
+        '--duplicates lists duplicate public symbols by package.',
+        '--check compares --duplicates output with the committed duplicate baseline.',
         '',
       ].join('\n'),
     );
     return 0;
   }
 
-  const report = exportedSymbolsReport();
-  process.stdout.write(json ? `${JSON.stringify(report, null, 2)}\n` : formatSymbolsText(report));
+  const report = duplicates ? duplicatePublicSymbolsReport() : exportedSymbolsReport();
+  if (check) {
+    if (!duplicates) {
+      process.stderr.write('--check currently requires --duplicates.\n');
+      return 2;
+    }
+    return assertDuplicateBaseline(report, readDuplicateBaseline()) ? 0 : 1;
+  }
+
+  process.stdout.write(
+    json
+      ? `${JSON.stringify(report, null, 2)}\n`
+      : duplicates
+        ? formatDuplicateSymbolsText(report)
+        : formatSymbolsText(report),
+  );
   return 0;
 }
 
