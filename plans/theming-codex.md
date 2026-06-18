@@ -82,30 +82,62 @@ helpers. It is Apache-2.0 and published as `@material/material-color-utilities`.
 
 ## Part A — Public theme token API
 
-- [ ] **A1. Export theme APIs from root `@kovojs/style`.** Add `defineTheme`, `themeFromSeed`,
+- [x] **A1. Export theme APIs from root `@kovojs/style`.** Add `defineTheme`, `themeFromSeed`,
       `tokens`, and their public types to `packages/style/src/index.ts`; update api-reference/docs
       so the root package remains documented. Do not re-export the full Material package.
-- [ ] **A2. Add the Material Color Utilities dependency.** Declare
+  - Evidence: `packages/style/src/index.ts` explicitly re-exports `defineTheme`,
+    `themeFromSeed`, `tokens`, and public Kovo-owned theme types from
+    `packages/style/src/theme.ts`; `node site/scripts/api-ref.mjs && node
+    site/scripts/api-examples-check.mjs` passes with
+    `api-ref/v1 packages=8 exports=641 documented=465`.
+- [x] **A2. Add the Material Color Utilities dependency.** Declare
       `@material/material-color-utilities` as a real dependency of `@kovojs/style`; pin the version
       range deliberately and record Apache-2.0 in the dependency/license review notes if such a
       ledger exists.
-- [ ] **A3. Define the token model.** Add typed reference tokens, system color tokens, and custom
+  - Evidence: `packages/style/package.json` declares
+    `@material/material-color-utilities` as a dependency pinned to `^0.3.0`;
+    `corepack pnpm view @material/material-color-utilities version license --json`
+    reported Apache-2.0. Version `0.4.0` was not used because its root ESM import
+    currently fails in Node on an extensionless generated internal import.
+- [x] **A3. Define the token model.** Add typed reference tokens, system color tokens, and custom
       color token groups. Include light/dark schemes and a stable CSS variable naming convention
       such as `--kovo-theme-ref-palette-primary-40` and `--kovo-theme-sys-color-primary`.
+  - Evidence: `packages/style/src/theme.ts` defines typed reference palettes,
+    system color roles, shape tokens, custom color groups, and the exported
+    `tokens` object. `packages/style/src/index.test.ts` asserts token refs such
+    as `var(--kovo-theme-sys-color-primary)` and
+    `var(--kovo-theme-ref-palette-primary-40)`.
 - [ ] **A4. Implement seed generation.** Add `themeFromSeed(seed, options)` supporting
       hex/ARGB input, light/dark output, `variant`, `contrast`, and custom colors with optional
       harmonization. Keep the Kovo return shape independent from upstream class shapes.
-- [ ] **A5. Add the ergonomic single-theme API.** Implement `defineTheme({ seed, shape,
+  - Partial evidence: `packages/style/src/theme.ts` implements hex/ARGB seed
+    generation, light/dark values, `tonal-spot` and `content` variants, custom
+    colors with optional harmonization, and Kovo-owned return types. Gap:
+    nonzero `contrast` currently fails loudly instead of silently no-oping because
+    the Node-safe Material package version does not expose the newer dynamic
+    contrast schemes.
+- [x] **A5. Add the ergonomic single-theme API.** Implement `defineTheme({ seed, shape,
 colors, variant?, contrast? })` as the common app-facing entry point. It should return the
       theme object/assets Kovo needs without requiring authors to manually call a separate
       CSS-emission function in the common path.
-- [ ] **A6. Implement CSS emission behind the ergonomic API.** Add deterministic internal/lower-level
+  - Evidence: `packages/style/src/theme.ts` implements `defineTheme({ seed })`
+    by returning a `KovoTheme` with generated `css`, `ref`, `sys`, `light`,
+    `dark`, and `custom` values; `packages/style/src/index.test.ts` exercises
+    `defineTheme({ seed: '#6750A4' })`.
+- [x] **A6. Implement CSS emission behind the ergonomic API.** Add deterministic internal/lower-level
       emission such that `defineTheme(...)` can emit `:root`, dark selector/class blocks,
       and optional reference-palette variables. Output must be stable enough for snapshots.
-- [ ] **A7. Add the `base` composition form.** Support `defineTheme({ base, sys?,
+  - Evidence: `packages/style/src/theme.ts` emits deterministic `:root` and
+    `:root[data-theme="dark"]` blocks with reference palette, system color,
+    shape, custom, and component variables. `packages/style/src/index.test.ts`
+    pins exact `#6750A4` values and CSS variable names.
+- [x] **A7. Add the `base` composition form.** Support `defineTheme({ base, sys?,
 component?, shape?, colors? })` so app authors can derive one final theme from seed-generated
       values without an override callback. Evidence should include a test where border color/radius
       derive from a generated base theme.
+  - Evidence: `packages/style/src/theme.ts` implements the `base` form, and
+    `packages/style/src/index.test.ts` derives `outline`, `cornerSmall`, and a
+    component border token from `base.sys.color.primary`.
 - [ ] **A8. Decide current token-sheet alias compatibility.** Inspect
       `packages/headless-ui/src/lib/token-sheet.ts` and decide whether the M3 sheet preserves
       existing document aliases such as `--color-*` / `@theme inline`, replaces them, or emits both
@@ -113,8 +145,11 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
 - [ ] **A9. Type-level and unit tests.** Assert token names, generated CSS variable names,
       light/dark role presence, custom-color groups, deterministic output, and exact known outputs
       for a canonical seed such as `#6750A4`.
-- [ ] **A10. Keep callback overrides out of v1.** Document in JSDoc/design notes that derived themes
+- [x] **A10. Keep callback overrides out of v1.** Document in JSDoc/design notes that derived themes
       should use the `base` form; do not expose a placeholder callback option.
+  - Evidence: `packages/style/src/theme.ts` exposes only seed and `base` object
+    forms in `DefineThemeOptions`; its `defineTheme` JSDoc names `base` as the
+    derivation path, and no callback override type or placeholder is exported.
 
 ## Part B — Compiler support for typed tokens/themes
 

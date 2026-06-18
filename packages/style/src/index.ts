@@ -1,4 +1,31 @@
 import { getPriority } from './internal.js';
+export {
+  defineTheme,
+  themeFromSeed,
+  tokens,
+} from './theme.js';
+export type {
+  DefineThemeFromBaseOptions,
+  DefineThemeOptions,
+  KovoTheme,
+  ThemeComponentTokensInput,
+  ThemeCustomColorGroup,
+  ThemeCustomColorInput,
+  ThemeCustomColorsInput,
+  ThemeFromSeedOptions,
+  ThemeReferencePaletteName,
+  ThemeReferencePalettes,
+  ThemeSchemeValues,
+  ThemeSeed,
+  ThemeShapeInput,
+  ThemeShapeTokenName,
+  ThemeShapeValues,
+  ThemeSystemColorName,
+  ThemeSystemColorValues,
+  ThemeSystemOverrides,
+  ThemeTokens,
+  ThemeVariant,
+} from './theme.js';
 
 const CSS_MARKER = '$$css';
 const STYLE_SRC = 'data-style-src';

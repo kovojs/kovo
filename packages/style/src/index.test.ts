@@ -5,6 +5,7 @@ import {
   create,
   createAtomicStyles,
   defineConsts,
+  defineTheme,
   createTheme,
   defineVars,
   emitAtomicCss,
@@ -12,6 +13,8 @@ import {
   keyframes,
   props,
   raw,
+  themeFromSeed,
+  tokens,
 } from './index.js';
 import { getPriority } from './internal.js';
 
@@ -162,6 +165,78 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(spacing.buttonHeight).toBe(36);
     expect(Object.isFrozen(spacing)).toBe(true);
     expect(attrs(styles.root).class).toMatch(/^kv-button-h-[a-z0-9]+ kv-button-pad-[a-z0-9]+$/);
+  });
+
+  it('generates a deterministic Material theme from one seed color', () => {
+    const theme = themeFromSeed('#6750A4', {
+      colors: { success: '#16a34a' },
+      shape: { cornerMedium: '0.625rem' },
+    });
+
+    expect(theme.seed).toBe('#6750a4');
+    expect(theme.variant).toBe('tonal-spot');
+    expect(theme.sys.color.primary).toBe('#6750a4');
+    expect(theme.sys.color.onPrimary).toBe('#ffffff');
+    expect(theme.sys.color.surface).toBe('#fffbff');
+    expect(theme.dark.sys.color.primary).toBe('#cfbcff');
+    expect(theme.ref.primary[40]).toBe('#6750a4');
+    expect(theme.sys.shape.cornerMedium).toBe('0.625rem');
+    expect(theme.custom.success).toEqual({
+      color: '#006c4b',
+      colorContainer: '#7df9c2',
+      onColor: '#ffffff',
+      onColorContainer: '#002114',
+    });
+    expect(theme.css).toContain('--kovo-theme-ref-palette-primary-40:');
+    expect(theme.css).toContain('--kovo-theme-sys-color-primary:');
+    expect(theme.css).toContain('--kovo-theme-custom-success-color:');
+    expect(theme.css).toContain(':root[data-theme="dark"]');
+  });
+
+  it('exports typed var references for theme tokens used in style.create', () => {
+    const styles = create(
+      {
+        root: {
+          backgroundColor: tokens.sys.color.primary,
+          borderColor: tokens.sys.color.outlineVariant,
+          borderRadius: tokens.sys.shape.cornerMedium,
+          color: tokens.sys.color.onPrimary,
+        },
+      },
+      { namespace: 'themed-button' },
+    );
+
+    expect(tokens.sys.color.primary).toBe('var(--kovo-theme-sys-color-primary)');
+    expect(tokens.ref.palette.primary[40]).toBe('var(--kovo-theme-ref-palette-primary-40)');
+    expect(tokens.customColor('success').onColor).toBe(
+      'var(--kovo-theme-custom-success-on-color)',
+    );
+    expect(styles.root.__rules?.map((rule) => rule.value)).toContain(
+      'var(--kovo-theme-sys-color-primary)',
+    );
+  });
+
+  it('derives one final theme from a generated base without callbacks', () => {
+    const base = defineTheme({ seed: '#6750A4' });
+    const theme = defineTheme({
+      base,
+      component: { buttonBorder: base.sys.color.primary },
+      sys: {
+        color: { outline: base.sys.color.primary },
+      },
+      shape: { cornerSmall: '2px' },
+    });
+
+    expect(theme.sys.color.outline).toBe(base.sys.color.primary);
+    expect(theme.sys.shape.cornerSmall).toBe('2px');
+    expect(theme.css).toContain(`--kovo-theme-sys-color-outline: ${base.sys.color.primary};`);
+    expect(theme.css).toContain(`--kovo-theme-component-button-border: ${base.sys.color.primary};`);
+  });
+
+  it('fails loudly for unsupported contrast generation instead of ignoring it', () => {
+    expect(() => themeFromSeed('#6750A4', { contrast: 0.5 })).toThrow(
+      'theme.themeFromSeed supports only contrast: 0 in this release.',
+    );
   });
 });
 
