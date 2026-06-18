@@ -250,6 +250,51 @@ test('dev HMR client replaces the document with server diagnostics', async ({ pa
   }
 });
 
+test('dev HMR client full reloads for route-shell changes', async ({ page }) => {
+  let routeVersion = 'before';
+  const app = createApp({
+    routes: [
+      route('/', {
+        page() {
+          return `<main><h1 id="route-version">${routeVersion}</h1></main>`;
+        },
+      }),
+    ],
+  });
+  const server = await serveHmrFixture(app);
+
+  try {
+    await page.goto(`${server.origin}/`);
+    await page.waitForFunction(
+      () =>
+        typeof (window as typeof window & { __kovoHot?: Record<string, unknown> }).__kovoHot?.[
+          'kovo:route-shell'
+        ] === 'function',
+    );
+    await expect(page.locator('#route-version')).toHaveText('before');
+
+    routeVersion = 'after';
+    const routeReload = page.waitForResponse(
+      (response) =>
+        response.url() === `${server.origin}/` &&
+        response.request().resourceType() === 'document' &&
+        response.status() === 200,
+    );
+    await page.evaluate(() => {
+      const hot = (window as typeof window & {
+        __kovoHot?: Record<string, (event?: unknown) => void>;
+      }).__kovoHot;
+      hot?.['kovo:route-shell']?.();
+    });
+    await routeReload;
+
+    await expect(page.locator('#route-version')).toHaveText('after');
+    expect(page.url()).toBe(`${server.origin}/`);
+  } finally {
+    await server.close();
+  }
+});
+
 async function serveHmrFixture(app: ReturnType<typeof createApp>): Promise<{
   close(): Promise<void>;
   origin: string;

@@ -282,8 +282,10 @@ render-plan version skew checks.
     sending current `Kovo-Live-Targets`/`Kovo-Targets` headers, preserving focused
     input state, reloading declared query data from server state, replacing the
     document with server-rendered diagnostics from the dev ledger, and avoiding
-    full navigation for fragment-refresh cases. Source-edit and route-table
-    browser scenarios remain open. Verification: `corepack pnpm --filter
+    full navigation for fragment-refresh cases. The same spec covers the
+    `kovo:route-shell` documented full-reload fallback and proves the reloaded
+    document uses fresh server output. Source-edit fixtures and an actual
+    route-table edit scenario remain open. Verification: `corepack pnpm --filter
     @kovojs/integration-tests exec playwright test specs/hmr-dev-client.spec.ts
     --project=chromium`.
 
