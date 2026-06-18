@@ -1,8 +1,11 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from '@kovojs/compiler';
 import { dispatchDelegatedEvent, type EventElementLike } from '@kovojs/runtime';
 import { renderRoutePageResponse } from '@kovojs/server/internal/route';
 
@@ -46,6 +49,12 @@ function bodyText(body: unknown): string {
 function renderProductRoute(id: string) {
   return renderRoutePageResponse(productRoute, { params: { id } }, {});
 }
+
+const repoRoot = fileURLToPath(new URL('../../../../../', import.meta.url));
+const kovoBin = fileURLToPath(new URL('../../../../../site/node_modules/.bin/kovo', import.meta.url));
+const productActionsSourcePath = fileURLToPath(
+  new URL('./components/product-actions.tsx', import.meta.url),
+);
 
 function attributeFrom(html: string, name: string): string {
   const match = new RegExp(`${name}="([^"]+)"`).exec(html);
@@ -98,18 +107,37 @@ describe('tutorial step 02 — islands', () => {
   // /snippet
 
   // snippet:lint-test
-  it('compiles the authored TSX with the KV210 naming nudge as the only lint', () => {
-    const result = compileComponentModule({
-      fileName: 'site/tutorial/steps/02-islands/src/components/product-actions.tsx',
-      source: readFileSync(new URL('./components/product-actions.tsx', import.meta.url), 'utf8'),
-    });
+  it('checks the authored TSX through the public kovo compile command', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-tutorial-compile-'));
+    const loweredPath = join(root, 'product-actions.tsx');
 
-    expect(result.diagnostics).toEqual([
-      expect.objectContaining({ code: 'KV210', severity: 'lint' }),
-    ]);
-    expect(result.platformSubstitutions).toEqual([
-      { action: 'toggle', event: 'click', kind: 'popover', tag: 'button', target: 'size-guide' },
-    ]);
+    try {
+      const output = execFileSync(
+        kovoBin,
+        [
+          'compile',
+          'component',
+          productActionsSourcePath,
+          '--out',
+          loweredPath,
+          '--file-name',
+          'site/tutorial/steps/02-islands/src/components/product-actions.tsx',
+          '--allow-diagnostic',
+          'KV210',
+        ],
+        { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+      const lowered = readFileSync(loweredPath, 'utf8');
+
+      expect(output).toContain(
+        'WARN KV210 file="site/tutorial/steps/02-islands/src/components/product-actions.tsx"',
+      );
+      expect(output).toContain('SUMMARY artifacts=1 diagnostics=1');
+      expect(lowered).toContain('popovertarget="size-guide"');
+      expect(lowered).toContain('popovertargetaction="toggle"');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
   // /snippet
 });

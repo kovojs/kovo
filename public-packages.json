@@ -271,14 +271,9 @@
       "visibility": "public",
       "kind": "build-tool",
       "apiBoundary": {
-        "public": [".", "./graph", "./package-styles"],
+        "public": [],
         "generated": [],
-        "internal": ["./internal", "./internal/graph"]
-      },
-      "apiRef": {
-        "order": 8,
-        "slug": "compiler",
-        "description": "Build/codegen surface: app-graph derivation, component compilation, fixpoint/render-equivalence assertions, and the Vite plugin."
+        "internal": [".", "./graph", "./internal", "./internal/graph", "./package-styles"]
       }
     },
     {

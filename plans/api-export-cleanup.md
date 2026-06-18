@@ -631,7 +631,7 @@ tsconfig.json --noEmit --pretty false`.
     `kovo` bin instead of importing compiler APIs. Verified with
     `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts`
     and `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
-- [ ] **Reclassify `@kovojs/compiler` only after app-facing imports are gone.**
+- [x] **Reclassify `@kovojs/compiler` only after app-facing imports are gone.**
   - Once starters and app-owned scripts use `kovo` or static artifacts instead,
     update `public-packages.json`, API docs, and publish/build assumptions so
     compiler APIs are treated as framework-internal build machinery.
@@ -707,10 +707,29 @@ tsconfig.json --noEmit --pretty false`.
     `node scripts/api-surface-gate.mjs`, `corepack pnpm run check:imports`,
     `corepack pnpm run check:exports`, and
     `corepack pnpm exec vitest --run scripts/public-packages.test.mjs`.
-  - Remaining gap: `site/tutorial/steps/02-islands/src/app.test.ts` still
-    imports `@kovojs/compiler` as framework-owned tutorial/compiler coverage.
-    Generated artifact banners in example/tutorial scripts may mention
-    `@kovojs/compiler`, but app-owned source no longer imports it.
+  - Evidence: `site/tutorial/steps/02-islands/src/app.test.ts` now checks the
+    tutorial component through the public `kovo compile component` command
+    instead of importing `@kovojs/compiler`. `public-packages.json` classifies
+    all `@kovojs/compiler` export subpaths as internal boundary entries with no
+    human-public API reference entries, `site/content/docs/stability.md` points
+    app projects at the `kovo` command facade, and
+    `site/src/generated/app.routes.tsx` / `site/src/generated/app.kovo-route.tsx`
+    no longer route `/api/compiler`. Verified with
+    `node site/tutorial/run-steps.mjs`,
+    `rg -n "from ['\"]@kovojs/compiler|import\\([^)]*['\"]@kovojs/compiler|import .*@kovojs/compiler" examples packages/create-kovo/templates site/tutorial site/content site/src --glob '!**/generated/**' --glob '!**/dist/**' --glob '!**/node_modules/**'`
+    returning no matches, `node site/scripts/api-ref.mjs`,
+    `node site/scripts/emit-routes.mjs`,
+    `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs`,
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs`,
+    `node scripts/api-surface-gate.mjs`, `node scripts/build-publish.mjs`,
+    `node scripts/exported-symbols.mjs --duplicates --check`,
+    `corepack pnpm run check:imports`, `corepack pnpm run check:exports`,
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+    `git diff --check`.
+  - Known unrelated gap: `node site/scripts/api-examples-check.mjs` still fails
+    on pre-existing server API examples for internalized render helpers
+    (`renderQueryScript`, `renderMutationEndpointResponse`, and
+    `renderRoutePageResponse`); this slice did not claim that gate.
 
 ## Package-Wide Internalization Candidates
 
@@ -723,7 +742,11 @@ tsconfig.json --noEmit --pretty false`.
   - Remove or replace public `@kovojs/compiler/graph` and
     `@kovojs/compiler/package-styles` app-facing imports with `@kovojs/cli`
     commands or internal framework imports.
-  - Evidence:
+  - Progress evidence: `public-packages.json` now gives `@kovojs/compiler` no
+    app-facing public subpaths, but the package remains publish-built because
+    `packages/cli/src/index.ts` still imports compiler internals. The remaining
+    work is to bundle or otherwise internalize the CLI/compiler relationship
+    before the package itself can become fully private.
 - [ ] **Shrink `@kovojs/runtime` root to hand-authored app APIs.**
   - Move generated/runtime machinery behind `@kovojs/runtime/generated` or an
     internal subpath: deferred stream apply, compiled query update plan apply,

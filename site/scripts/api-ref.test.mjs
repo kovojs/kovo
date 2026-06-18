@@ -89,7 +89,6 @@ describe('api-ref generator', () => {
       'drizzle.md',
       'style.md',
       'better-auth.md',
-      'compiler.md',
       'cli.md',
     ]);
     expect(result.packages.find((pkg) => pkg.name === '@kovojs/server').subpaths).toContain(

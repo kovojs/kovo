@@ -4,24 +4,6 @@
   "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md.",
   "duplicates": [
     {
-      "packageName": "@kovojs/compiler",
-      "symbol": "deriveAppGraph",
-      "homes": [
-        {
-          "importPath": "@kovojs/compiler",
-          "kind": "value",
-          "subpath": "."
-        },
-        {
-          "importPath": "@kovojs/compiler/graph",
-          "kind": "value",
-          "subpath": "./graph"
-        }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
-    },
-    {
       "packageName": "@kovojs/drizzle",
       "symbol": "DiagnosticCode",
       "homes": [
