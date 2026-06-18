@@ -357,7 +357,7 @@ item inherits from rather than re-deciding it:
     - Root gates pass: `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
       `node scripts/api-surface-gate.mjs`; `git diff --check`.
 
-- [ ] **6. Derive the app query registry from routes/components/layouts.**
+- [x] **6. Derive the app query registry from routes/components/layouts.**
   - Framework direction: the build emits the query registry from queries reachable
     through route/layout/component declarations (Constitution #2: "no global
     knowledge at local sites"). Mutation rerun selection and query endpoints consume
@@ -496,6 +496,6 @@ item inherits from rather than re-deciding it:
 - [x] **Nested layouts compose, refresh layout queries, and scope boundaries/guards per segment.** Evidence: item 3 current evidence.
 - [x] **No string shell helpers; document via `documentTemplate`, chrome via layouts.** Evidence: item 4 evidence.
 - [x] **Expected failures render via `<FieldError>/<FormError>` (KV242-checked); unexpected via error boundaries; no `formFailure({ message })`.** Evidence: item 5 evidence.
-- [ ] **No manual query-registry duplication across shells, mutation registries, generated files, or `graph.ts`.** Evidence pending.
+- [x] **No manual query-registry duplication across shells, mutation registries, generated files, or `graph.ts`.** Evidence: item 6 app/query registry derivation, generated-file no-match, example graph checks, Commerce compiler graph join, focused compiler/CLI/example tests, root `tsc`, API gate, and `git diff --check` above.
 - [x] **No static-export surface in interactive examples; capability covered by a standalone fixture.** Evidence: item 7 no-match, docs pointer, example checks, static-export fixture/server/reference/gallery checks, root `tsc`, API gate, and `git diff --check` above.
 - [ ] **Starter template teaches the model; `kovo explain` covers the new seams; inference type-tests pass.** Evidence pending.
