@@ -728,8 +728,10 @@ export function routeHasBoundary(
  * @param render - Turns the page value into an HTML string (defaults to `String`).
  * @param options - Guard-failure, session, and error options.
  * @returns A `RoutePageResponse`.
+ * @internal
  * @example
- * import { renderRoutePageResponse, route } from '@kovojs/server';
+ * import { route } from '@kovojs/server';
+ * import { renderRoutePageResponse } from '@kovojs/server/internal/route';
  *
  * const homeRoute = route('/', { page: () => '<h1>Home</h1>' });
  *

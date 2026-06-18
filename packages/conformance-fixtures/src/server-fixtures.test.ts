@@ -11,12 +11,7 @@ import {
   notFound,
   query,
   renderDeferredStream,
-  renderMutationEndpointResponse,
-  renderMutationResponse,
   renderPageHints,
-  renderQueryEndpointResponse,
-  renderQueryRegistryEndpointResponse,
-  renderRoutePageResponse,
   route,
   session,
   s,
@@ -24,6 +19,13 @@ import {
   t,
 } from '@kovojs/server';
 import { runMutation, runQuery, runRoutePage } from '@kovojs/server/internal/execution';
+import { renderRoutePageResponse } from '@kovojs/server/internal/route';
+import {
+  renderMutationEndpointResponse,
+  renderMutationResponse,
+  renderQueryEndpointResponse,
+  renderQueryRegistryEndpointResponse,
+} from '@kovojs/server/internal/wire';
 import { createQueryStore, submitEnhancedMutation } from '@kovojs/runtime';
 
 import {

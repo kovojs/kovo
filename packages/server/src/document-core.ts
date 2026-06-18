@@ -164,6 +164,11 @@ function assembleDocumentParts(
   };
 }
 
+/**
+ * Wrap a rendered route body in a full document for framework dispatch.
+ *
+ * @internal
+ */
 export function renderRouteDocumentResponse(
   response: DocumentRoutePageResponse,
   options: DocumentResponseOptions = {},

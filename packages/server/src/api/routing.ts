@@ -59,7 +59,6 @@ export { respond } from '../response.js';
 export {
   layout,
   notFound,
-  renderRoutePageResponse,
   route,
 } from '../route.js';
 export type {

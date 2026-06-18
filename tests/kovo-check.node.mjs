@@ -183,15 +183,10 @@ import {
   notFound,
   query,
   renderDeferredStream,
-  renderQueryEndpointResponse,
-  renderQueryRegistryEndpointResponse,
   renderDocument,
   renderDocumentQueryScript,
-  renderMutationResponse,
-  renderMutationEndpointResponse,
   renderPageHints,
   renderQueryScript,
-  renderRoutePageResponse,
   route as serverRoute,
   session,
   s,
@@ -204,6 +199,13 @@ import {
   runQuery,
   runRoutePage,
 } from '../dist/server/src/internal/execution.mjs';
+import { renderRoutePageResponse } from '../dist/server/src/internal/route.mjs';
+import {
+  renderMutationEndpointResponse,
+  renderMutationResponse,
+  renderQueryEndpointResponse,
+  renderQueryRegistryEndpointResponse,
+} from '../dist/server/src/internal/wire.mjs';
 import { fragmentTarget, href, Link, redirect, route } from '../dist/core/src/index.mjs';
 
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');

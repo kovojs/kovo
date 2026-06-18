@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from '@kovojs/compiler';
 import { dispatchDelegatedEvent, type EventElementLike } from '@kovojs/runtime';
-import { renderRoutePageResponse } from '@kovojs/server';
+import { renderRoutePageResponse } from '@kovojs/server/internal/route';
 
 import { productRoute } from './app.js';
 

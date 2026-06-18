@@ -466,6 +466,7 @@ class MutationRollback extends Error {
  * @param definition - The mutation to run.
  * @param wireRequest - The parsed wire request (raw input, request, fragment renderers).
  * @returns A `MutationWireResponse` of fragment HTML.
+ * @internal
  */
 export async function renderMutationResponse<
   const Key extends string,
@@ -664,8 +665,10 @@ function mutationServerErrorResponse<Request>(
  * @param definition - The mutation to run.
  * @param endpointRequest - Raw input, request, wire headers, `redirectTo`, fragment renderers, and failure renderers.
  * @returns A `MutationEndpointResponse` (status, headers, body).
+ * @internal
  * @example
- * import { mutation, renderMutationEndpointResponse, s } from '@kovojs/server';
+ * import { mutation, s } from '@kovojs/server';
+ * import { renderMutationEndpointResponse } from '@kovojs/server/internal/wire';
  *
  * interface Req { db: { add(id: string): void } }
  *
@@ -774,6 +777,7 @@ function mergeMutationRegistryQueries(
  * @param definition - The mutation to run.
  * @param noJsRequest - Raw input, request, `redirectTo`, and optional failure-page renderer.
  * @returns A `NoJsMutationResponse` (redirect or document).
+ * @internal
  */
 export async function renderNoJsMutationResponse<
   const Key extends string,

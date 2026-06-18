@@ -2,8 +2,11 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken, renderMutationEndpointResponse } from '@kovojs/server';
-import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
+import { csrfToken } from '@kovojs/server';
+import {
+  renderMutationEndpointResponse,
+  type MutationWireHeaderSource,
+} from '@kovojs/server/internal/wire';
 import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test/harness';
 import { kovoCheck, kovoExplain } from 'kovo';
 

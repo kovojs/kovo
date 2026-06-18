@@ -23,3 +23,4 @@ export {
   type ShellDispatchMatch,
   type ShellDispatchPhase,
 } from '../shell.js';
+export { renderRoutePageResponse } from '../route.js';

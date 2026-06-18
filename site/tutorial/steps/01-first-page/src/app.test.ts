@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderRoutePageResponse } from '@kovojs/server';
+import { renderRoutePageResponse } from '@kovojs/server/internal/route';
 
 import { catalog, homeRoute, productRoute } from './app.js';
 

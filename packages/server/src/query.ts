@@ -292,6 +292,7 @@ export interface QueryEndpointFailure {
  * @param definition - The query to run.
  * @param endpointRequest - The request plus optional search input and guard-failure options.
  * @returns A `QueryEndpointResponse` (status, headers, JSON body).
+ * @internal
  */
 export async function renderQueryEndpointResponse<const Key extends string, Value, Input, Request>(
   definition: QueryDefinition<Key, Value, Input, Request>,
@@ -342,6 +343,11 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   };
 }
 
+/**
+ * Render a registered query endpoint by key for generated/framework dispatch.
+ *
+ * @internal
+ */
 export async function renderQueryRegistryEndpointResponse<Request>(
   registry: QueryEndpointRegistry<Request>,
   queryKey: string,

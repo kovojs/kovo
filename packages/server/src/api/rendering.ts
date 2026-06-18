@@ -20,7 +20,6 @@ export {
   renderDocument,
   renderDocumentQueryScript,
   renderErrorDocument,
-  renderRouteDocumentResponse,
 } from '../document-core.js';
 export { renderDiagnosticDocument } from '../document-diagnostics.js';
 export type {

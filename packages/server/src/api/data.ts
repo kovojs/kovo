@@ -6,9 +6,6 @@ export {
   errorBoundary,
   invalidate,
   mutation,
-  renderMutationEndpointResponse,
-  renderMutationResponse,
-  renderNoJsMutationResponse,
   write,
 } from '../mutation.js';
 /** Build JSX-spread attributes for a SPEC §6.3 enhanced mutation form. */
@@ -45,11 +42,7 @@ export type {
   QuerySearchInput,
   RegisteredQueryDefinition,
 } from '../query.js';
-export {
-  query,
-  renderQueryEndpointResponse,
-  renderQueryRegistryEndpointResponse,
-} from '../query.js';
+export { query } from '../query.js';
 export { createMemoryMutationReplayStore } from '../replay.js';
 export type { MutationReplayReservation, MutationReplayStore } from '../replay.js';
 export { s, SchemaValidationError } from '../schema.js';

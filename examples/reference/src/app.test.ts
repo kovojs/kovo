@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
-import { renderRoutePageResponse } from '@kovojs/server';
 import { runMutation } from '@kovojs/server/internal/execution';
+import { renderRoutePageResponse } from '@kovojs/server/internal/route';
 
 import { kovoCheck, kovoExplain } from '../../../packages/cli/src/index.js';
 import {

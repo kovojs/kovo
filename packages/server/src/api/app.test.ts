@@ -8,7 +8,10 @@ import * as packageStaticExportApi from '@kovojs/server/app-shell/static-export'
 import * as packageViteApi from '@kovojs/server/app-shell/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
 import * as packageInternalExecutionApi from '@kovojs/server/internal/execution';
+import * as packageInternalHtmlApi from '@kovojs/server/internal/html';
+import * as packageInternalRouteApi from '@kovojs/server/internal/route';
 import * as packageInternalStaticExportApi from '@kovojs/server/internal/static-export';
+import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
@@ -18,8 +21,12 @@ import * as clientModulesApi from './app-shell/client-modules.js';
 import * as coreApi from './app-shell/core.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
 import * as internalExecutionApi from '../internal/execution.js';
+import * as internalHtmlApi from '../internal/html.js';
+import * as internalRouteApi from '../internal/route.js';
+import * as mutationApi from '../mutation.js';
 import * as nodeApi from './app-shell/node.js';
 import * as nodeSourceApi from '../node.js';
+import * as queryApi from '../query.js';
 import * as staticExportApi from './app-shell/static-export.js';
 import * as viteApi from './app-shell/vite.js';
 import type * as vt from './app-shell/vite.js';
@@ -37,6 +44,7 @@ import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
 import * as viteStaticExportManifestFileApi from '../vite-static-export-manifest-file.js';
 import * as viteDevApi from '../vite-dev.js';
+import * as internalWireApi from '../internal/wire.js';
 import * as wireHtmlApi from '../wire-html.js';
 
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
@@ -426,7 +434,6 @@ describe('server app-shell public API barrels', () => {
 
     expect(publicApi.renderDocument).toBe(documentCoreApi.renderDocument);
     expect(publicApi.renderDeferredDocument).toBe(documentCoreApi.renderDeferredDocument);
-    expect(publicApi.renderRouteDocumentResponse).toBe(documentCoreApi.renderRouteDocumentResponse);
     expect(publicApi.renderDiagnosticDocument).toBe(
       documentDiagnosticsApi.renderDiagnosticDocument,
     );
@@ -456,13 +463,54 @@ describe('server app-shell public API barrels', () => {
     expect(publicValues).not.toHaveProperty('runQuery');
     expect(publicValues).not.toHaveProperty('runRoutePage');
     expect(publicValues).not.toHaveProperty('runWebhook');
+    expect(publicValues).not.toHaveProperty('renderMutationEndpointResponse');
+    expect(publicValues).not.toHaveProperty('renderMutationResponse');
+    expect(publicValues).not.toHaveProperty('renderNoJsMutationResponse');
+    expect(publicValues).not.toHaveProperty('renderQueryEndpointResponse');
+    expect(publicValues).not.toHaveProperty('renderQueryRegistryEndpointResponse');
+    expect(publicValues).not.toHaveProperty('renderRouteDocumentResponse');
+    expect(publicValues).not.toHaveProperty('renderRoutePageResponse');
+    expect(dataApi).not.toHaveProperty('renderMutationEndpointResponse');
+    expect(dataApi).not.toHaveProperty('renderMutationResponse');
+    expect(dataApi).not.toHaveProperty('renderNoJsMutationResponse');
+    expect(dataApi).not.toHaveProperty('renderQueryEndpointResponse');
+    expect(dataApi).not.toHaveProperty('renderQueryRegistryEndpointResponse');
     expect(dataApi).not.toHaveProperty('runMutation');
     expect(dataApi).not.toHaveProperty('runQuery');
+    expect(renderingApi).not.toHaveProperty('renderRouteDocumentResponse');
     expect(routingApi).not.toHaveProperty('endpointMatches');
     expect(routingApi).not.toHaveProperty('parseRouteRequest');
+    expect(routingApi).not.toHaveProperty('renderRoutePageResponse');
     expect(routingApi).not.toHaveProperty('runEndpoint');
     expect(routingApi).not.toHaveProperty('runRoutePage');
     expect(routingApi).not.toHaveProperty('runWebhook');
+
+    expect(packageInternalHtmlApi.renderRouteDocumentResponse).toBe(
+      documentCoreApi.renderRouteDocumentResponse,
+    );
+    expect(packageInternalRouteApi.renderRoutePageResponse).toBe(routeApi.renderRoutePageResponse);
+    expect(packageInternalWireApi.renderMutationEndpointResponse).toBe(
+      mutationApi.renderMutationEndpointResponse,
+    );
+    expect(packageInternalWireApi.renderMutationResponse).toBe(mutationApi.renderMutationResponse);
+    expect(packageInternalWireApi.renderNoJsMutationResponse).toBe(
+      mutationApi.renderNoJsMutationResponse,
+    );
+    expect(packageInternalWireApi.renderQueryEndpointResponse).toBe(
+      queryApi.renderQueryEndpointResponse,
+    );
+    expect(packageInternalWireApi.renderQueryRegistryEndpointResponse).toBe(
+      queryApi.renderQueryRegistryEndpointResponse,
+    );
+    expect(packageInternalHtmlApi.renderRouteDocumentResponse).toBe(
+      internalHtmlApi.renderRouteDocumentResponse,
+    );
+    expect(packageInternalRouteApi.renderRoutePageResponse).toBe(
+      internalRouteApi.renderRoutePageResponse,
+    );
+    expect(packageInternalWireApi.renderMutationEndpointResponse).toBe(
+      internalWireApi.renderMutationEndpointResponse,
+    );
 
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell');
   });

@@ -464,7 +464,7 @@ packages/create-kovo/src/index.test.ts`.
       `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
       `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
       `corepack pnpm run check:imports`; `corepack pnpm run check:exports`.
-- [ ] **Move mutation/query/route response renderers internal-only.**
+- [x] **Move mutation/query/route response renderers internal-only.**
   - Remove these from public `@kovojs/server` exports unless a concrete app-authored
     use case is documented: `renderMutationEndpointResponse`,
     `renderMutationResponse`, `renderNoJsMutationResponse`,
@@ -473,6 +473,26 @@ packages/create-kovo/src/index.test.ts`.
   - Keep public declaration APIs (`mutation`, `query`, `route`, `webhook`,
     `createRequestHandler`) as the app-facing surface.
   - Evidence:
+    - `packages/server/src/api/data.ts`, `packages/server/src/api/routing.ts`,
+      and `packages/server/src/api/rendering.ts` no longer public-export the
+      listed response renderers; `packages/server/src/internal/wire.ts`,
+      `packages/server/src/internal/route.ts`, and
+      `packages/server/src/internal/html.ts` provide their internal homes.
+    - App-authored tutorial/docs/reference sources no longer import or call the
+      listed renderers; test/conformance harnesses import them from internal
+      subpaths where direct execution is still needed.
+    - Verification: public-root scan
+      `rg -n "from ['\\\"]@kovojs/server['\\\"][^;]*(renderMutationEndpointResponse|renderMutationResponse|renderNoJsMutationResponse|renderQueryEndpointResponse|renderQueryRegistryEndpointResponse|renderRouteDocumentResponse|renderRoutePageResponse)|import \\{[^}]*\\b(renderMutationEndpointResponse|renderMutationResponse|renderNoJsMutationResponse|renderQueryEndpointResponse|renderQueryRegistryEndpointResponse|renderRouteDocumentResponse|renderRoutePageResponse)\\b[^}]*\\} from ['\\\"]@kovojs/server['\\\"]" . --glob '!**/node_modules/**' --glob '!**/dist/**' --glob '!**/generated/**'`
+      exits 1; `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/conformance-fixtures/src/server-fixtures.test.ts conformance/better-auth-pin/src/index.session-credentials.test.ts examples/reference/src/app.test.ts site/tutorial/steps/01-first-page/src/app.test.ts site/tutorial/steps/02-islands/src/app.test.ts site/tutorial/steps/03-queries/src/app.test.ts site/tutorial/steps/04-mutations/src/app.test.ts site/tutorial/steps/05-optimistic/src/app.test.ts site/tutorial/steps/06-streaming/src/app.test.ts site/tutorial/steps/07-verification/src/app.test.ts`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
+      `corepack pnpm run check:imports`; `corepack pnpm run check:exports`;
+      `corepack pnpm exec vitest --run scripts/public-packages.test.mjs`;
+      `git diff --check`.
+    - Remaining smoke gap: `node tests/kovo-check.node.mjs` is still blocked
+      before assertions by missing repo-level publish-layout artifact
+      `dist/compiler/src/internal.mjs` (same known blocker recorded in
+      `plans/example-readability.md`).
 - [ ] **Move document/deferred/page-hint rendering internals off the public root.**
   - Review and likely internalize `renderDocument`, `renderDeferredDocument`,
     `renderDeferredStream`, `renderDocumentQueryScript`, `renderQueryScript`,

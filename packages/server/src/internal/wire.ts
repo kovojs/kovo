@@ -27,3 +27,9 @@ export {
   type NoJsMutationRequest,
   type NoJsMutationResponse,
 } from '../mutation-wire.js';
+export {
+  renderMutationEndpointResponse,
+  renderMutationResponse,
+  renderNoJsMutationResponse,
+} from '../mutation.js';
+export { renderQueryEndpointResponse, renderQueryRegistryEndpointResponse } from '../query.js';
