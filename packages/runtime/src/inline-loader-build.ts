@@ -119,6 +119,31 @@ function installInlineKovoLoader(im) {
       doc.getElementsByName?.(raw)?.[0]
     );
   };
+  const so = () => {
+    let offset = 0;
+    for (const el of qa(doc, 'body *')) {
+      const style = globalThis.getComputedStyle?.(el);
+      if (!style || (style.position !== 'fixed' && style.position !== 'sticky')) continue;
+      const top = parseFloat(style.top || '0') || 0;
+      const rect = el.getBoundingClientRect?.();
+      if (top <= 0 && rect && rect.top <= 1 && rect.bottom > offset) offset = rect.bottom;
+    }
+    return offset;
+  };
+  const hscl = (hash) => {
+    const target = ht(hash);
+    if (!target) return;
+    const offset = so();
+    const rect = target.getBoundingClientRect?.();
+    if (offset && rect) {
+      globalThis.scrollTo?.(
+        globalThis.scrollX || globalThis.pageXOffset || 0,
+        (globalThis.scrollY || globalThis.pageYOffset || 0) + rect.top - offset,
+      );
+      return;
+    }
+    target.scrollIntoView?.();
+  };
   const vp = (val, path) =>
     path.split('.').reduce((cur, seg) => {
       const key = seg.endsWith('?') ? seg.slice(0, -1) : seg;
@@ -371,7 +396,7 @@ function installInlineKovoLoader(im) {
       focusTarget?.focus?.({ preventScroll: true });
       const saved = sc[finalUrl.href];
       if (saved) globalThis.scrollTo?.(saved[0], saved[1]);
-      else if (finalUrl.hash) ht(finalUrl.hash)?.scrollIntoView?.();
+      else if (finalUrl.hash) hscl(finalUrl.hash);
       else globalThis.scrollTo?.(0, 0);
       if (triggerRoot) setTimeout(() => tr(triggerRoot));
       cu = finalUrl.href;

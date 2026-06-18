@@ -204,11 +204,12 @@ through client navigation.
     hash anchors to native browser navigation. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
     packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
-    passed and proves target-document API hashes scroll after morphing, update
-    `location.href`, and restore saved scroll/hash URL state through browser
-    `popstate`. `node site/scripts/smoke.mjs` passed `site-smoke/v1 OK` and
-    proves a real generated API symbol-rail hash lands below the sticky docs
-    header in the exported site.
+    passed with 48 browser tests and proves target-document API hashes scroll
+    after morphing, offset below sticky document chrome, update `location.href`,
+    and restore saved scroll/hash URL state through browser `popstate`.
+    `node site/scripts/smoke.mjs` passed `site-smoke/v1 OK` and proves a real
+    generated API symbol-rail hash lands below the sticky docs header in the
+    exported site.
     `packages/runtime/src/inline-loader-navigation.test.ts` proves `popstate`
     restores saved scroll without pushing another history entry across all
     inline installer artifacts.
@@ -396,7 +397,8 @@ through client navigation.
       route-change announcement, axe, and bfcache hygiene pass.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves focus, top scroll, decoded/encoded/named hash scroll, route-change
-    announcement, delegated docs theme persistence, and newest-hash concurrency;
+    announcement, delegated docs theme persistence, sticky-chrome hash offset,
+    and newest-hash concurrency;
     `packages/runtime/src/inline-loader-navigation.test.ts` proves popstate
     scroll restoration; bfcache hygiene is covered by the runtime visible-return,
     pagehide, and conformance fixtures; `examples/commerce/src/enhanced-navigation.test.ts`
@@ -405,4 +407,4 @@ through client navigation.
 - [x] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
       budget change is explicitly accepted.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
-    the measured shipped source was `inline-loader-gzip=5782/8192`.
+    the measured shipped source was `inline-loader-gzip=6032/8192`.

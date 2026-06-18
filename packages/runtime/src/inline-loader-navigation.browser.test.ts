@@ -592,6 +592,93 @@ describe('browser inline loader enhanced navigation', () => {
     }
   });
 
+  it('offsets target-document hash scrolling below sticky document chrome', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-symbol" href="/api#symbols%2Fsticky">Symbol</a>',
+      '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+      '</main>',
+    ].join('');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>API</title>',
+          '</head><body>',
+          '<header id="fixed-docs-header">Docs</header>',
+          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+          '<h2 id="symbols/sticky">Sticky target</h2>',
+          '</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/api#symbols%2Fsticky', location.href).href,
+    }));
+    const originalGetComputedStyle = globalThis.getComputedStyle;
+    const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      if ((this as Element).id === 'fixed-docs-header') {
+        return {
+          bottom: 72,
+          height: 72,
+          left: 0,
+          right: 800,
+          toJSON: () => ({}),
+          top: 0,
+          width: 800,
+          x: 0,
+          y: 0,
+        };
+      }
+      if ((this as Element).id === 'symbols/sticky') {
+        return {
+          bottom: 250,
+          height: 30,
+          left: 0,
+          right: 400,
+          toJSON: () => ({}),
+          top: 220,
+          width: 400,
+          x: 0,
+          y: 220,
+        };
+      }
+      return originalGetBoundingClientRect.call(this);
+    };
+    vi.stubGlobal('getComputedStyle', (element: Element) => {
+      if (element.id === 'fixed-docs-header') {
+        return { position: 'sticky', top: '0px' } as CSSStyleDeclaration;
+      }
+      return { position: 'static', top: 'auto' } as CSSStyleDeclaration;
+    });
+    const scrollTo = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', scrollTo);
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    try {
+      installNavigationLoader();
+      dispatchAnchorLikeClick('/api#symbols%2Fsticky');
+
+      await vi.waitFor(() => expect(document.title).toBe('API'));
+
+      expect(scrollTo).toHaveBeenCalledWith(0, 148);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      vi.stubGlobal('getComputedStyle', originalGetComputedStyle);
+    }
+  });
+
   it('scrolls to encoded-id and named hash anchors from target documents', async () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
     document.body.innerHTML = [
