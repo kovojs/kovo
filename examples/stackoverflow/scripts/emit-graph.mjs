@@ -1,6 +1,8 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
@@ -31,7 +33,6 @@ const {
   serializeInvalidationRegistry,
   serializeTouchGraph,
 } = await import('@kovojs/drizzle/static');
-const { deriveOptimistic, serializeDerivedOptimistic } = await import('@kovojs/drizzle/derive');
 const { createSoGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,8 @@ const srcDir = resolve(soRoot, 'src');
 const graphPath = resolve(soRoot, 'src/generated/graph.json');
 const touchGraphPath = resolve(soRoot, 'src/generated/touch-graph.ts');
 const optimisticDir = resolve(soRoot, 'src/generated/optimistic');
+const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-so-graph-'));
+process.on('exit', () => rmSync(tempRoot, { force: true, recursive: true }));
 
 // The source files the §10.5 extractors analyze. db.ts/model.ts are included so
 // ts-morph can resolve cross-module types (SoDb, request/result shapes, the
@@ -159,7 +162,7 @@ const invalidatedQueriesByMutation = {
   voteUp: ['questionList', 'questionScore'],
 };
 
-// ── Derive one PatchProgram per (mutation × invalidated query) pair ────────────
+// ── Build optimistic derivation inputs per mutation ────────────────────────────
 const optimisticByMutation = new Map();
 for (const mutationKey of MUTATION_KEYS) {
   const effects = effectsByMutation.get(mutationKey);
@@ -168,15 +171,9 @@ for (const mutationKey of MUTATION_KEYS) {
   for (const query of invalidatedQueriesByMutation[mutationKey]) {
     const shape = shapeByQuery.get(query);
     assert.ok(shape, `expected an extracted shape for ${query}`);
-    const result = deriveOptimistic(effects, shape);
-    assert.equal(
-      result.kind,
-      'derived',
-      `${mutationKey} × ${query} must derive: ${JSON.stringify(result)}`,
-    );
-    entries.push({ program: result.program, query });
+    entries.push({ query, shape });
   }
-  optimisticByMutation.set(mutationKey, entries);
+  optimisticByMutation.set(mutationKey, { effects, entries });
 }
 
 // ── Build the KovoExplainInput graph.json (touchGraph EXTRACTED) ─────────────────
@@ -249,14 +246,39 @@ const optimisticFileName = (mutationKey) =>
 const optimisticSources = new Map();
 for (const mutationKey of MUTATION_KEYS) {
   const path = optimisticFileName(mutationKey);
-  const source = serializeDerivedOptimistic({
+  const tempPath = resolve(tempRoot, `${mutationKey}.optimistic.ts`);
+  compileDrizzleOptimistic({
     complete: true,
     constName: CONST_BY_MUTATION[mutationKey],
-    entries: optimisticByMutation.get(mutationKey),
+    ...optimisticByMutation.get(mutationKey),
     formImport: FORM_BY_MUTATION[mutationKey],
+    outPath: tempPath,
     queue: QUEUE_BY_MUTATION[mutationKey],
   });
-  optimisticSources.set(path, formatTs(source, path));
+  optimisticSources.set(path, formatTs(readFileSync(tempPath, 'utf8'), path));
+}
+
+function compileDrizzleOptimistic(input) {
+  const inputPath = resolve(tempRoot, `${input.constName}.drizzle-optimistic-input.json`);
+  writeFileSync(
+    inputPath,
+    `${JSON.stringify(
+      {
+        complete: input.complete,
+        constName: input.constName,
+        effects: input.effects,
+        entries: input.entries,
+        formImport: input.formImport,
+        queue: input.queue,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  execFileSync('kovo', ['compile', 'drizzle-optimistic', inputPath, '--out', input.outPath], {
+    cwd: soRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }
 
 // ── Write or --check ───────────────────────────────────────────────────────────

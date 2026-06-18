@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/runtime.ts",
     "./derive": "./src/derive.ts",
+    "./internal/derive-codegen": "./src/derive-codegen.ts",
     "./static": "./src/static.ts"
   },
   "publishConfig": {
@@ -20,6 +21,10 @@
         "types": "./dist/derive.d.mts",
         "default": "./dist/derive.mjs"
       },
+      "./internal/derive-codegen": {
+        "types": "./dist/derive-codegen.d.mts",
+        "default": "./dist/derive-codegen.mjs"
+      },
       "./static": {
         "types": "./dist/static.d.mts",
         "default": "./dist/static.mjs"
@@ -27,7 +32,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/derive.ts src/runtime.ts src/static.ts --dts",
+    "build:dist": "vp pack src/derive-codegen.ts src/derive.ts src/runtime.ts src/static.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

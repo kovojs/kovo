@@ -6,12 +6,13 @@ import type { PatchOp, PatchProgram, SymbolicValue } from '@kovojs/core/internal
 // source-free. Output is `(current, $input) => Value` transforms inside an
 // `OptimisticFor`-shaped plan, with a DO-NOT-EDIT header (SPEC.md §10.4 example).
 
-/** One derived (non-overridden) transform to emit into the generated plan. */
+/** @internal One derived (non-overridden) transform to emit into the generated plan. */
 export interface DerivedTransformEntry {
   program: PatchProgram;
   query: string;
 }
 
+/** @internal */
 export interface SerializeDerivedOptimisticOptions {
   /** Exported binding name, e.g. `cartAddDerivedOptimistic`. */
   constName: string;
@@ -33,6 +34,8 @@ const DO_NOT_EDIT = [
 ].join('\n');
 
 /**
+ * @internal
+ *
  * Serialize derived transforms for one mutation into a `generated/optimistic/*.ts`
  * module. Override precedence: callers pass only the non-overridden `entries`, so a
  * hand-written transform present ⇒ its derived entry is suppressed; deleting the
@@ -86,6 +89,8 @@ ${planBody}
 }
 
 /**
+ * @internal
+ *
  * Lower one PatchProgram to a pure `(current, $input) => Value` transform arrow —
  * the exact source committed into the generated plan, and the unit under the
  * codegen↔interpreter parity test (it must agree with `applyPatchProgram`).

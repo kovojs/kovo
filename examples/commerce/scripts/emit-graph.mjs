@@ -26,7 +26,6 @@ const {
   extractSymbolicEffectsFromProject,
   extractAlgebraicShapesFromProject,
 } = await import('@kovojs/drizzle/static');
-const { deriveOptimistic, serializeDerivedOptimistic } = await import('@kovojs/drizzle/derive');
 const ts = await import('typescript');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -321,24 +320,35 @@ declare module '@kovojs/core' {
 // a transform from generated/optimistic/ lets you hand-write an override;
 // regenerating restores derivation (the §10.4 pair-by-pair contract).
 const cartAddEffects = effectsInHandler('addToCart').map((fact) => fact.effect);
-const cartAddOptimisticEntries = [];
-for (const query of ['cart', 'orderHistory', 'productGrid']) {
+const cartAddOptimisticQueries = ['cart', 'orderHistory', 'productGrid'].map((query) => {
   const shape = shapeByQuery.get(query);
   assert.ok(shape, `commerce extractor must produce a ${query} query shape`);
-  const result = deriveOptimistic(cartAddEffects, shape);
-  assert.equal(result.kind, 'derived', `commerce ${query} must derive: ${JSON.stringify(result)}`);
-  cartAddOptimisticEntries.push({ program: result.program, query });
-}
+  return { query, shape };
+});
+const optimisticSourcePath = resolve(tempRoot, 'cart-add.optimistic.ts');
+const optimisticFactsPath = resolve(tempRoot, 'cart-add.optimistic.json');
+compileDrizzleOptimistic({
+  complete: true,
+  constName: 'cartAddDerivedOptimistic',
+  effects: cartAddEffects,
+  entries: cartAddOptimisticQueries,
+  factsPath: optimisticFactsPath,
+  formImport: { name: 'addToCartForm', path: '../../app.js' },
+  outPath: optimisticSourcePath,
+  queue: 'cart',
+});
+assert.deepEqual(
+  readJson(optimisticFactsPath),
+  cartAddOptimisticQueries.map(({ query }) => ({
+    derivation: { status: 'derived' },
+    query,
+    status: 'derived',
+  })),
+);
 const optimisticSource = [
   "import '../live-targets.js';",
   '',
-  serializeDerivedOptimistic({
-    complete: true,
-    constName: 'cartAddDerivedOptimistic',
-    entries: cartAddOptimisticEntries,
-    formImport: { name: 'addToCartForm', path: '../../app.js' },
-    queue: 'cart',
-  }),
+  readFileSync(optimisticSourcePath, 'utf8'),
 ].join('\n');
 
 if (process.argv.includes('--check')) {
@@ -380,6 +390,34 @@ function deriveGraphViaCli(input) {
   writeFileSync(inputPath, `${JSON.stringify(input, null, 2)}\n`);
   runKovo(['compile', 'graph', inputPath, '--out', outPath]);
   return readJson(outPath);
+}
+
+function compileDrizzleOptimistic(input) {
+  const inputPath = resolve(tempRoot, `${input.constName}.drizzle-optimistic-input.json`);
+  writeFileSync(
+    inputPath,
+    `${JSON.stringify(
+      {
+        complete: input.complete,
+        constName: input.constName,
+        effects: input.effects,
+        entries: input.entries,
+        formImport: input.formImport,
+        queue: input.queue,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  runKovo([
+    'compile',
+    'drizzle-optimistic',
+    inputPath,
+    '--out',
+    input.outPath,
+    '--facts-out',
+    input.factsPath,
+  ]);
 }
 
 function readJson(path) {

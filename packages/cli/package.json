@@ -34,6 +34,7 @@
   "dependencies": {
     "@kovojs/compiler": "workspace:*",
     "@kovojs/core": "workspace:*",
+    "@kovojs/drizzle": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/ui": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0"

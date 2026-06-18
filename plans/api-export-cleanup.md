@@ -906,17 +906,33 @@ tsconfig.json --noEmit --pretty false`.
     drizzle home. Verification:
     `pnpm --filter @kovojs/drizzle exec vitest run src/index src/runtime-surface.test.ts`,
     `pnpm run check:exports`, and `node scripts/api-surface-gate.mjs`.
-  - Remaining audit: `@kovojs/drizzle/derive` is still app-build consumed by
-    `examples/{commerce,crm,stackoverflow}/scripts/emit-graph.mjs` for
-    `deriveOptimistic` and `serializeDerivedOptimistic`; `lowerTransform` is
-    currently only a repo test/conformance consumer. `@kovojs/drizzle/static` is
-    still app-build consumed by those graph scripts for touch graph, invalidation,
-    algebraic-shape, and symbolic-effect extraction/serialization. Proposed
-    follow-up export map after graph emission moves behind `@kovojs/cli`: keep
-    `.` public for annotations, keep `./derive` public only if
-    `deriveOptimistic` remains app-authored, and move graph/codegen helpers to
-    narrow internal subpaths such as `./internal/static-extraction` and
-    `./internal/derive-codegen`.
+  - [x] Move optimistic transform codegen off `@kovojs/drizzle/derive`.
+    - Evidence: `@kovojs/drizzle/derive` now exports only the source-agnostic
+      `deriveOptimistic` API; `lowerTransform`, `serializeDerivedOptimistic`,
+      `DerivedTransformEntry`, and `SerializeDerivedOptimisticOptions` are
+      available only from the manifest-declared internal
+      `@kovojs/drizzle/internal/derive-codegen` subpath. Example graph scripts
+      call `kovo compile drizzle-optimistic` for derived optimistic modules and
+      derivation facts instead of importing the codegen helpers. Verification:
+      `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts packages/conformance-fixtures/src/derivation-fixtures.test.ts`;
+      `corepack pnpm --filter @kovojs/example-commerce run emit-graph -- --check`;
+      `corepack pnpm --filter @kovojs/example-crm run emit-graph -- --check`;
+      `corepack pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `corepack pnpm run check:imports`; `corepack pnpm run check:exports`;
+      `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
+      `node site/scripts/api-ref.mjs`; `node site/scripts/api-examples-check.mjs`;
+      `corepack pnpm exec vitest --run scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs packages/conformance-fixtures/src/package-exports.test.ts`;
+      `rg -n "@kovojs/drizzle/derive|serializeDerivedOptimistic|lowerTransform" examples packages/create-kovo/templates site/tutorial site/content site/src --glob '!**/generated/**' --glob '!**/dist/**' --glob '!**/node_modules/**'`
+      returned no matches.
+  - Remaining audit: `@kovojs/drizzle/static` is still app-build consumed by
+    `examples/{commerce,crm,stackoverflow}/scripts/emit-graph.mjs` for touch
+    graph, invalidation, algebraic-shape, and symbolic-effect
+    extraction/serialization. Proposed follow-up export map after static graph
+    emission moves behind `@kovojs/cli`: keep `.` public for annotations, keep
+    `./derive` public only if `deriveOptimistic` remains app-authored, and move
+    static extraction helpers to a narrow internal subpath such as
+    `./internal/static-extraction`.
 - [x] **Shrink `@kovojs/headless-ui` root.**
   - After direct family subpaths exist, remove primitive-family exports from the
     root so family symbols have one canonical home.

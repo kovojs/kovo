@@ -326,6 +326,9 @@ importers:
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core
+      '@kovojs/drizzle':
+        specifier: workspace:*
+        version: link:../drizzle
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server

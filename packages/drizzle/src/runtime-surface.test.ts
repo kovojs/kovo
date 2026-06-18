@@ -57,6 +57,7 @@ describe('@kovojs/drizzle runtime surface', () => {
       // SPEC.md §10.5: the source-agnostic derivation algebra is a ts-morph-free
       // entrypoint (it consumes the shared IR, not Drizzle source).
       './derive': './src/derive.ts',
+      './internal/derive-codegen': './src/derive-codegen.ts',
       './static': './src/static.ts',
     });
     expect(drizzleDeriveSource()).not.toContain('ts-morph');

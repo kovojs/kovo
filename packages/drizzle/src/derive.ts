@@ -21,14 +21,6 @@ import {
 // All-or-nothing per field: any Opaque component punts the whole pair, never a
 // best-effort patch (wrong predictions are worse than none).
 
-// Phase 3 codegen (PatchProgram → committed transform source) shares this entry.
-export {
-  lowerTransform,
-  serializeDerivedOptimistic,
-  type DerivedTransformEntry,
-  type SerializeDerivedOptimisticOptions,
-} from './derive-codegen.js';
-
 interface FieldDerivation {
   aggOps: PatchOp[];
   connected: boolean;

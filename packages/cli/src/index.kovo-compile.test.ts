@@ -357,4 +357,79 @@ export const addToCart = mutation('cart/add', {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('writes Drizzle optimistic codegen through the CLI facade', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-optimistic-'));
+    const inputPath = join(root, 'optimistic.json');
+    const outPath = join(root, 'cart-add.ts');
+    const factsPath = join(root, 'optimistic-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        inputPath,
+        JSON.stringify(
+          {
+            complete: true,
+            constName: 'cartAddDerivedOptimistic',
+            effects: [
+              {
+                op: 'insert',
+                table: 'cart_items',
+                values: { qty: { kind: 'param', path: 'quantity' } },
+              },
+            ],
+            entries: [
+              {
+                query: 'cart',
+                shape: {
+                  fields: {
+                    count: {
+                      arith: { column: 'qty', kind: 'col' },
+                      kind: 'sum',
+                      rowset: { filters: [], key: null, orderBy: [], table: 'cart_items' },
+                    },
+                  },
+                  query: 'cart',
+                },
+              },
+            ],
+            formImport: { name: 'addToCartForm', path: '../../app.js' },
+            queue: 'cart',
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'drizzle-optimistic',
+          inputPath,
+          '--out',
+          outPath,
+          '--facts-out',
+          factsPath,
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(readFileSync(outPath, 'utf8')).toContain(
+        'export const cartAddDerivedOptimistic = {',
+      );
+      expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
+        { derivation: { status: 'derived' }, query: 'cart', status: 'derived' },
+      ]);
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `WRITE drizzle-optimistic path=${JSON.stringify(outPath)}`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

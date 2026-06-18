@@ -10,11 +10,11 @@ import assert from 'node:assert/strict';
 // SPEC.md §10.5 / §11.1: this script is the CRM example's EXTRACTION pipeline. It
 // reads the real Drizzle source (schema/queries/mutations), runs the static
 // extractor to get the touch graph + symbolic write effects + algebraic query
-// shapes, then runs the source-agnostic deriver per (mutation × query) pair. For
-// the pairs it can lower it emits a committed derived transform via
-// serializeDerivedOptimistic; for the pairs that PUNT (GROUP BY pipeline, opaque
-// commission / column arithmetic) it suppresses the derived entry via `overrides`
-// so the mutation module's hand-written transform merges in. It also emits the
+// shapes, then asks `kovo compile drizzle-optimistic` to run the source-agnostic
+// deriver per (mutation × query) pair and emit the committed derived transform.
+// For the pairs that PUNT (GROUP BY pipeline, opaque commission / column
+// arithmetic), the CLI suppresses the derived entry via `overrides` so the
+// mutation module's hand-written transform merges in. It also emits the
 // touch-graph module + graph.json (with the optimistic[] status mix) and supports
 // `--check` to fail on stale artifacts.
 
@@ -36,7 +36,6 @@ const {
   extractSymbolicEffectsFromProject,
   extractAlgebraicShapesFromProject,
 } = await import('@kovojs/drizzle/static');
-const { deriveOptimistic, serializeDerivedOptimistic } = await import('@kovojs/drizzle/derive');
 const { puntReasonLabel } = await import('@kovojs/core/internal/derivation');
 const { createCrmGraph } = await import('../src/graph.js');
 
@@ -79,8 +78,8 @@ const files = SOURCE_FILES.map((relative) => ({
 // SPEC.md §10.4: the extractor keys write effects by the handler function name;
 // we map those to the public mutation keys (and forms) here. `overrides` lists
 // the queries whose transform is HAND-WRITTEN in mutations.ts (a PUNT, or a
-// derived-but-unlowerable opaque program) so serializeDerivedOptimistic suppresses
-// the derived entry and the app merges the hand-written one.
+// derived-but-unlowerable opaque program) so the CLI suppresses the derived entry
+// and the app merges the hand-written one.
 const MUTATIONS = [
   {
     key: 'addContact',
@@ -171,7 +170,7 @@ for (const mutation of MUTATIONS) {
   const effects = effectsByHandler.get(mutation.handler) ?? [];
   const writtenDomains = new Set(effects.map((effect) => TABLE_DOMAIN[effect.table]));
   const overrides = new Set(mutation.overrides);
-  const derivedEntries = [];
+  const optimisticInputEntries = [];
 
   for (const { domains, query } of crmQueryDomains) {
     const invalidated = domains.some((domain) => writtenDomains.has(domain));
@@ -179,49 +178,40 @@ for (const mutation of MUTATIONS) {
 
     const shape = shapeByQuery.get(query);
     assert.ok(shape, `expected an extracted shape for ${query}`);
-    const result = deriveOptimistic(effects, shape);
-
-    if (overrides.has(query)) {
-      // HAND-WRITTEN / await-fragment in the mutation module. Record the
-      // derivation metadata so `kovo explain --optimistic` shows the PUNTED reason
-      // inline; status is 'hand-written' (a transform) or 'await-fragment'.
-      const status = AWAIT_FRAGMENT_PAIRS.has(`${mutation.key}\0${query}`)
-        ? 'await-fragment'
-        : 'hand-written';
-      const derivation =
-        result.kind === 'punt' ? { status: 'PUNTED', reason: result.reason } : undefined;
-      optimisticEntries.push({
-        mutation: mutation.key,
-        query,
-        status,
-        ...(derivation ? { derivation } : {}),
-      });
-      continue;
-    }
-
-    // DERIVED + lowerable: the generated module owns this transform.
-    assert.equal(
-      result.kind,
-      'derived',
-      `${mutation.key} × ${query} expected derived (override it otherwise): ${JSON.stringify(result)}`,
-    );
-    derivedEntries.push({ program: result.program, query });
-    optimisticEntries.push({
-      mutation: mutation.key,
+    optimisticInputEntries.push({
       query,
-      status: 'derived',
-      derivation: { status: 'derived' },
+      shape,
+      status: overrides.has(query)
+        ? AWAIT_FRAGMENT_PAIRS.has(`${mutation.key}\0${query}`)
+          ? 'await-fragment'
+          : 'hand-written'
+        : 'derived',
     });
   }
 
-  const baseSource = serializeDerivedOptimistic({
+  const optimisticSourcePath = resolve(tempRoot, `${mutation.key}.optimistic.ts`);
+  const optimisticFactsPath = resolve(tempRoot, `${mutation.key}.optimistic.json`);
+  compileDrizzleOptimistic({
     complete: overrides.size === 0,
     constName: `${mutation.key}DerivedOptimistic`,
-    entries: derivedEntries,
+    effects,
+    entries: optimisticInputEntries,
+    factsPath: optimisticFactsPath,
     formImport: { name: mutation.form, path: FORM_IMPORT_PATH },
+    outPath: optimisticSourcePath,
     queue: mutation.queue,
     ...(overrides.size > 0 ? { overrides: [...overrides] } : {}),
   });
+  const facts = readJson(optimisticFactsPath);
+  optimisticEntries.push(
+    ...facts.map((entry) => ({
+      mutation: mutation.key,
+      query: entry.query,
+      status: entry.status,
+      ...(entry.derivation ? { derivation: entry.derivation } : {}),
+    })),
+  );
+  const baseSource = readFileSync(optimisticSourcePath, 'utf8');
   // SPEC.md §10.4: a complete (fully-derived) plan `satisfies OptimisticFor` and
   // is already typed. A partial plan (override path) is emitted satisfies-free by
   // the serializer; we add the example-local `CrmDerivedSubset` contextual type
@@ -233,7 +223,7 @@ for (const mutation of MUTATIONS) {
       : typeDerivedSubset(
           baseSource,
           mutation.form,
-          derivedEntries.map((entry) => entry.query),
+          facts.filter((entry) => entry.status === 'derived').map((entry) => entry.query),
         );
   generatedModules.push({
     key: mutation.key,
@@ -377,6 +367,46 @@ function deriveGraphViaCli(input) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   return JSON.parse(readFileSync(outPath, 'utf8'));
+}
+
+function compileDrizzleOptimistic(input) {
+  const inputPath = resolve(tempRoot, `${input.constName}.drizzle-optimistic-input.json`);
+  writeFileSync(
+    inputPath,
+    `${JSON.stringify(
+      {
+        complete: input.complete,
+        constName: input.constName,
+        effects: input.effects,
+        entries: input.entries,
+        formImport: input.formImport,
+        overrides: input.overrides,
+        queue: input.queue,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  execFileSync(
+    'kovo',
+    [
+      'compile',
+      'drizzle-optimistic',
+      inputPath,
+      '--out',
+      input.outPath,
+      '--facts-out',
+      input.factsPath,
+    ],
+    {
+      cwd: crmRoot,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+}
+
+function readJson(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
 }
 
 function kebab(value) {

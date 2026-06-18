@@ -185,7 +185,7 @@
       "apiBoundary": {
         "public": [".", "./derive", "./static"],
         "generated": [],
-        "internal": []
+        "internal": ["./internal/derive-codegen"]
       },
       "apiRef": {
         "order": 5,

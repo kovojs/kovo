@@ -727,7 +727,13 @@ type AddArgParseResult =
   | { ok: true; options: AddComponentOptions }
   | { message: string; ok: false };
 
-type CompileTarget = 'component' | 'graph' | 'mutation-inputs' | 'package-css' | 'route';
+type CompileTarget =
+  | 'component'
+  | 'drizzle-optimistic'
+  | 'graph'
+  | 'mutation-inputs'
+  | 'package-css'
+  | 'route';
 
 interface CompileBaseOptions {
   check: boolean;
@@ -767,6 +773,12 @@ interface CompileMutationInputsCommandOptions extends CompileBaseOptions {
   target: 'mutation-inputs';
 }
 
+interface CompileDrizzleOptimisticCommandOptions extends CompileBaseOptions {
+  factsOutPath?: string;
+  inputPath: string;
+  target: 'drizzle-optimistic';
+}
+
 interface CompilePackageCssCommandOptions extends CompileBaseOptions {
   entryPath?: string;
   packageName: string;
@@ -775,6 +787,7 @@ interface CompilePackageCssCommandOptions extends CompileBaseOptions {
 
 type CompileCommandOptions =
   | CompileComponentCommandOptions
+  | CompileDrizzleOptimisticCommandOptions
   | CompileGraphCommandOptions
   | CompileMutationInputsCommandOptions
   | CompilePackageCssCommandOptions
@@ -893,6 +906,7 @@ function parseCompileArgs(args: readonly string[]): CompileArgParseResult {
   if (target === 'route') return parseCompileRouteArgs(args.slice(1));
   if (target === 'graph') return parseCompileGraphArgs(args.slice(1));
   if (target === 'mutation-inputs') return parseCompileMutationInputsArgs(args.slice(1));
+  if (target === 'drizzle-optimistic') return parseCompileDrizzleOptimisticArgs(args.slice(1));
   return parseCompilePackageCssArgs(args.slice(1));
 }
 
@@ -1288,6 +1302,92 @@ function parseCompileMutationInputsArgs(args: readonly string[]): CompileArgPars
   };
 }
 
+function parseCompileDrizzleOptimisticArgs(args: readonly string[]): CompileArgParseResult {
+  let inputPath: string | undefined;
+  let outPath: string | undefined;
+  let factsOutPath: string | undefined;
+  let check = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+    if (arg === '--help' || arg === '-h') return { message: compileUsage(), ok: false };
+    if (arg === '--check') {
+      check = true;
+      continue;
+    }
+    if (arg === '--out') {
+      const value = args[index + 1];
+      if (!value)
+        return { message: 'kovo: compile drizzle-optimistic --out requires a path.\n', ok: false };
+      outPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--out=')) {
+      outPath = arg.slice('--out='.length);
+      if (!outPath)
+        return { message: 'kovo: compile drizzle-optimistic --out requires a path.\n', ok: false };
+      continue;
+    }
+    if (arg === '--facts-out') {
+      const value = args[index + 1];
+      if (!value)
+        return {
+          message: 'kovo: compile drizzle-optimistic --facts-out requires a JSON path.\n',
+          ok: false,
+        };
+      factsOutPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--facts-out=')) {
+      factsOutPath = arg.slice('--facts-out='.length);
+      if (!factsOutPath)
+        return {
+          message: 'kovo: compile drizzle-optimistic --facts-out requires a JSON path.\n',
+          ok: false,
+        };
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      return {
+        message: `kovo: unknown compile drizzle-optimistic option ${stableValue(arg)}.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    if (inputPath) {
+      return {
+        message: `kovo: compile drizzle-optimistic accepts one input path.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    inputPath = arg;
+  }
+
+  if (!inputPath)
+    return {
+      message: `kovo: compile drizzle-optimistic requires an input path.\n${compileUsage()}`,
+      ok: false,
+    };
+  if (!outPath)
+    return {
+      message: `kovo: compile drizzle-optimistic requires --out.\n${compileUsage()}`,
+      ok: false,
+    };
+
+  return {
+    ok: true,
+    options: {
+      check,
+      ...(factsOutPath === undefined ? {} : { factsOutPath }),
+      inputPath,
+      outPath,
+      target: 'drizzle-optimistic',
+    },
+  };
+}
+
 function parseCompilePackageCssArgs(args: readonly string[]): CompileArgParseResult {
   let packageName: string | undefined;
   let outPath: string | undefined;
@@ -1384,6 +1484,7 @@ function parseRouteRewrite(
 function isCompileTarget(value: string): value is CompileTarget {
   return (
     value === 'component' ||
+    value === 'drizzle-optimistic' ||
     value === 'route' ||
     value === 'graph' ||
     value === 'mutation-inputs' ||
@@ -1401,6 +1502,8 @@ async function runCompileCommand(options: CompileCommandOptions): Promise<CliCom
     if (options.target === 'route') return await runCompileRouteCommand(options);
     if (options.target === 'graph') return await runCompileGraphCommand(options);
     if (options.target === 'mutation-inputs') return await runCompileMutationInputsCommand(options);
+    if (options.target === 'drizzle-optimistic')
+      return await runCompileDrizzleOptimisticCommand(options);
     return await runCompilePackageCssCommand(options);
   } catch (error) {
     return {
@@ -1508,6 +1611,88 @@ async function runCompileMutationInputsCommand(
     ),
   );
   return compileArtifactResult(options, `${JSON.stringify(facts, null, 2)}\n`, 'mutation-inputs');
+}
+
+type DrizzleOptimisticEntryStatus = 'await-fragment' | 'derived' | 'hand-written';
+
+interface DrizzleOptimisticCommandInput {
+  complete?: boolean;
+  constName: string;
+  effects: readonly unknown[];
+  entries: readonly {
+    query: string;
+    shape: unknown;
+    status?: DrizzleOptimisticEntryStatus;
+  }[];
+  formImport: { name: string; path: string };
+  overrides?: readonly string[];
+  queue?: string;
+}
+
+async function runCompileDrizzleOptimisticCommand(
+  options: CompileDrizzleOptimisticCommandOptions,
+): Promise<CliCommandResult> {
+  const { deriveOptimistic } = await import('@kovojs/drizzle/derive');
+  const { serializeDerivedOptimistic } = await import('@kovojs/drizzle/internal/derive-codegen');
+  const input = readJsonFile(options.inputPath) as DrizzleOptimisticCommandInput;
+  const derivedEntries: Parameters<typeof serializeDerivedOptimistic>[0]['entries'][number][] = [];
+  const facts: {
+    derivation?: { reason?: unknown; status: 'PUNTED' | 'derived' };
+    query: string;
+    status: DrizzleOptimisticEntryStatus;
+  }[] = [];
+
+  for (const entry of input.entries) {
+    const status = entry.status ?? 'derived';
+    const result = deriveOptimistic(
+      input.effects as Parameters<typeof deriveOptimistic>[0],
+      entry.shape as Parameters<typeof deriveOptimistic>[1],
+    );
+
+    if (status === 'derived') {
+      if (result.kind !== 'derived') {
+        throw new Error(
+          `${entry.query} expected derived optimistic transform, got ${JSON.stringify(result)}`,
+        );
+      }
+      derivedEntries.push({ program: result.program, query: entry.query });
+      facts.push({ derivation: { status: 'derived' }, query: entry.query, status });
+      continue;
+    }
+
+    facts.push({
+      ...(result.kind === 'punt'
+        ? { derivation: { status: 'PUNTED' as const, reason: result.reason } }
+        : {}),
+      query: entry.query,
+      status,
+    });
+  }
+
+  const overrideQueries =
+    input.overrides ??
+    input.entries
+      .filter((entry) => (entry.status ?? 'derived') !== 'derived')
+      .map((entry) => entry.query);
+  const source = serializeDerivedOptimistic({
+    complete: input.complete ?? overrideQueries.length === 0,
+    constName: input.constName,
+    entries: derivedEntries,
+    formImport: input.formImport,
+    ...(input.queue === undefined ? {} : { queue: input.queue }),
+    ...(overrideQueries.length === 0 ? {} : { overrides: overrideQueries }),
+  });
+  const artifacts: CompileArtifact[] = [
+    { kind: 'drizzle-optimistic', path: options.outPath, source },
+  ];
+  if (options.factsOutPath !== undefined) {
+    artifacts.push({
+      kind: 'drizzle-optimistic-facts',
+      path: options.factsOutPath,
+      source: `${JSON.stringify(facts, null, 2)}\n`,
+    });
+  }
+  return compileArtifactsResult(options.check, artifacts);
 }
 
 async function runCompilePackageCssCommand(
