@@ -6,6 +6,7 @@ import type { CrmDb } from './db.js';
 import {
   contact,
   deal,
+  addContactForm,
   closeDealForm,
   createDealForm,
   moveDealForm,
@@ -14,12 +15,9 @@ import {
   type CreateDealInput,
   type MoveDealInput,
 } from './model.js';
+import type { CrmDerivedSubset } from './optimistic-merge.js';
 import { contacts, deals } from './schema.js';
 
-import { addContactDerivedOptimistic } from './generated/optimistic/add-contact.js';
-import { createDealDerivedOptimistic } from './generated/optimistic/create-deal.js';
-import { moveDealDerivedOptimistic } from './generated/optimistic/move-deal.js';
-import { closeDealDerivedOptimistic } from './generated/optimistic/close-deal.js';
 import type { ContactListResult, OpenDealsResult, PipelineByStageResult } from './queries.js';
 
 /**
@@ -51,6 +49,85 @@ export const crmCsrf = {
 const authed = guards.authed<CrmRequest>();
 
 const duplicateEmailError = s.object({ email: s.string() });
+
+const addContactDerivedOptimistic = {
+  queue: 'crm',
+  transforms: {
+    contactList: (current, $input) => {
+      const next = structuredClone(current);
+      const row = {
+        dealCount: 0,
+        email: $input.email,
+        id: $input.id,
+        name: $input.name,
+        ownerId: $input.ownerId,
+      };
+      const index = next.items.findIndex((entry) => entry.id > row.id);
+      if (index < 0) next.items.push(row);
+      else next.items.splice(index, 0, row);
+      return next;
+    },
+  },
+} satisfies OptimisticFor<typeof addContactForm>;
+
+const createDealDerivedOptimistic = {
+  queue: 'crm',
+  transforms: {
+    contactDealCount: (current, _$input) => {
+      const next = structuredClone(current);
+      next.count = (next.count ?? 0) + 1;
+      return next;
+    },
+    dealList: (current, $input) => {
+      const next = structuredClone(current);
+      const row = {
+        amount: $input.amount,
+        contactId: $input.contactId,
+        id: $input.id,
+        ownerId: $input.ownerId,
+        stage: $input.stage,
+      };
+      const index = next.items.findIndex((entry) => entry.id > row.id);
+      if (index < 0) next.items.push(row);
+      else next.items.splice(index, 0, row);
+      return next;
+    },
+    openDeals: (current, $input) => {
+      const next = structuredClone(current);
+      const row = {
+        amount: $input.amount,
+        contactId: $input.contactId,
+        id: $input.id,
+        ownerId: $input.ownerId,
+        stage: $input.stage,
+      };
+      const index = next.items.findIndex((entry) => entry.id > row.id);
+      if (index < 0) next.items.push(row);
+      else next.items.splice(index, 0, row);
+      return next;
+    },
+  },
+} satisfies CrmDerivedSubset<typeof createDealForm, 'contactDealCount' | 'dealList' | 'openDeals'>;
+
+const moveDealDerivedOptimistic = {
+  queue: 'crm',
+  transforms: {
+    contactDealCount: (current, _$input) => structuredClone(current),
+    dealList: (current, $input) => {
+      const next = structuredClone(current);
+      const target = next.items.find((entry) => entry.id === $input.dealId);
+      if (target) target.stage = $input.stage;
+      return next;
+    },
+  },
+} satisfies CrmDerivedSubset<typeof moveDealForm, 'contactDealCount' | 'dealList'>;
+
+const closeDealDerivedOptimistic = {
+  queue: 'crm',
+  transforms: {
+    contactDealCount: (current, _$input) => structuredClone(current),
+  },
+} satisfies CrmDerivedSubset<typeof closeDealForm, 'contactDealCount'>;
 
 export async function addContactHandler(
   { id, name, email, ownerId }: AddContactInput,

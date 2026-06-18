@@ -120,6 +120,12 @@ internals, emit/check scripts, and narrowly named artifact tests.
     generated route modules directly; they use explicitly named generated
     fixtures until authored app loading preserves compiled route metadata.
     Focused CRM and StackOverflow interactive tests passed.
+  - Current progress: `examples/crm/src/mutations.ts` no longer imports
+    `src/generated/optimistic/*`; CRM keeps generated optimistic artifacts as
+    review/check outputs while authored mutation exports own the runtime
+    optimistic plans. `pnpm --filter @kovojs/example-crm exec vitest --run
+    src/optimistic.test.ts src/interactive-app.test.ts src/graph.test.ts` and
+    `pnpm --filter @kovojs/example-crm run emit-graph -- --check` passed.
 - [x] Update CRM and StackOverflow Vite configs to reference authored app entries
       only.
   - Evidence: `examples/crm/vite.config.ts` and
@@ -238,11 +244,12 @@ internals, emit/check scripts, and narrowly named artifact tests.
 - [ ] Add/extend a guard command that proves authored example source has no
       generated imports.
   - Current evidence gap: `node scripts/import-boundary.mjs` now reports
-    app-local generated imports, but it still fails on CRM optimistic artifact
-    imports plus Gallery, site, and tutorial files; CSS generated-import
-    violations and Commerce/CRM/StackOverflow direct generated route imports were
-    removed from ordinary tests/app shells. Keep open until the remaining reported
-    backlog is removed or narrowed by an explicit artifact-test policy.
+    app-local generated imports, but it still fails on Gallery, site, and
+    tutorial files; CSS generated-import violations, CRM optimistic generated
+    imports, and Commerce/CRM/StackOverflow direct generated route imports were
+    removed from ordinary app source/tests/app shells. Keep open until the
+    remaining reported backlog is removed or narrowed by an explicit
+    artifact-test policy.
   - Current guard-policy evidence: `pnpm exec vitest --run
     scripts/import-boundary.test.mjs` passed after narrowing explicit artifact
     allowances and renaming gallery artifact consumers.
