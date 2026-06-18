@@ -97,6 +97,7 @@ function installInlineKovoLoader(im) {
     xa(current, next);
     current.classList?.toggle('dark', dark);
     current.classList?.toggle('light', light && !dark);
+    if (theme === 'dark' || theme === 'light') current.setAttribute('data-theme', theme);
   };
   const sf = (href) => {
     const x = globalThis.scrollX || globalThis.pageXOffset || 0;

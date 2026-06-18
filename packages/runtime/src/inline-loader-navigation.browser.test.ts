@@ -296,6 +296,7 @@ describe('browser inline loader enhanced navigation', () => {
   it('preserves explicit light html theme class across target documents with dark defaults', async () => {
     localStorage.setItem('theme', 'light');
     document.documentElement.className = 'light stale-shell';
+    document.documentElement.setAttribute('data-theme', 'light');
     document.head.innerHTML = [
       '<meta name="kovo-build" content="build-a">',
       '<title>Docs</title>',
@@ -336,12 +337,60 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false);
     expect(document.documentElement.classList.contains('target-shell')).toBe(true);
     expect(document.documentElement.classList.contains('stale-shell')).toBe(false);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     expect(localStorage.getItem('theme')).toBe('light');
+  });
+
+  it('preserves explicit html data-theme across stale target shell state', async () => {
+    localStorage.setItem('theme', 'dark');
+    document.documentElement.className = 'dark';
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Docs</title>',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-api" href="/api">API</a>',
+      '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+      '</main>',
+    ].join('');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html lang="en" class="light target-shell" data-theme="light">',
+          '<head><meta name="kovo-build" content="build-a"><title>API</title></head>',
+          '<body data-route="api">',
+          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+          '<a id="to-api" href="/api">API</a>',
+          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/api', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    dispatchAnchorLikeClick('/api');
+
+    await vi.waitFor(() => expect(document.title).toBe('API'));
+
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(document.documentElement.classList.contains('light')).toBe(false);
+    expect(document.documentElement.classList.contains('target-shell')).toBe(true);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(document.body.getAttribute('data-route')).toBe('api');
   });
 
   it('uses the latest user theme state when a pending enhanced navigation resolves', async () => {
     localStorage.setItem('theme', 'dark');
     document.documentElement.className = 'dark';
+    document.documentElement.setAttribute('data-theme', 'dark');
     document.head.innerHTML = [
       '<meta name="kovo-build" content="build-a">',
       '<title>Docs</title>',
@@ -372,9 +421,10 @@ describe('browser inline loader enhanced navigation', () => {
     localStorage.setItem('theme', 'light');
     document.documentElement.classList.remove('dark');
     document.documentElement.classList.add('light');
+    document.documentElement.setAttribute('data-theme', 'light');
     resolveText?.(
       [
-        '<!doctype html><html lang="en" class="dark target-shell"><head>',
+        '<!doctype html><html lang="en" class="dark target-shell" data-theme="dark"><head>',
         '<meta name="kovo-build" content="build-a">',
         '<title>API</title>',
         '</head><body data-route="api">',
@@ -391,6 +441,7 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.documentElement.classList.contains('light')).toBe(true);
     expect(document.documentElement.classList.contains('dark')).toBe(false);
     expect(document.documentElement.classList.contains('target-shell')).toBe(true);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     expect(localStorage.getItem('theme')).toBe('light');
   });
 
@@ -437,9 +488,9 @@ describe('browser inline loader enhanced navigation', () => {
     vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
 
     installNavigationLoader();
-    document.querySelector('#theme')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true, cancelable: true }),
-    );
+    document
+      .querySelector('#theme')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(toggle).toHaveBeenCalledTimes(1));
 
     expect(document.documentElement.classList.contains('dark')).toBe(true);
@@ -492,12 +543,10 @@ describe('browser inline loader enhanced navigation', () => {
       '</section>',
       '</main>',
     ].join('');
-    (
-      document.querySelector('#layout-island') as (Element & { a?: AbortController }) | null
-    )!.a = layoutController;
-    (
-      document.querySelector('#old-page-island') as (Element & { a?: AbortController }) | null
-    )!.a = oldPageController;
+    (document.querySelector('#layout-island') as (Element & { a?: AbortController }) | null)!.a =
+      layoutController;
+    (document.querySelector('#old-page-island') as (Element & { a?: AbortController }) | null)!.a =
+      oldPageController;
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
       async text() {
@@ -577,11 +626,9 @@ describe('browser inline loader enhanced navigation', () => {
     vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
 
     installNavigationLoader();
-    (
-      document.querySelector('#layout-island') as
-        | (HTMLElement & { __kovo_load?: number })
-        | null
-    )!.__kovo_load = 1;
+    (document.querySelector('#layout-island') as
+      | (HTMLElement & { __kovo_load?: number })
+      | null)!.__kovo_load = 1;
 
     dispatchAnchorLikeClick('/api');
 
@@ -948,7 +995,9 @@ describe('browser inline loader enhanced navigation', () => {
 
       document.title = 'Docs';
       dispatchAnchorLikeClick('/api#legacy-symbol');
-      await vi.waitFor(() => expect(scrolledTargets).toEqual(['symbols%2Fencoded', 'legacy-symbol']));
+      await vi.waitFor(() =>
+        expect(scrolledTargets).toEqual(['symbols%2Fencoded', 'legacy-symbol']),
+      );
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
     }
@@ -1224,9 +1273,9 @@ describe('browser inline loader enhanced navigation', () => {
     );
     document.querySelector('form')?.addEventListener('submit', (event) => event.preventDefault());
 
-    document.querySelector('form')?.dispatchEvent(
-      new SubmitEvent('submit', { bubbles: true, cancelable: true }),
-    );
+    document
+      .querySelector('form')
+      ?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() =>
       expect(document.querySelector('[kovo-fragment-target="cart-badge"]')?.textContent).toBe(
