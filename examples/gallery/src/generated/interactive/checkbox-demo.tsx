@@ -21,15 +21,10 @@ export const GalleryCheckboxDemo$output_text_derive = derive(['state'], (state: 
 
 import { component } from '@kovojs/core';
 import { type CheckboxCheckedState } from '@kovojs/headless-ui/checkbox';
+import { checkboxClasses, checkboxInputClasses } from '@kovojs/ui/checkbox';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/checkbox.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ROOT_CLASS =
-  'inline-flex items-center gap-2 text-sm text-neutral-950 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50';
-const INPUT_CLASS =
-  'h-4 w-4 rounded border border-neutral-300 text-neutral-950 accent-neutral-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50';
+const ROOT_CLASS = checkboxClasses.join(' ');
+const INPUT_CLASS = checkboxInputClasses.join(' ');
 
 export interface GalleryCheckboxDemoState {
   checked: CheckboxCheckedState;

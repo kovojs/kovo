@@ -52,23 +52,23 @@ export const GalleryCheckboxGroupDemo$output_text_derive = derive(
 
 import { component } from '@kovojs/core';
 import {
+  checkboxGroupClasses,
+  checkboxGroupItemClasses,
+  checkboxGroupControlClasses,
+  checkboxGroupLabelClasses,
+} from '@kovojs/ui/checkbox-group';
+
+import {
   checkboxGroupControlAttributes,
   checkboxGroupItemAttributes,
   checkboxGroupLabelAttributes,
   checkboxGroupRootAttributes,
 } from '@kovojs/headless-ui/checkbox-group';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/checkbox-group.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ROOT_CLASS =
-  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[orientation=horizontal]:flex data-[orientation=horizontal]:flex-wrap data-[orientation=horizontal]:items-center data-[invalid]:text-red-950';
-const ITEM_CLASS =
-  'inline-flex items-center gap-2 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50';
-const CONTROL_CLASS =
-  'h-4 w-4 rounded border border-neutral-300 text-neutral-950 accent-neutral-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50';
-const LABEL_CLASS = 'select-none leading-none data-[disabled]:cursor-not-allowed';
+const ROOT_CLASS = checkboxGroupClasses.join(' ');
+const ITEM_CLASS = checkboxGroupItemClasses.join(' ');
+const CONTROL_CLASS = checkboxGroupControlClasses.join(' ');
+const LABEL_CLASS = checkboxGroupLabelClasses.join(' ');
 
 export interface GalleryCheckboxGroupDemoState {
   activeValue: string;

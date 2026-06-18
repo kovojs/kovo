@@ -12,12 +12,12 @@ import {
   commerceCartPageMeta,
   commerceMessages,
   commerceMeta,
-  commerceStylesheets,
   createCommerceDb,
   loadCartQuery,
   productGridQuery,
   type CartQueryResult,
 } from './domain.js';
+import { commerceStylesheets } from './app.js';
 import { queryContext } from './app-test-helpers.js';
 import { resetProducts } from './app-test-helpers.js';
 

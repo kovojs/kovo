@@ -1,17 +1,69 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import type { OrderHistoryResult } from '../domain.js';
 import { orderHistoryQuery } from '../queries.js';
-import { commerceStyles } from '../styles.js';
 import { priceLabel } from './product-grid.js';
+
+const orderHistoryStyles = style.create(
+  {
+    item: {
+      alignItems: 'center',
+      backgroundColor: tokens.sys.color.surfaceContainerLowest,
+      borderColor: tokens.sys.color.outlineVariant,
+      borderRadius: tokens.sys.shape.cornerMedium,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      display: 'flex',
+      justifyContent: 'space-between',
+      paddingBlock: 12,
+      paddingInline: 16,
+    },
+    mutedText: {
+      color: tokens.sys.color.onSurfaceVariant,
+      fontSize: 12,
+    },
+    row: {
+      alignItems: 'center',
+      display: 'flex',
+      gap: 16,
+    },
+    stack: {
+      display: 'grid',
+      gap: 16,
+    },
+    stackSm: {
+      display: 'grid',
+      gap: 4,
+    },
+    tabularStrong: {
+      fontVariantNumeric: 'tabular-nums',
+      fontWeight: 600,
+    },
+    title: {
+      color: tokens.sys.color.onSurface,
+      fontWeight: 600,
+      letterSpacing: 0,
+      margin: 0,
+    },
+  },
+  {
+    namespace: 'commerce-order-history',
+    source: 'examples/commerce/src/components/order-history.tsx',
+  },
+);
+
+export const orderHistoryStyleCss = style.emitAtomicCss(
+  Object.values(orderHistoryStyles).flatMap((entry) => entry.__rules ?? []),
+);
 
 export const OrderHistory = component({
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
-    <ol {...style.attrs(commerceStyles.stack)}>{renderOrderHistoryItems(orderHistory)}</ol>
+    <ol style={orderHistoryStyles.stack}>{renderOrderHistoryItems(orderHistory)}</ol>
   ),
 });
 
@@ -26,14 +78,14 @@ export function renderOrderHistoryItems(result: OrderHistoryResult): string {
   return (
     <>
       {result.items.map((item: OrderHistoryItem) => (
-        <li kovo-key={item.id} {...style.attrs(commerceStyles.orderItem)}>
-          <div {...style.attrs(commerceStyles.stackSm)}>
-            <span {...style.attrs(commerceStyles.title)}>{item.productId}</span>
-            <span {...style.attrs(commerceStyles.mutedText)}>Order {item.id}</span>
+        <li kovo-key={item.id} style={orderHistoryStyles.item}>
+          <div style={orderHistoryStyles.stackSm}>
+            <span style={orderHistoryStyles.title}>{item.productId}</span>
+            <span style={orderHistoryStyles.mutedText}>Order {item.id}</span>
           </div>
-          <div {...style.attrs(commerceStyles.row)}>
+          <div style={orderHistoryStyles.row}>
             {Badge.definition.render({ children: `×${item.qty}`, variant: 'neutral' })}
-            <span {...style.attrs(commerceStyles.tabularStrong)}>{priceLabel(item.total)}</span>
+            <span style={orderHistoryStyles.tabularStrong}>{priceLabel(item.total)}</span>
           </div>
         </li>
       ))}

@@ -9,16 +9,18 @@ import {
   accordionTriggerAttributes,
   accordionTriggerClick as _accordionTriggerClick,
 } from '@kovojs/headless-ui/accordion';
+import {
+  accordionClasses,
+  accordionItemClasses,
+  accordionHeaderClasses,
+  accordionTriggerClasses,
+  accordionContentClasses,
+} from '@kovojs/ui/accordion';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/accordion.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ITEM_CLASS = 'rounded-md border border-neutral-200 bg-white data-[disabled]:opacity-50';
-const HEADER_CLASS = 'm-0 text-sm font-medium';
-const TRIGGER_CLASS =
-  'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none data-[state=open]:bg-neutral-50 data-[disabled]:opacity-50';
-const CONTENT_CLASS = 'px-3 pb-3 pt-1 text-sm text-neutral-700 data-[state=closed]:hidden';
+const ITEM_CLASS = accordionItemClasses.join(' ');
+const HEADER_CLASS = accordionHeaderClasses.join(' ');
+const TRIGGER_CLASS = accordionTriggerClasses.join(' ');
+const CONTENT_CLASS = accordionContentClasses.join(' ');
 
 export interface GalleryAccordionDemoState {
   activeValue: string;
@@ -43,7 +45,7 @@ export const GalleryAccordionDemo = component({
     return (
       <section
         {...accordionRootAttributes(rootState)}
-        class="grid w-full gap-2 text-sm text-neutral-950"
+        class={accordionClasses.join(' ')}
         data-gallery-interactive="accordion"
         onKeyDown={() => {
           const result = _accordionKeyDown(Object(event), {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { trustedHtml } from '@kovojs/runtime';
 import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
 
 import { Fragment, jsx, jsxDEV, jsxs } from './jsx-runtime.js';
 
@@ -81,6 +82,34 @@ describe('server jsx runtime', () => {
         },
       }),
     ).toBe('<span style="left: 25%; transform: translate(-50%, -50%)"></span>');
+  });
+
+  it('renders Kovo style records passed through style= in direct server JSX', () => {
+    const styles = style.create(
+      {
+        root: {
+          backgroundColor: 'black',
+          color: 'white',
+        },
+        inline: {
+          marginTop: 4,
+        },
+      },
+      { namespace: 'server-test', source: 'server-test.tsx' },
+    );
+
+    expect(jsx('button', { style: styles.root, children: 'Buy' })).toMatch(
+      /^<button class="kv-server-test-bg-[^ ]+ kv-server-test-fg-[^"]+" data-style-src="server-test\.tsx#root">Buy<\/button>$/,
+    );
+    expect(
+      jsx('button', {
+        class: 'manual',
+        style: [styles.root, [styles.inline, { opacity: 0.8 }]],
+        children: 'Buy',
+      }),
+    ).toMatch(
+      /^<button class="manual kv-server-test-bg-[^ ]+ kv-server-test-fg-[^ ]+ kv-server-test-m-[^"]+" data-style-src="server-test\.tsx#root; server-test\.tsx#inline" style="opacity:0.8">Buy<\/button>$/,
+    );
   });
 
   it('renders raw HTML sinks only from trusted values', () => {

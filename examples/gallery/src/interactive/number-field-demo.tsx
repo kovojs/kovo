@@ -10,19 +10,17 @@ import {
   numberFieldKeyDown as _numberFieldKeyDown,
   numberFieldRootAttributes,
 } from '@kovojs/headless-ui/number-field';
+import {
+  numberFieldClasses,
+  numberFieldControlClasses,
+  numberFieldInputClasses,
+  numberFieldButtonClasses,
+} from '@kovojs/ui/number-field';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/number-field.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ROOT_CLASS =
-  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950';
-const CONTROL_CLASS =
-  'inline-flex h-9 w-fit items-center overflow-hidden rounded-md border border-neutral-300 bg-white shadow-sm data-[disabled]:opacity-60 data-[invalid]:border-red-400';
-const INPUT_CLASS =
-  'h-9 w-20 border-0 bg-transparent px-3 text-center text-sm text-neutral-950 outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:text-red-950';
-const BUTTON_CLASS =
-  'inline-flex h-9 w-9 items-center justify-center border-neutral-200 bg-neutral-50 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 data-[action=decrement]:border-r data-[action=increment]:border-l data-[disabled]:opacity-70';
+const ROOT_CLASS = numberFieldClasses.join(' ');
+const CONTROL_CLASS = numberFieldControlClasses.join(' ');
+const INPUT_CLASS = numberFieldInputClasses.join(' ');
+const BUTTON_CLASS = numberFieldButtonClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 
 export interface GalleryNumberFieldDemoState {

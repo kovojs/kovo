@@ -13,17 +13,11 @@ import {
   menubarTypeahead as _menubarTypeahead,
   type MenubarItem,
 } from '@kovojs/headless-ui/menubar';
+import { menubarClasses, menubarItemClasses, menubarSubmenuClasses } from '@kovojs/ui/menubar';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/menubar.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ROOT_CLASS =
-  'inline-flex rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-sm data-[orientation=vertical]:flex-col data-[disabled]:opacity-50';
-const ITEM_CLASS =
-  'inline-flex h-8 items-center rounded px-2.5 text-sm text-neutral-700 outline-none data-[state=open]:bg-neutral-100 data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
-const SUBMENU_CLASS =
-  'min-w-40 rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-md outline-none data-[state=closed]:hidden';
+const ROOT_CLASS = menubarClasses.join(' ');
+const ITEM_CLASS = menubarItemClasses.join(' ');
+const SUBMENU_CLASS = menubarSubmenuClasses.join(' ');
 
 export interface GalleryMenubarDemoState {
   activeValue: string;

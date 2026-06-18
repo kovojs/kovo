@@ -61,18 +61,17 @@ import {
   tabsRootAttributes,
   tabsTriggerAttributes,
 } from '@kovojs/headless-ui/tabs';
+import {
+  tabsClasses,
+  tabsListClasses,
+  tabsTriggerClasses,
+  tabsPanelClasses,
+} from '@kovojs/ui/tabs';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/tabs.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ROOT_CLASS = 'w-full text-neutral-950 data-[disabled]:opacity-50';
-const LIST_CLASS =
-  'inline-flex h-10 items-center gap-1 rounded-md border border-neutral-200 bg-neutral-100 p-1 data-[orientation=vertical]:h-auto data-[orientation=vertical]:flex-col data-[disabled]:opacity-50';
-const TRIGGER_CLASS =
-  'inline-flex h-8 items-center justify-center rounded px-3 text-sm font-medium text-neutral-600 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none data-[state=active]:bg-white data-[state=active]:text-neutral-950 data-[state=active]:shadow-sm data-[disabled]:opacity-50';
-const PANEL_CLASS =
-  'mt-3 rounded-md border border-neutral-200 bg-white p-4 text-sm text-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400';
+const ROOT_CLASS = tabsClasses.join(' ');
+const LIST_CLASS = tabsListClasses.join(' ');
+const TRIGGER_CLASS = tabsTriggerClasses.join(' ');
+const PANEL_CLASS = tabsPanelClasses.join(' ');
 
 export interface GalleryTabsDemoState {
   activeValue: string;

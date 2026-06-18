@@ -9,22 +9,24 @@ import {
   dialogTriggerClick as _dialogTriggerClick,
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui/dialog';
+import {
+  drawerTriggerClasses,
+  drawerContentClasses,
+  drawerHandleClasses,
+  drawerHeaderClasses,
+  drawerTitleClasses,
+  drawerDescriptionClasses,
+  drawerCloseClasses,
+} from '@kovojs/ui/drawer';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/drawer.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
 // CONTENT_CLASS is drawerContentClassNames base + the `bottom` side variant.
-const TRIGGER_CLASS =
-  'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50';
-const CONTENT_CLASS =
-  'fixed z-50 flex flex-col gap-4 border-neutral-200 bg-white p-6 text-neutral-950 shadow-xl inset-x-0 bottom-0 max-h-[85vh] border-t';
-const HANDLE_CLASS = 'mx-auto h-1.5 w-12 rounded-full bg-neutral-300';
-const HEADER_CLASS = 'grid gap-1';
-const TITLE_CLASS = 'text-base font-semibold';
-const DESCRIPTION_CLASS = 'text-sm text-neutral-600';
-const CLOSE_CLASS =
-  'inline-flex h-8 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-2.5 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50';
+const TRIGGER_CLASS = drawerTriggerClasses.join(' ');
+const CONTENT_CLASS = drawerContentClasses.join(' ');
+const HANDLE_CLASS = drawerHandleClasses.join(' ');
+const HEADER_CLASS = drawerHeaderClasses.join(' ');
+const TITLE_CLASS = drawerTitleClasses.join(' ');
+const DESCRIPTION_CLASS = drawerDescriptionClasses.join(' ');
+const CLOSE_CLASS = drawerCloseClasses.join(' ');
 
 export interface GalleryDrawerDemoState {
   open: boolean;

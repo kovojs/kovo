@@ -42,25 +42,25 @@ import {
   toastTitleAttributes,
   toastViewportAttributes,
 } from '@kovojs/headless-ui/toast';
+import {
+  toastViewportClasses,
+  toastClasses,
+  toastTitleClasses,
+  toastDescriptionClasses,
+  toastActionClasses,
+  toastCloseClasses,
+} from '@kovojs/ui/toast';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/toast.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const VIEWPORT_CLASS =
-  'fixed z-50 grid w-full max-w-sm gap-2 p-4 outline-none data-[placement=top-start]:left-0 data-[placement=top-start]:top-0 data-[placement=top-end]:right-0 data-[placement=top-end]:top-0 data-[placement=bottom-start]:bottom-0 data-[placement=bottom-start]:left-0 data-[placement=bottom-end]:bottom-0 data-[placement=bottom-end]:right-0 data-[placement=top-center]:left-1/2 data-[placement=top-center]:top-0 data-[placement=bottom-center]:bottom-0 data-[placement=bottom-center]:left-1/2 data-[disabled]:opacity-50';
-const TOAST_CLASS =
-  'grid gap-2 rounded-md border border-neutral-200 bg-white p-4 text-sm text-neutral-950 shadow-lg data-[state=closed]:hidden data-[variant=success]:border-emerald-200 data-[variant=success]:bg-emerald-50 data-[variant=info]:border-sky-200 data-[variant=info]:bg-sky-50 data-[disabled]:opacity-50';
+const VIEWPORT_CLASS = toastViewportClasses.join(' ');
+const TOAST_CLASS = toastClasses.join(' ');
 const TIMER_CLASS =
   '[animation:gallery-toast-auto-dismiss_5000ms_linear] hover:[animation-play-state:paused] focus-within:[animation-play-state:paused] data-[state=closed]:[animation:none]';
 const TRIGGER_CLASS =
   'inline-flex h-9 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950';
-const TITLE_CLASS = 'font-medium text-neutral-950';
-const DESCRIPTION_CLASS = 'text-neutral-700';
-const ACTION_CLASS =
-  'inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50';
-const CLOSE_CLASS =
-  'inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50';
+const TITLE_CLASS = toastTitleClasses.join(' ');
+const DESCRIPTION_CLASS = toastDescriptionClasses.join(' ');
+const ACTION_CLASS = toastActionClasses.join(' ');
+const CLOSE_CLASS = toastCloseClasses.join(' ');
 
 export interface GalleryToastDemoState {
   activeCount: number;

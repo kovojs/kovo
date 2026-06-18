@@ -84,20 +84,19 @@ import {
   autocompleteValueAttributes,
   type AutocompleteItem,
 } from '@kovojs/headless-ui/autocomplete';
+import {
+  autocompleteClasses,
+  autocompleteInputClasses,
+  autocompleteListClasses,
+  autocompleteOptionClasses,
+  autocompleteValueClasses,
+} from '@kovojs/ui/autocomplete';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/autocomplete.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ROOT_CLASS =
-  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950';
-const INPUT_CLASS =
-  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:border-red-400 data-[placeholder]:text-neutral-500';
-const LIST_CLASS =
-  'max-h-56 overflow-auto rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-sm data-[state=closed]:hidden';
-const OPTION_CLASS =
-  'w-full rounded px-2 py-1.5 text-left text-neutral-700 data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[state=checked]:font-medium data-[state=checked]:text-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
-const VALUE_CLASS = 'text-sm text-neutral-700 data-[placeholder]:text-neutral-500';
+const ROOT_CLASS = autocompleteClasses.join(' ');
+const INPUT_CLASS = autocompleteInputClasses.join(' ');
+const LIST_CLASS = autocompleteListClasses.join(' ');
+const OPTION_CLASS = autocompleteOptionClasses.join(' ');
+const VALUE_CLASS = autocompleteValueClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 
 export interface GalleryAutocompleteDemoState {

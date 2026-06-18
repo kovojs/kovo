@@ -9,27 +9,29 @@ import {
   fieldsetLegendAttributes,
   fieldsetRootAttributes,
 } from '@kovojs/headless-ui/field';
+import {
+  fieldClasses,
+  fieldLabelClasses,
+  fieldControlClasses,
+  fieldTextareaClasses,
+  fieldSelectClasses,
+  fieldSelectOptionClasses,
+  fieldDescriptionClasses,
+  fieldErrorClasses,
+  fieldsetClasses,
+  fieldsetLegendClasses,
+} from '@kovojs/ui/field';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/field.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const FIELD_CLASS =
-  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950 data-[required]:font-medium';
-const LABEL_CLASS =
-  'text-sm font-medium leading-none text-neutral-900 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70';
-const CONTROL_CLASS =
-  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500';
-const TEXTAREA_CLASS =
-  'min-h-24 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500';
-const SELECT_CLASS =
-  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-950 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500';
-const SELECT_OPTION_CLASS = 'text-neutral-950 disabled:text-neutral-400';
-const DESCRIPTION_CLASS = 'text-sm text-neutral-500';
-const ERROR_CLASS = 'text-sm font-medium text-red-600';
-const FIELDSET_CLASS =
-  'grid gap-3 rounded-md border border-neutral-200 p-4 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:border-red-300';
-const LEGEND_CLASS = 'px-1 text-sm font-medium text-neutral-900';
+const FIELD_CLASS = fieldClasses.join(' ');
+const LABEL_CLASS = fieldLabelClasses.join(' ');
+const CONTROL_CLASS = fieldControlClasses.join(' ');
+const TEXTAREA_CLASS = fieldTextareaClasses.join(' ');
+const SELECT_CLASS = fieldSelectClasses.join(' ');
+const SELECT_OPTION_CLASS = fieldSelectOptionClasses.join(' ');
+const DESCRIPTION_CLASS = fieldDescriptionClasses.join(' ');
+const ERROR_CLASS = fieldErrorClasses.join(' ');
+const FIELDSET_CLASS = fieldsetClasses.join(' ');
+const LEGEND_CLASS = fieldsetLegendClasses.join(' ');
 const OUTPUT_CLASS = 'text-xs text-neutral-500';
 
 export interface GalleryFieldDemoState {

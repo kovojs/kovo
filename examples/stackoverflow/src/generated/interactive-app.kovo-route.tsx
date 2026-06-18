@@ -11,13 +11,12 @@ import {
   type RequestHandler,
 } from '@kovojs/server';
 
-import { QuestionDetailRegion } from "./question-detail.js";
-import { QuestionListRegion } from "./question-list.js";
-import { SoShell } from "../components/chrome.js";
+import { QuestionDetailRegion, questionDetailStyleCss } from "./question-detail.js";
+import { QuestionListRegion, questionListStyleCss } from "./question-list.js";
+import { SoShell, soChromeStyleCss } from "../components/chrome.js";
 import { createSoDb, type SoDb } from "../db.js";
 import { seedSoDemo } from "../demo-data.js";
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from "../mutations.js";
-import { soStyleCss } from "../styles.js";
 import { soThemeCss } from "../theme.js";
 
 // SPEC.md §9.1: the Stack Overflow example as a fully interactive Kovo app. It
@@ -27,7 +26,10 @@ import { soThemeCss } from "../theme.js";
 // (scripts/serve.mjs), the inline loader morphs the re-rendered region.
 
 const soStylesheets = [
-  { criticalCss: `${soThemeCss}\n${soStyleCss}`, href: '/assets/styles.css' },
+  {
+    criticalCss: `${soThemeCss}\n${soChromeStyleCss}\n${questionListStyleCss}\n${questionDetailStyleCss}`,
+    href: '/assets/styles.css',
+  },
 ] as const;
 const demoSession = { id: 'demo-session', user: { id: 'demo-viewer', roles: ['member'] as const } };
 const soStaticQuestionPaths = [

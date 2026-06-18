@@ -11,19 +11,17 @@ import {
   sliderTrackPointerDown as _sliderTrackPointerDown,
   sliderTrackAttributes,
 } from '@kovojs/headless-ui/slider';
+import {
+  sliderClasses,
+  sliderTrackClasses,
+  sliderRangeClasses,
+  sliderThumbClasses,
+} from '@kovojs/ui/slider';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/slider.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ROOT_CLASS =
-  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950 data-[orientation=vertical]:inline-grid';
-const TRACK_CLASS =
-  'relative h-2 w-full cursor-pointer rounded-full bg-neutral-200 data-[orientation=vertical]:h-40 data-[orientation=vertical]:w-2';
-const RANGE_CLASS =
-  'pointer-events-none block h-full rounded-full bg-neutral-950 data-[orientation=vertical]:w-full';
-const THUMB_CLASS =
-  'absolute block h-4 w-4 cursor-grab rounded-full border border-neutral-300 bg-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 data-[disabled]:opacity-50 data-[dragging]:cursor-grabbing';
+const ROOT_CLASS = sliderClasses.join(' ');
+const TRACK_CLASS = sliderTrackClasses.join(' ');
+const RANGE_CLASS = sliderRangeClasses.join(' ');
+const THUMB_CLASS = sliderThumbClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 const OUTPUT_CLASS = 'text-xs text-neutral-500';
 

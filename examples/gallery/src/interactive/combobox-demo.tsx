@@ -12,20 +12,19 @@ import {
   comboboxValueAttributes,
   type ComboboxItem,
 } from '@kovojs/headless-ui/combobox';
+import {
+  comboboxClasses,
+  comboboxInputClasses,
+  comboboxListboxClasses,
+  comboboxOptionClasses,
+  comboboxValueClasses,
+} from '@kovojs/ui/combobox';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/combobox.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ROOT_CLASS =
-  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950';
-const INPUT_CLASS =
-  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:border-red-400 data-[placeholder]:text-neutral-500';
-const LISTBOX_CLASS =
-  'max-h-56 overflow-auto rounded-md border border-neutral-200 bg-white p-1 shadow-sm data-[state=closed]:hidden';
-const OPTION_CLASS =
-  'rounded px-2 py-1.5 text-sm text-neutral-700 data-[highlighted]:bg-neutral-100 data-[state=checked]:font-medium data-[state=checked]:text-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
-const VALUE_CLASS = 'text-sm text-neutral-700 data-[placeholder]:text-neutral-500';
+const ROOT_CLASS = comboboxClasses.join(' ');
+const INPUT_CLASS = comboboxInputClasses.join(' ');
+const LISTBOX_CLASS = comboboxListboxClasses.join(' ');
+const OPTION_CLASS = comboboxOptionClasses.join(' ');
+const VALUE_CLASS = comboboxValueClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 
 export interface GalleryComboboxDemoState {

@@ -9,21 +9,23 @@ import {
   type RequestHandler,
 } from '@kovojs/server';
 
-import { ContactsRegion } from './components/contacts.js';
-import { DealDetailRegion } from './components/deal-detail.js';
-import { PipelineRegion } from './components/pipeline.js';
-import { CrmShell } from './components/chrome.js';
+import { ContactsRegion, contactStyleCss } from './components/contacts.js';
+import { DealDetailRegion, dealDetailStyleCss } from './components/deal-detail.js';
+import { PipelineRegion, pipelineStyleCss } from './components/pipeline.js';
+import { CrmShell, crmChromeStyleCss } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
 import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';
-import { crmStyleCss } from './styles.js';
 import { crmThemeCss } from './theme.js';
 
 // Interactive CRM app: pipeline, contacts, and deal detail pages backed by the
 // demo database. Forms post to `/_m/*` and refresh query-backed regions.
 
 const crmStylesheets = [
-  { criticalCss: `${crmThemeCss}\n${crmStyleCss}`, href: '/assets/styles.css' },
+  {
+    criticalCss: `${crmThemeCss}\n${crmChromeStyleCss}\n${contactStyleCss}\n${pipelineStyleCss}\n${dealDetailStyleCss}`,
+    href: '/assets/styles.css',
+  },
 ] as const;
 const crmStaticDealPaths = [
   '/deals/d1',

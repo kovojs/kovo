@@ -18,22 +18,21 @@ import {
   navigationMenuViewportAttributes,
   type NavigationMenuItem,
 } from '@kovojs/headless-ui/navigation-menu';
+import {
+  navigationMenuListClasses,
+  navigationMenuItemClasses,
+  navigationMenuTriggerClasses,
+  navigationMenuLinkClasses,
+  navigationMenuContentClasses,
+  navigationMenuViewportClasses,
+} from '@kovojs/ui/navigation-menu';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/navigation-menu.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const LIST_CLASS =
-  'flex list-none items-center gap-1 rounded-md border border-neutral-200 bg-white p-1 shadow-sm data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch';
-const ITEM_CLASS = 'relative data-[disabled]:opacity-50';
-const TRIGGER_CLASS =
-  'inline-flex h-9 items-center rounded px-3 text-sm font-medium text-neutral-700 outline-none transition-colors hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-neutral-950 data-[state=open]:bg-neutral-100 data-[highlighted]:bg-neutral-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
-const LINK_CLASS =
-  'inline-flex h-9 items-center rounded px-3 text-sm font-medium text-neutral-700 outline-none transition-colors hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-neutral-950 data-[highlighted]:bg-neutral-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
-const CONTENT_CLASS =
-  'mt-2 rounded-md border border-neutral-200 bg-white p-3 text-sm text-neutral-700 shadow-md outline-none data-[state=closed]:hidden';
-const VIEWPORT_CLASS =
-  'mt-2 rounded-md border border-neutral-200 bg-white shadow-md data-[state=closed]:hidden';
+const LIST_CLASS = navigationMenuListClasses.join(' ');
+const ITEM_CLASS = navigationMenuItemClasses.join(' ');
+const TRIGGER_CLASS = navigationMenuTriggerClasses.join(' ');
+const LINK_CLASS = navigationMenuLinkClasses.join(' ');
+const CONTENT_CLASS = navigationMenuContentClasses.join(' ');
+const VIEWPORT_CLASS = navigationMenuViewportClasses.join(' ');
 
 export interface GalleryNavigationMenuDemoState {
   activeValue: string;

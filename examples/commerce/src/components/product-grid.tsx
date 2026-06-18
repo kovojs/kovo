@@ -3,13 +3,104 @@ import { component, FieldError, form, FormError } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import { addToCart, type ProductGridResult } from '../domain.js';
 import { productGridQuery } from '../queries.js';
-import { commerceStyles } from '../styles.js';
 
 const addToCartForm = form('cart/add');
+
+const productGridStyles = style.create(
+  {
+    errorText: {
+      color: tokens.sys.color.error,
+      fontSize: 14,
+    },
+    field: {
+      backgroundColor: tokens.sys.color.surfaceContainerLowest,
+      borderColor: tokens.sys.color.outline,
+      borderRadius: tokens.sys.shape.cornerMedium,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxSizing: 'border-box',
+      color: tokens.sys.color.onSurface,
+      paddingBlock: 6,
+      paddingInline: 10,
+    },
+    formLabel: {
+      color: tokens.sys.color.onSurfaceVariant,
+      display: 'grid',
+      fontSize: 12,
+      fontWeight: 500,
+      gap: 4,
+    },
+    link: {
+      color: tokens.sys.color.primary,
+      fontSize: 14,
+      fontWeight: 500,
+      textDecoration: 'none',
+    },
+    panelError: {
+      backgroundColor: tokens.sys.color.errorContainer,
+      borderColor: tokens.sys.color.error,
+      borderRadius: tokens.sys.shape.cornerMedium,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: tokens.sys.color.onErrorContainer,
+      fontSize: 14,
+      padding: 16,
+    },
+    productEmoji: {
+      backgroundColor: tokens.sys.color.surfaceContainer,
+      borderRadius: tokens.sys.shape.cornerMedium,
+      display: 'grid',
+      fontSize: 24,
+      height: 48,
+      placeItems: 'center',
+      width: 48,
+    },
+    productForm: {
+      alignItems: 'end',
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    row: {
+      alignItems: 'center',
+      display: 'flex',
+      gap: 16,
+    },
+    rowBetween: {
+      alignItems: 'center',
+      display: 'flex',
+      justifyContent: 'space-between',
+    },
+    stack: {
+      display: 'grid',
+      gap: 16,
+    },
+    stackSm: {
+      display: 'grid',
+      gap: 4,
+    },
+    tabularStrong: {
+      fontVariantNumeric: 'tabular-nums',
+      fontWeight: 600,
+    },
+    title: {
+      color: tokens.sys.color.onSurface,
+      fontWeight: 600,
+      letterSpacing: 0,
+      margin: 0,
+    },
+  },
+  { namespace: 'commerce-product-grid', source: 'examples/commerce/src/components/product-grid.tsx' },
+);
+
+export const productGridStyleCss = style.emitAtomicCss(
+  Object.values(productGridStyles).flatMap((entry) => entry.__rules ?? []),
+);
 
 export interface OutOfStockFailure {
   code: 'OUT_OF_STOCK';
@@ -37,7 +128,7 @@ export function ProductGridError(): string {
 
 function renderProductGridError(): string {
   return (
-    <section {...style.attrs(commerceStyles.panelError)}>
+    <section style={productGridStyles.panelError}>
       Products are temporarily unavailable.
     </section>
   );
@@ -50,7 +141,7 @@ export function renderProductGridItems(result: ProductGridResult): string {
     <>
       {cards}
       {cursor ? (
-        <a {...style.attrs(commerceStyles.productLink)} href={`/products?after=${cursor}`} data-cursor={cursor}>
+        <a style={productGridStyles.link} href={`/products?after=${cursor}`} data-cursor={cursor}>
           More
         </a>
       ) : (
@@ -84,16 +175,16 @@ function stockBadge(stock: number): string {
 
 function renderProductCard(item: ProductItem): string {
   const body = (
-    <div {...style.attrs(commerceStyles.stack)}>
-      <div {...style.attrs(commerceStyles.row)}>
-        <span {...style.attrs(commerceStyles.productEmoji)}>{item.emoji}</span>
-        <div {...style.attrs(commerceStyles.stackSm)}>
-          <h2 {...style.attrs(commerceStyles.title)}>{item.name}</h2>
+    <div style={productGridStyles.stack}>
+      <div style={productGridStyles.row}>
+        <span style={productGridStyles.productEmoji}>{item.emoji}</span>
+        <div style={productGridStyles.stackSm}>
+          <h2 style={productGridStyles.title}>{item.name}</h2>
           {Badge.definition.render({ variant: 'neutral', children: item.category })}
         </div>
       </div>
-      <div {...style.attrs(commerceStyles.rowBetween)}>
-        <span {...style.attrs(commerceStyles.tabularStrong)}>{priceLabel(item.unitPrice)}</span>
+      <div style={productGridStyles.rowBetween}>
+        <span style={productGridStyles.tabularStrong}>{priceLabel(item.unitPrice)}</span>
         {stockBadge(item.stock)}
       </div>
       {renderAddToCartForm(item)}
@@ -105,19 +196,19 @@ function renderProductCard(item: ProductItem): string {
 export function renderAddToCartForm(item: { id: string; stock: number }): string {
   const soldOut = item.stock === 0;
   return (
-    <form enhance mutation={addToCart} key={item.id} {...style.attrs(commerceStyles.productForm)}>
+    <form enhance mutation={addToCart} key={item.id} style={productGridStyles.productForm}>
       <input type="hidden" name="productId" value={item.id} />
-      <label {...style.attrs(commerceStyles.formLabel)}>
+      <label style={productGridStyles.formLabel}>
         <span>Qty</span>
         <input
-          {...style.attrs(commerceStyles.field)}
+          style={productGridStyles.field}
           name="quantity"
           type="number"
           min="1"
           max={item.stock}
           value="1"
         />
-        <FieldError name="quantity" {...style.attrs(commerceStyles.errorText)} />
+        <FieldError name="quantity" style={productGridStyles.errorText} />
       </label>
       {Button.definition.render({
         children: soldOut ? 'Sold out' : 'Add to cart',
@@ -127,7 +218,7 @@ export function renderAddToCartForm(item: { id: string; stock: number }): string
       })}
       <FormError
         code="OUT_OF_STOCK"
-        {...style.attrs(commerceStyles.errorText)}
+        style={productGridStyles.errorText}
         message={(failure: OutOfStockFailure) =>
           `Only ${failure.payload.availableQuantity} available.`
         }

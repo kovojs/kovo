@@ -71,17 +71,17 @@ import {
   otpFieldInputAttributes,
   otpFieldRootAttributes,
 } from '@kovojs/headless-ui/otp-field';
+import {
+  otpFieldClasses,
+  otpFieldGroupClasses,
+  otpFieldHiddenInputClasses,
+  otpFieldInputClasses,
+} from '@kovojs/ui/otp-field';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/otp-field.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ROOT_CLASS =
-  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950';
-const GROUP_CLASS = 'flex items-center gap-2';
-const HIDDEN_INPUT_CLASS = 'sr-only';
-const INPUT_CLASS =
-  'h-10 w-9 rounded-md border border-neutral-300 bg-white text-center text-base font-medium text-neutral-950 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 data-[filled]:border-neutral-500 data-[invalid]:border-red-500 data-[invalid]:focus-visible:outline-red-500';
+const ROOT_CLASS = otpFieldClasses.join(' ');
+const GROUP_CLASS = otpFieldGroupClasses.join(' ');
+const HIDDEN_INPUT_CLASS = otpFieldHiddenInputClasses.join(' ');
+const INPUT_CLASS = otpFieldInputClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 const DESCRIPTION_CLASS = 'text-sm text-neutral-500';
 const OUTPUT_CLASS = 'text-xs text-neutral-500';

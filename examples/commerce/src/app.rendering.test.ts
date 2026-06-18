@@ -11,11 +11,11 @@ import {
   commerceMessages,
   commerceMeta,
   commerceMessageCatalog,
-  commerceStylesheets,
   createCommerceDb,
   loadCartQuery,
   type CartQueryResult,
 } from './domain.js';
+import { commerceStylesheets } from './app.js';
 import { createCommerceScenarioClient, seedCartItems } from './app-test-helpers.js';
 
 const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -69,8 +69,10 @@ describe('commerce example', () => {
     expect(pageHints.links).toMatchObject([
       { attrs: { href: '/assets/styles.css', rel: 'stylesheet' }, tag: 'link' },
     ]);
-    expect(cartPage).toContain('data-style-src="examples/commerce/src/styles.ts#cartShell"');
-    expect(cartPage).toContain('data-style-src="examples/commerce/src/styles.ts#cartCount"');
+    expect(cartPage).toContain('data-style-src="examples/commerce/src/app.tsx#cartShell"');
+    expect(cartPage).toContain(
+      'data-style-src="examples/commerce/src/components/cart-badge.tsx#count"',
+    );
   });
 
   it('resolves commerce route meta from loaded cart query data', async () => {

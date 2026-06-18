@@ -1,8 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { Badge, type BadgeVariant } from '@kovojs/ui/badge';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
-
-import { crmStyles } from '../styles.js';
 
 // Shared page chrome and formatting helpers for the CRM example UI.
 
@@ -12,6 +11,90 @@ const NAV: { href: string; label: string; section: CrmSection }[] = [
   { href: '/', label: 'Pipeline', section: 'pipeline' },
   { href: '/contacts', label: 'Contacts', section: 'contacts' },
 ];
+
+const chromeStyles = style.create(
+  {
+    appRoot: {
+      backgroundColor: tokens.sys.color.surface,
+      color: tokens.sys.color.onSurface,
+      minHeight: '100vh',
+    },
+    brand: {
+      alignItems: 'center',
+      color: tokens.sys.color.onSurface,
+      display: 'flex',
+      fontSize: 14,
+      fontWeight: 600,
+      gap: 8,
+      letterSpacing: 0,
+      textDecoration: 'none',
+    },
+    brandMark: {
+      backgroundColor: tokens.sys.color.primary,
+      borderRadius: tokens.sys.shape.cornerMedium,
+      color: tokens.sys.color.onPrimary,
+      display: 'grid',
+      fontSize: 12,
+      fontWeight: 700,
+      height: 28,
+      placeItems: 'center',
+      width: 28,
+    },
+    header: {
+      backgroundColor: tokens.sys.color.surfaceContainerLowest,
+      borderBottomColor: tokens.sys.color.outlineVariant,
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+    },
+    headerInner: {
+      alignItems: 'center',
+      display: 'flex',
+      justifyContent: 'space-between',
+      marginInline: 'auto',
+      maxWidth: 1024,
+      paddingBlock: 16,
+      paddingInline: 24,
+    },
+    main: {
+      marginInline: 'auto',
+      maxWidth: 1024,
+      paddingBlock: 32,
+      paddingInline: 24,
+    },
+    nav: {
+      alignItems: 'center',
+      display: 'flex',
+      fontSize: 14,
+      gap: 4,
+    },
+    navLink: {
+      borderRadius: tokens.sys.shape.cornerMedium,
+      fontWeight: 500,
+      paddingBlock: 6,
+      paddingInline: 12,
+      textDecoration: 'none',
+    },
+    navLinkActive: {
+      backgroundColor: tokens.sys.color.primary,
+      color: tokens.sys.color.onPrimary,
+    },
+    navLinkInactive: {
+      color: tokens.sys.color.onSurfaceVariant,
+      ':hover': {
+        backgroundColor: tokens.sys.color.surfaceContainer,
+        color: tokens.sys.color.onSurface,
+      },
+    },
+    stageText: {
+      textTransform: 'capitalize',
+    },
+  },
+  { namespace: 'crm-chrome', source: 'examples/crm/src/components/chrome.tsx' },
+);
+
+export const crmChromeStyleCss = style.emitAtomicCss(
+  Object.values(chromeStyles).flatMap((entry) => entry.__rules ?? []),
+);
 
 // Form fragments mint ids server-side so each rendered composer is ready to post.
 export function freshId(prefix: string): string {
@@ -40,7 +123,7 @@ export function stageBadgeVariant(stage: string): BadgeVariant {
 /** A capitalized stage chip rendered with the @kojvojs/ui Badge. */
 export function stageBadge(stage: string): string {
   return (
-    <span {...style.attrs(crmStyles.stageText)}>
+    <span style={chromeStyles.stageText}>
       {Badge.definition.render({ variant: stageBadgeVariant(stage), children: stage })}
     </span>
   );
@@ -48,21 +131,21 @@ export function stageBadge(stage: string): string {
 
 export function CrmShell({ active, children }: { active: CrmSection; children?: unknown }): string {
   return (
-    <div {...style.attrs(crmStyles.appRoot)}>
-      <header {...style.attrs(crmStyles.header)}>
-        <div {...style.attrs(crmStyles.headerInner)}>
-          <a href="/" {...style.attrs(crmStyles.brand)}>
-            <span {...style.attrs(crmStyles.brandMark)}>A</span>
+    <div style={chromeStyles.appRoot}>
+      <header style={chromeStyles.header}>
+        <div style={chromeStyles.headerInner}>
+          <a href="/" style={chromeStyles.brand}>
+            <span style={chromeStyles.brandMark}>A</span>
             Atlas CRM
           </a>
-          <nav {...style.attrs(crmStyles.nav)}>
+          <nav style={chromeStyles.nav}>
             {NAV.map((item) => (
               <a
                 href={item.href}
-                {...style.attrs(
-                  crmStyles.navLink,
-                  item.section === active ? crmStyles.navLinkActive : crmStyles.navLinkInactive,
-                )}
+                style={[
+                  chromeStyles.navLink,
+                  item.section === active ? chromeStyles.navLinkActive : chromeStyles.navLinkInactive,
+                ]}
               >
                 {item.label}
               </a>
@@ -70,7 +153,7 @@ export function CrmShell({ active, children }: { active: CrmSection; children?: 
           </nav>
         </div>
       </header>
-      <main {...style.attrs(crmStyles.main)}>{children}</main>
+      <main style={chromeStyles.main}>{children}</main>
     </div>
   );
 }

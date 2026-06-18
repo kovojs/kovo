@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, compileComponentModule } from './index.js';
+import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
 import { parseComponentModule } from './scan/parse.js';
 import { extractKovoStyles } from './style.js';
 
@@ -59,6 +59,39 @@ export const Button = component({
       "source: 'button.tsx#root'; styleRef: 'base.root'; moduleFileName: 'components/button.tsx';",
     );
     expect(() => assertFixpoint(result)).not.toThrow();
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+  });
+
+  it('lowers styles after child structural rewrites without overlapping source spans', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const badgeStyles = style.create({
+  badge: {
+    alignItems: 'center',
+    display: 'inline-flex',
+  },
+}, { namespace: 'cartBadge', source: 'cart-badge.tsx' });
+
+export const CartBadge = component({
+  queries: { cart: true },
+  render: ({ cart }) => (
+    <cart-badge style={badgeStyles.badge}>
+      <span>{cart.count}</span>
+    </cart-badge>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(serverSource).toContain('class="kv-cart-badge-align-');
+    expect(serverSource).toContain('data-style-src="cart-badge.tsx#badge"');
+    expect(serverSource).toContain('data-bind="cart.count"');
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
 
   it('lowers static style arrays with author-last property wins', () => {

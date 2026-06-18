@@ -1,16 +1,15 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/headless-ui/disclosure';
+import {
+  disclosureClasses,
+  disclosureTriggerClasses,
+  disclosureContentClasses,
+} from '@kovojs/ui/disclosure';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/disclosure.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50';
-const TRIGGER_CLASS =
-  'inline-flex h-9 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50 data-[state=open]:bg-neutral-100';
-const CONTENT_CLASS =
-  'rounded-md border border-neutral-200 bg-white p-3 text-sm text-neutral-700 data-[state=closed]:hidden';
+const ROOT_CLASS = disclosureClasses.join(' ');
+const TRIGGER_CLASS = disclosureTriggerClasses.join(' ');
+const CONTENT_CLASS = disclosureContentClasses.join(' ');
 
 export interface GalleryDisclosureDemoState {
   open: boolean;

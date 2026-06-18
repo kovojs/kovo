@@ -5,6 +5,7 @@ import { component } from '@kovojs/core';
 import { csrfField, mutationFormAttributes } from '@kovojs/server';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 import {
   Table,
@@ -28,7 +29,6 @@ import {
   type PipelineStageBucket,
 } from '../queries.js';
 import { freshId, money, stageBadge } from '../components/chrome.js';
-import { crmStyles } from '../styles.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
@@ -38,6 +38,105 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 // A new deal starts in one of these stages; closing moves it to `won`.
 const NEW_DEAL_STAGES = ['lead', 'qualified', 'open', 'proposal'] as const;
 
+const pipelineStyles = style.create(
+  {
+    backLink: {
+      alignItems: 'center',
+      color: tokens.sys.color.onSurfaceVariant,
+      display: 'inline-flex',
+      fontSize: 14,
+      gap: 4,
+      textDecoration: 'none',
+      ':hover': {
+        color: tokens.sys.color.onSurface,
+      },
+    },
+    formGrid: {
+      display: 'grid',
+      gap: 8,
+      '@media (min-width: 640px)': {
+        alignItems: 'start',
+        gridTemplateColumns: '1fr auto 1fr auto',
+      },
+    },
+    formPanel: {
+      backgroundColor: tokens.sys.color.surfaceContainerLowest,
+      borderColor: tokens.sys.color.outlineVariant,
+      borderRadius: tokens.sys.shape.cornerMedium,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      padding: 16,
+    },
+    heading: {
+      color: tokens.sys.color.onSurface,
+      fontSize: 24,
+      fontWeight: 700,
+      letterSpacing: 0,
+      lineHeight: 1.25,
+      margin: 0,
+    },
+    input: {
+      backgroundColor: tokens.sys.color.surfaceContainerLowest,
+      borderColor: tokens.sys.color.outline,
+      borderRadius: tokens.sys.shape.cornerSmall,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxSizing: 'border-box',
+      color: tokens.sys.color.onSurface,
+      fontSize: 14,
+      paddingBlock: 8,
+      paddingInline: 12,
+      width: '100%',
+    },
+    muted: {
+      color: tokens.sys.color.onSurfaceVariant,
+      fontSize: 14,
+    },
+    sectionLabel: {
+      color: tokens.sys.color.onSurfaceVariant,
+      fontSize: 12,
+      fontWeight: 600,
+      letterSpacing: '0.025em',
+      marginBlockEnd: 12,
+      textTransform: 'uppercase',
+    },
+    stackLg: {
+      display: 'grid',
+      gap: 32,
+    },
+    stackSm: {
+      display: 'grid',
+      gap: 4,
+    },
+    stageGrid: {
+      display: 'grid',
+      gap: 12,
+      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+      '@media (min-width: 640px)': {
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+      },
+      '@media (min-width: 1024px)': {
+        gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+      },
+    },
+    stageText: {
+      textTransform: 'capitalize',
+    },
+    tabular: {
+      fontVariantNumeric: 'tabular-nums',
+    },
+    tabularStrong: {
+      fontVariantNumeric: 'tabular-nums',
+      fontWeight: 600,
+    },
+  },
+  { namespace: 'crm-pipeline', source: 'examples/crm/src/components/pipeline.tsx' },
+);
+
+export const pipelineStyleCss = style.emitAtomicCss(
+  Object.values(pipelineStyles).flatMap((entry) => entry.__rules ?? []),
+);
+
 interface PipelineRenderSlots {
   request?: CrmRequest | undefined;
 }
@@ -45,9 +144,9 @@ interface PipelineRenderSlots {
 function renderStageCard(bucket: PipelineStageBucket): string {
   return Card.definition.render({
     children: (
-      <div {...style.attrs(crmStyles.stackSm)}>
+      <div class="kv-crm-pipeline-d-35rcxb kv-crm-pipeline-gap-zc9vce" data-style-src="examples/crm/src/components/pipeline.tsx#stackSm">
         <div>{stageBadge(bucket.stage)}</div>
-        <p {...style.attrs(crmStyles.tabularStrong)}>{money(bucket.total)}</p>
+        <p class="kv-crm-pipeline-font-gx0kp2 kv-crm-pipeline-font-ahhk4k" data-style-src="examples/crm/src/components/pipeline.tsx#tabularStrong">{money(bucket.total)}</p>
       </div>
     ),
   });
@@ -70,7 +169,7 @@ function renderOpenDealsTable(openDeals: DealRow[], contactsById: Map<string, Co
           TableCell.definition.render({
             children: (
               <a
-                {...style.attrs(crmStyles.backLink)}
+                class="kv-crm-pipeline-align-5rg1kv kv-crm-pipeline-fg-152gzp kv-crm-pipeline-d-1rbnzz kv-crm-pipeline-font-mvdwxk kv-crm-pipeline-gap-zc9vce kv-crm-pipeline-text-1xhj6c kv-crm-pipeline-fg-1g0ttt" data-style-src="examples/crm/src/components/pipeline.tsx#backLink"
                 href={`/deals/${deal.id}`}
               >
                 {deal.id.toUpperCase()}
@@ -81,7 +180,7 @@ function renderOpenDealsTable(openDeals: DealRow[], contactsById: Map<string, Co
             children: contactsById.get(deal.contactId)?.name ?? deal.contactId,
           }) +
           TableCell.definition.render({
-            children: <span {...style.attrs(crmStyles.tabular)}>{money(deal.amount)}</span>,
+            children: <span class="kv-crm-pipeline-font-gx0kp2" data-style-src="examples/crm/src/components/pipeline.tsx#tabular">{money(deal.amount)}</span>,
           }),
       }),
     )
@@ -118,37 +217,37 @@ export const PipelineRegion = component({
     const total = buckets.reduce((sum, bucket) => sum + bucket.total, 0);
 
     return (
-      <div {...style.attrs(crmStyles.stackLg)} kovo-c="pipeline-region" kovo-deps="contactList openDeals pipelineByStage" kovo-fragment-target="pipeline-region" kovo-live-component="components/pipeline/pipeline-region">
+      <div class="kv-crm-pipeline-d-35rcxb kv-crm-pipeline-gap-1qya6n" data-style-src="examples/crm/src/components/pipeline.tsx#stackLg" kovo-c="pipeline-region" kovo-deps="contactList openDeals pipelineByStage" kovo-fragment-target="pipeline-region" kovo-live-component="components/pipeline/pipeline-region">
         <div>
-          <h1 {...style.attrs(crmStyles.heading)}>Sales pipeline</h1>
-          <p {...style.attrs(crmStyles.muted)}>
+          <h1 class="kv-crm-pipeline-fg-1b909x kv-crm-pipeline-font-4cosxi kv-crm-pipeline-font-11kkrq kv-crm-pipeline-letter-15wj4r kv-crm-pipeline-line-lk5pgb kv-crm-pipeline-m-5u1b4h" data-style-src="examples/crm/src/components/pipeline.tsx#heading">Sales pipeline</h1>
+          <p class="kv-crm-pipeline-fg-152gzp kv-crm-pipeline-font-mvdwxk" data-style-src="examples/crm/src/components/pipeline.tsx#muted">
             {money(total)} across {escapeText(buckets.length)} stages, <span data-bind="openDeals.items.length">{openDeals.items.length}</span>{' '}
             deals open now.
           </p>
         </div>
 
         <section>
-          <h2 {...style.attrs(crmStyles.sectionLabel)}>By stage</h2>
-          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <h2 class="kv-crm-pipeline-fg-152gzp kv-crm-pipeline-font-m3qnve kv-crm-pipeline-font-ahhk4k kv-crm-pipeline-letter-g2l3bv kv-crm-pipeline-m-1q923g kv-crm-pipeline-text-hms780" data-style-src="examples/crm/src/components/pipeline.tsx#sectionLabel">By stage</h2>
+          <div class="kv-crm-pipeline-d-35rcxb kv-crm-pipeline-gap-1q3oj3 kv-crm-pipeline-grid-1dyoeq kv-crm-pipeline-grid-11mpod kv-crm-pipeline-grid-149k9q" data-style-src="examples/crm/src/components/pipeline.tsx#stageGrid">
             {buckets.map((bucket) => renderStageCard(bucket))}
           </div>
         </section>
 
         {/* The refreshed fragment resets the form with a fresh deal id. */}
         <section>
-          <h2 {...style.attrs(crmStyles.sectionLabel)}>New deal</h2>
+          <h2 class="kv-crm-pipeline-fg-152gzp kv-crm-pipeline-font-m3qnve kv-crm-pipeline-font-ahhk4k kv-crm-pipeline-letter-g2l3bv kv-crm-pipeline-m-1q923g kv-crm-pipeline-text-hms780" data-style-src="examples/crm/src/components/pipeline.tsx#sectionLabel">New deal</h2>
           <form
             {...mutationFormAttributes(createDeal)}
-            {...style.attrs(crmStyles.formPanel)}
+            class="kv-crm-pipeline-bg-144jhh kv-crm-pipeline-bd-onez8x kv-crm-pipeline-bd-ejq4bt kv-crm-pipeline-bd-1sy3k0 kv-crm-pipeline-bd-1c40yo kv-crm-pipeline-pad-itmub1" data-style-src="examples/crm/src/components/pipeline.tsx#formPanel"
           >
             {slots.request ? csrfField(slots.request, crmCsrf) : ''}
             <input type="hidden" name="id" value={freshId('d')} />
             <input type="hidden" name="ownerId" value="u1" />
-            <div {...style.attrs(crmStyles.formGridDeals)}>
+            <div class="kv-crm-pipeline-d-35rcxb kv-crm-pipeline-gap-ya510v kv-crm-pipeline-align-5dr6mb kv-crm-pipeline-grid-1gu97v" data-style-src="examples/crm/src/components/pipeline.tsx#formGrid">
               <select
                 name="contactId"
                 required
-                {...style.attrs(crmStyles.input)}
+                class="kv-crm-pipeline-bg-144jhh kv-crm-pipeline-bd-1u2qp7 kv-crm-pipeline-bd-ra0es7 kv-crm-pipeline-bd-1sy3k0 kv-crm-pipeline-bd-1c40yo kv-crm-pipeline-box-1gvzd3 kv-crm-pipeline-fg-1b909x kv-crm-pipeline-font-mvdwxk kv-crm-pipeline-pad-kcv6bq kv-crm-pipeline-pad-13ileu kv-crm-pipeline-w-lhhf6b" data-style-src="examples/crm/src/components/pipeline.tsx#input"
               >
                 {contacts.map((contact) => (
                   <option value={contact.id}>{escapeText(contact.name)}</option>
@@ -156,7 +255,7 @@ export const PipelineRegion = component({
               </select>
               <select
                 name="stage"
-                {...style.attrs(crmStyles.input, crmStyles.stageText)}
+                class="kv-crm-pipeline-bg-144jhh kv-crm-pipeline-bd-1u2qp7 kv-crm-pipeline-bd-ra0es7 kv-crm-pipeline-bd-1sy3k0 kv-crm-pipeline-bd-1c40yo kv-crm-pipeline-box-1gvzd3 kv-crm-pipeline-fg-1b909x kv-crm-pipeline-font-mvdwxk kv-crm-pipeline-pad-kcv6bq kv-crm-pipeline-pad-13ileu kv-crm-pipeline-w-lhhf6b kv-crm-pipeline-text-1axo91" data-style-src="examples/crm/src/components/pipeline.tsx#input; examples/crm/src/components/pipeline.tsx#stageText"
               >
                 {NEW_DEAL_STAGES.map((stage) => (
                   <option value={stage}>{stage}</option>
@@ -168,7 +267,7 @@ export const PipelineRegion = component({
                 min="0"
                 required
                 placeholder="Amount"
-                {...style.attrs(crmStyles.input)}
+                class="kv-crm-pipeline-bg-144jhh kv-crm-pipeline-bd-1u2qp7 kv-crm-pipeline-bd-ra0es7 kv-crm-pipeline-bd-1sy3k0 kv-crm-pipeline-bd-1c40yo kv-crm-pipeline-box-1gvzd3 kv-crm-pipeline-fg-1b909x kv-crm-pipeline-font-mvdwxk kv-crm-pipeline-pad-kcv6bq kv-crm-pipeline-pad-13ileu kv-crm-pipeline-w-lhhf6b" data-style-src="examples/crm/src/components/pipeline.tsx#input"
               />
               {Button.definition.render({
                 children: 'Create deal',
@@ -180,7 +279,7 @@ export const PipelineRegion = component({
         </section>
 
         <section>
-          <h2 {...style.attrs(crmStyles.sectionLabel)}>Open deals</h2>
+          <h2 class="kv-crm-pipeline-fg-152gzp kv-crm-pipeline-font-m3qnve kv-crm-pipeline-font-ahhk4k kv-crm-pipeline-letter-g2l3bv kv-crm-pipeline-m-1q923g kv-crm-pipeline-text-hms780" data-style-src="examples/crm/src/components/pipeline.tsx#sectionLabel">Open deals</h2>
           {renderOpenDealsTable(openDeals.items, contactsById)}
         </section>
       </div>

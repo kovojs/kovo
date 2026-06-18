@@ -5,17 +5,12 @@ import {
   meterValueState as _meterValueState,
   type MeterDataState,
 } from '@kovojs/headless-ui/meter';
+import { meterClasses } from '@kovojs/ui/meter';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/meter.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-// METER_CLASS is the styled gauge; the wrapper/label/button have no @kovojs/ui
-// counterpart, so they use the @kovojs/ui button base (packages/ui/src/button.tsx)
-// and sensible layout utilities.
+// METER_CLASS comes from @kovojs/ui/meter; the wrapper and control button keep
+// local demo layout classes because they are not the meter component surface.
 const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
-const METER_CLASS =
-  'h-2 w-full accent-emerald-600 data-[state=suboptimum]:accent-amber-500 data-[state=even-less-good]:accent-red-600';
+const METER_CLASS = meterClasses.join(' ');
 const BUTTON_CLASS =
   'inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
 

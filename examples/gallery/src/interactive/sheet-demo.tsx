@@ -9,21 +9,22 @@ import {
   dialogTriggerClick as _dialogTriggerClick,
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui/dialog';
+import {
+  sheetTriggerClasses,
+  sheetContentClasses,
+  sheetHeaderClasses,
+  sheetTitleClasses,
+  sheetDescriptionClasses,
+  sheetCloseClasses,
+} from '@kovojs/ui/sheet';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/sheet.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
 // CONTENT_CLASS is sheetContentClassNames base + the `right` side variant.
-const TRIGGER_CLASS =
-  'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50';
-const CONTENT_CLASS =
-  'fixed z-50 flex flex-col gap-4 border-neutral-200 bg-white p-6 text-neutral-950 shadow-xl inset-y-0 right-0 w-full max-w-sm border-l';
-const HEADER_CLASS = 'grid gap-1';
-const TITLE_CLASS = 'text-base font-semibold';
-const DESCRIPTION_CLASS = 'text-sm text-neutral-600';
-const CLOSE_CLASS =
-  'inline-flex h-8 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-2.5 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50';
+const TRIGGER_CLASS = sheetTriggerClasses.join(' ');
+const CONTENT_CLASS = sheetContentClasses.join(' ');
+const HEADER_CLASS = sheetHeaderClasses.join(' ');
+const TITLE_CLASS = sheetTitleClasses.join(' ');
+const DESCRIPTION_CLASS = sheetDescriptionClasses.join(' ');
+const CLOSE_CLASS = sheetCloseClasses.join(' ');
 
 export interface GallerySheetDemoState {
   open: boolean;

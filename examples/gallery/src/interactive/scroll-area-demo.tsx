@@ -12,25 +12,23 @@ import {
   scrollAreaViewportAttributes,
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
 } from '@kovojs/headless-ui/scroll-area';
+import {
+  scrollAreaClasses,
+  scrollAreaViewportClasses,
+  scrollAreaScrollbarClasses,
+  scrollAreaThumbClasses,
+  scrollAreaCornerClasses,
+} from '@kovojs/ui/scroll-area';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/scroll-area.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
 // The viewport keeps its inline max-height/overflow style so the demo stays short
 // enough to scroll; that inline style wins over the @kovojs/ui max-h-56 utility.
-// TOGGLE_CLASS uses the @kovojs/ui button base (packages/ui/src/button.tsx) since the
-// jump-to-end control has no scroll-area counterpart.
-const ROOT_CLASS =
-  'relative overflow-hidden rounded-md border border-neutral-200 bg-white text-sm text-neutral-950 data-[disabled]:opacity-50';
-const VIEWPORT_CLASS =
-  'max-h-56 overflow-auto p-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-950 data-[disabled]:cursor-not-allowed';
-const SCROLLBAR_CLASS =
-  'absolute flex touch-none select-none bg-neutral-100 p-0.5 transition-colors data-[orientation=vertical]:inset-y-0 data-[orientation=vertical]:right-0 data-[orientation=vertical]:w-2.5 data-[orientation=horizontal]:inset-x-0 data-[orientation=horizontal]:bottom-0 data-[orientation=horizontal]:h-2.5 data-[state=hidden]:opacity-0';
-const THUMB_CLASS =
-  'absolute left-0 right-0 rounded-full bg-neutral-400 transition-[top,height,width] data-[orientation=vertical]:min-h-8 data-[orientation=horizontal]:min-w-8 data-[state=hidden]:opacity-0';
-const CORNER_CLASS =
-  'absolute bottom-0 right-0 h-2.5 w-2.5 bg-neutral-100 data-[state=hidden]:hidden';
+// The jump-to-end control keeps local demo button classes because it is not part
+// of the scroll-area component surface.
+const ROOT_CLASS = scrollAreaClasses.join(' ');
+const VIEWPORT_CLASS = scrollAreaViewportClasses.join(' ');
+const SCROLLBAR_CLASS = scrollAreaScrollbarClasses.join(' ');
+const THUMB_CLASS = scrollAreaThumbClasses.join(' ');
+const CORNER_CLASS = scrollAreaCornerClasses.join(' ');
 const TOGGLE_CLASS =
   'inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
 

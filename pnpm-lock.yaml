@@ -218,12 +218,12 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
     devDependencies:
+      '@kovojs/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@types/node':
         specifier: ^25.0.0
         version: 25.9.2
-      kovo:
-        specifier: workspace:*
-        version: link:../../packages/cli
       typescript:
         specifier: ^6.0.0
         version: 6.0.3
@@ -513,6 +513,9 @@ importers:
       '@kovojs/runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@kovojs/style':
+        specifier: workspace:*
+        version: link:../style
     devDependencies:
       vitest:
         specifier: 4.1.8

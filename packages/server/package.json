@@ -92,7 +92,8 @@
   },
   "dependencies": {
     "@kovojs/core": "workspace:*",
-    "@kovojs/runtime": "workspace:*"
+    "@kovojs/runtime": "workspace:*",
+    "@kovojs/style": "workspace:*"
   },
   "devDependencies": {
     "vitest": "4.1.8"

@@ -5,13 +5,13 @@ import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import { addContact, crmCsrf, type CrmRequest } from '../mutations.js';
 import { addContactForm } from '../model.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
 import { freshId } from '../components/chrome.js';
-import { crmStyles } from '../styles.js';
 
 // Contact book for `/contacts`. The add-contact form posts back to this region
 // so the list refreshes with the new person.
@@ -24,18 +24,99 @@ function initials(name: string): string {
     .join('');
 }
 
+const contactStyles = style.create(
+  {
+    cardBody: {
+      flex: '1 1 0%',
+      minWidth: 0,
+    },
+    cardBadge: {
+      flexShrink: 0,
+    },
+    formGrid: {
+      display: 'grid',
+      gap: 8,
+      '@media (min-width: 640px)': {
+        alignItems: 'start',
+        gridTemplateColumns: '1fr 1fr auto',
+      },
+    },
+    formPanel: {
+      backgroundColor: tokens.sys.color.surfaceContainerLowest,
+      borderColor: tokens.sys.color.outlineVariant,
+      borderRadius: tokens.sys.shape.cornerMedium,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      padding: 16,
+    },
+    heading: {
+      color: tokens.sys.color.onSurface,
+      fontSize: 24,
+      fontWeight: 700,
+      letterSpacing: 0,
+      lineHeight: 1.25,
+      margin: 0,
+    },
+    input: {
+      backgroundColor: tokens.sys.color.surfaceContainerLowest,
+      borderColor: tokens.sys.color.outline,
+      borderRadius: tokens.sys.shape.cornerSmall,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxSizing: 'border-box',
+      color: tokens.sys.color.onSurface,
+      fontSize: 14,
+      paddingBlock: 8,
+      paddingInline: 12,
+      width: '100%',
+    },
+    list: {
+      display: 'grid',
+      gap: 12,
+      listStyle: 'none',
+      margin: 0,
+      padding: 0,
+      '@media (min-width: 640px)': {
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+      },
+    },
+    muted: {
+      color: tokens.sys.color.onSurfaceVariant,
+      fontSize: 14,
+    },
+    row: {
+      alignItems: 'center',
+      display: 'flex',
+      gap: 12,
+    },
+    stack: {
+      display: 'grid',
+      gap: 24,
+    },
+    tabularStrong: {
+      fontVariantNumeric: 'tabular-nums',
+      fontWeight: 600,
+    },
+  },
+  { namespace: 'crm-contacts', source: 'examples/crm/src/components/contacts.tsx' },
+);
+
+export const contactStyleCss = style.emitAtomicCss(
+  Object.values(contactStyles).flatMap((entry) => entry.__rules ?? []),
+);
+
 function renderContactCard(contact: ContactRow): string {
   return Card.definition.render({
     children: (
-      <div {...style.attrs(crmStyles.row)}>
+      <div style={contactStyles.row}>
         {Avatar.definition.render({
           children: AvatarFallback.definition.render({ children: initials(contact.name) }),
         })}
-        <div class="min-w-0 flex-1">
-          <p {...style.attrs(crmStyles.tabularStrong)}>{contact.name}</p>
-          <p {...style.attrs(crmStyles.muted)}>{contact.email}</p>
+        <div style={contactStyles.cardBody}>
+          <p style={contactStyles.tabularStrong}>{contact.name}</p>
+          <p style={contactStyles.muted}>{contact.email}</p>
         </div>
-        <span class="shrink-0">
+        <span style={contactStyles.cardBadge}>
           {Badge.definition.render({
             variant: contact.dealCount > 0 ? 'success' : 'neutral',
             children: `${contact.dealCount} ${contact.dealCount === 1 ? 'deal' : 'deals'}`,
@@ -70,33 +151,33 @@ export const ContactsRegion = component({
     const contacts = contactList.items;
 
     return (
-      <div {...style.attrs(crmStyles.stack)}>
+      <div style={contactStyles.stack}>
         <div>
-          <h1 {...style.attrs(crmStyles.heading)}>Contacts</h1>
-          <p {...style.attrs(crmStyles.muted)}>{contacts.length} people in the book.</p>
+          <h1 style={contactStyles.heading}>Contacts</h1>
+          <p style={contactStyles.muted}>{contacts.length} people in the book.</p>
         </div>
 
         {/* The refreshed fragment resets the form with a fresh contact id. */}
         <form
           {...mutationFormAttributes(addContact)}
-          {...style.attrs(crmStyles.formPanel)}
+          style={contactStyles.formPanel}
         >
           {slots.request ? csrfField(slots.request, crmCsrf) : ''}
           <input type="hidden" name="id" value={freshId('c')} />
           <input type="hidden" name="ownerId" value="u1" />
-          <div {...style.attrs(crmStyles.formGridContacts)}>
+          <div style={contactStyles.formGrid}>
             <input
               name="name"
               required
               placeholder="Full name"
-              {...style.attrs(crmStyles.input)}
+              style={contactStyles.input}
             />
             <input
               name="email"
               required
               type="email"
               placeholder="name@example.com"
-              {...style.attrs(crmStyles.input)}
+              style={contactStyles.input}
             />
             {Button.definition.render({
               children: 'Add contact',
@@ -106,14 +187,14 @@ export const ContactsRegion = component({
           </div>
           <FormError
             code="DUPLICATE_EMAIL"
-            {...style.attrs(crmStyles.muted)}
+            style={contactStyles.muted}
             message={(failure: DuplicateEmailFailure) =>
               `${failure.payload.email} is already in the contact book.`
             }
           />
         </form>
 
-        <ul class="grid gap-3 sm:grid-cols-2">
+        <ul style={contactStyles.list}>
           {contacts.map((contact) => (
             <li>{renderContactCard(contact)}</li>
           ))}

@@ -9,6 +9,7 @@ import type {
 } from '@kovojs/core';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
 import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/runtime/internal/output';
+import { attrs as kovoStyleAttrs, type StyleInput } from '@kovojs/style';
 
 import { componentMutationFailureSlots } from './component-render.js';
 import { csrfField, type CsrfValidationOptions } from './csrf.js';
@@ -155,6 +156,11 @@ export function jsxDEV(
 function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): string {
   let rendered = '';
   const key = props['kovo-key'] === undefined ? (props.key ?? jsxKey) : undefined;
+  const styleAttrs = kovoStyleInputAttributes(props.style);
+  let renderedClass = false;
+  let renderedStyle = false;
+  let renderedStyleSource = false;
+
   if (key !== false && key !== null && key !== undefined) {
     rendered += ` kovo-key="${escapeAttribute(attributeText('kovo-key', key))}"`;
   }
@@ -174,11 +180,53 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
       rendered += renderMutationFormAttributes(value.key, props);
       continue;
     }
+
+    if (styleAttrs && name === 'style') {
+      continue;
+    }
+    if (styleAttrs && name === 'class') {
+      const className = [attributeText(name, value), styleAttrs.class].filter(Boolean).join(' ');
+      rendered += ` class="${escapeAttribute(className)}"`;
+      renderedClass = true;
+      continue;
+    }
+    if (styleAttrs && name === 'data-style-src') {
+      const source = [attributeText(name, value), styleAttrs['data-style-src']]
+        .filter(Boolean)
+        .join('; ');
+      rendered += ` data-style-src="${escapeAttribute(source)}"`;
+      renderedStyleSource = true;
+      continue;
+    }
+
     rendered +=
       value === true ? ` ${name}` : ` ${name}="${escapeAttribute(attributeText(name, value))}"`;
   }
 
+  if (styleAttrs?.class && !renderedClass) rendered += ` class="${escapeAttribute(styleAttrs.class)}"`;
+  if (styleAttrs?.['data-style-src'] && !renderedStyleSource) {
+    rendered += ` data-style-src="${escapeAttribute(styleAttrs['data-style-src'])}"`;
+  }
+  if (styleAttrs?.style && !renderedStyle) rendered += ` style="${escapeAttribute(styleAttrs.style)}"`;
+
   return rendered;
+}
+
+function kovoStyleInputAttributes(value: unknown):
+  | {
+      readonly class?: string;
+      readonly 'data-style-src'?: string;
+      readonly style?: string;
+    }
+  | undefined {
+  if (!isKovoStyleInput(value)) return undefined;
+  return kovoStyleAttrs(value as StyleInput);
+}
+
+function isKovoStyleInput(value: unknown): boolean {
+  if (!value) return false;
+  if (Array.isArray(value)) return value.some(isKovoStyleInput);
+  return typeof value === 'object' && value !== null && '$$css' in value;
 }
 
 function renderMutationFormAttributes(key: string, props: JsxProps): string {

@@ -11,7 +11,6 @@ import {
   type RequestHandler,
   type ServerErrorHandler,
 } from '@kovojs/server';
-import * as style from '@kovojs/style';
 
 import {
   addToCart,
@@ -19,17 +18,18 @@ import {
   commerceSessionProvider,
   commerceSignIn,
   commerceSignOut,
-  commerceStylesheets,
   createCommerceDb,
   type CommerceAuthRequest,
   type CommerceDb,
   type CommerceSession,
 } from './domain.js';
-import { LoginForm } from './components/auth-forms.js';
-import { CartBadge } from './components/cart-badge.js';
-import { OrderHistory } from './components/order-history.js';
-import { ProductGrid, ProductGridError } from './components/product-grid.js';
-import { commerceStyles } from './styles.js';
+import { tokens } from '@kovojs/style';
+import * as style from '@kovojs/style';
+import { LoginForm, authFormStyleCss } from './components/auth-forms.js';
+import { CartBadge, cartBadgeStyleCss } from './components/cart-badge.js';
+import { OrderHistory, orderHistoryStyleCss } from './components/order-history.js';
+import { ProductGrid, ProductGridError, productGridStyleCss } from './components/product-grid.js';
+import { commerceThemeCss } from './theme.js';
 
 export type CommerceRouteRequest = Request & CommerceAuthRequest;
 
@@ -45,10 +45,41 @@ export interface CommerceApp {
   requestHandler: RequestHandler;
 }
 
+const commerceAppStyles = style.create(
+  {
+    appRoot: {
+      backgroundColor: tokens.sys.color.surface,
+      color: tokens.sys.color.onSurface,
+      minHeight: '100dvh',
+    },
+    cartShell: {
+      marginInline: 'auto',
+      maxWidth: 896,
+    },
+    loginMain: {
+      marginInline: 'auto',
+      maxWidth: 448,
+      padding: 24,
+    },
+  },
+  { namespace: 'commerce-app', source: 'examples/commerce/src/app.tsx' },
+);
+
+export const commerceAppStyleCss = style.emitAtomicCss(
+  Object.values(commerceAppStyles).flatMap((entry) => entry.__rules ?? []),
+);
+
+export const commerceStylesheets = [
+  {
+    criticalCss: `${commerceThemeCss}\n${commerceAppStyleCss}\n${authFormStyleCss}\n${cartBadgeStyleCss}\n${orderHistoryStyleCss}\n${productGridStyleCss}`,
+    href: '/assets/styles.css',
+  },
+] as const;
+
 function CommerceCartShell({ children }: { children?: unknown }): string {
   return (
-    <div {...style.attrs(commerceStyles.appRoot)} data-commerce-shell="cart">
-      <main {...style.attrs(commerceStyles.cartShell)}>{children}</main>
+    <div style={commerceAppStyles.appRoot} data-commerce-shell="cart">
+      <main style={commerceAppStyles.cartShell}>{children}</main>
     </div>
   );
 }
@@ -107,7 +138,7 @@ export const commerceLoginRoute = route('/login', {
   page(context, _request: CommerceRouteRequest) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/cart';
     return (
-      <main {...style.attrs(commerceStyles.loginMain)}>
+      <main style={commerceAppStyles.loginMain}>
         <LoginForm next={next} />
       </main>
     );

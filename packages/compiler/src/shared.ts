@@ -128,6 +128,58 @@ export function generatedOffsetToOriginal(
   return undefined;
 }
 
+export function composeSourceOffsetMaps(
+  originalToIntermediate: SourceOffsetMap,
+  intermediateToGenerated: SourceOffsetMap,
+): SourceOffsetMap {
+  const segments: SourceOffsetSegment[] = [];
+
+  for (const generatedSegment of intermediateToGenerated.segments) {
+    const intermediateStart = generatedSegment.originalStart;
+    const intermediateEnd = intermediateStart + generatedSegment.length;
+
+    for (const originalSegment of originalToIntermediate.segments) {
+      const overlapStart = Math.max(intermediateStart, originalSegment.generatedStart);
+      const overlapEnd = Math.min(
+        intermediateEnd,
+        originalSegment.generatedStart + originalSegment.length,
+      );
+      if (overlapStart >= overlapEnd) continue;
+
+      segments.push({
+        generatedStart: generatedSegment.generatedStart + overlapStart - intermediateStart,
+        length: overlapEnd - overlapStart,
+        originalStart: originalSegment.originalStart + overlapStart - originalSegment.generatedStart,
+      });
+    }
+  }
+
+  return {
+    generatedLength: intermediateToGenerated.generatedLength,
+    originalLength: originalToIntermediate.originalLength,
+    segments: mergeAdjacentOffsetSegments(segments),
+  };
+}
+
+function mergeAdjacentOffsetSegments(
+  segments: readonly SourceOffsetSegment[],
+): SourceOffsetSegment[] {
+  const merged: SourceOffsetSegment[] = [];
+  for (const segment of [...segments].sort((left, right) => left.generatedStart - right.generatedStart)) {
+    const previous = merged[merged.length - 1];
+    if (
+      previous &&
+      previous.generatedStart + previous.length === segment.generatedStart &&
+      previous.originalStart + previous.length === segment.originalStart
+    ) {
+      previous.length += segment.length;
+      continue;
+    }
+    merged.push({ ...segment });
+  }
+  return merged;
+}
+
 function patchedSourceLength(
   originalLength: number,
   replacements: readonly SourceReplacement[],

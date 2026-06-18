@@ -46,7 +46,12 @@ import {
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
-import { applySourceReplacements, escapeAttribute, type SourceReplacement } from './shared.js';
+import {
+  applySourceReplacements,
+  composeSourceOffsetMaps,
+  escapeAttribute,
+  type SourceReplacement,
+} from './shared.js';
 import { extractKovoStyles } from './style.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
@@ -96,7 +101,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const componentName = inferComponentName(options.fileName, originalModel);
   const componentNames = deriveComponentNames(options.fileName, firstComponentModel(originalModel));
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
-  const styleExtraction = extractKovoStyles(
+  const styleSpanProbe = extractKovoStyles(
     options.fileName,
     options.source,
     originalModel,
@@ -105,17 +110,32 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   );
   const structuralLowering = lowerStructuralJsx(originalState.model, componentName, {
     ...compileOptions,
-    skipInlineAttributeDeriveSpans: styleExtraction.handledSpans,
+    skipInlineAttributeDeriveSpans: styleSpanProbe.handledSpans,
   });
   const hrefReplacements = navigationStandaloneHrefLowering(originalState.model);
-  const modelPatch = applyModelPatchPass(
+  const structuralPatch = applyModelPatchPass(
     originalState,
-    [...structuralLowering.replacements, ...hrefReplacements, ...styleExtraction.replacements],
+    [...structuralLowering.replacements, ...hrefReplacements],
+    parseComponentModuleModel,
+  );
+  const styleExtraction = extractKovoStyles(
+    options.fileName,
+    structuralPatch.state.source,
+    structuralPatch.state.model,
+    componentName,
+    compileOptions,
+  );
+  const modelPatch = applyModelPatchPass(
+    structuralPatch.state,
+    styleExtraction.replacements,
     parseComponentModuleModel,
   );
   const source = modelPatch.state.source;
   const diagnosticSource = options.source;
-  const validationOffsetMap = modelPatch.sourceOffsetMap;
+  const validationOffsetMap = composeSourceOffsetMaps(
+    structuralPatch.sourceOffsetMap,
+    modelPatch.sourceOffsetMap,
+  );
   const model = modelPatch.state.model;
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = mergeQueryUpdatePlans([
@@ -139,7 +159,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     diagnosticSource,
     source,
     sourceOffsetMap: validationOffsetMap,
-    styleOwnedSpans: styleExtraction.handledSpans,
+    styleOwnedSpans: styleSpanProbe.handledSpans,
     updateCoverage,
   });
   const fileNames = compileArtifactFileNames(options.fileName);
@@ -241,7 +261,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const renderEquivalenceChecks = [
     semanticRenderEquivalenceCheck(
       fileNames.server,
-      originalModel,
+      model,
       serverModule.executableSource,
       compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {},
     ),

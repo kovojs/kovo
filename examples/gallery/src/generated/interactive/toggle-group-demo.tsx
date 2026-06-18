@@ -31,16 +31,15 @@ import {
   toggleGroupItemAttributes,
   toggleGroupRootAttributes,
 } from '@kovojs/headless-ui/toggle-group';
+import {
+  toggleGroupClasses,
+  toggleGroupItemClasses,
+  toggleGroupButtonClasses,
+} from '@kovojs/ui/toggle-group';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/toggle-group.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const GROUP_CLASS =
-  'inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-100 p-1 text-neutral-950 data-[orientation=vertical]:flex-col data-[disabled]:opacity-50';
-const ITEM_CLASS = 'inline-flex data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50';
-const BUTTON_CLASS =
-  'inline-flex h-8 min-w-8 items-center justify-center rounded px-2.5 text-sm font-medium text-neutral-600 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none data-[state=pressed]:bg-white data-[state=pressed]:text-neutral-950 data-[state=pressed]:shadow-sm data-[disabled]:opacity-50';
+const GROUP_CLASS = toggleGroupClasses.join(' ');
+const ITEM_CLASS = toggleGroupItemClasses.join(' ');
+const BUTTON_CLASS = toggleGroupButtonClasses.join(' ');
 
 export interface GalleryToggleGroupDemoState {
   activeValue: string;

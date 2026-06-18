@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applySourceReplacements,
   applySourceReplacementsWithOffsetMap,
+  composeSourceOffsetMaps,
   generatedOffsetToOriginal,
   sourceReplacementOffsetMap,
 } from './shared.js';
@@ -87,5 +88,30 @@ describe('compiler shared source replacements', () => {
     ]);
 
     expect(generatedOffsetToOriginal(map, map.generatedLength)).toBe(original.length);
+  });
+
+  it('composes two patch offset maps back to the original source', () => {
+    const original = '<section><span>{cart.count}</span></section>';
+    const firstReplacement = '<span data-bind="cart.count">{cart.count}</span>';
+    const intermediate = applySourceReplacements(original, [
+      { end: 32, replacement: firstReplacement, start: 9 },
+    ]);
+    const firstMap = sourceReplacementOffsetMap(original.length, [
+      { end: 32, replacement: firstReplacement, start: 9 },
+    ]);
+    const secondMap = sourceReplacementOffsetMap(intermediate.length, [
+      { end: 8, replacement: '<section class="kv-root"', start: 0 },
+    ]);
+    const composed = composeSourceOffsetMaps(firstMap, secondMap);
+    const generatedSectionClose = applySourceReplacements(intermediate, [
+      { end: 8, replacement: '<section class="kv-root"', start: 0 },
+    ]).indexOf('</section>');
+
+    expect(generatedOffsetToOriginal(composed, generatedSectionClose)).toBe(
+      original.indexOf('</section>'),
+    );
+    expect(generatedOffsetToOriginal(composed, '<section class="kv-root"'.length - 1)).toBe(
+      undefined,
+    );
   });
 });

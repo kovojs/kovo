@@ -6,16 +6,11 @@ import {
   toolbarKeyDown as _toolbarKeyDown,
   toolbarRootAttributes,
 } from '@kovojs/headless-ui/toolbar';
+import { toolbarClasses, toolbarItemClasses, toolbarButtonClasses } from '@kovojs/ui/toolbar';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/toolbar.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const TOOLBAR_CLASS =
-  'inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-white p-1 text-neutral-950 shadow-sm data-[orientation=vertical]:flex-col data-[disabled]:opacity-50';
-const ITEM_CLASS = 'inline-flex data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50';
-const BUTTON_CLASS =
-  'inline-flex h-8 min-w-8 items-center justify-center rounded px-2.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none data-[pressed=true]:bg-neutral-950 data-[pressed=true]:text-white data-[pressed=true]:shadow-sm data-[disabled]:opacity-50';
+const TOOLBAR_CLASS = toolbarClasses.join(' ');
+const ITEM_CLASS = toolbarItemClasses.join(' ');
+const BUTTON_CLASS = toolbarButtonClasses.join(' ');
 
 export interface GalleryToolbarDemoState {
   activeValue: string;

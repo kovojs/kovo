@@ -56,17 +56,15 @@ import {
   type ContextMenuItem,
   type ContextMenuPoint,
 } from '@kovojs/headless-ui/context-menu';
+import {
+  contextMenuTriggerClasses,
+  contextMenuContentClasses,
+  contextMenuItemClasses,
+} from '@kovojs/ui/context-menu';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/context-menu.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const TRIGGER_CLASS =
-  'rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-3 text-sm text-neutral-700 outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 data-[state=open]:border-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
-const CONTENT_CLASS =
-  'min-w-40 rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-md outline-none data-[state=closed]:hidden';
-const ITEM_CLASS =
-  'flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-neutral-700 outline-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+const TRIGGER_CLASS = contextMenuTriggerClasses.join(' ');
+const CONTENT_CLASS = contextMenuContentClasses.join(' ');
+const ITEM_CLASS = contextMenuItemClasses.join(' ');
 
 export interface GalleryContextMenuDemoState {
   highlightedValue: string;

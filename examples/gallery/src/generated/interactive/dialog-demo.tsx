@@ -31,17 +31,11 @@ import {
   dialogRootAttributes,
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui/dialog';
+import { dialogTriggerClasses, dialogContentClasses, dialogCloseClasses } from '@kovojs/ui/dialog';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/dialog.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const TRIGGER_CLASS =
-  'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50';
-const CONTENT_CLASS =
-  'm-auto max-w-lg rounded-lg border border-neutral-200 bg-white p-6 text-neutral-950 shadow-xl backdrop:bg-black/30 data-[state=closed]:hidden';
-const CLOSE_CLASS =
-  'inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-2.5 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50';
+const TRIGGER_CLASS = dialogTriggerClasses.join(' ');
+const CONTENT_CLASS = dialogContentClasses.join(' ');
+const CLOSE_CLASS = dialogCloseClasses.join(' ');
 const TITLE_CLASS = 'text-base font-semibold';
 const DESCRIPTION_CLASS = 'text-sm text-neutral-600';
 

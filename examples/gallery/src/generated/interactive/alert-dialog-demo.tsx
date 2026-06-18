@@ -35,19 +35,17 @@ import {
   alertDialogRootAttributes,
   alertDialogTriggerAttributes,
 } from '@kovojs/headless-ui/alert-dialog';
+import {
+  alertDialogTriggerClasses,
+  alertDialogContentClasses,
+  alertDialogCancelClasses,
+  alertDialogActionClasses,
+} from '@kovojs/ui/alert-dialog';
 
-// Local class constants mirror the @kovojs/ui StyleX layer (packages/ui/src/alert-dialog.tsx)
-// so this interactive demo matches the component-gallery look. Importing @kovojs/ui
-// directly is KV234 (component package without a prefix), so matching class
-// strings stay in this TSX-authored gallery fixture.
-const TRIGGER_CLASS =
-  'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50';
-const CONTENT_CLASS =
-  'm-auto max-w-md rounded-lg border border-neutral-200 bg-white p-6 text-neutral-950 shadow-xl backdrop:bg-black/40 data-[state=closed]:hidden';
-const CANCEL_CLASS =
-  'inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-2.5 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50';
-const ACTION_CLASS =
-  'inline-flex h-8 items-center justify-center rounded-md border border-transparent bg-neutral-950 px-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50 data-[intent=destructive]:bg-red-600 data-[intent=destructive]:hover:bg-red-700';
+const TRIGGER_CLASS = alertDialogTriggerClasses.join(' ');
+const CONTENT_CLASS = alertDialogContentClasses.join(' ');
+const CANCEL_CLASS = alertDialogCancelClasses.join(' ');
+const ACTION_CLASS = alertDialogActionClasses.join(' ');
 const TITLE_CLASS = 'text-base font-semibold';
 const DESCRIPTION_CLASS = 'text-sm text-neutral-600';
 
