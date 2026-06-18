@@ -229,6 +229,89 @@ function installInlineKovoLoader(im) {
     }
   };
   const hs = (el) => ((el = el.closest('[kovo-c]') || el).a ||= new AbortController()).signal;
+  const kb = (root = doc) =>
+    root.querySelector('meta[name="kovo-build"]')?.getAttribute('content') || '';
+  const ns = (root) => [...root.querySelectorAll('[kovo-nav-segment]')];
+  const nk = (el) =>
+    [
+      el.getAttribute('kovo-nav-segment'),
+      el.getAttribute('kovo-nav-kind'),
+      el.getAttribute('kovo-nav-name'),
+      el.getAttribute('kovo-nav-queries') || '',
+      el.getAttribute('kovo-nav-components') || '',
+    ].join('|');
+  const ng = (href) => {
+    if (location.assign) location.assign(href);
+    else location.href = href;
+  };
+  const an = async (href) => {
+    try {
+      const response = await fetch(href, { headers: { Accept: 'text/html' } });
+      const finalUrl = new URL(response.url || href, location.href);
+      const contentType = response.headers?.get('content-type') || '';
+      if (finalUrl.origin !== location.origin || !contentType.toLowerCase().includes('text/html')) {
+        throw Error();
+      }
+      const nextDoc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      if (!nextDoc?.body || kb() !== kb(nextDoc)) throw Error();
+      const currentSegments = ns(doc.body);
+      const nextSegments = ns(nextDoc.body);
+      if (!nextSegments.length) throw Error();
+
+      let index = 0;
+      for (
+        ;
+        index < currentSegments.length &&
+        index < nextSegments.length &&
+        nk(currentSegments[index]) === nk(nextSegments[index]);
+        index += 1
+      );
+
+      if (!currentSegments.length || index === 0) {
+        doc.body.replaceWith(nextDoc.body);
+      } else if (index < currentSegments.length && index < nextSegments.length) {
+        for (const el of qa(currentSegments[index], '[kovo-c]')) el.a?.abort();
+        m(currentSegments[index], nextSegments[index]);
+      } else if (currentSegments.length !== nextSegments.length) {
+        throw Error();
+      }
+
+      doc.head.innerHTML = nextDoc.head.innerHTML;
+      history.pushState?.({}, '', finalUrl.href);
+      dispatchEvent(new CustomEvent('kovo:navigate', { detail: { url: finalUrl.href } }));
+    } catch {
+      ng(href);
+    }
+  };
+  const inav = (event) => {
+    if (
+      event.defaultPrevented ||
+      event.button ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return false;
+    }
+    const anchor = event.target?.closest?.('a[href]');
+    if (
+      !anchor ||
+      event.target?.closest?.('[on\\:click]') ||
+      anchor.target ||
+      anchor.hasAttribute?.('download')
+    ) {
+      return false;
+    }
+    const url = new URL(anchor.href, location.href);
+    if (url.origin !== location.origin) return false;
+    if (url.pathname === location.pathname && url.search === location.search && url.hash) {
+      return false;
+    }
+    event.preventDefault();
+    void an(url.href);
+    return true;
+  };
   for (const el of qa(
     doc,
     'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
@@ -299,6 +382,7 @@ function installInlineKovoLoader(im) {
         return;
       }
     }
+    if (event.type === 'click' && inav(event)) return;
     const el = event.target?.closest?.('[on\\:' + event.type + ']');
     const refs = el?.getAttribute('on:' + event.type);
     if (!el || !refs) return;

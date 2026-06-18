@@ -54,11 +54,14 @@ through client navigation.
   - JS-off, modified clicks, context-menu open, copy-link, crawlers, and external
     tools all see the canonical URL.
   - Evidence: pending route/link fixture and JS-off browser route walk.
-- [ ] **Full-document GET is the oracle, not just the fallback.**
+- [x] **Full-document GET is the oracle, not just the fallback.**
   - Phase 1 enhanced navigation fetches the full target document, parses it, and
     morphs from that document. Partial responses are forbidden until the
     full-document path has render-equivalence evidence.
-  - Evidence: pending.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves an eligible same-origin anchor fetches the target full HTML document,
+    parses its head/body, preserves the unchanged layout segment, and replaces
+    the changed page segment from the target document.
 - [ ] **Only unchanged layout segments persist.**
   - "Only the leaf changes" is an optimization, not a promise. Active nav state,
     breadcrumbs, route/search-dependent chrome, auth state, layout queries,
@@ -70,10 +73,13 @@ through client navigation.
     full target document determines the destination layout chain and rendered
     output; the client never uses its current chain to skip guards or layouts.
   - Evidence: pending guard/redirect/403 fixture.
-- [ ] **Deploy skew is loud and recoverable.**
+- [x] **Deploy skew is loud and recoverable.**
   - Reuse the §9.1.1 render-plan version token. Token mismatch discards the
     enhanced path and performs a full GET.
-  - Evidence: pending mismatch fallback test.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.test.ts` runs the
+    readable, freshly minified, generated-bootstrap, and extracted inline
+    installers and proves `<meta name="kovo-build">` mismatch falls back through
+    `location.assign`.
 
 ## Interception Contract
 
@@ -147,10 +153,12 @@ through client navigation.
   - No `unload` handlers, no global session heap, and no listeners that block the
     existing bfcache acceptance gates.
   - Evidence: pending browser bfcache check.
-- [ ] **Inline-loader budget remains explicit.**
+- [x] **Inline-loader budget remains explicit.**
   - Navigation code must fit the current 8KB gzip inline-loader budget or the
     SPEC must deliberately change that budget with acceptance evidence.
-  - Evidence: pending size report.
+  - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
+    `node --experimental-strip-types - <<'NODE' ...` reported
+    `inline-loader-gzip=4946/8192`.
 
 ## Implementation Plan
 
@@ -175,12 +183,19 @@ through client navigation.
     generated page metadata carries navigation segments; `packages/server/src/route-jsx.test.tsx`
     proves the server stamps page and nested layout roots from that metadata;
     `packages/cli/src/index.kovo-explain.test.ts` covers explain output.
-- [ ] **2. Runtime MVP: full-document enhanced navigation.**
+- [x] **2. Runtime MVP: full-document enhanced navigation.**
   - Intercept eligible anchors, fetch the canonical full HTML document, parse it,
     validate build token and segment metadata, update document-shell fields, and
     morph changed segments through the shared fragment/morph path. Fall back to
     `location.href = url` on any unsupported case.
-  - Evidence: pending.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    covers eligible anchor interception, full-document fetch, head/title update,
+    unchanged layout preservation, changed leaf replacement, and modified-click
+    native behavior; `packages/runtime/src/inline-loader-navigation.test.ts`
+    covers build-token mismatch fallback across all inline installer artifacts;
+    `packages/runtime/src/inline-loader-artifact-minifier.test.ts` pins the
+    minified navigation parser/segment hooks; `pnpm --filter @kovojs/runtime run
+    check:inline-loader` passed under the 8KB gzip budget.
 - [ ] **3. History/focus/scroll/concurrency hardening.**
   - Add `pushState`/`popstate`, scroll/hash restoration, focus movement,
     route-change announcement, in-flight cancellation, and bfcache-safe teardown.
@@ -233,6 +248,7 @@ through client navigation.
 - [ ] **History/scroll/focus/a11y/bfcache:** back/forward, restoration,
       route-change announcement, axe, and bfcache hygiene pass.
   - Evidence: pending.
-- [ ] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
+- [x] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
       budget change is explicitly accepted.
-  - Evidence: pending.
+  - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
+    the measured shipped source was `inline-loader-gzip=4946/8192`.

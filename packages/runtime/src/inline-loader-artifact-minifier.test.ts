@@ -47,7 +47,8 @@ describe('inline loader minified artifact', () => {
       "const ft=(target)=>{try{return(doc.querySelector('[kovo-c=\"'+target+'\"]')??doc.getElementById(target)??doc.querySelector('[kovo-fragment-target=\"'+target+'\"]')??doc.querySelector('kovo-defer[target=\"'+target+'\"]'));}catch{return;}};",
     );
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-param-types')");
-    expect(inlineKovoLoaderInstallerSource).not.toContain('DOMParser');
+    expect(inlineKovoLoaderInstallerSource).toContain('new DOMParser().parseFromString');
+    expect(inlineKovoLoaderInstallerSource).toContain("'[kovo-nav-segment]'");
     expect(inlineKovoLoaderInstallerSource).not.toContain('Math.random');
   });
 
