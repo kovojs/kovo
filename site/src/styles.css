@@ -1078,6 +1078,10 @@ canvas {
   scroll-margin-top: 5.5rem;
 }
 
+.prose h4 {
+  scroll-margin-top: 5.5rem;
+}
+
 .prose h2:first-child,
 .prose h3:first-child {
   margin-top: 0;

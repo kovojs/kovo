@@ -239,6 +239,60 @@ describe('browser inline loader enhanced navigation', () => {
     expect(localStorage.getItem('theme')).toBe('dark');
   });
 
+  it('re-applies docs theme from localStorage when target shell classes would override it', async () => {
+    localStorage.setItem('theme', 'dark');
+    document.documentElement.className = 'stale-shell';
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Docs</title>',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-api" href="/api">API</a>',
+      '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+      '</main>',
+    ].join('');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html lang="en" class="target-shell"><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>API</title>',
+          '</head><body data-route="api">',
+          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+          '<a id="to-api" href="/api">API</a>',
+          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/api', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    dispatchAnchorLikeClick('/api');
+
+    await vi.waitFor(() => expect(document.title).toBe('API'));
+
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(document.documentElement.classList.contains('target-shell')).toBe(true);
+    expect(document.documentElement.classList.contains('stale-shell')).toBe(false);
+    expect(localStorage.getItem('theme')).toBe('dark');
+
+    localStorage.setItem('theme', 'light');
+    document.title = 'Docs';
+    dispatchAnchorLikeClick('/api');
+
+    await vi.waitFor(() => expect(document.title).toBe('API'));
+
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(localStorage.getItem('theme')).toBe('light');
+  });
+
   it('preserves docs theme state toggled through delegated handlers across page morphs', async () => {
     const toggle = vi.fn((event: Event) => {
       event.preventDefault();
@@ -379,6 +433,60 @@ describe('browser inline loader enhanced navigation', () => {
     expect(oldPageController.signal.aborted).toBe(true);
     expect(load).toHaveBeenCalledTimes(1);
     expect(idle).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not replay preserved layout trigger listeners after enhanced navigation', async () => {
+    const layoutLoad = vi.fn();
+    const pageLoad = vi.fn();
+    inlineImportModule = async (url) => {
+      if (url === '/c/layout.js') return { layoutLoad };
+      if (url === '/c/page.js') return { pageLoad };
+      return {};
+    };
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<header id="layout-island" on:load="/c/layout.js#layoutLoad">Docs</header>',
+      '<a id="to-api" href="/api">API</a>',
+      '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+      '</main>',
+    ].join('');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>API</title>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+          '<header id="layout-island" on:load="/c/layout.js#layoutLoad">Docs</header>',
+          '<a id="to-api" href="/api">API</a>',
+          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+          '<article id="api-page" on:load="/c/page.js#pageLoad">API</article>',
+          '</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/api', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    (
+      document.querySelector('#layout-island') as
+        | (HTMLElement & { __kovo_load?: number })
+        | null
+    )!.__kovo_load = 1;
+
+    dispatchAnchorLikeClick('/api');
+
+    await vi.waitFor(() => expect(pageLoad).toHaveBeenCalledTimes(1));
+
+    expect(layoutLoad).not.toHaveBeenCalled();
   });
 
   it('scrolls to target-document hash anchors after navigation', async () => {
@@ -611,6 +719,84 @@ describe('browser inline loader enhanced navigation', () => {
 
       expect(document.title).toBe('Fast');
       expect(scrolledIds).toEqual(['fast']);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
+
+  it('restores hash and scroll state through browser popstate after morphing', async () => {
+    history.replaceState({}, '', new URL('/docs', initialUrl).href);
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
+      '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+      '</main>',
+    ].join('');
+    const scrolledTargets: string[] = [];
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), location.href);
+      const isApi = url.pathname === '/api';
+      return {
+        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        async text() {
+          return [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            `<title>${isApi ? 'API' : 'Docs'}</title>`,
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
+            isApi
+              ? [
+                  '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+                  '<nav class="api-nav" aria-label="Symbols on this page">',
+                  '<a href="#symbols%2Fproperty%20value">property value</a>',
+                  '</nav>',
+                  '<article><h2 id="symbols/property value">property value</h2></article>',
+                  '</section>',
+                ].join('')
+              : '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs again</section>',
+            '</main>',
+            '</body></html>',
+          ].join('');
+        },
+        url: url.href,
+      };
+    });
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView() {
+      scrolledTargets.push((this as Element).id || (this as Element).getAttribute('name') || '');
+    };
+    const scrollTo = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', scrollTo);
+
+    try {
+      installNavigationLoader();
+      vi.stubGlobal('scrollX', 12);
+      vi.stubGlobal('scrollY', 34);
+      dispatchAnchorLikeClick('/api#symbols%2Fproperty%20value');
+      await vi.waitFor(() => expect(document.title).toBe('API'));
+
+      expect(scrolledTargets).toEqual(['symbols/property value']);
+      expect(location.href).toBe(new URL('/api#symbols%2Fproperty%20value', initialUrl).href);
+
+      vi.stubGlobal('scrollX', 56);
+      vi.stubGlobal('scrollY', 78);
+      history.replaceState({}, '', new URL('/docs', initialUrl).href);
+      dispatchEvent(new PopStateEvent('popstate'));
+      await vi.waitFor(() => expect(document.title).toBe('Docs'));
+
+      expect(scrollTo).toHaveBeenCalledWith(12, 34);
+
+      history.replaceState({}, '', new URL('/api#symbols%2Fproperty%20value', initialUrl).href);
+      dispatchEvent(new PopStateEvent('popstate'));
+      await vi.waitFor(() => expect(document.title).toBe('API'));
+
+      expect(location.href).toBe(new URL('/api#symbols%2Fproperty%20value', initialUrl).href);
+      expect(scrollTo).toHaveBeenCalledWith(56, 78);
+      expect(scrolledTargets).toEqual(['symbols/property value']);
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
     }

@@ -125,14 +125,15 @@ through client navigation.
     attrs, stylesheet/modulepreload hints, speculation rules, and route-level
     document state. Unsupported shell drift falls back to full GET.
   - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63350`
-    passed and proves target document updates `<title>`, meta, html/body attrs,
-    stylesheet/modulepreload hints, and speculation rules. Latest:
-    `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63373`
-    passed 36 browser tests and proves docs theme state toggled through the
-    delegated handler (`html.dark` plus `localStorage.theme`) survives enhanced
-    navigation while target html/body shell attributes still update.
+    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
+    passed 45 browser tests and proves target document updates `<title>`, meta,
+    html/body attrs, stylesheet/modulepreload hints, and speculation rules. It
+    also proves docs theme state from `localStorage.theme` (`dark` and `light`)
+    survives enhanced navigation when target full-document shell classes would
+    otherwise replace `html.class`. `node site/scripts/smoke.mjs` passed
+    `site-smoke/v1 OK` after `pnpm --filter @kovojs/site run build` and proves
+    the docs site's theme choice survives enhanced navigation from docs pages
+    through the API reference flow.
 
 ## Segment Identity And Morph Contract
 
@@ -167,10 +168,11 @@ through client navigation.
     morph remain inert until their declared trigger fires and are observed for
     `on:visible`, `on:idle`, and `on:load` exactly like mutation fragments.
   - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63354`
+    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
     passed and proves preserved layout island signals survive, removed page
-    island signals abort, and inserted page `on:load`/`on:idle`/`on:visible`
-    triggers start once after enhanced navigation. `pnpm exec vitest --run
+    island signals abort, inserted page `on:load`/`on:idle`/`on:visible`
+    triggers start once after enhanced navigation, and already-triggered
+    preserved layout `on:load` listeners do not replay. `pnpm exec vitest --run
     packages/runtime/src/inline-loader-delegated.test.ts
     packages/runtime/src/delegated-loader-lifecycle.test.ts` is included in the
     106-test runtime gate and proves the underlying ctx.signal reuse/disposal
@@ -199,7 +201,14 @@ through client navigation.
     manual scroll restoration, scrolls to top for plain URLs, emits
     `kovo:navigate`, scrolls decoded target-document/API-rail hash anchors,
     encoded-id anchors, and named anchors into view, and leaves same-document
-    hash anchors to native browser navigation.
+    hash anchors to native browser navigation. Latest:
+    `pnpm exec vitest --config vitest.browser.config.ts --run
+    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
+    passed and proves target-document API hashes scroll after morphing, update
+    `location.href`, and restore saved scroll/hash URL state through browser
+    `popstate`. `node site/scripts/smoke.mjs` passed `site-smoke/v1 OK` and
+    proves a real generated API symbol-rail hash lands below the sticky docs
+    header in the exported site.
     `packages/runtime/src/inline-loader-navigation.test.ts` proves `popstate`
     restores saved scroll without pushing another history entry across all
     inline installer artifacts.
@@ -236,7 +245,7 @@ through client navigation.
     SPEC must deliberately change that budget with acceptance evidence.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
     `node --experimental-strip-types - <<'NODE' ...` reported
-    `inline-loader-gzip=5782/8192`.
+    `inline-loader-gzip=5817/8192`.
 
 ## Implementation Plan
 

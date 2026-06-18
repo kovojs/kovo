@@ -148,6 +148,62 @@ try {
   await page.keyboard.press('Meta+k');
   await page.waitForFunction(() => document.getElementById('site-search')?.open === true);
   check(true, 'JS: ⌘K reopens after first use');
+  await page.keyboard.press('Escape');
+
+  await page.click('button[on\\:click^="/c/theme.js"]');
+  await page.waitForFunction(
+    () =>
+      document.documentElement.classList.contains('dark') &&
+      localStorage.getItem('theme') === 'dark',
+  );
+  await page.click('.site-nav a[href="/reference/"]');
+  await page.waitForFunction(() => location.pathname === '/reference/');
+  check(
+    await page.evaluate(
+      () =>
+        document.documentElement.classList.contains('dark') &&
+        localStorage.getItem('theme') === 'dark',
+    ),
+    'JS: theme choice survives enhanced docs navigation',
+  );
+  await page.click('main a[href="/api/"]');
+  await page.waitForFunction(() => location.pathname === '/api/');
+  check(
+    await page.evaluate(
+      () =>
+        document.documentElement.classList.contains('dark') &&
+        localStorage.getItem('theme') === 'dark',
+    ),
+    'JS: theme choice survives enhanced API navigation',
+  );
+  await page.click('main a[href="/api/core/"]:visible');
+  await page.waitForFunction(() => location.pathname === '/api/core/');
+
+  const apiSymbolLink = page.locator('.api-nav li > a:first-child').nth(10);
+  const apiSymbolHref = await apiSymbolLink.getAttribute('href');
+  await apiSymbolLink.click();
+  await page.waitForFunction((hash) => location.hash === hash, apiSymbolHref);
+  check(
+    await page.evaluate((hash) => {
+      if (!hash) return false;
+      const raw = hash.slice(1);
+      let decoded = raw;
+      try {
+        decoded = decodeURIComponent(raw);
+      } catch {}
+      const target =
+        document.getElementById(decoded) ??
+        document.getElementById(raw) ??
+        document.getElementsByName(decoded)[0] ??
+        document.getElementsByName(raw)[0];
+      const header = document.querySelector('.site-bar');
+      if (!target || !header) return false;
+      const targetTop = target.getBoundingClientRect().top;
+      const headerBottom = header.getBoundingClientRect().bottom;
+      return targetTop >= headerBottom - 1 && targetTop < window.innerHeight;
+    }, apiSymbolHref),
+    'JS: API symbol rail hash lands below sticky header',
+  );
 
   const galleryScripts = [];
   page.on('request', (request) => {

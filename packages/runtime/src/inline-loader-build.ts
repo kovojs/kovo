@@ -88,7 +88,11 @@ function installInlineKovoLoader(im) {
     for (const attr of next.attributes) current.setAttribute(attr.name, attr.value);
   };
   const xd = (current, next) => {
-    const dark = current.classList?.contains('dark');
+    let theme;
+    try {
+      theme = localStorage.getItem('theme');
+    } catch {}
+    const dark = theme === 'dark' || (theme !== 'light' && current.classList?.contains('dark'));
     xa(current, next);
     current.classList?.toggle('dark', dark);
   };
