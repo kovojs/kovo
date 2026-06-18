@@ -127,7 +127,12 @@ through client navigation.
   - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
     packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63350`
     passed and proves target document updates `<title>`, meta, html/body attrs,
-    stylesheet/modulepreload hints, and speculation rules.
+    stylesheet/modulepreload hints, and speculation rules. Latest:
+    `pnpm exec vitest --config vitest.browser.config.ts --run
+    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63373`
+    passed and proves client-applied docs theme state (`html.dark` plus
+    `localStorage.theme`) survives enhanced navigation while target html/body
+    shell attributes still update.
 
 ## Segment Identity And Morph Contract
 
@@ -151,7 +156,11 @@ through client navigation.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     covers unchanged-prefix preservation and changed leaf morphing; `packages/runtime/src/inline-loader-navigation.test.ts`
     covers divergent layout chrome body replacement from the parsed target
-    document across all inline installer artifacts.
+    document across all inline installer artifacts. Latest:
+    `pnpm exec vitest --config vitest.browser.config.ts --run
+    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63373`
+    passed and proves full-body layout replacement keeps `document.body`
+    available in real browsers.
 - [x] **Island lifecycle follows the existing morph rules.**
   - Islands inside preserved segments keep DOM identity and client state. Islands
     removed by a morphed segment have `ctx.signal` aborted. Islands inserted by a
@@ -188,7 +197,8 @@ through client navigation.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves successful enhanced navigation moves focus to the page root, sets
     manual scroll restoration, scrolls to top for plain URLs, emits
-    `kovo:navigate`, and scrolls target-document hash anchors into view.
+    `kovo:navigate`, scrolls decoded target-document/API-rail hash anchors into
+    view, and leaves same-document hash anchors to native browser navigation.
     `packages/runtime/src/inline-loader-navigation.test.ts` proves `popstate`
     restores saved scroll without pushing another history entry across all
     inline installer artifacts.
