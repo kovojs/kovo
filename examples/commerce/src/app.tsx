@@ -5,6 +5,7 @@ import {
   createRequestHandler,
   layout,
   route,
+  stylesheet,
   toNodeHandler,
   type KovoApp,
   type NodeRequestHandler,
@@ -29,7 +30,7 @@ import { LoginForm, authFormStyleCss } from './components/auth-forms.js';
 import { CartBadge, cartBadgeStyleCss } from './components/cart-badge.js';
 import { OrderHistory, orderHistoryStyleCss } from './components/order-history.js';
 import { ProductGrid, ProductGridError, productGridStyleCss } from './components/product-grid.js';
-import { commerceThemeCss } from './theme.js';
+import { commerceTheme } from './theme.js';
 
 export type CommerceRouteRequest = Request & CommerceAuthRequest;
 
@@ -70,10 +71,16 @@ export const commerceAppStyleCss = style.emitAtomicCss(
 );
 
 export const commerceStylesheets = [
-  {
-    criticalCss: `${commerceThemeCss}\n${commerceAppStyleCss}\n${authFormStyleCss}\n${cartBadgeStyleCss}\n${orderHistoryStyleCss}\n${productGridStyleCss}`,
-    href: '/assets/styles.css',
-  },
+  stylesheet('./styles.css', {
+    criticalCss: [
+      commerceAppStyleCss,
+      authFormStyleCss,
+      cartBadgeStyleCss,
+      orderHistoryStyleCss,
+      productGridStyleCss,
+    ],
+    theme: commerceTheme,
+  }),
 ] as const;
 
 function CommerceCartShell({ children }: { children?: unknown }): string {

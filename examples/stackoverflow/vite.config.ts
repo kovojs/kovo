@@ -1,5 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
-
+import { kovo } from '@kovojs/server/vite';
 import { defineConfig } from 'vite-plus';
 
 export const soViteConfig = defineConfig({
@@ -17,7 +16,7 @@ export const soViteConfig = defineConfig({
   // KOVO_DEMO_MULTITENANT (scripts/demo-serve.mjs) mounts its own per-session
   // request dispatch, so drop the singleton app-shell dev plugin that would
   // otherwise claim app routes against one shared PGlite (SPEC.md §9.5).
-  plugins: process.env.KOVO_DEMO_MULTITENANT ? [] : [soSharedAppShellDevPlugin()],
+  plugins: process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app-shell.ts' })],
   // PGlite (WASM) makes the build/dev paths slow; give the tests room.
   test: {
     hookTimeout: 60_000,
@@ -39,44 +38,3 @@ export const soViteConfig = defineConfig({
 });
 
 export default soViteConfig;
-
-type DevMiddleware = (
-  request: IncomingMessage,
-  response: ServerResponse,
-  next: (error?: unknown) => void,
-) => void;
-
-type DevPostHook = () => void | Promise<void>;
-
-interface SoDevServer {
-  middlewares: {
-    use(handler: DevMiddleware): void;
-  };
-  ssrLoadModule(id: string): Promise<Record<string, unknown>>;
-}
-
-interface SoDevPlugin {
-  configureServer(server: SoDevServer): Promise<void | DevPostHook>;
-  name: string;
-}
-
-export function soSharedAppShellDevPlugin(): SoDevPlugin {
-  return {
-    async configureServer(server) {
-      const serverModule = await server.ssrLoadModule('@kovojs/server');
-      const createDevIntegration = serverModule.createKovoAppShellViteDevIntegration;
-      if (typeof createDevIntegration !== 'function') {
-        throw new Error('@kovojs/server must export createKovoAppShellViteDevIntegration.');
-      }
-
-      const integration = createDevIntegration({
-        name: 'kovo-so-app-shell-dev',
-        nodeHandlerExportName: 'soNodeHandler',
-        order: 'post',
-      }) as { plugin: { configureServer(server: SoDevServer): void | DevPostHook } };
-
-      return integration.plugin.configureServer(server);
-    },
-    name: 'kovo-so-app-shell-dev-loader',
-  };
-}

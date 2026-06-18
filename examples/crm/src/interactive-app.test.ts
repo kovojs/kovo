@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
@@ -61,6 +63,16 @@ async function postForm(
 }
 
 describe('crm interactive app', () => {
+  it('keeps global CSS limited to app resets and generated UI styles', () => {
+    const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+    expect(css).toContain("@import './generated/kovo-ui.css';");
+    expect(css).not.toContain('.bg-slate-50');
+    expect(css).not.toContain('.text-slate-900');
+    expect(css).not.toContain('.rounded-lg');
+    expect(css).not.toContain('.grid {');
+  });
+
   it('serves every authored route as no-JS full HTML documents', async () => {
     const { handler } = await buildCrmInteractiveApp();
 

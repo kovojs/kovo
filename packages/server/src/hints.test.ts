@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { versionedClientModuleHref } from './client-modules.js';
 import { renderDeferredStream } from './deferred-stream.js';
-import { renderPageHints, stylesheetsForTargets } from './hints.js';
+import { renderPageHints, stylesheet, stylesheetsForTargets } from './hints.js';
 
 describe('page hints', () => {
   it('renders modulepreloads, opt-in speculation rules, and Early Hints headers', () => {
@@ -89,6 +89,32 @@ describe('page hints', () => {
         '<link rel="stylesheet" href="/assets/print.css">',
         '<link rel="modulepreload" href="/c/cart.client.js">',
       ].join(''),
+    });
+  });
+
+  it('declares local, external, and theme-only stylesheets through the public helper', () => {
+    expect(stylesheet('./styles.css')).toEqual({
+      href: '/assets/styles.css',
+    });
+    expect(stylesheet('./components/cart.css?build=1', { preload: false })).toEqual({
+      href: '/assets/cart.css?build=1',
+      preload: false,
+    });
+    expect(stylesheet('https://cdn.example.test/reset.css')).toEqual({
+      href: 'https://cdn.example.test/reset.css',
+    });
+    expect(
+      stylesheet('./styles.css', {
+        criticalCss: ['.cart{display:grid}', '.badge{color:teal}'],
+        theme: { css: ':root{--brand:teal}' },
+      }),
+    ).toEqual({
+      criticalCss: ':root{--brand:teal}\n.cart{display:grid}\n.badge{color:teal}',
+      href: '/assets/styles.css',
+    });
+    expect(stylesheet({ theme: ':root{--only-theme:1}' })).toEqual({
+      criticalCss: ':root{--only-theme:1}',
+      href: '/assets/styles.css',
     });
   });
 

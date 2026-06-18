@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  appLocalGeneratedImportTier,
   collectImportBoundaryViolations,
   importSpecifiers,
   nonPublicKovoImportTier,
@@ -35,6 +36,13 @@ const runtime = () => import('@kovojs/runtime/generated');
     expect(nonPublicKovoImportTier('@kovojs/runtime/generated')).toBe('generated');
     expect(nonPublicKovoImportTier('@kovojs/cli/internal')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/core')).toBeNull();
+    expect(appLocalGeneratedImportTier('./generated/app.kovo-route.js')).toBe(
+      'app-local-generated',
+    );
+    expect(appLocalGeneratedImportTier('../generated/optimistic/cart-add.js')).toBe(
+      'app-local-generated',
+    );
+    expect(appLocalGeneratedImportTier('./components/cart.js')).toBeNull();
   });
 
   it('fails app-facing authored code but exempts generated artifacts and tests', async () => {
@@ -56,6 +64,16 @@ const runtime = () => import('@kovojs/runtime/generated');
     );
     await writeFixture(
       rootDir,
+      'examples/demo/src/app.test.ts',
+      "import { createApp } from './generated/app.kovo-route.js';\n",
+    );
+    await writeFixture(
+      rootDir,
+      'examples/demo/src/app.generated.test.ts',
+      "import { createApp } from './generated/app.kovo-route.js';\n",
+    );
+    await writeFixture(
+      rootDir,
       'packages/create-kovo/templates/src/component.tsx',
       "const runtime = () => import('@kovojs/runtime/generated');\n",
     );
@@ -71,6 +89,11 @@ const runtime = () => import('@kovojs/runtime/generated');
         roots: ['examples', 'packages/create-kovo/templates', 'site/scripts', 'site/tutorial'],
       }),
     ).resolves.toEqual([
+      {
+        fileName: 'examples/demo/src/app.test.ts',
+        specifier: './generated/app.kovo-route.js',
+        tier: 'app-local-generated',
+      },
       {
         fileName: 'examples/demo/src/app.ts',
         specifier: '@kovojs/core/internal/graph',
