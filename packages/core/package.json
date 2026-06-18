@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./internal/derivation": "./src/internal/derivation.ts",
     "./internal/graph": "./src/internal/graph.ts",
-    "./internal/package-prefix": "./src/internal/package-prefix.ts"
+    "./internal/package-prefix": "./src/internal/package-prefix.ts",
+    "./internal/query-delta": "./src/internal/query-delta.ts"
   },
   "publishConfig": {
     "exports": {
@@ -28,11 +29,15 @@
       "./internal/package-prefix": {
         "types": "./dist/internal/package-prefix.d.mts",
         "default": "./dist/internal/package-prefix.mjs"
+      },
+      "./internal/query-delta": {
+        "types": "./dist/internal/query-delta.d.mts",
+        "default": "./dist/internal/query-delta.mjs"
       }
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/index.ts src/internal/derivation.ts src/internal/graph.ts src/internal/package-prefix.ts --dts",
+    "build:dist": "vp pack src/index.ts src/internal/derivation.ts src/internal/graph.ts src/internal/package-prefix.ts src/internal/query-delta.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "devDependencies": {

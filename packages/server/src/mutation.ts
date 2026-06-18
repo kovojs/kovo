@@ -1,4 +1,5 @@
-import { buildQueryDelta, queryDeltaIsSmaller, type JsonValue } from '@kovojs/core';
+import type { JsonValue } from '@kovojs/core';
+import { buildQueryDelta, queryDeltaIsSmaller } from '@kovojs/core/internal/query-delta';
 import { serializeCookie, validateRawSetCookie, type CookieOptions } from './cookies.js';
 import { mutationCsrfOptions, validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
 import {

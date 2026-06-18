@@ -1,4 +1,4 @@
-import type { QueryDeltaListMeta } from '@kovojs/core';
+import type { QueryDeltaListMeta } from '@kovojs/core/internal/query-delta';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
 import {

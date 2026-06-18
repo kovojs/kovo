@@ -9,7 +9,12 @@
       "apiBoundary": {
         "public": ["."],
         "generated": [],
-        "internal": ["./internal/derivation", "./internal/graph", "./internal/package-prefix"]
+        "internal": [
+          "./internal/derivation",
+          "./internal/graph",
+          "./internal/package-prefix",
+          "./internal/query-delta"
+        ]
       },
       "apiRef": {
         "order": 1,

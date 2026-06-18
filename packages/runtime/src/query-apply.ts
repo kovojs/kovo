@@ -1,5 +1,6 @@
-import { applyQueryDelta, QueryDeltaApplyError } from '@kovojs/core';
-import type { JsonValue, QueryDelta } from '@kovojs/core';
+import type { JsonValue } from '@kovojs/core';
+import { applyQueryDelta, QueryDeltaApplyError } from '@kovojs/core/internal/query-delta';
+import type { QueryDelta } from '@kovojs/core/internal/query-delta';
 import { definedProps } from './defined-props.js';
 import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';

@@ -1,6 +1,7 @@
 import type { JsonValue } from './index.js';
 
 /**
+ * @internal
  * A keyed-collection delta: the rows present after a change (matched/added by
  * key) and the key values removed. Part of the change-record-scoped query delta
  * wire format (SPEC §9.1.1).
@@ -15,6 +16,7 @@ export interface QueryListDelta {
 }
 
 /**
+ * @internal
  * A change-record-scoped query delta (SPEC §9.1.1). Carries only what the
  * committed write provably touched: scalar/object fields whole under `set`, and
  * keyed-collection upserts/removals under `lists`. Everything outside this scope
@@ -30,6 +32,7 @@ export interface QueryDelta {
 }
 
 /**
+ * @internal
  * Metadata that makes one collection in a query result delta-eligible: the field
  * `path` holding the array, the `key` field on each row (its `kovo-key`), and the
  * `domain` whose change-record keys scope it. A collection is delta-eligible only
@@ -42,7 +45,7 @@ export interface QueryDeltaListMeta {
   path: string;
 }
 
-/** Thrown when a delta cannot be applied to a base (structural mismatch / deploy skew). */
+/** @internal Thrown when a delta cannot be applied to a base (structural mismatch / deploy skew). */
 export class QueryDeltaApplyError extends Error {
   constructor(message: string) {
     super(message);
@@ -63,6 +66,7 @@ function rowKey(row: JsonValue, keyField: string): string | undefined {
 }
 
 /**
+ * @internal
  * Build a change-record-scoped delta from a freshly re-run query `value`
  * (SPEC §9.1.1). For each delta-eligible collection, emit only the rows whose key
  * is in the change-record's `affectedKeysByDomain` set (upsert) plus the affected
@@ -79,7 +83,7 @@ function rowKey(row: JsonValue, keyField: string): string | undefined {
  * @param listMeta - The query's delta-eligible collections.
  * @returns A `QueryDelta`, or `undefined` to fall back to the full value.
  * @example
- * import { buildQueryDelta } from '@kovojs/core';
+ * import { buildQueryDelta } from '@kovojs/core/internal/query-delta';
  *
  * const delta = buildQueryDelta(
  *   { count: 3, items: [{ id: 'p1', qty: 2 }] },
@@ -137,6 +141,7 @@ export function buildQueryDelta(
 }
 
 /**
+ * @internal
  * Whether a `delta` serializes smaller than the full `value` — the deterministic
  * automatic full-vs-delta selection rule (SPEC §9.1.1). Callers ship the delta
  * only when this holds, so a delta is never larger than the value it replaces.
@@ -146,6 +151,7 @@ export function queryDeltaIsSmaller(delta: QueryDelta, value: JsonValue): boolea
 }
 
 /**
+ * @internal
  * Apply a change-record-scoped `delta` to the client's held `base` value,
  * returning the reconstructed full value (SPEC §9.1.1). Scalar/object fields in
  * `set` overwrite; keyed collections reconcile by `kovo-key` — matched rows are
@@ -160,7 +166,7 @@ export function queryDeltaIsSmaller(delta: QueryDelta, value: JsonValue): boolea
  * @param delta - The wire delta to apply.
  * @returns The reconstructed full query value.
  * @example
- * import { applyQueryDelta } from '@kovojs/core';
+ * import { applyQueryDelta } from '@kovojs/core/internal/query-delta';
  *
  * const next = applyQueryDelta(
  *   { count: 2, items: [{ id: 'p1', qty: 1 }] },

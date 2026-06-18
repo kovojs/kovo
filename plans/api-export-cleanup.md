@@ -799,6 +799,16 @@ tsconfig.json --noEmit --pretty false`.
   - Keep app declaration primitives (`component`, `route`, `query`, `form`,
     `event`, `href`, `redirect`), storage APIs, and generic webhook/HMAC
     primitives whose full signature type closure is public.
+  - [x] Move query-delta wire helpers off the root.
+    - Evidence: `@kovojs/core` no longer root-exports `applyQueryDelta`,
+      `buildQueryDelta`, `QueryDeltaApplyError`, `queryDeltaIsSmaller`, or the
+      `QueryDelta*` types; framework consumers import them from
+      `@kovojs/core/internal/query-delta`. Verification:
+      `corepack pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/query-delta.test.ts`;
+      `corepack pnpm exec vitest --run packages/runtime/src/query-apply.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `corepack pnpm run check:imports`; `corepack pnpm run check:exports`;
+      `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`.
   - Evidence:
 - [x] **Cull vendor-specific `@kovojs/core` symbols.**
   - Remove `stripeSignature` and `StripeSignatureOptions`; inline Stripe logic in

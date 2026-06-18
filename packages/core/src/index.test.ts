@@ -24,6 +24,7 @@ import {
   type JsonValue,
 } from './index.js';
 import * as coreRoot from './index.js';
+import * as internalQueryDelta from './internal/query-delta.js';
 
 interface TestSchema<Value> {
   parse(input: unknown): Value;
@@ -86,6 +87,19 @@ describe('core authoring APIs', () => {
     expect('derived' in coreRoot).toBe(false);
     expect('packageComponentPrefixFactFromPackageManifest' in coreRoot).toBe(false);
     expect('validateKovoExplainInput' in coreRoot).toBe(false);
+  });
+
+  it('keeps query-delta wire helpers off the root surface', () => {
+    expect('applyQueryDelta' in coreRoot).toBe(false);
+    expect('buildQueryDelta' in coreRoot).toBe(false);
+    expect('QueryDeltaApplyError' in coreRoot).toBe(false);
+    expect('queryDeltaIsSmaller' in coreRoot).toBe(false);
+    expect(Object.keys(internalQueryDelta).sort()).toEqual([
+      'QueryDeltaApplyError',
+      'applyQueryDelta',
+      'buildQueryDelta',
+      'queryDeltaIsSmaller',
+    ]);
   });
 
   it('preserves component definitions for compiler analysis', () => {
