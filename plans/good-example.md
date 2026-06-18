@@ -20,11 +20,14 @@ that still make the simplified Commerce example feel like a test fixture.
 
 ## Target Shape
 
-- [ ] Commerce authored source imports authored components, queries, mutations,
+- [x] Commerce authored source imports authored components, queries, mutations,
   layouts, and framework APIs only; app modules do not import app-local
   `src/generated/*` artifacts except in scripts, generated files, or tests that
   explicitly check generated artifacts.
-  - Evidence to add: `rg -n "from './generated/|from \"\\./generated/" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts'` exits 1.
+  - Evidence: `rg -n "from './generated/|from \"\\./generated/" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts'`
+    exits 1; `examples/commerce/src/app-test-helpers.ts` imports the authored
+    `./app-shell.js` helper instead of generated route IR. `packages/compiler/src/compile-component.test.ts`
+    covers KV235 for app-authored app-local generated imports.
 - [ ] Commerce app code keeps direct framework/wire helpers out of the happy
   path: no app-authored `renderMutationEndpointResponse`,
   `renderComponentMutationFailure`, `componentMutationFailureSlots`,
@@ -89,7 +92,7 @@ that still make the simplified Commerce example feel like a test fixture.
     `rg -n "renderMutationFormAttributes|csrfField|<form \\$\\{|FormError\\(" examples/commerce/src/app.ts examples/commerce/src/app-shell.tsx`
     exiting 1, and the focused Commerce auth/shell tests passing in Latest
     verification.
-- [ ] Keep generated artifacts inspectable but out of app-authored control flow.
+- [x] Keep generated artifacts inspectable but out of app-authored control flow.
   - Current friction: `app.ts` imports generated component modules,
     `generated/optimistic/cart-add`, and `generated/touch-graph`; scripts splice
     Commerce-specific code into generated ProductGrid output.
@@ -97,12 +100,15 @@ that still make the simplified Commerce example feel like a test fixture.
     conformance checks. App-authored modules import authored components and
     declarations; graph/optimism facts are surfaced through `kovo explain` and
     package-level generated-artifact tests.
-  - Evidence: app-authored runtime modules no longer import generated component,
-    graph, touch, or optimism artifacts. Remaining gap: the Commerce scenario
-    helper still imports `src/generated/app-shell.kovo-route.js` so enhanced
-    tests load the generated live-target registry; direct authored app-shell
-    execution currently lacks automatic route-component live-target
-    registration.
+  - Evidence: app-authored runtime modules and the Commerce scenario helper no
+    longer import generated component, graph, touch, optimism, route, or
+    live-target artifacts. Verified with
+    `rg -n "from './generated/|from \"\\./generated/" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts'`
+    exiting 1, and
+    `corepack pnpm exec vitest run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/enhanced-navigation.test.ts`
+    passing. Generated `optimistic/cart-add.ts` imports generated
+    `live-targets.ts`, keeping enhanced live-target registration inside generated
+    runtime artifacts.
 - [ ] Reduce Commerce-local commentary that explains framework internals.
   - Current friction: many source comments are conformance notes about generated
     stamps, static extraction, and graph behavior rather than app intent.
@@ -190,7 +196,7 @@ that still make the simplified Commerce example feel like a test fixture.
 
 ## Framework Deficiencies And Remedies
 
-- [ ] **Deficiency 1: generated artifacts still leak into authored app modules.**
+- [x] **Deficiency 1: generated artifacts still leak into authored app modules.**
   - Current symptom: `examples/commerce/src/app.ts` imports
     `./generated/cart-badge`, `./generated/order-history`,
     `./generated/product-grid`, `./generated/optimistic/cart-add`, and
@@ -214,9 +220,10 @@ that still make the simplified Commerce example feel like a test fixture.
   - Acceptance: no app-authored Commerce module imports `./generated/*`; compiler
     diagnostics catch app-local generated imports outside allowed artifact/test
     contexts.
-  - Evidence to add:
+  - Evidence:
     `rg -n "from './generated/|from \"\\./generated/" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts'`
-    exits 1 with no matches.
+    exits 1 with no matches. `corepack pnpm exec vitest run packages/compiler/src/compile-component.test.ts --testNamePattern "app-local generated|non-public Kovo|dynamic imports"`
+    passes, covering KV235 for app-authored app-local generated imports.
 - [ ] **Deficiency 2: mutation failure response policy is too broad and too
   manual.**
   - Current symptom: `createCommerceAppShell()` has a key switch for sign-in,
@@ -474,3 +481,9 @@ Latest verification:
   passed.
 - [x] `node scripts/api-surface-gate.mjs` passed with
   `public-exports-needing-attention=2904 (baseline=2904, fixed-this-run=0)`.
+- [x] `corepack pnpm exec vitest run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/enhanced-navigation.test.ts`
+  passed after moving the Commerce scenario helper to the authored app shell.
+- [x] `corepack pnpm exec vitest run examples/commerce/src/app.auth.test.ts`
+  passed after moving the Commerce scenario helper to the authored app shell.
+- [x] `corepack pnpm exec vitest run packages/compiler/src/compile-component.test.ts --testNamePattern "app-local generated|non-public Kovo|dynamic imports"`
+  passed, covering KV235 for app-authored app-local generated imports.

@@ -273,13 +273,17 @@ for (const query of ['cart', 'orderHistory', 'productGrid']) {
   assert.equal(result.kind, 'derived', `commerce ${query} must derive: ${JSON.stringify(result)}`);
   cartAddOptimisticEntries.push({ program: result.program, query });
 }
-const optimisticSource = serializeDerivedOptimistic({
-  complete: true,
-  constName: 'cartAddDerivedOptimistic',
-  entries: cartAddOptimisticEntries,
-  formImport: { name: 'addToCartForm', path: '../../app.js' },
-  queue: 'cart',
-});
+const optimisticSource = [
+  "import '../live-targets.js';",
+  '',
+  serializeDerivedOptimistic({
+    complete: true,
+    constName: 'cartAddDerivedOptimistic',
+    entries: cartAddOptimisticEntries,
+    formImport: { name: 'addToCartForm', path: '../../app.js' },
+    queue: 'cart',
+  }),
+].join('\n');
 
 if (process.argv.includes('--check')) {
   assert.equal(readFileSync(graphPath, 'utf8'), graphJson, 'generated graph.json is stale');

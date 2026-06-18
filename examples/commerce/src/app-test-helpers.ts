@@ -14,7 +14,7 @@ import {
 import {
   createCommerceAppShell,
   type CommerceAppShell,
-} from './generated/app-shell.kovo-route.js';
+} from './app-shell.js';
 import { cartItems, orders, products } from './schema.js';
 
 // SPEC.md §14: the test DB is real Drizzle/PGlite, so tests seed and read rows
