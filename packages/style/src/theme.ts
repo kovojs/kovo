@@ -2,10 +2,21 @@ import {
   Blend,
   CorePalette,
   Hct,
+  MaterialDynamicColors,
   Scheme,
+  SchemeContent,
+  SchemeExpressive,
+  SchemeFidelity,
+  SchemeFruitSalad,
+  SchemeMonochrome,
+  SchemeNeutral,
+  SchemeRainbow,
+  SchemeTonalSpot,
+  SchemeVibrant,
   argbFromHex,
   hexFromArgb,
   themeFromSourceColor,
+  type DynamicScheme,
   type Theme as MaterialTheme,
 } from '@material/material-color-utilities';
 
@@ -13,7 +24,16 @@ import {
 export type ThemeSeed = string | number;
 
 /** Material dynamic-color scheme variants supported by Kovo's public adapter. */
-export type ThemeVariant = 'content' | 'tonal-spot';
+export type ThemeVariant =
+  | 'content'
+  | 'expressive'
+  | 'fidelity'
+  | 'fruit-salad'
+  | 'monochrome'
+  | 'neutral'
+  | 'rainbow'
+  | 'tonal-spot'
+  | 'vibrant';
 
 /** Named semantic color to harmonize with the seed color. */
 export interface ThemeCustomColorInput {
@@ -290,15 +310,43 @@ export const tokens = Object.freeze({
  * Material Color Utilities without leaking upstream classes into app code.
  */
 export function themeFromSeed(seed: ThemeSeed, options: ThemeFromSeedOptions = {}): KovoTheme {
-  if (options.contrast !== undefined && options.contrast !== 0) {
-    throw new RangeError('theme.themeFromSeed supports only contrast: 0 in this release.');
-  }
   const argb = seedToArgb(seed);
   const variant = options.variant ?? DEFAULT_VARIANT;
+  const contrast = clampContrast(options.contrast ?? 0);
+  if (variant !== 'tonal-spot' || contrast !== 0) {
+    return dynamicThemeFromSeed(argb, variant, contrast, options);
+  }
   const material = createMaterialTheme(argb, variant);
   const ref = referencePalettes(material);
   const light = schemeValues(argb, material, false, options);
   const dark = schemeValues(argb, material, true, options);
+
+  return themeFromValues({
+    custom: light.custom,
+    dark,
+    emitRef: options.emitRef ?? true,
+    light,
+    ref,
+    seed: hexFromArgb(argb),
+    selector: options.selector ?? DEFAULT_SELECTOR,
+    darkSelector: options.darkSelector ?? DEFAULT_DARK_SELECTOR,
+    sys: light.sys,
+    variant,
+  });
+}
+
+function dynamicThemeFromSeed(
+  argb: number,
+  variant: ThemeVariant,
+  contrast: number,
+  options: ThemeFromSeedOptions,
+): KovoTheme {
+  const source = Hct.fromInt(argb);
+  const lightScheme = createDynamicScheme(source, variant, false, contrast);
+  const darkScheme = createDynamicScheme(source, variant, true, contrast);
+  const ref = dynamicReferencePalettes(lightScheme);
+  const light = dynamicSchemeValues(argb, lightScheme, false, options);
+  const dark = dynamicSchemeValues(argb, darkScheme, true, options);
 
   return themeFromValues({
     custom: light.custom,
@@ -393,6 +441,34 @@ function createMaterialTheme(argb: number, variant: ThemeVariant): MaterialTheme
   return themeFromSourceColor(argb);
 }
 
+function createDynamicScheme(
+  source: Hct,
+  variant: ThemeVariant,
+  isDark: boolean,
+  contrast: number,
+): DynamicScheme {
+  switch (variant) {
+    case 'content':
+      return new SchemeContent(source, isDark, contrast);
+    case 'expressive':
+      return new SchemeExpressive(source, isDark, contrast);
+    case 'fidelity':
+      return new SchemeFidelity(source, isDark, contrast);
+    case 'fruit-salad':
+      return new SchemeFruitSalad(source, isDark, contrast);
+    case 'monochrome':
+      return new SchemeMonochrome(source, isDark, contrast);
+    case 'neutral':
+      return new SchemeNeutral(source, isDark, contrast);
+    case 'rainbow':
+      return new SchemeRainbow(source, isDark, contrast);
+    case 'vibrant':
+      return new SchemeVibrant(source, isDark, contrast);
+    case 'tonal-spot':
+      return new SchemeTonalSpot(source, isDark, contrast);
+  }
+}
+
 function schemeValues(
   sourceArgb: number,
   material: MaterialTheme,
@@ -403,6 +479,21 @@ function schemeValues(
     custom: customColors(sourceArgb, isDark, options.colors ?? {}),
     sys: {
       color: systemColors(material, isDark),
+      shape: { ...SHAPE_DEFAULTS, ...options.shape },
+    },
+  };
+}
+
+function dynamicSchemeValues(
+  sourceArgb: number,
+  scheme: DynamicScheme,
+  isDark: boolean,
+  options: Pick<ThemeFromSeedOptions, 'colors' | 'shape'>,
+): ThemeSchemeValues {
+  return {
+    custom: customColors(sourceArgb, isDark, options.colors ?? {}),
+    sys: {
+      color: dynamicSystemColors(scheme),
       shape: { ...SHAPE_DEFAULTS, ...options.shape },
     },
   };
@@ -437,6 +528,20 @@ function systemColors(material: MaterialTheme, isDark: boolean): ThemeSystemColo
   values.tertiaryFixedDim = paletteHex(tertiary, 80);
   values.onTertiaryFixed = paletteHex(tertiary, 10);
   values.onTertiaryFixedVariant = paletteHex(tertiary, 30);
+  return values as ThemeSystemColorValues;
+}
+
+function dynamicSystemColors(scheme: DynamicScheme): ThemeSystemColorValues {
+  const values: Partial<Record<ThemeSystemColorName, string>> = {};
+  const material = MaterialDynamicColors as unknown as Record<
+    string,
+    { getArgb: (scheme: DynamicScheme) => number } | undefined
+  >;
+  for (const name of SYSTEM_COLOR_NAMES) {
+    const color = material[name];
+    if (color) values[name] = hexFromArgb(color.getArgb(scheme));
+  }
+  values.surfaceTint = values.primary ?? paletteHex(scheme.primaryPalette, scheme.isDark ? 80 : 40);
   return values as ThemeSystemColorValues;
 }
 
@@ -475,6 +580,17 @@ function referencePalettes(theme: MaterialTheme): ThemeReferencePalettes {
     primary: paletteTones(theme.palettes.primary),
     secondary: paletteTones(theme.palettes.secondary),
     tertiary: paletteTones(theme.palettes.tertiary),
+  };
+}
+
+function dynamicReferencePalettes(scheme: DynamicScheme): ThemeReferencePalettes {
+  return {
+    error: paletteTones(scheme.errorPalette),
+    neutral: paletteTones(scheme.neutralPalette),
+    neutralVariant: paletteTones(scheme.neutralVariantPalette),
+    primary: paletteTones(scheme.primaryPalette),
+    secondary: paletteTones(scheme.secondaryPalette),
+    tertiary: paletteTones(scheme.tertiaryPalette),
   };
 }
 
@@ -608,6 +724,10 @@ function shapeTokenVars(): ThemeShapeValues {
 function seedToArgb(seed: ThemeSeed): number {
   if (typeof seed === 'number') return seed;
   return argbFromHex(seed);
+}
+
+function clampContrast(contrast: number): number {
+  return Math.max(-1, Math.min(1, contrast));
 }
 
 function themeVar(...parts: readonly string[]): string {

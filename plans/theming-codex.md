@@ -107,15 +107,19 @@ helpers. It is Apache-2.0 and published as `@material/material-color-utilities`.
     `tokens` object. `packages/style/src/index.test.ts` asserts token refs such
     as `var(--kovo-theme-sys-color-primary)` and
     `var(--kovo-theme-ref-palette-primary-40)`.
-- [ ] **A4. Implement seed generation.** Add `themeFromSeed(seed, options)` supporting
+- [x] **A4. Implement seed generation.** Add `themeFromSeed(seed, options)` supporting
       hex/ARGB input, light/dark output, `variant`, `contrast`, and custom colors with optional
       harmonization. Keep the Kovo return shape independent from upstream class shapes.
-  - Partial evidence: `packages/style/src/theme.ts` implements hex/ARGB seed
-    generation, light/dark values, `tonal-spot` and `content` variants, custom
-    colors with optional harmonization, and Kovo-owned return types. Gap:
-    nonzero `contrast` currently fails loudly instead of silently no-oping because
-    the Node-safe Material package version does not expose the newer dynamic
-    contrast schemes.
+  - Evidence: `packages/style/src/theme.ts` implements hex/ARGB seed
+    generation, light/dark values, dynamic Material scheme variants, clamped
+    contrast, custom colors with optional harmonization, and Kovo-owned return
+    types. `packages/style/src/index.test.ts` pins the stable default
+    `#6750A4` output, dynamic nonzero contrast output, non-default `vibrant`
+    variant output, and absence of missing system-role CSS values. Verification:
+    `corepack pnpm --filter @kovojs/style test`; `corepack pnpm exec tsc -p
+    tsconfig.json --noEmit --pretty false`; `node scripts/api-surface-gate.mjs
+    && node site/scripts/api-ref.mjs && node site/scripts/api-examples-check.mjs`;
+    `git diff --check`.
 - [x] **A5. Add the ergonomic single-theme API.** Implement `defineTheme({ seed, shape,
 colors, variant?, contrast? })` as the common app-facing entry point. It should return the
       theme object/assets Kovo needs without requiring authors to manually call a separate

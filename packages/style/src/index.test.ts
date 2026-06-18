@@ -233,10 +233,20 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(theme.css).toContain(`--kovo-theme-component-button-border: ${base.sys.color.primary};`);
   });
 
-  it('fails loudly for unsupported contrast generation instead of ignoring it', () => {
-    expect(() => themeFromSeed('#6750A4', { contrast: 0.5 })).toThrow(
-      'theme.themeFromSeed supports only contrast: 0 in this release.',
-    );
+  it('supports dynamic variants and contrast without leaking missing system roles', () => {
+    const highContrast = themeFromSeed('#6750A4', { contrast: 0.5 });
+    const vibrant = themeFromSeed('#6750A4', { variant: 'vibrant' });
+
+    expect(highContrast.variant).toBe('tonal-spot');
+    expect(highContrast.seed).toBe('#6750a4');
+    expect(highContrast.sys.color.primary).not.toBe('#6750a4');
+    expect(highContrast.css).toContain('--kovo-theme-sys-color-primary:');
+    expect(highContrast.css).not.toContain('undefined');
+
+    expect(vibrant.variant).toBe('vibrant');
+    expect(vibrant.sys.color.primary).toMatch(/^#[0-9a-f]{6}$/);
+    expect(vibrant.ref.primary[40]).toMatch(/^#[0-9a-f]{6}$/);
+    expect(vibrant.css).not.toContain('undefined');
   });
 
   it('keeps generated on-* role pairs at readable contrast for the canonical seed', () => {
