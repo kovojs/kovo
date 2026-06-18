@@ -499,6 +499,8 @@ describe('server app shell Vite dev seam', () => {
       expect(clientResponse.headers.get('cache-control')).toBe('no-store');
       expect(clientBody).toContain('createHotContext("/@kovo/hmr-client")');
       expect(clientBody).toContain('hot.on("kovo:component-render"');
+      expect(clientBody).toContain('hot.on("kovo:diagnostics"');
+      expect(clientBody).toContain('/@kovo/hmr/refresh/route');
       expect(clientBody).toContain('/@kovo/hmr/refresh/live-targets');
     } finally {
       await new Promise<void>((resolve, reject) => {
@@ -567,6 +569,80 @@ describe('server app shell Vite dev seam', () => {
       expect(body).toContain('<meta name="kovo-build" content="');
       expect(body).toContain('<script type="module" src="/@kovo/hmr-client"></script>');
       expect(body).toContain('<main>Cart refresh</main>');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('serves HMR route refresh diagnostics from the dev ledger', async () => {
+    const diagnostics = createKovoAppShellDevDiagnosticLedger();
+    diagnostics.recordModuleDiagnostics({
+      diagnostics: [
+        {
+          code: 'KV225',
+          fileName: 'src/components/cart.tsx',
+          message: 'JSX nesting violates the HTML content model.',
+        },
+      ],
+      fileName: 'src/components/cart.tsx',
+      source: 'export const Cart = component({ render: () => <p><div /></p> });',
+    });
+    const app = createApp({
+      routes: [
+        route('/cart', {
+          modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
+          page() {
+            return '<main>Cart refresh</main>';
+          },
+        }),
+      ],
+    });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({
+      devDiagnostics: diagnostics,
+      moduleId: '/src/app-shell.ts',
+    });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule() {
+        return { default: app };
+      },
+    });
+
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const response = await fetch(
+        `http://127.0.0.1:${(server.address() as AddressInfo).port}/@kovo/hmr/refresh/route?url=/cart`,
+      );
+      const body = await response.text();
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(response.headers.get('kovo-hmr-refresh')).toBe('route');
+      expect(body).toContain('<p class="kovo-diagnostic-code">KV225</p>');
+      expect(body).toContain('<script type="module" src="/@kovo/hmr-client"></script>');
+      expect(body).not.toContain('<main>Cart refresh</main>');
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

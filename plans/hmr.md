@@ -214,21 +214,24 @@ render-plan version skew checks.
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`; `node
     scripts/api-surface-gate.mjs && node site/scripts/api-ref.mjs && node
     site/scripts/api-examples-check.mjs`; `git diff --check`.
-- [ ] **5. Dev-only HMR client runtime.**
+- [x] **5. Dev-only HMR client runtime.**
   - Emit or serve a small dev module that subscribes to Kovo HMR events.
   - For `kovo:component-render`, call a dev refresh endpoint and feed returned
     query/fragment wire through existing runtime apply/morph code.
   - For `kovo:diagnostics`, render the server-produced teaching document or
     fragment through the same path used by failed dev requests.
   - For unsafe classes, delegate to Vite full reload.
-  - Partial evidence: `packages/server/src/vite-dev.ts` serves and injects the
+  - Evidence: `packages/server/src/vite-dev.ts` serves and injects the
     dev-only `/@kovo/hmr-client` module from the Vite dev middleware, including
     generated Node handler exports, and the client subscribes to
     `kovo:component-render`, `kovo:route-shell`, `kovo:diagnostics`, and
     `kovo:full-reload`. Component-render events POST current live-target
     descriptors to `/@kovo/hmr/refresh/live-targets` and apply the returned
     fragment wire with the existing inline loader `globalThis.__kovo_a`.
-    Diagnostics and unsafe classes currently reload. Verification:
+    Diagnostic events fetch `/@kovo/hmr/refresh/route`, which consults the same
+    dev diagnostic ledger used by failed direct requests before replaying the
+    route; route-shell and full-reload classes still delegate to page reload.
+    Verification:
     `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts
     packages/server/src/vite-dev-middleware.test.ts packages/compiler/src/vite.test.ts
     packages/compiler/src/hmr-impact.test.ts`; `corepack pnpm --filter

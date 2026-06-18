@@ -248,7 +248,11 @@ export function kovoAppShellViteDevPlugin(
             return;
           }
 
-          const hmrResponse = renderKovoAppShellViteDevHmrResponse(app, request);
+          const hmrResponse = renderKovoAppShellViteDevHmrResponse(
+            app,
+            request,
+            options.devDiagnostics,
+          );
           if (hmrResponse) {
             return hmrResponse
               .then((webResponse) =>
@@ -307,13 +311,14 @@ async function writeKovoAppShellViteDevRouteResponse(
 function renderKovoAppShellViteDevHmrResponse(
   app: KovoApp,
   request: IncomingMessage,
+  diagnostics: KovoAppShellDevDiagnosticLedger | undefined,
 ): Promise<Response> | undefined {
   if (!request.url) return undefined;
 
   const url = new URL(request.url, 'http://kovo.local');
   if (url.pathname === kovoHmrClientPath) return Promise.resolve(renderKovoHmrClientResponse());
   if (url.pathname === kovoHmrRouteRefreshPath) {
-    return renderKovoHmrRouteRefreshResponse(app, request, url);
+    return renderKovoHmrRouteRefreshResponse(app, request, url, diagnostics);
   }
   if (url.pathname === kovoHmrLiveTargetRefreshPath) {
     return renderKovoHmrLiveTargetRefreshResponse(app, request, url);
@@ -336,6 +341,7 @@ async function renderKovoHmrRouteRefreshResponse(
   app: KovoApp,
   request: IncomingMessage,
   endpointUrl: URL,
+  diagnostics: KovoAppShellDevDiagnosticLedger | undefined,
 ): Promise<Response> {
   if (!requestMethodIs(request, 'GET', 'HEAD')) {
     return hmrRefreshTextResponse('Kovo HMR route refresh only accepts GET or HEAD.', 405, app, {
@@ -346,6 +352,22 @@ async function renderKovoHmrRouteRefreshResponse(
   const webRequest = nodeRequestToWebRequest(request);
   const targetUrl = hmrRefreshTargetUrl(endpointUrl, webRequest, request);
   if (targetUrl instanceof Response) return targetUrl;
+
+  const diagnosticResponse = renderKovoAppShellViteDevDiagnosticResponse(
+    app,
+    hmrTargetNodeRequest(request, targetUrl),
+    diagnostics,
+  );
+  if (diagnosticResponse) {
+    return withKovoHmrRefreshHeaders(
+      routeResponseToWebResponse(injectKovoHmrScriptIntoRouteResponse(diagnosticResponse), {
+        method: request.method ?? 'GET',
+      }),
+      app,
+      'route',
+      previousHmrBuildToken(endpointUrl, request),
+    );
+  }
 
   const routeResponse = await createRequestHandler(app)(
     new Request(targetUrl, { headers: webRequest.headers, method: 'GET' }),
@@ -460,6 +482,14 @@ function hmrRefreshTargetUrl(
   }
 
   return targetUrl;
+}
+
+function hmrTargetNodeRequest(request: IncomingMessage, targetUrl: URL): IncomingMessage {
+  return {
+    ...request,
+    method: 'GET',
+    url: `${targetUrl.pathname}${targetUrl.search}`,
+  } as IncomingMessage;
 }
 
 function requestMethodIs(request: IncomingMessage, ...methods: readonly string[]): boolean {
@@ -646,7 +676,7 @@ function shouldInjectKovoHmrScript(
   contentType: string | null | undefined,
   body: unknown,
 ): boolean {
-  if (status < 200 || status >= 300) return false;
+  if (status < 200 || status >= 600) return false;
   if (typeof body === 'string' && body.includes(kovoHmrClientPath)) return false;
   return (contentType ?? '').toLowerCase().includes('text/html');
 }
@@ -736,7 +766,26 @@ async function refreshLiveTargets(event) {
 hot.on("kovo:component-render", (event) => {
   refreshLiveTargets(event).catch(reload);
 });
-hot.on("kovo:diagnostics", reload);
+async function refreshRoute() {
+  const url = new URL("${kovoHmrRouteRefreshPath}", location.href);
+  url.searchParams.set("url", location.href);
+  const build = currentBuild();
+  if (build) url.searchParams.set("oldBuild", build);
+  const response = await fetch(url, {
+    headers: {
+      Accept: "text/html",
+      "Kovo-Current-Url": location.href,
+    },
+  });
+  const contentType = response.headers.get("Content-Type") || "";
+  if (!contentType.toLowerCase().includes("text/html")) return reload();
+  document.open();
+  document.write(await response.text());
+  document.close();
+}
+hot.on("kovo:diagnostics", () => {
+  refreshRoute().catch(reload);
+});
 hot.on("kovo:route-shell", reload);
 hot.on("kovo:full-reload", reload);
 `;
