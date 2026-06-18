@@ -1356,10 +1356,23 @@ scripts/exported-symbols.mjs --duplicates --check` fails on added/removed
     in sync through `scripts/build-publish.mjs`.
   - Evidence: `node scripts/build-publish.mjs` built all public packages and
     verified every `publishConfig` target file for the current export maps.
-- [ ] **The `kovo` CLI currently imports `@kovojs/compiler`.**
+- [x] **The `kovo` CLI currently imports `@kovojs/compiler`.**
   - Making `@kovojs/compiler` fully private/unpublished may require bundling the
     compiler into `@kovojs/cli` or moving compiler internals behind a package that
     only framework packages consume.
+  - Decision: for this API-boundary cleanup, `@kovojs/compiler` remains a
+    publishable framework build-tool package with zero app-facing public entries;
+    `@kovojs/cli` is allowed to depend on it internally. Bundling compiler code
+    into the CLI can be revisited as a distribution-size or install-shape
+    optimization without changing the public API boundary.
+  - Evidence: `public-packages.json` classifies `@kovojs/compiler` as
+    `kind: "build-tool"` with no public subpaths and all compiler exports in the
+    internal boundary; `packages/cli/package.json` declares the compiler
+    dependency for the CLI facade; `site/content/docs/stability.md` directs app
+    projects to `kovo compile`, `kovo check`, and `kovo explain` instead of
+    compiler imports. Verification: `corepack pnpm run check:imports`;
+    `corepack pnpm run check:exports`; `node scripts/api-surface-gate.mjs`;
+    `node scripts/build-publish.mjs`.
 - [x] **Headless-ui subpath migration can duplicate API reference debt.**
   - Adding direct subpaths before deciding `./primitives/*` compatibility may
     temporarily double the documented/exported headless-ui surface. Keep the
