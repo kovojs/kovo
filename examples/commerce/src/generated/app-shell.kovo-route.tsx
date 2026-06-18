@@ -59,10 +59,6 @@ export interface CommerceAppShell {
   requestHandler: RequestHandler;
 }
 
-export interface CommerceStaticExportShellOptions {
-  db?: CommerceDb;
-}
-
 const clientModules = createMemoryVersionedClientModuleRegistry();
 const shellCommerceAuthCsrf: CsrfValidationOptions<Request> = {
   field: commerceAuthCsrf.field,
@@ -156,67 +152,6 @@ export const commerceLoginRoute = route('/login', {
   },
   stylesheets: commerceStylesheets,
 });
-
-export function createCommerceStaticExportShell(options: CommerceStaticExportShellOptions = {}) {
-  const db = options.db ?? createCommerceDb();
-  const app = createApp({
-    clientModules,
-    db: () => db,
-    document: { lang: 'en-US' },
-    routes: [
-      route('/', {
-        i18n: commerceMessages,
-        meta: {
-          description: 'Browse products and checkout with verifiable cart state.',
-          title: 'Kovo Commerce',
-        },
-        modulepreloads: [commerceClientModuleHref],
-        layout: CommerceCartLayout,
-        page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CartBadge","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"ProductGrid","props":[{"expression":"true","name":"readOnly","staticValue":true}],"propsExpression":"{ readOnly: true }","serializedPropsExpression":"JSON.stringify({ readOnly: true })"}],"fileName":"examples/commerce/src/app-shell.tsx","layouts":[{"localName":"CommerceCartLayout","queries":[]}],"navigationSegments":[{"id":"layout:CommerceCartLayout","kind":"layout","localName":"CommerceCartLayout","queries":[]},{"components":["CartBadge","ProductGrid"],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, function page() {
-          return (
-            <>
-              <CartBadge />
-              <ProductGrid readOnly />
-              {OrderHistory.definition.render({ orderHistory: { items: [] } })}
-            </>
-          );
-        }),
-        stylesheets: commerceStylesheets,
-      }),
-      route('/cart', {
-        i18n: commerceMessages,
-        meta: {
-          description: 'Browse products and checkout with verifiable cart state.',
-          title: 'Kovo Commerce',
-        },
-        modulepreloads: [commerceClientModuleHref],
-        layout: CommerceCartLayout,
-        page: __kovoDefineCompiledRoutePage({"components":[{"localName":"CartBadge","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"},{"localName":"ProductGrid","props":[{"expression":"true","name":"readOnly","staticValue":true}],"propsExpression":"{ readOnly: true }","serializedPropsExpression":"JSON.stringify({ readOnly: true })"}],"fileName":"examples/commerce/src/app-shell.tsx","layouts":[{"localName":"CommerceCartLayout","queries":[]}],"navigationSegments":[{"id":"layout:CommerceCartLayout","kind":"layout","localName":"CommerceCartLayout","queries":[]},{"components":["CartBadge","ProductGrid"],"id":"page:/cart","kind":"page","localName":"page"}],"route":"/cart"}, function page() {
-          return (
-            <>
-              <CartBadge />
-              <ProductGrid readOnly />
-              {OrderHistory.definition.render({ orderHistory: { items: [] } })}
-            </>
-          );
-        }),
-        stylesheets: commerceStylesheets,
-      }),
-      route('/login', {
-        meta: {
-          description: 'Sign in to the Kovo commerce reference app.',
-          title: 'Kovo Commerce Sign In',
-        },
-        page() {
-          return '<main class="mx-auto max-w-md p-6"><h1>Kovo Commerce Sign In</h1><p>Sign in is available on the dynamic commerce server.</p></main>';
-        },
-        stylesheets: commerceStylesheets,
-      }),
-    ],
-  });
-
-  return { app, db };
-}
 
 export function createCommerceAppShell(options: CommerceAppShellOptions = {}): CommerceAppShell {
   const db = options.db ?? createCommerceDb();
@@ -353,7 +288,5 @@ function authRedirectTo(value: unknown): string {
 export const commerceAppShell = createCommerceAppShell();
 export const commerceRequestHandler = commerceAppShell.requestHandler;
 export const commerceNodeHandler = commerceAppShell.nodeHandler;
-export const commerceStaticExportShell = createCommerceStaticExportShell();
-export const commerceStaticExportApp = commerceStaticExportShell.app;
 
 export default commerceAppShell.app;

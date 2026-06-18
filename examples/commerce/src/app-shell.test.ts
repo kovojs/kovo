@@ -1,9 +1,8 @@
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createNetServer, type AddressInfo } from 'node:net';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
-import * as os from 'node:os';
+import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,8 +10,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createServer as createViteServer } from 'vite';
 
 import { csrfToken, runMutation } from '@kovojs/server';
-import { isKovoApp } from '@kovojs/server/app-shell/core';
-import { exportStaticApp } from '@kovojs/server/app-shell/static-export';
 import { cookiePair, firstSetCookiePair } from '@kovojs/test/headers';
 import {
   kovoFragmentFacts,
@@ -23,7 +20,6 @@ import {
   htmlFormActions,
   htmlFormFacts,
   htmlFormFields,
-  htmlLinkHrefs,
 } from '@kovojs/test/html-fragment';
 
 import {
@@ -35,7 +31,6 @@ import {
 import {
   commerceClientModuleHref,
   createCommerceAppShell,
-  createCommerceStaticExportShell,
 } from './generated/app-shell.kovo-route.js';
 import { readOrders } from './app-test-helpers.js';
 import { commerceSharedAppShellDevPlugin, commerceViteConfig } from '../vite.config.ts';
@@ -64,7 +59,7 @@ afterEach(async () => {
 });
 
 describe('commerce app shell HTTP entry', () => {
-  it('documents the commerce app-shell dev, serve, and export command matrix', async () => {
+  it('documents the commerce app-shell dev and serve command matrix', async () => {
     const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
     const packageJson = JSON.parse(await readFile(path.join(commerceRoot, 'package.json'), 'utf8'));
     const viteConfig = commerceViteConfig as {
@@ -75,39 +70,22 @@ describe('commerce app shell HTTP entry', () => {
     expect(packageJson.scripts).toMatchObject({
       dev: 'vp dev',
       start: 'node scripts/serve.mjs',
-      static: 'vp run export',
     });
+    expect(packageJson.scripts.static).toBeUndefined();
     expect(
       viteConfig.plugins?.some((plugin) => plugin.name === 'kovo-commerce-app-shell-dev-loader'),
     ).toBe(true);
     expect(viteConfig.run?.tasks?.serve?.command).toBe('node scripts/serve.mjs');
-    expect(viteConfig.run?.tasks?.export?.command).toBe('node scripts/export-static.mjs');
+    expect(viteConfig.run?.tasks?.export).toBeUndefined();
     expect(commerceServeCommands().map((command) => command.label)).toEqual([
       'node scripts/serve.mjs',
       'vp run serve',
       'npm start',
     ]);
-    expect(commerceExportCommands().map((command) => command.label)).toEqual([
-      'vp run export',
-      'npm run static',
-    ]);
 
     const viteConfigSource = await readFile(path.join(commerceRoot, 'vite.config.ts'), 'utf8');
     expect(viteConfigSource).toContain("server.ssrLoadModule('@kovojs/server/app-shell/vite')");
     expect(viteConfigSource).not.toContain("server.ssrLoadModule('@kovojs/server')");
-
-    const exportScriptSource = await readFile(
-      path.join(commerceRoot, 'scripts/export-static.mjs'),
-      'utf8',
-    );
-    expect(exportScriptSource).toContain("ssrLoadModule('@kovojs/server/app-shell/core')");
-    expect(exportScriptSource).toContain("ssrLoadModule('@kovojs/server/app-shell/vite')");
-    expect(exportScriptSource).toContain("ssrLoadModule('@kovojs/server/app-shell/static-export')");
-    expect(exportScriptSource).toContain('isKovoApp');
-    expect(exportScriptSource).toContain('exportKovoAppShellViteBuildWithManifestFromManifestFile');
-    expect(exportScriptSource).not.toContain('function isKovoApp');
-    expect(exportScriptSource).not.toContain('commerceStaticExportShell?.app');
-    expect(exportScriptSource).not.toContain("ssrLoadModule('@kovojs/server')");
 
     const appShellSource = await readFile(path.join(commerceRoot, 'src/app-shell.tsx'), 'utf8');
     expect(appShellSource).toContain("from '@kovojs/server/app-shell/client-modules'");
@@ -590,181 +568,11 @@ describe('commerce app shell HTTP entry', () => {
     expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
   });
 
-  it('exports the public commerce shell while the dynamic session shell stays non-exportable', async () => {
-    await expect(exportStaticApp(createCommerceAppShell().app)).rejects.toMatchObject({
-      code: 'KV229',
-      diagnostics: expect.arrayContaining([
-        expect.objectContaining({
-          code: 'KV229',
-          routePath: '/cart',
-        }),
-      ]),
-    });
-
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-commerce-export-'));
-    try {
-      const shell = createCommerceStaticExportShell();
-      expect(isKovoApp(shell.app)).toBe(true);
-      expect(
-        isKovoApp({
-          ...shell.app,
-          renderRoute: '<main>compat</main>',
-        }),
-      ).toBe(false);
-      expect(
-        isKovoApp({
-          ...shell.app,
-          clientModules: {
-            resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
-          },
-        }),
-      ).toBe(false);
-      const result = await exportStaticApp(shell.app, { outDir });
-
-      expect(result.diagnostics).toEqual([]);
-      expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
-        '/index.html',
-        '/cart/index.html',
-        '/login/index.html',
-      ]);
-      expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
-        commerceClientModuleHref,
-      ]);
-
-      const homeHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
-      expectCommerceShellDocument(homeHtml, { staticExport: true });
-      expect(htmlLinkHrefs(homeHtml, { rel: 'modulepreload' })).toEqual([commerceClientModuleHref]);
-
-      const cartHtml = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
-      expectCommerceShellDocument(cartHtml, { staticExport: true });
-      expect(htmlLinkHrefs(cartHtml, { rel: 'stylesheet' })).toContain('/assets/styles.css');
-      expect(htmlLinkHrefs(cartHtml, { rel: 'modulepreload' })).toEqual([commerceClientModuleHref]);
-      expect(htmlFormFields(cartHtml, 'csrf')).toEqual([]);
-
-      const loginHtml = await readFile(path.join(outDir, 'login', 'index.html'), 'utf8');
-      expect(htmlDocumentFacts(loginHtml).text).toContain(
-        'Sign in is available on the dynamic commerce server.',
-      );
-      expect(htmlFormActions(loginHtml)).not.toContain('/_m/auth/sign-in');
-      expect(htmlFormFields(loginHtml, 'csrf')).toHaveLength(0);
-
-      await expect(readFile(path.join(outDir, 'c', 'commerce.client.js'), 'utf8')).resolves.toBe(
-        result.clientModules[0]?.body,
-      );
-      expect(result.clientModules[0]?.body).toContain('Commerce$markReady');
-    } finally {
-      await rm(outDir, { force: true, recursive: true });
-    }
-  });
-
-  for (const exportCommand of commerceExportCommands()) {
-    it(`wires ${exportCommand.label} to the public commerce shell static output`, async () => {
-      const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
-      const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-commerce-export-'));
-
-      try {
-        const result = await execFileResult(exportCommand.command, exportCommand.args(outDir), {
-          cwd: commerceRoot,
-          timeout: 60000,
-        });
-        const output = `${result.stdout}\n${result.stderr}`;
-
-        expect(result.status, output).toBe(0);
-        expect(output).toContain('commerce-export/v1');
-        expect(output).toContain('html=3');
-        expect(output).toContain('client-modules=1');
-        expect(output).toContain('assets=1');
-        expect(output).toContain('manifest-html=3');
-        expect(output).toContain('manifest-client-modules=1');
-        expect(output).toContain('manifest-assets=1');
-        expect(output).toContain(
-          [
-            'manifest-files=route-document:/index.html',
-            'route-document:/cart/index.html',
-            'route-document:/login/index.html',
-            'client-module:/c/commerce.client.js',
-            'static-asset:/assets/styles.css',
-          ].join(','),
-        );
-        expect(output).toContain('diagnostics=0');
-
-        const homeHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
-        expectCommerceShellDocument(homeHtml, { staticExport: true });
-        expect(htmlLinkHrefs(homeHtml, { rel: 'modulepreload' })).toEqual([
-          commerceClientModuleHref,
-        ]);
-
-        const cartHtml = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
-        expectCommerceShellDocument(cartHtml, { staticExport: true });
-        expect(htmlLinkHrefs(cartHtml, { rel: 'stylesheet' })).toContain('/assets/styles.css');
-        expect(htmlLinkHrefs(cartHtml, { rel: 'modulepreload' })).toEqual([
-          commerceClientModuleHref,
-        ]);
-        await expect(access(path.join(outDir, 'cart.html'))).rejects.toThrow();
-        await expect(access(path.join(outDir, 'login.html'))).rejects.toThrow();
-
-        const loginHtml = await readFile(path.join(outDir, 'login', 'index.html'), 'utf8');
-        expect(htmlDocumentFacts(loginHtml).title).toBe('Kovo Commerce Sign In');
-        expect(htmlDocumentFacts(loginHtml).text).toContain(
-          'Sign in is available on the dynamic commerce server.',
-        );
-        expect(htmlFormActions(loginHtml)).not.toContain('/_m/auth/sign-in');
-
-        const clientModule = await readFile(path.join(outDir, 'c', 'commerce.client.js'), 'utf8');
-        expect(clientModule).toContain('Commerce$markReady');
-
-        const stylesheet = await readFile(path.join(outDir, 'assets', 'styles.css'), 'utf8');
-        expectCommerceStylesheet(stylesheet);
-        await expect(access(path.join(outDir, 'assets', 'styles.css'))).resolves.toBeUndefined();
-        await expect(access(path.join(outDir, 'c', 'commerce.client.js'))).resolves.toBeUndefined();
-
-        server = createStaticExportServer(outDir);
-        await listen(server);
-        const origin = serverOrigin(server);
-
-        const home = await fetch(`${origin}/`);
-        const homeBody = await home.text();
-        expect(home.status, homeBody).toBe(200);
-        expect(home.headers.get('content-type')).toBe('text/html; charset=utf-8');
-        expectCommerceShellDocument(homeBody, { staticExport: true });
-
-        const cart = await fetch(`${origin}/cart/`);
-        const cartBody = await cart.text();
-        expect(cart.status, cartBody).toBe(200);
-        expectCommerceShellDocument(cartBody, { staticExport: true });
-
-        const moduleResponse = await fetch(`${origin}${commerceClientModuleHref}`);
-        const moduleBody = await moduleResponse.text();
-        expect(moduleResponse.status, moduleBody).toBe(200);
-        expect(moduleResponse.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
-        expect(moduleBody).toContain('Commerce$markReady');
-
-        const assetResponse = await fetch(`${origin}/assets/styles.css`);
-        const assetBody = await assetResponse.text();
-        expect(assetResponse.status, assetBody).toBe(200);
-        expect(assetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
-        expectCommerceStylesheet(assetBody);
-
-        const mutation = await fetch(`${origin}/_m/cart/add`, { method: 'POST' });
-        expect(mutation.status).toBe(404);
-      } finally {
-        await closeServer();
-        await rm(outDir, { force: true, recursive: true });
-      }
-      // A cold, --no-cache static export now bundles the Drizzle/PGlite (WASM)
-      // data layer, so the build runs ~10-15s — well past Vitest's 5s default.
-    }, 120_000);
-  }
 });
 
-function expectCommerceShellDocument(html: string, options: { staticExport?: boolean } = {}): void {
+function expectCommerceShellDocument(html: string): void {
   expect(htmlElementCount(html, commerceShellSelector)).toBe(1);
-  if (options.staticExport) {
-    expect(htmlFormActions(html)).not.toContain('/_m/cart/add');
-    expect(htmlFormActions(html)).not.toContain('/_m/order/receipt');
-  } else {
-    expect(htmlFormActions(html)).toContain('/_m/cart/add');
-  }
+  expect(htmlFormActions(html)).toContain('/_m/cart/add');
 }
 
 function expectCommerceStylesheet(css: string): void {
@@ -836,72 +644,6 @@ function serverOrigin(target: Server): string {
   return `http://127.0.0.1:${address.port}`;
 }
 
-function createStaticExportServer(root: string): Server {
-  return createServer(async (request, response) => {
-    try {
-      const filePath = staticExportFilePath(root, request.url ?? '/');
-      const body = await readFile(filePath);
-      response.writeHead(200, {
-        'Content-Length': String(body.byteLength),
-        'Content-Type': staticExportContentType(filePath),
-      });
-      response.end(body);
-    } catch {
-      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-      response.end('Not Found');
-    }
-  });
-}
-
-function staticExportFilePath(root: string, requestUrl: string): string {
-  const url = new URL(requestUrl, 'http://commerce-static.test');
-  const pathname = decodeURIComponent(url.pathname);
-  const relativePath = pathname.endsWith('/')
-    ? `${pathname.slice(1)}index.html`
-    : pathname.slice(1);
-  const resolved = path.resolve(root, relativePath);
-  const rootPath = path.resolve(root);
-
-  if (resolved !== rootPath && !resolved.startsWith(`${rootPath}${path.sep}`)) {
-    throw new Error(`Static export request escaped output root: ${pathname}`);
-  }
-
-  return resolved;
-}
-
-function staticExportContentType(filePath: string): string {
-  if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
-  if (filePath.endsWith('.css')) return 'text/css; charset=utf-8';
-  if (filePath.endsWith('.js')) return 'text/javascript; charset=utf-8';
-  return 'application/octet-stream';
-}
-
-function execFileResult(
-  command: string,
-  args: readonly string[],
-  options: { cwd: string; timeout: number },
-): Promise<{ status: number | null; stderr: string; stdout: string }> {
-  return new Promise((resolve, reject) => {
-    execFile(command, [...args], options, (error, stdout, stderr) => {
-      if (!error) {
-        resolve({ status: 0, stderr, stdout });
-        return;
-      }
-
-      if (typeof error === 'object' && error !== null && 'code' in error) {
-        resolve({
-          status: typeof error.code === 'number' ? error.code : null,
-          stderr,
-          stdout,
-        });
-        return;
-      }
-
-      reject(error);
-    });
-  });
-}
-
 function pnpmCommand(): string {
   return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 }
@@ -938,25 +680,6 @@ function commerceServeCommands(): Array<{
       args: (port) => ['start', '--', ...serveArgs(port)],
       command: npmCommand(),
       label: 'npm start',
-    },
-  ];
-}
-
-function commerceExportCommands(): Array<{
-  args(outDir: string): string[];
-  command: string;
-  label: string;
-}> {
-  return [
-    {
-      args: (outDir) => ['exec', 'vp', 'run', '--no-cache', 'export', '--out', outDir],
-      command: pnpmCommand(),
-      label: 'vp run export',
-    },
-    {
-      args: (outDir) => ['run', 'static', '--', '--out', outDir],
-      command: npmCommand(),
-      label: 'npm run static',
     },
   ];
 }

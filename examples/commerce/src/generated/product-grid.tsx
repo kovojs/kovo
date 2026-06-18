@@ -38,7 +38,6 @@ type ProductGridMutationSlots = ComponentRenderSlots<{ addToCart: typeof addToCa
 
 export type ProductGridRenderSlots = ProductGridMutationSlots & {
   productId?: string | undefined;
-  readOnly?: boolean | undefined;
   request?: CommerceRequest | undefined;
 };
 
@@ -57,14 +56,7 @@ export const ProductGrid = component({
     const { nextCursor } = productGrid;
     return (
       <section data-page-cursor={nextCursor ?? ''} kovo-c="product-grid" kovo-deps="productGrid" kovo-fragment-target="product-grid" kovo-live-component="components/product-grid/product-grid">
-        {renderProductGridItems(
-          productGrid,
-          slots,
-          slots.request,
-          {
-            readOnly: slots.readOnly,
-          },
-        )}
+        {renderProductGridItems(productGrid, slots, slots.request)}
       </section>
     );
   },
@@ -77,10 +69,9 @@ export function renderProductGridItems(
   result: ProductGridResult,
   slots: ProductGridRenderSlots = defaultProductGridRenderSlots,
   request?: CommerceRequest,
-  options: { readOnly?: boolean | undefined } = {},
 ): string {
   const cards = result.items.map((item) =>
-    renderProductCard(item, productGridItemSlots(slots, item.id), request, options),
+    renderProductCard(item, productGridItemSlots(slots, item.id), request),
   );
   const cursor = result.nextCursor;
   return (
@@ -124,7 +115,6 @@ function renderProductCard(
   item: ProductItem,
   slots: ProductGridRenderSlots,
   request?: CommerceRequest,
-  options: { readOnly?: boolean | undefined } = {},
 ): string {
   const body = (
     <div class="grid gap-4">
@@ -141,7 +131,7 @@ function renderProductCard(
         <span class="text-lg font-semibold tabular-nums">{priceLabel(item.unitPrice)}</span>
         {stockBadge(item.stock)}
       </div>
-      {options.readOnly ? '' : renderAddToCartForm(item, slots, request)}
+      {renderAddToCartForm(item, slots, request)}
     </div>
   );
   // `kovo-key` stays on the keyed child of the grid fragment host (§9.1 morph);

@@ -18,23 +18,13 @@ export const crmViteConfig = defineConfig({
   // request dispatch, so drop the singleton app-shell dev plugin that would
   // otherwise claim app routes against one shared PGlite (SPEC.md §9.5).
   plugins: process.env.KOVO_DEMO_MULTITENANT ? [] : [crmSharedAppShellDevPlugin()],
-  // PGlite (WASM) makes the build/dev/export paths slow; give the tests room.
+  // PGlite (WASM) makes the build/dev paths slow; give the tests room.
   test: {
     hookTimeout: 60_000,
     testTimeout: 60_000,
   },
   run: {
     tasks: {
-      export: {
-        command: 'node scripts/export-static.mjs',
-        input: [
-          { pattern: 'package.json', base: 'workspace' },
-          { pattern: 'scripts/export-static.mjs', base: 'workspace' },
-          { pattern: 'src/**/*', base: 'workspace' },
-          { pattern: 'vite.config.ts', base: 'workspace' },
-        ],
-        output: ['dist/**'],
-      },
       serve: {
         command: 'node scripts/serve.mjs',
         input: [

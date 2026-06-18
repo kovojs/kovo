@@ -5,9 +5,9 @@ import { createDemoServeServer, runDemoServeCli } from '../../../scripts/demo-se
 // SPEC.md §9.5: per-visitor multi-tenant serve for the commerce example. Each
 // browser session drives its OWN seeded PGlite through the real commerce node
 // handler (SSR routes, add-to-cart `/_m/*`, and the `/products?after=` "More"
-// pagination that the static export can't replay). See scripts/serve.mjs for the
-// single-tenant variant. Run `vp build` first so built `/assets/*` stylesheets
-// are present; this is the path the Cloud Run image runs.
+// pagination). See scripts/serve.mjs for the single-tenant variant. Run
+// `vp build` first so built `/assets/*` stylesheets are present; this is the path
+// the Cloud Run image runs.
 
 const commerceRoot = fileURLToPath(new URL('../', import.meta.url));
 

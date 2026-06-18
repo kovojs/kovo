@@ -1,7 +1,7 @@
 // SPEC.md §10–§11: the public surface of the Stack Overflow clone — a FOCUSED
 // data + derived-optimism example (schema, queries, mutations, the extracted kovo
-// graph, and the compiler-derived optimistic transforms). No TSX/app-shell/
-// browser/static-export here (the commerce example owns the full-UI story).
+// graph, and the compiler-derived optimistic transforms). The runnable app-shell
+// is the small interactive surface in app-shell.ts.
 
 import { createSoGraph } from './graph.js';
 import { soQueryDomains, soTouchGraph } from './generated/touch-graph.js';

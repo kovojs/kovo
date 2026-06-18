@@ -745,12 +745,11 @@ export function renderProductGrid(
   result: ProductGridResult,
   request?: CommerceRequest,
   addToCartFailure?: AddToCartFailureState,
-  options: { readOnly?: boolean | undefined } = {},
 ): string {
   // SPEC.md section 4.2: the markup comes from the compiled TSX component;
   // kovo-c and kovo-deps are compiler-derived (section 4.8). SPEC.md §6.3/§9.2
   // keeps mutation failures in forms.addToCart.failure, separate from query data.
-  const slots = productGridRenderSlots(request, options, addToCartFailure?.productId);
+  const slots = productGridRenderSlots(request, addToCartFailure?.productId);
 
   if (addToCartFailure) {
     return renderComponentMutationFailure(
@@ -769,13 +768,11 @@ export function renderProductGrid(
 
 function productGridRenderSlots(
   request?: CommerceRequest,
-  options: { readOnly?: boolean | undefined } = {},
   productId?: string,
 ): productGridComponent.ProductGridRenderSlots {
   return {
     forms: { addToCart: { failure: null } },
     ...(productId === undefined ? {} : { productId }),
-    ...(options.readOnly === undefined ? {} : { readOnly: options.readOnly }),
     ...(request === undefined ? {} : { request }),
   };
 }
@@ -822,10 +819,8 @@ export async function renderProductGridDeferredStream(
 export async function renderOrderHistory(db: CommerceDb, userId?: string): Promise<string> {
   // SPEC.md section 4.2: the markup comes from the compiled TSX component
   // (src/components/order-history.tsx); kovo-c and kovo-deps are compiler-derived.
-  // SECURITY (SECURITY_FINDINGS.md M9): order history is per-user. With no
-  // authenticated user (e.g. the read-only static export, or an unauthenticated
-  // viewer) we default-deny and render an EMPTY history rather than leaking every
-  // user's orders. When a user id is present we scope the read to that user.
+  // Order history is per-user. With no authenticated user we default-deny and
+  // render an empty history rather than leaking another user's orders.
   const history: OrderHistoryResult = userId ? await loadOrderHistory(db, userId) : { items: [] };
   return OrderHistory.definition.render({ orderHistory: history });
 }
@@ -951,7 +946,7 @@ function productGridCartPageSlots(
   return componentMutationFailureSlots(
     'addToCart',
     addToCartFailure.failure,
-    productGridRenderSlots(undefined, {}, addToCartFailure.productId),
+    productGridRenderSlots(undefined, addToCartFailure.productId),
   ) as productGridComponent.ProductGridRenderSlots;
 }
 

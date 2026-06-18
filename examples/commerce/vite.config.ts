@@ -18,8 +18,8 @@ export const commerceViteConfig = defineConfig({
   // request dispatch, so drop the singleton app-shell dev plugin that would
   // otherwise also claim app routes against one shared PGlite (SPEC.md §9.5).
   plugins: process.env.KOVO_DEMO_MULTITENANT ? [] : [commerceSharedAppShellDevPlugin()],
-  // The Drizzle/PGlite (WASM) data layer makes the build/dev/export tests (which
-  // spawn real vite builds and a dev server) run well past Vitest's 5s default,
+  // The Drizzle/PGlite (WASM) data layer makes the build/dev tests (which spawn
+  // real vite builds and a dev server) run well past Vitest's 5s default,
   // especially under the suite's parallelism. Give them room.
   test: {
     hookTimeout: 60_000,
@@ -27,16 +27,6 @@ export const commerceViteConfig = defineConfig({
   },
   run: {
     tasks: {
-      export: {
-        command: 'node scripts/export-static.mjs',
-        input: [
-          { pattern: 'package.json', base: 'workspace' },
-          { pattern: 'scripts/export-static.mjs', base: 'workspace' },
-          { pattern: 'src/**/*', base: 'workspace' },
-          { pattern: 'vite.config.ts', base: 'workspace' },
-        ],
-        output: ['dist/**'],
-      },
       serve: {
         command: 'node scripts/serve.mjs',
         input: [

@@ -106,7 +106,7 @@ describe('commerce example', () => {
         { domain: 'product', input: { productId: 'p1', quantity: 2 }, keys: ['p1'] },
       ],
       ok: true,
-      rerunQueries: ['cart', 'productGrid', 'orderHistory'],
+      rerunQueries: [],
     });
     const cartBadge = await harness.page('/cart').then((page) => page.fragment('cart-badge'));
     expect(htmlElementFacts(cartBadge, { attrs: { 'data-bind': 'cart.count' } })).toHaveLength(1);

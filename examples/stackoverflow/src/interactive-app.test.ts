@@ -48,8 +48,7 @@ async function postForm(
 }
 
 // SPEC.md §9.1: the interactive app's voteUp endpoint runs the REAL Drizzle
-// mutation against PGlite and returns the fragment wire — the same handler the
-// in-browser backend serves inside the static export. This proves the server
+// mutation against PGlite and returns the fragment wire. This proves the server
 // half of the round-trip (no browser): a POST /_m/voteUp increments the persisted
 // score AND the re-rendered fragment carries the new value.
 

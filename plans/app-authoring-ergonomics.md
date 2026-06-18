@@ -64,10 +64,14 @@ item inherits from rather than re-deciding it:
 
 ## Scope boundaries
 
-- [ ] **Do not add a static-export/read-only framework mode for these examples.**
+- [x] **Do not add a static-export/read-only framework mode for these examples.**
   - StackOverflow, CRM, and Commerce are interactive; retire their example
     static-export paths (item 8). Static export remains a framework capability,
     but must keep a dedicated non-example fixture so it does not bitrot.
+  - Evidence: item 7 now removes static/export scripts, Vite tasks, static-only
+    Commerce shell/read-only grid mode, and stale static-export exports/comments
+    from the interactive examples while `docs/static-export.md` points at the
+    package-level fixture and static-output coverage.
 - [ ] **Do not regress archived automatic enhanced refresh behavior.** This
   follow-up starts after AER and must preserve its generated live-target path.
 - [ ] **Nested layouts target authoring parity, not runtime persistence (v1).**
@@ -419,7 +423,7 @@ item inherits from rather than re-deciding it:
         `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
         `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`.
 
-- [ ] **7. Retire static export from interactive examples (+ keep a fixture).**
+- [x] **7. Retire static export from interactive examples (+ keep a fixture).**
   - Remove static export scripts/tests/docs refs and static-only page helpers from
     StackOverflow, CRM, Commerce; delete the commerce static-export shell rather
     than preserve `renderCartPageBody(…, { readOnly: true })`.
@@ -430,6 +434,26 @@ item inherits from rather than re-deciding it:
       interactive examples; tests no longer assert their static-export output.
     - A standalone static-export fixture test stays green and is referenced from
       the static-export docs.
+  - Evidence:
+    - Removed `examples/{commerce,crm,stackoverflow}/scripts/export-static.mjs`,
+      each example package `"static"` script, each Vite `run.tasks.export`, the
+      Commerce `createCommerceStaticExportShell()`/`commerceStaticExportApp`
+      exports, and the ProductGrid `readOnly` branch; regenerated Commerce/CRM/SO
+      route/component artifacts.
+    - `rg -n "static export|static-export|export-static|StaticExport|commerceStaticExport|crmStaticExport|soStaticExport|exportStaticApp|vp run export|npm run static|\"static\"|readOnly" examples/commerce examples/crm examples/stackoverflow --glob '!**/node_modules/**'`
+      exits 1 with no hits.
+    - `docs/static-export.md` references the dedicated package-level and
+      static-output coverage.
+    - Verification: `pnpm --filter @kovojs/example-commerce run emit-components -- --check`;
+      `pnpm --filter @kovojs/example-crm run emit-components -- --check`;
+      `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`;
+      `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.queries.test.ts app.rendering.test.ts app.add-to-cart.test.ts app.auth.test.ts`;
+      `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
+      `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`;
+      `pnpm exec vitest --run packages/conformance-fixtures/src/kovo-export-fixtures.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-endpoints.test.ts`;
+      `pnpm exec vitest --run examples/reference/src/app-shell.test.ts examples/gallery/src/interactive-gallery.static-export.test.ts`;
+      `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `node scripts/api-surface-gate.mjs`; `git diff --check`.
 
 ## Cross-cutting DX (new — not in the original plan)
 
@@ -468,5 +492,5 @@ item inherits from rather than re-deciding it:
 - [x] **No string shell helpers; document via `documentTemplate`, chrome via layouts.** Evidence: item 4 evidence.
 - [x] **Expected failures render via `<FieldError>/<FormError>` (KV242-checked); unexpected via error boundaries; no `formFailure({ message })`.** Evidence: item 5 evidence.
 - [ ] **No manual query-registry duplication across shells, mutation registries, generated files, or `graph.ts`.** Evidence pending.
-- [ ] **No static-export surface in interactive examples; capability covered by a standalone fixture.** Evidence pending.
+- [x] **No static-export surface in interactive examples; capability covered by a standalone fixture.** Evidence: item 7 no-match, docs pointer, example checks, static-export fixture/server/reference/gallery checks, root `tsc`, API gate, and `git diff --check` above.
 - [ ] **Starter template teaches the model; `kovo explain` covers the new seams; inference type-tests pass.** Evidence pending.
