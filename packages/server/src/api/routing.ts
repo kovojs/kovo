@@ -41,7 +41,7 @@ export type {
   UnauthenticatedDenial,
   UnauthenticatedHandler,
 } from '../guards.js';
-export { isHeaderSource, readHeader } from '../response.js';
+export { isHeaderSource } from '../response.js';
 export type {
   MutationResponseHeaderValue,
   MutationResponseHeaders,

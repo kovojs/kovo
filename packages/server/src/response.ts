@@ -108,6 +108,11 @@ export function isHeaderSource(value: unknown): value is HeaderSource {
  * @param name - The header name (case-insensitive).
  * @returns The header value, or `undefined` if absent.
  */
+/**
+ * Read a response/request header from any framework-supported header source.
+ *
+ * @internal
+ */
 export function readHeader(headers: HeaderSource, name: string): string | undefined {
   if ('get' in headers && typeof headers.get === 'function') {
     return headers.get(name) ?? undefined;

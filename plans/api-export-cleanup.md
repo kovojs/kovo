@@ -522,13 +522,26 @@ packages/create-kovo/src/index.test.ts`.
       before assertions by missing repo-level publish-layout artifact
       `dist/compiler/src/internal.mjs` (same known blocker recorded in
       `plans/example-readability.md`).
-- [ ] **Review low-level helpers before keeping them public.**
+- [x] **Review low-level helpers before keeping them public.**
   - Deliberately decide whether `renderComponent`,
     `renderMutationFormAttributes`, `mutationFormAttributes`, `csrfField`,
     `csrfToken`, and `readHeader` are common enough app helpers to remain public.
   - If kept public, document their intended app-authored use cases and canonical
     import path. If not, internalize them in the same no-compatibility style.
   - Evidence:
+    - Kept public app-form helpers at `@kovojs/server`: `csrfField`,
+      `csrfToken`, `mutationFormAttributes`, and `renderMutationFormAttributes`.
+      Current app-authored examples/templates use them for explicit CSRF fields,
+      no-JS form submissions, JSX form spreads, and string-template form
+      attributes.
+    - Moved non-app-facing helpers internal-only:
+      `packages/server/src/api/rendering.ts` no longer exports
+      `renderComponent`, and `packages/server/src/api/routing.ts` no longer
+      exports `readHeader`; `packages/server/src/internal/html.ts` exports both
+      for framework/test harness use.
+    - Verification: `rg -n "from ['\\\"]@kovojs/server['\\\"][^;]*(renderComponent|readHeader)|import \\{[^}]*\\b(renderComponent|readHeader)\\b[^}]*\\} from ['\\\"]@kovojs/server['\\\"]" . --glob '!**/node_modules/**' --glob '!**/dist/**' --glob '!**/generated/**'`
+      exits 1; `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/component-render.test.tsx packages/server/src/response.test.ts`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 - [ ] **Make Vite build/export replay helpers internal once a higher-level command exists.**
   - Keep `kovoAppShellViteDevPlugin` as the likely public/root dev setup API.
   - Move Vite build/export replay helpers internal-only when `kovo build` or

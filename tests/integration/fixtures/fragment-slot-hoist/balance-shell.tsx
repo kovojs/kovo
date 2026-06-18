@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC.md §4.5: fragment-target children lower to server-renderable slot functions.
 import { component } from '@kovojs/core';
-import { renderComponent } from '@kovojs/server';
+import { renderComponent } from '@kovojs/server/internal/html';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { balanceQuery, readBalance, type BalanceResult } from './shared';

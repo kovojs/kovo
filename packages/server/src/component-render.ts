@@ -38,6 +38,8 @@ export interface ComponentMutationFailureRenderOptions<
  * Fragment-target children are compiler-hoisted into named slot functions; mutation fragment
  * renderers call back through the same component render function with fresh query values and the
  * stamped, serializable slot output.
+ *
+ * @internal
  */
 export function renderComponent<
   const Definition extends ComponentDefinitionInput,

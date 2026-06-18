@@ -16,6 +16,7 @@ import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
 import * as clientModulesSourceApi from '../client-modules.js';
+import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
 import * as publicApi from '../index.js';
@@ -469,6 +470,8 @@ describe('server app-shell public API barrels', () => {
     expect(publicValues).not.toHaveProperty('renderQueryScript');
     expect(publicValues).not.toHaveProperty('renderRouteDocumentResponse');
     expect(publicValues).not.toHaveProperty('renderRoutePageResponse');
+    expect(publicValues).not.toHaveProperty('readHeader');
+    expect(publicValues).not.toHaveProperty('renderComponent');
     expect(dataApi).not.toHaveProperty('renderMutationEndpointResponse');
     expect(dataApi).not.toHaveProperty('renderMutationResponse');
     expect(dataApi).not.toHaveProperty('renderNoJsMutationResponse');
@@ -485,10 +488,12 @@ describe('server app-shell public API barrels', () => {
     expect(renderingApi).not.toHaveProperty('renderDocumentQueryScript');
     expect(renderingApi).not.toHaveProperty('renderErrorDocument');
     expect(renderingApi).not.toHaveProperty('renderPageHints');
+    expect(renderingApi).not.toHaveProperty('renderComponent');
     expect(renderingApi).not.toHaveProperty('renderRouteDocumentResponse');
     expect(routingApi).not.toHaveProperty('endpointMatches');
     expect(routingApi).not.toHaveProperty('parseRouteRequest');
     expect(routingApi).not.toHaveProperty('renderRoutePageResponse');
+    expect(routingApi).not.toHaveProperty('readHeader');
     expect(routingApi).not.toHaveProperty('runEndpoint');
     expect(routingApi).not.toHaveProperty('runRoutePage');
     expect(routingApi).not.toHaveProperty('runWebhook');
@@ -499,6 +504,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageInternalHtmlApi.renderContentSecurityPolicy).toBe(
       cspApi.renderContentSecurityPolicy,
     );
+    expect(packageInternalHtmlApi.renderComponent).toBe(componentRenderApi.renderComponent);
     expect(packageInternalHtmlApi.renderDeferredDocument).toBe(
       documentCoreApi.renderDeferredDocument,
     );
@@ -513,6 +519,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageInternalHtmlApi.renderErrorDocument).toBe(documentCoreApi.renderErrorDocument);
     expect(packageInternalHtmlApi.renderPageHints).toBe(hintsApi.renderPageHints);
     expect(packageInternalHtmlApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
+    expect(packageInternalHtmlApi.readHeader).toBe(responseApi.readHeader);
     expect(packageInternalRouteApi.renderRoutePageResponse).toBe(routeApi.renderRoutePageResponse);
     expect(packageInternalWireApi.renderMutationEndpointResponse).toBe(
       mutationApi.renderMutationEndpointResponse,
