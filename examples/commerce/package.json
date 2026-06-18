@@ -28,7 +28,9 @@
     "@kovojs/compiler": "workspace:*",
     "@kovojs/conformance-fixtures": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
+    "axe-core": "^4.12.1",
     "kovo": "workspace:*",
+    "playwright": "^1.60.0",
     "vite": "8.0.16",
     "vite-plus": "^0.1.24",
     "vitest": "4.1.8"

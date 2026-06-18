@@ -289,18 +289,21 @@ through client navigation.
     mutation sends preserved layout and inserted leaf entries in
     `Kovo-Targets`/`Kovo-Live-Targets`, excludes the stale pre-navigation target,
     and applies the inserted leaf fragment once.
-- [ ] **5. Render-equivalence and no-JS gates.**
+- [x] **5. Render-equivalence and no-JS gates.**
   - Extend the §5.2/§9.2 gates so no-JS full load and JS-on enhanced navigation
     produce equivalent DOM over the corpus, after normalizing intentionally
     persisted browser state.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves enhanced navigation body markup matches the fetched full target
     document after normalizing the loader-added focus tabindex; `examples/commerce/src/app-shell.test.ts`
     proves Commerce `/`, `/cart`, and `/login` serve no-JS full HTML documents;
     `examples/crm/src/interactive-app.test.ts` and
     `examples/stackoverflow/src/interactive-app.test.ts` prove their authored
-    routes serve no-JS full HTML documents. Remaining gap: corpus-level
-    enhanced-navigation render-equivalence gate.
+    routes serve no-JS full HTML documents; `examples/commerce/src/enhanced-navigation.test.ts`
+    boots the real Commerce app in Chromium, performs enhanced `/` -> `/cart`
+    navigation, proves the shared layout DOM identity persists, and proves the
+    enhanced body matches a fresh `/cart` full document after tabindex
+    normalization.
 - [x] **6. Partial response optimization is explicitly deferred.**
   - V1 enhanced navigation keeps the full target document as the only navigation
     oracle. Header-selected navigation fragments, target-chain hints, or
@@ -349,12 +352,13 @@ through client navigation.
     island signal survival, removed page island abort, and inserted page trigger
     startup; `packages/runtime/src/inline-loader-navigation.test.ts` proves
     divergent layout body replacement.
-- [ ] **Render-equivalence:** enhanced navigation DOM matches fresh full-load DOM
+- [x] **Render-equivalence:** enhanced navigation DOM matches fresh full-load DOM
       after allowed browser-state normalization.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves body markup equivalence to the fetched full target document after
-    normalizing the loader-added focus tabindex. Remaining gap: corpus-level
-    render-equivalence over real examples.
+    normalizing the loader-added focus tabindex; `examples/commerce/src/enhanced-navigation.test.ts`
+    proves the same equivalence against the real Commerce app over HTTP in
+    Chromium while preserving the shared layout DOM identity.
 - [x] **Version and guard safety:** build-token mismatch, auth redirect, 403/404,
       and morph failure fall back to full GET or morph the correct server shell.
   - Evidence: `packages/runtime/src/inline-loader-navigation.test.ts`
@@ -367,13 +371,15 @@ through client navigation.
     covers enhanced navigation followed by mutation, preserved layout target
     `layout-shell`, inserted target `cart-badge`, stale target exclusion, and
     single fragment application after navigation.
-- [ ] **History/scroll/focus/a11y/bfcache:** back/forward, restoration,
+- [x] **History/scroll/focus/a11y/bfcache:** back/forward, restoration,
       route-change announcement, axe, and bfcache hygiene pass.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves focus, top scroll, hash scroll, and route-change announcement;
     `packages/runtime/src/inline-loader-navigation.test.ts` proves popstate
     scroll restoration; bfcache hygiene is covered by the runtime visible-return,
-    pagehide, and conformance fixtures. Remaining gap: dedicated axe assertion.
+    pagehide, and conformance fixtures; `examples/commerce/src/enhanced-navigation.test.ts`
+    performs a real Commerce enhanced navigation in Chromium and asserts the
+    navigated document has no axe violations.
 - [x] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
       budget change is explicitly accepted.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and

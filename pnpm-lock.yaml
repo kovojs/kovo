@@ -138,9 +138,15 @@ importers:
       '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../../packages/headless-ui
+      axe-core:
+        specifier: ^4.12.1
+        version: 4.12.1
       kovo:
         specifier: workspace:*
         version: link:../../packages/cli
+      playwright:
+        specifier: ^1.60.0
+        version: 1.60.0
       vite:
         specifier: 8.0.16
         version: 8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)
