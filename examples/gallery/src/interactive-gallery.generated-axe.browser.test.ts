@@ -12,7 +12,7 @@ import {
   required,
   staticVisualFixtureHtml,
   type StaticVisualFixturePath,
-} from './interactive-gallery-browser-fixtures.js';
+} from './interactive-gallery.generated-browser-fixtures.js';
 
 afterEach(() => {
   document.body.replaceChildren();

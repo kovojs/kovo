@@ -38,22 +38,6 @@ const explicitlyAllowedInternalImports = new Set([
   'site/tutorial/steps/07-verification/src/app.ts -> @kovojs/server/internal/wire',
 ]);
 
-const explicitlyAllowedGeneratedImports = new Set([
-  'site/src/gallery.ts -> @kovojs/runtime/generated',
-]);
-
-const explicitlyAllowedAppLocalGeneratedImports = new Set([
-  'examples/crm/src/mutations.ts -> ./generated/optimistic/add-contact.js',
-  'examples/crm/src/mutations.ts -> ./generated/optimistic/create-deal.js',
-  'examples/crm/src/mutations.ts -> ./generated/optimistic/move-deal.js',
-  'examples/crm/src/mutations.ts -> ./generated/optimistic/close-deal.js',
-  'examples/crm/src/index.ts -> ./generated/touch-graph.js',
-  'examples/stackoverflow/src/app.ts -> ./generated/touch-graph.js',
-  'examples/stackoverflow/src/app.ts -> ./generated/optimistic/post-answer.js',
-  'examples/stackoverflow/src/app.ts -> ./generated/optimistic/post-question.js',
-  'examples/stackoverflow/src/app.ts -> ./generated/optimistic/vote-up.js',
-]);
-
 export async function collectImportBoundaryViolations({
   rootDir = repoRootFromScript(),
   roots = appFacingRoots,
@@ -72,10 +56,11 @@ export async function collectImportBoundaryViolations({
     const source = await readFile(filePath, 'utf8');
     if (isGeneratedArtifact(relativePath, source)) continue;
 
-    for (const specifier of importSpecifiers(source)) {
+    for (const specifier of new Set(importSpecifiers(source))) {
       const tier = importBoundaryTier(specifier);
       if (tier === null) continue;
-      if (tier !== 'app-local-generated' && isTestFile(relativePath)) continue;
+      if (tier === 'internal' && isTestFile(relativePath)) continue;
+      if (isGeneratedImportTier(tier) && isAllowedGeneratedRead(relativePath)) continue;
 
       const allowKey = `${relativePath} -> ${specifier}`;
       const allowed = allowedImportBoundaryException(tier, allowKey);
@@ -116,10 +101,7 @@ function importBoundaryTier(specifier) {
 
 function allowedImportBoundaryException(tier, allowKey) {
   if (tier === 'internal') return explicitlyAllowedInternalImports.has(allowKey);
-  if (tier === 'generated') return explicitlyAllowedGeneratedImports.has(allowKey);
-  if (tier === 'app-local-generated') {
-    return explicitlyAllowedAppLocalGeneratedImports.has(allowKey);
-  }
+  if (tier === 'generated' || tier === 'app-local-generated') return false;
   return false;
 }
 
@@ -141,14 +123,40 @@ export function importSpecifiers(source) {
 function shouldCheckFile(relativePath) {
   if (relativePath.includes('/node_modules/')) return false;
   if (relativePath.includes('/dist/')) return false;
-  if (isExplicitArtifactTest(relativePath)) return false;
 
   return checkedExtensions.has(path.extname(relativePath));
 }
 
+function isGeneratedImportTier(tier) {
+  return tier === 'generated' || tier === 'app-local-generated';
+}
+
+function isAllowedGeneratedRead(relativePath) {
+  return (
+    isEmitFreshnessScript(relativePath) ||
+    isExplicitArtifactTest(relativePath) ||
+    isExplicitArtifactFixture(relativePath)
+  );
+}
+
+function isEmitFreshnessScript(relativePath) {
+  if (!/(?:^|\/)scripts\//.test(relativePath)) return false;
+  return /(?:^|\/)(?:emit|check)[^/]*\.[cm]?js$/.test(relativePath);
+}
+
 function isExplicitArtifactTest(relativePath) {
   if (!isTestFile(relativePath)) return false;
-  return /(?:artifact|generated|graph)\.(?:test|spec)\.[cm]?[jt]sx?$/.test(relativePath);
+  return hasExplicitArtifactName(relativePath);
+}
+
+function isExplicitArtifactFixture(relativePath) {
+  const basename = path.basename(relativePath);
+  if (!/fixtures?\.[cm]?[jt]sx?$/.test(basename)) return false;
+  return hasExplicitArtifactName(relativePath);
+}
+
+function hasExplicitArtifactName(relativePath) {
+  return /(?:^|[./-])(?:artifact|artifacts|generated|graph)(?:[./-]|$)/.test(relativePath);
 }
 
 function isTestFile(relativePath) {

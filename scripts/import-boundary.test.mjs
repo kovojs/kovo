@@ -45,12 +45,17 @@ const runtime = () => import('@kovojs/runtime/generated');
     expect(appLocalGeneratedImportTier('./components/cart.js')).toBeNull();
   });
 
-  it('fails app-facing authored code but exempts generated artifacts and tests', async () => {
+  it('fails app-facing authored code but allows explicit artifact tests and fixtures', async () => {
     const rootDir = await fixtureRoot();
     await writeFixture(
       rootDir,
       'examples/demo/src/app.ts',
       "import { hidden } from '@kovojs/core/internal/graph';\n",
+    );
+    await writeFixture(
+      rootDir,
+      'examples/demo/src/mutations.ts',
+      "import { optimistic } from './generated/optimistic/cart-add.js';\n",
     );
     await writeFixture(
       rootDir,
@@ -69,8 +74,28 @@ const runtime = () => import('@kovojs/runtime/generated');
     );
     await writeFixture(
       rootDir,
-      'examples/demo/src/app.generated.test.ts',
+      'examples/demo/src/runtime.test.ts',
+      "import { runtime } from '@kovojs/runtime/generated';\n",
+    );
+    await writeFixture(
+      rootDir,
+      'examples/demo/src/app.generated.browser.test.ts',
       "import { createApp } from './generated/app.kovo-route.js';\n",
+    );
+    await writeFixture(
+      rootDir,
+      'examples/demo/src/app.generated-browser-fixtures.ts',
+      "import * as client from './generated/app.client.js';\n",
+    );
+    await writeFixture(
+      rootDir,
+      'examples/demo/src/app-browser-fixtures.ts',
+      "import * as client from './generated/app.client.js';\n",
+    );
+    await writeFixture(
+      rootDir,
+      'examples/demo/scripts/emit-demo.mjs',
+      "import { createApp } from '../src/generated/app.kovo-route.js';\n",
     );
     await writeFixture(
       rootDir,
@@ -90,6 +115,11 @@ const runtime = () => import('@kovojs/runtime/generated');
       }),
     ).resolves.toEqual([
       {
+        fileName: 'examples/demo/src/app-browser-fixtures.ts',
+        specifier: './generated/app.client.js',
+        tier: 'app-local-generated',
+      },
+      {
         fileName: 'examples/demo/src/app.test.ts',
         specifier: './generated/app.kovo-route.js',
         tier: 'app-local-generated',
@@ -98,6 +128,16 @@ const runtime = () => import('@kovojs/runtime/generated');
         fileName: 'examples/demo/src/app.ts',
         specifier: '@kovojs/core/internal/graph',
         tier: 'internal',
+      },
+      {
+        fileName: 'examples/demo/src/mutations.ts',
+        specifier: './generated/optimistic/cart-add.js',
+        tier: 'app-local-generated',
+      },
+      {
+        fileName: 'examples/demo/src/runtime.test.ts',
+        specifier: '@kovojs/runtime/generated',
+        tier: 'generated',
       },
       {
         fileName: 'packages/create-kovo/templates/src/component.tsx',
