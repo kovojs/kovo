@@ -1,6 +1,6 @@
 import { toNodeHandler } from '@kovojs/server';
 
-import { buildCrmInteractiveApp } from './generated/interactive-app.kovo-route.js';
+import { buildCrmInteractiveApp } from './interactive-app.generated-fixtures.js';
 
 // Interactive CRM app shell over a seeded PGlite database. Forms post to the
 // mutation endpoints and refresh the affected page regions.

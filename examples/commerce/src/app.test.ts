@@ -15,7 +15,7 @@ import {
 } from '@kovojs/test/html-fragment';
 
 import { commerceAuthCsrf, commerceCsrf, commerceSignIn } from './domain.js';
-import { createCommerceApp } from './generated/app.kovo-route.js';
+import { createCommerceApp } from './app.generated-fixtures.js';
 
 let server: Server | undefined;
 

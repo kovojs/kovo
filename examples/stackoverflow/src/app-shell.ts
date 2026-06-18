@@ -1,6 +1,6 @@
 import { toNodeHandler } from '@kovojs/server';
 
-import { buildSoInteractiveApp } from './generated/interactive-app.kovo-route.js';
+import { buildSoInteractiveApp } from './interactive-app.generated-fixtures.js';
 
 // SPEC.md §9.1/§9.5: the Stack Overflow example app shell. It builds the FULLY
 // INTERACTIVE multi-page Kovo app (a ranked question list with upvote + ask

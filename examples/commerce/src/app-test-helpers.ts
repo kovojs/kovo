@@ -11,7 +11,7 @@ import {
   type CommerceDb,
   type ProductGridInput,
 } from './domain.js';
-import { createCommerceApp, type CommerceApp } from './generated/app.kovo-route.js';
+import { createCommerceApp, type CommerceApp } from './app.generated-fixtures.js';
 import { cartItems, orders, products } from './schema.js';
 
 export type ProductRow = { id: string; stock: number; unitPrice: number };

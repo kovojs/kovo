@@ -75,6 +75,11 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Current generated imports are in `examples/commerce/src/app-test-helpers.ts`,
     `examples/commerce/src/app.test.ts`, and
     `examples/commerce/src/enhanced-navigation.test.ts`.
+  - Current progress: those scenario files no longer import
+    `./generated/app.kovo-route.js` directly; they use
+    `examples/commerce/src/app.generated-fixtures.ts` while the public authored
+    loader gap is closed. `pnpm --filter @kovojs/example-commerce exec vitest
+    --run src/app.test.ts src/enhanced-navigation.test.ts` passed.
 - [x] Delete `examples/commerce/src/source-truth.test.ts`.
   - Rationale: reading `src/generated/graph.json` from an example test is not a
     useful app-author DevX signal. Graph correctness should live in compiler/CLI
@@ -108,6 +113,13 @@ internals, emit/check scripts, and narrowly named artifact tests.
 - [ ] Apply the same test/helper boundary to CRM and StackOverflow.
   - Scenario tests import authored entries or public helper factories, not
     `src/generated/*`.
+  - Current progress: `examples/crm/src/app-shell.ts`,
+    `examples/crm/src/interactive-app.test.ts`,
+    `examples/stackoverflow/src/app-shell.ts`, and
+    `examples/stackoverflow/src/interactive-app.test.ts` no longer import
+    generated route modules directly; they use explicitly named generated
+    fixtures until authored app loading preserves compiled route metadata.
+    Focused CRM and StackOverflow interactive tests passed.
 - [x] Update CRM and StackOverflow Vite configs to reference authored app entries
       only.
   - Evidence: `examples/crm/vite.config.ts` and
@@ -226,17 +238,24 @@ internals, emit/check scripts, and narrowly named artifact tests.
 - [ ] Add/extend a guard command that proves authored example source has no
       generated imports.
   - Current evidence gap: `node scripts/import-boundary.mjs` now reports
-    app-local generated imports, but it still fails on Commerce/CRM/StackOverflow
-    tests/app shells plus Gallery, site, and tutorial files; CSS generated-import
-    violations were removed from Commerce/CRM/StackOverflow. Keep open until the
-    remaining reported backlog is removed or narrowed by an explicit artifact-test
-    policy.
+    app-local generated imports, but it still fails on CRM optimistic artifact
+    imports plus Gallery, site, and tutorial files; CSS generated-import
+    violations and Commerce/CRM/StackOverflow direct generated route imports were
+    removed from ordinary tests/app shells. Keep open until the remaining reported
+    backlog is removed or narrowed by an explicit artifact-test policy.
   - Current guard-policy evidence: `pnpm exec vitest --run
     scripts/import-boundary.test.mjs` passed after narrowing explicit artifact
     allowances and renaming gallery artifact consumers.
 - [ ] Run focused Commerce tests after removing generated imports and deleting
       `source-truth.test.ts`.
+  - Current progress: `pnpm --filter @kovojs/example-commerce exec vitest --run
+    src/app.test.ts src/enhanced-navigation.test.ts` passed after route-module
+    imports moved behind generated fixtures.
 - [ ] Run focused CRM and StackOverflow tests after applying the same boundary.
+  - Current progress: `pnpm --filter @kovojs/example-crm exec vitest --run
+    src/interactive-app.test.ts` and `pnpm --filter @kovojs/example-stackoverflow
+    exec vitest --run src/interactive-app.test.ts` passed after direct generated
+    route imports moved behind generated fixtures.
 - [ ] Run `emit-components -- --check` and `emit-graph -- --check` for each
       migrated example.
 - [ ] Run `pnpm run check` and `git diff --check` before closing the plan.

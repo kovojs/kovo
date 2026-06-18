@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
 
-import { buildSoInteractiveApp } from './generated/interactive-app.kovo-route.js';
+import { buildSoInteractiveApp } from './interactive-app.generated-fixtures.js';
 import { soCsrf } from './mutations.js';
 import { answers, questions } from './schema.js';
 
