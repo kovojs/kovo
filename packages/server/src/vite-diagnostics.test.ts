@@ -43,7 +43,7 @@ describe('server app shell Vite diagnostics', () => {
         }
 
         response.writeHead(418, { 'Content-Type': 'text/plain; charset=utf-8' });
-        response.end('next');
+        response.end('__kovo_vite_diagnostics_next__');
       });
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -170,7 +170,7 @@ describe('server app shell Vite diagnostics', () => {
         status: 500,
       });
       expect(fragmentResponse.body).toContain('<p class="kovo-diagnostic-code">KV225</p>');
-      expect(fragmentResponse.body).not.toContain('next');
+      expect(fragmentResponse.body).not.toContain('__kovo_vite_diagnostics_next__');
 
       const documentResponse = await nodeFetch(`http://127.0.0.1:${port}/_m/cart/add`, {
         method: 'POST',

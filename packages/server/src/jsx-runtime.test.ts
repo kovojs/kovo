@@ -51,7 +51,7 @@ describe('server jsx runtime', () => {
         'p1',
       ),
     ).toBe(
-      '<form kovo-key="p1" enhance method="post" action="/_m/cart/add" data-mutation="cart/add"></form>',
+      '<form kovo-key="p1" enhance method="post" action="/_m/cart/add" data-mutation="cart/add"><input type="hidden" name="kovo-form-key" value="p1"></form>',
     );
     expect(jsx('form', { key: 'p2', enhance: true, children: '' })).toBe(
       '<form kovo-key="p2" enhance></form>',

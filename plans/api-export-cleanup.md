@@ -249,12 +249,18 @@ packages/server/src/vite-plugin-boundary.test.ts` passes, including negative
     `packages/create-kovo` template expectations.
   - Broad: `pnpm run check:api-surface`, `pnpm run check:publish`, and
     `pnpm run check`.
-  - Evidence: focused `scripts/exported-symbols.test.mjs` and
-    `packages/create-kovo/src/index.test.ts` pass, along with root typecheck,
-    API-surface, publish, import-boundary, export-duplicate, and diff-check
-    gates for the current checkpoint. Full `corepack pnpm run check` remains
-    open: it now gets through `check:imports` but fails in repo-wide `vp check`
-    formatting on pre-existing files outside this slice.
+  - Evidence: `corepack pnpm --filter @kovojs/server exec vitest run` passes
+    with 67 files / 442 tests after updating stale assertions for keyed mutation
+    form output and Vite diagnostic middleware fallback detection.
+    `corepack pnpm exec vitest --run packages/create-kovo/src/index.test.ts
+    scripts/exported-symbols.test.mjs scripts/public-packages.test.mjs
+    site/scripts/api-ref.test.mjs`, `corepack pnpm run check:api-surface`,
+    `corepack pnpm run check:publish`, `corepack pnpm run check:exports`,
+    `corepack pnpm run check:imports`, and `corepack pnpm exec tsc -p
+    tsconfig.json --noEmit --pretty false` pass for the current checkpoint.
+    Full `corepack pnpm run check` remains open: it gets through
+    `check:imports` but fails in repo-wide `vp check` with formatting plus
+    unrelated lint/type findings outside this export-surface slice.
 
 ## Server Root Canonicalization
 
