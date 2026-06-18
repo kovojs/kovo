@@ -20,7 +20,20 @@ const FONT_PRELOADS = [
   '<link rel="preload" href="/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>',
 ].join('');
 
-const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label="Search documentation"><input type="search" class="search-input" placeholder="Search docs&hellip;" on:input="${clientHrefs.search}#query" kovo-state="{}"><ul class="search-results" id="site-search-results"></ul></dialog>`;
+const SEARCH_DEFAULT_RESULTS = [
+  ['start', 'Quickstart', 'Getting Started', '/docs/quickstart/'],
+  ['guide', 'Tutorial', 'Build the app', '/tutorial/'],
+  ['api', 'API Reference', 'Packages and symbols', '/api/'],
+  ['app', 'Examples', 'Runnable apps', '/examples/'],
+  ['spec', 'Specification', 'Normative behavior', '/spec/'],
+]
+  .map(
+    ([kind, title, section, url], index) =>
+      `<li${index === 0 ? ' class="active"' : ''}><a href="${url}"${index === 0 ? ' aria-current="true"' : ''}><span class="result-kind" data-kind="${kind}">${kind}</span><span class="result-body"><span class="result-title">${title}</span><span class="result-section">${section}</span></span></a></li>`,
+  )
+  .join('');
+
+const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label="Search documentation"><input type="search" class="search-input" placeholder="Search docs&hellip;" on:input="${clientHrefs.search}#query" on:keydown="${clientHrefs.search}#navigate" kovo-state="{}"><ul class="search-results" id="site-search-results"><li class="search-results-label">Suggested</li>${SEARCH_DEFAULT_RESULTS}</ul></dialog>`;
 
 // ⌘K / Ctrl-K opens the search dialog. This must be an always-present inline
 // listener, not part of the lazy search island: the island only loads on first

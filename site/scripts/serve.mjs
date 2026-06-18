@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite-plus';
 
 import { runContentPipeline } from './content-pipeline.mjs';
+import { emitSiteRoutes } from './emit-routes.mjs';
 
 // Live dev server for the docs app. The app-shell dev plugin (vite.config.ts)
 // serves the same src/app.ts through its node handler, so what you see in dev is
@@ -16,8 +17,9 @@ export async function createSiteServeServer({
   host = process.env.HOST ?? '127.0.0.1',
   port = Number(process.env.PORT ?? 4173),
   strictPort = false,
-} = {}) {
+  } = {}) {
   await runContentPipeline();
+  await emitSiteRoutes({ skipPipeline: true });
 
   const vite = await createViteServer({
     appType: 'custom',

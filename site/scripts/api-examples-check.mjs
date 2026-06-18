@@ -62,11 +62,11 @@ export function collectApiExamples(dir = apiDir, publicPages = publicApiPageFile
     const lines = markdown.split('\n');
     const slug = file.replace(/\.md$/, '');
 
-    // Track the current `### heading` so example file names are stable & meaningful.
+    // Track the current symbol heading so example file names are stable & meaningful.
     let heading = 'page';
     let perHeading = 0;
     for (let index = 0; index < lines.length; index += 1) {
-      const headingMatch = /^### `(.+)`$/.exec(lines[index]);
+      const headingMatch = /^#{3,4} `(.+)`$/.exec(lines[index]);
       if (headingMatch) {
         heading = headingMatch[1];
         perHeading = 0;

@@ -11,6 +11,16 @@
  */
 
 let indexPromise;
+let queryVersion = 0;
+let selectedIndex = -1;
+
+const DEFAULT_ENTRIES = [
+  { kind: 'start', section: 'Getting Started', title: 'Quickstart', url: '/docs/quickstart/' },
+  { kind: 'guide', section: 'Build the app', title: 'Tutorial', url: '/tutorial/' },
+  { kind: 'api', section: 'Packages and symbols', title: 'API Reference', url: '/api/' },
+  { kind: 'app', section: 'Runnable apps', title: 'Examples', url: '/examples/' },
+  { kind: 'spec', section: 'Normative behavior', title: 'Specification', url: '/spec/' },
+];
 
 function loadIndex() {
   indexPromise ??= fetch('/search-index.json').then((response) => response.json());
@@ -49,13 +59,60 @@ function score(entry, terms) {
 
 /** A result row: kind/section badge, the symbol-or-page title, and the section
  * path. API-symbol rows deep-link straight to the symbol anchor. */
-function renderResults(element, entries) {
-  element.innerHTML = entries
-    .map((entry) => {
-      const badge = entry.kind ? entry.kind : 'page';
-      return `<li><a href="${escapeHtml(entry.url)}"><span class="result-kind" data-kind="${escapeHtml(badge)}">${escapeHtml(badge)}</span><span class="result-body"><span class="result-title">${escapeHtml(entry.title)}</span><span class="result-section">${escapeHtml(entry.section)}</span></span></a></li>`;
-    })
-    .join('');
+function resultRow(entry, active = false) {
+  const badge = entry.kind ? entry.kind : 'page';
+  return `<li${active ? ' class="active"' : ''}><a href="${escapeHtml(entry.url)}"${active ? ' aria-current="true"' : ''}><span class="result-kind" data-kind="${escapeHtml(badge)}">${escapeHtml(badge)}</span><span class="result-body"><span class="result-title">${escapeHtml(entry.title)}</span><span class="result-section">${escapeHtml(entry.section)}</span></span></a></li>`;
+}
+
+function renderResults(element, entries, options = {}) {
+  selectedIndex = entries.length > 0 ? 0 : -1;
+  const label = options.label
+    ? `<li class="search-results-label">${escapeHtml(options.label)}</li>`
+    : '';
+  element.innerHTML = `${label}${entries
+    .map((entry, index) => resultRow(entry, index === selectedIndex))
+    .join('')}`;
+}
+
+function renderDefaultResults(element) {
+  renderResults(element, DEFAULT_ENTRIES, { label: 'Suggested' });
+}
+
+function renderNoResults(element) {
+  element.innerHTML = [
+    '<li class="search-results-empty">No matching docs found.</li>',
+    '<li class="search-results-label">Suggested</li>',
+    ...DEFAULT_ENTRIES.map((entry) => resultRow(entry)),
+  ].join('');
+  selectedIndex = 0;
+  setSelectedIndex(0);
+}
+
+function resultItems() {
+  return [
+    ...(document.getElementById('site-search-results')?.querySelectorAll('li') ?? []),
+  ].filter((item) => item.querySelector('a'));
+}
+
+function setSelectedIndex(nextIndex) {
+  const items = resultItems();
+  if (items.length === 0) {
+    selectedIndex = -1;
+    return;
+  }
+
+  selectedIndex = (nextIndex + items.length) % items.length;
+  for (const [index, item] of items.entries()) {
+    const active = index === selectedIndex;
+    item.classList.toggle('active', active);
+    const link = item.querySelector('a');
+    if (active) {
+      link?.setAttribute('aria-current', 'true');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      link?.removeAttribute('aria-current');
+    }
+  }
 }
 
 export function open(event) {
@@ -64,23 +121,55 @@ export function open(event) {
   if (!element) return;
   if (!element.open) element.showModal();
   element.querySelector('input')?.focus();
+  const results = document.getElementById('site-search-results');
+  if (results && results.children.length === 0) renderDefaultResults(results);
   void loadIndex();
 }
 
 export async function query(event) {
+  const version = (queryVersion += 1);
   const terms = event.target.value.toLowerCase().split(/\s+/).filter(Boolean);
   const results = document.getElementById('site-search-results');
   if (!results) return;
   if (terms.length === 0) {
-    results.innerHTML = '';
+    renderDefaultResults(results);
     return;
   }
   const index = await loadIndex();
+  if (version !== queryVersion) return;
   const matches = index
     .map((entry) => ({ entry, rank: score(entry, terms) }))
     .filter((match) => match.rank > 0)
     .sort((a, b) => b.rank - a.rank)
     .slice(0, 12)
     .map((match) => match.entry);
+  if (matches.length === 0) {
+    renderNoResults(results);
+    return;
+  }
   renderResults(results, matches);
+}
+
+export function navigate(event) {
+  const items = resultItems();
+  if (items.length === 0) return;
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    setSelectedIndex(selectedIndex + 1);
+    return;
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    setSelectedIndex(selectedIndex - 1);
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    const link = items[selectedIndex < 0 ? 0 : selectedIndex]?.querySelector('a');
+    if (!link) return;
+    event.preventDefault();
+    window.location.href = link.href;
+  }
 }

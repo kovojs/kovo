@@ -427,7 +427,7 @@ canvas {
   padding-left: 1.75rem;
 }
 
-/* API reference rail: category-grouped, collapsible, scroll-spied symbol list.
+/* API reference rail: subpath/category-grouped, collapsible, scroll-spied symbol list.
    Scrolls within a sticky viewport so 200+ symbols stay usable. */
 .api-nav {
   font-size: 0.8rem;
@@ -468,8 +468,56 @@ canvas {
   color: var(--teal);
 }
 
+.api-nav-subpath {
+  border-bottom: 1px solid var(--edge-soft);
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.55rem;
+}
+
+.api-nav-subpath > summary {
+  align-items: baseline;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 650;
+  gap: 0.45rem;
+  justify-content: space-between;
+  line-height: 1.35;
+  list-style: none;
+  padding: 0.25rem 0;
+}
+
+.api-nav-subpath > summary::-webkit-details-marker {
+  display: none;
+}
+
+.api-nav-subpath > summary::before {
+  color: var(--faint);
+  content: '▸';
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  transition: transform 0.15s;
+}
+
+.api-nav-subpath[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.api-nav-subpath > summary > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.api-nav-subpath > .api-nav-src-pkg {
+  display: inline-block;
+  margin: 0.05rem 0 0.25rem 1rem;
+}
+
 .api-nav-group {
-  margin-bottom: 0.5rem;
+  margin: 0 0 0.5rem 1rem;
 }
 
 .api-nav-group > summary {
@@ -1350,6 +1398,24 @@ dialog.search-dialog::backdrop {
   padding: 0.5rem;
 }
 
+.search-results-label,
+.search-results-empty {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  padding: 0.55rem 0.75rem 0.35rem;
+  text-transform: uppercase;
+}
+
+.search-results-empty {
+  border-bottom: 1px solid var(--edge-soft);
+  color: var(--dim);
+  margin-bottom: 0.25rem;
+  padding-bottom: 0.65rem;
+  text-transform: none;
+}
+
 .search-results a {
   align-items: center;
   color: var(--ink);
@@ -1380,6 +1446,17 @@ dialog.search-dialog::backdrop {
 
 .search-results .result-kind[data-kind='function'] {
   color: var(--teal);
+}
+
+.search-results .result-kind[data-kind='api'],
+.search-results .result-kind[data-kind='spec'] {
+  color: var(--purple);
+}
+
+.search-results .result-kind[data-kind='app'],
+.search-results .result-kind[data-kind='guide'],
+.search-results .result-kind[data-kind='start'] {
+  color: var(--sky);
 }
 
 .search-results .result-body {

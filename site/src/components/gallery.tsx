@@ -29,8 +29,8 @@ function galleryUrl(routePath: string): string {
   return `/gallery${routePath}/`;
 }
 
-/** Render the gallery component page body as a verbatim HTML string. */
-export function renderGalleryPage(input: GalleryPageInput): string {
+/** Gallery component route page content. */
+export function GalleryPage({ input }: { input: GalleryPageInput }): string {
   const { demoHtml, interactive, route, routes } = input;
   const blurb = interactive
     ? `Live compiled demo for the ${escapeHtml(route.title)} component contract.`
