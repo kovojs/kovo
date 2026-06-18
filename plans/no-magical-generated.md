@@ -299,6 +299,17 @@ internals, emit/check scripts, and narrowly named artifact tests.
     --filter @kovojs/site exec node scripts/export-static.mjs`, and `git diff
     --check` passed. Keep open for remaining class-based docs site components,
     especially `landing.tsx`, and global/generated-content markup.
+  - Current progress: `site/src/components/landing.tsx` now co-locates landing
+    styles with `@kovojs/style`, `site/src/document-template.ts` co-locates
+    search dialog styles for the raw document shell, and
+    `site/src/client/search.js` uses data-state hooks instead of styling
+    classes. `pnpm --filter @kovojs/site test`, `pnpm --filter @kovojs/site run
+    build:css`, `node scripts/import-boundary.mjs`, and `git diff --check`
+    passed. `pnpm --filter @kovojs/site exec node scripts/export-static.mjs`
+    is currently blocked in this isolated HEAD by missing
+    `examples/devtool/src/graph-model.mjs`, outside the docs-site slice.
+    Keep open for remaining generated/prose global class surfaces and any final
+    no-`style.attrs` app-authoring audit beyond the raw document-template bridge.
 
 ## Verification
 

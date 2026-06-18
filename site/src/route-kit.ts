@@ -4,7 +4,9 @@ import { chromeStyleCss } from './components/chrome.js';
 import { docsLayoutStyleCss } from './components/docs-layout.js';
 import { exampleSplitStyleCss } from './components/example-split.js';
 import { galleryStyleCss } from './components/gallery.js';
+import { landingStyleCss } from './components/landing.js';
 import type { DocPage, NavLink } from './content.js';
+import { searchDialogStyleCss } from './document-template.js';
 
 // Shared route data helpers. Route declarations are emitted as literal TSX in
 // src/generated/app.routes.tsx so @kovojs/compiler can derive route/page
@@ -12,7 +14,14 @@ import type { DocPage, NavLink } from './content.js';
 
 export const siteStylesheets = [
   stylesheet('./styles.css', {
-    criticalCss: [chromeStyleCss, docsLayoutStyleCss, exampleSplitStyleCss, galleryStyleCss],
+    criticalCss: [
+      chromeStyleCss,
+      docsLayoutStyleCss,
+      exampleSplitStyleCss,
+      galleryStyleCss,
+      landingStyleCss,
+      searchDialogStyleCss,
+    ],
     href: '/assets/site.css',
   }),
 ] as const;

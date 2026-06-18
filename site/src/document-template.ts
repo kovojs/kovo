@@ -1,5 +1,6 @@
 import { escapeAttribute } from '@kovojs/server/internal/html';
 import type { DocumentTemplate } from '@kovojs/server';
+import * as style from '@kovojs/style';
 
 import { clientHrefs } from './client/modules.js';
 
@@ -20,6 +21,133 @@ const FONT_PRELOADS = [
   '<link rel="preload" href="/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>',
 ].join('');
 
+const searchStyles = style.create(
+  {
+    dialog: {
+      background: 'var(--bg)',
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 24px 60px -12px rgb(0 0 0 / 0.5)',
+      color: 'var(--ink)',
+      margin: '10vh auto 0',
+      maxHeight: '70vh',
+      padding: 0,
+      width: 'min(40rem, 92vw)',
+      '::backdrop': {
+        backdropFilter: 'blur(3px)',
+        background: 'rgb(0 0 0 / 0.55)',
+      },
+    },
+    input: {
+      background: 'transparent',
+      border: 'none',
+      borderBottomColor: 'var(--edge)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      color: 'var(--ink)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.95rem',
+      outline: 'none',
+      padding: '1rem 1.25rem',
+      width: '100%',
+      '::placeholder': {
+        color: 'var(--faint)',
+      },
+    },
+    results: {
+      listStyle: 'none',
+      margin: 0,
+      maxHeight: '50vh',
+      overflowY: 'auto',
+      padding: '0.5rem',
+      '[data-search-label], [data-search-empty]': {
+        color: 'var(--faint)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.64rem',
+        letterSpacing: '0.12em',
+        padding: '0.55rem 0.75rem 0.35rem',
+        textTransform: 'uppercase',
+      },
+      '[data-search-empty]': {
+        borderBottomColor: 'var(--edge-soft)',
+        borderBottomStyle: 'solid',
+        borderBottomWidth: 1,
+        color: 'var(--dim)',
+        marginBottom: '0.25rem',
+        paddingBottom: '0.65rem',
+        textTransform: 'none',
+      },
+      '[data-search-result-link]': {
+        alignItems: 'center',
+        color: 'var(--ink)',
+        display: 'flex',
+        gap: '0.7rem',
+        padding: '0.55rem 0.75rem',
+        textDecoration: 'none',
+      },
+      '[data-search-result-link]:hover': {
+        background: 'var(--panel)',
+      },
+      '[data-active="true"] [data-search-result-link]': {
+        background: 'var(--panel)',
+      },
+      '[data-result-kind]': {
+        background: 'var(--panel)',
+        borderColor: 'var(--edge)',
+        borderStyle: 'solid',
+        borderWidth: 1,
+        color: 'var(--faint)',
+        flexShrink: 0,
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.56rem',
+        letterSpacing: '0.08em',
+        padding: '0.12rem 0.4rem',
+        textAlign: 'center',
+        textTransform: 'uppercase',
+        width: '3.4rem',
+      },
+      '[data-result-kind="function"]': {
+        color: 'var(--teal)',
+      },
+      '[data-result-kind="api"], [data-result-kind="spec"]': {
+        color: 'var(--purple)',
+      },
+      '[data-result-kind="app"], [data-result-kind="guide"], [data-result-kind="start"]': {
+        color: 'var(--sky)',
+      },
+      '[data-result-body]': {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.1rem',
+        minWidth: 0,
+      },
+      '[data-result-title]': {
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.84rem',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      },
+      '[data-result-section]': {
+        color: 'var(--faint)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.62rem',
+        letterSpacing: '0.1em',
+      },
+    },
+  },
+  { namespace: 'site-search-dialog', source: 'site/src/document-template.ts' },
+);
+
+export const searchDialogStyleCss = style.emitAtomicCss(
+  Object.values(searchStyles).flatMap((entry) => entry.__rules ?? []),
+);
+
+const searchDialogClass = style.attrs(searchStyles.dialog).className;
+const searchInputClass = style.attrs(searchStyles.input).className;
+const searchResultsClass = style.attrs(searchStyles.results).className;
+
 const SEARCH_DEFAULT_RESULTS = [
   ['start', 'Quickstart', 'Getting Started', '/docs/quickstart/'],
   ['guide', 'Tutorial', 'Build the app', '/tutorial/'],
@@ -29,11 +157,11 @@ const SEARCH_DEFAULT_RESULTS = [
 ]
   .map(
     ([kind, title, section, url], index) =>
-      `<li${index === 0 ? ' class="active"' : ''}><a href="${url}"${index === 0 ? ' aria-current="true"' : ''}><span class="result-kind" data-kind="${kind}">${kind}</span><span class="result-body"><span class="result-title">${title}</span><span class="result-section">${section}</span></span></a></li>`,
+      `<li${index === 0 ? ' data-active="true"' : ''}><a href="${url}" data-search-result-link${index === 0 ? ' aria-current="true"' : ''}><span data-result-kind="${kind}">${kind}</span><span data-result-body><span data-result-title>${title}</span><span data-result-section>${section}</span></span></a></li>`,
   )
   .join('');
 
-const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label="Search documentation"><input type="search" class="search-input" placeholder="Search docs&hellip;" on:input="${clientHrefs.search}#query" on:keydown="${clientHrefs.search}#navigate" kovo-state="{}"><ul class="search-results" id="site-search-results"><li class="search-results-label">Suggested</li>${SEARCH_DEFAULT_RESULTS}</ul></dialog>`;
+const SEARCH_DIALOG = `<dialog id="site-search" class="${searchDialogClass}" aria-label="Search documentation"><input type="search" class="${searchInputClass}" placeholder="Search docs&hellip;" on:input="${clientHrefs.search}#query" on:keydown="${clientHrefs.search}#navigate" kovo-state="{}"><ul class="${searchResultsClass}" id="site-search-results"><li data-search-label>Suggested</li>${SEARCH_DEFAULT_RESULTS}</ul></dialog>`;
 
 // ⌘K / Ctrl-K opens the search dialog. This must be an always-present inline
 // listener, not part of the lazy search island: the island only loads on first
