@@ -4,15 +4,19 @@ import { fileURLToPath } from 'node:url';
 
 import type { KovoExplainInput, PageExplain } from '@kovojs/core/internal/graph';
 import { htmlDocumentFacts } from '@kovojs/test/html-fragment';
+import { renderPageHints } from '@kovojs/server';
 import { kovoExplain } from 'kovo';
 import { describe, expect, it } from 'vitest';
 
 import {
   commerceCartPageMeta,
+  commerceMessages,
+  commerceMeta,
+  commerceStylesheets,
   createCommerceDb,
   loadCartQuery,
   productGridQuery,
-  renderCommercePageHints,
+  type CartQueryResult,
 } from './app.js';
 import { resetProducts } from './app-test-helpers.js';
 
@@ -20,6 +24,17 @@ const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
 const generatedGraph = JSON.parse(
   readFileSync(join(commerceRoot, 'src/generated/graph.json'), 'utf8'),
 ) as KovoExplainInput;
+
+function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
+  return renderPageHints(
+    {
+      i18n: commerceMessages,
+      meta: commerceMeta,
+      stylesheets: commerceStylesheets,
+    },
+    { queries: { cart } },
+  );
+}
 
 describe('commerce graph', () => {
   it('keeps cart/add refresh behavior visible', () => {

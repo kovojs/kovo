@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@kovojs/server';
+import { csrfToken, renderDeferredStream } from '@kovojs/server';
 import {
   renderMutationEndpointResponse,
   type MutationWireHeaderSource,
@@ -11,12 +11,14 @@ import {
   renderAddToCartError,
   renderAddToCartForm,
   renderShopPage,
-  renderShopPageDeferredStream,
   shopCsrf,
   type AddToCartFailure,
   type ShopRequest,
 } from './app.js';
 import { createShopDb } from './db.js';
+import { CartBadge } from './generated/cart-badge.js';
+import { ProductList } from './generated/product-list.js';
+import { loadCart, loadProducts } from './queries.js';
 
 // Tutorial step 06: <kovo-defer> streams the product list out of order inside
 // one response, reusing the mutation wire's fragment/query vocabulary
@@ -65,6 +67,35 @@ function productIdFromRawInput(rawInput: unknown): string | undefined {
   }
   const productId = rawInput.productId;
   return typeof productId === 'string' ? productId : undefined;
+}
+
+function renderShopPageDeferredStream(db = createShopDb(), request?: ShopRequest) {
+  const cart = loadCart(db);
+  const shell = `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1><kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment><kovo-defer target="product-list" state="pending">Loading products...</kovo-defer>`;
+  const products = loadProducts(db);
+
+  return renderDeferredStream({
+    chunks: [
+      {
+        fragments: [
+          {
+            html: expectSyncHtml(ProductList.definition.render({ products }, { request })),
+            target: 'product-list',
+          },
+        ],
+        queries: [{ name: 'products', value: products }],
+      },
+    ],
+    closeHtml: '</main></body></html>',
+    shell,
+  });
+}
+
+function expectSyncHtml(html: string | Promise<string>): string {
+  if (typeof html !== 'string') {
+    throw new Error('Tutorial deferred stream fixture expected synchronous component HTML');
+  }
+  return html;
 }
 
 describe('tutorial step 06 — streaming & defer', () => {

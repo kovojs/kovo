@@ -6,8 +6,8 @@ import { renderShopPage } from './app.js';
 import { createShopDb } from './db.js';
 
 // Tutorial step 03: queries are declared once and every derived surface —
-// kovo-deps stamps, data-bind paths, the shipped query JSON — is checkable from
-// the rendered page (SPEC.md sections 4.2, 4.8, 10.2).
+// kovo-deps stamps and data-bind paths are checkable from the rendered page
+// (SPEC.md sections 4.2, 4.8, 10.2).
 
 describe('tutorial step 03 — queries & data binding', () => {
   // snippet:stamps-test
@@ -26,17 +26,14 @@ describe('tutorial step 03 — queries & data binding', () => {
   });
   // /snippet
 
-  // snippet:query-json-test
-  it('ships each query value exactly once as shared client data', () => {
+  // snippet:query-data-test
+  it('renders loaded query values through the declared components', () => {
     const db = createShopDb();
     db.cartItems.push({ productId: 'p1', qty: 2, unitPrice: 1499 });
     const html = renderShopPage(db);
 
-    expect(html.match(/kovo-query="cart"/g)).toHaveLength(1);
-    expect(html).toContain(
-      '<script type="application/json" kovo-query="cart">{"count":2}</script>',
-    );
     expect(html).toContain('<span data-bind="cart.count">2</span>');
+    expect(html).toContain('Pour-over kettle — $14.99 (5 in stock)');
   });
   // /snippet
 

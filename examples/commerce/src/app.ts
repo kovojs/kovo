@@ -4,7 +4,6 @@ import {
   i18n,
   metaFromQuery,
   mutation,
-  renderPageHints,
   s,
   session,
 } from '@kovojs/server';
@@ -25,7 +24,6 @@ import {
   orderHistoryQuery,
   product,
   productGridQuery,
-  type CartQueryResult,
 } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 
@@ -289,19 +287,6 @@ export const commerceMessageCatalog = {
 export const commerceMessages = i18n('en-US', commerceMessageCatalog);
 
 export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
-
-export function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
-  return renderPageHints(
-    {
-      i18n: commerceMessages,
-      meta: commerceMeta,
-      stylesheets: commerceStylesheets,
-    },
-    { queries: { cart } },
-  );
-}
-
-export const commercePageHints = renderCommercePageHints();
 
 function readCookie(headers: Headers, name: string): string | undefined {
   const cookie = headers.get('cookie');

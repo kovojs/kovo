@@ -12,37 +12,27 @@ streams into the same response: the shell renders with a fallback, the real frag
 later chunk, and the morph layer patches it in. It reuses the fragment protocol within first render
 rather than adding a second mechanism.
 
-## The shape of a deferred response
+## The app shape
 
-From the commerce reference app, deferring the product grid:
+From the commerce reference app, the app authors declare the route and the query-backed component.
+The app shell owns the deferred document wire:
 
-```ts
-import { renderDeferredStream } from '@kovojs/server';
+```tsx
+import { component } from '@kovojs/core';
+import { route } from '@kovojs/server';
 
-export function renderProductGridDeferredStream(db: CommerceDb) {
-  const productGrid = loadProductGrid(db);
+export const ProductGrid = component({
+  queries: { productGrid },
+  render: ({ productGrid }) => <section>{productGrid.items.map(renderProduct)}</section>,
+});
 
-  return renderDeferredStream({
-    shell:
-      '<!doctype html><html><body><main class="product-page"><kovo-defer target="product-grid" state="pending"></kovo-defer>',
-    chunks: [
-      {
-        queries: [{ name: 'productGrid', value: productGrid }],
-        fragments: [
-          {
-            target: 'product-grid',
-            html: renderProductGrid(productGrid),
-            stylesheets: commerceStylesheets,
-          },
-        ],
-      },
-    ],
-    closeHtml: '</main></body></html>',
-  });
-}
+export const productPage = route('/products', {
+  page: () => <ProductGrid />,
+  stylesheets: commerceStylesheets,
+});
 ```
 
-The response is one chunked HTML document. On the wire, in order:
+The response is one chunked HTML document. Internally, the wire stays ordered like this:
 
 ```html
 <!doctype html>
@@ -81,15 +71,12 @@ mutation fragments — useful for streaming list pages.
 ## Keep deferred queries ahead of their consumers
 
 The guarantee to rely on: deferred query JSON arrives before or with its consumers. That's why
-`renderDeferredStream` couples `queries` and `fragments` per chunk — the
-`<kovo-query name="productGrid">` value lands in the same chunk as the fragment whose `data-bind`
-attributes read it, so a deferred island never renders against missing data. When you build chunks by
-hand, keep a fragment's queries in its own chunk or an earlier one, never a later one.
+Kovo emits a fragment's query values in the same chunk as the fragment whose `data-bind` attributes
+read them, so a deferred island never renders against missing data.
 
-Chunks and fragments accept a `priority` (`'high' | 'normal' | 'low'` or a number), and emission
-order follows priority with declaration order as the tiebreaker. That's declared hinting within the
-stream; finer priority semantics and query-JSON placement under HTTP/1.1 fallbacks are still open
-design areas. The before-or-with guarantee is the contract you can depend on.
+Priority is declared on the route/component surface that owns the late region. Finer priority
+semantics and query-JSON placement under HTTP/1.1 fallbacks are still open design areas. The
+before-or-with guarantee is the contract you can depend on.
 
 ## Stylesheets for late fragments
 

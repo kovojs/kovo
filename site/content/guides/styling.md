@@ -83,23 +83,22 @@ component-local styles and component override surfaces.
 
 Kovo owns the framework CSS contract. An emitted page lists its required stylesheet assets once, and
 the same hints serve full-page renders, mutation fragments, and deferred fragments. The docs site
-declares its stylesheet as part of its page hints:
+declares its stylesheet on the route:
 
-```ts
-import { renderPageHints } from '@kovojs/server';
+```tsx
+import { route } from '@kovojs/server';
 
 export const siteStylesheets = ['/assets/site.css'] as const;
 
-const hints = renderPageHints(
-  { meta: siteMeta, stylesheets: siteStylesheets },
-  { queries: { cart } },
-);
-// hints.html       -> <link rel="stylesheet" ...> + meta + modulepreloads, for <head>
-// hints.earlyHints -> the same assets shaped for 103 Early Hints
+export const cartPage = route('/cart', {
+  meta: siteMeta,
+  page: () => <CartPage />,
+  stylesheets: siteStylesheets,
+});
 ```
 
-Each stylesheet entry can carry `preload` and `criticalCss`, and the hint renderer dedupes assets in
-page order.
+Each stylesheet entry can carry `preload` and `criticalCss`, and the app shell dedupes assets in page
+order.
 
 ## Declare stylesheets for fragments and streams
 
@@ -124,27 +123,21 @@ export const addToCart = mutation('cart/add', {
 });
 ```
 
-Deferred chunks do the same:
+Deferred chunks do the same through the component and route metadata that own the late-rendered
+region:
 
-```ts
-import { renderDeferredStream } from '@kovojs/server';
+```tsx
+import { component } from '@kovojs/core';
+import { route } from '@kovojs/server';
 
-renderDeferredStream({
-  shell:
-    '<!doctype html><html><body><main><kovo-defer target="product-grid" state="pending"></kovo-defer>',
-  chunks: [
-    {
-      queries: [{ name: 'productGrid', value: productGrid }],
-      fragments: [
-        {
-          target: 'product-grid',
-          html: renderProductGrid(productGrid),
-          stylesheets: siteStylesheets,
-        },
-      ],
-    },
-  ],
-  closeHtml: '</main></body></html>',
+export const ProductGrid = component({
+  queries: { productGrid },
+  render: ({ productGrid }) => <section>{productGrid.items.map(renderProduct)}</section>,
+});
+
+export const cartPage = route('/cart', {
+  page: () => <ProductGrid />,
+  stylesheets: siteStylesheets,
 });
 ```
 

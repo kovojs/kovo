@@ -2,7 +2,6 @@ import { form, type FormInput } from '@kovojs/core';
 import type { OptimisticFor } from '@kovojs/runtime';
 import {
   mutation,
-  renderQueryScript,
   route,
   s,
   type MutationFail,
@@ -129,13 +128,10 @@ export function renderShopPage(
 ): string {
   const cart = loadCart(db);
   const products = loadProducts(db);
-  const queryData =
-    renderQueryScript({ name: 'cart', value: cart }) +
-    renderQueryScript({ name: 'products', value: products });
   const badge = `<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment>`;
   const list = `<kovo-fragment target="product-list">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</kovo-fragment>`;
 
-  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${queryData}${badge}${list}</main></body></html>`;
+  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${badge}${list}</main></body></html>`;
 }
 
 export const homeRoute = route('/', {

@@ -135,7 +135,7 @@ are already proven. See [reading kovo check & kovo explain](/guides/kovo-explain
 - [ ] App server is stateless; no instance affinity configured anywhere.
 - [ ] `/c/*` published additively, served immutable, retained across deploys.
 - [ ] HTML responses are not cached as immutable (documents change per deploy; modules don't).
-- [ ] 103 Early Hints / preload wired from `renderPageHints` output if your edge supports it.
+- [ ] 103 Early Hints / preload wired from route page hints if your edge supports it.
 - [ ] Speculation Rules prefetch only on routes that opted in — it is per-route, default off.
 - [ ] CI runs `vp check`, `vp test`, `vp run kovo-check`, and graph assertions before deploy.
 

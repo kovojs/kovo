@@ -5,17 +5,32 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { htmlDocumentFacts, htmlElementFacts } from '@kovojs/test/html-fragment';
+import { renderPageHints } from '@kovojs/server';
 
 import {
+  commerceMessages,
+  commerceMeta,
   commerceMessageCatalog,
-  commercePageHints,
+  commerceStylesheets,
   createCommerceDb,
   loadCartQuery,
-  renderCommercePageHints,
+  type CartQueryResult,
 } from './app.js';
 import { createCommerceScenarioClient, seedCartItems } from './app-test-helpers.js';
 
 const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
+const commercePageHints = renderCommercePageHints();
+
+function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
+  return renderPageHints(
+    {
+      i18n: commerceMessages,
+      meta: commerceMeta,
+      stylesheets: commerceStylesheets,
+    },
+    { queries: { cart } },
+  );
+}
 
 describe('commerce example', () => {
   it('renders StyleX-first stylesheet hints and static utility classes', async () => {

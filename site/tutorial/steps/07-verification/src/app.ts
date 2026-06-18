@@ -3,8 +3,6 @@ import type { OptimisticFor } from '@kovojs/runtime';
 import {
   guards,
   mutation,
-  renderDeferredStream,
-  renderQueryScript,
   route,
   s,
   session,
@@ -208,15 +206,11 @@ export function renderShopPage(
   const cart = loadCart(db);
   const products = loadProducts(db);
   const orderHistory = loadOrderHistory(db);
-  const queryData =
-    renderQueryScript({ name: 'cart', value: cart }) +
-    renderQueryScript({ name: 'products', value: products }) +
-    renderQueryScript({ name: 'orderHistory', value: orderHistory });
   const badge = `<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment>`;
   const list = `<kovo-fragment target="product-list">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</kovo-fragment>`;
   const orders = `<kovo-fragment target="order-history">${OrderHistory.definition.render({ orderHistory })}</kovo-fragment>`;
 
-  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${queryData}${badge}${list}${orders}</main></body></html>`;
+  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${badge}${list}${orders}</main></body></html>`;
 }
 
 export const homeRoute = route('/', {
@@ -224,32 +218,3 @@ export const homeRoute = route('/', {
     return renderShopPage();
   },
 });
-
-export function renderShopPageDeferredStream(db: ShopDb = createShopDb(), request?: ShopRequest) {
-  const cart = loadCart(db);
-  const shell = `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${renderQueryScript({ name: 'cart', value: cart })}<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment><kovo-defer target="product-list" state="pending">Loading products…</kovo-defer>`;
-  const products = loadProducts(db);
-
-  return renderDeferredStream({
-    chunks: [
-      {
-        fragments: [
-          {
-            html: expectSyncHtml(ProductList.definition.render({ products }, { request })),
-            target: 'product-list',
-          },
-        ],
-        queries: [{ name: 'products', value: products }],
-      },
-    ],
-    closeHtml: '</main></body></html>',
-    shell,
-  });
-}
-
-function expectSyncHtml(html: string | Promise<string>): string {
-  if (typeof html !== 'string') {
-    throw new Error('Tutorial deferred stream fixture expected synchronous component HTML');
-  }
-  return html;
-}
