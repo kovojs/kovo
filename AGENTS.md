@@ -43,6 +43,15 @@
 - Treat active plan files as compact current-state ledgers, not append-only audit logs. Keep them
   focused on the checklist, open work, current risks, and latest proving commands; summarize or
   archive repetitive historical evidence instead of growing long transcripts of partial slices.
+- Keep plan evidence concise. For each completed checkbox, record at most the shortest proof needed
+  to justify the checkmark: usually one focused command or authoritative file/artifact plus the
+  behavioral claim it proves. Do not paste command transcripts, fixture inventories, repeated root
+  gate lists, or historical slice-by-slice logs into every item. Put shared verification such as
+  `tsc`, API gates, or `git diff --check` in one compact "latest verification" section when useful,
+  and reference that section from related checkboxes only when it directly supports them.
+- When new evidence supersedes old evidence in an active plan, replace or collapse the older record
+  instead of appending. If the historical detail is still valuable, move it to an archive or a linked
+  handoff note; active plans should preserve decision state and current proof, not forensic history.
 - When integrating a branch forked before a plan compaction, do not accept the branch's stale plan
   version wholesale. Keep the compact main-thread ledger, manually port only the new implementation
   evidence needed for the integrated slice, and verify line counts stay reasonable before committing.

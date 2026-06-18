@@ -40,6 +40,13 @@ public package, every `package.json` export subpath is classified by
 - Public subpaths expose only app-facing API. Every exported declaration must be
   documented (JSDoc, ideally citing the SPEC § where behavior is normative), and
   public subpaths must not export declarations tagged `@internal` or `@generated`.
+  If a function, class, constant, or type is public, then every parameter type,
+  return type, property type, callback type, generic constraint/default, overload,
+  and referenced helper type needed to use it must also be public, recursively.
+  A public signature must not require importing or naming an internal/generated
+  type. Either promote the supporting type to the same public surface, redesign
+  the signature to use an existing public type, or move the original symbol behind
+  an internal/generated subpath too.
 - Generated subpaths, such as `@kovojs/runtime/generated`, expose compiler-emitted
   ABI. They may export declarations tagged `@generated` plus documented public
   types needed to type that ABI. They must not export `@internal` declarations or
