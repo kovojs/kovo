@@ -2,7 +2,7 @@
   "name": "kovo",
   "version": "0.1.0",
   "bin": {
-    "kovo": "./src/index.ts"
+    "kovo": "./src/bin.ts"
   },
   "files": [
     "dist"
@@ -14,7 +14,7 @@
   },
   "publishConfig": {
     "bin": {
-      "kovo": "./dist/index.mjs"
+      "kovo": "./dist/bin.mjs"
     },
     "exports": {
       ".": {
@@ -28,7 +28,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/api.ts src/index.ts --dts",
+    "build:dist": "vp pack src/api.ts src/bin.ts src/index.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

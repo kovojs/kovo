@@ -1009,7 +1009,8 @@ describe('kovo check', () => {
         'utf8',
       );
       writeFileSync(join(parent, 'package.json'), '{"type":"module"}\n', 'utf8');
-      symlinkSync(new URL('./index.ts', import.meta.url), entryPath);
+      symlinkSync(new URL('./bin.ts', import.meta.url), entryPath);
+      symlinkSync(new URL('./index.ts', import.meta.url), join(spacedDir, 'index.js'));
       symlinkSync(new URL('./add-catalog.ts', import.meta.url), join(spacedDir, 'add-catalog.js'));
       symlinkSync(
         new URL('./commands-manifest.ts', import.meta.url),

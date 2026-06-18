@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { registerHooks } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,12 +22,8 @@ registerHooks({
   },
 });
 
-const { assertFixpoint, assertRenderEquivalence, compileComponentModule, compileRouteModule } =
-  await import('@kovojs/compiler');
-const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
-
 // Compiles the authored TSX components (src/components/*.tsx) through
-// @kovojs/compiler and commits the lowered IR modules to src/generated/ — the
+// `kovo compile` and commits the lowered IR modules to src/generated/ — the
 // SPEC.md section 3 pipeline with the section 5.2.3 fixpoint gate and committed
 // lowered-source freshness applied to every component. The app imports the
 // committed IR at runtime, so served HTML carries the compiler-derived stamps
@@ -29,67 +33,85 @@ const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
 const componentNames = ['cart-badge', 'order-history', 'product-grid'];
-const mutationSourcePath = resolve(commerceRoot, 'src/app.ts');
+const checkMode = process.argv.includes('--check');
 const registryFacts = {
-  mutationInputs: registryMutationInputs(
-    'examples/commerce/src/app.ts',
-    readFileSync(mutationSourcePath, 'utf8'),
-  ),
+  mutationInputs: {
+    'cart/add': [
+      {
+        coercion: 'string',
+        defaulted: false,
+        name: 'productId',
+        optional: false,
+        provenance: 'registry',
+        required: true,
+      },
+      {
+        coercion: 'number',
+        defaulted: true,
+        name: 'quantity',
+        optional: false,
+        provenance: 'registry',
+        required: false,
+      },
+    ],
+  },
   mutations: { 'cart/add': 'typeof addToCart' },
 };
+const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-commerce-emit-'));
+const registryFactsPath = resolve(tempRoot, 'registry-facts.json');
+writeFileSync(registryFactsPath, JSON.stringify(registryFacts, null, 2));
 
-function registryMutationInputs(fileName, source) {
-  return Object.fromEntries(
-    [...mutationInputFactsFromSource(fileName, source).values()].map((fact) => [
-      fact.key,
-      fact.fields.map((field) => ({ ...field, provenance: 'registry' })),
-    ]),
-  );
+function compileArtifact(args, outputPath) {
+  execFileSync('kovo', ['compile', ...args, '--out', outputPath], {
+    cwd: commerceRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return readFileSync(outputPath, 'utf8');
 }
 
-for (const name of componentNames) {
-  const sourcePath = resolve(commerceRoot, `src/components/${name}.tsx`);
-  const generatedPath = resolve(commerceRoot, `src/generated/${name}.tsx`);
-  const fileName = `examples/commerce/src/components/${name}.tsx`;
-  const source = readFileSync(sourcePath, 'utf8');
+try {
+  for (const name of componentNames) {
+    const sourcePath = resolve(commerceRoot, `src/components/${name}.tsx`);
+    const generatedPath = resolve(commerceRoot, `src/generated/${name}.tsx`);
+    const loweredPath = resolve(tempRoot, `${name}.tsx`);
+    const fileName = `examples/commerce/src/components/${name}.tsx`;
+    const source = readFileSync(sourcePath, 'utf8');
 
-  // SPEC.md section 4.8: stamps are derived, never required in sugar.
-  assert.doesNotMatch(
-    source,
-    /(?:data-bind|kovo-deps|kovo-c|kovo-fragment-target|kovo-state|data-p-[\w-]+)=/,
-    `${fileName} hand-writes stamps`,
-  );
-
-  const result = compileComponentModule({ fileName, registryFacts, source });
-
-  assert.deepEqual(
-    result.diagnostics,
-    [],
-    `${fileName} has compiler diagnostics: ${JSON.stringify(result.diagnostics, null, 2)}`,
-  );
-  // SPEC.md section 5.2.3 / Constitution #3: compiling the output is a no-op.
-  // Real authored-vs-lowered render equivalence is tracked separately in plans/compiler-hardening.md.
-  assertFixpoint(result);
-  assertRenderEquivalence(result);
-
-  const lowered = result.loweredSource;
-  assert.ok(lowered, `${fileName} produced no lowered render source`);
-
-  const generated = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.\n${lowered}`;
-
-  if (process.argv.includes('--check')) {
-    assert.equal(
-      readFileSync(generatedPath, 'utf8'),
-      generated,
-      `generated ${name}.tsx is stale; run \`pnpm --filter @kovojs/example-commerce run emit-components\``,
+    // SPEC.md section 4.8: stamps are derived, never required in sugar.
+    assert.doesNotMatch(
+      source,
+      /(?:data-bind|kovo-deps|kovo-c|kovo-fragment-target|kovo-state|data-p-[\w-]+)=/,
+      `${fileName} hand-writes stamps`,
     );
-  } else {
-    writeFileSync(generatedPath, generated);
-  }
-}
 
-const liveTargetsPath = resolve(commerceRoot, 'src/generated/live-targets.ts');
-const liveTargetsSource = `// @kovojs-ir - generated live-target registry for Commerce components (SPEC.md section 9.1). Do not edit; regenerate with \`pnpm run emit-components\`.
+    const lowered = compileArtifact(
+      [
+        'component',
+        sourcePath,
+        '--file-name',
+        fileName,
+        '--registry-facts',
+        registryFactsPath,
+        '--fixpoint',
+        '--render-equivalence',
+      ],
+      loweredPath,
+    );
+    const generated = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.\n${lowered}`;
+
+    if (checkMode) {
+      assert.equal(
+        readFileSync(generatedPath, 'utf8'),
+        generated,
+        `generated ${name}.tsx is stale; run \`pnpm --filter @kovojs/example-commerce run emit-components\``,
+      );
+    } else {
+      writeFileSync(generatedPath, generated);
+    }
+  }
+
+  const liveTargetsPath = resolve(commerceRoot, 'src/generated/live-targets.ts');
+  const liveTargetsSource = `// @kovojs-ir - generated live-target registry for Commerce components (SPEC.md section 9.1). Do not edit; regenerate with \`pnpm run emit-components\`.
 import {
   collectGeneratedLiveTargetRenderers,
   type LiveTargetRenderer,
@@ -109,45 +131,47 @@ export const liveTargetRenderers: readonly LiveTargetRenderer<CommerceRequest>[]
 ];
 `;
 
-if (process.argv.includes('--check')) {
-  assert.equal(
-    readFileSync(liveTargetsPath, 'utf8'),
-    liveTargetsSource,
-    'generated live-targets.ts is stale; run `pnpm --filter @kovojs/example-commerce run emit-components`',
+  if (checkMode) {
+    assert.equal(
+      readFileSync(liveTargetsPath, 'utf8'),
+      liveTargetsSource,
+      'generated live-targets.ts is stale; run `pnpm --filter @kovojs/example-commerce run emit-components`',
+    );
+  } else {
+    writeFileSync(liveTargetsPath, liveTargetsSource);
+  }
+
+  const routeSourcePath = resolve(commerceRoot, 'src/app-shell.tsx');
+  const routeGeneratedPath = resolve(commerceRoot, 'src/generated/app-shell.kovo-route.tsx');
+  const routeFileName = 'examples/commerce/src/app-shell.tsx';
+  const routeArtifactFileName = 'examples/commerce/src/generated/app-shell.kovo-route.tsx';
+  const routeGenerated = compileArtifact(
+    [
+      'route',
+      routeSourcePath,
+      '--file-name',
+      routeFileName,
+      '--artifact-file-name',
+      routeArtifactFileName,
+      '--rewrite',
+      'CartBadge=./cart-badge.js',
+      '--rewrite',
+      'OrderHistory=./order-history.js',
+      '--rewrite',
+      'ProductGrid=./product-grid.js',
+    ],
+    resolve(tempRoot, 'app-shell.kovo-route.tsx'),
   );
-} else {
-  writeFileSync(liveTargetsPath, liveTargetsSource);
-}
 
-const routeSourcePath = resolve(commerceRoot, 'src/app-shell.tsx');
-const routeGeneratedPath = resolve(commerceRoot, 'src/generated/app-shell.kovo-route.tsx');
-const routeFileName = 'examples/commerce/src/app-shell.tsx';
-const routeArtifactFileName = 'examples/commerce/src/generated/app-shell.kovo-route.tsx';
-const routeResult = compileRouteModule({
-  artifactFileName: routeArtifactFileName,
-  componentImportRewrites: [
-    { localName: 'CartBadge', specifier: './cart-badge.js' },
-    { localName: 'OrderHistory', specifier: './order-history.js' },
-    { localName: 'ProductGrid', specifier: './product-grid.js' },
-  ],
-  fileName: routeFileName,
-  source: readFileSync(routeSourcePath, 'utf8'),
-});
-
-assert.deepEqual(
-  routeResult.diagnostics,
-  [],
-  `${routeFileName} has compiler diagnostics: ${JSON.stringify(routeResult.diagnostics, null, 2)}`,
-);
-assert.equal(routeResult.files.length, 1, `${routeFileName} produced no generated route IR`);
-const routeGenerated = routeResult.files[0].source;
-
-if (process.argv.includes('--check')) {
-  assert.equal(
-    readFileSync(routeGeneratedPath, 'utf8'),
-    routeGenerated,
-    'generated app-shell.kovo-route.tsx is stale; run `pnpm --filter @kovojs/example-commerce run emit-components`',
-  );
-} else {
-  writeFileSync(routeGeneratedPath, routeGenerated);
+  if (checkMode) {
+    assert.equal(
+      readFileSync(routeGeneratedPath, 'utf8'),
+      routeGenerated,
+      'generated app-shell.kovo-route.tsx is stale; run `pnpm --filter @kovojs/example-commerce run emit-components`',
+    );
+  } else {
+    writeFileSync(routeGeneratedPath, routeGenerated);
+  }
+} finally {
+  rmSync(tempRoot, { force: true, recursive: true });
 }

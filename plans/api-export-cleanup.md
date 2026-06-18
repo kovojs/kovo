@@ -631,7 +631,25 @@ tsconfig.json --noEmit --pretty false`.
   - Once starters and app-owned scripts use `kovo` or static artifacts instead,
     update `public-packages.json`, API docs, and publish/build assumptions so
     compiler APIs are treated as framework-internal build machinery.
-  - Evidence:
+  - Progress evidence: `examples/commerce/scripts/emit-components.mjs` now calls
+    `kovo compile component` and `kovo compile route` instead of importing
+    `@kovojs/compiler`; `examples/commerce/scripts/emit-ui-css.mjs` now calls
+    `kovo compile package-css` instead of importing
+    `@kovojs/compiler/package-styles`. `packages/cli/src/bin.ts` is the
+    workspace/published bin bootstrap, so app scripts can call the command
+    facade in source worktrees without manually authoring TS resolver hooks.
+    Verified with
+    `corepack pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+    `corepack pnpm --filter @kovojs/example-commerce exec node scripts/emit-ui-css.mjs`,
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts`,
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+    `node scripts/build-publish.mjs`, `corepack pnpm run check:imports`, and
+    `corepack pnpm run check:exports`.
+  - Remaining gap: `examples/commerce/scripts/emit-graph.mjs`, CRM/StackOverflow
+    graph/UI CSS scripts, Gallery interactive emit tooling, and
+    `site/tutorial/run-steps.mjs` still require compiler APIs or compiler
+    capabilities not yet exposed by `kovo compile` (client artifact emission,
+    configurable lint-diagnostic policy, and mutation-input fact extraction).
 
 ## Package-Wide Internalization Candidates
 
