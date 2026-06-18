@@ -14,6 +14,70 @@ import { kovoAppShellViteDevPlugin } from './api/app-shell/vite.js';
 import { nodeFetch } from './vite-test-http.js';
 
 describe('server app shell Vite plugin', () => {
+  it('owns the app-shell dev plugin option matrix for generated module loading', async () => {
+    const app = createApp({ routes: [route('/cart', { page: () => '<main>Cart</main>' })] });
+    const plugin = kovoAppShellViteDevPlugin({
+      appExportName: 'shopApp',
+      moduleId: '/src/generated/app-shell.kovo-route.tsx',
+      name: 'kovo-shop-app-shell-dev',
+      nodeHandlerExportName: 'shopNodeHandler',
+      order: 'post',
+    });
+    const middlewares: KovoAppShellViteMiddleware[] = [];
+    const loadedModuleIds: string[] = [];
+    let handlerCalls = 0;
+
+    const postHook = plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+      async ssrLoadModule(id) {
+        loadedModuleIds.push(id);
+        return {
+          shopApp: app,
+          shopNodeHandler(_request: unknown, response: { end(body: string): void }) {
+            handlerCalls += 1;
+            response.end('handled by generated app shell');
+          },
+        };
+      },
+    });
+
+    expect(plugin.name).toBe('kovo-shop-app-shell-dev');
+    expect(middlewares).toEqual([]);
+    expect(postHook).toBeTypeOf('function');
+    if (typeof postHook !== 'function') {
+      throw new Error('post-order app-shell dev plugin did not return its install hook');
+    }
+    postHook();
+    expect(middlewares).toHaveLength(1);
+
+    const server = createServer((request, response) => {
+      middlewares[0]?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'next');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    try {
+      await expect(
+        nodeFetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/cart`),
+      ).resolves.toMatchObject({
+        body: 'handled by generated app shell',
+        status: 200,
+      });
+      expect(loadedModuleIds).toEqual(['/src/generated/app-shell.kovo-route.tsx']);
+      expect(handlerCalls).toBe(1);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it('registers dev middleware that serves shell requests and passes source assets onward', async () => {
     const productRoute = route('/products/:id', {
       meta: { title: 'Product' },

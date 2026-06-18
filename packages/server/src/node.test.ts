@@ -3,7 +3,14 @@ import type { IncomingHttpHeaders, IncomingMessage, RequestListener } from 'node
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 
+import { createApp, createRequestHandler } from './app.js';
+import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import { domain } from './domain.js';
+import { mutation } from './mutation.js';
 import { toNodeHandler } from './node.js';
+import { query } from './query.js';
+import { route } from './route.js';
+import { s } from './schema.js';
 
 describe('server node adapter', () => {
   it('serves web-standard handlers through node:http with request bodies and early hints', async () => {
@@ -91,6 +98,97 @@ describe('server node adapter', () => {
       await server.close();
     }
   });
+
+  it('serves a SPEC §9.5 app shell surface through node:http', async () => {
+    const cart = domain('cart');
+    const db = { count: 0 };
+    const clientModules = createMemoryVersionedClientModuleRegistry();
+    const clientHref = clientModules.put({
+      path: '/c/cart.client.js',
+      source: 'export const cartClient = true;',
+      version: 'cart-v1',
+    });
+    const cartQuery = query('cart', {
+      load: () => ({ count: db.count }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ quantity: s.number().int().min(1).default(1) }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        db.count += input.quantity;
+        return { count: db.count };
+      },
+    });
+    const app = createApp({
+      clientModules,
+      mutations: [addToCart],
+      queries: [cartQuery],
+      routes: [
+        route('/cart', {
+          modulepreloads: [clientHref],
+          page: () => `<main>Cart ${db.count}</main>`,
+        }),
+      ],
+    });
+    const server = await serveWithNode(toNodeHandler(createRequestHandler(app)));
+
+    try {
+      const document = await server.fetch('/cart');
+      expect(document).toMatchObject({
+        body: expect.stringContaining('<main>Cart 0</main>'),
+        headers: expect.objectContaining({
+          'content-type': 'text/html; charset=utf-8',
+          link: `</c/cart.client.js?v=cart-v1>; rel=modulepreload`,
+        }),
+        status: 200,
+      });
+
+      const queryResponse = await server.fetch('/_q/cart');
+      expect(queryResponse).toMatchObject({
+        body: '<kovo-query name="cart">{"count":0}</kovo-query>',
+        headers: expect.objectContaining({
+          'content-type': 'text/html; charset=utf-8',
+        }),
+        status: 200,
+      });
+
+      const moduleResponse = await server.fetch(clientHref);
+      expect(moduleResponse).toMatchObject({
+        body: 'export const cartClient = true;',
+        headers: expect.objectContaining({
+          'cache-control': 'public, max-age=31536000, immutable',
+          'content-type': 'text/javascript; charset=utf-8',
+        }),
+        status: 200,
+      });
+
+      const mutationResponse = await server.fetch('/_m/cart/add', {
+        body: formBody({ quantity: '2' }),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        method: 'POST',
+      });
+      expect(mutationResponse).toMatchObject({
+        body: '',
+        headers: expect.objectContaining({
+          location: '/',
+        }),
+        status: 303,
+      });
+
+      const refreshedQuery = await server.fetch('/_q/cart');
+      expect(refreshedQuery).toMatchObject({
+        body: '<kovo-query name="cart">{"count":2}</kovo-query>',
+        status: 200,
+      });
+    } finally {
+      await server.close();
+    }
+  });
 });
 
 interface NodeTestResponse {
@@ -125,6 +223,14 @@ interface NodeTestRequestOptions {
   body?: string;
   headers?: Record<string, string>;
   method?: string;
+}
+
+function formBody(fields: Record<string, string>): string {
+  const body = new URLSearchParams();
+  for (const [name, value] of Object.entries(fields)) {
+    body.set(name, value);
+  }
+  return body.toString();
 }
 
 async function nodeFetch(
