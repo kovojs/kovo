@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 export type { DiagnosticCode } from '@kovojs/core';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type {
@@ -36,6 +38,7 @@ import {
 import {
   ADD_USAGE,
   AUDIT_USAGE,
+  BUILD_USAGE,
   CHECK_USAGE,
   COMPILE_USAGE,
   COMPILE_USAGE_LINE,
@@ -77,16 +80,17 @@ const compileOutputVersion = 'compile/v1';
 const compileCommandOutputVersion = 'kovo-compile/v1';
 const addOutputVersion = 'kovo-add/v1';
 const mcpOutputVersion = 'kovo-mcp/v1';
+const buildOutputVersion = 'kovo-build/v1';
 
 /** @internal Synchronous argv dispatcher for the `kovo` bin; not a public API. */
 export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args.length === 0) {
-    process.stdout.write('kovo: add, audit, check, compile, explain, export, mcp\n');
+    process.stdout.write('kovo: add, audit, build, check, compile, explain, export, mcp\n');
     return 0;
   }
 
   if (args[0] === 'compile' && args.length === 1) return writeUsageError(compileUsage());
-  if (args[0] === 'compile' || args[0] === 'export' || args[0] === 'mcp') {
+  if (args[0] === 'build' || args[0] === 'compile' || args[0] === 'export' || args[0] === 'mcp') {
     throw new Error(`kovo ${args[0]} is asynchronous; call mainAsync() instead.`);
   }
 
@@ -122,7 +126,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   process.stderr.write(
-    `kovo: unknown command ${stableValue(args[0])}. expected add, compile, explain, check, audit, export, or mcp.\n`,
+    `kovo: unknown command ${stableValue(args[0])}. expected add, build, compile, explain, check, audit, export, or mcp.\n`,
   );
   return 1;
 }
@@ -130,6 +134,11 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 /** @internal Async argv dispatcher (export/mcp) for the `kovo` bin; not a public API. */
 export async function mainAsync(args: readonly string[] = process.argv.slice(2)): Promise<number> {
   if (args[0] === 'mcp') return runMcpCommand(args.slice(1));
+  if (args[0] === 'build') {
+    const parsed = parseBuildArgs(args.slice(1));
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(await runBuildCommand(parsed.options));
+  }
   if (args[0] === 'compile') {
     const parsed = parseCompileArgs(args.slice(1));
     if (!parsed.ok) return writeUsageError(parsed.message);
@@ -716,6 +725,16 @@ interface KovoExportOptions {
 
 type ExportArgParseResult =
   | { ok: true; options: KovoExportOptions }
+  | { message: string; ok: false };
+
+interface KovoBuildOptions {
+  appModulePath: string;
+  outDir: string;
+  preset: 'node';
+}
+
+type BuildArgParseResult =
+  | { ok: true; options: KovoBuildOptions }
   | { message: string; ok: false };
 
 interface AddComponentOptions {
@@ -1996,6 +2015,85 @@ function siteLineNumber(site: string): number {
   return Number(String(site).split(':').pop() ?? 0);
 }
 
+function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
+  let appModulePath: string | undefined;
+  let outDir = 'dist';
+  let preset: KovoBuildOptions['preset'] = 'node';
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+
+    if (arg === '--help' || arg === '-h') {
+      return { message: buildUsage(), ok: false };
+    }
+
+    if (arg === '--out') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: build --out requires a directory.\n', ok: false };
+      outDir = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--out=')) {
+      outDir = arg.slice('--out='.length);
+      if (!outDir) return { message: 'kovo: build --out requires a directory.\n', ok: false };
+      continue;
+    }
+
+    if (arg === '--preset') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: build --preset requires a preset name.\n', ok: false };
+      if (value !== 'node') {
+        return { message: `kovo: unsupported build preset ${stableValue(value)}.\n`, ok: false };
+      }
+      preset = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--preset=')) {
+      const value = arg.slice('--preset='.length);
+      if (!value) return { message: 'kovo: build --preset requires a preset name.\n', ok: false };
+      if (value !== 'node') {
+        return { message: `kovo: unsupported build preset ${stableValue(value)}.\n`, ok: false };
+      }
+      preset = value;
+      continue;
+    }
+
+    if (arg.startsWith('-')) {
+      return {
+        message: `kovo: unknown build option ${stableValue(arg)}.\n${buildUsage()}`,
+        ok: false,
+      };
+    }
+
+    if (appModulePath) {
+      return { message: `kovo: build accepts one app module path.\n${buildUsage()}`, ok: false };
+    }
+
+    appModulePath = arg;
+  }
+
+  if (!appModulePath)
+    return { message: `kovo: build requires an app module path.\n${buildUsage()}`, ok: false };
+
+  return {
+    ok: true,
+    options: {
+      appModulePath,
+      outDir,
+      preset,
+    },
+  };
+}
+
+function buildUsage(): string {
+  return [BUILD_USAGE, ''].join('\n');
+}
+
 function parseExportArgs(args: readonly string[]): ExportArgParseResult {
   let appModulePath: string | undefined;
   let origin: string | undefined;
@@ -2073,6 +2171,103 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
 
 function exportUsage(): string {
   return [EXPORT_USAGE, ''].join('\n');
+}
+
+async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandResult> {
+  try {
+    const resolvedAppModulePath = resolve(options.appModulePath);
+    const [{ node, writeKovoNeutralBuild }, appModule] = await Promise.all([
+      import('@kovojs/server/build'),
+      import(pathToFileURL(resolvedAppModulePath).href),
+    ]);
+    const app = appFromModule(appModule, options.appModulePath);
+    const serverHandlerSource = await bundleKovoServerHandler(resolvedAppModulePath);
+    const outDir = resolve(options.outDir);
+    const neutralBuild = await writeKovoNeutralBuild({
+      app,
+      outDir: join(outDir, '.kovo'),
+      serverHandlerSource,
+    });
+    const preset = node();
+    const presetLogs: string[] = [];
+
+    await preset.emit(neutralBuild, {
+      declaredEnv: [],
+      log(message) {
+        presetLogs.push(message);
+      },
+      outDir: join(outDir, 'server'),
+      readNeutral() {
+        return neutralBuild;
+      },
+    });
+
+    return kovoBuildResult({
+      appModulePath: resolvedAppModulePath,
+      neutralOutDir: neutralBuild.outDir,
+      outDir,
+      preset: options.preset,
+      presetLogs,
+      serverOutDir: join(outDir, 'server'),
+    });
+  } catch (error) {
+    return buildErrorResult(error);
+  }
+}
+
+async function bundleKovoServerHandler(appModulePath: string): Promise<string> {
+  const { build } = await import('vite-plus');
+  const tempDir = mkdtempSync(join(tmpdir(), 'kovo-build-'));
+  const entryPath = join(tempDir, 'entry.mjs');
+  const outDir = join(tempDir, 'out');
+
+  try {
+    writeFileSync(entryPath, kovoServerHandlerEntrySource(appModulePath), 'utf8');
+    await build({
+      appType: 'custom',
+      build: {
+        emptyOutDir: true,
+        minify: false,
+        outDir,
+        rollupOptions: {
+          external: [/^@kovojs\//],
+          input: entryPath,
+          output: {
+            entryFileNames: 'handler.mjs',
+            format: 'es',
+          },
+        },
+        ssr: true,
+        target: 'node22',
+      },
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [
+        {
+          name: 'kovo-server-build-externals',
+          resolveId(id) {
+            if (id.startsWith('@kovojs/')) return { external: true, id };
+            return null;
+          },
+        },
+      ],
+      root: process.cwd(),
+    });
+
+    return await readFile(join(outDir, 'handler.mjs'), 'utf8');
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+}
+
+function kovoServerHandlerEntrySource(appModulePath: string): string {
+  return [
+    "import { createRequestHandler } from '@kovojs/server';",
+    `import * as appModule from ${JSON.stringify(pathToFileURL(appModulePath).href)};`,
+    'const app = appModule.default ?? appModule.app;',
+    'export default createRequestHandler(app);',
+    '',
+  ].join('\n');
 }
 
 async function runExportCommand(options: KovoExportOptions): Promise<CliCommandResult> {
@@ -2170,8 +2365,34 @@ function kovoExportResult(
   return { exitCode: result.diagnostics.length > 0 ? 1 : 0, output: `${lines.join('\n')}\n` };
 }
 
+function kovoBuildResult(options: {
+  appModulePath: string;
+  neutralOutDir: string;
+  outDir: string;
+  preset: 'node';
+  presetLogs: readonly string[];
+  serverOutDir: string;
+}): KovoCheckResult {
+  const lines = [
+    buildOutputVersion,
+    `APP module=${JSON.stringify(options.appModulePath)}`,
+    `NEUTRAL outDir=${JSON.stringify(options.neutralOutDir)}`,
+    ...options.presetLogs.map((message) => `PRESET ${stableText(message)}`),
+    `SUMMARY preset=${options.preset} outDir=${JSON.stringify(options.outDir)} serverOutDir=${JSON.stringify(options.serverOutDir)}`,
+  ];
+
+  return { exitCode: 0, output: `${lines.join('\n')}\n` };
+}
+
 function byteLength(value: string): number {
   return Buffer.byteLength(value, 'utf8');
+}
+
+function buildErrorResult(error: unknown): CliCommandResult {
+  return {
+    error: `${buildOutputVersion}\nERROR ${error instanceof Error ? error.message : String(error)}`,
+    exitCode: 1,
+  };
 }
 
 function exportErrorResult(error: unknown): CliCommandResult {

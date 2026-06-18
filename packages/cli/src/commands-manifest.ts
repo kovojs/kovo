@@ -42,6 +42,9 @@ export const EXPLAIN_USAGE_LINE =
 /** @internal Usage line emitted for `kovo add` (see `addUsage`). */
 export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
 
+/** @internal Usage line emitted for `kovo build` (see `buildUsage`). */
+export const BUILD_USAGE = 'usage: kovo build <app-module> [--out <dir>] [--preset node]';
+
 /** @internal Usage forms emitted for `kovo compile` (see `compileUsage`). */
 export const COMPILE_USAGE = [
   'usage: kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>]',
@@ -90,8 +93,8 @@ export interface CommandManifestEntry {
 
 /**
  * @internal The full `kovo` command surface, in display order. Covers every
- * command `main`/`mainAsync` dispatches: check, explain, add, audit, compile,
- * export, mcp.
+ * command `main`/`mainAsync` dispatches: check, explain, add, build, audit,
+ * compile, export, mcp.
  */
 export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   {
@@ -144,6 +147,20 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
       },
     ],
     examples: ['kovo add button', 'kovo add button card --out src/components/ui'],
+  },
+  {
+    name: 'build',
+    summary: 'Build a Kovo app module into node preset production output.',
+    usage: BUILD_USAGE,
+    async: true,
+    flags: [
+      { flag: '--out <dir>', description: 'Output directory for the neutral and preset artifacts.' },
+      {
+        flag: '--preset node',
+        description: 'Select the built-in Node/VPS preset. Other presets land in later phases.',
+      },
+    ],
+    examples: ['kovo build ./src/app-shell.ts --out dist'],
   },
   {
     name: 'compile',

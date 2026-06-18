@@ -37,7 +37,8 @@
     "@kovojs/drizzle": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/ui": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "vite-plus": "0.1.24"
   },
   "devDependencies": {
     "vitest": "4.1.8"

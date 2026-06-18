@@ -256,9 +256,27 @@ Design decisions to lock in code review:
 - [ ] Add server-bundle step: `src/app-shell.ts` → `server/handler.mjs`
       (`Request → Response`), no Vite at runtime. Verify a bundled handler serves a
       route + a `/_m/` mutation + a `/c/` module with **zero dev deps installed**.
+  - Partial evidence: `packages/cli/src/index.ts` now bundles the supplied app
+    module into a `server/handler.mjs` source using `vite-plus` SSR build, with
+    `@kovojs/*` packages externalized so framework runtime remains a production
+    dependency instead of being inlined. `packages/cli/src/index.kovo-build.test.ts`
+    runs `kovo build <app-module> --out <dir>`, boots the emitted
+    `dist/server/server.mjs`, and verifies a route, `/_m/` mutation, and `/_q/`
+    query response without Vite in the request path. The full item remains open
+    because `kovo build` does not yet run the client build/manifest pipeline, so
+    `/c/` modules from the CLI build path and a prod-deps-only `node_modules`
+    boot are not proven.
 - [ ] Wire `kovo build` into `packages/cli` (a thin wrapper, exactly like
       `kovo export` over `exportStaticApp`); it reads `kovo.config.ts` + host env,
       runs client build → server bundle → neutral emit → preset.
+  - Partial evidence: `packages/cli/src/index.ts` dispatches async `kovo build`,
+    parses `<app-module>`, `--out`, and `--preset node`, writes the neutral
+    artifact with the bundled handler, and emits the built-in `node()` preset.
+    `packages/cli/src/commands-manifest.ts` / `commands-manifest.test.ts` pin the
+    CLI docs/usage surface, and `packages/cli/package.json` declares the runtime
+    `vite-plus` dependency needed by the build command. The full item remains open
+    because config loading, host-env preset selection, client build/manifest
+    orchestration, and non-node presets are not implemented.
 - [ ] Evidence target: a test that boots `server/handler.mjs` in a clean
       `node_modules` (prod deps only) and asserts route/mutation/asset responses.
 
@@ -356,6 +374,9 @@ Design decisions to lock in code review:
   scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs
   site/scripts/api-ref.test.mjs`; `corepack pnpm run check:publish`;
   `git diff --check`.
+- `kovo build` route/query/mutation smoke: `corepack pnpm exec vitest --run
+  packages/cli/src/index.kovo-build.test.ts packages/cli/src/commands-manifest.test.ts`;
+  `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 - `kovo build` + node preset container, pruned deps: _(Phase 1, still open)_
 - `vercel build --prebuilt` dry-run + golden config: _(Phase 2)_
 - `wrangler deploy --dry-run` + `inspect()` diagnostics: _(Phase 3)_
