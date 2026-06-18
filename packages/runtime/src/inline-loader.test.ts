@@ -10,6 +10,7 @@ describe('inline loader source', () => {
       addEventListener: globalRecord.addEventListener,
       document: globalRecord.document,
       importModule: globalRecord.__kovoInlineImport,
+      location: globalRecord.location,
     };
     const listeners = new Map<string, unknown>();
     const importModule = vi.fn(async () => ({}));
@@ -24,6 +25,7 @@ describe('inline loader source', () => {
           return [];
         },
       };
+      globalRecord.location = { href: 'http://app.test/' };
 
       runInThisContext(createInlineKovoLoaderSource(' globalThis.__kovoInlineImport '));
 
@@ -54,6 +56,7 @@ describe('inline loader source', () => {
       Object.assign(globalRecord, {
         addEventListener: originals.addEventListener,
         document: originals.document,
+        location: originals.location,
       });
       if (originals.importModule === undefined) {
         delete globalRecord.__kovoInlineImport;

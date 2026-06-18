@@ -337,6 +337,7 @@ function installInlineKovoLoader(im) {
       else if (finalUrl.hash) doc.getElementById(finalUrl.hash.slice(1))?.scrollIntoView?.();
       else globalThis.scrollTo?.(0, 0);
       if (triggerRoot) setTimeout(() => tr(triggerRoot));
+      cu = finalUrl.href;
       dispatchEvent(new CustomEvent('kovo:navigate', { detail: { url: finalUrl.href } }));
     } catch {
       if (navId === ni) ng(href);
@@ -373,6 +374,7 @@ function installInlineKovoLoader(im) {
     return true;
   };
   const sc = {};
+  let cu = location.href;
   let ni = 0;
   if (globalThis.history?.scrollRestoration !== undefined) {
     globalThis.history.scrollRestoration = 'manual';
@@ -520,7 +522,7 @@ function installInlineKovoLoader(im) {
   crossing('pointerover', 'pointerenter');
   crossing('pointerout', 'pointerleave');
   addEventListener('popstate', () => {
-    sf();
+    sf(cu);
     void an(location.href, true);
   });
   // SPEC.md §4.7: declared triggers are legible in body markup, while the default

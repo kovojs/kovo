@@ -180,11 +180,17 @@ through client navigation.
 
 ## Runtime State Contract
 
-- [ ] **History, scroll, focus, and announcements emulate browser navigation.**
+- [x] **History, scroll, focus, and announcements emulate browser navigation.**
   - Define `pushState`/`replaceState`, `popstate`, scroll restoration, hash
     scrolling, focus target after navigation, route-change announcement, and
     restoration for back/forward.
-  - Evidence: pending browser suite with back/forward and hash cases.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves successful enhanced navigation moves focus to the page root, sets
+    manual scroll restoration, scrolls to top for plain URLs, emits
+    `kovo:navigate`, and scrolls target-document hash anchors into view.
+    `packages/runtime/src/inline-loader-navigation.test.ts` proves `popstate`
+    restores saved scroll without pushing another history entry across all
+    inline installer artifacts.
 - [ ] **Navigation concurrency is deterministic.**
   - A newer navigation cancels stale fetch/morph work. In-flight mutations keep
     the existing §8/§10.4 pagehide/keepalive semantics. Pending optimistic state
@@ -193,16 +199,26 @@ through client navigation.
   - Evidence so far: `pnpm exec vitest --run packages/runtime/src/inline-loader-navigation.test.ts`
     proves stale target documents cannot override a newer navigation across all
     inline installer artifacts. Remaining gap: pending mutation reconciliation.
-- [ ] **bfcache hygiene is preserved.**
+- [x] **bfcache hygiene is preserved.**
   - No `unload` handlers, no global session heap, and no listeners that block the
     existing bfcache acceptance gates.
-  - Evidence: pending browser bfcache check.
+  - Evidence: `pnpm exec vitest --run packages/runtime/src/query-visible-return-refetch.test.ts
+    packages/runtime/src/mutation-optimistic-pagehide.test.ts
+    packages/conformance-fixtures/src/runtime-fixtures.test.ts` passed as part of
+    the 71-test runtime gate and proves visible-return/pageshow refetch,
+    pagehide optimistic cleanup, and `afterInstall: { pagehide: true, unload:
+    false }` conformance behavior. `rg -n "unload|beforeunload|pagehide|pageshow|visibilitychange|popstate"
+    packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts
+    packages/runtime/src/*.test.ts packages/conformance-fixtures/src/runtime-fixtures.test.ts`
+    shows the inline enhanced-navigation loader registers `popstate`, while
+    bfcache-sensitive runtime paths use `pagehide`/`pageshow`/`visibilitychange`
+    and keep `unload` out of the loader.
 - [x] **Inline-loader budget remains explicit.**
   - Navigation code must fit the current 8KB gzip inline-loader budget or the
     SPEC must deliberately change that budget with acceptance evidence.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
     `node --experimental-strip-types - <<'NODE' ...` reported
-    `inline-loader-gzip=5583/8192`.
+    `inline-loader-gzip=5596/8192`.
 
 ## Implementation Plan
 
@@ -247,10 +263,13 @@ through client navigation.
     inline loader registers `popstate`; `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves successful enhanced navigation focuses the preserved layout root,
     sets manual scroll restoration, scrolls to top, and emits the full-document
-    `kovo:navigate` announcement; `packages/runtime/src/inline-loader-navigation.test.ts`
-    proves stale response suppression across all inline installer artifacts.
-    Remaining gap: dedicated back/forward, hash restoration, pending mutation,
-    and bfcache evidence.
+    `kovo:navigate` announcement, and scrolls target-document hash anchors into
+    view; `packages/runtime/src/inline-loader-navigation.test.ts` proves stale
+    response suppression and popstate scroll restoration across all inline
+    installer artifacts; `packages/runtime/src/query-visible-return-refetch.test.ts`,
+    `packages/runtime/src/mutation-optimistic-pagehide.test.ts`, and
+    `packages/conformance-fixtures/src/runtime-fixtures.test.ts` prove bfcache
+    hygiene. Remaining gap: pending mutation reconciliation.
 - [ ] **4. Mutation/live composition after enhanced navigation.**
   - Prove `Kovo-Targets`/`Kovo-Live-Targets` snapshots include preserved layout
     targets after navigation, inserted leaf targets are discoverable, and stale
@@ -320,8 +339,12 @@ through client navigation.
     integrated navigation-plus-mutation and stale-target exclusion.
 - [ ] **History/scroll/focus/a11y/bfcache:** back/forward, restoration,
       route-change announcement, axe, and bfcache hygiene pass.
-  - Evidence: pending.
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves focus, top scroll, hash scroll, and route-change announcement;
+    `packages/runtime/src/inline-loader-navigation.test.ts` proves popstate
+    scroll restoration; bfcache hygiene is covered by the runtime visible-return,
+    pagehide, and conformance fixtures. Remaining gap: dedicated axe assertion.
 - [x] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
       budget change is explicitly accepted.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
-    the measured shipped source was `inline-loader-gzip=5583/8192`.
+    the measured shipped source was `inline-loader-gzip=5596/8192`.

@@ -103,6 +103,7 @@ async function withEnhancedNavigationHarness(
   ) => void,
   {
     assert,
+    act,
     currentDocument,
     documents,
     fetch,
@@ -115,6 +116,17 @@ async function withEnhancedNavigationHarness(
       dispatchEvent: ReturnType<typeof vi.fn>;
       preventDefault: ReturnType<typeof vi.fn>;
       pushState: ReturnType<typeof vi.fn>;
+      scrollTo: ReturnType<typeof vi.fn>;
+    }): Promise<void> | void;
+    act?(args: {
+      listeners: Map<string, (event: unknown) => Promise<void> | void>;
+      location: {
+        href: string;
+        origin: string;
+        pathname: string;
+        search: string;
+      };
+      preventDefault: ReturnType<typeof vi.fn>;
     }): Promise<void> | void;
     currentDocument: ReturnType<typeof createTestShell>;
     documents: Array<ReturnType<typeof createTestShell>>;
@@ -136,6 +148,8 @@ async function withEnhancedNavigationHarness(
     importModule: globalRecord.__kovoInlineImport,
     location: globalRecord.location,
     scrollTo: globalRecord.scrollTo,
+    scrollX: globalRecord.scrollX,
+    scrollY: globalRecord.scrollY,
     setTimeout: globalRecord.setTimeout,
   };
   const listeners = new Map<string, (event: unknown) => Promise<void>>();
@@ -143,7 +157,15 @@ async function withEnhancedNavigationHarness(
   const dispatchEvent = vi.fn();
   const preventDefault = vi.fn();
   const pushState = vi.fn();
+  const scrollTo = vi.fn();
   const url = new URL(locationHref);
+  const locationRecord = {
+    assign,
+    href: locationHref,
+    origin: url.origin,
+    pathname: url.pathname,
+    search: url.search,
+  };
 
   try {
     globalRecord.addEventListener = (type: string, listener: (event: unknown) => Promise<void>) => {
@@ -164,35 +186,33 @@ async function withEnhancedNavigationHarness(
     };
     globalRecord.fetch = fetch;
     globalRecord.history = { pushState };
-    globalRecord.location = {
-      assign,
-      href: locationHref,
-      origin: url.origin,
-      pathname: url.pathname,
-      search: url.search,
-    };
-    globalRecord.scrollTo = vi.fn();
+    globalRecord.location = locationRecord;
+    globalRecord.scrollTo = scrollTo;
     globalRecord.setTimeout = vi.fn();
 
     installSource(async () => ({}), globalRecord);
-    for (const clickHref of hrefs ?? [href]) {
-      await listeners.get('click')?.({
-        button: 0,
-        defaultPrevented: false,
-        preventDefault,
-        target: {
-          closest(selector: string) {
-            if (selector === 'a[href]') {
-              return { hasAttribute: () => false, href: clickHref, target: '' };
-            }
-            return null;
+    if (act) {
+      await act({ listeners, location: locationRecord, preventDefault });
+    } else {
+      for (const clickHref of hrefs ?? [href]) {
+        await listeners.get('click')?.({
+          button: 0,
+          defaultPrevented: false,
+          preventDefault,
+          target: {
+            closest(selector: string) {
+              if (selector === 'a[href]') {
+                return { hasAttribute: () => false, href: clickHref, target: '' };
+              }
+              return null;
+            },
           },
-        },
-        type: 'click',
-      });
+          type: 'click',
+        });
+      }
     }
 
-    await assert({ assign, dispatchEvent, preventDefault, pushState });
+    await assert({ assign, dispatchEvent, preventDefault, pushState, scrollTo });
   } finally {
     Object.assign(globalRecord, {
       addEventListener: originals.addEventListener,
@@ -204,6 +224,8 @@ async function withEnhancedNavigationHarness(
       history: originals.history,
       location: originals.location,
       scrollTo: originals.scrollTo,
+      scrollX: originals.scrollX,
+      scrollY: originals.scrollY,
       setTimeout: originals.setTimeout,
     });
     if (originals.importModule === undefined) {
@@ -717,6 +739,94 @@ describe('inline loader enhanced navigation fallback', () => {
           expect(replaceWith).toHaveBeenCalledTimes(1);
           expect(replaceWith).not.toHaveBeenCalledWith(slowDocument.body);
           expect(pushState).toHaveBeenCalledTimes(1);
+        },
+      });
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'restores saved scroll on popstate without pushing history through %s',
+    async (_name, installSource) => {
+      const replaceWith = vi.fn();
+      const productsLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Products',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Products',
+        },
+        '<main><section>Products</section></main>',
+      );
+      const cartLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Cart',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Cart',
+        },
+        '<main><section>Cart</section></main>',
+      );
+      let currentDocument: ReturnType<typeof createTestShell>;
+      currentDocument = createTestShell({
+        replaceWith: (nextBody) => {
+          replaceWith(nextBody);
+          currentDocument.body = nextBody as typeof currentDocument.body;
+        },
+        segments: [productsLayout],
+      });
+      const cartDocument = createTestShell({
+        replaceWith: (nextBody) => {
+          replaceWith(nextBody);
+          currentDocument.body = nextBody as typeof currentDocument.body;
+        },
+        segments: [cartLayout],
+      });
+      const secondProductsDocument = createTestShell({ segments: [productsLayout] });
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument,
+        documents: [cartDocument, secondProductsDocument],
+        fetch: vi.fn(async (href: string) => ({
+          headers: { get: () => 'text/html' },
+          text: async () => '<!doctype html><html></html>',
+          url: href,
+        })),
+        locationHref: 'http://app.test/products',
+        async act({ listeners, location, preventDefault }) {
+          Object.assign(globalThis, { scrollX: 10, scrollY: 20 });
+          await listeners.get('click')?.({
+            button: 0,
+            defaultPrevented: false,
+            preventDefault,
+            target: {
+              closest(selector: string) {
+                if (selector === 'a[href]') {
+                  return { hasAttribute: () => false, href: 'http://app.test/cart', target: '' };
+                }
+                return null;
+              },
+            },
+            type: 'click',
+          });
+          await vi.waitFor(() => {
+            expect(replaceWith).toHaveBeenCalledWith(cartDocument.body);
+          });
+
+          Object.assign(globalThis, { scrollX: 30, scrollY: 40 });
+          location.href = 'http://app.test/products';
+          location.pathname = '/products';
+          await listeners.get('popstate')?.({ type: 'popstate' });
+        },
+        async assert({ preventDefault, pushState, scrollTo }) {
+          await vi.waitFor(() => {
+            expect(replaceWith).toHaveBeenCalledWith(secondProductsDocument.body);
+          });
+          expect(preventDefault).toHaveBeenCalledTimes(1);
+          expect(pushState).toHaveBeenCalledTimes(1);
+          expect(pushState).toHaveBeenCalledWith({}, '', 'http://app.test/cart');
+          expect(scrollTo).toHaveBeenCalledWith(0, 0);
+          expect(scrollTo).toHaveBeenCalledWith(10, 20);
         },
       });
     },
