@@ -63,10 +63,10 @@ async function postForm(
 }
 
 describe('crm interactive app', () => {
-  it('keeps global CSS limited to app resets and generated UI styles', () => {
+  it('keeps authored global CSS limited to app resets', () => {
     const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
-    expect(css).toContain("@import './generated/kovo-ui.css';");
+    expect(css).not.toContain('./generated/');
     expect(css).not.toContain('.bg-slate-50');
     expect(css).not.toContain('.text-slate-900');
     expect(css).not.toContain('.rounded-lg');

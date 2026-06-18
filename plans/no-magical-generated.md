@@ -86,10 +86,14 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Evidence: `examples/commerce/vite.config.ts` uses
     `kovo({ app: '/src/app.tsx' })`; `pnpm --filter @kovojs/example-commerce exec
     vitest --run src/app.test.ts src/enhanced-navigation.test.ts` passed.
-- [ ] Remove authored CSS imports of app-local generated CSS.
+- [x] Remove authored CSS imports of app-local generated CSS.
   - Target authoring shape: no `@import './generated/kovo-ui.css'` in
     `examples/commerce/src/styles.css`; the build/dev pipeline injects or
     expands framework/UI CSS from public stylesheet/theme declarations.
+  - Evidence: `examples/commerce/src/styles.css` no longer imports
+    `./generated/kovo-ui.css`; `pnpm --filter @kovojs/example-commerce exec
+    vitest --run src/app.rendering.test.ts` passed and asserts authored CSS does
+    not contain `./generated/`.
 
 ## CRM And StackOverflow
 
@@ -101,8 +105,14 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Evidence: `examples/crm/vite.config.ts` and
     `examples/stackoverflow/vite.config.ts` use `kovo({ app: '/src/app-shell.ts' })`;
     focused interactive-app tests for both packages passed.
-- [ ] Remove authored CSS imports of app-local generated CSS from CRM and
+- [x] Remove authored CSS imports of app-local generated CSS from CRM and
       StackOverflow.
+  - Evidence: `examples/crm/src/styles.css` and
+    `examples/stackoverflow/src/styles.css` no longer import
+    `./generated/kovo-ui.css`; `pnpm --filter @kovojs/example-crm exec vitest
+    --run src/interactive-app.test.ts` and `pnpm --filter
+    @kovojs/example-stackoverflow exec vitest --run src/interactive-app.test.ts`
+    passed and assert authored CSS does not contain `./generated/`.
 - [ ] Audit public demo modules that export generated graph/optimistic artifacts.
   - Decision needed: either keep them behind explicitly named artifact exports or
     move them to package/conformance coverage so the public demo surface stays
@@ -170,6 +180,9 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - The emitted asset should contain declared theme CSS, authored global CSS when
     present, generated `@kovojs/ui` CSS used by the app graph, and generated
     `@kovojs/style` atomic CSS used by authored style objects.
+  - Current gap: authored example CSS no longer imports `src/generated/kovo-ui.css`,
+    but the framework-owned Vite/build aggregation hook still needs to materialize
+    package UI CSS into the emitted `/assets/styles.css` asset.
 - [ ] Allow app-wide and route-level stylesheet declarations.
   - App-level stylesheets are inherited by routes; route-level stylesheets can
     add page-specific CSS while remaining visible to page hints, fragments,
@@ -193,8 +206,10 @@ internals, emit/check scripts, and narrowly named artifact tests.
       generated imports.
   - Current evidence gap: `node scripts/import-boundary.mjs` now reports
     app-local generated imports, but it still fails on Commerce/CRM/StackOverflow
-    tests/app shells plus Gallery, site, and tutorial files; keep open until the
-    reported backlog is removed or narrowed by an explicit artifact-test policy.
+    tests/app shells plus Gallery, site, and tutorial files; CSS generated-import
+    violations were removed from Commerce/CRM/StackOverflow. Keep open until the
+    remaining reported backlog is removed or narrowed by an explicit artifact-test
+    policy.
 - [ ] Run focused Commerce tests after removing generated imports and deleting
       `source-truth.test.ts`.
 - [ ] Run focused CRM and StackOverflow tests after applying the same boundary.

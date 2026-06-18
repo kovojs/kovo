@@ -88,7 +88,10 @@ describe('commerce example', () => {
     );
   });
 
-  it('builds the linked app stylesheet as reset plus generated UI CSS', () => {
+  it('keeps authored global CSS clean while building the linked app stylesheet', () => {
+    const authoredCss = readFileSync(path.join(commerceRoot, 'src', 'styles.css'), 'utf8');
+    expect(authoredCss).not.toContain('./generated/');
+
     rmSync(path.join(commerceRoot, 'dist'), { force: true, recursive: true });
 
     execFileSync('corepack', ['pnpm', '--filter', '@kovojs/example-commerce', 'run', 'build'], {
