@@ -1,5 +1,6 @@
 import { stylesheet } from '@kovojs/server';
 
+import { chromeStyleCss } from './components/chrome.js';
 import { docsLayoutStyleCss } from './components/docs-layout.js';
 import { exampleSplitStyleCss } from './components/example-split.js';
 import { galleryStyleCss } from './components/gallery.js';
@@ -11,7 +12,7 @@ import type { DocPage, NavLink } from './content.js';
 
 export const siteStylesheets = [
   stylesheet('./styles.css', {
-    criticalCss: [docsLayoutStyleCss, exampleSplitStyleCss, galleryStyleCss],
+    criticalCss: [chromeStyleCss, docsLayoutStyleCss, exampleSplitStyleCss, galleryStyleCss],
     href: '/assets/site.css',
   }),
 ] as const;

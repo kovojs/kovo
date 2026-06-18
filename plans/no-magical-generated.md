@@ -264,6 +264,16 @@ internals, emit/check scripts, and narrowly named artifact tests.
     @kovojs/site test`, `pnpm exec vitest --run site/tutorial/steps`, and `git
     diff --check` passed. Keep open for remaining class-based docs site
     components.
+  - Current progress: `site/src/components/chrome.tsx` now co-locates its
+    header/footer/sidebar/TOC/API-rail styles with `@kovojs/style`, feeds
+    `chromeStyleCss` through `siteStylesheets`, and uses data hooks instead of
+    styling classes for the API rail script. `rg -n "class=|className="
+    site/src/components/chrome.tsx -S`, `rg -n "style\\.attrs" site/content
+    site/src site/tutorial --glob '!**/generated/**' -S`, `pnpm --filter
+    @kovojs/site test`, `pnpm --filter @kovojs/site run build:css`, `pnpm
+    --filter @kovojs/site exec node scripts/export-static.mjs`, and `git diff
+    --check` passed. Keep open for remaining class-based docs site components,
+    especially `landing.tsx`, and global/generated-content markup.
 
 ## Verification
 
