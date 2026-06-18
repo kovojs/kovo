@@ -130,9 +130,9 @@ through client navigation.
     stylesheet/modulepreload hints, and speculation rules. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
     packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63373`
-    passed and proves client-applied docs theme state (`html.dark` plus
-    `localStorage.theme`) survives enhanced navigation while target html/body
-    shell attributes still update.
+    passed 36 browser tests and proves docs theme state toggled through the
+    delegated handler (`html.dark` plus `localStorage.theme`) survives enhanced
+    navigation while target html/body shell attributes still update.
 
 ## Segment Identity And Morph Contract
 
@@ -197,8 +197,9 @@ through client navigation.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves successful enhanced navigation moves focus to the page root, sets
     manual scroll restoration, scrolls to top for plain URLs, emits
-    `kovo:navigate`, scrolls decoded target-document/API-rail hash anchors into
-    view, and leaves same-document hash anchors to native browser navigation.
+    `kovo:navigate`, scrolls decoded target-document/API-rail hash anchors,
+    encoded-id anchors, and named anchors into view, and leaves same-document
+    hash anchors to native browser navigation.
     `packages/runtime/src/inline-loader-navigation.test.ts` proves `popstate`
     restores saved scroll without pushing another history entry across all
     inline installer artifacts.
@@ -210,8 +211,9 @@ through client navigation.
   - Evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader-navigation.test.ts`
     proves stale target documents cannot override a newer navigation across all
     inline installer artifacts; `packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    proves mutation snapshots after enhanced navigation are taken from the
-    post-navigation DOM and exclude stale pre-navigation targets;
+    proves the newest concurrent target hash wins when responses resolve out of
+    order, and proves mutation snapshots after enhanced navigation are taken
+    from the post-navigation DOM and exclude stale pre-navigation targets;
     `packages/runtime/src/mutation-optimistic-pagehide.test.ts` proves pending
     optimistic mutation state is discarded/reconciled through the bfcache-safe
     `pagehide` cleanup path.
@@ -234,7 +236,7 @@ through client navigation.
     SPEC must deliberately change that budget with acceptance evidence.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
     `node --experimental-strip-types - <<'NODE' ...` reported
-    `inline-loader-gzip=5596/8192`.
+    `inline-loader-gzip=5782/8192`.
 
 ## Implementation Plan
 
@@ -384,7 +386,8 @@ through client navigation.
 - [x] **History/scroll/focus/a11y/bfcache:** back/forward, restoration,
       route-change announcement, axe, and bfcache hygiene pass.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    proves focus, top scroll, hash scroll, and route-change announcement;
+    proves focus, top scroll, decoded/encoded/named hash scroll, route-change
+    announcement, delegated docs theme persistence, and newest-hash concurrency;
     `packages/runtime/src/inline-loader-navigation.test.ts` proves popstate
     scroll restoration; bfcache hygiene is covered by the runtime visible-return,
     pagehide, and conformance fixtures; `examples/commerce/src/enhanced-navigation.test.ts`
@@ -393,4 +396,4 @@ through client navigation.
 - [x] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
       budget change is explicitly accepted.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
-    the measured shipped source was `inline-loader-gzip=5596/8192`.
+    the measured shipped source was `inline-loader-gzip=5782/8192`.
