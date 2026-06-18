@@ -110,13 +110,17 @@ generated renderer. Failure-only policies can provide `failureStylesheets` for s
 rerenders:
 
 ```ts
-return renderMutationEndpointResponse(addToCart, {
+export const cartPage = route('/cart', {
+  stylesheets: siteStylesheets,
+  page: () => <CartPage />,
+});
+
+export const addToCart = mutation('cart/add', {
   failureStylesheets: siteStylesheets,
-  headers,
-  rawInput,
-  redirectTo: '/cart',
-  renderFailureFragment: (failure) => renderAddToCartForm(item, failure),
-  request,
+  input: addToCartInput,
+  handler(input, request) {
+    return request.db.cart.add(input);
+  },
 });
 ```
 

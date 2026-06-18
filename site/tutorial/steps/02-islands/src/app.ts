@@ -1,4 +1,4 @@
-import { notFound, renderRoutePageResponse, route, s } from '@kovojs/server';
+import { notFound, route, s } from '@kovojs/server';
 
 import { ProductActions } from './generated/product-actions.js';
 
@@ -55,11 +55,3 @@ export function renderProductPage(product: Product): string {
   return `<!doctype html><html><head><title>${product.name} · Kovo Shop</title></head><body><main><h1>${product.name}</h1><p>${formatPrice(product.unitPrice)}</p>${actions}<a href="/">Back to the shop</a></main></body></html>`;
 }
 // /snippet
-
-export function renderHomeRoute() {
-  return renderRoutePageResponse(homeRoute, {}, {});
-}
-
-export function renderProductRoute(id: string) {
-  return renderRoutePageResponse(productRoute, { params: { id } }, {});
-}

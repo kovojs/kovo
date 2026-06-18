@@ -1,13 +1,10 @@
 import {
   mutation,
-  renderMutationEndpointResponse,
   renderQueryScript,
-  renderRoutePageResponse,
   route,
   s,
   type MutationFail,
 } from '@kovojs/server';
-import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
 import { cart, product } from './domains.js';
@@ -103,50 +100,3 @@ export const homeRoute = route('/', {
     return renderShopPage();
   },
 });
-
-export function renderHomeRoute() {
-  return renderRoutePageResponse(homeRoute, {}, {});
-}
-
-// snippet:submit
-export function submitAddToCartNoJs(rawInput: unknown, request: ShopRequest) {
-  return submitAddToCart(rawInput, request, {});
-}
-
-export function submitAddToCart(
-  rawInput: unknown,
-  request: ShopRequest,
-  headers: MutationWireHeaderSource,
-) {
-  const productId = productIdFromRawInput(rawInput);
-  return renderMutationEndpointResponse(addToCart, {
-    headers,
-    rawInput,
-    redirectTo: '/',
-    renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
-    renderFailurePage: (failure) => renderShopPage(request.db, { failure, productId }, request),
-    request,
-  });
-}
-// /snippet
-
-function renderAddToCartFailureFragment(
-  request: ShopRequest,
-  rawInput: unknown,
-  failure: AddToCartFailure,
-) {
-  const productId = productIdFromRawInput(rawInput);
-  const product = productId ? request.db.products.get(productId) : undefined;
-
-  if (!product) return renderAddToCartError(failure);
-
-  return renderAddToCartForm(product, failure, request);
-}
-
-function productIdFromRawInput(rawInput: unknown): string | undefined {
-  if (typeof rawInput !== 'object' || rawInput === null || !('productId' in rawInput)) {
-    return undefined;
-  }
-  const productId = rawInput.productId;
-  return typeof productId === 'string' ? productId : undefined;
-}

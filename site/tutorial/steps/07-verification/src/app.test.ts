@@ -2,18 +2,21 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@kovojs/server';
+import { csrfToken, renderMutationEndpointResponse } from '@kovojs/server';
+import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test/harness';
 import { kovoCheck, kovoExplain } from 'kovo';
 
 import {
   addToCart,
   addToCartOptimistic,
+  renderAddToCartError,
+  renderAddToCartForm,
   renderShopPage,
   shopCsrf,
   shopGraph,
   shopTouchGraph,
-  submitAddToCart,
+  type AddToCartFailure,
   type ShopRequest,
 } from './app.js';
 import { createShopDb, type ShopDb } from './db.js';
@@ -32,6 +35,43 @@ function shopRequest(db = createShopDb()): ShopRequest {
 
 function formInput(request: ShopRequest, fields: Record<string, string>) {
   return { ...fields, 'kovo-csrf': csrfToken(request, shopCsrf) };
+}
+
+function submitAddToCart(
+  rawInput: unknown,
+  request: ShopRequest,
+  headers: MutationWireHeaderSource,
+) {
+  const productId = productIdFromRawInput(rawInput);
+  return renderMutationEndpointResponse(addToCart, {
+    headers,
+    rawInput,
+    redirectTo: '/',
+    renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
+    renderFailurePage: (failure) => renderShopPage(request.db, { failure, productId }, request),
+    request,
+  });
+}
+
+function renderAddToCartFailureFragment(
+  request: ShopRequest,
+  rawInput: unknown,
+  failure: AddToCartFailure,
+) {
+  const productId = productIdFromRawInput(rawInput);
+  const product = productId ? request.db.products.get(productId) : undefined;
+
+  if (!product) return renderAddToCartError(failure);
+
+  return renderAddToCartForm(product, failure, request);
+}
+
+function productIdFromRawInput(rawInput: unknown): string | undefined {
+  if (typeof rawInput !== 'object' || rawInput === null || !('productId' in rawInput)) {
+    return undefined;
+  }
+  const productId = rawInput.productId;
+  return typeof productId === 'string' ? productId : undefined;
 }
 
 function explainLine(output: string, prefix: string): string {

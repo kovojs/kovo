@@ -2,7 +2,6 @@ import {
   csrfField,
   csrfToken,
   renderMutationFormAttributes,
-  renderRoutePageResponse,
   route,
   s,
   session,
@@ -283,31 +282,6 @@ export function renderReferenceLogoutForm(request: ReferenceRequest): string {
     request,
     referenceAuthCsrf,
   )}<button type="submit">Sign out</button></form>`;
-}
-
-export async function renderReferenceAccountRoute(
-  request: ReferenceRequest,
-  auth: ReferenceAuthBindings = referenceAuth,
-) {
-  return renderRoutePageResponse(accountRoute, {}, request, (value) => `<main>${value}</main>`, {
-    onUnauthenticated({ next }) {
-      return { location: `/login?next=${encodeURIComponent(next)}`, status: 303 };
-    },
-    sessionProvider: auth.sessionProvider,
-  });
-}
-
-export async function renderReferenceAdminRoute(
-  request: ReferenceRequest,
-  auth: ReferenceAuthBindings = referenceAuth,
-) {
-  return renderRoutePageResponse(adminRoute, {}, request, (value) => `<main>${value}</main>`, {
-    onUnauthenticated({ next }) {
-      return { location: `/login?next=${encodeURIComponent(next)}`, status: 303 };
-    },
-    renderForbidden: () => '<main>Forbidden</main>',
-    sessionProvider: auth.sessionProvider,
-  });
 }
 
 export function referenceAuthRequest(cookie?: string): ReferenceRequest {

@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { catalog, renderHomeRoute, renderProductRoute } from './app.js';
+import { renderRoutePageResponse } from '@kovojs/server';
+
+import { catalog, homeRoute, productRoute } from './app.js';
 
 // Tutorial step 01: every page is a complete document answered by a declared
 // route (SPEC.md sections 6.4 and 8) — assertable as plain request/response
 // values, no browser involved.
+
+function renderHomeRoute() {
+  return renderRoutePageResponse(homeRoute, {}, {});
+}
+
+function renderProductRoute(id: string) {
+  return renderRoutePageResponse(productRoute, { params: { id } }, {});
+}
 
 describe('tutorial step 01 — first page', () => {
   // snippet:home-test

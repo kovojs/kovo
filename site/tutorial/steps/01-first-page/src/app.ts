@@ -1,4 +1,4 @@
-import { notFound, renderRoutePageResponse, route, s } from '@kovojs/server';
+import { notFound, route, s } from '@kovojs/server';
 
 // Tutorial step 01 (chapter 1): routes and the first page. Pages are complete
 // documents rendered on the server — there is no client router and no
@@ -56,13 +56,3 @@ export function renderHomePage(): string {
 export function renderProductPage(product: Product): string {
   return `<!doctype html><html><head><title>${product.name} · Kovo Shop</title></head><body><main><h1>${product.name}</h1><p>${formatPrice(product.unitPrice)}</p><a href="/">Back to the shop</a></main></body></html>`;
 }
-
-// snippet:render-route
-export function renderHomeRoute() {
-  return renderRoutePageResponse(homeRoute, {}, {});
-}
-
-export function renderProductRoute(id: string) {
-  return renderRoutePageResponse(productRoute, { params: { id } }, {});
-}
-// /snippet

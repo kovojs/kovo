@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
+import { renderRoutePageResponse } from '@kovojs/server';
 import { runMutation } from '@kovojs/server/internal/execution';
 
 import { kovoCheck, kovoExplain } from '../../../packages/cli/src/index.js';
 import {
+  accountRoute,
+  adminRoute,
   createReferenceAuth,
   referenceAuth,
   referenceAuthCsrf,
@@ -12,8 +15,6 @@ import {
   referenceAuthRequest,
   referenceAuthToken,
   referenceSessionProvider,
-  renderReferenceAccountRoute,
-  renderReferenceAdminRoute,
   renderReferenceLoginForm,
   renderReferenceLogoutForm,
   type ReferenceAuthBindings,
@@ -97,6 +98,31 @@ async function submitReferenceSignOutNoJs(
     },
     status: 303,
   };
+}
+
+function renderReferenceAccountRoute(
+  request: ReferenceRequest,
+  auth: ReferenceAuthBindings = referenceAuth,
+) {
+  return renderRoutePageResponse(accountRoute, {}, request, (value) => `<main>${value}</main>`, {
+    onUnauthenticated({ next }) {
+      return { location: `/login?next=${encodeURIComponent(next)}`, status: 303 };
+    },
+    sessionProvider: auth.sessionProvider,
+  });
+}
+
+function renderReferenceAdminRoute(
+  request: ReferenceRequest,
+  auth: ReferenceAuthBindings = referenceAuth,
+) {
+  return renderRoutePageResponse(adminRoute, {}, request, (value) => `<main>${value}</main>`, {
+    onUnauthenticated({ next }) {
+      return { location: `/login?next=${encodeURIComponent(next)}`, status: 303 };
+    },
+    renderForbidden: () => '<main>Forbidden</main>',
+    sessionProvider: auth.sessionProvider,
+  });
 }
 
 describe('reference auth adoption', () => {

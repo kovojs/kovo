@@ -1,4 +1,4 @@
-import { renderQueryScript, renderRoutePageResponse, route } from '@kovojs/server';
+import { renderQueryScript, route } from '@kovojs/server';
 
 import { createShopDb, type ShopDb } from './db.js';
 import { CartBadge } from './generated/cart-badge.js';
@@ -27,7 +27,3 @@ export const homeRoute = route('/', {
     return renderShopPage();
   },
 });
-
-export function renderHomeRoute() {
-  return renderRoutePageResponse(homeRoute, {}, {});
-}

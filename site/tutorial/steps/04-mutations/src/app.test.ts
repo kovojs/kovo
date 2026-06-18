@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@kovojs/server';
+import { csrfToken, renderMutationEndpointResponse } from '@kovojs/server';
+import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 
 import {
+  addToCart,
+  renderAddToCartError,
+  renderAddToCartForm,
   renderShopPage,
   shopCsrf,
-  submitAddToCart,
-  submitAddToCartNoJs,
+  type AddToCartFailure,
   type ShopRequest,
 } from './app.js';
 import { createShopDb } from './db.js';
@@ -23,6 +26,47 @@ function shopRequest(db = createShopDb()): ShopRequest {
 // the same submission explicitly (SPEC.md section 6.6).
 function formInput(request: ShopRequest, fields: Record<string, string>) {
   return { ...fields, 'kovo-csrf': csrfToken(request, shopCsrf) };
+}
+
+function submitAddToCartNoJs(rawInput: unknown, request: ShopRequest) {
+  return submitAddToCart(rawInput, request, {});
+}
+
+function submitAddToCart(
+  rawInput: unknown,
+  request: ShopRequest,
+  headers: MutationWireHeaderSource,
+) {
+  const productId = productIdFromRawInput(rawInput);
+  return renderMutationEndpointResponse(addToCart, {
+    headers,
+    rawInput,
+    redirectTo: '/',
+    renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
+    renderFailurePage: (failure) => renderShopPage(request.db, { failure, productId }, request),
+    request,
+  });
+}
+
+function renderAddToCartFailureFragment(
+  request: ShopRequest,
+  rawInput: unknown,
+  failure: AddToCartFailure,
+) {
+  const productId = productIdFromRawInput(rawInput);
+  const product = productId ? request.db.products.get(productId) : undefined;
+
+  if (!product) return renderAddToCartError(failure);
+
+  return renderAddToCartForm(product, failure, request);
+}
+
+function productIdFromRawInput(rawInput: unknown): string | undefined {
+  if (typeof rawInput !== 'object' || rawInput === null || !('productId' in rawInput)) {
+    return undefined;
+  }
+  const productId = rawInput.productId;
+  return typeof productId === 'string' ? productId : undefined;
 }
 
 describe('tutorial step 04 — mutations & forms', () => {

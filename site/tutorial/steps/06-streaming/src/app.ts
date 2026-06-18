@@ -3,14 +3,11 @@ import type { OptimisticFor } from '@kovojs/runtime';
 import {
   mutation,
   renderDeferredStream,
-  renderMutationEndpointResponse,
   renderQueryScript,
-  renderRoutePageResponse,
   route,
   s,
   type MutationFail,
 } from '@kovojs/server';
-import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
@@ -148,10 +145,6 @@ export const homeRoute = route('/', {
   },
 });
 
-export function renderHomeRoute() {
-  return renderRoutePageResponse(homeRoute, {}, {});
-}
-
 // snippet:deferred-stream
 // Tutorial step 06 (chapter 6): out-of-order streaming (SPEC.md section 8).
 // The shell ships immediately with a declared fallback; the expensive product
@@ -180,47 +173,6 @@ export function renderShopPageDeferredStream(db: ShopDb = createShopDb(), reques
   });
 }
 // /snippet
-
-export function submitAddToCartNoJs(rawInput: unknown, request: ShopRequest) {
-  return submitAddToCart(rawInput, request, {});
-}
-
-export function submitAddToCart(
-  rawInput: unknown,
-  request: ShopRequest,
-  headers: MutationWireHeaderSource,
-) {
-  const productId = productIdFromRawInput(rawInput);
-  return renderMutationEndpointResponse(addToCart, {
-    headers,
-    rawInput,
-    redirectTo: '/',
-    renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
-    renderFailurePage: (failure) => renderShopPage(request.db, { failure, productId }, request),
-    request,
-  });
-}
-
-function renderAddToCartFailureFragment(
-  request: ShopRequest,
-  rawInput: unknown,
-  failure: AddToCartFailure,
-) {
-  const productId = productIdFromRawInput(rawInput);
-  const product = productId ? request.db.products.get(productId) : undefined;
-
-  if (!product) return renderAddToCartError(failure);
-
-  return renderAddToCartForm(product, failure, request);
-}
-
-function productIdFromRawInput(rawInput: unknown): string | undefined {
-  if (typeof rawInput !== 'object' || rawInput === null || !('productId' in rawInput)) {
-    return undefined;
-  }
-  const productId = rawInput.productId;
-  return typeof productId === 'string' ? productId : undefined;
-}
 
 function expectSyncHtml(html: string | Promise<string>): string {
   if (typeof html !== 'string') {

@@ -4,15 +4,12 @@ import {
   guards,
   mutation,
   renderDeferredStream,
-  renderMutationEndpointResponse,
   renderQueryScript,
-  renderRoutePageResponse,
   route,
   s,
   session,
   type MutationFail,
 } from '@kovojs/server';
-import type { MutationWireHeaderSource } from '@kovojs/server/internal/wire';
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
@@ -228,10 +225,6 @@ export const homeRoute = route('/', {
   },
 });
 
-export function renderHomeRoute() {
-  return renderRoutePageResponse(homeRoute, {}, {});
-}
-
 export function renderShopPageDeferredStream(db: ShopDb = createShopDb(), request?: ShopRequest) {
   const cart = loadCart(db);
   const shell = `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${renderQueryScript({ name: 'cart', value: cart })}<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment><kovo-defer target="product-list" state="pending">Loading products…</kovo-defer>`;
@@ -252,47 +245,6 @@ export function renderShopPageDeferredStream(db: ShopDb = createShopDb(), reques
     closeHtml: '</main></body></html>',
     shell,
   });
-}
-
-export function submitAddToCartNoJs(rawInput: unknown, request: ShopRequest) {
-  return submitAddToCart(rawInput, request, {});
-}
-
-export function submitAddToCart(
-  rawInput: unknown,
-  request: ShopRequest,
-  headers: MutationWireHeaderSource,
-) {
-  const productId = productIdFromRawInput(rawInput);
-  return renderMutationEndpointResponse(addToCart, {
-    headers,
-    rawInput,
-    redirectTo: '/',
-    renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
-    renderFailurePage: (failure) => renderShopPage(request.db, { failure, productId }, request),
-    request,
-  });
-}
-
-function renderAddToCartFailureFragment(
-  request: ShopRequest,
-  rawInput: unknown,
-  failure: AddToCartFailure,
-) {
-  const productId = productIdFromRawInput(rawInput);
-  const product = productId ? request.db.products.get(productId) : undefined;
-
-  if (!product) return renderAddToCartError(failure);
-
-  return renderAddToCartForm(product, failure, request);
-}
-
-function productIdFromRawInput(rawInput: unknown): string | undefined {
-  if (typeof rawInput !== 'object' || rawInput === null || !('productId' in rawInput)) {
-    return undefined;
-  }
-  const productId = rawInput.productId;
-  return typeof productId === 'string' ? productId : undefined;
 }
 
 function expectSyncHtml(html: string | Promise<string>): string {

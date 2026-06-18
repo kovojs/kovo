@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from '@kovojs/compiler';
 import { dispatchDelegatedEvent, type EventElementLike } from '@kovojs/runtime';
+import { renderRoutePageResponse } from '@kovojs/server';
 
-import { renderProductRoute } from './app.js';
+import { productRoute } from './app.js';
 
 // Tutorial step 02: the served page is self-describing (SPEC.md section 4.2)
 // — platform behavior, handler wiring, and island state are all readable as
@@ -40,6 +41,10 @@ class FakeElement implements EventElementLike {
 function bodyText(body: unknown): string {
   if (typeof body !== 'string') throw new Error('expected a string page body');
   return body;
+}
+
+function renderProductRoute(id: string) {
+  return renderRoutePageResponse(productRoute, { params: { id } }, {});
 }
 
 function attributeFrom(html: string, name: string): string {

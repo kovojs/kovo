@@ -186,18 +186,23 @@ with messages in place. You don't write success fragment routing: query-backed c
 data they need, and Kovo reruns those queries after the mutation commits.
 
 ```ts
-import { renderMutationEndpointResponse } from '@kovojs/server';
+export const cartPage = route('/cart', {
+  page: () => <CartPage />,
+});
 
-return renderMutationEndpointResponse(addToCart, {
+export const addToCart = mutation('cart/add', {
   csrf: commerceCsrf,
-  rawInput,
-  redirectTo: '/cart', // the PRG destination for the no-JS mode
-  renderFailureFragment: (failure) => renderAddToCartForm(item, failure, request),
-  renderFailurePage: (failure) => renderCartPage(request.db, { failure }, request),
-  headers, // Kovo-Fragment / target descriptors, when present
-  request,
+  input: addToCartInput,
+  registry: { queries: [cartQuery, productGridQuery] },
+  handler(input, request) {
+    return request.db.cart.add(input);
+  },
 });
 ```
+
+The app declares the page, mutation, input schema, and affected queries. Kovo's request shell owns
+the endpoint response: PRG for no-JS success, typed 422 pages for failures, and fragment/query
+chunks for enhanced submissions.
 
 ## Handle a failure: the 422 path
 
