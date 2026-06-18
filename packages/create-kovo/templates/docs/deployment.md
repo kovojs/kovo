@@ -11,6 +11,8 @@ No SSE or live bus ships in v1. SSE-backed `<kovo-live>` subscriptions and live-
 
 Client handler modules are immutable URLs under `/c/*?v=...`. Keep old versioned client module artifacts published across deploys until documents that reference them have aged out; never rewrite a versioned `/c/` URL to the latest module.
 
+Kovo-owned deployment environment variables are limited to `PORT`, `HOST`, `NODE_ENV`, and `DATABASE_URL`. The Node preset reads `PORT` and `HOST` when it starts, generated container output sets `NODE_ENV=production`, and `kovo build` declares `DATABASE_URL` to presets when the bundled request handler references it. App-specific secrets remain ordinary platform environment variables and are not named by Kovo.
+
 The generated `src/app-shell.ts` module exports the same `app` for `vp dev`, `kovo build`, and static export, matching SPEC.md section 9.5's single request-shell path for route dispatch, document assembly, and static export replay.
 
 Production starts with the app-author build command:

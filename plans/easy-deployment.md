@@ -283,12 +283,12 @@ Design decisions to lock in code review:
     (`/c/name.js?v=...`). A new deploy can overwrite `client/c/name.js`, so old
     documents may fetch new module bytes for an old query version. Actual
     retained versioned artifact paths or query-aware retained serving remain open.
-- [ ] **Env & origin.** Convention: `PORT`, `HOST`, `NODE_ENV`, and `DATABASE_URL`
+- [x] **Env & origin.** Convention: `PORT`, `HOST`, `NODE_ENV`, and `DATABASE_URL`
       (only env Kovo names for the data plane). Origin/proto already handled via
       `Host`/`x-forwarded-proto` in `node.ts`; presets set `origin` appropriately for
       proxied platforms. Secrets beyond `DATABASE_URL` are pass-through env, undocumented
       by Kovo per the locked DB decision.
-  - Partial evidence: `packages/server/src/build.ts` emits a node preset `server.mjs`
+  - Evidence: `packages/server/src/build.ts` emits a node preset `server.mjs`
     that reads `process.env.PORT ?? "3000"` and `process.env.HOST ?? "0.0.0.0"`,
     uses `Host` plus `x-forwarded-proto` to construct the Web `Request` URL, and
     emits a Dockerfile with `ENV NODE_ENV=production`.
@@ -300,11 +300,13 @@ Design decisions to lock in code review:
     and a Cloudflare Worker that forwards the platform `Request` directly.
     `packages/server/src/build.test.ts` and
     `packages/cli/src/index.kovo-build.test.ts` verify `DATABASE_URL` inspection
-    warnings for Cloudflare TCP database deployments.
-  - Gap: `kovo build` still passes `declaredEnv: []` and only catches
-    `DATABASE_URL` when it appears in bundle source or a test supplies
-    `declaredEnv`; the general data-plane env convention is not inferred or
-    documented across presets yet.
+    warnings for Cloudflare TCP database deployments. `packages/cli/src/index.ts`
+    infers `DATABASE_URL` from the bundled request handler and passes it through
+    `PresetContext.declaredEnv`; `packages/cli/src/index.kovo-build.test.ts`
+    verifies a configured preset receives `declaredEnv=["DATABASE_URL"]` during
+    both inspection and emission. `packages/create-kovo/templates/docs/deployment.md`
+    documents `PORT`, `HOST`, `NODE_ENV`, and `DATABASE_URL` as Kovo-owned
+    deployment environment variables and leaves app-specific secrets to the host.
 - [x] **Edge-readiness audit (deferred, tracked).** Catalogue every `node:`
       import on the request path (`node:crypto` in `csrf.ts`/`csp.ts`, `node:stream`
       in `node.ts`) so the Phase 5 isolate-edge work has a scoped worklist. The likely

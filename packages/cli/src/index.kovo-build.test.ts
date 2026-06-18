@@ -328,6 +328,59 @@ describe('kovo build', () => {
     }
   });
 
+  it('passes inferred DATABASE_URL env to configured presets', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-env-'));
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(join(root, 'app.mjs'), databaseEnvAppModuleSource(), 'utf8');
+      writeClientEntry(root);
+      writeFileSync(
+        join(root, 'kovo.config.ts'),
+        [
+          "import { mkdir, writeFile } from 'node:fs/promises';",
+          "import { defineConfig } from '@kovojs/server/build';",
+          'export default defineConfig({',
+          '  preset: {',
+          "    name: 'node',",
+          '    async emit(_build, context) {',
+          '      await mkdir(context.outDir, { recursive: true });',
+          "      await writeFile(context.outDir + '/declared-env.txt', context.declaredEnv.join(','), 'utf8');",
+          '    },',
+          '    inspect(_build, context) {',
+          '      return [{',
+          "        code: 'test-declared-env',",
+          "        message: 'declared=' + context.declaredEnv.join(','),",
+          "        severity: 'warning',",
+          '      }];',
+          '    },',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('WARN test-declared-env declared=DATABASE_URL');
+      expect(readFileSync(join(outDir, 'server/declared-env.txt'), 'utf8')).toBe('DATABASE_URL');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('auto-detects Vercel and emits Build Output API files', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-vercel-'));
     const appPath = join(root, 'app.mjs');

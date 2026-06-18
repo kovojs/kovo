@@ -2405,8 +2405,9 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       throw new Error(`kovo build preset ${selectedPreset.name} cannot emit build output.`);
     }
 
+    const declaredEnv = inferredKovoBuildDeclaredEnv(serverHandlerSource);
     const presetContext: PresetContext = {
-      declaredEnv: [],
+      declaredEnv,
       log(message) {
         presetLogs.push(message);
       },
@@ -2449,6 +2450,12 @@ async function inspectKovoBuildPreset(
 ): Promise<readonly PresetDiagnostic[]> {
   if (typeof preset.inspect !== 'function') return [];
   return preset.inspect(neutralBuild, context);
+}
+
+const kovoBuildEnvConventions = ['DATABASE_URL'] as const;
+
+function inferredKovoBuildDeclaredEnv(serverHandlerSource: string): readonly string[] {
+  return kovoBuildEnvConventions.filter((name) => serverHandlerSource.includes(name));
 }
 
 function buildPresetOutDir(outDir: string, preset: KovoBuildPresetName): string {
