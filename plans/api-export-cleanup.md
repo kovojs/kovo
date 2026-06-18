@@ -253,32 +253,60 @@ integration. Framework packages should expose only generic webhook primitives.
 
 ## Server Root Canonicalization
 
-- [ ] **Move common app-shell types to `@kovojs/server` root.**
+- [x] **Move common app-shell types to `@kovojs/server` root.**
   - Add root exports for `RequestHandler`, `AppDocumentOptions`,
     `AppErrorShellOptions`, `ErrorShellRenderer`, `AppRouteRenderContext`,
     `AppMutationResponseContext`, `AppMutationResponseOptions`, and
     `AppMutationResponseResolver`.
   - Remove those symbols from `@kovojs/server/app-shell/core`; do not keep
     compatibility re-exports.
-  - Evidence:
-- [ ] **Move Node adapter companion types to `@kovojs/server` root.**
+  - Evidence: `packages/server/src/index.ts` exports the common app-shell types
+    from the root and `packages/server/src/api/app-shell/core.ts` no longer
+    re-exports them. `packages/server/src/api/app.test.ts` has compile-time root
+    assertions and `@ts-expect-error` old-subpath assertions for the full moved
+    set. Verification: `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+    `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `node scripts/api-surface-gate.mjs`; `git diff --check`.
+- [x] **Move Node adapter companion types to `@kovojs/server` root.**
   - Add root exports for `NodeHandlerOptions` and `NodeRequestHandler`.
   - Remove those symbols from `@kovojs/server/app-shell/node`; do not keep
     compatibility re-exports.
-  - Evidence:
-- [ ] **Move common client-module registry types to `@kovojs/server` root.**
+  - Evidence: `packages/server/src/index.ts` exports `NodeHandlerOptions` and
+    `NodeRequestHandler` from the root, while
+    `packages/server/src/api/app-shell/node.ts` exports only `toNodeHandler`.
+    `packages/server/src/api/app.test.ts` asserts root availability and old
+    subpath removal at compile time. Verification:
+    `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+    `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `node scripts/api-surface-gate.mjs`; `git diff --check`.
+- [x] **Move common client-module registry types to `@kovojs/server` root.**
   - Add root exports for `MemoryVersionedClientModuleRegistryOptions`,
     `VersionedClientModuleRegistry`, and `VersionedClientModuleInput`.
   - Remove those symbols from `@kovojs/server/app-shell/client-modules`; do not
     keep compatibility re-exports.
-  - Evidence:
-- [ ] **Move static-export core types to `@kovojs/server` root.**
+  - Evidence: `packages/server/src/index.ts` exports the registry companion
+    types from the root, while
+    `packages/server/src/api/app-shell/client-modules.ts` keeps only the support
+    request/response types. `packages/server/src/api/app.test.ts` asserts root
+    availability and old subpath removal at compile time. Verification:
+    `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+    `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `node scripts/api-surface-gate.mjs`; `git diff --check`.
+- [x] **Move static-export core types to `@kovojs/server` root.**
   - Add root exports for `StaticExportOptions`, `StaticExportResult`,
     `StaticExportDiagnostic`, `StaticExportDiagnosticSeverity`, and
     `StaticExportError`.
   - Remove those symbols from `@kovojs/server/app-shell/static-export`; do not
     keep compatibility re-exports.
-  - Evidence:
+  - Evidence: `packages/server/src/index.ts` exports `StaticExportError` and the
+    static-export core types from the root, while
+    `packages/server/src/api/app-shell/static-export.ts` no longer re-exports
+    those names. `packages/server/src/api/app.test.ts` asserts root type/value
+    availability and old subpath removal. Verification:
+    `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+    `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
+    `git diff --check`.
 - [ ] **Move Vite dev-plugin app setup API to `@kovojs/server` root.**
   - Add root exports for `kovoAppShellViteDevPlugin`, `KovoAppShellViteDevPlugin`,
     and `KovoAppShellViteDevPluginOptions`.

@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { layout, route, s } from '@kovojs/server';
 import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
-import type { RequestHandler } from '@kovojs/server/app-shell/core';
+import type { RequestHandler } from '@kovojs/server';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 
 import { ContactsRegion } from './components/contacts.js';

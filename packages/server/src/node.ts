@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { RequestHandler } from './app-types.js';
 
+/** Options for adapting a Web `RequestHandler` to a Node `http` listener. */
 export interface NodeHandlerOptions {
   earlyHints?: boolean;
   origin?: string | ((request: IncomingMessage) => string);
@@ -12,6 +13,7 @@ export interface WriteWebResponseToNodeOptions {
   earlyHints?: boolean;
 }
 
+/** Node `http`/`https` listener shape returned by `toNodeHandler()`. */
 export type NodeRequestHandler = (
   request: IncomingMessage,
   response: ServerResponse,

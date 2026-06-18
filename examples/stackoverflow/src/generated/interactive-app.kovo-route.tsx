@@ -5,8 +5,8 @@ import { layout, route, s } from '@kovojs/server';
 import {
   createApp,
   createRequestHandler,
-  type RequestHandler,
 } from '@kovojs/server/app-shell/core';
+import type { RequestHandler } from '@kovojs/server';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 
 import { QuestionDetailRegion } from "./question-detail.js";

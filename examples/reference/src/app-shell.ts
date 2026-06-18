@@ -3,8 +3,8 @@ import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-sh
 import {
   createApp,
   createRequestHandler,
-  type RequestHandler,
 } from '@kovojs/server/app-shell/core';
+import type { RequestHandler } from '@kovojs/server';
 import { toNodeHandler } from '@kovojs/server/app-shell/node';
 
 import {

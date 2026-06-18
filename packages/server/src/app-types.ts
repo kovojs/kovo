@@ -66,22 +66,32 @@ export type AppAuthoringDeclarations<Declaration, AppRequest> =
   | readonly Declaration[]
   | ((context: AppAuthoringContext<AppRequest>) => readonly unknown[]);
 
+/**
+ * Optional shell renderers for framework-owned error pages in the request shell
+ * (SPEC §9.5).
+ */
 export interface AppErrorShellOptions {
   forbidden?: ErrorShellRenderer;
   notFound?: ErrorShellRenderer;
   serverError?: ErrorShellRenderer;
 }
 
+/**
+ * Render an app-provided 403, 404, or 500 shell response for request-shell errors
+ * (SPEC §9.5).
+ */
 export type ErrorShellRenderer = (context: {
   request: Request;
   status: 403 | 404 | 500;
 }) => RoutePageResponse | Promise<RoutePageResponse>;
 
+/** Document-level options applied by `createApp()` when rendering route documents. */
 export interface AppDocumentOptions {
   lang?: string;
   template?: DocumentTemplate;
 }
 
+/** Request-shell context passed to a custom `renderRoute` hook (SPEC §9.5). */
 export interface AppRouteRenderContext<Route extends AnyRouteDeclaration = AnyRouteDeclaration> {
   params: Record<string, string>;
   request: Request;
@@ -153,6 +163,7 @@ export interface KovoApp<
   sessionProvider?: SessionProvider<any, any>;
 }
 
+/** Web-standard request handler returned by `createRequestHandler()` (SPEC §9.5). */
 export type RequestHandler = (request: Request) => Promise<Response>;
 
 export interface AppMutationDeclaration<AppRequest = unknown> {
@@ -174,6 +185,10 @@ export interface AppMutationDeclaration<AppRequest = unknown> {
   ) => Promise<Result>;
 }
 
+/**
+ * Runtime context passed to mutation response resolvers when the request shell
+ * builds redirect, fragment, or failure responses (SPEC §9.5).
+ */
 export interface AppMutationResponseContext {
   currentUrl: string;
   key: string;
@@ -183,6 +198,10 @@ export interface AppMutationResponseContext {
   url: URL;
 }
 
+/**
+ * Per-mutation response policy used by the request shell after a mutation handler
+ * succeeds or fails (SPEC §9.5).
+ */
 export interface AppMutationResponseOptions {
   csrf?: CsrfValidationOptions<Request>;
   failureTarget?: string;
@@ -196,6 +215,10 @@ export type AppMutationResponsePolicy = AppMutationResponseOptions | AppMutation
 
 export type AppMutationResponses = Readonly<Record<string, AppMutationResponsePolicy>>;
 
+/**
+ * Resolve mutation response policy from the current mutation request instead of
+ * declaring static options up front (SPEC §9.5).
+ */
 export type AppMutationResponseResolver = (
   context: AppMutationResponseContext,
 ) => AppMutationResponseOptions | Promise<AppMutationResponseOptions | undefined> | undefined;

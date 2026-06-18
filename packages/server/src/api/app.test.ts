@@ -27,44 +27,126 @@ import * as staticExportResultApi from '../static-export-result.js';
 import * as viteStaticExportManifestFileApi from '../vite-static-export-manifest-file.js';
 import * as wireHtmlApi from '../wire-html.js';
 
-// @ts-expect-error SPEC.md §9.5: raw web request handlers are app-shell/core boundary types,
-// not root @kovojs/server compatibility aliases.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedRootRequestHandler = import('../index.js').RequestHandler;
-
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedRootMemoryRegistryOptions =
-  // @ts-expect-error SPEC.md §9.5: memory registry options belong to app-shell/client-modules.
-  import('../index.js').MemoryVersionedClientModuleRegistryOptions;
-
-// @ts-expect-error SPEC.md §9.5: versioned client-module registry contracts belong to the focused
-// app-shell/client-modules subpath, not the root @kovojs/server barrel.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedRootVersionedClientModuleRegistry = import('../index.js').VersionedClientModuleRegistry;
-
-// @ts-expect-error SPEC.md §9.5: Node adapter options belong to the focused app-shell/node
-// subpath, not the root @kovojs/server barrel.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedRootNodeHandlerOptions = import('../index.js').NodeHandlerOptions;
-
-// @ts-expect-error SPEC.md §9.5: Node request handlers belong to the focused app-shell/node
-// subpath, not the root @kovojs/server barrel.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedRootNodeRequestHandler = import('../index.js').NodeRequestHandler;
-
-// Focused app-shell subpaths remain the public type homes for the removed root aliases.
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type FocusedRequestHandler = import('./app-shell/core.js').RequestHandler;
+type RootAppDocumentOptions = import('../index.js').AppDocumentOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type FocusedMemoryRegistryOptions =
+type RootAppErrorShellOptions = import('../index.js').AppErrorShellOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootAppMutationResponseContext = import('../index.js').AppMutationResponseContext;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootAppMutationResponseOptions = import('../index.js').AppMutationResponseOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootAppMutationResponseResolver = import('../index.js').AppMutationResponseResolver;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootAppRouteRenderContext = import('../index.js').AppRouteRenderContext;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootErrorShellRenderer = import('../index.js').ErrorShellRenderer;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootRequestHandler = import('../index.js').RequestHandler;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootMemoryRegistryOptions = import('../index.js').MemoryVersionedClientModuleRegistryOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootVersionedClientModuleRegistry = import('../index.js').VersionedClientModuleRegistry;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootVersionedClientModuleInput = import('../index.js').VersionedClientModuleInput;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootNodeHandlerOptions = import('../index.js').NodeHandlerOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootNodeRequestHandler = import('../index.js').NodeRequestHandler;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootStaticExportOptions = import('../index.js').StaticExportOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootStaticExportResult = import('../index.js').StaticExportResult;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootStaticExportDiagnostic = import('../index.js').StaticExportDiagnostic;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootStaticExportDiagnosticSeverity = import('../index.js').StaticExportDiagnosticSeverity;
+
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedAppDocumentOptions =
+  // @ts-expect-error SPEC.md §9.5: app document options now have the root
+  // @kovojs/server canonical home, not the app-shell/core subpath.
+  import('./app-shell/core.js').AppDocumentOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedAppErrorShellOptions =
+  // @ts-expect-error SPEC.md §9.5: app error shell options now have the root
+  // @kovojs/server canonical home, not the app-shell/core subpath.
+  import('./app-shell/core.js').AppErrorShellOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedAppMutationResponseContext =
+  // @ts-expect-error SPEC.md §9.5: mutation response context now has the root
+  // @kovojs/server canonical home, not the app-shell/core subpath.
+  import('./app-shell/core.js').AppMutationResponseContext;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedAppMutationResponseOptions =
+  // @ts-expect-error SPEC.md §9.5: mutation response options now have the root
+  // @kovojs/server canonical home, not the app-shell/core subpath.
+  import('./app-shell/core.js').AppMutationResponseOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedAppMutationResponseResolver =
+  // @ts-expect-error SPEC.md §9.5: mutation response resolvers now have the root
+  // @kovojs/server canonical home, not the app-shell/core subpath.
+  import('./app-shell/core.js').AppMutationResponseResolver;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedAppRouteRenderContext =
+  // @ts-expect-error SPEC.md §9.5: route render context now has the root
+  // @kovojs/server canonical home, not the app-shell/core subpath.
+  import('./app-shell/core.js').AppRouteRenderContext;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedErrorShellRenderer =
+  // @ts-expect-error SPEC.md §9.5: error shell renderers now have the root
+  // @kovojs/server canonical home, not the app-shell/core subpath.
+  import('./app-shell/core.js').ErrorShellRenderer;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedRequestHandler =
+  // @ts-expect-error SPEC.md §9.5: request-handler types now have the root
+  // @kovojs/server canonical home, not the app-shell/core subpath.
+  import('./app-shell/core.js').RequestHandler;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedMemoryRegistryOptions =
+  // @ts-expect-error SPEC.md §9.5: versioned client-module registry option types
+  // now have the root @kovojs/server canonical home.
   import('./app-shell/client-modules.js').MemoryVersionedClientModuleRegistryOptions;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type FocusedVersionedClientModuleRegistry =
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedVersionedClientModuleRegistry =
+  // @ts-expect-error SPEC.md §9.5: versioned client-module registry types now have
+  // the root @kovojs/server canonical home.
   import('./app-shell/client-modules.js').VersionedClientModuleRegistry;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type FocusedNodeHandlerOptions = import('./app-shell/node.js').NodeHandlerOptions;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type FocusedNodeRequestHandler = import('./app-shell/node.js').NodeRequestHandler;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedVersionedClientModuleInput =
+  // @ts-expect-error SPEC.md §9.5: versioned client-module input types now have
+  // the root @kovojs/server canonical home.
+  import('./app-shell/client-modules.js').VersionedClientModuleInput;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedNodeHandlerOptions =
+  // @ts-expect-error SPEC.md §9.5: Node adapter companion types now have the root
+  // @kovojs/server canonical home.
+  import('./app-shell/node.js').NodeHandlerOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedNodeRequestHandler =
+  // @ts-expect-error SPEC.md §9.5: Node request handler types now have the root
+  // @kovojs/server canonical home.
+  import('./app-shell/node.js').NodeRequestHandler;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportOptions =
+  // @ts-expect-error SPEC.md §9.5: static-export result/config types now have the
+  // root @kovojs/server canonical home.
+  import('./app-shell/static-export.js').StaticExportOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportResult =
+  // @ts-expect-error SPEC.md §9.5: static-export result/config types now have the
+  // root @kovojs/server canonical home.
+  import('./app-shell/static-export.js').StaticExportResult;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportDiagnostic =
+  // @ts-expect-error SPEC.md §9.5: static-export diagnostics now have the root
+  // @kovojs/server canonical home.
+  import('./app-shell/static-export.js').StaticExportDiagnostic;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportDiagnosticSeverity =
+  // @ts-expect-error SPEC.md §9.5: static-export diagnostics now have the root
+  // @kovojs/server canonical home.
+  import('./app-shell/static-export.js').StaticExportDiagnosticSeverity;
 
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedWriteWebResponseToNodeOptions =
@@ -167,6 +249,7 @@ describe('server app-shell public API barrels', () => {
         clientModulesApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: coreApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
+      StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       toNodeHandler: nodeApi.toNodeHandler,
     });
 
@@ -210,6 +293,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(publicApi.createRequestHandler).toBe(coreApi.createRequestHandler);
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
+    expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
     expect(publicApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
 
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell');
@@ -234,7 +318,6 @@ describe('server app-shell public API barrels', () => {
     ]);
     expect(moduleValueKeys(packageNodeApi)).toEqual(['toNodeHandler']);
     expect(moduleValueKeys(packageStaticExportApi)).toEqual([
-      'StaticExportError',
       'assertStaticExportManifestMatchesResult',
       'assertStaticExportManifestUsesDirectoryIndexDocuments',
       'exportStaticApp',
@@ -264,6 +347,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageNodeApi).not.toHaveProperty('nodeRequestToWebRequest');
     expect(packageNodeApi).not.toHaveProperty('writeWebResponseToNode');
     expect(packageStaticExportApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
+    expect(packageStaticExportApi).not.toHaveProperty('StaticExportError');
     expect(packageStaticExportApi.staticExportInventory).toBe(
       staticExportResultApi.staticExportInventory,
     );

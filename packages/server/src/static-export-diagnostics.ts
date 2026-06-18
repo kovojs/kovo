@@ -1,11 +1,16 @@
 import { diagnosticDefinitions, type DiagnosticCode } from '@kovojs/core';
 
+/**
+ * Route-level diagnostic emitted when a request-shell route cannot be represented
+ * by static export output (SPEC §11.3).
+ */
 export interface StaticExportDiagnostic {
   code: DiagnosticCode | 'KV229';
   message: string;
   routePath: string;
 }
 
+/** Severity label used when formatting static-export diagnostics. */
 export type StaticExportDiagnosticSeverity = 'ERROR' | 'WARN';
 
 export interface StaticExportCompileDiagnostic {
@@ -16,6 +21,7 @@ export interface StaticExportCompileDiagnostic {
   start?: { column: number; line: number };
 }
 
+/** Error thrown when static export is configured to fail on non-exportable routes. */
 export class StaticExportError extends Error {
   readonly code: DiagnosticCode | 'KV229';
   readonly diagnostics: readonly StaticExportDiagnostic[];

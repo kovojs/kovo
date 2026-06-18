@@ -4,7 +4,6 @@ export {
   formatStaticExportDiagnostics,
   isStaticExportDiagnostic,
   isStaticExportDiagnosticError,
-  StaticExportError,
 } from '../../static-export-diagnostics.js';
 export {
   assertStaticExportManifestMatchesResult,
@@ -24,11 +23,7 @@ export type {
   StaticExportManifestClientModule,
   StaticExportManifestRouteDocument,
   StaticExportNonExportablePolicy,
-  StaticExportOptions,
-  StaticExportResult,
 } from '../../static-export-types.js';
 export type {
   StaticExportCompileDiagnostic,
-  StaticExportDiagnostic,
-  StaticExportDiagnosticSeverity,
 } from '../../static-export-diagnostics.js';

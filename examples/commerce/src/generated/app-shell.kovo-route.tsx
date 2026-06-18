@@ -11,9 +11,9 @@ import {
   createApp,
   createRequestHandler,
   type KovoApp,
-  type RequestHandler,
 } from '@kovojs/server/app-shell/core';
-import { toNodeHandler, type NodeRequestHandler } from '@kovojs/server/app-shell/node';
+import type { NodeRequestHandler, RequestHandler } from '@kovojs/server';
+import { toNodeHandler } from '@kovojs/server/app-shell/node';
 
 import {
   addToCart,

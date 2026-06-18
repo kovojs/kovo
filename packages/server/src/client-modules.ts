@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto';
 import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import type { ServerResponseBase } from './response.js';
 
+/**
+ * Source module registered into the request-shell client-module registry for
+ * versioned browser delivery (SPEC §9.5).
+ */
 export interface VersionedClientModuleInput {
   contentType?: string;
   path: string;
@@ -15,6 +19,10 @@ export interface VersionedClientModuleResponse extends ServerResponseBase<
   200 | 404
 > {}
 
+/**
+ * Registry used by the server request shell to publish immutable versioned
+ * client modules and resolve browser requests for them (SPEC §9.5).
+ */
 export interface VersionedClientModuleRegistry {
   /**
    * A deterministic build-global token derived from the set of registered
@@ -33,6 +41,7 @@ export interface VersionedClientModuleRequest {
   url?: string | null;
 }
 
+/** Options for the in-memory versioned client-module registry. */
 export interface MemoryVersionedClientModuleRegistryOptions {
   maxVersionsPerPath?: number;
 }
