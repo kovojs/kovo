@@ -650,26 +650,23 @@ describe('compiler conformance corpus', () => {
 
   it('checks committed Commerce route IR freshness through the package §5.2 gate', () => {
     const routeResult = compileRouteModule({
-      artifactFileName: 'examples/commerce/src/generated/app-shell.kovo-route.tsx',
+      artifactFileName: 'examples/commerce/src/generated/app.kovo-route.tsx',
       componentImportRewrites: [
         { localName: 'CartBadge', specifier: './cart-badge.js' },
         { localName: 'OrderHistory', specifier: './order-history.js' },
         { localName: 'ProductGrid', specifier: './product-grid.js' },
       ],
-      fileName: 'examples/commerce/src/app-shell.tsx',
-      source: readFileSync(
-        new URL('../../../examples/commerce/src/app-shell.tsx', import.meta.url),
-        'utf8',
-      ),
+      fileName: 'examples/commerce/src/app.tsx',
+      source: readFileSync(new URL('../../../examples/commerce/src/app.tsx', import.meta.url), 'utf8'),
     });
     const generatedSource = readFileSync(
-      new URL('../../../examples/commerce/src/generated/app-shell.kovo-route.tsx', import.meta.url),
+      new URL('../../../examples/commerce/src/generated/app.kovo-route.tsx', import.meta.url),
       'utf8',
     );
 
     expect(routeResult.diagnostics).toEqual([]);
     expect(routeResult.files.map((file) => file.fileName)).toEqual([
-      'examples/commerce/src/generated/app-shell.kovo-route.tsx',
+      'examples/commerce/src/generated/app.kovo-route.tsx',
     ]);
     expect(routeResult.files[0]?.source).toBe(generatedSource);
     expect(generatedSource).not.toContain('renderCommerceLoginForm');
@@ -682,7 +679,7 @@ describe('compiler conformance corpus', () => {
     );
 
     expect(generatedSource).toContain("interface MutationRegistry {\n    'cart/add':");
-    expect(generatedSource).toContain("typeof import('../app.js').addToCart;");
+    expect(generatedSource).toContain("typeof import('../domain.js').addToCart;");
     expect(generatedSource).toContain(
       'interface InvalidationSets extends CommerceInvalidationSets',
     );
@@ -729,9 +726,9 @@ function commerceComponentFixture(name: (typeof commerceComponentNames)[number])
 }
 
 function commerceRegistryFacts() {
-  const fileName = 'examples/commerce/src/app.ts';
+  const fileName = 'examples/commerce/src/domain.ts';
   const source = readFileSync(
-    new URL('../../../examples/commerce/src/app.ts', import.meta.url),
+    new URL('../../../examples/commerce/src/domain.ts', import.meta.url),
     'utf8',
   );
 

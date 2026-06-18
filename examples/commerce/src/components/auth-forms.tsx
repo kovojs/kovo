@@ -1,38 +1,40 @@
 /** @jsxImportSource @kovojs/server */
 import { FormError } from '@kovojs/core';
+import * as style from '@kovojs/style';
 
 import { commerceSignIn, commerceSignOut } from '../domain.js';
+import { commerceStyles } from '../styles.js';
 
 export function LoginForm({ next = '/cart' }: { next?: string }): string {
   return (
-    <form class="grid gap-4 rounded border border-slate-200 bg-white p-6" mutation={commerceSignIn}>
+    <form {...style.attrs(commerceStyles.loginForm)} mutation={commerceSignIn}>
       <input type="hidden" name="next" value={next} />
-      <label class="grid gap-1 text-sm font-medium text-slate-700">
+      <label {...style.attrs(commerceStyles.formLabel)}>
         <span>Email</span>
         <input
           autocomplete="email"
-          class="rounded border border-slate-300 px-3 py-2"
+          {...style.attrs(commerceStyles.field)}
           name="email"
           required
           type="email"
         />
       </label>
-      <label class="grid gap-1 text-sm font-medium text-slate-700">
+      <label {...style.attrs(commerceStyles.formLabel)}>
         <span>Password</span>
         <input
           autocomplete="current-password"
-          class="rounded border border-slate-300 px-3 py-2"
+          {...style.attrs(commerceStyles.field)}
           name="password"
           required
           type="password"
         />
       </label>
       <FormError
-        class="text-sm text-red-700"
+        {...style.attrs(commerceStyles.errorText)}
         code="INVALID_CREDENTIALS"
         message="Invalid email or password."
       />
-      <button class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white" type="submit">
+      <button {...style.attrs(commerceStyles.primaryButton)} type="submit">
         Sign in
       </button>
     </form>
@@ -41,10 +43,8 @@ export function LoginForm({ next = '/cart' }: { next?: string }): string {
 
 export function LogoutForm(): string {
   return (
-    <form class="inline" mutation={commerceSignOut}>
-      <button class="text-sm font-medium text-slate-900" type="submit">
-        Sign out
-      </button>
+    <form {...style.attrs(commerceStyles.formInline)} mutation={commerceSignOut}>
+      <button {...style.attrs(commerceStyles.productLink)} type="submit">Sign out</button>
     </form>
   );
 }

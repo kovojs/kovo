@@ -13,6 +13,7 @@ import {
   type RequestHandler,
   type ServerErrorHandler,
 } from '@kovojs/server';
+import * as style from '@kovojs/style';
 
 import {
   addToCart,
@@ -30,6 +31,7 @@ import { LoginForm } from "../components/auth-forms.js";
 import { CartBadge } from "./cart-badge.js";
 import { OrderHistory } from "./order-history.js";
 import { ProductGrid, ProductGridError } from "./product-grid.js";
+import { commerceStyles } from "../styles.js";
 
 export type CommerceRouteRequest = Request & CommerceAuthRequest;
 
@@ -47,8 +49,8 @@ export interface CommerceApp {
 
 function CommerceCartShell({ children }: { children?: unknown }): string {
   return (
-    <div data-commerce-shell="cart">
-      <main class="mx-auto max-w-4xl">{children}</main>
+    <div {...style.attrs(commerceStyles.appRoot)} data-commerce-shell="cart">
+      <main {...style.attrs(commerceStyles.cartShell)}>{children}</main>
     </div>
   );
 }
@@ -107,7 +109,7 @@ export const commerceLoginRoute = route('/login', {
   page: __kovoDefineCompiledRoutePage({"components":[{"localName":"LoginForm","props":[{"expression":"next","name":"next"}],"propsExpression":"{ next: next }","serializedPropsExpression":"JSON.stringify({ next: next })"}],"fileName":"examples/commerce/src/app.tsx","navigationSegments":[{"components":["LoginForm"],"id":"page:/login","kind":"page","localName":"page"}],"route":"/login"}, function page(context, _request: CommerceRouteRequest) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/cart';
     return (
-      <main class="mx-auto max-w-md p-6">
+      <main {...style.attrs(commerceStyles.loginMain)}>
         <LoginForm next={next} />
       </main>
     );

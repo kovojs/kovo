@@ -3,9 +3,11 @@ import { component, FieldError, form, FormError } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
+import * as style from '@kovojs/style';
 
 import { addToCart, type ProductGridResult } from '../domain.js';
 import { productGridQuery } from '../queries.js';
+import { commerceStyles } from '../styles.js';
 
 const addToCartForm = form('cart/add');
 
@@ -35,7 +37,7 @@ export function ProductGridError(): string {
 
 function renderProductGridError(): string {
   return (
-    <section class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+    <section {...style.attrs(commerceStyles.panelError)}>
       Products are temporarily unavailable.
     </section>
   );
@@ -48,7 +50,7 @@ export function renderProductGridItems(result: ProductGridResult): string {
     <>
       {cards}
       {cursor ? (
-        <a href={`/products?after=${cursor}`} data-cursor={cursor}>
+        <a {...style.attrs(commerceStyles.productLink)} href={`/products?after=${cursor}`} data-cursor={cursor}>
           More
         </a>
       ) : (
@@ -82,18 +84,16 @@ function stockBadge(stock: number): string {
 
 function renderProductCard(item: ProductItem): string {
   const body = (
-    <div class="grid gap-4">
-      <div class="flex items-center gap-4">
-        <span class="grid h-12 w-12 place-items-center rounded-md bg-slate-50 text-2xl">
-          {item.emoji}
-        </span>
-        <div class="grid gap-1">
-          <h2 class="font-semibold tracking-tight">{item.name}</h2>
+    <div {...style.attrs(commerceStyles.stack)}>
+      <div {...style.attrs(commerceStyles.row)}>
+        <span {...style.attrs(commerceStyles.productEmoji)}>{item.emoji}</span>
+        <div {...style.attrs(commerceStyles.stackSm)}>
+          <h2 {...style.attrs(commerceStyles.title)}>{item.name}</h2>
           {Badge.definition.render({ variant: 'neutral', children: item.category })}
         </div>
       </div>
-      <div class="flex items-center justify-between">
-        <span class="text-lg font-semibold tabular-nums">{priceLabel(item.unitPrice)}</span>
+      <div {...style.attrs(commerceStyles.rowBetween)}>
+        <span {...style.attrs(commerceStyles.tabularStrong)}>{priceLabel(item.unitPrice)}</span>
         {stockBadge(item.stock)}
       </div>
       {renderAddToCartForm(item)}
@@ -105,19 +105,19 @@ function renderProductCard(item: ProductItem): string {
 export function renderAddToCartForm(item: { id: string; stock: number }): string {
   const soldOut = item.stock === 0;
   return (
-    <form enhance mutation={addToCart} key={item.id} class="flex flex-wrap items-end gap-2">
+    <form enhance mutation={addToCart} key={item.id} {...style.attrs(commerceStyles.productForm)}>
       <input type="hidden" name="productId" value={item.id} />
-      <label class="grid gap-1 text-xs font-medium text-slate-700">
+      <label {...style.attrs(commerceStyles.formLabel)}>
         <span>Qty</span>
         <input
-          class="w-16 rounded-md border border-slate-300 px-2 py-1.5"
+          {...style.attrs(commerceStyles.field)}
           name="quantity"
           type="number"
           min="1"
           max={item.stock}
           value="1"
         />
-        <FieldError name="quantity" class="basis-full text-sm text-red-700" />
+        <FieldError name="quantity" {...style.attrs(commerceStyles.errorText)} />
       </label>
       {Button.definition.render({
         children: soldOut ? 'Sold out' : 'Add to cart',
@@ -127,7 +127,7 @@ export function renderAddToCartForm(item: { id: string; stock: number }): string
       })}
       <FormError
         code="OUT_OF_STOCK"
-        class="basis-full text-sm text-red-700"
+        {...style.attrs(commerceStyles.errorText)}
         message={(failure: OutOfStockFailure) =>
           `Only ${failure.payload.availableQuantity} available.`
         }

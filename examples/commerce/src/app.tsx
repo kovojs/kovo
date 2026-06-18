@@ -11,6 +11,7 @@ import {
   type RequestHandler,
   type ServerErrorHandler,
 } from '@kovojs/server';
+import * as style from '@kovojs/style';
 
 import {
   addToCart,
@@ -28,6 +29,7 @@ import { LoginForm } from './components/auth-forms.js';
 import { CartBadge } from './components/cart-badge.js';
 import { OrderHistory } from './components/order-history.js';
 import { ProductGrid, ProductGridError } from './components/product-grid.js';
+import { commerceStyles } from './styles.js';
 
 export type CommerceRouteRequest = Request & CommerceAuthRequest;
 
@@ -45,8 +47,8 @@ export interface CommerceApp {
 
 function CommerceCartShell({ children }: { children?: unknown }): string {
   return (
-    <div data-commerce-shell="cart">
-      <main class="mx-auto max-w-4xl">{children}</main>
+    <div {...style.attrs(commerceStyles.appRoot)} data-commerce-shell="cart">
+      <main {...style.attrs(commerceStyles.cartShell)}>{children}</main>
     </div>
   );
 }
@@ -105,7 +107,7 @@ export const commerceLoginRoute = route('/login', {
   page(context, _request: CommerceRouteRequest) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/cart';
     return (
-      <main class="mx-auto max-w-md p-6">
+      <main {...style.attrs(commerceStyles.loginMain)}>
         <LoginForm next={next} />
       </main>
     );

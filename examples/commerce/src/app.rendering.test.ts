@@ -4,7 +4,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { htmlDocumentFacts, htmlElementFacts } from '@kovojs/test/html-fragment';
+import { htmlDocumentFacts } from '@kovojs/test/html-fragment';
 import { renderPageHints } from '@kovojs/server/internal/html';
 
 import {
@@ -33,7 +33,7 @@ function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
 }
 
 describe('commerce example', () => {
-  it('renders StyleX-first stylesheet hints and static utility classes', async () => {
+  it('renders theme-backed stylesheet hints and authored StyleX classes', async () => {
     const cartResponse = await createCommerceScenarioClient().get('/cart');
     const cartPage = await cartResponse.text();
     const pageHints = htmlDocumentFacts(commercePageHints.html);
@@ -45,6 +45,9 @@ describe('commerce example', () => {
     expect(commercePageHints.earlyHints).toEqual({
       Link: '</assets/styles.css>; rel=preload; as=style',
     });
+    expect(commercePageHints.html).toContain('data-kovo-critical-href="/assets/styles.css"');
+    expect(commercePageHints.html).toContain('--kovo-theme-sys-color-primary');
+    expect(commercePageHints.html).toContain('.kv-commerce-');
     expect(pageHints.title).toBe('Kovo Commerce (0)');
     expect(pageHints.metas).toEqual(
       expect.arrayContaining([
@@ -66,21 +69,8 @@ describe('commerce example', () => {
     expect(pageHints.links).toMatchObject([
       { attrs: { href: '/assets/styles.css', rel: 'stylesheet' }, tag: 'link' },
     ]);
-    expect(
-      htmlElementFacts(cartPage, {
-        attrs: { class: 'mx-auto max-w-4xl' },
-        tag: 'main',
-      }),
-    ).toHaveLength(1);
-    expect(
-      htmlElementFacts(cartPage, {
-        attrs: {
-          class:
-            'inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1.5 text-xs font-semibold tabular-nums text-white',
-        },
-        tag: 'span',
-      }),
-    ).toHaveLength(1);
+    expect(cartPage).toContain('data-style-src="examples/commerce/src/styles.ts#cartShell"');
+    expect(cartPage).toContain('data-style-src="examples/commerce/src/styles.ts#cartCount"');
   });
 
   it('resolves commerce route meta from loaded cart query data', async () => {
@@ -96,7 +86,7 @@ describe('commerce example', () => {
     );
   });
 
-  it('builds the linked app stylesheet for commerce utility classes', () => {
+  it('builds the linked app stylesheet as reset plus generated UI CSS', () => {
     rmSync(path.join(commerceRoot, 'dist'), { force: true, recursive: true });
 
     execFileSync('corepack', ['pnpm', '--filter', '@kovojs/example-commerce', 'run', 'build'], {
@@ -104,12 +94,14 @@ describe('commerce example', () => {
       stdio: 'pipe',
     });
 
-    const css = readFileSync(path.join(commerceRoot, 'dist', 'assets', 'styles.css'), 'utf8');
+    const css = readFileSync(
+      path.join(commerceRoot, 'dist', 'server', 'client', 'assets', 'styles.css'),
+      'utf8',
+    );
 
-    expect(css).toContain('.bg-slate-50');
-    expect(css).toContain('.rounded');
-    expect(css).toContain('.text-red-700');
-    expect(css).toContain('.bg-teal-600');
-    expect(css).toContain('.border-slate-200');
+    expect(css).toContain('var(--kovo-theme-sys-color-surface)');
+    expect(css).toContain('var(--kovo-theme-sys-color-on-surface)');
+    expect(css).not.toContain('.bg-slate-50');
+    expect(css).not.toContain('.text-red-700');
   });
 });

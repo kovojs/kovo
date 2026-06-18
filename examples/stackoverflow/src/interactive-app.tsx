@@ -15,6 +15,8 @@ import { SoShell } from './components/chrome.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';
+import { soStyleCss } from './styles.js';
+import { soThemeCss } from './theme.js';
 
 // SPEC.md §9.1: the Stack Overflow example as a fully interactive Kovo app. It
 // registers the postQuestion / postAnswer / voteUp mutations and lets generated
@@ -22,7 +24,9 @@ import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './muta
 // The native `enhance` forms POST to `/_m/*`; served by the Node server
 // (scripts/serve.mjs), the inline loader morphs the re-rendered region.
 
-const soStylesheets = ['/assets/styles.css'] as const;
+const soStylesheets = [
+  { criticalCss: `${soThemeCss}\n${soStyleCss}`, href: '/assets/styles.css' },
+] as const;
 const demoSession = { id: 'demo-session', user: { id: 'demo-viewer', roles: ['member'] as const } };
 const soStaticQuestionPaths = [
   '/questions/q1',

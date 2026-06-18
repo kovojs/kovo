@@ -5,11 +5,13 @@ import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
+import * as style from '@kovojs/style';
 
 import { addContact, crmCsrf, type CrmRequest } from '../mutations.js';
 import { addContactForm } from '../model.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
 import { freshId } from '../components/chrome.js';
+import { crmStyles } from '../styles.js';
 
 // Contact book for `/contacts`. The add-contact form posts back to this region
 // so the list refreshes with the new person.
@@ -25,13 +27,13 @@ function initials(name: string): string {
 function renderContactCard(contact: ContactRow): string {
   return Card.definition.render({
     children: (
-      <div class="flex items-center gap-3">
+      <div {...style.attrs(crmStyles.row)}>
         {Avatar.definition.render({
           children: AvatarFallback.definition.render({ children: initials(contact.name) }),
         })}
         <div class="min-w-0 flex-1">
-          <p class="truncate font-semibold text-slate-900">{contact.name}</p>
-          <p class="truncate text-sm text-slate-500">{contact.email}</p>
+          <p {...style.attrs(crmStyles.tabularStrong)}>{contact.name}</p>
+          <p {...style.attrs(crmStyles.muted)}>{contact.email}</p>
         </div>
         <span class="shrink-0">
           {Badge.definition.render({
@@ -68,33 +70,33 @@ export const ContactsRegion = component({
     const contacts = contactList.items;
 
     return (
-      <div class="space-y-6">
+      <div {...style.attrs(crmStyles.stack)}>
         <div>
-          <h1 class="text-2xl font-bold tracking-tight">Contacts</h1>
-          <p class="mt-1 text-sm text-slate-600">{contacts.length} people in the book.</p>
+          <h1 {...style.attrs(crmStyles.heading)}>Contacts</h1>
+          <p {...style.attrs(crmStyles.muted)}>{contacts.length} people in the book.</p>
         </div>
 
         {/* The refreshed fragment resets the form with a fresh contact id. */}
         <form
           {...mutationFormAttributes(addContact)}
-          class="rounded-lg border border-slate-200 bg-white p-4"
+          {...style.attrs(crmStyles.formPanel)}
         >
           {slots.request ? csrfField(slots.request, crmCsrf) : ''}
           <input type="hidden" name="id" value={freshId('c')} />
           <input type="hidden" name="ownerId" value="u1" />
-          <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
+          <div {...style.attrs(crmStyles.formGridContacts)}>
             <input
               name="name"
               required
               placeholder="Full name"
-              class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              {...style.attrs(crmStyles.input)}
             />
             <input
               name="email"
               required
               type="email"
               placeholder="name@example.com"
-              class="crm-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              {...style.attrs(crmStyles.input)}
             />
             {Button.definition.render({
               children: 'Add contact',
@@ -104,7 +106,7 @@ export const ContactsRegion = component({
           </div>
           <FormError
             code="DUPLICATE_EMAIL"
-            class="mt-2 block text-sm text-red-700"
+            {...style.attrs(crmStyles.muted)}
             message={(failure: DuplicateEmailFailure) =>
               `${failure.payload.email} is already in the contact book.`
             }

@@ -3,6 +3,7 @@
 import { escapeText } from '@kovojs/server/internal/html';
 import { component } from '@kovojs/core';
 import { csrfField, mutationFormAttributes } from '@kovojs/server';
+import * as style from '@kovojs/style';
 
 import { closeDeal, crmCsrf, moveDeal, type CrmRequest } from '../mutations.js';
 import {
@@ -14,6 +15,7 @@ import {
   type DealListResult,
 } from '../queries.js';
 import { money, stageBadge } from '../components/chrome.js';
+import { crmStyles } from '../styles.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
@@ -57,16 +59,13 @@ export const DealDetailRegion = component({
 
     if (!deal) {
       return (
-        <div class="space-y-6">
-          <a
-            class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
-            href="/"
-          >
+        <div {...style.attrs(crmStyles.stack)}>
+          <a {...style.attrs(crmStyles.backLink)} href="/">
             &larr; Pipeline
           </a>
-          <div class="rounded-lg border border-slate-200 bg-white p-6">
-            <h1 class="text-xl font-bold tracking-tight">Unknown deal</h1>
-            <p class="mt-1 text-sm text-slate-600">
+          <div {...style.attrs(crmStyles.card)}>
+            <h1 {...style.attrs(crmStyles.heading)}>Unknown deal</h1>
+            <p {...style.attrs(crmStyles.muted)}>
               Deal {dealId.toUpperCase()} does not exist in this demo database.
             </p>
           </div>
@@ -75,30 +74,28 @@ export const DealDetailRegion = component({
     }
 
     return (
-      <div class="space-y-6" kovo-c="deal-detail-region" kovo-deps="activityList contactList dealList" kovo-fragment-target="deal-detail-region" kovo-live-component="components/deal-detail/deal-detail-region" kovo-props={JSON.stringify({ dealId })}>
-        <a
-          class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
-          href="/"
-        >
+      <div {...style.attrs(crmStyles.stack)} kovo-c="deal-detail-region" kovo-deps="activityList contactList dealList" kovo-fragment-target="deal-detail-region" kovo-live-component="components/deal-detail/deal-detail-region" kovo-props={JSON.stringify({ dealId })}>
+        <a {...style.attrs(crmStyles.backLink)} href="/">
           &larr; Pipeline
         </a>
 
-        <div class="rounded-lg border border-slate-200 bg-white p-6">
-          <div class="flex items-start justify-between gap-4">
+        <div {...style.attrs(crmStyles.card)}>
+          <div {...style.attrs(crmStyles.rowBetween)}>
             <div>
-              <h1 class="text-xl font-bold tracking-tight">Deal {deal.id.toUpperCase()}</h1>
-              <p class="mt-1 text-sm text-slate-600">
+              <h1 {...style.attrs(crmStyles.heading)}>Deal {deal.id.toUpperCase()}</h1>
+              <p {...style.attrs(crmStyles.muted)}>
                 {contact ? contact.name : deal.contactId} · owner {escapeText(deal.ownerId)}
               </p>
             </div>
             <div class="text-right">
-              <p class="text-2xl font-semibold tabular-nums">{money(deal.amount)}</p>
+              <p {...style.attrs(crmStyles.tabularStrong)}>{money(deal.amount)}</p>
               <div class="mt-1">{stageBadge(deal.stage)}</div>
             </div>
           </div>
           {contact ? (
-            <p class="mt-4 border-t border-slate-100 pt-4 text-sm text-slate-600">
-              <span class="font-medium text-slate-900">{escapeText(contact.name)}</span> · {escapeText(contact.email)}
+            <p {...style.attrs(crmStyles.dividerTop, crmStyles.muted)}>
+              <span {...style.attrs(crmStyles.tabularStrong)}>{escapeText(contact.name)}</span> ·{' '}
+              {escapeText(contact.email)}
             </p>
           ) : (
             ''
@@ -106,10 +103,8 @@ export const DealDetailRegion = component({
         </div>
 
         {/* Each stage button posts a tiny form and refreshes this region. */}
-        <div class="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Move stage
-          </h2>
+        <div {...style.attrs(crmStyles.card)}>
+          <h2 {...style.attrs(crmStyles.sectionLabel)}>Move stage</h2>
           <div class="flex flex-wrap gap-2">
             {MOVE_STAGES.map((stage) => (
               <form key={`${deal.id}:${stage}`} {...mutationFormAttributes(moveDeal)}>
@@ -119,20 +114,19 @@ export const DealDetailRegion = component({
                 <button
                   type="submit"
                   disabled={deal.stage === stage || closed}
-                  class={`rounded-md border px-3 py-1.5 text-sm font-medium capitalize ${
-                    deal.stage === stage
-                      ? 'cursor-default border-slate-300 bg-slate-900 text-white'
-                      : 'border-slate-300 text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40'
-                  }`}
+                  {...style.attrs(
+                    crmStyles.stageButton,
+                    deal.stage === stage ? crmStyles.stageButtonActive : false,
+                  )}
                 >
                   {stage}
                 </button>
               </form>
             ))}
           </div>
-          <div class="mt-4 border-t border-slate-100 pt-4">
+          <div {...style.attrs(crmStyles.dividerTop)}>
             {closed ? (
-              <p class="text-sm text-slate-500">
+              <p {...style.attrs(crmStyles.muted)}>
                 This deal is closed ({escapeText(deal.stage)}). Commission is final.
               </p>
             ) : (
@@ -141,7 +135,7 @@ export const DealDetailRegion = component({
                 <input type="hidden" name="dealId" value={deal.id} />
                 <button
                   type="submit"
-                  class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                  {...style.attrs(crmStyles.stageButton, crmStyles.stageButtonActive)}
                 >
                   Close won
                 </button>
@@ -151,21 +145,19 @@ export const DealDetailRegion = component({
         </div>
 
         <section>
-          <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Activity
-          </h2>
+          <h2 {...style.attrs(crmStyles.sectionLabel)}>Activity</h2>
           {activities.length === 0 ? (
-            <p class="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+            <p {...style.attrs(crmStyles.formPanel, crmStyles.muted)}>
               No activity logged yet.
             </p>
           ) : (
             <ol class="space-y-2">
               {activities.map((activity) => (
-                <li class="rounded-lg border border-slate-200 bg-white p-4">
-                  <p class="text-xs font-medium uppercase tracking-wide text-slate-400">
+                <li {...style.attrs(crmStyles.formPanel)}>
+                  <p {...style.attrs(crmStyles.sectionLabel)}>
                     {escapeText(activity.kind)}
                   </p>
-                  <p class="mt-1 text-sm text-slate-700">{escapeText(activity.note)}</p>
+                  <p {...style.attrs(crmStyles.muted)}>{escapeText(activity.note)}</p>
                 </li>
               ))}
             </ol>

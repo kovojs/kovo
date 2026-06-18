@@ -13,7 +13,7 @@ import { commerceCartPageMeta } from './graph.js';
 import { cart, cartQuery, order, orderHistoryQuery, product, productGridQuery } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 
-export { commerceCartPageMeta, commerceStylesheets } from './graph.js';
+export { commerceCartPageMeta, commerceStylesheetHrefs, commerceStylesheets } from './graph.js';
 export { createCommerceDb, type CommerceDb } from './db.js';
 export { loadCartQuery, loadProductGrid, loadOrderHistory } from './queries.js';
 export type {

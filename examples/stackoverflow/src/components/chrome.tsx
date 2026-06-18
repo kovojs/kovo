@@ -6,6 +6,7 @@ import * as style from '@kovojs/style';
 
 import { soCsrf, voteUpMutation } from '../mutations.js';
 import type { SoRequest } from '../model.js';
+import { soStyles } from '../styles.js';
 
 // Shared page chrome and small rendering helpers for the StackOverflow demo.
 
@@ -48,18 +49,11 @@ export function parseTags(tags: string | undefined): string[] {
     .filter(Boolean);
 }
 
-const chromeStyles = style.create(
-  {
-    authorAvatar: { fontSize: 12, height: 28, width: 28 },
-  },
-  { namespace: 'stackoverflowChrome', source: 'components/chrome.tsx' },
-);
-
 /** Render a row of tags as neutral @kovojs/ui Badges. */
 export function renderTags(tags: string[]): string {
   if (tags.length === 0) return '';
   return (
-    <div class="flex flex-wrap gap-2">
+    <div {...style.attrs(soStyles.tagRow)}>
       {tags.map((tag) => Badge.definition.render({ variant: 'neutral', children: tag }))}
     </div>
   );
@@ -73,14 +67,14 @@ export function renderAuthor(name: string, iso: string | undefined, verb: string
   const avatar = Avatar.definition.render({
     label: name,
     children: AvatarFallback.definition.render({ children: initials(name) }),
-    styles: { root: chromeStyles.authorAvatar },
+    styles: { root: soStyles.authorAvatar },
   });
   const when = iso ? relativeTime(iso) : '';
   return (
-    <div class="flex items-center gap-2 text-xs text-slate-500">
+    <div {...style.attrs(soStyles.byline)}>
       {avatar}
-      <span class="font-medium text-slate-700">{name}</span>
-      <span class="text-slate-400">
+      <span {...style.attrs(soStyles.bylineName)}>{name}</span>
+      <span {...style.attrs(soStyles.bylineMeta)}>
         {verb}
         {when ? ` · ${when}` : ''}
       </span>
@@ -92,15 +86,15 @@ export function renderAuthor(name: string, iso: string | undefined, verb: string
 // binding can update it directly.
 export function voteButton(questionId: string, value: number, request?: SoRequest): string {
   return (
-    <form enhance mutation={voteUpMutation} key={questionId} class="so-vote">
+    <form enhance mutation={voteUpMutation} key={questionId} {...style.attrs(soStyles.voteForm)}>
       {request ? csrfField(request, soCsrf) : ''}
       <input type="hidden" name="id" value={`vote-${questionId}`} />
       <input type="hidden" name="targetId" value={questionId} />
       <input type="hidden" name="userId" value="demo-viewer" />
-      <button type="submit" aria-label="Upvote" class="so-vote-btn">
-        <span class="so-vote-caret">&#9650;</span>
-        <span class="so-vote-score tabular-nums">{value}</span>
-        <span class="so-vote-label">votes</span>
+      <button type="submit" aria-label="Upvote" {...style.attrs(soStyles.voteButton)}>
+        <span {...style.attrs(soStyles.voteCaret)}>&#9650;</span>
+        <span {...style.attrs(soStyles.voteScore)}>{value}</span>
+        <span {...style.attrs(soStyles.voteLabel)}>votes</span>
       </button>
     </form>
   );
@@ -108,27 +102,27 @@ export function voteButton(questionId: string, value: number, request?: SoReques
 
 export function SoShell({ children }: { children?: unknown }): string {
   return (
-    <div class="so-app">
-      <header class="so-header">
-        <div class="so-header-inner">
-          <a href="/" class="so-brand">
-            <span class="so-brand-mark">DO</span>
-            <span class="so-brand-name">DevOverflow</span>
+    <div {...style.attrs(soStyles.appRoot)}>
+      <header {...style.attrs(soStyles.header)}>
+        <div {...style.attrs(soStyles.headerInner)}>
+          <a href="/" {...style.attrs(soStyles.brand)}>
+            <span {...style.attrs(soStyles.brandMark)}>DO</span>
+            <span {...style.attrs(soStyles.brandName)}>DevOverflow</span>
           </a>
-          <nav class="so-nav">
-            <a href="/" class="so-nav-link so-nav-link--active">
+          <nav {...style.attrs(soStyles.nav)}>
+            <a href="/" {...style.attrs(soStyles.navLink, soStyles.navLinkActive)}>
               Questions
             </a>
-            <a href="/" class="so-nav-link">
+            <a href="/" {...style.attrs(soStyles.navLink)}>
               Tags
             </a>
-            <a href="/" class="so-nav-link">
+            <a href="/" {...style.attrs(soStyles.navLink)}>
               Users
             </a>
           </nav>
         </div>
       </header>
-      <main class="so-main">{children}</main>
+      <main {...style.attrs(soStyles.main)}>{children}</main>
     </div>
   );
 }

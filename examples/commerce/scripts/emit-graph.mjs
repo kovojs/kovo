@@ -18,7 +18,7 @@ registerHooks({
   },
 });
 
-const { commerceCartPageMeta, commerceStylesheets } = await import('../src/graph.js');
+const { commerceCartPageMeta, commerceStylesheetHrefs } = await import('../src/graph.js');
 const ts = await import('typescript');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -252,7 +252,7 @@ const commerceGraph = {
       modulepreloads: [],
       prefetch: false,
       route: '/',
-      stylesheets: [...commerceStylesheets],
+      stylesheets: [...commerceStylesheetHrefs],
     },
     {
       i18n: ['en-US:cartLabel,productStock'],
@@ -260,7 +260,7 @@ const commerceGraph = {
       modulepreloads: [],
       prefetch: false,
       route: '/cart',
-      stylesheets: [...commerceStylesheets],
+      stylesheets: [...commerceStylesheetHrefs],
     },
   ],
   queries: commerceQueryDomains,
