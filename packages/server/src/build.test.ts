@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import type { Server } from 'node:http';
+import { createServer as createHttpServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -9,16 +9,21 @@ import * as packageBuildApi from '@kovojs/server/build';
 import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
-import { node, writeKovoNeutralBuild } from './build.js';
+import { node, vercel, writeKovoNeutralBuild } from './build.js';
 
 describe('server build-time deployment API', () => {
   it('exposes the build subpath without promoting it to the runtime root', () => {
     expect(packageBuildApi.node).toBe(node);
+    expect(packageBuildApi.vercel).toBe(vercel);
     expect(packageBuildApi.writeKovoNeutralBuild).toBe(writeKovoNeutralBuild);
     expect(node()).toMatchObject({ name: 'node', options: {} });
     expect(node({ dockerfile: false })).toMatchObject({
       name: 'node',
       options: { dockerfile: false },
+    });
+    expect(vercel({ maxDuration: 10, regions: ['iad1'] })).toMatchObject({
+      name: 'vercel',
+      options: { maxDuration: 10, regions: ['iad1'] },
     });
   });
 
@@ -314,6 +319,126 @@ export default async function handler(request) {
       await expect(readFile(join(nodeOutDir, 'Dockerfile'), 'utf8')).resolves.toContain(
         'CMD ["node", "server.mjs"]',
       );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('emits Vercel Build Output API v3 with static files and a Node function', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-vercel-preset-'));
+
+    try {
+      const distDir = join(root, 'dist');
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/cart.css'), 'main { color: teal; }');
+      await writeFile(join(distDir, 'assets/cart.js'), 'export const viteAsset = true;');
+      await writeFile(
+        join(distDir, '.vite/manifest.json'),
+        JSON.stringify({
+          'src/cart.client.ts': {
+            css: ['assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        }),
+      );
+
+      const neutralDir = join(root, 'dist', '.kovo');
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/hello', {
+              page() {
+                return '<main>Hello</main>';
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            source: 'export const cart = true;',
+            version: 'cart-v1',
+          },
+        ],
+        manifestFile: join(distDir, '.vite/manifest.json'),
+        outDir: neutralDir,
+        routeEntryMap: {
+          '/hello': 'src/cart.client.ts',
+        },
+        serverHandlerSource: `
+export default async function handler(request) {
+  const url = new URL(request.url);
+  return new Response('vercel:' + url.pathname + ':' + request.headers.get('x-from-test'), {
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  });
+}
+`,
+      });
+
+      const logs: string[] = [];
+      const vercelOutDir = join(root, '.vercel/output');
+      await vercel({ maxDuration: 8, regions: ['iad1'] }).emit(build, {
+        declaredEnv: [],
+        log(message) {
+          logs.push(message);
+        },
+        outDir: vercelOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      expect(logs).toEqual([`Emitted Kovo vercel preset output to ${vercelOutDir}`]);
+      await expect(readFile(join(vercelOutDir, 'static/c/cart.client.js'), 'utf8')).resolves.toBe(
+        'export const cart = true;',
+      );
+      await expect(readFile(join(vercelOutDir, 'static/assets/cart.css'), 'utf8')).resolves.toBe(
+        'main { color: teal; }',
+      );
+      await expect(
+        readFile(join(vercelOutDir, 'functions/kovo.func/handler.mjs'), 'utf8'),
+      ).resolves.toContain('vercel:');
+      await expect(
+        readJson(join(vercelOutDir, 'functions/kovo.func/.vc-config.json')),
+      ).resolves.toEqual({
+        handler: 'index.cjs',
+        launcherType: 'Nodejs',
+        maxDuration: 8,
+        regions: ['iad1'],
+        runtime: 'nodejs22.x',
+        shouldAddHelpers: true,
+      });
+      await expect(readJson(join(vercelOutDir, 'config.json'))).resolves.toEqual({
+        routes: [
+          {
+            continue: true,
+            headers: { 'cache-control': 'public, max-age=31536000, immutable' },
+            src: '/(?:assets|c)/(.*)',
+          },
+          { handle: 'filesystem' },
+          { dest: '/kovo', src: '/(.*)' },
+        ],
+        version: 3,
+      });
+
+      const functionModule = (await import(
+        `${pathToFileURL(join(vercelOutDir, 'functions/kovo.func/index.cjs')).href}?t=${Date.now()}`
+      )) as {
+        default: (request: unknown, response: unknown) => void;
+      };
+      const server = createHttpServer(functionModule.default);
+      const baseUrl = await listen(server);
+
+      try {
+        const response = await fetch(`${baseUrl}/hello`, {
+          headers: { 'x-from-test': 'function-header' },
+        });
+        await expect(response.text()).resolves.toBe('vercel:/hello:function-header');
+        expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+      } finally {
+        await close(server);
+      }
     } finally {
       await rm(root, { force: true, recursive: true });
     }

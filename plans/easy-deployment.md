@@ -367,10 +367,31 @@ packages/cli/src/index.kovo-build.test.ts -t "generated node Dockerfile"`.
 
 ### Phase 2 — `vercel` preset
 
-- [ ] Emit `.vercel/output/` (Build Output API v3): Node function + static.
+- [x] Emit `.vercel/output/` (Build Output API v3): Node function + static.
+  - Evidence: `packages/server/src/build.ts` exposes `vercel()` from
+    `@kovojs/server/build`; `vercel().emit()` copies neutral `client/` into
+    `.vercel/output/static`, writes `functions/kovo.func/handler.mjs`,
+    `functions/kovo.func/index.cjs`, `functions/kovo.func/.vc-config.json`
+    (`runtime: "nodejs22.x"`, `launcherType: "Nodejs"`), and
+    `.vercel/output/config.json` with `version: 3`, immutable `/assets|/c`
+    headers, filesystem routing, and catch-all function routing. Verification:
+    `corepack pnpm exec vitest --run packages/server/src/build.test.ts
+packages/cli/src/index.kovo-build.test.ts`.
 - [ ] Auto-detect on `VERCEL` env; static-only apps emit pure static (no function).
+  - Partial evidence: `packages/cli/src/index.ts` now allows the `vercel` preset,
+    selects `vercel()` for `VERCEL=1` and `KOVO_PRESET=vercel`, and writes
+    `.vercel/output` as the preset output directory. `packages/cli/src/
+index.kovo-build.test.ts` verifies Vercel host auto-detection emits the Build
+    Output API files and that `KOVO_PRESET=cloudflare` still wins over
+    `VERCEL=1`. The full item remains open for the static-only optimization.
 - [ ] Evidence: `vercel build`/`--prebuilt` dry-run validates the output dir;
       golden-file test on `config.json` + function manifest.
+  - Partial evidence: golden-file coverage exists in `packages/server/src/
+build.test.ts` and `packages/cli/src/index.kovo-build.test.ts` for
+    `config.json`, `.vc-config.json`, copied static assets, and the generated
+    Node function wrapper. Gap: `vercel --version` is not available in this
+    environment (`zsh: command not found: vercel`), so no Vercel CLI dry-run was
+    executed in this checkpoint.
 
 ### Phase 3 — `cloudflare` preset
 

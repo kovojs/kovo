@@ -2368,13 +2368,13 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
   try {
     const loadedConfig = await loadKovoBuildConfig(process.cwd());
     const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
-    if (selectedPreset.name !== 'node') {
+    if (selectedPreset.name !== 'node' && selectedPreset.name !== 'vercel') {
       throw new Error(
-        `kovo build preset ${selectedPreset.name} is not implemented yet; use --preset node for the current Node/VPS output.`,
+        `kovo build preset ${selectedPreset.name} is not implemented yet; use --preset node or --preset vercel for the current output.`,
       );
     }
     const resolvedAppModulePath = resolve(options.appModulePath);
-    const [{ node, writeKovoNeutralBuild }, appModule] = await Promise.all([
+    const [{ node, vercel, writeKovoNeutralBuild }, appModule] = await Promise.all([
       import('@kovojs/server/build'),
       loadBuildAppModule(resolvedAppModulePath, process.cwd()),
     ]);
@@ -2391,7 +2391,8 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       outDir: join(outDir, '.kovo'),
       serverHandlerSource,
     });
-    const preset = selectedPreset.preset ?? node();
+    const preset = selectedPreset.preset ?? (selectedPreset.name === 'vercel' ? vercel() : node());
+    const presetOutDir = buildPresetOutDir(outDir, selectedPreset.name);
     const presetLogs: string[] = [];
     if (typeof preset.emit !== 'function') {
       throw new Error(`kovo build preset ${selectedPreset.name} cannot emit build output.`);
@@ -2402,7 +2403,7 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       log(message) {
         presetLogs.push(message);
       },
-      outDir: join(outDir, 'server'),
+      outDir: presetOutDir,
       readNeutral() {
         return neutralBuild;
       },
@@ -2414,11 +2415,15 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       outDir,
       preset: selectedPreset.name,
       presetLogs,
-      serverOutDir: join(outDir, 'server'),
+      serverOutDir: presetOutDir,
     });
   } catch (error) {
     return buildErrorResult(error);
   }
+}
+
+function buildPresetOutDir(outDir: string, preset: KovoBuildPresetName): string {
+  return preset === 'vercel' ? join(outDir, '.vercel/output') : join(outDir, 'server');
 }
 
 function selectedKovoBuildPreset(
@@ -2835,7 +2840,7 @@ function kovoBuildResult(options: {
   appModulePath: string;
   neutralOutDir: string;
   outDir: string;
-  preset: 'node';
+  preset: KovoBuildPresetName;
   presetLogs: readonly string[];
   serverOutDir: string;
 }): KovoCheckResult {

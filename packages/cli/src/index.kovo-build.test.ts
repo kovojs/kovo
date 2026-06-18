@@ -328,23 +328,63 @@ describe('kovo build', () => {
     }
   });
 
-  it('fails loudly for detected presets that do not have emitters yet', async () => {
+  it('auto-detects Vercel and emits Build Output API files', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-vercel-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      const exitCode = await withEnv({ VERCEL: '1' }, () =>
-        mainAsync(['build', 'missing-app.mjs']),
-      );
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(appPath, appModuleSource(), 'utf8');
+      writeClientEntry(root);
 
-      expect(exitCode).toBe(1);
-      expect(stdout).not.toHaveBeenCalled();
-      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
-        'kovo build preset vercel is not implemented yet',
+      const exitCode = await withEnv({ VERCEL: '1' }, () =>
+        mainAsync(['build', appPath, '--out', outDir]),
       );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('SUMMARY preset=vercel');
+      expect(output).toContain(`serverOutDir=${JSON.stringify(join(outDir, '.vercel/output'))}`);
+      expect(readBuildJson(join(outDir, '.vercel/output/config.json'))).toEqual({
+        routes: [
+          {
+            continue: true,
+            headers: { 'cache-control': 'public, max-age=31536000, immutable' },
+            src: '/(?:assets|c)/(.*)',
+          },
+          { handle: 'filesystem' },
+          { dest: '/kovo', src: '/(.*)' },
+        ],
+        version: 3,
+      });
+      expect(
+        readBuildJson(join(outDir, '.vercel/output/functions/kovo.func/.vc-config.json')),
+      ).toEqual({
+        handler: 'index.cjs',
+        launcherType: 'Nodejs',
+        runtime: 'nodejs22.x',
+        shouldAddHelpers: true,
+      });
+      expect(readFileSync(join(outDir, '.vercel/output/static/c/cart.client.js'), 'utf8')).toBe(
+        'export const cartClient = true;',
+      );
+      const stylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
+      expect(
+        readFileSync(join(outDir, '.vercel/output/static', stylesheetPath.slice(1)), 'utf8'),
+      ).toContain('color:#639');
+      expect(
+        readFileSync(join(outDir, '.vercel/output/functions/kovo.func/handler.mjs'), 'utf8'),
+      ).not.toContain('vite');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
     }
   });
 
@@ -353,14 +393,14 @@ describe('kovo build', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      const exitCode = await withEnv({ CF_PAGES: '1', KOVO_PRESET: 'vercel' }, () =>
+      const exitCode = await withEnv({ KOVO_PRESET: 'cloudflare', VERCEL: '1' }, () =>
         mainAsync(['build', 'missing-app.mjs']),
       );
 
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
-        'kovo build preset vercel is not implemented yet',
+        'kovo build preset cloudflare is not implemented yet',
       );
     } finally {
       stdout.mockRestore();
@@ -441,6 +481,10 @@ function builtAssetPath(outDir: string, predicate: (path: string) => boolean): s
   const asset = manifest.assets?.find((entry) => predicate(entry.path));
   if (!asset) throw new Error(`Expected built asset in ${outDir}`);
   return asset.path;
+}
+
+function readBuildJson(filePath: string): unknown {
+  return JSON.parse(readFileSync(filePath, 'utf8'));
 }
 
 function typescriptAppModuleSource(): string {

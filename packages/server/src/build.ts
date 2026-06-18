@@ -14,6 +14,7 @@ import { writeKovoAppShellViteBuildOutput } from './vite-build-output.js';
 import type { KovoAppShellRouteEntryMap } from './vite-manifest.js';
 
 const neutralBuildVersion = 'kovo-neutral-build/v1';
+const immutableCacheControl = 'public, max-age=31536000, immutable';
 
 /** Build-time preset descriptor consumed by `kovo build` and deployment tooling. */
 export interface KovoPreset {
@@ -63,6 +64,26 @@ export interface NodePreset extends KovoPreset {
   options: NodePresetOptions;
 }
 
+/** Options for the built-in Vercel preset. */
+export interface VercelPresetOptions {
+  /** Maximum Vercel Function duration in seconds. */
+  maxDuration?: number;
+  /** Vercel Function memory in MB. */
+  memory?: number;
+  /** Vercel regions for the Node function. */
+  regions?: readonly string[];
+}
+
+/** Built-in Vercel Build Output API v3 preset descriptor returned by `vercel()`. */
+export interface VercelPreset extends KovoPreset {
+  /** Emit `.vercel/output` from Kovo's neutral build artifact. */
+  emit(build: KovoNeutralBuild, context: PresetContext): Promise<void>;
+  /** Return blocking diagnostics when the neutral build lacks a request handler. */
+  inspect(build: KovoNeutralBuild): readonly PresetDiagnostic[];
+  /** Options captured by `vercel()`. */
+  options: VercelPresetOptions;
+}
+
 /** Build-time project configuration loaded from `kovo.config.ts`. */
 export interface KovoConfig {
   /** Platform preset used by `kovo build` when CLI/env overrides are absent. */
@@ -98,6 +119,34 @@ export function node(options: NodePresetOptions = {}): NodePreset {
         : [];
     },
     name: 'node',
+    options,
+  };
+}
+
+/**
+ * Create the built-in Vercel preset descriptor.
+ *
+ * The emitted output follows Vercel Build Output API v3: static client files
+ * land under `.vercel/output/static`, and the request handler is wrapped as a
+ * Node.js Vercel Function under `.vercel/output/functions/kovo.func`.
+ */
+export function vercel(options: VercelPresetOptions = {}): VercelPreset {
+  return {
+    emit(build, context) {
+      return emitVercelPreset(build, context, options);
+    },
+    inspect(build) {
+      return build.serverHandlerPath === undefined
+        ? [
+            {
+              code: 'vercel-missing-handler',
+              message: 'The vercel preset requires a neutral build with server/handler.mjs.',
+              severity: 'error',
+            },
+          ]
+        : [];
+    },
+    name: 'vercel',
     options,
   };
 }
@@ -255,6 +304,36 @@ async function emitNodePreset(
   context.log(`Emitted Kovo node preset output to ${outDir}`);
 }
 
+async function emitVercelPreset(
+  build: KovoNeutralBuild,
+  context: PresetContext,
+  options: VercelPresetOptions,
+): Promise<void> {
+  if (build.serverHandlerPath === undefined) {
+    throw new Error('The vercel preset requires a neutral build with server/handler.mjs.');
+  }
+
+  const outDir = resolvedFileSystemPath(context.outDir);
+  const functionDir = path.join(outDir, 'functions/kovo.func');
+  await mkdir(outDir, { recursive: true });
+  await cp(build.clientDir, path.join(outDir, 'static'), { recursive: true });
+  await mkdir(functionDir, { recursive: true });
+  await copyFile(build.serverHandlerPath, path.join(functionDir, 'handler.mjs'));
+  await writeFile(path.join(functionDir, 'index.cjs'), vercelFunctionSource(), 'utf8');
+  await writeJson(path.join(functionDir, '.vc-config.json'), {
+    handler: 'index.cjs',
+    launcherType: 'Nodejs',
+    ...(options.maxDuration === undefined ? {} : { maxDuration: options.maxDuration }),
+    ...(options.memory === undefined ? {} : { memory: options.memory }),
+    ...(options.regions === undefined ? {} : { regions: options.regions }),
+    runtime: 'nodejs22.x',
+    shouldAddHelpers: true,
+  });
+  await writeJson(path.join(outDir, 'config.json'), vercelBuildOutputConfig());
+
+  context.log(`Emitted Kovo vercel preset output to ${outDir}`);
+}
+
 async function copyNeutralStaticAssets(
   assets: readonly KovoNeutralBuild['staticAssets'][number][],
   clientDir: string,
@@ -288,6 +367,110 @@ function neutralClientOutputPath(clientDir: string, urlPath: string): string {
 async function writeJson(filePath: string, value: unknown): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+function vercelBuildOutputConfig(): unknown {
+  return {
+    routes: [
+      {
+        continue: true,
+        headers: { 'cache-control': immutableCacheControl },
+        src: '/(?:assets|c)/(.*)',
+      },
+      { handle: 'filesystem' },
+      { dest: '/kovo', src: '/(.*)' },
+    ],
+    version: 3,
+  };
+}
+
+function vercelFunctionSource(): string {
+  return `const { Readable } = require('node:stream');
+
+let handlerPromise;
+
+module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
+  try {
+    const handler = await loadHandler();
+    const request = nodeRequestToWebRequest(nodeRequest);
+    const response = await handler(request);
+    await writeWebResponseToNode(response, nodeResponse, request.method);
+  } catch {
+    if (!nodeResponse.headersSent) {
+      nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+    }
+    nodeResponse.end('Internal Server Error');
+  }
+};
+
+async function loadHandler() {
+  handlerPromise ||= import('./handler.mjs').then((module) => module.default);
+  return handlerPromise;
+}
+
+function nodeRequestToWebRequest(nodeRequest) {
+  const method = nodeRequest.method ?? 'GET';
+  const init = {
+    headers: nodeHeadersToWebHeaders(nodeRequest),
+    method,
+    ...(method === 'GET' || method === 'HEAD'
+      ? {}
+      : {
+          body: Readable.toWeb(nodeRequest),
+          duplex: 'half',
+        }),
+  };
+
+  return new Request(nodeRequestUrl(nodeRequest), init);
+}
+
+function nodeRequestUrl(nodeRequest) {
+  const rawUrl = nodeRequest.url ?? '/';
+  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) return rawUrl;
+
+  const host = nodeRequest.headers.host ?? '127.0.0.1';
+  const proto = firstHeaderValue(nodeRequest.headers['x-forwarded-proto']) ?? 'https';
+  return new URL(rawUrl, proto + '://' + host).href;
+}
+
+async function writeWebResponseToNode(response, nodeResponse, method = 'GET') {
+  const headers = {};
+  response.headers.forEach((value, name) => {
+    headers[name] = value;
+  });
+
+  nodeResponse.writeHead(response.status, response.statusText, headers);
+  if (method === 'HEAD' || response.body === null) {
+    nodeResponse.end();
+    return;
+  }
+
+  await new Promise((resolvePromise, reject) => {
+    Readable.fromWeb(response.body)
+      .once('error', reject)
+      .pipe(nodeResponse)
+      .once('error', reject)
+      .once('finish', resolvePromise);
+  });
+}
+
+function nodeHeadersToWebHeaders(nodeRequest) {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(nodeRequest.headers)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const entry of value) headers.append(name, entry);
+    } else {
+      headers.set(name, value);
+    }
+  }
+  return headers;
+}
+
+function firstHeaderValue(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+`;
 }
 
 function nodeServerSource(): string {
