@@ -3,7 +3,7 @@
 // override lets derivation take this pair back over, pair by pair (SPEC.md §10.4).
 import type { OptimisticFor } from '@kovojs/runtime';
 
-import type { addContactForm } from '../../forms.js';
+import type { addContactForm } from '../../model.js';
 
 export const addContactDerivedOptimistic = {
   queue: 'crm',

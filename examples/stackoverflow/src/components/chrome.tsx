@@ -5,7 +5,7 @@ import { Badge } from '@kovojs/ui/badge';
 import * as style from '@kovojs/style';
 
 import { soCsrf, voteUpMutation } from '../mutations.js';
-import type { SoRequest } from '../runtime.js';
+import type { SoRequest } from '../model.js';
 
 // Shared page chrome and small rendering helpers for the StackOverflow demo.
 

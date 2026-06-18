@@ -4,6 +4,8 @@ import type { OptimisticFor } from '@kovojs/runtime';
 
 import type { CrmDb } from './db.js';
 import {
+  contact,
+  deal,
   closeDealForm,
   createDealForm,
   moveDealForm,
@@ -11,9 +13,8 @@ import {
   type CloseDealInput,
   type CreateDealInput,
   type MoveDealInput,
-} from './forms.js';
+} from './model.js';
 import { contacts, deals } from './schema.js';
-import { contact, deal } from './domains.js';
 
 import { addContactDerivedOptimistic } from './generated/optimistic/add-contact.js';
 import { createDealDerivedOptimistic } from './generated/optimistic/create-deal.js';

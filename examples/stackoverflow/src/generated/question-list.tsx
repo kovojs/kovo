@@ -9,8 +9,7 @@ import { Card } from '@kovojs/ui/card';
 
 import { soCsrf } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
-import type { SoRequest } from '../runtime.js';
-import { postQuestionForm, type QuestionListItem } from '../types.js';
+import { postQuestionForm, type QuestionListItem, type SoRequest } from '../model.js';
 import {
   freshId,
   parseTags,

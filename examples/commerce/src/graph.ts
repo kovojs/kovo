@@ -1,13 +1,18 @@
 import type { KovoExplainInput, TouchGraph } from '@kovojs/core/internal/graph';
 import type { InvalidationQueryInput } from '@kovojs/drizzle/static';
 
-import { commerceCartPageMeta } from './page-meta.js';
-
 export interface CommerceGraphCartSummary {
   count: number;
 }
 
 export const commerceStylesheets = ['/assets/styles.css'] as const;
+
+export function commerceCartPageMeta(cart: CommerceGraphCartSummary) {
+  return {
+    description: `Browse products and checkout with ${cart.count} verifiable cart item.`,
+    title: `Kovo Commerce (${cart.count})`,
+  };
+}
 
 // SPEC.md §10.2/§11.2: commerce graph facts are declared once and consumed by
 // both the runtime example and generated acceptance artifacts. Component and

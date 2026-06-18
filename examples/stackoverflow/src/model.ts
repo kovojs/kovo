@@ -1,7 +1,13 @@
 import { form, type FormInput } from '@kovojs/core';
+import { domain } from '@kovojs/server';
 
-// Form helpers and result shapes shared by the demo components and generated
-// StackOverflow artifacts.
+import type { SoDb } from './db.js';
+
+// Shared demo facts: invalidation domains, typed mutation forms, and the small
+// request/result shapes consumed across the interactive example.
+export const question = domain('question');
+export const answer = domain('answer');
+export const vote = domain('vote');
 
 export const postQuestionForm = form('postQuestion');
 export const postAnswerForm = form('postAnswer');
@@ -11,7 +17,14 @@ export type PostQuestionInput = FormInput<typeof postQuestionForm>;
 export type PostAnswerInput = FormInput<typeof postAnswerForm>;
 export type VoteUpInput = FormInput<typeof voteUpForm>;
 
-// Query result shapes (the §10.5 algebraic shapes the deriver patches).
+export interface SoRequest {
+  db: SoDb;
+  session?: {
+    id?: string;
+    user?: { id?: string; roles?: readonly string[] } | null;
+  } | null;
+}
+
 export interface QuestionListItem {
   authorId: string;
   authorName: string;
@@ -23,6 +36,7 @@ export interface QuestionListItem {
   answerCount: number;
   title: string;
 }
+
 export interface QuestionListResult {
   items: QuestionListItem[];
 }
@@ -45,6 +59,7 @@ export interface AnswerListItem {
   body: string;
   score: number;
 }
+
 export interface AnswerListResult {
   items: AnswerListItem[];
 }
@@ -55,6 +70,7 @@ export interface QuestionAnswerDetail extends AnswerListItem {
   authorName?: string;
   createdAt?: string;
 }
+
 export type QuestionAnswersResult = QuestionAnswerDetail[];
 
 export interface QuestionScoreResult {

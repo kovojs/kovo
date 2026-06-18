@@ -2,7 +2,7 @@ import { count, eq, sql } from 'drizzle-orm';
 
 import type { CrmDb } from './db.js';
 import type { Domain } from '@kovojs/server';
-import { activity, contact, deal } from './domains.js';
+import { activity, contact, deal } from './model.js';
 import { activities, contacts, deals } from './schema.js';
 
 // Small query factory for the demo. Each query names the domains it reads and

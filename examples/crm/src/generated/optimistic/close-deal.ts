@@ -3,7 +3,7 @@
 // override lets derivation take this pair back over, pair by pair (SPEC.md §10.4).
 import type { CrmDerivedSubset } from '../../optimistic-merge.js';
 
-import type { closeDealForm } from '../../forms.js';
+import type { closeDealForm } from '../../model.js';
 // Overridden in the mutation module (derivation suppressed): dealList, openDeals, pipelineByStage.
 
 export const closeDealDerivedOptimistic = {

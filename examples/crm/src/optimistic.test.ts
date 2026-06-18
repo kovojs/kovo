@@ -2,7 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { createCrmDb, type CrmDb } from './db.js';
-import type { CloseDealInput, CreateDealInput, MoveDealInput } from './forms.js';
+import type { CloseDealInput, CreateDealInput, MoveDealInput } from './model.js';
 import {
   applyMoveDealPipeline,
   closeDealOptimistic,

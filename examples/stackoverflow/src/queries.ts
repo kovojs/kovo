@@ -1,10 +1,16 @@
 import { query, s, type QueryLoadContext } from '@kovojs/server';
 import { asc, eq, sum } from 'drizzle-orm';
 
-import { answer, question, vote } from './domains.js';
-import type { SoDb, SoRequest } from './runtime.js';
+import type { SoDb } from './db.js';
+import {
+  answer,
+  question,
+  vote,
+  type QuestionAnswersResult,
+  type QuestionDetailResult,
+  type SoRequest,
+} from './model.js';
 import { answers, questions, votes } from './schema.js';
-import type { QuestionAnswersResult, QuestionDetailResult } from './types.js';
 
 // Typed reads for the demo. The Drizzle selects stay inline so the generated
 // StackOverflow artifacts can inspect the query shapes.

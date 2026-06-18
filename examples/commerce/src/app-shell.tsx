@@ -82,6 +82,20 @@ function CommerceCartShell({ children }: { children?: unknown }): string {
   );
 }
 
+function CommerceCartPage({ request }: { request: CommerceShellRequest }): string {
+  return (
+    <>
+      <CartBadge />
+      <ProductGrid />
+      {request.session?.user?.id ? (
+        <OrderHistory />
+      ) : (
+        OrderHistory.definition.render({ orderHistory: { items: [] } })
+      )}
+    </>
+  );
+}
+
 const CommerceCartLayout = layout({
   render: (_queries, _state, { children }) => <CommerceCartShell>{children}</CommerceCartShell>,
 });
@@ -94,17 +108,7 @@ export const commerceHomeRoute = route('/', {
   },
   layout: CommerceCartLayout,
   page(_context, request: CommerceShellRequest) {
-    return (
-      <>
-        <CartBadge />
-        <ProductGrid />
-        {request.session?.user?.id ? (
-          <OrderHistory />
-        ) : (
-          OrderHistory.definition.render({ orderHistory: { items: [] } })
-        )}
-      </>
-    );
+    return <CommerceCartPage request={request} />;
   },
   stylesheets: commerceStylesheets,
 });
@@ -117,17 +121,7 @@ export const commerceCartRoute = route('/cart', {
   },
   layout: CommerceCartLayout,
   page(_context, request: CommerceShellRequest) {
-    return (
-      <>
-        <CartBadge />
-        <ProductGrid />
-        {request.session?.user?.id ? (
-          <OrderHistory />
-        ) : (
-          OrderHistory.definition.render({ orderHistory: { items: [] } })
-        )}
-      </>
-    );
+    return <CommerceCartPage request={request} />;
   },
   stylesheets: commerceStylesheets,
 });

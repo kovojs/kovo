@@ -13,8 +13,8 @@ import { SoShell } from './components/chrome.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';
+import type { SoRequest } from './model.js';
 import { questionList, questionScore } from './queries.js';
-import type { SoRequest } from './runtime.js';
 
 // SPEC.md §9.1: the Stack Overflow example as a fully interactive Kovo app. It
 // registers the postQuestion / postAnswer / voteUp mutations and lets generated

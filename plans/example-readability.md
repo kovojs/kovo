@@ -28,6 +28,11 @@ Example source should prioritize the app-author mental model:
   - Evidence: Workers simplified example-local tests without splitting app code
     into extra tiny modules; Commerce `app.ts` is 698 lines after removing
     non-demo surfaces, while CRM/SO keep cohesive component/query/mutation files.
+  - Evidence: 2026-06-17 readability pass removed Commerce `src/domains.ts` /
+    `page-meta.ts`, merged CRM `src/{domains,forms}.ts` into `src/model.ts`
+    (18 lines), and merged StackOverflow `src/{domains,runtime,types}.ts` into
+    `src/model.ts` (78 lines); `wc -l` over authored TS/TSX now reports 7,297
+    total lines across Commerce/CRM/StackOverflow.
 - [x] Keep generated artifacts inspectable, but do not optimize example readability
   around generated files.
   - Evidence: generated artifacts were regenerated/checked for Commerce, CRM,

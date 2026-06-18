@@ -1,8 +1,8 @@
 import { guards, query, type QueryLoadContext } from '@kovojs/server';
 import { eq, gt, sum } from 'drizzle-orm';
+import { domain } from '@kovojs/server';
 
 import type { CommerceDb } from './db.js';
-import { cart, order, product } from './domains.js';
 import { cartItems, orders, products } from './schema.js';
 
 // SPEC.md §10.2 / §11.1: typed reads declared once. Each loader INLINES its
@@ -43,6 +43,12 @@ export interface CommerceQueryRequest {
   // scopes the rows. Cart/product reads remain global (no session needed).
   session?: { id?: string; user?: { id?: string } | null } | null;
 }
+
+// SPEC.md §10.1: the example keeps its query domains next to the queries and
+// mutations that use them, instead of splitting them into a separate helper.
+export const cart = domain('cart');
+export const order = domain('order');
+export const product = domain('product');
 
 type CommerceQueryLoadContext = QueryLoadContext<CommerceQueryRequest> & {
   db?: CommerceDb;

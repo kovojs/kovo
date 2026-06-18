@@ -1,6 +1,11 @@
 import { form, type FormInput } from '@kovojs/core';
+import { domain } from '@kovojs/server';
 
-// Typed form references shared by mutations and optimistic patches.
+// Small shared authoring facts for the CRM demo: invalidation domains plus the
+// typed form handles reused by components, mutations, and optimistic patches.
+export const contact = domain('contact');
+export const deal = domain('deal');
+export const activity = domain('activity');
 
 export const addContactForm = form('addContact');
 export const createDealForm = form('createDeal');

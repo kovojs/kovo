@@ -1,8 +1,7 @@
 import { mutation, s, type MutationContext } from '@kovojs/server';
 import { eq, sql } from 'drizzle-orm';
 
-import { answer, question, vote } from './domains.js';
-import type { SoRequest } from './runtime.js';
+import { answer, question, vote, type SoRequest } from './model.js';
 import { answers, questions, votes } from './schema.js';
 
 // Top-level mutation handlers for the demo. Drizzle writes stay inline so the

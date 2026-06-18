@@ -7,8 +7,7 @@ import { Card } from '@kovojs/ui/card';
 
 import { postAnswerMutation, soCsrf } from '../mutations.js';
 import { questionAnswers, questionDetail } from '../queries.js';
-import type { SoRequest } from '../runtime.js';
-import type { QuestionAnswersResult, QuestionDetailResult } from '../types.js';
+import type { QuestionAnswersResult, QuestionDetailResult, SoRequest } from '../model.js';
 import {
   freshId,
   parseTags,

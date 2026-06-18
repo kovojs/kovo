@@ -61,9 +61,8 @@ function siteLineNumber(site) {
 const SOURCE_FILES = [
   'src/schema.ts',
   'src/db.ts',
-  'src/domains.ts',
+  'src/model.ts',
   'src/queries.ts',
-  'src/forms.ts',
   'src/mutations.ts',
 ];
 
@@ -114,7 +113,7 @@ const MUTATIONS = [
   },
 ];
 
-const FORM_IMPORT_PATH = '../../forms.js';
+const FORM_IMPORT_PATH = '../../model.js';
 
 const TABLE_DOMAIN = { contacts: 'contact', deals: 'deal', activities: 'activity' };
 

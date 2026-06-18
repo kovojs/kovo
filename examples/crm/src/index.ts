@@ -3,8 +3,7 @@
 
 export * from './schema.js';
 export * from './db.js';
-export * from './domains.js';
-export * from './forms.js';
+export * from './model.js';
 export * from './queries.js';
 export * from './mutations.js';
 export { createCrmGraph, crmGraphDeclarations } from './graph.js';

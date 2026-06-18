@@ -3,7 +3,7 @@
 // override lets derivation take this pair back over, pair by pair (SPEC.md §10.4).
 import type { OptimisticFor } from '@kovojs/runtime';
 
-import type { postAnswerForm } from '../../types.js';
+import type { postAnswerForm } from '../../model.js';
 
 export const postAnswerDerivedOptimistic = {
   queue: 'answer',

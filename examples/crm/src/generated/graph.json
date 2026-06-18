@@ -182,7 +182,7 @@
         {
           "domain": "contact",
           "keys": null,
-          "site": "examples/crm/src/mutations.ts:59",
+          "site": "examples/crm/src/mutations.ts:60",
           "source": "select",
           "via": "contacts"
         }
@@ -191,7 +191,7 @@
         {
           "domain": "contact",
           "keys": null,
-          "site": "examples/crm/src/mutations.ts:64",
+          "site": "examples/crm/src/mutations.ts:65",
           "via": "contacts"
         }
       ],
@@ -203,13 +203,13 @@
         {
           "domain": "contact",
           "keys": "arg:contactId",
-          "site": "examples/crm/src/mutations.ts:92",
+          "site": "examples/crm/src/mutations.ts:93",
           "via": "contacts"
         },
         {
           "domain": "deal",
           "keys": null,
-          "site": "examples/crm/src/mutations.ts:91",
+          "site": "examples/crm/src/mutations.ts:92",
           "via": "deals"
         }
       ],
@@ -221,7 +221,7 @@
         {
           "domain": "deal",
           "keys": "arg:dealId",
-          "site": "examples/crm/src/mutations.ts:139",
+          "site": "examples/crm/src/mutations.ts:140",
           "via": "deals"
         }
       ],
@@ -233,7 +233,7 @@
         {
           "domain": "deal",
           "keys": "arg:dealId",
-          "site": "examples/crm/src/mutations.ts:189",
+          "site": "examples/crm/src/mutations.ts:190",
           "via": "deals"
         }
       ],

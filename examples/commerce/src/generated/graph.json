@@ -68,14 +68,12 @@
           "name": "CommerceCartLayout"
         },
         {
-          "components": ["CartBadge", "ProductGrid", "OrderHistory"],
+          "components": ["CommerceCartPage"],
           "id": "page:/",
           "kind": "page",
-          "name": "page",
-          "queries": ["cart", "orderHistory", "productGrid"]
+          "name": "page"
         }
-      ],
-      "queries": ["cart", "orderHistory", "productGrid"]
+      ]
     },
     {
       "i18n": ["en-US:cartLabel,productStock"],
@@ -100,14 +98,12 @@
           "name": "CommerceCartLayout"
         },
         {
-          "components": ["CartBadge", "ProductGrid", "OrderHistory"],
+          "components": ["CommerceCartPage"],
           "id": "page:/cart",
           "kind": "page",
-          "name": "page",
-          "queries": ["cart", "orderHistory", "productGrid"]
+          "name": "page"
         }
-      ],
-      "queries": ["cart", "orderHistory", "productGrid"]
+      ]
     }
   ],
   "queries": [

@@ -35,20 +35,21 @@ import {
 import { count, eq, sql } from 'drizzle-orm';
 
 import { createCommerceDb, type CommerceDb } from './db.js';
-import { cart, order, product } from './domains.js';
 import { CartBadge } from './generated/cart-badge.js';
 import { cartAddDerivedOptimistic } from './generated/optimistic/cart-add.js';
 import { OrderHistory } from './generated/order-history.js';
 import * as productGridComponent from './generated/product-grid.js';
 import { commerceQueryDomains, commerceTouchGraph } from './generated/touch-graph.js';
-import { commerceStylesheets, createCommerceGraph } from './graph.js';
-import { commerceCartPageMeta } from './page-meta.js';
+import { commerceCartPageMeta, commerceStylesheets, createCommerceGraph } from './graph.js';
 import {
+  cart,
   cartQuery,
   loadCartQuery,
   loadOrderHistory,
   loadProductGrid,
+  order,
   orderHistoryQuery,
+  product,
   productGridQuery,
   type CartQueryResult,
   type OrderHistoryResult,
@@ -58,8 +59,7 @@ import {
 import { cartItems, orders, products } from './schema.js';
 
 export { commerceQueryDomains, commerceTouchGraph } from './generated/touch-graph.js';
-export { commerceStylesheets } from './graph.js';
-export { commerceCartPageMeta } from './page-meta.js';
+export { commerceCartPageMeta, commerceStylesheets } from './graph.js';
 export { createCommerceDb, type CommerceDb } from './db.js';
 export { loadCartQuery, loadProductGrid, loadOrderHistory } from './queries.js';
 export type {

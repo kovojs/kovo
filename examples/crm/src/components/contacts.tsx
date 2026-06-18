@@ -7,7 +7,7 @@ import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 
 import { addContact, crmCsrf, type CrmRequest } from '../mutations.js';
-import { addContactForm } from '../forms.js';
+import { addContactForm } from '../model.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
 import { freshId } from '../components/chrome.js';
 
