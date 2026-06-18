@@ -230,9 +230,11 @@ describe('create-kovo starter', () => {
       const appShellTestSource = readFileSync(join(root, 'src/app-shell.test.ts'), 'utf8');
       expect(appShellTestSource).toContain('SPEC.md section 9.5');
       expect(appShellTestSource).toContain("from '@kovojs/server/app-shell/core'");
-      expect(appShellTestSource).toContain('isKovoApp(app)');
       expect(appShellTestSource).toContain("from '@kovojs/server/app-shell/static-export'");
-      expect(appShellTestSource).toContain('assertStaticExportManifestUsesDirectoryIndexDocuments');
+      expect(appShellTestSource).toContain('isKovoApp(app)');
+      expect(appShellTestSource).toContain('isDirectoryIndexDocumentPath');
+      expect(appShellTestSource).not.toContain('assertStaticExportManifestUsesDirectoryIndexDocuments');
+      expect(appShellTestSource).not.toContain('staticExportManifest');
       const authSource = readFileSync(join(root, 'src/auth.tsx'), 'utf8');
       expect(authSource).toContain("from '@kovojs/better-auth'");
       expect(authSource).toContain("import * as style from '@kovojs/style';");
@@ -291,7 +293,7 @@ describe('create-kovo starter', () => {
       expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
       expect(exportStaticScript).toContain("server.ssrLoadModule('@kovojs/server/app-shell/core')");
       expect(exportStaticScript).toContain("server.ssrLoadModule('@kovojs/server/app-shell/vite')");
-      expect(exportStaticScript).toContain(
+      expect(exportStaticScript).not.toContain(
         "server.ssrLoadModule('@kovojs/server/app-shell/static-export')",
       );
       expect(exportStaticScript).toContain(
@@ -311,9 +313,9 @@ describe('create-kovo starter', () => {
       expect(exportStaticScript).toContain('const app = appModule.default;');
       expect(exportStaticScript).toContain('isStaticExportDiagnosticError');
       expect(exportStaticScript).toContain('starter-export/v1');
-      expect(exportStaticScript).not.toContain('function formatStaticExportDiagnostic');
+      expect(exportStaticScript).toContain('function formatStaticExportDiagnostic');
+      expect(exportStaticScript).toContain('function isStaticExportDiagnostic');
       expect(exportStaticScript).not.toContain('function isKovoApp');
-      expect(exportStaticScript).not.toContain('function isStaticExportDiagnostic');
       expect(exportStaticScript).not.toContain('appModule.default ?? appModule.app');
       expect(exportStaticScript).not.toContain('htmlPathStyle');
       const previewStaticScript = readFileSync(join(root, 'scripts/preview-static.mjs'), 'utf8');

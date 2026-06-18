@@ -42,6 +42,9 @@ export function staticExportDiagnostic(routePath: string, message: string): Stat
   return { code: 'KV229', message, routePath };
 }
 
+/**
+ * @internal Static-export diagnostic shape guard for framework export tooling (SPEC.md §9.5).
+ */
 export function isStaticExportDiagnostic(value: unknown): value is StaticExportDiagnostic {
   return (
     typeof value === 'object' &&
@@ -52,6 +55,9 @@ export function isStaticExportDiagnostic(value: unknown): value is StaticExportD
   );
 }
 
+/**
+ * @internal Static-export diagnostic error guard for framework export tooling (SPEC.md §9.5).
+ */
 export function isStaticExportDiagnosticError(
   error: unknown,
 ): error is { diagnostics: readonly StaticExportDiagnostic[] } {
@@ -63,6 +69,9 @@ export function isStaticExportDiagnosticError(
   );
 }
 
+/**
+ * @internal Stable static-export diagnostic formatter for framework export tooling (SPEC.md §9.5).
+ */
 export function formatStaticExportDiagnostic(
   diagnostic: StaticExportDiagnostic,
   severity: StaticExportDiagnosticSeverity,
@@ -72,6 +81,9 @@ export function formatStaticExportDiagnostic(
   )}`;
 }
 
+/**
+ * @internal Stable static-export diagnostic formatter for framework export tooling (SPEC.md §9.5).
+ */
 export function formatStaticExportDiagnostics(
   diagnostics: readonly StaticExportDiagnostic[],
   severity: StaticExportDiagnosticSeverity,

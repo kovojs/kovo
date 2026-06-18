@@ -9,9 +9,6 @@ const manifestFile = join(process.cwd(), 'dist/.vite/manifest.json');
 
 let result;
 let exportKovoAppShellViteBuildWithManifestFromManifestFile;
-let formatStaticExportDiagnostic;
-let formatStaticExportDiagnostics;
-let isStaticExportDiagnosticError;
 let isKovoApp;
 let kovoAppShellViteManifestStylesheetHrefFromFile;
 let manifest;
@@ -23,18 +20,15 @@ const server = await createServer({
 });
 
 try {
-  const [coreModule, viteModule, staticExportModule] = await Promise.all([
+  const [coreModule, viteModule] = await Promise.all([
     server.ssrLoadModule('@kovojs/server/app-shell/core'),
     server.ssrLoadModule('@kovojs/server/app-shell/vite'),
-    server.ssrLoadModule('@kovojs/server/app-shell/static-export'),
   ]);
   ({ isKovoApp } = coreModule);
   ({
     exportKovoAppShellViteBuildWithManifestFromManifestFile,
     kovoAppShellViteManifestStylesheetHrefFromFile,
   } = viteModule);
-  ({ formatStaticExportDiagnostic, formatStaticExportDiagnostics, isStaticExportDiagnosticError } =
-    staticExportModule);
 
   if (typeof exportKovoAppShellViteBuildWithManifestFromManifestFile !== 'function') {
     throw new Error(
@@ -43,21 +37,6 @@ try {
   }
   if (typeof isKovoApp !== 'function') {
     throw new Error('@kovojs/server/app-shell/core must export isKovoApp.');
-  }
-  if (typeof formatStaticExportDiagnostic !== 'function') {
-    throw new Error(
-      '@kovojs/server/app-shell/static-export must export formatStaticExportDiagnostic.',
-    );
-  }
-  if (typeof formatStaticExportDiagnostics !== 'function') {
-    throw new Error(
-      '@kovojs/server/app-shell/static-export must export formatStaticExportDiagnostics.',
-    );
-  }
-  if (typeof isStaticExportDiagnosticError !== 'function') {
-    throw new Error(
-      '@kovojs/server/app-shell/static-export must export isStaticExportDiagnosticError.',
-    );
   }
   if (typeof kovoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
     throw new Error(
@@ -84,12 +63,7 @@ try {
     outDir: 'dist',
   }));
 } catch (error) {
-  if (
-    typeof isStaticExportDiagnosticError !== 'function' ||
-    !isStaticExportDiagnosticError(error)
-  ) {
-    throw error;
-  }
+  if (!isStaticExportDiagnosticError(error)) throw error;
 
   process.stderr.write(
     ['starter-export/v1', ...formatStaticExportDiagnostics(error.diagnostics, 'ERROR'), ''].join(
@@ -120,4 +94,37 @@ if (result) {
       '',
     ].join('\n'),
   );
+}
+
+function isStaticExportDiagnosticError(error) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    Array.isArray(error.diagnostics) &&
+    error.diagnostics.every(isStaticExportDiagnostic)
+  );
+}
+
+function isStaticExportDiagnostic(value) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof value.code === 'string' &&
+    typeof value.message === 'string' &&
+    typeof value.routePath === 'string'
+  );
+}
+
+function formatStaticExportDiagnostics(diagnostics, severity) {
+  return diagnostics.map((diagnostic) => formatStaticExportDiagnostic(diagnostic, severity));
+}
+
+function formatStaticExportDiagnostic(diagnostic, severity) {
+  return `${severity} ${diagnostic.code} route=${diagnostic.routePath} ${stableText(
+    diagnostic.message,
+  )}`;
+}
+
+function stableText(value) {
+  return String(value).replace(/\s+/g, ' ').trim();
 }

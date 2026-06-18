@@ -339,8 +339,12 @@ integration. Framework packages should expose only generic webhook primitives.
       `VersionedClientModuleRequest`, and `VersionedClientModuleResponse`.
       Verification: `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts`;
       `node scripts/api-surface-gate.mjs`.
-  - [ ] Static-export support helper portion remains with the static-export
-    internalization items below.
+  - [x] Static-export support helper portion is internal-only.
+    - Evidence: `packages/server/src/api/app-shell/static-export.ts` exports only
+      `exportStaticApp`; `packages/server/src/internal/static-export.ts` exports
+      the manifest/assertion/output-plan and diagnostic formatter/guard helpers.
+      Verification: `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
+      `node scripts/api-surface-gate.mjs`.
 - [x] **Move client-module support helpers behind an internal server subpath.**
   - Remove `renderVersionedClientModuleResponse`, `versionedClientModuleHref`,
     `VersionedClientModuleRequest`, and `VersionedClientModuleResponse` from
@@ -356,28 +360,45 @@ integration. Framework packages should expose only generic webhook primitives.
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
     `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
     `git diff --check`.
-- [ ] **Move static-export manifest/assertion helpers behind an internal server subpath.**
+- [x] **Move static-export manifest/assertion helpers behind an internal server subpath.**
   - Remove `staticExportManifest`, `staticExportInventory`,
     `staticExportOutputPlan`, `assertStaticExportManifestMatchesResult`, and
     `assertStaticExportManifestUsesDirectoryIndexDocuments` from
     `@kovojs/server/app-shell/static-export`.
   - Keep them available only to framework build/export internals and tests.
-  - Evidence:
-- [ ] **Move static-export diagnostic formatting helpers behind an internal server subpath.**
+  - Evidence: `packages/server/src/api/app-shell/static-export.ts` exports only
+    `exportStaticApp` as a runtime value, while
+    `packages/server/src/internal/static-export.ts` re-exports the manifest,
+    assertion, and output-plan helpers with `@internal` source declarations.
+    Verification: `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts
+    packages/create-kovo/src/index.test.ts`; `corepack pnpm exec tsc -p
+    tsconfig.json --noEmit --pretty false`; `node scripts/api-surface-gate.mjs`;
+    `git diff --check`.
+- [x] **Move static-export diagnostic formatting helpers behind an internal server subpath.**
   - Remove `formatStaticExportDiagnostic`, `formatStaticExportDiagnostics`,
     `isStaticExportDiagnostic`, and `isStaticExportDiagnosticError` from
     `@kovojs/server/app-shell/static-export`.
   - Keep public static-export types/errors needed by `exportStaticApp`, but make
     formatting/type-guard helpers local to framework tooling or internal imports.
-  - Evidence:
-- [ ] **Update starter/example export scripts not to import internal static-export helpers.**
+  - Evidence: `packages/server/src/api/app-shell/static-export.ts` no longer
+    re-exports diagnostic formatter/guard helpers; the helpers are available from
+    `packages/server/src/internal/static-export.ts` with `@internal` source
+    declarations. Verification: `corepack pnpm exec vitest --run
+    packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
+    `node scripts/api-surface-gate.mjs`.
+- [x] **Update starter/example export scripts not to import internal static-export helpers.**
   - Inline small formatting/type-guard logic in app-owned export scripts, or route
     those scripts through a higher-level `kovo` command when one exists.
   - Update `packages/create-kovo/templates/scripts/export-static.mjs`,
     `examples/*/scripts/export-static.mjs`, and `site/scripts/export-static.mjs`
     as needed before removing public helper exports.
-  - Evidence:
-- [ ] **Add negative export tests for support helpers.**
+  - Evidence: `packages/create-kovo/templates/scripts/export-static.mjs`,
+    `examples/reference/scripts/export-static.mjs`, and
+    `site/scripts/export-static.mjs` format/check static-export diagnostics with
+    local helper functions instead of loading public or internal helper exports.
+    Verification: `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts
+    packages/create-kovo/src/index.test.ts`.
+- [x] **Add negative export tests for support helpers.**
   - Assert the moved client-module and static-export support helpers are not
     exported from public app-shell subpaths.
   - Assert any internal replacement subpath exports them only when framework tests
@@ -391,8 +412,14 @@ integration. Framework packages should expose only generic webhook primitives.
       subpath exposes the helper values/types. Verification:
       `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts`;
       `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
-  - [ ] Static-export support helper negative assertions remain with the
-    static-export internalization items.
+  - [x] Static-export support helper negative assertions are covered in
+    `packages/server/src/api/app.test.ts`.
+    - Evidence: the test asserts the manifest/assertion/output-plan and
+      diagnostic formatter/guard helpers are absent from
+      `@kovojs/server/app-shell/static-export` and present from
+      `@kovojs/server/internal/static-export`. Verification:
+      `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/create-kovo/src/index.test.ts`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 - [ ] **Move request-shell execution helpers internal-only.**
   - Remove these from public `@kovojs/server` exports unless a concrete app-authored
     use case is documented: `runEndpoint`, `runMutation`, `runQuery`,

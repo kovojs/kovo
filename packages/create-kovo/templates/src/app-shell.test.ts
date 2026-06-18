@@ -6,11 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  assertStaticExportManifestUsesDirectoryIndexDocuments,
-  exportStaticApp,
-  staticExportManifest,
-} from '@kovojs/server/app-shell/static-export';
+import { exportStaticApp } from '@kovojs/server/app-shell/static-export';
 import { isKovoApp } from '@kovojs/server/app-shell/core';
 import { createServer as createViteServer } from 'vite';
 import { describe, expect, it } from 'vitest';
@@ -59,15 +55,11 @@ describe('starter app shell', () => {
 
     try {
       const result = await exportStaticApp(app, { outDir });
+      const routeDocumentPaths = result.artifacts.map((artifact) => artifact.path);
 
       expect(result.diagnostics).toEqual([]);
-      expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/index.html']);
-      expect(staticExportManifest(result).routeDocuments.map((artifact) => artifact.path)).toEqual([
-        '/index.html',
-      ]);
-      expect(() =>
-        assertStaticExportManifestUsesDirectoryIndexDocuments(staticExportManifest(result)),
-      ).not.toThrow();
+      expect(routeDocumentPaths).toEqual(['/index.html']);
+      expect(routeDocumentPaths.every(isDirectoryIndexDocumentPath)).toBe(true);
       expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
         starterClientModuleHref,
       ]);
@@ -191,4 +183,8 @@ function formatDevServerFailure(body: string, error: unknown): string {
   }
 
   return body;
+}
+
+function isDirectoryIndexDocumentPath(path: string): boolean {
+  return path === '/index.html' || /^\/.+\/index\.html$/.test(path);
 }

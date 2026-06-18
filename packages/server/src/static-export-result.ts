@@ -12,8 +12,11 @@ interface StaticExportResultArtifacts {
   clientModules: readonly StaticExportClientModuleArtifact[];
 }
 
-// SPEC §9.5: dry-run export task wiring inspects the same route/module/asset set
-// that a write export would publish, without reaching into replay internals.
+/**
+ * @internal Dry-run export task wiring inspects the same route/module/asset set
+ * that a write export would publish, without reaching into replay internals
+ * (SPEC.md §9.5).
+ */
 export function staticExportInventory(
   result: StaticExportResultArtifacts,
 ): StaticExportInventoryItem[] {
@@ -41,8 +44,10 @@ export function staticExportInventory(
   ];
 }
 
-// SPEC §9.5: export-task consumers need a stable public manifest for the
-// directory-index documents, copied assets, and /c/ modules that replay would publish.
+/**
+ * @internal Export-task manifest for directory-index documents, copied assets,
+ * and /c/ modules that replay would publish (SPEC.md §9.5).
+ */
 export function staticExportManifest(result: StaticExportResultArtifacts): StaticExportManifest {
   const routeDocuments = result.artifacts.map((artifact) => ({
     headers: artifact.headers,
@@ -70,8 +75,10 @@ export function staticExportManifest(result: StaticExportResultArtifacts): Stati
   };
 }
 
-// SPEC §9.5: manifest/inventory task evidence must describe the same static
-// host surface that a write export publishes.
+/**
+ * @internal Manifest/inventory task evidence must describe the same static host
+ * surface that a write export publishes (SPEC.md §9.5).
+ */
 export function assertStaticExportManifestMatchesResult(
   result: StaticExportResultArtifacts,
   manifest: StaticExportManifest,
@@ -93,8 +100,10 @@ export function assertStaticExportManifestMatchesResult(
   );
 }
 
-// SPEC §9.5: static export publishes route documents as directory-index HTML
-// so static hosts do not depend on flat `.html` rewrite compatibility.
+/**
+ * @internal Static export publishes route documents as directory-index HTML so
+ * static hosts do not depend on flat `.html` rewrite compatibility (SPEC.md §9.5).
+ */
 export function assertStaticExportManifestUsesDirectoryIndexDocuments(
   manifest: Pick<StaticExportManifest, 'files' | 'routeDocuments'>,
 ): void {

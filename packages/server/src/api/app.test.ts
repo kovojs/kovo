@@ -7,6 +7,7 @@ import * as packageNodeApi from '@kovojs/server/app-shell/node';
 import * as packageStaticExportApi from '@kovojs/server/app-shell/static-export';
 import * as packageViteApi from '@kovojs/server/app-shell/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
+import * as packageInternalStaticExportApi from '@kovojs/server/internal/static-export';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as publicApi from '../index.js';
 import * as clientModulesApi from './app-shell/client-modules.js';
@@ -19,6 +20,7 @@ import type * as vt from './app-shell/vite.js';
 import * as dataApi from './data.js';
 import * as documentCoreApi from '../document-core.js';
 import * as documentDiagnosticsApi from '../document-diagnostics.js';
+import * as internalStaticExportApi from '../internal/static-export.js';
 import * as renderingApi from './rendering.js';
 import * as routingApi from './routing.js';
 import * as responseApi from '../response.js';
@@ -175,6 +177,51 @@ type RemovedFocusedStaticExportDiagnosticSeverity =
   // @ts-expect-error SPEC.md §9.5: static-export diagnostics now have the root
   // @kovojs/server canonical home.
   import('./app-shell/static-export.js').StaticExportDiagnosticSeverity;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportManifestHelper =
+  // @ts-expect-error SPEC.md §9.5: static-export manifest helpers are framework
+  // export-task internals, not public app-shell/static-export helpers.
+  typeof import('./app-shell/static-export.js').staticExportManifest;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportInventoryHelper =
+  // @ts-expect-error SPEC.md §9.5: static-export inventory helpers are framework
+  // export-task internals, not public app-shell/static-export helpers.
+  typeof import('./app-shell/static-export.js').staticExportInventory;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportOutputPlanHelper =
+  // @ts-expect-error SPEC.md §9.5: static-export output planning is framework
+  // export-task plumbing, not a public app-shell/static-export helper.
+  typeof import('./app-shell/static-export.js').staticExportOutputPlan;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportManifestAssertion =
+  // @ts-expect-error SPEC.md §9.5: static-export manifest assertions stay behind
+  // an internal server export-task subpath.
+  typeof import('./app-shell/static-export.js').assertStaticExportManifestMatchesResult;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportDirectoryIndexAssertion =
+  // @ts-expect-error SPEC.md §9.5: static-export manifest assertions stay behind
+  // an internal server export-task subpath.
+  typeof import('./app-shell/static-export.js').assertStaticExportManifestUsesDirectoryIndexDocuments;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportDiagnosticFormatter =
+  // @ts-expect-error SPEC.md §9.5: static-export diagnostic rendering is framework
+  // tooling support, not a public app-shell/static-export helper.
+  typeof import('./app-shell/static-export.js').formatStaticExportDiagnostic;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportDiagnosticsFormatter =
+  // @ts-expect-error SPEC.md §9.5: static-export diagnostic rendering is framework
+  // tooling support, not a public app-shell/static-export helper.
+  typeof import('./app-shell/static-export.js').formatStaticExportDiagnostics;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportDiagnosticGuard =
+  // @ts-expect-error SPEC.md §9.5: static-export diagnostic shape guards stay
+  // behind an internal server export-task subpath.
+  typeof import('./app-shell/static-export.js').isStaticExportDiagnostic;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedStaticExportDiagnosticErrorGuard =
+  // @ts-expect-error SPEC.md §9.5: static-export diagnostic shape guards stay
+  // behind an internal server export-task subpath.
+  typeof import('./app-shell/static-export.js').isStaticExportDiagnosticError;
 
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedWriteWebResponseToNodeOptions =
@@ -368,18 +415,7 @@ describe('server app-shell public API barrels', () => {
       'route',
     ]);
     expect(moduleValueKeys(packageNodeApi)).toEqual(['toNodeHandler']);
-    expect(moduleValueKeys(packageStaticExportApi)).toEqual([
-      'assertStaticExportManifestMatchesResult',
-      'assertStaticExportManifestUsesDirectoryIndexDocuments',
-      'exportStaticApp',
-      'formatStaticExportDiagnostic',
-      'formatStaticExportDiagnostics',
-      'isStaticExportDiagnostic',
-      'isStaticExportDiagnosticError',
-      'staticExportInventory',
-      'staticExportManifest',
-      'staticExportOutputPlan',
-    ]);
+    expect(moduleValueKeys(packageStaticExportApi)).toEqual(['exportStaticApp']);
     expect(moduleValueKeys(packageViteApi)).toEqual([
       'exportKovoAppShellViteBuildWithManifestFromManifestFile',
       'kovoAppShellViteManifestStylesheetHrefFromFile',
@@ -403,26 +439,46 @@ describe('server app-shell public API barrels', () => {
     expect(packageNodeApi).not.toHaveProperty('writeWebResponseToNode');
     expect(packageStaticExportApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(packageStaticExportApi).not.toHaveProperty('StaticExportError');
-    expect(packageStaticExportApi.staticExportInventory).toBe(
+    expect(packageStaticExportApi).not.toHaveProperty('staticExportInventory');
+    expect(packageStaticExportApi).not.toHaveProperty('staticExportManifest');
+    expect(packageStaticExportApi).not.toHaveProperty('staticExportOutputPlan');
+    expect(packageStaticExportApi).not.toHaveProperty('assertStaticExportManifestMatchesResult');
+    expect(packageStaticExportApi).not.toHaveProperty(
+      'assertStaticExportManifestUsesDirectoryIndexDocuments',
+    );
+    expect(packageStaticExportApi).not.toHaveProperty('formatStaticExportDiagnostic');
+    expect(packageStaticExportApi).not.toHaveProperty('formatStaticExportDiagnostics');
+    expect(packageStaticExportApi).not.toHaveProperty('isStaticExportDiagnostic');
+    expect(packageStaticExportApi).not.toHaveProperty('isStaticExportDiagnosticError');
+    expect(packageInternalStaticExportApi.staticExportInventory).toBe(
       staticExportResultApi.staticExportInventory,
     );
-    expect(packageStaticExportApi.staticExportManifest).toBe(
+    expect(packageInternalStaticExportApi.staticExportManifest).toBe(
       staticExportResultApi.staticExportManifest,
     );
-    expect(packageStaticExportApi.assertStaticExportManifestMatchesResult).toBe(
+    expect(packageInternalStaticExportApi.assertStaticExportManifestMatchesResult).toBe(
       staticExportResultApi.assertStaticExportManifestMatchesResult,
     );
-    expect(packageStaticExportApi.assertStaticExportManifestUsesDirectoryIndexDocuments).toBe(
+    expect(packageInternalStaticExportApi.assertStaticExportManifestUsesDirectoryIndexDocuments).toBe(
       staticExportResultApi.assertStaticExportManifestUsesDirectoryIndexDocuments,
     );
-    expect(packageStaticExportApi.staticExportOutputPlan).toBe(
+    expect(packageInternalStaticExportApi.staticExportOutputPlan).toBe(
       staticExportOutputApi.staticExportOutputPlan,
     );
-    expect(packageStaticExportApi.formatStaticExportDiagnostic).toBe(
+    expect(packageInternalStaticExportApi.formatStaticExportDiagnostic).toBe(
       staticExportDiagnosticsApi.formatStaticExportDiagnostic,
     );
-    expect(packageStaticExportApi.isStaticExportDiagnosticError).toBe(
+    expect(packageInternalStaticExportApi.formatStaticExportDiagnostics).toBe(
+      staticExportDiagnosticsApi.formatStaticExportDiagnostics,
+    );
+    expect(packageInternalStaticExportApi.isStaticExportDiagnostic).toBe(
+      staticExportDiagnosticsApi.isStaticExportDiagnostic,
+    );
+    expect(packageInternalStaticExportApi.isStaticExportDiagnosticError).toBe(
       staticExportDiagnosticsApi.isStaticExportDiagnosticError,
+    );
+    expect(packageInternalStaticExportApi.staticExportManifest).toBe(
+      internalStaticExportApi.staticExportManifest,
     );
     expect(packageViteApi.exportKovoAppShellViteBuildWithManifestFromManifestFile).toBe(
       viteStaticExportManifestFileApi.exportKovoAppShellViteBuildWithManifestFromManifestFile,

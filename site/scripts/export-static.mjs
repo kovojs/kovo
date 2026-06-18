@@ -16,7 +16,6 @@ const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const cssDistDir = path.join(siteRoot, 'dist-css');
 const publicDir = path.join(siteRoot, 'public');
 const defaultDistDir = path.join(siteRoot, 'dist');
-let staticExportTaskHelpers;
 
 export async function exportSiteStaticApp({
   createViteServer = createServer,
@@ -39,30 +38,18 @@ export async function exportSiteStaticApp({
   });
 
   try {
-    const [appModule, auxModule, examplesModule, coreModule, viteModule, staticExportModule] =
-      await Promise.all([
-        viteServer.ssrLoadModule('/src/app.ts'),
-        viteServer.ssrLoadModule('/src/aux.ts'),
-        viteServer.ssrLoadModule('/src/examples.ts'),
-        viteServer.ssrLoadModule('@kovojs/server/app-shell/core'),
-        viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
-        viteServer.ssrLoadModule('@kovojs/server/app-shell/static-export'),
-      ]);
+    const [appModule, auxModule, examplesModule, coreModule, viteModule] = await Promise.all([
+      viteServer.ssrLoadModule('/src/app.ts'),
+      viteServer.ssrLoadModule('/src/aux.ts'),
+      viteServer.ssrLoadModule('/src/examples.ts'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/core'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
+    ]);
     const { isKovoApp } = coreModule;
     const {
       exportKovoAppShellViteBuildWithManifestFromManifestFile,
       kovoAppShellViteManifestStylesheetHrefFromFile,
     } = viteModule;
-    const {
-      formatStaticExportDiagnostic,
-      formatStaticExportDiagnostics,
-      isStaticExportDiagnosticError,
-    } = staticExportModule;
-    staticExportTaskHelpers = {
-      formatStaticExportDiagnostic,
-      formatStaticExportDiagnostics,
-      isStaticExportDiagnosticError,
-    };
 
     const app = appModule.siteStaticExportApp;
     if (!isKovoApp(app)) {
@@ -98,9 +85,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const result = await exportSiteStaticApp(parseCliOptions(process.argv.slice(2)));
 
     for (const diagnostic of result.diagnostics) {
-      process.stderr.write(
-        `${staticExportTaskHelpers.formatStaticExportDiagnostic(diagnostic, 'WARN')}\n`,
-      );
+      process.stderr.write(`${formatStaticExportDiagnostic(diagnostic, 'WARN')}\n`);
       process.exitCode = 1;
     }
 
@@ -116,11 +101,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       ].join('\n'),
     );
   } catch (error) {
-    if (!staticExportTaskHelpers?.isStaticExportDiagnosticError(error)) throw error;
+    if (!isStaticExportDiagnosticError(error)) throw error;
     process.stderr.write(
       [
         'site-export/v1',
-        ...staticExportTaskHelpers.formatStaticExportDiagnostics(error.diagnostics, 'ERROR'),
+        ...formatStaticExportDiagnostics(error.diagnostics, 'ERROR'),
         '',
       ].join('\n'),
     );
@@ -146,4 +131,37 @@ function parseCliOptions(args) {
     throw new Error(`Unknown site export option '${arg}'.`);
   }
   return options;
+}
+
+function isStaticExportDiagnosticError(error) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    Array.isArray(error.diagnostics) &&
+    error.diagnostics.every(isStaticExportDiagnostic)
+  );
+}
+
+function isStaticExportDiagnostic(value) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof value.code === 'string' &&
+    typeof value.message === 'string' &&
+    typeof value.routePath === 'string'
+  );
+}
+
+function formatStaticExportDiagnostics(diagnostics, severity) {
+  return diagnostics.map((diagnostic) => formatStaticExportDiagnostic(diagnostic, severity));
+}
+
+function formatStaticExportDiagnostic(diagnostic, severity) {
+  return `${severity} ${diagnostic.code} route=${diagnostic.routePath} ${stableText(
+    diagnostic.message,
+  )}`;
+}
+
+function stableText(value) {
+  return String(value).replace(/\s+/g, ' ').trim();
 }

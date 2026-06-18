@@ -64,12 +64,14 @@ interface StaticExportOutputPlanInput extends StaticExportOutputArtifacts {
   outDir: string | URL;
 }
 
+/**
+ * @internal Dry-run export task wiring must inspect the same target files that a
+ * write export would publish, without reimplementing path planning (SPEC.md §9.5).
+ */
 export function staticExportOutputPlan(
   result: StaticExportOutputArtifacts,
   options: StaticExportOutputPlanOptions,
 ): StaticExportOutputPlanItem[] {
-  // SPEC §9.5: dry-run export task wiring must inspect the same target files
-  // that a write export would publish, without reimplementing path planning.
   return createStaticExportOutputPlan({
     artifacts: result.artifacts,
     assets: result.assets,
