@@ -33,10 +33,4 @@ ProductList.name = "components/product-list/product-list";
 export const ProductList$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductList,
   componentId: "components/product-list/product-list",
-  queries: [
-    {
-      name: "products",
-      query: productsQuery,
-    },
-  ],
 }));

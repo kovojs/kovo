@@ -52,20 +52,20 @@ export const GalleryCollapsibleDemo = component({
         data-gallery-interactive="collapsible"
         {...collapsibleRootAttributes({ open: state.open })}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$details_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=7cca2e26#GalleryCollapsibleDemo$details_data_state_derive"
         open={state.open}
-        data-bind:open="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$details_open_derive"
+        data-bind:open="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=7cca2e26#GalleryCollapsibleDemo$details_open_derive"
         kovo-c="gallery-collapsible-demo"
         kovo-state='{"open":false}'
       >
         <summary
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$summary_click"
+          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=7cca2e26#GalleryCollapsibleDemo$summary_click"
           {...collapsibleTriggerAttributes({ contentId, open: state.open })}
           aria-expanded={String(state.open)}
-          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$summary_aria_expanded_derive"
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=7cca2e26#GalleryCollapsibleDemo$summary_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$summary_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=7cca2e26#GalleryCollapsibleDemo$summary_data_state_derive"
         >
           Release notes
         </summary>
@@ -73,7 +73,7 @@ export const GalleryCollapsibleDemo = component({
           class={CONTENT_CLASS}
           {...collapsibleContentAttributes({ contentId, open: state.open })}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=11c1978a#GalleryCollapsibleDemo$div_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=7cca2e26#GalleryCollapsibleDemo$div_data_state_derive"
         >
           Added browser-backed compiled coverage.
         </div>

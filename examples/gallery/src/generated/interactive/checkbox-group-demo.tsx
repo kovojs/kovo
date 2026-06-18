@@ -117,14 +117,14 @@ export const GalleryCheckboxGroupDemo = component({
           <input
             class={CONTROL_CLASS}
             id="gallery-checkbox-group-all"
-            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_click"
+            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_click"
             type="checkbox"
             aria-checked={
               state.value === 'updates,billing' ? 'true' : state.value === '' ? 'false' : 'mixed'
             }
-            data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_aria_checked_derive"
+            data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_aria_checked_derive"
             checked={state.value === 'updates,billing'}
-            data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_checked_derive"
+            data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_checked_derive"
             data-state={
               state.value === 'updates,billing'
                 ? 'checked'
@@ -132,31 +132,31 @@ export const GalleryCheckboxGroupDemo = component({
                   ? 'unchecked'
                   : 'indeterminate'
             }
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_data_state_derive"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_data_state_derive"
             indeterminate={state.value !== '' && state.value !== 'updates,billing'}
-            data-bind:indeterminate="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_indeterminate_derive"
+            data-bind:indeterminate="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_indeterminate_derive"
           />
           <span class={LABEL_CLASS}>All notifications</span>
         </label>
         <div {...checkboxGroupItemAttributes(updatesState)} class={ITEM_CLASS}>
           <input
             class={CONTROL_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_click_2"
             tabIndex={0}
             {...checkboxGroupControlAttributes({
               ...updatesState,
               controlId: 'gallery-checkbox-group-updates',
             })}
             aria-checked={String(state.value === 'updates' || state.value === 'updates,billing')}
-            data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_aria_checked_derive_2"
+            data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_aria_checked_derive_2"
             checked={state.value === 'updates' || state.value === 'updates,billing'}
-            data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_checked_derive_2"
+            data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_checked_derive_2"
             data-state={
               state.value === 'updates' || state.value === 'updates,billing'
                 ? 'checked'
                 : 'unchecked'
             }
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_data_state_derive_2"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_data_state_derive_2"
           />
           <label
             class={LABEL_CLASS}
@@ -169,7 +169,7 @@ export const GalleryCheckboxGroupDemo = component({
                 ? 'checked'
                 : 'unchecked'
             }
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$label_data_state_derive"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$label_data_state_derive"
           >
             Product updates
           </label>
@@ -177,22 +177,22 @@ export const GalleryCheckboxGroupDemo = component({
         <div {...checkboxGroupItemAttributes(billingState)} class={ITEM_CLASS}>
           <input
             class={CONTROL_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_click_3"
+            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_click_3"
             tabIndex={0}
             {...checkboxGroupControlAttributes({
               ...billingState,
               controlId: 'gallery-checkbox-group-billing',
             })}
             aria-checked={String(state.value === 'billing' || state.value === 'updates,billing')}
-            data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_aria_checked_derive_3"
+            data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_aria_checked_derive_3"
             checked={state.value === 'billing' || state.value === 'updates,billing'}
-            data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_checked_derive_3"
+            data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_checked_derive_3"
             data-state={
               state.value === 'billing' || state.value === 'updates,billing'
                 ? 'checked'
                 : 'unchecked'
             }
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$input_data_state_derive_3"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$input_data_state_derive_3"
           />
           <label
             class={LABEL_CLASS}
@@ -205,7 +205,7 @@ export const GalleryCheckboxGroupDemo = component({
                 ? 'checked'
                 : 'unchecked'
             }
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$label_data_state_derive_2"
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$label_data_state_derive_2"
           >
             Billing notices
           </label>
@@ -213,7 +213,7 @@ export const GalleryCheckboxGroupDemo = component({
         <output
           class="text-xs text-neutral-500"
           data-demo-state="checkbox-group-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=b5406814#GalleryCheckboxGroupDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=35dde547#GalleryCheckboxGroupDemo$output_text_derive"
         >
           {state.value || 'none'}
         </output>

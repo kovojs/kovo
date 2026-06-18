@@ -18,7 +18,7 @@ the same `<kovo-query>` and `<kovo-fragment>` elements the mutation wire used in
 the fragment protocol, reused within first render. Nothing new ships in the loader, and nothing
 new needs auditing on the wire.
 
-{{snippet:06-streaming/src/app.ts#deferred-stream}}
+{{snippet:06-streaming/src/app.test.ts#deferred-stream}}
 
 The shell carries the cart badge (cheap, rendered inline) and a `<kovo-defer>` placeholder with
 declared fallback content. The stream then appends the products query value and the product-list

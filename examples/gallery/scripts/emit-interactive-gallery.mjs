@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { dirname, relative, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 registerHooks({
@@ -15,12 +16,10 @@ registerHooks({
   },
 });
 
-const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
-  await import('@kovojs/compiler');
-
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const galleryRoot = resolve(scriptDir, '..');
 const repoRoot = resolve(galleryRoot, '../..');
+const kovoBin = resolve(galleryRoot, 'node_modules/.bin/kovo');
 const checkOnly = process.argv.includes('--check');
 
 const demos = [
@@ -74,42 +73,22 @@ for (const name of demos) {
     `${sourceFileName} hand-writes compiler stamps`,
   );
 
-  const result = compileComponentModule({
-    fileName: generatedFileName,
-    source,
-  });
-  const blockingDiagnostics = result.diagnostics.filter(
-    (diagnostic) => diagnostic.code !== 'KV210',
-  );
-  assert.deepEqual(
-    blockingDiagnostics,
-    [],
-    `${sourceFileName} has blocking compiler diagnostics: ${JSON.stringify(blockingDiagnostics, null, 2)}`,
-  );
-  assert.ok(
-    result.diagnostics.every((diagnostic) => diagnostic.code === 'KV210'),
-    `${sourceFileName} emitted unexpected lint diagnostics: ${JSON.stringify(result.diagnostics, null, 2)}`,
-  );
-  assertFixpoint(result);
-  assertRenderEquivalence(result);
-
-  const lowered = result.loweredSource;
-  assert.ok(lowered, `${sourceFileName} produced no lowered TSX`);
+  const compiled = compileInteractiveComponent(sourcePath, generatedFileName);
+  assert.ok(compiled.lowered, `${sourceFileName} produced no lowered TSX`);
 
   const generated = new Map([
     [
       `${generatedBase}.tsx`,
       formatGeneratedTsx(
         `${generatedBase}.tsx`,
-        `// @kovojs-ir - lowered from ${sourceFileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit:interactive-gallery\`.\n${lowered}`,
+        `// @kovojs-ir - lowered from ${sourceFileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit:interactive-gallery\`.\n${compiled.lowered}`,
       ),
     ],
   ]);
 
-  for (const file of result.files) {
-    if (file.kind !== 'client') continue;
-    const artifactPath = resolve(repoRoot, file.fileName);
-    generated.set(artifactPath, formatGeneratedSource(artifactPath, file.source));
+  for (const [fileName, content] of compiled.clientFiles) {
+    const artifactPath = resolve(repoRoot, fileName);
+    generated.set(artifactPath, formatGeneratedSource(artifactPath, content));
   }
 
   for (const [artifactPath, content] of generated) {
@@ -136,4 +115,43 @@ function formatGeneratedSource(fileName, source) {
     encoding: 'utf8',
     input: source,
   });
+}
+
+function compileInteractiveComponent(sourcePath, generatedFileName) {
+  const root = mkdtempSync(resolve(tmpdir(), 'kovo-gallery-compile-'));
+  const loweredPath = resolve(root, 'lowered.tsx');
+  try {
+    execFileSync(
+      kovoBin,
+      [
+        'compile',
+        'component',
+        sourcePath,
+        '--out',
+        loweredPath,
+        '--file-name',
+        generatedFileName,
+        '--emit-client-files',
+        '--allow-diagnostic',
+        'KV210',
+        '--fixpoint',
+        '--render-equivalence',
+      ],
+      { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
+    );
+
+    const clientFiles = new Map();
+    const clientFileName = generatedFileName.replace(/\.tsx$/, '.client.js');
+    const clientPath = resolve(root, clientFileName);
+    if (existsSync(clientPath)) {
+      clientFiles.set(clientFileName, readFileSync(clientPath, 'utf8'));
+    }
+
+    return {
+      clientFiles,
+      lowered: readFileSync(loweredPath, 'utf8'),
+    };
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
 }

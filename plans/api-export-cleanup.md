@@ -620,12 +620,16 @@ tsconfig.json --noEmit --pretty false`.
     app-facing `kovo compile` command family:
     `kovo compile component`, `kovo compile route`, `kovo compile graph`, and
     `kovo compile package-css`, with `--check`, component `--fixpoint`, and
-    component `--render-equivalence` flags where applicable. The dispatcher in
-    `packages/cli/src/index.ts` implements those commands by importing
+    component `--render-equivalence` flags where applicable. Follow-up evidence:
+    commit `34604d42` extended the facade with component `--facts-out`,
+    `--emit-client-files`, `--allow-diagnostic <code>`, route `--facts-out`,
+    and `kovo compile mutation-inputs`, covering the client artifact, lint
+    policy, and mutation-input fact gaps found in gallery/tutorial tooling. The
+    dispatcher in `packages/cli/src/index.ts` implements those commands by importing
     `@kovojs/compiler`, `@kovojs/compiler/graph`, and
     `@kovojs/compiler/package-styles` internally, so app scripts can call the
     `kovo` bin instead of importing compiler APIs. Verified with
-    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts --testNamePattern "compile|commands manifest|reports usage"`
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts`
     and `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 - [ ] **Reclassify `@kovojs/compiler` only after app-facing imports are gone.**
   - Once starters and app-owned scripts use `kovo` or static artifacts instead,
@@ -659,11 +663,42 @@ tsconfig.json --noEmit --pretty false`.
     `corepack pnpm --filter @kovojs/example-crm exec node scripts/emit-ui-css.mjs`,
     and
     `corepack pnpm --filter @kovojs/example-stackoverflow exec node scripts/emit-ui-css.mjs`.
-  - Remaining gap: `examples/commerce/scripts/emit-graph.mjs`,
-    `examples/crm/scripts/emit-graph.mjs`, Gallery interactive emit tooling, and
-    `site/tutorial/run-steps.mjs` still require compiler APIs or compiler
-    capabilities not yet exposed by `kovo compile` (client artifact emission,
-    configurable lint-diagnostic policy, and mutation-input fact extraction).
+  - Progress evidence: `examples/commerce/scripts/emit-graph.mjs` now calls
+    `kovo compile component`, `kovo compile route`, `kovo compile graph`, and
+    `kovo compile mutation-inputs` for compiler-backed facts/derivation instead
+    of importing `@kovojs/compiler`, `@kovojs/compiler/graph`, or
+    `@kovojs/compiler/internal`. `examples/crm/scripts/emit-graph.mjs` now calls
+    `kovo compile graph` instead of importing `@kovojs/compiler/graph`.
+    `examples/commerce/package.json` and `examples/crm/package.json` no longer
+    depend directly on `@kovojs/compiler`. Verified with
+    `corepack pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+    `corepack pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
+    `corepack pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+    `corepack pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts`,
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+    `node scripts/api-surface-gate.mjs`, `corepack pnpm run check:imports`,
+    `corepack pnpm run check:exports`, and
+    `corepack pnpm exec vitest --run scripts/public-packages.test.mjs`.
+  - Progress evidence: `examples/gallery/scripts/emit-interactive-gallery.mjs`
+    now calls `kovo compile component --emit-client-files --allow-diagnostic KV210`
+    instead of importing `@kovojs/compiler`; `site/tutorial/run-steps.mjs` now
+    calls `kovo compile mutation-inputs` and `kovo compile component` instead
+    of importing `@kovojs/compiler` or `@kovojs/compiler/internal`. Verified
+    with
+    `corepack pnpm --filter @kovojs/example-gallery run emit:interactive-gallery -- --check`,
+    `node site/tutorial/run-steps.mjs`,
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts`,
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+    `node scripts/api-surface-gate.mjs`, `corepack pnpm run check:imports`,
+    `corepack pnpm run check:exports`, and
+    `corepack pnpm exec vitest --run scripts/public-packages.test.mjs`.
+  - Remaining gap: `site/tutorial/steps/02-islands/src/app.test.ts` still
+    imports `@kovojs/compiler` as framework-owned tutorial/compiler coverage,
+    and `examples/gallery/src/merge-fixtures-oracle.tsx` still imports
+    `@kovojs/compiler`; `examples/gallery/package.json` must keep its compiler
+    dependency until that oracle is reclassified or moved behind a framework
+    helper.
 
 ## Package-Wide Internalization Candidates
 

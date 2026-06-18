@@ -6,7 +6,7 @@ import { csrfField } from '@kovojs/server';
 
 import { formatPrice, type ShopProduct, type ShopRequest } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
-import { shopCsrf, type AddToCartFailure, type AddToCartFailureState } from '../app.js';
+import { addToCart, shopCsrf, type AddToCartFailure, type AddToCartFailureState } from '../app.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
@@ -52,7 +52,7 @@ export function renderAddToCartForm(
   request?: ShopRequest,
 ) {
   return (
-    <form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${item.id}`} kovo-key={item.id}>
+    <form enhance mutation={addToCart} method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${item.id}`} kovo-key={item.id}>
       {request?.session?.id ? csrfField(request, shopCsrf) : ''}
       <input type="hidden" name="productId" value={item.id} />
       <label>
@@ -88,10 +88,4 @@ export function renderAddToCartError(failure: AddToCartFailure) {
 export const ProductList$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductList,
   componentId: "components/product-list/product-list",
-  queries: [
-    {
-      name: "products",
-      query: productsQuery,
-    },
-  ],
 }));

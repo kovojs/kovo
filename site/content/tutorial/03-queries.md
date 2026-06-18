@@ -64,7 +64,7 @@ replaces it and walks the self-describing bindings under each dependent island:
 
 {{snippet:03-queries/src/app.ts#shop-page}}
 
-{{snippet:03-queries/src/app.test.ts#query-json-test}}
+{{snippet:03-queries/src/app.test.ts#query-data-test}}
 
 Note what the page does **not** contain: no serialized component tree, no hydration script, no
 framework boot. The data is inspectable JSON, the dependencies are attributes, and the update

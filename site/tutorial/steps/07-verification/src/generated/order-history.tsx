@@ -32,10 +32,4 @@ OrderHistory.name = "components/order-history/order-history";
 export const OrderHistory$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: OrderHistory,
   componentId: "components/order-history/order-history",
-  queries: [
-    {
-      name: "orderHistory",
-      query: orderHistoryQuery,
-    },
-  ],
 }));

@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,10 +26,6 @@ registerHooks({
   },
 });
 
-const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
-  await import('@kovojs/compiler');
-const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
-
 /**
  * Tutorial step gate (plan W5): every checked-in step state must
  *  1. typecheck against the workspace @kovojs/* packages (tsgo per step),
@@ -35,8 +40,10 @@ const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal
 
 const tutorialDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(tutorialDir, '../..');
+const siteRoot = path.resolve(tutorialDir, '..');
 const stepsDir = path.join(tutorialDir, 'steps');
 const contentDir = path.resolve(tutorialDir, '../content/tutorial');
+const kovoBin = path.join(siteRoot, 'node_modules/.bin/kovo');
 const write = process.argv.includes('--write');
 
 const steps = readdirSync(stepsDir, { withFileTypes: true })
@@ -53,84 +60,115 @@ function compileStepComponents(step) {
   if (!existsSync(componentsDir)) return 0;
 
   const generatedDir = path.join(stepsDir, step, 'src/generated');
-  const registryFacts = registryFactsForStep(step);
   let compiled = 0;
+  const root = mkdtempSync(path.join(tmpdir(), 'kovo-tutorial-compile-'));
 
-  for (const file of readdirSync(componentsDir).sort()) {
-    if (!file.endsWith('.tsx')) continue;
-    const name = file.replace(/\.tsx$/, '');
-    const fileName = `site/tutorial/steps/${step}/src/components/${file}`;
-    const source = readFileSync(path.join(componentsDir, file), 'utf8');
+  try {
+    const registryFactsPath = writeRegistryFactsForStep(step, root);
 
-    // SPEC.md §4.8: stamps are derived, never hand-written in authored sugar.
-    assert.doesNotMatch(
-      source,
-      /(?:data-bind|kovo-deps|kovo-c|kovo-state|data-p-[\w-]+)=/,
-      `${fileName} hand-writes stamps`,
-    );
+    for (const file of readdirSync(componentsDir).sort()) {
+      if (!file.endsWith('.tsx')) continue;
+      const name = file.replace(/\.tsx$/, '');
+      const fileName = `site/tutorial/steps/${step}/src/components/${file}`;
+      const sourcePath = path.join(componentsDir, file);
+      const source = readFileSync(sourcePath, 'utf8');
 
-    const result = compileComponentModule({ fileName, registryFacts, source });
-    const errors = result.diagnostics.filter((entry) => entry.severity === 'error');
-    assert.deepEqual(
-      errors,
-      [],
-      `${fileName} has compiler errors: ${JSON.stringify(errors, null, 2)}`,
-    );
-    // SPEC.md §5.2.3 / Constitution #3: compiling the output is a no-op.
-    // Real authored-vs-lowered render equivalence is tracked separately in plans/compiler-hardening.md.
-    assertFixpoint(result);
-    assertRenderEquivalence(result);
+      // SPEC.md §4.8: stamps are derived, never hand-written in authored sugar.
+      assert.doesNotMatch(
+        source,
+        /(?:data-bind|kovo-deps|kovo-c|kovo-state|data-p-[\w-]+)=/,
+        `${fileName} hand-writes stamps`,
+      );
 
-    const lowered = result.loweredSource;
-    assert.ok(lowered, `${fileName} produced no lowered render source`);
-    const clientSource = result.files.find((entry) =>
-      entry.fileName.endsWith('.client.js'),
-    )?.source;
-    assert.ok(clientSource, `${fileName} produced no client module`);
+      const compiledComponent = compileTutorialComponent({
+        fileName,
+        registryFactsPath,
+        root,
+        sourcePath,
+      });
+      assert.ok(compiledComponent.lowered, `${fileName} produced no lowered render source`);
+      assert.ok(compiledComponent.clientSource, `${fileName} produced no client module`);
 
-    const loweredFile = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`node site/tutorial/run-steps.mjs --write\`.\n${lowered}`;
-    const targets = [
-      [path.join(generatedDir, `${name}.tsx`), loweredFile],
-      [path.join(generatedDir, `${name}.client.js`), clientSource],
-    ];
+      const loweredFile = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`node site/tutorial/run-steps.mjs --write\`.\n${compiledComponent.lowered}`;
+      const targets = [
+        [path.join(generatedDir, `${name}.tsx`), loweredFile],
+        [path.join(generatedDir, `${name}.client.js`), compiledComponent.clientSource],
+      ];
 
-    for (const [target, content] of targets) {
-      if (write) {
-        mkdirSync(generatedDir, { recursive: true });
-        writeFileSync(target, content);
-      } else {
-        assert.ok(existsSync(target), `${target} missing; run run-steps.mjs --write`);
-        assert.equal(
-          readFileSync(target, 'utf8'),
-          content,
-          `${path.relative(repoRoot, target)} is stale; run \`node site/tutorial/run-steps.mjs --write\``,
-        );
+      for (const [target, content] of targets) {
+        if (write) {
+          mkdirSync(generatedDir, { recursive: true });
+          writeFileSync(target, content);
+        } else {
+          assert.ok(existsSync(target), `${target} missing; run run-steps.mjs --write`);
+          assert.equal(
+            readFileSync(target, 'utf8'),
+            content,
+            `${path.relative(repoRoot, target)} is stale; run \`node site/tutorial/run-steps.mjs --write\``,
+          );
+        }
       }
+      compiled += 1;
     }
-    compiled += 1;
+  } finally {
+    rmSync(root, { force: true, recursive: true });
   }
 
   return compiled;
 }
 
-function registryFactsForStep(step) {
+function writeRegistryFactsForStep(step, root) {
   const appPath = path.join(stepsDir, step, 'src/app.ts');
   const mutationInputs = existsSync(appPath)
-    ? registryMutationInputs(`site/tutorial/steps/${step}/src/app.ts`, readFileSync(appPath, 'utf8'))
+    ? compileMutationInputs(`site/tutorial/steps/${step}/src/app.ts`, appPath, root)
     : {};
-  return {
+  const registryFacts = {
     ...(Object.keys(mutationInputs).length > 0 ? { mutationInputs } : {}),
     mutations: { 'cart/add': 'typeof addToCart' },
   };
+  const registryFactsPath = path.join(root, 'registry-facts.json');
+  writeFileSync(registryFactsPath, `${JSON.stringify(registryFacts, null, 2)}\n`);
+  return registryFactsPath;
 }
 
-function registryMutationInputs(fileName, source) {
-  return Object.fromEntries(
-    [...mutationInputFactsFromSource(fileName, source).values()].map((fact) => [
-      fact.key,
-      fact.fields.map((field) => ({ ...field, provenance: 'registry' })),
-    ]),
+function compileMutationInputs(fileName, appPath, root) {
+  const outPath = path.join(root, 'mutation-inputs.json');
+  execFileSync(
+    kovoBin,
+    ['compile', 'mutation-inputs', appPath, '--out', outPath, '--file-name', fileName],
+    { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
   );
+  return JSON.parse(readFileSync(outPath, 'utf8'));
+}
+
+function compileTutorialComponent({ fileName, registryFactsPath, root, sourcePath }) {
+  const loweredPath = path.join(root, 'lowered.tsx');
+  const clientFileName = fileName.replace(/\.tsx$/, '.client.js');
+  const clientPath = path.join(root, clientFileName);
+  execFileSync(
+    kovoBin,
+    [
+      'compile',
+      'component',
+      sourcePath,
+      '--out',
+      loweredPath,
+      '--file-name',
+      fileName,
+      '--registry-facts',
+      registryFactsPath,
+      '--emit-client-files',
+      '--allow-diagnostic',
+      'KV210',
+      '--fixpoint',
+      '--render-equivalence',
+    ],
+    { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
+  );
+  return {
+    clientSource: existsSync(clientPath) ? readFileSync(clientPath, 'utf8') : '',
+    lowered: readFileSync(loweredPath, 'utf8'),
+  };
 }
 
 let components = 0;

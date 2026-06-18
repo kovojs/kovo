@@ -67,24 +67,24 @@ export const GalleryMeterDemo = component({
           id="gallery-meter-value"
           {...meterRootAttributes(meterState)}
           aria-valuetext={`${state.value} percent capacity`}
-          data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=d9c8686a#GalleryMeterDemo$meter_aria_valuetext_derive"
+          data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=683e2539#GalleryMeterDemo$meter_aria_valuetext_derive"
           data-state={state.dataState}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=d9c8686a#GalleryMeterDemo$meter_data_state_derive"
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=683e2539#GalleryMeterDemo$meter_data_state_derive"
           data-value={String(state.value)}
-          data-bind:data-value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=d9c8686a#GalleryMeterDemo$meter_data_value_derive"
+          data-bind:data-value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=683e2539#GalleryMeterDemo$meter_data_value_derive"
           value={state.value}
-          data-bind:value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=d9c8686a#GalleryMeterDemo$meter_value_derive"
+          data-bind:value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=683e2539#GalleryMeterDemo$meter_value_derive"
         />
         <button
           type="button"
           class={BUTTON_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=d9c8686a#GalleryMeterDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=683e2539#GalleryMeterDemo$button_click"
         >
           Optimize capacity
         </button>
         <output
           data-demo-state="meter-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=d9c8686a#GalleryMeterDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=683e2539#GalleryMeterDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

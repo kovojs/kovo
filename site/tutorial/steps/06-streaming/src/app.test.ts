@@ -70,6 +70,7 @@ function productIdFromRawInput(rawInput: unknown): string | undefined {
   return typeof productId === 'string' ? productId : undefined;
 }
 
+// snippet:deferred-stream
 function renderShopPageDeferredStream(db = createShopDb(), request?: ShopRequest) {
   const cart = loadCart(db);
   const shell = `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1><kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment><kovo-defer target="product-list" state="pending">Loading products...</kovo-defer>`;
@@ -91,6 +92,7 @@ function renderShopPageDeferredStream(db = createShopDb(), request?: ShopRequest
     shell,
   });
 }
+// /snippet
 
 function expectSyncHtml(html: string | Promise<string>): string {
   if (typeof html !== 'string') {
