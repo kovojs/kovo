@@ -219,4 +219,88 @@ describe('inline loader enhanced navigation fallback', () => {
       }
     },
   );
+
+  it.each(inlineSourceInstallCases)(
+    'falls back to native navigation on non-html responses through %s',
+    async (_name, installSource) => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        history: globalRecord.history,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+        setTimeout: globalRecord.setTimeout,
+      };
+      const listeners = new Map<string, (event: unknown) => Promise<void>>();
+      const assign = vi.fn();
+      const preventDefault = vi.fn();
+      const anchor = {
+        hasAttribute: () => false,
+        href: 'http://app.test/download.csv',
+        target: '',
+      };
+      const target = {
+        closest(selector: string) {
+          if (selector === 'a[href]') return anchor;
+          return null;
+        },
+      };
+
+      try {
+        globalRecord.addEventListener = (
+          type: string,
+          listener: (event: unknown) => Promise<void>,
+        ) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          querySelectorAll: () => [],
+        };
+        globalRecord.fetch = vi.fn(async () => ({
+          headers: { get: () => 'text/csv' },
+          text: async () => 'id,total\n1,42\n',
+          url: 'http://app.test/download.csv',
+        }));
+        globalRecord.history = {};
+        globalRecord.location = {
+          assign,
+          href: 'http://app.test/products',
+          origin: 'http://app.test',
+          pathname: '/products',
+          search: '',
+        };
+        globalRecord.setTimeout = vi.fn();
+
+        installSource(async () => ({}), globalRecord);
+        await listeners.get('click')?.({
+          button: 0,
+          defaultPrevented: false,
+          preventDefault,
+          target,
+          type: 'click',
+        });
+
+        expect(preventDefault).toHaveBeenCalledTimes(1);
+        await vi.waitFor(() => {
+          expect(assign).toHaveBeenCalledWith('http://app.test/download.csv');
+        });
+      } finally {
+        Object.assign(globalRecord, {
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+          history: originals.history,
+          location: originals.location,
+          setTimeout: originals.setTimeout,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
 });

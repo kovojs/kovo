@@ -184,6 +184,93 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.querySelector('[kovo-nav-segment="page:/cart"]')?.textContent).toBe('Cart');
   });
 
+  it('uses the final same-origin redirect document as navigation authority', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Admin</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Admin" kovo-nav-kind="layout" kovo-nav-name="Admin">',
+      '<a id="admin" href="/admin">Admin</a>',
+      '<section kovo-nav-segment="page:/admin" kovo-nav-kind="page" kovo-nav-name="page">Admin</section>',
+      '</main>',
+    ].join('');
+    const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>Login</title>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Auth" kovo-nav-kind="layout" kovo-nav-name="Auth">',
+          '<section kovo-nav-segment="page:/login" kovo-nav-kind="page" kovo-nav-name="page">Login required</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/login?next=%2Fadmin', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+
+    installInlineKovoLoader(async () => ({}));
+    document.querySelector('#admin')?.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+
+    await vi.waitFor(() => expect(document.title).toBe('Login'));
+
+    expect(document.querySelector('[kovo-nav-segment="layout:Auth"]')).not.toBeNull();
+    expect(document.querySelector('[kovo-nav-segment="page:/login"]')?.textContent).toBe(
+      'Login required',
+    );
+    expect(pushState).toHaveBeenCalledWith(
+      {},
+      '',
+      new URL('/login?next=%2Fadmin', initialUrl).href,
+    );
+  });
+
+  it('morphs compatible non-200 target documents from server-rendered shells', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Admin</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Admin" kovo-nav-kind="layout" kovo-nav-name="Admin">',
+      '<a id="admin" href="/admin">Admin</a>',
+      '<section kovo-nav-segment="page:/admin" kovo-nav-kind="page" kovo-nav-name="page">Admin</section>',
+      '</main>',
+    ].join('');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>Forbidden</title>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Admin" kovo-nav-kind="layout" kovo-nav-name="Admin">',
+          '<section kovo-nav-segment="page:/admin" kovo-nav-kind="page" kovo-nav-name="page">Denied by server</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      status: 403,
+      url: new URL('/admin', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installInlineKovoLoader(async () => ({}));
+    document.querySelector('#admin')?.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+
+    await vi.waitFor(() => expect(document.title).toBe('Forbidden'));
+
+    expect(document.querySelector('[kovo-nav-segment="page:/admin"]')?.textContent).toBe(
+      'Denied by server',
+    );
+  });
+
   it('collects mutation live targets from the post-navigation DOM', async () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Start</title>';
     document.body.innerHTML = [

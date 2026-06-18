@@ -74,11 +74,14 @@ through client navigation.
     proves a shared layout segment persists when its target-document chrome is
     equivalent and the route leaf changes, and proves the layout segment morphs
     from the target document when same-id layout chrome changes.
-- [ ] **The server remains authoritative for target route and guard results.**
+- [x] **The server remains authoritative for target route and guard results.**
   - Any client-supplied current chain is an optimization hint only. The server or
     full target document determines the destination layout chain and rendered
     output; the client never uses its current chain to skip guards or layouts.
-  - Evidence: pending guard/redirect/403 fixture.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves the loader uses the fetched target document for same-origin auth
+    redirects and compatible 403 server-rendered shells, including the final
+    response URL and target layout/page segments.
 - [x] **Deploy skew is loud and recoverable.**
   - Reuse the §9.1.1 render-plan version token. Token mismatch discards the
     enhanced path and performs a full GET.
@@ -89,7 +92,7 @@ through client navigation.
 
 ## Interception Contract
 
-- [ ] **Intercept only navigations that native browser navigation can replace.**
+- [x] **Intercept only navigations that native browser navigation can replace.**
   - Eligible: same-origin app route, normal unmodified left click, GET
     navigation, no `target`, no `download`, no external marker, and an HTML
     response.
@@ -97,16 +100,20 @@ through client navigation.
     new-tab/window targets, downloads, hash-only same-document movement,
     `respond.file()`, `respond.stream()`, non-GET outcomes, and unknown content
     types. These use native navigation.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.test.ts`
+  - Evidence: `packages/runtime/src/inline-loader-navigation.test.ts`
     proves cross-origin, modified-click, target, download, hash-only, and nested
     `on:click` anchors are not intercepted by any inline installer artifact.
-    Remaining gap: file/stream/non-HTML outcome fixtures.
+    It also proves non-HTML responses fall back through `location.assign`;
+    `packages/runtime/src/inline-loader-navigation.browser.test.ts` proves the
+    eligible same-origin HTML path is intercepted.
 - [ ] **Redirects and non-200 route outcomes are server-owned.**
   - Enhanced navigation may follow same-origin HTML redirects only when the final
     response passes the same eligibility checks. 403/404/500 shells are target
     documents and may be morphed only when their segment/document stamps are
     compatible; otherwise full GET.
-  - Evidence: pending redirect, notFound, and forbidden fixtures.
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves same-origin HTML redirect and forbidden-shell handling. Remaining
+    gap: notFound fixture.
 - [ ] **Head and document shell updates are part of navigation.**
   - The full-document MVP must update or validate `<title>`, meta, html/body
     attrs, stylesheet/modulepreload hints, speculation rules, and route-level
@@ -266,7 +273,11 @@ through client navigation.
   - Evidence: pending.
 - [ ] **Version and guard safety:** build-token mismatch, auth redirect, 403/404,
       and morph failure fall back to full GET or morph the correct server shell.
-  - Evidence: pending.
+  - Evidence so far: `packages/runtime/src/inline-loader-navigation.test.ts`
+    proves build-token mismatch fallback across inline artifacts;
+    `packages/runtime/src/inline-loader-navigation.browser.test.ts` proves auth
+    redirect and 403 shell morphing. Remaining gap: 404 and morph-failure
+    fixture.
 - [x] **Mutation/live after navigation:** preserved and inserted targets refresh
       correctly with no stale-target or double-morph races.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
