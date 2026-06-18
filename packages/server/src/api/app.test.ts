@@ -447,6 +447,10 @@ describe('server app-shell public API barrels', () => {
     expect(packageRootApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
     expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
     expect(publicApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
+    expect(publicValues).not.toHaveProperty('parseRouteRequest');
+    expect(publicValues).not.toHaveProperty('runWebhook');
+    expect(routingApi).not.toHaveProperty('parseRouteRequest');
+    expect(routingApi).not.toHaveProperty('runWebhook');
 
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell');
   });

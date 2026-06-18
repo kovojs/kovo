@@ -438,7 +438,16 @@ packages/create-kovo/src/index.test.ts`.
     use case is documented: `runEndpoint`, `runMutation`, `runQuery`,
     `runRoutePage`, `runWebhook`, `parseRouteRequest`, and `endpointMatches`.
   - Keep them reachable through internal modules for framework dispatch and tests.
-  - Evidence:
+  - [x] Remove the no-public-use `parseRouteRequest`, `runWebhook`, and
+        `WebhookRunResult` exports from the public routing barrel.
+    - Evidence: `packages/server/src/api/routing.ts` no longer re-exports those
+      symbols; `packages/server/src/api/app.test.ts` asserts `@kovojs/server`
+      and the public routing barrel do not expose `parseRouteRequest` or
+      `runWebhook`. Verification:
+      `rg -n "parseRouteRequest|runWebhook" packages/conformance-fixtures/src/package-exports.test.ts packages/server/src/api/app.test.ts site/content site/tutorial examples conformance packages/better-auth packages/test --glob '!**/dist/**' --glob '!**/generated/**'`;
+      `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/api-ref.test.mjs scripts/exported-symbols.test.mjs`;
+      `corepack pnpm run check:exports`; `node scripts/api-surface-gate.mjs`;
+      `node site/scripts/api-ref.mjs`; `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 - [ ] **Move mutation/query/route response renderers internal-only.**
   - Remove these from public `@kovojs/server` exports unless a concrete app-authored
     use case is documented: `renderMutationEndpointResponse`,

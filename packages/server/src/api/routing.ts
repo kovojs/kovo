@@ -59,7 +59,6 @@ export { respond } from '../response.js';
 export {
   layout,
   notFound,
-  parseRouteRequest,
   renderRoutePageResponse,
   route,
   runRoutePage,
@@ -84,7 +83,7 @@ export type {
   RouteRequestInput,
 } from '../route.js';
 export type { CookieOptions } from '../cookies.js';
-export { runWebhook, webhook } from '../webhook.js';
+export { webhook } from '../webhook.js';
 export type {
   WebhookChangeOptions,
   WebhookDeclaration,
@@ -95,7 +94,6 @@ export type {
   WebhookReplayReservation,
   WebhookReplayStore,
   WebhookResponseStatus,
-  WebhookRunResult,
   WebhookSuccessStatus,
   WebhookTransactionContext,
   WebhookWireResponse,
