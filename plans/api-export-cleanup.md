@@ -634,13 +634,21 @@ tsconfig.json --noEmit --pretty false`.
     `BetterAuthSignUpEmailApi`, `BetterAuthSignOutApi`, and `*Like` credential
     API shapes unless apps must author them directly.
   - Evidence:
-- [ ] **Review `@kovojs/style` compiler-level result types.**
+- [x] **Review `@kovojs/style` compiler-level result types.**
   - Confirm whether `CompiledStyle`, `AtomicRule`, and `AtomicCssResult` are
     necessary public type closures for public functions such as `style.create`
     and `emitAtomicCss`.
   - Keep them public only if required by public signatures; otherwise internalize
     compiler-level CSS output types.
-  - Evidence:
+  - Evidence: `packages/style/src/index.ts` still exposes public
+    `createAtomicStyles(...): AtomicCssResult<Styles>` and
+    `emitAtomicCss(rules: readonly AtomicRule[], ...)`, while app/starter code in
+    `packages/create-kovo/templates/src/app.tsx` and
+    `packages/create-kovo/templates/src/auth.tsx` uses `style.emitAtomicCss(...)`
+    for critical CSS emission. `packages/compiler/src/style.ts` also consumes
+    `createAtomicStyles`, `emitAtomicCss`, `AtomicRule`, and `CompiledStyle` as
+    public type closures. Verification:
+    `rg -n "createAtomicStyles|emitAtomicCss|AtomicRule|AtomicCssResult|CssEmitOptions|CompiledStyle" packages examples site docs tests conformance scripts --glob '!**/dist/**' --glob '!**/generated/**'`.
 
 ## Headless UI Subpath Cleanup
 
