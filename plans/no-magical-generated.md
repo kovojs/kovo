@@ -194,10 +194,16 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Evidence: the repeated local dev-server interfaces and loader wrappers were
     removed from the three example Vite configs in favor of
     `@kovojs/server/vite`.
-- [ ] Preserve `vite-plus` task inputs without hand-maintaining broad boilerplate
+- [x] Preserve `vite-plus` task inputs without hand-maintaining broad boilerplate
       in every example config.
   - Do not overload `kovo()` with `serve`/task options unless a separate
     vite-plus-specific helper is introduced.
+  - Evidence: `examples/vite-plus-tasks.js` owns the shared `serve` task input
+    list, including the helper itself as an input, while Commerce, CRM, and
+    StackOverflow configs call `kovoExampleServeTask()` and keep `kovo({ app })`
+    focused on app loading. Config-load checks for all three packages printed
+    the shared task shape, `pnpm --filter @kovojs/example-commerce exec vitest
+    --run src/app.rendering.test.ts` passed, and `git diff --check` passed.
 
 ## Stylesheet API
 
