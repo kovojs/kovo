@@ -132,7 +132,7 @@ that still make the simplified Commerce example feel like a test fixture.
 | Broad generated graph equality and `kovo-check` facts from `examples/commerce/src/source-truth.test.ts` | `packages/conformance-fixtures/src/graph-fixtures.test.ts`, `packages/compiler/src/spec-coverage-map.test.ts`, and CLI kovo-check coverage | `corepack pnpm exec vitest run packages/compiler/src/spec-coverage-map.test.ts` | Static graph shape and diagnostic acceptance are framework proof surfaces; Commerce keeps one `cart/add` explain smoke showing the example is wired. |
 | Derived optimism commuting diagrams from `examples/commerce/src/derivation-commuting.test.ts` | `packages/conformance-fixtures/src/derivation-fixtures.test.ts`, `packages/drizzle/src/derive.test.ts`, and `packages/test/src/derivation-pglite.test.ts` | `corepack pnpm exec vitest run packages/conformance-fixtures/src/derivation-fixtures.test.ts packages/drizzle/src/derive.test.ts packages/test/src/derivation-pglite.test.ts` | `SPEC.md` §10.5 assigns algebra soundness to the deriver; Commerce only needs the explain summary `total=3 derived=3`. |
 | Query-delta internals from `examples/commerce/src/queries-delta.test.ts` | `packages/server/src/mutation-delta.test.ts` and `packages/runtime/src/apply-mutation-response-delta.test.ts` | `corepack pnpm exec vitest run packages/runtime/src/apply-mutation-response-delta.test.ts packages/server/src/mutation-delta.test.ts` | `SPEC.md` §9.1.1 delta selection, merge, and build-token fallback are protocol/runtime behavior, not Commerce scenario behavior. |
-| App-shell command matrix and Vite delegation in `examples/commerce/src/app-shell.test.ts` | `packages/server/src/vite-dev-middleware.test.ts`, `packages/server/src/node.test.ts`, and server app dispatch tests | Pending | `SPEC.md` §9.5 makes request-shell dispatch and dev middleware package behavior; Commerce should keep HTTP user-flow smokes only. |
+| App-shell command matrix and Vite delegation in `examples/commerce/src/app-shell.test.ts` | `packages/server/src/vite-dev-middleware.test.ts`, `packages/server/src/node.test.ts`, and server app dispatch tests | `corepack pnpm exec vitest run packages/server/src/vite-dev-middleware.test.ts packages/server/src/node.test.ts examples/commerce/src/app-shell.test.ts` | `SPEC.md` §9.5 makes request-shell dispatch and dev middleware package behavior; Commerce now keeps HTTP user-flow smokes only. |
 | Fragment header grammar and live-target internals in Commerce shell/add-to-cart tests | `packages/runtime/src/mutation-targets.test.ts`, `packages/runtime/src/fragment-targets.test.ts`, `packages/server/src/live-target-registry.test.ts`, and server mutation wire tests | Pending | `SPEC.md` §9.1 owns `Kovo-Targets` / `Kovo-Live-Targets`; app examples should assert visible cart, stock, order, and validation behavior. |
 | Expected vs unexpected fragment error-boundary proof using `renderFaults` | `packages/server/src/live-target-renderer.test.tsx`, `packages/server/src/component-render.test.tsx`, and server mutation response tests | Pending | `SPEC.md` §9.2 makes expected failure forms typed and unexpected render failures server/component behavior; Commerce request types should not carry test-only fault hooks. |
 
@@ -156,15 +156,18 @@ that still make the simplified Commerce example feel like a test fixture.
     package commands above prove the contract fixtures and real-PGlite commuting
     suite, while `examples/commerce/src/source-truth.test.ts` keeps the
     `OPTIMISTIC-SUMMARY total=3 derived=3` smoke.
-- [ ] Move app-shell middleware and command-matrix proof to server/app-shell tests.
+- [x] Move app-shell middleware and command-matrix proof to server/app-shell tests.
   - SPEC link: `SPEC.md` §9.5 defines the request shell and app entry behavior.
   - Remedy: package/server tests own Vite delegation, Node handler conversion,
     client module serving, and query/mutation endpoint wiring. Commerce keeps
     one HTTP smoke that proves `/cart`, login, and add-to-cart work in the
     example shell.
-  - Evidence to add: server/app-shell tests cover shared plugin behavior; the
-    Commerce test no longer reads `package.json` or `vite.config.ts` to enforce
-    command matrices.
+  - Evidence: `packages/server/src/vite-dev-middleware.test.ts` owns generated
+    app-shell dev plugin option loading and Vite middleware delegation;
+    `packages/server/src/node.test.ts` owns Node-hosted route, query, mutation,
+    and client-module dispatch; `examples/commerce/src/app-shell.test.ts` no
+    longer reads `package.json` or `vite.config.ts`. Verified with
+    `corepack pnpm exec vitest run packages/server/src/vite-dev-middleware.test.ts packages/server/src/node.test.ts examples/commerce/src/app-shell.test.ts`.
 - [x] Move wire-level delta and fragment internals to runtime/server tests.
   - SPEC link: `SPEC.md` §9.1 and §9.1.1 define fragment and query-delta wire.
   - Remedy: package tests assert `Kovo-Targets`, `Kovo-Live-Targets`, keyed
@@ -439,8 +442,8 @@ that still make the simplified Commerce example feel like a test fixture.
   `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
   `node scripts/api-surface-gate.mjs`, and `git diff --check`.
   - Evidence: latest verification below records all three commands passing for
-    this Track B slice; the plan remains open for pending app-shell and
-    error-boundary proof relocation.
+    this Track B slice; the plan remains open for pending error-boundary proof
+    relocation.
 
 Latest verification:
 
@@ -464,6 +467,8 @@ Latest verification:
   passed.
 - [x] `corepack pnpm exec vitest run packages/conformance-fixtures/src/derivation-fixtures.test.ts packages/drizzle/src/derive.test.ts packages/runtime/src/apply-mutation-response-delta.test.ts packages/server/src/mutation-delta.test.ts packages/test/src/derivation-pglite.test.ts`
   passed.
+- [x] `corepack pnpm exec vitest run packages/server/src/vite-dev-middleware.test.ts packages/server/src/node.test.ts examples/commerce/src/app-shell.test.ts`
+  passed after moving app-shell command-matrix proof into server tests.
 - [x] `git diff --check` passed.
 - [x] `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`
   passed.
