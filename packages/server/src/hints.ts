@@ -34,6 +34,16 @@ export interface StylesheetAsset {
   preload?: boolean;
 }
 
+export type StylesheetTheme = string | { readonly css: string };
+
+export interface StylesheetDeclarationOptions {
+  criticalCss?: string | readonly string[];
+  cspHash?: string;
+  href?: string;
+  preload?: boolean;
+  theme?: StylesheetTheme;
+}
+
 export interface StylesheetManifestEntry extends StylesheetAsset {
   fragmentTargets?: readonly string[];
   sourceFileName?: string;
@@ -75,6 +85,28 @@ export function stylesheetsForTargets(
   return dedupeStylesheets(
     manifest.filter((asset) => asset.fragmentTargets?.some((target) => wanted.has(target))),
   );
+}
+
+export function stylesheet(
+  source: string,
+  options?: StylesheetDeclarationOptions,
+): StylesheetAsset;
+export function stylesheet(options: StylesheetDeclarationOptions): StylesheetAsset;
+export function stylesheet(
+  sourceOrOptions: string | StylesheetDeclarationOptions,
+  maybeOptions: StylesheetDeclarationOptions = {},
+): StylesheetAsset {
+  const source = typeof sourceOrOptions === 'string' ? sourceOrOptions : undefined;
+  const options = typeof sourceOrOptions === 'string' ? maybeOptions : sourceOrOptions;
+  const criticalCss = resolveStylesheetCriticalCss(options);
+  const href = options.href ?? (source ? stylesheetHrefForSource(source) : '/assets/styles.css');
+
+  return {
+    ...(criticalCss ? { criticalCss } : {}),
+    ...(options.cspHash === undefined ? {} : { cspHash: options.cspHash }),
+    href,
+    ...(options.preload === undefined ? {} : { preload: options.preload }),
+  };
 }
 
 /**
@@ -188,6 +220,33 @@ function formatLinkHeaderTarget(href: string): string {
     /[<>,]/g,
     (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );
+}
+
+function stylesheetHrefForSource(source: string): string {
+  if (isExternalStylesheetSource(source) || source.startsWith('/')) return source;
+
+  const cleanSource = source.split(/[?#]/, 1)[0] ?? source;
+  const suffix = source.slice(cleanSource.length);
+  const fileName = cleanSource.split('/').filter(Boolean).at(-1);
+  return `/assets/${fileName || 'styles.css'}${suffix}`;
+}
+
+function isExternalStylesheetSource(source: string): boolean {
+  return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(source) || source.startsWith('//');
+}
+
+function resolveStylesheetCriticalCss(options: StylesheetDeclarationOptions): string | undefined {
+  const parts = [
+    stylesheetThemeCss(options.theme),
+    ...(Array.isArray(options.criticalCss) ? options.criticalCss : [options.criticalCss]),
+  ].filter((part): part is string => typeof part === 'string' && part.length > 0);
+
+  return parts.length > 0 ? parts.join('\n') : undefined;
+}
+
+function stylesheetThemeCss(theme: StylesheetTheme | undefined): string | undefined {
+  if (typeof theme === 'string') return theme;
+  return typeof theme?.css === 'string' ? theme.css : undefined;
 }
 
 function renderSpeculationRules(

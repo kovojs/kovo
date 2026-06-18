@@ -34,7 +34,7 @@ export type {
   DiagnosticDocumentOptions,
   DiagnosticDocumentSource,
 } from '../document-diagnostics.js';
-export { stylesheetsForTargets } from '../hints.js';
+export { stylesheet, stylesheetsForTargets } from '../hints.js';
 export type {
   I18nCatalog,
   PageHintOptions,
@@ -45,7 +45,9 @@ export type {
   RouteMetaSource,
   RoutePrefetch,
   StylesheetAsset,
+  StylesheetDeclarationOptions,
   StylesheetManifestEntry,
+  StylesheetTheme,
 } from '../hints.js';
 export { i18n, meta, metaFromQuery, t } from '../meta.js';
 export type { QueryScriptRenderOptions } from '../wire-html.js';

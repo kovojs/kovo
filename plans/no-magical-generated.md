@@ -129,9 +129,12 @@ internals, emit/check scripts, and narrowly named artifact tests.
     `plugins: process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app.tsx' })]`.
   - Evidence: Commerce, CRM, and StackOverflow configs keep
     `process.env.KOVO_DEMO_MULTITENANT ? [] : [...]` outside `kovo()`.
-- [ ] Keep styles out of Vite config.
+- [x] Keep styles out of Vite config.
   - Styles are app/route render metadata declared through `stylesheet(...)`;
     Vite materializes declared assets but does not own style semantics.
+  - Evidence: Commerce, CRM, and StackOverflow declare route stylesheets in
+    authored app modules with `stylesheet(...)`; focused example rendering tests
+    passed.
 - [x] Move repeated Vite dev server type aliases and plugin-loader wrappers into
       framework code or a shared examples helper.
   - Evidence: the repeated local dev-server interfaces and loader wrappers were
@@ -144,15 +147,20 @@ internals, emit/check scripts, and narrowly named artifact tests.
 
 ## Stylesheet API
 
-- [ ] Add `stylesheet()` as the authored declaration for local, external, and
+- [x] Add `stylesheet()` as the authored declaration for local, external, and
       theme-only styles.
   - Local authored CSS: `stylesheet('./styles.css')`.
   - Local authored CSS plus theme: `stylesheet('./styles.css', { theme })`.
   - Theme-only: `stylesheet({ theme })`.
   - External CSS: `stylesheet('https://cdn.example.com/reset.css')`.
-- [ ] Let local declarations derive their public URL.
+  - Evidence: `packages/server/src/hints.ts` exports `stylesheet()` and
+    `packages/server/src/hints.test.ts` covers local, local plus theme,
+    theme-only, and external declarations.
+- [x] Let local declarations derive their public URL.
   - `stylesheet('./styles.css')` should emit/link `/assets/styles.css` unless
     overridden with `href`.
+  - Evidence: `pnpm --filter @kovojs/server exec vitest --run src/hints.test.ts
+    src/api/app.test.ts`.
 - [ ] Make emitted stylesheet assets aggregate compiler-owned CSS.
   - The emitted asset should contain declared theme CSS, authored global CSS when
     present, generated `@kovojs/ui` CSS used by the app graph, and generated

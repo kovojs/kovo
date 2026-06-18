@@ -101,6 +101,8 @@ type RootKovoAppShellViteDevPluginOptions =
   import('@kovojs/server').KovoAppShellViteDevPluginOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootIsKovoApp = typeof import('@kovojs/server').isKovoApp;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootStylesheet = typeof import('@kovojs/server').stylesheet;
 
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedCreateApp =
@@ -386,6 +388,7 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
     expect(publicApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
     expect(publicApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
+    expect(publicApi.stylesheet).toBe(hintsApi.stylesheet);
     expect(packageRootApi.createKovoAppShellViteDevIntegration).toBe(
       viteDevApi.createKovoAppShellViteDevIntegration,
     );
@@ -530,6 +533,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageRootApi.layout).toBe(routeApi.layout);
     expect(packageRootApi.respond).toBe(responseApi.respond);
     expect(packageRootApi.route).toBe(routeApi.route);
+    expect(packageRootApi.stylesheet).toBe(hintsApi.stylesheet);
     expect(packageRootApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
     expect(packageClientModulesApi).not.toHaveProperty('renderVersionedClientModuleResponse');
     expect(packageClientModulesApi).not.toHaveProperty('versionedClientModuleHref');
