@@ -238,7 +238,7 @@ render-plan version skew checks.
     @kovojs/integration-tests exec playwright test specs/hmr-dev-client.spec.ts
     --project=chromium`; `corepack pnpm exec tsc -p tsconfig.json --noEmit
     --pretty false`; `git diff --check`.
-- [ ] **6. Dev refresh endpoints.**
+- [x] **6. Dev refresh endpoints.**
   - Add dev-only shell endpoints for current-route refresh and live-target
     refresh. They should be available only in Vite dev middleware, not production
     `createRequestHandler()`.
@@ -246,7 +246,7 @@ render-plan version skew checks.
     fragment wire code instead of adding a client render path.
   - Include old/new build tokens so the HMR client can reject stale patches and
     full reload.
-  - Partial evidence: `packages/server/src/vite-dev.ts` adds Vite-dev-only
+  - Evidence: `packages/server/src/vite-dev.ts` adds Vite-dev-only
     `/@kovo/hmr/refresh/route` and `/@kovo/hmr/refresh/live-targets` handlers.
     Route refresh replays the current document through `createRequestHandler()`;
     live-target refresh reuses `renderLiveTargetChunks()` and fragment wire.
@@ -255,7 +255,13 @@ render-plan version skew checks.
     `packages/server/src/vite-dev.test.ts` covers route document replay,
     live-target fragment refresh, explicit generated Node handler client
     injection, build-token headers, and absence from production
-    `createRequestHandler()`. Query-specific HMR refresh remains unproven.
+    `createRequestHandler()`. `tests/integration/specs/hmr-dev-client.spec.ts`
+    covers browser live-target refresh for a `componentLiveTargetRenderer()` that
+    reloads a declared query from serialized props, patches fresh server query
+    state into the DOM, and preserves focused user input. Verification:
+    `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts`;
+    `corepack pnpm --filter @kovojs/integration-tests exec playwright test
+    specs/hmr-dev-client.spec.ts --project=chromium`.
 - [ ] **7. Verification matrix.**
   - Unit test impact classification in the compiler package.
   - Unit test Vite websocket event emission with fake dev-server objects.
@@ -267,14 +273,16 @@ render-plan version skew checks.
   - Add a static export/build assertion that HMR modules and endpoints are absent
     outside dev.
   - Partial evidence: endpoint and transport coverage is current as listed under
-    items 5 and 6. `corepack pnpm --filter @kovojs/site run build` passes
+    items 5 and 6, including a browser query-backed live-target refresh through
+    `componentLiveTargetRenderer()`. `corepack pnpm --filter @kovojs/site run build` passes
     (with the pre-existing Vite websocket port warning), and `rg -n
     "@kovo/hmr|Kovo-HMR-Refresh" site/dist site/dist-css` finds no production
     HMR endpoint/client strings. `tests/integration/specs/hmr-dev-client.spec.ts`
     covers the browser dev client applying a server-rendered live-target fragment,
     sending current `Kovo-Live-Targets`/`Kovo-Targets` headers, preserving focused
-    input state, and avoiding full navigation. Source-edit, diagnostic, route-table,
-    and query-bound browser scenarios remain open.
+    input state, reloading declared query data from server state, and avoiding
+    full navigation. Source-edit, diagnostic, and route-table browser scenarios
+    remain open.
 
 ## First Milestone Slice
 
