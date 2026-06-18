@@ -85,6 +85,124 @@ function createTestShell({
   };
 }
 
+async function withEnhancedNavigationHarness(
+  installSource: (
+    importModule: () => Promise<Record<string, unknown>>,
+    globalRecord: Record<string, unknown>,
+  ) => void,
+  {
+    assert,
+    currentDocument,
+    documents,
+    fetch,
+    href = 'http://app.test/cart',
+    hrefs,
+    locationHref = 'http://app.test/products',
+  }: {
+    assert(args: {
+      assign: ReturnType<typeof vi.fn>;
+      dispatchEvent: ReturnType<typeof vi.fn>;
+      preventDefault: ReturnType<typeof vi.fn>;
+      pushState: ReturnType<typeof vi.fn>;
+    }): Promise<void> | void;
+    currentDocument: ReturnType<typeof createTestShell>;
+    documents: Array<ReturnType<typeof createTestShell>>;
+    fetch: ReturnType<typeof vi.fn>;
+    href?: string;
+    hrefs?: string[];
+    locationHref?: string;
+  },
+): Promise<void> {
+  const globalRecord = globalThis as unknown as Record<string, unknown>;
+  const originals = {
+    addEventListener: globalRecord.addEventListener,
+    CustomEvent: globalRecord.CustomEvent,
+    dispatchEvent: globalRecord.dispatchEvent,
+    document: globalRecord.document,
+    DOMParser: globalRecord.DOMParser,
+    fetch: globalRecord.fetch,
+    history: globalRecord.history,
+    importModule: globalRecord.__kovoInlineImport,
+    location: globalRecord.location,
+    scrollTo: globalRecord.scrollTo,
+    setTimeout: globalRecord.setTimeout,
+  };
+  const listeners = new Map<string, (event: unknown) => Promise<void>>();
+  const assign = vi.fn();
+  const dispatchEvent = vi.fn();
+  const preventDefault = vi.fn();
+  const pushState = vi.fn();
+  const url = new URL(locationHref);
+
+  try {
+    globalRecord.addEventListener = (type: string, listener: (event: unknown) => Promise<void>) => {
+      listeners.set(type, listener);
+    };
+    globalRecord.CustomEvent = class TestCustomEvent {
+      constructor(
+        readonly type: string,
+        readonly init?: unknown,
+      ) {}
+    };
+    globalRecord.dispatchEvent = dispatchEvent;
+    globalRecord.document = currentDocument;
+    globalRecord.DOMParser = class TestDOMParser {
+      parseFromString() {
+        return documents.shift();
+      }
+    };
+    globalRecord.fetch = fetch;
+    globalRecord.history = { pushState };
+    globalRecord.location = {
+      assign,
+      href: locationHref,
+      origin: url.origin,
+      pathname: url.pathname,
+      search: url.search,
+    };
+    globalRecord.scrollTo = vi.fn();
+    globalRecord.setTimeout = vi.fn();
+
+    installSource(async () => ({}), globalRecord);
+    for (const clickHref of hrefs ?? [href]) {
+      await listeners.get('click')?.({
+        button: 0,
+        defaultPrevented: false,
+        preventDefault,
+        target: {
+          closest(selector: string) {
+            if (selector === 'a[href]') {
+              return { hasAttribute: () => false, href: clickHref, target: '' };
+            }
+            return null;
+          },
+        },
+        type: 'click',
+      });
+    }
+
+    await assert({ assign, dispatchEvent, preventDefault, pushState });
+  } finally {
+    Object.assign(globalRecord, {
+      addEventListener: originals.addEventListener,
+      CustomEvent: originals.CustomEvent,
+      dispatchEvent: originals.dispatchEvent,
+      document: originals.document,
+      DOMParser: originals.DOMParser,
+      fetch: originals.fetch,
+      history: originals.history,
+      location: originals.location,
+      scrollTo: originals.scrollTo,
+      setTimeout: originals.setTimeout,
+    });
+    if (originals.importModule === undefined) {
+      delete globalRecord.__kovoInlineImport;
+    } else {
+      globalRecord.__kovoInlineImport = originals.importModule;
+    }
+  }
+}
+
 describe('inline loader enhanced navigation fallback', () => {
   it.each(inlineSourceInstallCases)(
     'leaves ineligible anchor clicks native through %s',
@@ -384,6 +502,212 @@ describe('inline loader enhanced navigation fallback', () => {
           globalRecord.__kovoInlineImport = originals.importModule;
         }
       }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'uses final same-origin HTML redirect documents through %s',
+    async (_name, installSource) => {
+      const replaceWith = vi.fn();
+      const currentLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Admin',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Admin',
+        },
+        '<main><section>Admin</section></main>',
+      );
+      const targetLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Auth',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Auth',
+        },
+        '<main><section>Login required</section></main>',
+      );
+      const targetDocument = createTestShell({ segments: [targetLayout] });
+      let currentDocument: ReturnType<typeof createTestShell>;
+      currentDocument = createTestShell({
+        replaceWith: (nextBody) => {
+          replaceWith(nextBody);
+          currentDocument.body = nextBody as typeof currentDocument.body;
+        },
+        segments: [currentLayout],
+      });
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument,
+        documents: [targetDocument],
+        fetch: vi.fn(async () => ({
+          headers: { get: () => 'text/html' },
+          text: async () => '<!doctype html><html></html>',
+          url: 'http://app.test/login?next=%2Fadmin',
+        })),
+        href: 'http://app.test/admin',
+        locationHref: 'http://app.test/products',
+        async assert({ preventDefault, pushState }) {
+          await vi.waitFor(() => {
+            expect(replaceWith).toHaveBeenCalledWith(targetDocument.body);
+          });
+          expect(preventDefault).toHaveBeenCalledTimes(1);
+          expect(pushState).toHaveBeenCalledWith(
+            {},
+            '',
+            'http://app.test/login?next=%2Fadmin',
+          );
+        },
+      });
+    },
+  );
+
+  it.each(
+    inlineSourceInstallCases.flatMap(([name, installSource]) =>
+      [403, 404, 500].map(
+        (status) => [status, name, installSource] as const,
+      ),
+    ),
+  )(
+    'morphs server-rendered %i HTML shells through %s',
+    async (status, _name, installSource) => {
+      const replaceWith = vi.fn();
+      const currentLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Admin',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Admin',
+        },
+        '<main><section>Admin</section></main>',
+      );
+      const targetLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Boundary',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': `layout:Boundary:${status}`,
+        },
+        `<main><section>${status}</section></main>`,
+      );
+      const targetDocument = createTestShell({ segments: [targetLayout] });
+      let currentDocument: ReturnType<typeof createTestShell>;
+      currentDocument = createTestShell({
+        replaceWith: (nextBody) => {
+          replaceWith(nextBody);
+          currentDocument.body = nextBody as typeof currentDocument.body;
+        },
+        segments: [currentLayout],
+      });
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument,
+        documents: [targetDocument],
+        fetch: vi.fn(async () => ({
+          headers: { get: () => 'text/html' },
+          status,
+          text: async () => '<!doctype html><html></html>',
+          url: 'http://app.test/admin',
+        })),
+        href: 'http://app.test/admin',
+        async assert({ preventDefault, pushState }) {
+          await vi.waitFor(() => {
+            expect(replaceWith).toHaveBeenCalledWith(targetDocument.body);
+          });
+          expect(preventDefault).toHaveBeenCalledTimes(1);
+          expect(pushState).toHaveBeenCalledWith({}, '', 'http://app.test/admin');
+        },
+      });
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'ignores stale target documents when a newer navigation wins through %s',
+    async (_name, installSource) => {
+      const replaceWith = vi.fn();
+      const currentLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Shop',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Shop',
+        },
+        '<main><section>Start</section></main>',
+      );
+      const fastLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Fast',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Fast',
+        },
+        '<main><section>Fast</section></main>',
+      );
+      const slowLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Slow',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Slow',
+        },
+        '<main><section>Slow</section></main>',
+      );
+      const fastDocument = createTestShell({ segments: [fastLayout] });
+      const slowDocument = createTestShell({ segments: [slowLayout] });
+      let currentDocument: ReturnType<typeof createTestShell>;
+      currentDocument = createTestShell({
+        replaceWith: (nextBody) => {
+          replaceWith(nextBody);
+          currentDocument.body = nextBody as typeof currentDocument.body;
+        },
+        segments: [currentLayout],
+      });
+      let resolveSlow: ((value: unknown) => void) | undefined;
+      let resolveFast: ((value: unknown) => void) | undefined;
+      let fetchCount = 0;
+      const response = (url: string) => ({
+        headers: { get: () => 'text/html' },
+        text: async () => '<!doctype html><html></html>',
+        url,
+      });
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument,
+        documents: [fastDocument, slowDocument],
+        fetch: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              fetchCount += 1;
+              if (fetchCount === 1) resolveSlow = resolve;
+              if (fetchCount === 2) resolveFast = resolve;
+            }),
+        ),
+        hrefs: ['http://app.test/slow', 'http://app.test/fast'],
+        async assert({ preventDefault, pushState }) {
+          expect(fetchCount).toBe(2);
+          expect(preventDefault).toHaveBeenCalledTimes(2);
+
+          resolveFast?.(response('http://app.test/fast'));
+          await vi.waitFor(() => {
+            expect(replaceWith).toHaveBeenCalledWith(fastDocument.body);
+          });
+          expect(pushState).toHaveBeenCalledWith({}, '', 'http://app.test/fast');
+
+          resolveSlow?.(response('http://app.test/slow'));
+          await Promise.resolve();
+
+          expect(replaceWith).toHaveBeenCalledTimes(1);
+          expect(replaceWith).not.toHaveBeenCalledWith(slowDocument.body);
+          expect(pushState).toHaveBeenCalledTimes(1);
+        },
+      });
     },
   );
 

@@ -75,16 +75,17 @@ through client navigation.
     equivalent and the route leaf changes; `packages/runtime/src/inline-loader-navigation.test.ts`
     proves divergent layout chrome replaces the current body from the parsed
     target document across all inline installer artifacts.
-- [ ] **The server remains authoritative for target route and guard results.**
+- [x] **The server remains authoritative for target route and guard results.**
   - Any client-supplied current chain is an optimization hint only. The server or
     full target document determines the destination layout chain and rendered
     output; the client never uses its current chain to skip guards or layouts.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves the loader uses the fetched target document for the destination
     page/layout output; `packages/runtime/src/inline-loader-navigation.test.ts`
     proves target-document layout divergence replaces the current body across
-    all inline installer artifacts. Remaining gap: same-origin redirects and
-    guarded 403/404/500 shells.
+    all inline installer artifacts and proves final same-origin HTML redirect
+    documents plus server-rendered 403/404/500 HTML shells drive the final
+    document and URL.
 - [x] **Deploy skew is loud and recoverable.**
   - Reuse the §9.1.1 render-plan version token. Token mismatch discards the
     enhanced path and performs a full GET.
@@ -109,12 +110,15 @@ through client navigation.
     It also proves non-HTML responses fall back through `location.assign`;
     `packages/runtime/src/inline-loader-navigation.browser.test.ts` proves the
     eligible same-origin HTML path is intercepted.
-- [ ] **Redirects and non-200 route outcomes are server-owned.**
+- [x] **Redirects and non-200 route outcomes are server-owned.**
   - Enhanced navigation may follow same-origin HTML redirects only when the final
     response passes the same eligibility checks. 403/404/500 shells are target
     documents and may be morphed only when their segment/document stamps are
     compatible; otherwise full GET.
-  - Evidence: pending redirect, 403, 404, and 500 fixtures.
+  - Evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader-navigation.test.ts`
+    passed with 36 tests and proves final same-origin HTML redirects and
+    server-rendered 403/404/500 HTML shells are morphed from the fetched target
+    document across all inline installer artifacts.
 - [x] **Head and document shell updates are part of navigation.**
   - The full-document MVP must update or validate `<title>`, meta, html/body
     attrs, stylesheet/modulepreload hints, speculation rules, and route-level
@@ -171,7 +175,9 @@ through client navigation.
     the existing §8/§10.4 pagehide/keepalive semantics. Pending optimistic state
     must be reconciled from server truth, discarded on full GET, or explicitly
     diagnosed; it must not silently survive into an incompatible document.
-  - Evidence: pending stale-navigation and pending-mutation fixtures.
+  - Evidence so far: `pnpm exec vitest --run packages/runtime/src/inline-loader-navigation.test.ts`
+    proves stale target documents cannot override a newer navigation across all
+    inline installer artifacts. Remaining gap: pending mutation reconciliation.
 - [ ] **bfcache hygiene is preserved.**
   - No `unload` handlers, no global session heap, and no listeners that block the
     existing bfcache acceptance gates.
@@ -226,8 +232,10 @@ through client navigation.
     inline loader registers `popstate`; `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves successful enhanced navigation focuses the preserved layout root,
     sets manual scroll restoration, scrolls to top, and emits the full-document
-    `kovo:navigate` announcement. Remaining gap: dedicated back/forward, hash
-    restoration, stale response, and bfcache evidence.
+    `kovo:navigate` announcement; `packages/runtime/src/inline-loader-navigation.test.ts`
+    proves stale response suppression across all inline installer artifacts.
+    Remaining gap: dedicated back/forward, hash restoration, pending mutation,
+    and bfcache evidence.
 - [ ] **4. Mutation/live composition after enhanced navigation.**
   - Prove `Kovo-Targets`/`Kovo-Live-Targets` snapshots include preserved layout
     targets after navigation, inserted leaf targets are discoverable, and stale
@@ -284,8 +292,9 @@ through client navigation.
 - [ ] **Version and guard safety:** build-token mismatch, auth redirect, 403/404,
       and morph failure fall back to full GET or morph the correct server shell.
   - Evidence so far: `packages/runtime/src/inline-loader-navigation.test.ts`
-    proves build-token mismatch and non-HTML fallback across inline artifacts.
-    Remaining gap: auth redirect, 403/404, and morph-failure fixtures.
+    proves build-token mismatch, non-HTML fallback, final same-origin HTML
+    redirects, and 403/404/500 shell morphing across inline artifacts.
+    Remaining gap: morph-failure fallback fixture.
 - [ ] **Mutation/live after navigation:** preserved and inserted targets refresh
       correctly with no stale-target or double-morph races.
   - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
