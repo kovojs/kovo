@@ -162,13 +162,10 @@ async function assertFallbackNavigation(page, click, expectedPath, label) {
   await click();
   await page.waitForFunction((path) => location.pathname === path, expectedPath);
   await check(label, () =>
-    page.evaluate(
-      (path) => {
-        const events = globalThis.__kovoNavigationSmokeEvents ?? [];
-        return location.pathname === path && events.length === 0;
-      },
-      expectedPath,
-    ),
+    page.evaluate((path) => {
+      const events = globalThis.__kovoNavigationSmokeEvents ?? [];
+      return location.pathname === path && events.length === 0;
+    }, expectedPath),
   );
 }
 

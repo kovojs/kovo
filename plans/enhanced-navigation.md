@@ -392,7 +392,7 @@ packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63359`
     and body render-equivalence to the fetched target document; `packages/runtime/src/inline-loader-navigation.test.ts`
     proves build-token, non-HTML, duplicate-id morph, and missing navigation
     segment fallback across all inline installer artifacts. `pnpm --filter
-    @kovojs/site run smoke:navigation` passed `site-navigation-smoke/v1 OK`
+@kovojs/site run smoke:navigation` passed `site-navigation-smoke/v1 OK`
     after `pnpm --filter @kovojs/site run build` and proves exported-site
     same-origin non-HTML fallback to full navigation.
 - [x] **Segment persistence:** unchanged layout island/media state survives;
