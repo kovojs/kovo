@@ -563,6 +563,66 @@ describe('compiler conformance corpus', () => {
       ]
     `);
   });
+
+  it('checks committed Commerce component IR freshness through the package §5.2 gate', () => {
+    const facts = commerceComponentNames.map((name) => {
+      const authoredPath = `components/${name}.tsx`;
+      const generatedPath = `generated/${name}.tsx`;
+      const fileName = `examples/commerce/src/${authoredPath}`;
+      const result = commerceComponentFixture(name);
+      assertFixpoint(result);
+      assertRenderEquivalence(result);
+
+      const lowered = result.loweredSource ?? result.renderEquivalenceChecks?.[0]?.expected ?? '';
+      const generatedSource = readFileSync(
+        new URL(`../../../examples/commerce/src/${generatedPath}`, import.meta.url),
+        'utf8',
+      );
+      const expectedGeneratedSource = [
+        `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.`,
+        lowered,
+      ].join('\n');
+
+      return {
+        diagnostics: result.diagnostics.map((diagnostic) => diagnostic.code),
+        fileName,
+        fixpointAsserted: true,
+        generatedMatchesCompilerOutput: generatedSource === expectedGeneratedSource,
+        loweredRenderSourcePresent: lowered.length > 0,
+        renderEquivalenceAsserted: true,
+      };
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [],
+        fileName: 'examples/commerce/src/components/cart-badge.tsx',
+        fixpointAsserted: true,
+        generatedMatchesCompilerOutput: true,
+        loweredRenderSourcePresent: true,
+        renderEquivalenceAsserted: true,
+      },
+      {
+        diagnostics: [],
+        fileName: 'examples/commerce/src/components/order-history.tsx',
+        fixpointAsserted: true,
+        generatedMatchesCompilerOutput: true,
+        loweredRenderSourcePresent: true,
+        renderEquivalenceAsserted: true,
+      },
+      {
+        diagnostics: [],
+        fileName: 'examples/commerce/src/components/product-grid.tsx',
+        fixpointAsserted: true,
+        // ProductGrid carries generated Commerce live-target adapter code beyond
+        // the compiler-lowered component body so app files do not import
+        // generated registry wiring.
+        generatedMatchesCompilerOutput: false,
+        loweredRenderSourcePresent: true,
+        renderEquivalenceAsserted: true,
+      },
+    ]);
+  });
 });
 
 function referenceShellFixture(): CompileResult {

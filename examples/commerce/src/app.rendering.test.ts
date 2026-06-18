@@ -4,8 +4,6 @@ import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from '@kovojs/compiler';
-import { generatedComponentCommittedIrFacts } from '@kovojs/conformance-fixtures/generated-module-fixtures';
 import { htmlDocumentFacts, htmlElementFacts } from '@kovojs/test/html-fragment';
 
 import {
@@ -106,75 +104,4 @@ describe('commerce example', () => {
     expect(css).toContain('.border-slate-200');
   });
 
-  it('compiles TSX-authored components to committed IR through the fixpoint gate', () => {
-    // SPEC.md sections 4.8 and 5.2: authored sugar carries no lowered stamps,
-    // while committed generated IR must match the compiler output for the
-    // source component and pass the compiler fixpoint gate.
-    expect(
-      generatedComponentCommittedIrFacts({
-        assertFixpoint,
-        assertRenderEquivalence,
-        compileComponentModule: (input) =>
-          compileComponentModule({
-            ...input,
-            registryFacts: { mutations: { 'cart/add': 'typeof addToCart' } },
-          }),
-        components: ['cart-badge', 'order-history', 'product-grid'],
-        projectFilePrefix: 'examples/commerce/src',
-        sourceRootUrl: new URL('./', import.meta.url),
-      }),
-    ).toEqual([
-      {
-        authoredLoweredStampAttributes: [],
-        authoredPath: 'components/cart-badge.tsx',
-        diagnostics: [],
-        fixpointAsserted: true,
-        generatedHasLoweredIrMarker: true,
-        generatedMatchesCompilerOutput: true,
-        generatedPath: 'generated/cart-badge.tsx',
-        loweredRenderSourcePresent: true,
-        name: 'cart-badge',
-        provenance: {
-          fileName: 'examples/commerce/src/components/cart-badge.tsx',
-          spec: 'SPEC.md section 5.2',
-        },
-        renderEquivalenceAsserted: true,
-      },
-      {
-        authoredLoweredStampAttributes: [],
-        authoredPath: 'components/order-history.tsx',
-        diagnostics: [],
-        fixpointAsserted: true,
-        generatedHasLoweredIrMarker: true,
-        generatedMatchesCompilerOutput: true,
-        generatedPath: 'generated/order-history.tsx',
-        loweredRenderSourcePresent: true,
-        name: 'order-history',
-        provenance: {
-          fileName: 'examples/commerce/src/components/order-history.tsx',
-          spec: 'SPEC.md section 5.2',
-        },
-        renderEquivalenceAsserted: true,
-      },
-      {
-        authoredLoweredStampAttributes: [],
-        authoredPath: 'components/product-grid.tsx',
-        diagnostics: [],
-        fixpointAsserted: true,
-        generatedHasLoweredIrMarker: true,
-        // ProductGrid carries generated Commerce live-target adapter code beyond
-        // the compiler-lowered component body so app files do not import
-        // generated registry wiring.
-        generatedMatchesCompilerOutput: false,
-        generatedPath: 'generated/product-grid.tsx',
-        loweredRenderSourcePresent: true,
-        name: 'product-grid',
-        provenance: {
-          fileName: 'examples/commerce/src/components/product-grid.tsx',
-          spec: 'SPEC.md section 5.2',
-        },
-        renderEquivalenceAsserted: true,
-      },
-    ]);
-  });
 });

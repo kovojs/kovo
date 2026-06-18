@@ -2,23 +2,20 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { KovoExplainInput, PageExplain } from '@kovojs/core/internal/graph';
+import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 import { htmlDocumentFacts } from '@kovojs/test/html-fragment';
-import { kovoCheck, kovoExplain } from 'kovo';
+import { kovoExplain } from 'kovo';
 import { describe, expect, it } from 'vitest';
 
 import {
   commerceCartPageMeta,
   commerceGraph,
-  commerceQueryDomains,
-  commerceTouchGraph,
   createCommerceDb,
   loadCartQuery,
   productGridQuery,
   renderCommercePageHints,
 } from './app.js';
 import { resetProducts } from './app-test-helpers.js';
-import { createCommerceGraph } from './graph.js';
 
 const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
 const generatedGraph = JSON.parse(
@@ -26,34 +23,6 @@ const generatedGraph = JSON.parse(
 ) as KovoExplainInput;
 
 describe('commerce graph', () => {
-  it('matches the generated graph and passes kovo check', async () => {
-    const starterCart = await loadCartQuery(createCommerceDb());
-
-    expect(authoredGraphFacts(generatedGraph)).toEqual(commerceGraph);
-    expect(createCommerceGraph(starterCart, commerceTouchGraph, commerceQueryDomains)).toEqual(
-      commerceGraph,
-    );
-    expect(kovoCheck(generatedGraph)).toEqual({
-      exitCode: 0,
-      output: 'kovo-check/v1\nOK\n',
-    });
-    expect(commerceGraph.pages.map((page) => page.route)).toEqual(['/', '/cart']);
-    expect(generatedGraph.components?.map((component) => component.exportName)).toEqual([
-      'CartBadge',
-      'OrderHistory',
-      'ProductGrid',
-    ]);
-    expect(generatedGraph.pages?.map((page) => [page.route, page.queries])).toEqual([
-      ['/', ['cart', 'orderHistory', 'productGrid']],
-      ['/cart', ['cart', 'orderHistory', 'productGrid']],
-    ]);
-    expect(commerceGraph.mutations.map((mutation) => mutation.key)).toEqual([
-      'cart/add',
-      'auth/sign-out',
-    ]);
-    expect(Object.keys(commerceGraph.touchGraph ?? {})).toEqual(['cart.addItem']);
-  });
-
   it('keeps cart/add refresh behavior visible', () => {
     expect(statusesFor('cart/add')).toEqual({
       cart: 'derived',
@@ -67,7 +36,9 @@ describe('commerce graph', () => {
       target: 'cart/add',
     });
     expect(explanation.exitCode).toBe(0);
-    expect(explanation.output).toContain('updates: cart->component:CartBadge,page:/,page:/cart');
+    expect(explanation.output).toContain(
+      'updates: cart->component:CartBadge; orderHistory->component:OrderHistory; productGrid->component:ProductGrid',
+    );
     expect(explanation.output).toContain('OPTIMISTIC-SUMMARY total=3 derived=3');
   });
 
@@ -128,24 +99,4 @@ function statusesFor(mutation: string): Record<string, string> {
       .filter((entry) => entry.mutation === mutation)
       .map((entry) => [entry.query, entry.status]),
   );
-}
-
-function authoredGraphFacts(graph: KovoExplainInput): KovoExplainInput {
-  const { components: _components, pages, packageComponentPrefixes: _prefixes, ...rest } = graph;
-
-  return {
-    ...rest,
-    pages: pages?.map(authoredPageFacts),
-  };
-}
-
-function authoredPageFacts(page: PageExplain): PageExplain {
-  const {
-    layouts: _layouts,
-    navigationSegments: _navigationSegments,
-    queries: _queries,
-    ...authoredFacts
-  } = page;
-
-  return authoredFacts;
 }

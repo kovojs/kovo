@@ -215,7 +215,7 @@ export const compilerSpecCoverageMap = [
     referenceApp: [
       {
         file: 'examples/commerce/src/source-truth.test.ts',
-        testName: 'ships graph facts for kovo check and explain acceptance',
+        testName: 'keeps cart/add refresh behavior visible',
       },
     ],
   },
@@ -264,8 +264,8 @@ export const compilerSpecCoverageMap = [
     ],
     referenceApp: [
       {
-        file: 'examples/commerce/src/app.rendering.test.ts',
-        testName: 'compiles TSX-authored components to committed IR through the fixpoint gate',
+        file: 'packages/compiler/src/compiler-conformance.test.ts',
+        testName: 'checks committed Commerce component IR freshness through the package §5.2 gate',
       },
     ],
   },
@@ -399,8 +399,7 @@ export const compilerSpecCoverageMap = [
     referenceApp: [
       {
         file: 'examples/commerce/src/source-truth.test.ts',
-        testName:
-          'accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire',
+        testName: 'keeps cart/add refresh behavior visible',
       },
       {
         file: 'examples/reference/src/app.test.ts',

@@ -242,7 +242,7 @@ describe('compiler SPEC coverage map', () => {
             },
           ],
           "referenceApp": [
-            "examples/commerce/src/app.rendering.test.ts",
+            "packages/compiler/src/compiler-conformance.test.ts",
           ],
         },
         {
