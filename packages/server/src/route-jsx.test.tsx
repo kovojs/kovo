@@ -206,6 +206,40 @@ describe('route JSX pages', () => {
     });
   });
 
+  it('stamps compiler-derived navigation metadata from page functions when route WeakMap metadata is absent', async () => {
+    const productRoute = {
+      page: defineCompiledRoutePage(
+        {
+          components: [
+            {
+              localName: 'ProductGrid',
+              props: [],
+              propsExpression: '{}',
+              serializedPropsExpression: 'JSON.stringify({})',
+            },
+          ],
+          fileName: 'src/generated/app.kovo-route.tsx',
+          navigationSegments: [
+            {
+              components: ['ProductGrid'],
+              id: 'page:/products',
+              kind: 'page',
+              localName: 'page',
+            },
+          ],
+          route: '/products',
+        },
+        () => <main>Products</main>,
+      ),
+      path: '/products',
+    };
+
+    await expect(renderRoutePageResponse(productRoute as any, {}, {})).resolves.toMatchObject({
+      body: '<main kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page" kovo-nav-components="ProductGrid">Products</main>',
+      status: 200,
+    });
+  });
+
   it('wraps route JSX with nested layouts and loads layout queries from the request', async () => {
     const viewer = domain('viewer');
     const viewerQuery = query('viewer', {

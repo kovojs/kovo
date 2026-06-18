@@ -133,10 +133,10 @@ through client navigation.
     and `html[data-theme]` attributes, plus pending navigation responses that
     resolve after the user changes theme, when target full-document shell state
     would otherwise replace the current theme.
-    `node site/scripts/smoke.mjs` passed
-    `site-smoke/v1 OK` after `pnpm --filter @kovojs/site run build` and proves
-    the docs site's theme choice survives enhanced navigation from docs pages
-    through the API reference flow.
+    `pnpm --filter @kovojs/site run smoke:navigation` passed
+    `site-navigation-smoke/v1 OK` after `pnpm --filter @kovojs/site run build`
+    and proves explicit dark/light docs theme choices survive actual enhanced
+    navigation in the exported site, including `html[data-theme]`.
 
 ## Segment Identity And Morph Contract
 
@@ -152,7 +152,10 @@ through client navigation.
     `packages/compiler/src/route-pages.test.ts` prove `KV235` rejection for
     app-authored `kovo-nav-*`; `packages/cli/src/index.kovo-explain.test.ts`
     proves `kovo explain page --layouts` lists navigation segment ids and
-    metadata.
+    metadata. Latest: `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx`
+    passed with 13 tests and proves render-time stamping also falls back to
+    compiler-attached `page.kovoRoutePage` metadata when the route declaration's
+    WeakMap metadata was created by another server module instance.
 - [x] **Segment preservation is based on target-document equivalence.**
   - The runtime compares the current and target layout chains. Shared unchanged
     prefixes can persist; divergent or changed suffixes morph from the target
@@ -162,9 +165,11 @@ through client navigation.
     covers divergent layout chrome body replacement from the parsed target
     document across all inline installer artifacts. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63373`
-    passed and proves full-body layout replacement keeps `document.body`
-    available in real browsers.
+    packages/runtime/src/inline-loader-navigation.browser.test.ts` passed with
+    63 browser tests; `pnpm --filter @kovojs/site run smoke:navigation` passed
+    after the site build and proves exported docs/reference/API pages expose
+    `kovo-nav-segment` stamps, fire `kovo:navigate`, and preserve the docs
+    header DOM identity across enhanced docs/API clicks.
 - [x] **Island lifecycle follows the existing morph rules.**
   - Islands inside preserved segments keep DOM identity and client state. Islands
     removed by a morphed segment have `ctx.signal` aborted. Islands inserted by a
@@ -206,8 +211,8 @@ through client navigation.
     encoded-id anchors, and named anchors into view, and leaves same-document
     hash anchors to native browser navigation. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
-    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
-    passed with 60 browser tests and proves target-document API hashes scroll
+    packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    passed with 63 browser tests and proves target-document API hashes scroll
     after morphing, preserve request fragments when real `fetch()` response URLs
     omit hashes, offset below sticky document chrome, update `location.href`, and
     restore saved scroll/hash URL state through browser `popstate`. It also
@@ -215,10 +220,11 @@ through client navigation.
     saved scroll and land on the requested symbol.
     `pnpm --filter @kovojs/site run smoke:navigation` passed
     `site-navigation-smoke/v1 OK` after `pnpm --filter @kovojs/site run build`
-    and proves dark/light docs theme choices, same-page API symbol-rail hashes,
-    cross-page enhanced API symbol hashes, and fresh API symbol clicks after
-    leaving a previously visited symbol page land below the sticky docs header in
-    the exported site.
+    and proves actual enhanced docs/API clicks (`kovo:navigate` plus preserved
+    header identity), dark/light docs theme choices, same-page API symbol-rail
+    hashes, cross-page enhanced API symbol hashes, fresh API symbol clicks after
+    leaving a previously visited symbol page, and back/forward restoration all
+    land below the sticky docs header in the exported site.
     `pnpm exec vitest --run packages/runtime/src/inline-loader-navigation.test.ts`
     passed with 52 tests and proves `popstate` restores saved scroll without
     pushing another history entry while fresh clicks ignore saved scroll across

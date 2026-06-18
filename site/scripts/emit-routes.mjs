@@ -159,7 +159,7 @@ import {
 
 import { buildSiteRouteData, type SiteRoutePage } from '../app-data.js';
 import { clientHrefs, siteClientModules } from '../client/modules.js';
-import { DocsRoutePage } from '../components/docs-layout.js';
+import { DocsRouteLayoutShell, DocsRoutePage } from '../components/docs-layout.js';
 import { LandingRoutePage } from '../components/landing.js';
 import { siteDocumentTemplate } from '../document-template.js';
 import { siteStylesheets } from '../route-kit.js';
@@ -174,6 +174,12 @@ function SiteRouteLayoutShell({ children }: { children?: unknown }): string {
 
 const SiteRouteLayout = layout({
   render: (_queries, _state, { children }) => <SiteRouteLayoutShell>{children}</SiteRouteLayoutShell>,
+});
+
+const DocsRouteLayout = layout({
+  render: (_queries, _state, { children }) => (
+    <DocsRouteLayoutShell clients={clientHrefs}>{children}</DocsRouteLayoutShell>
+  ),
 });
 
 function pageAt(index: number, routePath: string): SiteRoutePage {
@@ -216,12 +222,12 @@ export default siteStaticExportApp;
 
 function renderDocsRouteEntry(routePath, index) {
   return `  route(${JSON.stringify(routePath)}, {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page${index}.meta,
     ...(page${index}.modulepreloads ? { modulepreloads: page${index}.modulepreloads } : {}),
     stylesheets: siteStylesheets,
     page() {
-      return <DocsRoutePage clients={clientHrefs} page={page${index}.body} />;
+      return <DocsRoutePage page={page${index}.body} />;
     },
   }) as SiteRoute,`;
 }

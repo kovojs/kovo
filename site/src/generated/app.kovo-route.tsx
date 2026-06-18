@@ -14,7 +14,7 @@ import {
 
 import { buildSiteRouteData, type SiteRoutePage } from '../app-data.js';
 import { clientHrefs, siteClientModules } from '../client/modules.js';
-import { DocsRoutePage } from '../components/docs-layout.js';
+import { DocsRouteLayoutShell, DocsRoutePage } from '../components/docs-layout.js';
 import { LandingRoutePage } from '../components/landing.js';
 import { siteDocumentTemplate } from '../document-template.js';
 import { siteStylesheets } from '../route-kit.js';
@@ -29,6 +29,12 @@ function SiteRouteLayoutShell({ children }: { children?: unknown }): string {
 
 const SiteRouteLayout = layout({
   render: (_queries, _state, { children }) => <SiteRouteLayoutShell>{children}</SiteRouteLayoutShell>,
+});
+
+const DocsRouteLayout = layout({
+  render: (_queries, _state, { children }) => (
+    <DocsRouteLayoutShell clients={clientHrefs}>{children}</DocsRouteLayoutShell>
+  ),
 });
 
 function pageAt(index: number, routePath: string): SiteRoutePage {
@@ -145,813 +151,813 @@ const routes: SiteRoute[] = [
     }),
   }) as SiteRoute,
   route("/docs", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page0.meta,
     ...(page0.modulepreloads ? { modulepreloads: page0.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page0.body","name":"page","propertyAccesses":["page0.body"]}],"propsExpression":"{ clients: clientHrefs, page: page0.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page0.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs","kind":"page","localName":"page"}],"route":"/docs"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page0.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page0.body","name":"page","propertyAccesses":["page0.body"]}],"propsExpression":"{ page: page0.body }","serializedPropsExpression":"JSON.stringify({ page: page0.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs","kind":"page","localName":"page"}],"route":"/docs"}, function page() {
+      return <DocsRoutePage page={page0.body} />;
     }),
   }) as SiteRoute,
   route("/docs/why-kovo", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page1.meta,
     ...(page1.modulepreloads ? { modulepreloads: page1.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page1.body","name":"page","propertyAccesses":["page1.body"]}],"propsExpression":"{ clients: clientHrefs, page: page1.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page1.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/why-kovo","kind":"page","localName":"page"}],"route":"/docs/why-kovo"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page1.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page1.body","name":"page","propertyAccesses":["page1.body"]}],"propsExpression":"{ page: page1.body }","serializedPropsExpression":"JSON.stringify({ page: page1.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/why-kovo","kind":"page","localName":"page"}],"route":"/docs/why-kovo"}, function page() {
+      return <DocsRoutePage page={page1.body} />;
     }),
   }) as SiteRoute,
   route("/docs/quickstart", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page2.meta,
     ...(page2.modulepreloads ? { modulepreloads: page2.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page2.body","name":"page","propertyAccesses":["page2.body"]}],"propsExpression":"{ clients: clientHrefs, page: page2.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page2.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/quickstart","kind":"page","localName":"page"}],"route":"/docs/quickstart"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page2.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page2.body","name":"page","propertyAccesses":["page2.body"]}],"propsExpression":"{ page: page2.body }","serializedPropsExpression":"JSON.stringify({ page: page2.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/quickstart","kind":"page","localName":"page"}],"route":"/docs/quickstart"}, function page() {
+      return <DocsRoutePage page={page2.body} />;
     }),
   }) as SiteRoute,
   route("/docs/mental-model", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page3.meta,
     ...(page3.modulepreloads ? { modulepreloads: page3.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page3.body","name":"page","propertyAccesses":["page3.body"]}],"propsExpression":"{ clients: clientHrefs, page: page3.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page3.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/mental-model","kind":"page","localName":"page"}],"route":"/docs/mental-model"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page3.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page3.body","name":"page","propertyAccesses":["page3.body"]}],"propsExpression":"{ page: page3.body }","serializedPropsExpression":"JSON.stringify({ page: page3.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/mental-model","kind":"page","localName":"page"}],"route":"/docs/mental-model"}, function page() {
+      return <DocsRoutePage page={page3.body} />;
     }),
   }) as SiteRoute,
   route("/docs/installation", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page4.meta,
     ...(page4.modulepreloads ? { modulepreloads: page4.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page4.body","name":"page","propertyAccesses":["page4.body"]}],"propsExpression":"{ clients: clientHrefs, page: page4.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page4.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/installation","kind":"page","localName":"page"}],"route":"/docs/installation"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page4.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page4.body","name":"page","propertyAccesses":["page4.body"]}],"propsExpression":"{ page: page4.body }","serializedPropsExpression":"JSON.stringify({ page: page4.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/installation","kind":"page","localName":"page"}],"route":"/docs/installation"}, function page() {
+      return <DocsRoutePage page={page4.body} />;
     }),
   }) as SiteRoute,
   route("/docs/project-structure", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page5.meta,
     ...(page5.modulepreloads ? { modulepreloads: page5.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page5.body","name":"page","propertyAccesses":["page5.body"]}],"propsExpression":"{ clients: clientHrefs, page: page5.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page5.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/project-structure","kind":"page","localName":"page"}],"route":"/docs/project-structure"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page5.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page5.body","name":"page","propertyAccesses":["page5.body"]}],"propsExpression":"{ page: page5.body }","serializedPropsExpression":"JSON.stringify({ page: page5.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/project-structure","kind":"page","localName":"page"}],"route":"/docs/project-structure"}, function page() {
+      return <DocsRoutePage page={page5.body} />;
     }),
   }) as SiteRoute,
   route("/docs/stability", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page6.meta,
     ...(page6.modulepreloads ? { modulepreloads: page6.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page6.body","name":"page","propertyAccesses":["page6.body"]}],"propsExpression":"{ clients: clientHrefs, page: page6.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page6.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/stability","kind":"page","localName":"page"}],"route":"/docs/stability"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page6.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page6.body","name":"page","propertyAccesses":["page6.body"]}],"propsExpression":"{ page: page6.body }","serializedPropsExpression":"JSON.stringify({ page: page6.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/docs/stability","kind":"page","localName":"page"}],"route":"/docs/stability"}, function page() {
+      return <DocsRoutePage page={page6.body} />;
     }),
   }) as SiteRoute,
   route("/tutorial", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page7.meta,
     ...(page7.modulepreloads ? { modulepreloads: page7.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page7.body","name":"page","propertyAccesses":["page7.body"]}],"propsExpression":"{ clients: clientHrefs, page: page7.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page7.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial","kind":"page","localName":"page"}],"route":"/tutorial"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page7.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page7.body","name":"page","propertyAccesses":["page7.body"]}],"propsExpression":"{ page: page7.body }","serializedPropsExpression":"JSON.stringify({ page: page7.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial","kind":"page","localName":"page"}],"route":"/tutorial"}, function page() {
+      return <DocsRoutePage page={page7.body} />;
     }),
   }) as SiteRoute,
   route("/tutorial/01-first-page", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page8.meta,
     ...(page8.modulepreloads ? { modulepreloads: page8.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page8.body","name":"page","propertyAccesses":["page8.body"]}],"propsExpression":"{ clients: clientHrefs, page: page8.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page8.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/01-first-page","kind":"page","localName":"page"}],"route":"/tutorial/01-first-page"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page8.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page8.body","name":"page","propertyAccesses":["page8.body"]}],"propsExpression":"{ page: page8.body }","serializedPropsExpression":"JSON.stringify({ page: page8.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/01-first-page","kind":"page","localName":"page"}],"route":"/tutorial/01-first-page"}, function page() {
+      return <DocsRoutePage page={page8.body} />;
     }),
   }) as SiteRoute,
   route("/tutorial/02-islands", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page9.meta,
     ...(page9.modulepreloads ? { modulepreloads: page9.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page9.body","name":"page","propertyAccesses":["page9.body"]}],"propsExpression":"{ clients: clientHrefs, page: page9.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page9.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/02-islands","kind":"page","localName":"page"}],"route":"/tutorial/02-islands"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page9.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page9.body","name":"page","propertyAccesses":["page9.body"]}],"propsExpression":"{ page: page9.body }","serializedPropsExpression":"JSON.stringify({ page: page9.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/02-islands","kind":"page","localName":"page"}],"route":"/tutorial/02-islands"}, function page() {
+      return <DocsRoutePage page={page9.body} />;
     }),
   }) as SiteRoute,
   route("/tutorial/03-queries", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page10.meta,
     ...(page10.modulepreloads ? { modulepreloads: page10.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page10.body","name":"page","propertyAccesses":["page10.body"]}],"propsExpression":"{ clients: clientHrefs, page: page10.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page10.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/03-queries","kind":"page","localName":"page"}],"route":"/tutorial/03-queries"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page10.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page10.body","name":"page","propertyAccesses":["page10.body"]}],"propsExpression":"{ page: page10.body }","serializedPropsExpression":"JSON.stringify({ page: page10.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/03-queries","kind":"page","localName":"page"}],"route":"/tutorial/03-queries"}, function page() {
+      return <DocsRoutePage page={page10.body} />;
     }),
   }) as SiteRoute,
   route("/tutorial/04-mutations", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page11.meta,
     ...(page11.modulepreloads ? { modulepreloads: page11.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page11.body","name":"page","propertyAccesses":["page11.body"]}],"propsExpression":"{ clients: clientHrefs, page: page11.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page11.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/04-mutations","kind":"page","localName":"page"}],"route":"/tutorial/04-mutations"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page11.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page11.body","name":"page","propertyAccesses":["page11.body"]}],"propsExpression":"{ page: page11.body }","serializedPropsExpression":"JSON.stringify({ page: page11.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/04-mutations","kind":"page","localName":"page"}],"route":"/tutorial/04-mutations"}, function page() {
+      return <DocsRoutePage page={page11.body} />;
     }),
   }) as SiteRoute,
   route("/tutorial/05-optimistic", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page12.meta,
     ...(page12.modulepreloads ? { modulepreloads: page12.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page12.body","name":"page","propertyAccesses":["page12.body"]}],"propsExpression":"{ clients: clientHrefs, page: page12.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page12.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/05-optimistic","kind":"page","localName":"page"}],"route":"/tutorial/05-optimistic"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page12.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page12.body","name":"page","propertyAccesses":["page12.body"]}],"propsExpression":"{ page: page12.body }","serializedPropsExpression":"JSON.stringify({ page: page12.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/05-optimistic","kind":"page","localName":"page"}],"route":"/tutorial/05-optimistic"}, function page() {
+      return <DocsRoutePage page={page12.body} />;
     }),
   }) as SiteRoute,
   route("/tutorial/06-streaming", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page13.meta,
     ...(page13.modulepreloads ? { modulepreloads: page13.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page13.body","name":"page","propertyAccesses":["page13.body"]}],"propsExpression":"{ clients: clientHrefs, page: page13.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page13.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/06-streaming","kind":"page","localName":"page"}],"route":"/tutorial/06-streaming"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page13.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page13.body","name":"page","propertyAccesses":["page13.body"]}],"propsExpression":"{ page: page13.body }","serializedPropsExpression":"JSON.stringify({ page: page13.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/06-streaming","kind":"page","localName":"page"}],"route":"/tutorial/06-streaming"}, function page() {
+      return <DocsRoutePage page={page13.body} />;
     }),
   }) as SiteRoute,
   route("/tutorial/07-verification", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page14.meta,
     ...(page14.modulepreloads ? { modulepreloads: page14.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page14.body","name":"page","propertyAccesses":["page14.body"]}],"propsExpression":"{ clients: clientHrefs, page: page14.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page14.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/07-verification","kind":"page","localName":"page"}],"route":"/tutorial/07-verification"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page14.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page14.body","name":"page","propertyAccesses":["page14.body"]}],"propsExpression":"{ page: page14.body }","serializedPropsExpression":"JSON.stringify({ page: page14.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/07-verification","kind":"page","localName":"page"}],"route":"/tutorial/07-verification"}, function page() {
+      return <DocsRoutePage page={page14.body} />;
     }),
   }) as SiteRoute,
   route("/tutorial/08-wrap-up", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page15.meta,
     ...(page15.modulepreloads ? { modulepreloads: page15.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page15.body","name":"page","propertyAccesses":["page15.body"]}],"propsExpression":"{ clients: clientHrefs, page: page15.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page15.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/08-wrap-up","kind":"page","localName":"page"}],"route":"/tutorial/08-wrap-up"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page15.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page15.body","name":"page","propertyAccesses":["page15.body"]}],"propsExpression":"{ page: page15.body }","serializedPropsExpression":"JSON.stringify({ page: page15.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/tutorial/08-wrap-up","kind":"page","localName":"page"}],"route":"/tutorial/08-wrap-up"}, function page() {
+      return <DocsRoutePage page={page15.body} />;
     }),
   }) as SiteRoute,
   route("/guides", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page16.meta,
     ...(page16.modulepreloads ? { modulepreloads: page16.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page16.body","name":"page","propertyAccesses":["page16.body"]}],"propsExpression":"{ clients: clientHrefs, page: page16.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page16.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides","kind":"page","localName":"page"}],"route":"/guides"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page16.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page16.body","name":"page","propertyAccesses":["page16.body"]}],"propsExpression":"{ page: page16.body }","serializedPropsExpression":"JSON.stringify({ page: page16.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides","kind":"page","localName":"page"}],"route":"/guides"}, function page() {
+      return <DocsRoutePage page={page16.body} />;
     }),
   }) as SiteRoute,
   route("/guides/queries", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page17.meta,
     ...(page17.modulepreloads ? { modulepreloads: page17.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page17.body","name":"page","propertyAccesses":["page17.body"]}],"propsExpression":"{ clients: clientHrefs, page: page17.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page17.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/queries","kind":"page","localName":"page"}],"route":"/guides/queries"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page17.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page17.body","name":"page","propertyAccesses":["page17.body"]}],"propsExpression":"{ page: page17.body }","serializedPropsExpression":"JSON.stringify({ page: page17.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/queries","kind":"page","localName":"page"}],"route":"/guides/queries"}, function page() {
+      return <DocsRoutePage page={page17.body} />;
     }),
   }) as SiteRoute,
   route("/guides/mutations", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page18.meta,
     ...(page18.modulepreloads ? { modulepreloads: page18.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page18.body","name":"page","propertyAccesses":["page18.body"]}],"propsExpression":"{ clients: clientHrefs, page: page18.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page18.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/mutations","kind":"page","localName":"page"}],"route":"/guides/mutations"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page18.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page18.body","name":"page","propertyAccesses":["page18.body"]}],"propsExpression":"{ page: page18.body }","serializedPropsExpression":"JSON.stringify({ page: page18.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/mutations","kind":"page","localName":"page"}],"route":"/guides/mutations"}, function page() {
+      return <DocsRoutePage page={page18.body} />;
     }),
   }) as SiteRoute,
   route("/guides/optimistic", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page19.meta,
     ...(page19.modulepreloads ? { modulepreloads: page19.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page19.body","name":"page","propertyAccesses":["page19.body"]}],"propsExpression":"{ clients: clientHrefs, page: page19.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page19.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/optimistic","kind":"page","localName":"page"}],"route":"/guides/optimistic"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page19.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page19.body","name":"page","propertyAccesses":["page19.body"]}],"propsExpression":"{ page: page19.body }","serializedPropsExpression":"JSON.stringify({ page: page19.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/optimistic","kind":"page","localName":"page"}],"route":"/guides/optimistic"}, function page() {
+      return <DocsRoutePage page={page19.body} />;
     }),
   }) as SiteRoute,
   route("/guides/styling", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page20.meta,
     ...(page20.modulepreloads ? { modulepreloads: page20.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page20.body","name":"page","propertyAccesses":["page20.body"]}],"propsExpression":"{ clients: clientHrefs, page: page20.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page20.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/styling","kind":"page","localName":"page"}],"route":"/guides/styling"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page20.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page20.body","name":"page","propertyAccesses":["page20.body"]}],"propsExpression":"{ page: page20.body }","serializedPropsExpression":"JSON.stringify({ page: page20.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/styling","kind":"page","localName":"page"}],"route":"/guides/styling"}, function page() {
+      return <DocsRoutePage page={page20.body} />;
     }),
   }) as SiteRoute,
   route("/guides/deployment", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page21.meta,
     ...(page21.modulepreloads ? { modulepreloads: page21.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page21.body","name":"page","propertyAccesses":["page21.body"]}],"propsExpression":"{ clients: clientHrefs, page: page21.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page21.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/deployment","kind":"page","localName":"page"}],"route":"/guides/deployment"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page21.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page21.body","name":"page","propertyAccesses":["page21.body"]}],"propsExpression":"{ page: page21.body }","serializedPropsExpression":"JSON.stringify({ page: page21.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/deployment","kind":"page","localName":"page"}],"route":"/guides/deployment"}, function page() {
+      return <DocsRoutePage page={page21.body} />;
     }),
   }) as SiteRoute,
   route("/guides/testing", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page22.meta,
     ...(page22.modulepreloads ? { modulepreloads: page22.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page22.body","name":"page","propertyAccesses":["page22.body"]}],"propsExpression":"{ clients: clientHrefs, page: page22.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page22.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/testing","kind":"page","localName":"page"}],"route":"/guides/testing"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page22.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page22.body","name":"page","propertyAccesses":["page22.body"]}],"propsExpression":"{ page: page22.body }","serializedPropsExpression":"JSON.stringify({ page: page22.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/testing","kind":"page","localName":"page"}],"route":"/guides/testing"}, function page() {
+      return <DocsRoutePage page={page22.body} />;
     }),
   }) as SiteRoute,
   route("/guides/kovo-explain", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page23.meta,
     ...(page23.modulepreloads ? { modulepreloads: page23.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page23.body","name":"page","propertyAccesses":["page23.body"]}],"propsExpression":"{ clients: clientHrefs, page: page23.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page23.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/kovo-explain","kind":"page","localName":"page"}],"route":"/guides/kovo-explain"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page23.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page23.body","name":"page","propertyAccesses":["page23.body"]}],"propsExpression":"{ page: page23.body }","serializedPropsExpression":"JSON.stringify({ page: page23.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/kovo-explain","kind":"page","localName":"page"}],"route":"/guides/kovo-explain"}, function page() {
+      return <DocsRoutePage page={page23.body} />;
     }),
   }) as SiteRoute,
   route("/guides/streaming", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page24.meta,
     ...(page24.modulepreloads ? { modulepreloads: page24.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page24.body","name":"page","propertyAccesses":["page24.body"]}],"propsExpression":"{ clients: clientHrefs, page: page24.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page24.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/streaming","kind":"page","localName":"page"}],"route":"/guides/streaming"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page24.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page24.body","name":"page","propertyAccesses":["page24.body"]}],"propsExpression":"{ page: page24.body }","serializedPropsExpression":"JSON.stringify({ page: page24.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/streaming","kind":"page","localName":"page"}],"route":"/guides/streaming"}, function page() {
+      return <DocsRoutePage page={page24.body} />;
     }),
   }) as SiteRoute,
   route("/guides/compiler-internals", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page25.meta,
     ...(page25.modulepreloads ? { modulepreloads: page25.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page25.body","name":"page","propertyAccesses":["page25.body"]}],"propsExpression":"{ clients: clientHrefs, page: page25.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page25.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/compiler-internals","kind":"page","localName":"page"}],"route":"/guides/compiler-internals"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page25.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page25.body","name":"page","propertyAccesses":["page25.body"]}],"propsExpression":"{ page: page25.body }","serializedPropsExpression":"JSON.stringify({ page: page25.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/compiler-internals","kind":"page","localName":"page"}],"route":"/guides/compiler-internals"}, function page() {
+      return <DocsRoutePage page={page25.body} />;
     }),
   }) as SiteRoute,
   route("/guides/accessibility", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page26.meta,
     ...(page26.modulepreloads ? { modulepreloads: page26.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page26.body","name":"page","propertyAccesses":["page26.body"]}],"propsExpression":"{ clients: clientHrefs, page: page26.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page26.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/accessibility","kind":"page","localName":"page"}],"route":"/guides/accessibility"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page26.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page26.body","name":"page","propertyAccesses":["page26.body"]}],"propsExpression":"{ page: page26.body }","serializedPropsExpression":"JSON.stringify({ page: page26.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/accessibility","kind":"page","localName":"page"}],"route":"/guides/accessibility"}, function page() {
+      return <DocsRoutePage page={page26.body} />;
     }),
   }) as SiteRoute,
   route("/guides/components", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page27.meta,
     ...(page27.modulepreloads ? { modulepreloads: page27.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page27.body","name":"page","propertyAccesses":["page27.body"]}],"propsExpression":"{ clients: clientHrefs, page: page27.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page27.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/components","kind":"page","localName":"page"}],"route":"/guides/components"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page27.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page27.body","name":"page","propertyAccesses":["page27.body"]}],"propsExpression":"{ page: page27.body }","serializedPropsExpression":"JSON.stringify({ page: page27.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/guides/components","kind":"page","localName":"page"}],"route":"/guides/components"}, function page() {
+      return <DocsRoutePage page={page27.body} />;
     }),
   }) as SiteRoute,
   route("/api", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page28.meta,
     ...(page28.modulepreloads ? { modulepreloads: page28.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page28.body","name":"page","propertyAccesses":["page28.body"]}],"propsExpression":"{ clients: clientHrefs, page: page28.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page28.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api","kind":"page","localName":"page"}],"route":"/api"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page28.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page28.body","name":"page","propertyAccesses":["page28.body"]}],"propsExpression":"{ page: page28.body }","serializedPropsExpression":"JSON.stringify({ page: page28.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api","kind":"page","localName":"page"}],"route":"/api"}, function page() {
+      return <DocsRoutePage page={page28.body} />;
     }),
   }) as SiteRoute,
   route("/api/core", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page29.meta,
     ...(page29.modulepreloads ? { modulepreloads: page29.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page29.body","name":"page","propertyAccesses":["page29.body"]}],"propsExpression":"{ clients: clientHrefs, page: page29.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page29.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/core","kind":"page","localName":"page"}],"route":"/api/core"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page29.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page29.body","name":"page","propertyAccesses":["page29.body"]}],"propsExpression":"{ page: page29.body }","serializedPropsExpression":"JSON.stringify({ page: page29.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/core","kind":"page","localName":"page"}],"route":"/api/core"}, function page() {
+      return <DocsRoutePage page={page29.body} />;
     }),
   }) as SiteRoute,
   route("/api/server", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page30.meta,
     ...(page30.modulepreloads ? { modulepreloads: page30.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page30.body","name":"page","propertyAccesses":["page30.body"]}],"propsExpression":"{ clients: clientHrefs, page: page30.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page30.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/server","kind":"page","localName":"page"}],"route":"/api/server"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page30.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page30.body","name":"page","propertyAccesses":["page30.body"]}],"propsExpression":"{ page: page30.body }","serializedPropsExpression":"JSON.stringify({ page: page30.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/server","kind":"page","localName":"page"}],"route":"/api/server"}, function page() {
+      return <DocsRoutePage page={page30.body} />;
     }),
   }) as SiteRoute,
   route("/api/runtime", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page31.meta,
     ...(page31.modulepreloads ? { modulepreloads: page31.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page31.body","name":"page","propertyAccesses":["page31.body"]}],"propsExpression":"{ clients: clientHrefs, page: page31.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page31.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/runtime","kind":"page","localName":"page"}],"route":"/api/runtime"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page31.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page31.body","name":"page","propertyAccesses":["page31.body"]}],"propsExpression":"{ page: page31.body }","serializedPropsExpression":"JSON.stringify({ page: page31.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/runtime","kind":"page","localName":"page"}],"route":"/api/runtime"}, function page() {
+      return <DocsRoutePage page={page31.body} />;
     }),
   }) as SiteRoute,
   route("/api/test", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page32.meta,
     ...(page32.modulepreloads ? { modulepreloads: page32.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page32.body","name":"page","propertyAccesses":["page32.body"]}],"propsExpression":"{ clients: clientHrefs, page: page32.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page32.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/test","kind":"page","localName":"page"}],"route":"/api/test"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page32.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page32.body","name":"page","propertyAccesses":["page32.body"]}],"propsExpression":"{ page: page32.body }","serializedPropsExpression":"JSON.stringify({ page: page32.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/test","kind":"page","localName":"page"}],"route":"/api/test"}, function page() {
+      return <DocsRoutePage page={page32.body} />;
     }),
   }) as SiteRoute,
   route("/api/drizzle", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page33.meta,
     ...(page33.modulepreloads ? { modulepreloads: page33.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page33.body","name":"page","propertyAccesses":["page33.body"]}],"propsExpression":"{ clients: clientHrefs, page: page33.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page33.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/drizzle","kind":"page","localName":"page"}],"route":"/api/drizzle"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page33.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page33.body","name":"page","propertyAccesses":["page33.body"]}],"propsExpression":"{ page: page33.body }","serializedPropsExpression":"JSON.stringify({ page: page33.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/drizzle","kind":"page","localName":"page"}],"route":"/api/drizzle"}, function page() {
+      return <DocsRoutePage page={page33.body} />;
     }),
   }) as SiteRoute,
   route("/api/style", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page34.meta,
     ...(page34.modulepreloads ? { modulepreloads: page34.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page34.body","name":"page","propertyAccesses":["page34.body"]}],"propsExpression":"{ clients: clientHrefs, page: page34.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page34.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/style","kind":"page","localName":"page"}],"route":"/api/style"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page34.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page34.body","name":"page","propertyAccesses":["page34.body"]}],"propsExpression":"{ page: page34.body }","serializedPropsExpression":"JSON.stringify({ page: page34.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/style","kind":"page","localName":"page"}],"route":"/api/style"}, function page() {
+      return <DocsRoutePage page={page34.body} />;
     }),
   }) as SiteRoute,
   route("/api/better-auth", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page35.meta,
     ...(page35.modulepreloads ? { modulepreloads: page35.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page35.body","name":"page","propertyAccesses":["page35.body"]}],"propsExpression":"{ clients: clientHrefs, page: page35.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page35.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/better-auth","kind":"page","localName":"page"}],"route":"/api/better-auth"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page35.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page35.body","name":"page","propertyAccesses":["page35.body"]}],"propsExpression":"{ page: page35.body }","serializedPropsExpression":"JSON.stringify({ page: page35.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/better-auth","kind":"page","localName":"page"}],"route":"/api/better-auth"}, function page() {
+      return <DocsRoutePage page={page35.body} />;
     }),
   }) as SiteRoute,
   route("/api/cli", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page36.meta,
     ...(page36.modulepreloads ? { modulepreloads: page36.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page36.body","name":"page","propertyAccesses":["page36.body"]}],"propsExpression":"{ clients: clientHrefs, page: page36.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page36.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/cli","kind":"page","localName":"page"}],"route":"/api/cli"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page36.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page36.body","name":"page","propertyAccesses":["page36.body"]}],"propsExpression":"{ page: page36.body }","serializedPropsExpression":"JSON.stringify({ page: page36.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/api/cli","kind":"page","localName":"page"}],"route":"/api/cli"}, function page() {
+      return <DocsRoutePage page={page36.body} />;
     }),
   }) as SiteRoute,
   route("/reference", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page37.meta,
     ...(page37.modulepreloads ? { modulepreloads: page37.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page37.body","name":"page","propertyAccesses":["page37.body"]}],"propsExpression":"{ clients: clientHrefs, page: page37.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page37.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/reference","kind":"page","localName":"page"}],"route":"/reference"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page37.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page37.body","name":"page","propertyAccesses":["page37.body"]}],"propsExpression":"{ page: page37.body }","serializedPropsExpression":"JSON.stringify({ page: page37.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/reference","kind":"page","localName":"page"}],"route":"/reference"}, function page() {
+      return <DocsRoutePage page={page37.body} />;
     }),
   }) as SiteRoute,
   route("/reference/diagnostics", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page38.meta,
     ...(page38.modulepreloads ? { modulepreloads: page38.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page38.body","name":"page","propertyAccesses":["page38.body"]}],"propsExpression":"{ clients: clientHrefs, page: page38.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page38.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/reference/diagnostics","kind":"page","localName":"page"}],"route":"/reference/diagnostics"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page38.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page38.body","name":"page","propertyAccesses":["page38.body"]}],"propsExpression":"{ page: page38.body }","serializedPropsExpression":"JSON.stringify({ page: page38.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/reference/diagnostics","kind":"page","localName":"page"}],"route":"/reference/diagnostics"}, function page() {
+      return <DocsRoutePage page={page38.body} />;
     }),
   }) as SiteRoute,
   route("/gallery", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page39.meta,
     ...(page39.modulepreloads ? { modulepreloads: page39.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page39.body","name":"page","propertyAccesses":["page39.body"]}],"propsExpression":"{ clients: clientHrefs, page: page39.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page39.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery","kind":"page","localName":"page"}],"route":"/gallery"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page39.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page39.body","name":"page","propertyAccesses":["page39.body"]}],"propsExpression":"{ page: page39.body }","serializedPropsExpression":"JSON.stringify({ page: page39.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery","kind":"page","localName":"page"}],"route":"/gallery"}, function page() {
+      return <DocsRoutePage page={page39.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/interactive", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page40.meta,
     ...(page40.modulepreloads ? { modulepreloads: page40.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page40.body","name":"page","propertyAccesses":["page40.body"]}],"propsExpression":"{ clients: clientHrefs, page: page40.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page40.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/interactive","kind":"page","localName":"page"}],"route":"/gallery/interactive"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page40.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page40.body","name":"page","propertyAccesses":["page40.body"]}],"propsExpression":"{ page: page40.body }","serializedPropsExpression":"JSON.stringify({ page: page40.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/interactive","kind":"page","localName":"page"}],"route":"/gallery/interactive"}, function page() {
+      return <DocsRoutePage page={page40.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/accordion", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page41.meta,
     ...(page41.modulepreloads ? { modulepreloads: page41.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page41.body","name":"page","propertyAccesses":["page41.body"]}],"propsExpression":"{ clients: clientHrefs, page: page41.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page41.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/accordion","kind":"page","localName":"page"}],"route":"/gallery/components/accordion"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page41.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page41.body","name":"page","propertyAccesses":["page41.body"]}],"propsExpression":"{ page: page41.body }","serializedPropsExpression":"JSON.stringify({ page: page41.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/accordion","kind":"page","localName":"page"}],"route":"/gallery/components/accordion"}, function page() {
+      return <DocsRoutePage page={page41.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/alert", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page42.meta,
     ...(page42.modulepreloads ? { modulepreloads: page42.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page42.body","name":"page","propertyAccesses":["page42.body"]}],"propsExpression":"{ clients: clientHrefs, page: page42.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page42.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/alert","kind":"page","localName":"page"}],"route":"/gallery/components/alert"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page42.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page42.body","name":"page","propertyAccesses":["page42.body"]}],"propsExpression":"{ page: page42.body }","serializedPropsExpression":"JSON.stringify({ page: page42.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/alert","kind":"page","localName":"page"}],"route":"/gallery/components/alert"}, function page() {
+      return <DocsRoutePage page={page42.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/alert-dialog", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page43.meta,
     ...(page43.modulepreloads ? { modulepreloads: page43.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page43.body","name":"page","propertyAccesses":["page43.body"]}],"propsExpression":"{ clients: clientHrefs, page: page43.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page43.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/alert-dialog","kind":"page","localName":"page"}],"route":"/gallery/components/alert-dialog"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page43.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page43.body","name":"page","propertyAccesses":["page43.body"]}],"propsExpression":"{ page: page43.body }","serializedPropsExpression":"JSON.stringify({ page: page43.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/alert-dialog","kind":"page","localName":"page"}],"route":"/gallery/components/alert-dialog"}, function page() {
+      return <DocsRoutePage page={page43.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/autocomplete", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page44.meta,
     ...(page44.modulepreloads ? { modulepreloads: page44.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page44.body","name":"page","propertyAccesses":["page44.body"]}],"propsExpression":"{ clients: clientHrefs, page: page44.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page44.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/autocomplete","kind":"page","localName":"page"}],"route":"/gallery/components/autocomplete"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page44.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page44.body","name":"page","propertyAccesses":["page44.body"]}],"propsExpression":"{ page: page44.body }","serializedPropsExpression":"JSON.stringify({ page: page44.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/autocomplete","kind":"page","localName":"page"}],"route":"/gallery/components/autocomplete"}, function page() {
+      return <DocsRoutePage page={page44.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/avatar", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page45.meta,
     ...(page45.modulepreloads ? { modulepreloads: page45.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page45.body","name":"page","propertyAccesses":["page45.body"]}],"propsExpression":"{ clients: clientHrefs, page: page45.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page45.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/avatar","kind":"page","localName":"page"}],"route":"/gallery/components/avatar"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page45.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page45.body","name":"page","propertyAccesses":["page45.body"]}],"propsExpression":"{ page: page45.body }","serializedPropsExpression":"JSON.stringify({ page: page45.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/avatar","kind":"page","localName":"page"}],"route":"/gallery/components/avatar"}, function page() {
+      return <DocsRoutePage page={page45.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/badge", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page46.meta,
     ...(page46.modulepreloads ? { modulepreloads: page46.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page46.body","name":"page","propertyAccesses":["page46.body"]}],"propsExpression":"{ clients: clientHrefs, page: page46.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page46.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/badge","kind":"page","localName":"page"}],"route":"/gallery/components/badge"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page46.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page46.body","name":"page","propertyAccesses":["page46.body"]}],"propsExpression":"{ page: page46.body }","serializedPropsExpression":"JSON.stringify({ page: page46.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/badge","kind":"page","localName":"page"}],"route":"/gallery/components/badge"}, function page() {
+      return <DocsRoutePage page={page46.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/breadcrumb", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page47.meta,
     ...(page47.modulepreloads ? { modulepreloads: page47.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page47.body","name":"page","propertyAccesses":["page47.body"]}],"propsExpression":"{ clients: clientHrefs, page: page47.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page47.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/breadcrumb","kind":"page","localName":"page"}],"route":"/gallery/components/breadcrumb"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page47.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page47.body","name":"page","propertyAccesses":["page47.body"]}],"propsExpression":"{ page: page47.body }","serializedPropsExpression":"JSON.stringify({ page: page47.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/breadcrumb","kind":"page","localName":"page"}],"route":"/gallery/components/breadcrumb"}, function page() {
+      return <DocsRoutePage page={page47.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/button", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page48.meta,
     ...(page48.modulepreloads ? { modulepreloads: page48.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page48.body","name":"page","propertyAccesses":["page48.body"]}],"propsExpression":"{ clients: clientHrefs, page: page48.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page48.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/button","kind":"page","localName":"page"}],"route":"/gallery/components/button"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page48.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page48.body","name":"page","propertyAccesses":["page48.body"]}],"propsExpression":"{ page: page48.body }","serializedPropsExpression":"JSON.stringify({ page: page48.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/button","kind":"page","localName":"page"}],"route":"/gallery/components/button"}, function page() {
+      return <DocsRoutePage page={page48.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/card", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page49.meta,
     ...(page49.modulepreloads ? { modulepreloads: page49.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page49.body","name":"page","propertyAccesses":["page49.body"]}],"propsExpression":"{ clients: clientHrefs, page: page49.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page49.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/card","kind":"page","localName":"page"}],"route":"/gallery/components/card"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page49.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page49.body","name":"page","propertyAccesses":["page49.body"]}],"propsExpression":"{ page: page49.body }","serializedPropsExpression":"JSON.stringify({ page: page49.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/card","kind":"page","localName":"page"}],"route":"/gallery/components/card"}, function page() {
+      return <DocsRoutePage page={page49.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/checkbox", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page50.meta,
     ...(page50.modulepreloads ? { modulepreloads: page50.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page50.body","name":"page","propertyAccesses":["page50.body"]}],"propsExpression":"{ clients: clientHrefs, page: page50.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page50.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/checkbox","kind":"page","localName":"page"}],"route":"/gallery/components/checkbox"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page50.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page50.body","name":"page","propertyAccesses":["page50.body"]}],"propsExpression":"{ page: page50.body }","serializedPropsExpression":"JSON.stringify({ page: page50.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/checkbox","kind":"page","localName":"page"}],"route":"/gallery/components/checkbox"}, function page() {
+      return <DocsRoutePage page={page50.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/checkbox-group", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page51.meta,
     ...(page51.modulepreloads ? { modulepreloads: page51.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page51.body","name":"page","propertyAccesses":["page51.body"]}],"propsExpression":"{ clients: clientHrefs, page: page51.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page51.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/checkbox-group","kind":"page","localName":"page"}],"route":"/gallery/components/checkbox-group"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page51.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page51.body","name":"page","propertyAccesses":["page51.body"]}],"propsExpression":"{ page: page51.body }","serializedPropsExpression":"JSON.stringify({ page: page51.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/checkbox-group","kind":"page","localName":"page"}],"route":"/gallery/components/checkbox-group"}, function page() {
+      return <DocsRoutePage page={page51.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/collapsible", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page52.meta,
     ...(page52.modulepreloads ? { modulepreloads: page52.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page52.body","name":"page","propertyAccesses":["page52.body"]}],"propsExpression":"{ clients: clientHrefs, page: page52.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page52.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/collapsible","kind":"page","localName":"page"}],"route":"/gallery/components/collapsible"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page52.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page52.body","name":"page","propertyAccesses":["page52.body"]}],"propsExpression":"{ page: page52.body }","serializedPropsExpression":"JSON.stringify({ page: page52.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/collapsible","kind":"page","localName":"page"}],"route":"/gallery/components/collapsible"}, function page() {
+      return <DocsRoutePage page={page52.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/combobox", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page53.meta,
     ...(page53.modulepreloads ? { modulepreloads: page53.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page53.body","name":"page","propertyAccesses":["page53.body"]}],"propsExpression":"{ clients: clientHrefs, page: page53.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page53.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/combobox","kind":"page","localName":"page"}],"route":"/gallery/components/combobox"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page53.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page53.body","name":"page","propertyAccesses":["page53.body"]}],"propsExpression":"{ page: page53.body }","serializedPropsExpression":"JSON.stringify({ page: page53.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/combobox","kind":"page","localName":"page"}],"route":"/gallery/components/combobox"}, function page() {
+      return <DocsRoutePage page={page53.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/command", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page54.meta,
     ...(page54.modulepreloads ? { modulepreloads: page54.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page54.body","name":"page","propertyAccesses":["page54.body"]}],"propsExpression":"{ clients: clientHrefs, page: page54.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page54.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/command","kind":"page","localName":"page"}],"route":"/gallery/components/command"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page54.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page54.body","name":"page","propertyAccesses":["page54.body"]}],"propsExpression":"{ page: page54.body }","serializedPropsExpression":"JSON.stringify({ page: page54.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/command","kind":"page","localName":"page"}],"route":"/gallery/components/command"}, function page() {
+      return <DocsRoutePage page={page54.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/context-menu", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page55.meta,
     ...(page55.modulepreloads ? { modulepreloads: page55.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page55.body","name":"page","propertyAccesses":["page55.body"]}],"propsExpression":"{ clients: clientHrefs, page: page55.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page55.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/context-menu","kind":"page","localName":"page"}],"route":"/gallery/components/context-menu"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page55.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page55.body","name":"page","propertyAccesses":["page55.body"]}],"propsExpression":"{ page: page55.body }","serializedPropsExpression":"JSON.stringify({ page: page55.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/context-menu","kind":"page","localName":"page"}],"route":"/gallery/components/context-menu"}, function page() {
+      return <DocsRoutePage page={page55.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/dialog", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page56.meta,
     ...(page56.modulepreloads ? { modulepreloads: page56.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page56.body","name":"page","propertyAccesses":["page56.body"]}],"propsExpression":"{ clients: clientHrefs, page: page56.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page56.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/dialog","kind":"page","localName":"page"}],"route":"/gallery/components/dialog"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page56.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page56.body","name":"page","propertyAccesses":["page56.body"]}],"propsExpression":"{ page: page56.body }","serializedPropsExpression":"JSON.stringify({ page: page56.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/dialog","kind":"page","localName":"page"}],"route":"/gallery/components/dialog"}, function page() {
+      return <DocsRoutePage page={page56.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/disclosure", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page57.meta,
     ...(page57.modulepreloads ? { modulepreloads: page57.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page57.body","name":"page","propertyAccesses":["page57.body"]}],"propsExpression":"{ clients: clientHrefs, page: page57.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page57.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/disclosure","kind":"page","localName":"page"}],"route":"/gallery/components/disclosure"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page57.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page57.body","name":"page","propertyAccesses":["page57.body"]}],"propsExpression":"{ page: page57.body }","serializedPropsExpression":"JSON.stringify({ page: page57.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/disclosure","kind":"page","localName":"page"}],"route":"/gallery/components/disclosure"}, function page() {
+      return <DocsRoutePage page={page57.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/drawer", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page58.meta,
     ...(page58.modulepreloads ? { modulepreloads: page58.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page58.body","name":"page","propertyAccesses":["page58.body"]}],"propsExpression":"{ clients: clientHrefs, page: page58.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page58.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/drawer","kind":"page","localName":"page"}],"route":"/gallery/components/drawer"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page58.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page58.body","name":"page","propertyAccesses":["page58.body"]}],"propsExpression":"{ page: page58.body }","serializedPropsExpression":"JSON.stringify({ page: page58.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/drawer","kind":"page","localName":"page"}],"route":"/gallery/components/drawer"}, function page() {
+      return <DocsRoutePage page={page58.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/dropdown-menu", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page59.meta,
     ...(page59.modulepreloads ? { modulepreloads: page59.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page59.body","name":"page","propertyAccesses":["page59.body"]}],"propsExpression":"{ clients: clientHrefs, page: page59.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page59.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/dropdown-menu","kind":"page","localName":"page"}],"route":"/gallery/components/dropdown-menu"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page59.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page59.body","name":"page","propertyAccesses":["page59.body"]}],"propsExpression":"{ page: page59.body }","serializedPropsExpression":"JSON.stringify({ page: page59.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/dropdown-menu","kind":"page","localName":"page"}],"route":"/gallery/components/dropdown-menu"}, function page() {
+      return <DocsRoutePage page={page59.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/field", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page60.meta,
     ...(page60.modulepreloads ? { modulepreloads: page60.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page60.body","name":"page","propertyAccesses":["page60.body"]}],"propsExpression":"{ clients: clientHrefs, page: page60.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page60.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/field","kind":"page","localName":"page"}],"route":"/gallery/components/field"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page60.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page60.body","name":"page","propertyAccesses":["page60.body"]}],"propsExpression":"{ page: page60.body }","serializedPropsExpression":"JSON.stringify({ page: page60.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/field","kind":"page","localName":"page"}],"route":"/gallery/components/field"}, function page() {
+      return <DocsRoutePage page={page60.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/hover-card", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page61.meta,
     ...(page61.modulepreloads ? { modulepreloads: page61.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page61.body","name":"page","propertyAccesses":["page61.body"]}],"propsExpression":"{ clients: clientHrefs, page: page61.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page61.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/hover-card","kind":"page","localName":"page"}],"route":"/gallery/components/hover-card"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page61.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page61.body","name":"page","propertyAccesses":["page61.body"]}],"propsExpression":"{ page: page61.body }","serializedPropsExpression":"JSON.stringify({ page: page61.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/hover-card","kind":"page","localName":"page"}],"route":"/gallery/components/hover-card"}, function page() {
+      return <DocsRoutePage page={page61.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/kbd", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page62.meta,
     ...(page62.modulepreloads ? { modulepreloads: page62.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page62.body","name":"page","propertyAccesses":["page62.body"]}],"propsExpression":"{ clients: clientHrefs, page: page62.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page62.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/kbd","kind":"page","localName":"page"}],"route":"/gallery/components/kbd"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page62.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page62.body","name":"page","propertyAccesses":["page62.body"]}],"propsExpression":"{ page: page62.body }","serializedPropsExpression":"JSON.stringify({ page: page62.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/kbd","kind":"page","localName":"page"}],"route":"/gallery/components/kbd"}, function page() {
+      return <DocsRoutePage page={page62.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/menubar", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page63.meta,
     ...(page63.modulepreloads ? { modulepreloads: page63.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page63.body","name":"page","propertyAccesses":["page63.body"]}],"propsExpression":"{ clients: clientHrefs, page: page63.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page63.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/menubar","kind":"page","localName":"page"}],"route":"/gallery/components/menubar"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page63.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page63.body","name":"page","propertyAccesses":["page63.body"]}],"propsExpression":"{ page: page63.body }","serializedPropsExpression":"JSON.stringify({ page: page63.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/menubar","kind":"page","localName":"page"}],"route":"/gallery/components/menubar"}, function page() {
+      return <DocsRoutePage page={page63.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/meter", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page64.meta,
     ...(page64.modulepreloads ? { modulepreloads: page64.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page64.body","name":"page","propertyAccesses":["page64.body"]}],"propsExpression":"{ clients: clientHrefs, page: page64.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page64.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/meter","kind":"page","localName":"page"}],"route":"/gallery/components/meter"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page64.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page64.body","name":"page","propertyAccesses":["page64.body"]}],"propsExpression":"{ page: page64.body }","serializedPropsExpression":"JSON.stringify({ page: page64.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/meter","kind":"page","localName":"page"}],"route":"/gallery/components/meter"}, function page() {
+      return <DocsRoutePage page={page64.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/navigation-menu", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page65.meta,
     ...(page65.modulepreloads ? { modulepreloads: page65.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page65.body","name":"page","propertyAccesses":["page65.body"]}],"propsExpression":"{ clients: clientHrefs, page: page65.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page65.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/navigation-menu","kind":"page","localName":"page"}],"route":"/gallery/components/navigation-menu"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page65.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page65.body","name":"page","propertyAccesses":["page65.body"]}],"propsExpression":"{ page: page65.body }","serializedPropsExpression":"JSON.stringify({ page: page65.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/navigation-menu","kind":"page","localName":"page"}],"route":"/gallery/components/navigation-menu"}, function page() {
+      return <DocsRoutePage page={page65.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/number-field", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page66.meta,
     ...(page66.modulepreloads ? { modulepreloads: page66.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page66.body","name":"page","propertyAccesses":["page66.body"]}],"propsExpression":"{ clients: clientHrefs, page: page66.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page66.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/number-field","kind":"page","localName":"page"}],"route":"/gallery/components/number-field"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page66.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page66.body","name":"page","propertyAccesses":["page66.body"]}],"propsExpression":"{ page: page66.body }","serializedPropsExpression":"JSON.stringify({ page: page66.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/number-field","kind":"page","localName":"page"}],"route":"/gallery/components/number-field"}, function page() {
+      return <DocsRoutePage page={page66.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/otp-field", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page67.meta,
     ...(page67.modulepreloads ? { modulepreloads: page67.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page67.body","name":"page","propertyAccesses":["page67.body"]}],"propsExpression":"{ clients: clientHrefs, page: page67.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page67.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/otp-field","kind":"page","localName":"page"}],"route":"/gallery/components/otp-field"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page67.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page67.body","name":"page","propertyAccesses":["page67.body"]}],"propsExpression":"{ page: page67.body }","serializedPropsExpression":"JSON.stringify({ page: page67.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/otp-field","kind":"page","localName":"page"}],"route":"/gallery/components/otp-field"}, function page() {
+      return <DocsRoutePage page={page67.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/popover", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page68.meta,
     ...(page68.modulepreloads ? { modulepreloads: page68.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page68.body","name":"page","propertyAccesses":["page68.body"]}],"propsExpression":"{ clients: clientHrefs, page: page68.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page68.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/popover","kind":"page","localName":"page"}],"route":"/gallery/components/popover"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page68.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page68.body","name":"page","propertyAccesses":["page68.body"]}],"propsExpression":"{ page: page68.body }","serializedPropsExpression":"JSON.stringify({ page: page68.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/popover","kind":"page","localName":"page"}],"route":"/gallery/components/popover"}, function page() {
+      return <DocsRoutePage page={page68.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/progress", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page69.meta,
     ...(page69.modulepreloads ? { modulepreloads: page69.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page69.body","name":"page","propertyAccesses":["page69.body"]}],"propsExpression":"{ clients: clientHrefs, page: page69.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page69.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/progress","kind":"page","localName":"page"}],"route":"/gallery/components/progress"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page69.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page69.body","name":"page","propertyAccesses":["page69.body"]}],"propsExpression":"{ page: page69.body }","serializedPropsExpression":"JSON.stringify({ page: page69.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/progress","kind":"page","localName":"page"}],"route":"/gallery/components/progress"}, function page() {
+      return <DocsRoutePage page={page69.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/radio-group", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page70.meta,
     ...(page70.modulepreloads ? { modulepreloads: page70.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page70.body","name":"page","propertyAccesses":["page70.body"]}],"propsExpression":"{ clients: clientHrefs, page: page70.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page70.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/radio-group","kind":"page","localName":"page"}],"route":"/gallery/components/radio-group"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page70.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page70.body","name":"page","propertyAccesses":["page70.body"]}],"propsExpression":"{ page: page70.body }","serializedPropsExpression":"JSON.stringify({ page: page70.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/radio-group","kind":"page","localName":"page"}],"route":"/gallery/components/radio-group"}, function page() {
+      return <DocsRoutePage page={page70.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/scroll-area", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page71.meta,
     ...(page71.modulepreloads ? { modulepreloads: page71.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page71.body","name":"page","propertyAccesses":["page71.body"]}],"propsExpression":"{ clients: clientHrefs, page: page71.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page71.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/scroll-area","kind":"page","localName":"page"}],"route":"/gallery/components/scroll-area"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page71.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page71.body","name":"page","propertyAccesses":["page71.body"]}],"propsExpression":"{ page: page71.body }","serializedPropsExpression":"JSON.stringify({ page: page71.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/scroll-area","kind":"page","localName":"page"}],"route":"/gallery/components/scroll-area"}, function page() {
+      return <DocsRoutePage page={page71.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/select", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page72.meta,
     ...(page72.modulepreloads ? { modulepreloads: page72.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page72.body","name":"page","propertyAccesses":["page72.body"]}],"propsExpression":"{ clients: clientHrefs, page: page72.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page72.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/select","kind":"page","localName":"page"}],"route":"/gallery/components/select"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page72.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page72.body","name":"page","propertyAccesses":["page72.body"]}],"propsExpression":"{ page: page72.body }","serializedPropsExpression":"JSON.stringify({ page: page72.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/select","kind":"page","localName":"page"}],"route":"/gallery/components/select"}, function page() {
+      return <DocsRoutePage page={page72.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/separator", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page73.meta,
     ...(page73.modulepreloads ? { modulepreloads: page73.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page73.body","name":"page","propertyAccesses":["page73.body"]}],"propsExpression":"{ clients: clientHrefs, page: page73.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page73.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/separator","kind":"page","localName":"page"}],"route":"/gallery/components/separator"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page73.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page73.body","name":"page","propertyAccesses":["page73.body"]}],"propsExpression":"{ page: page73.body }","serializedPropsExpression":"JSON.stringify({ page: page73.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/separator","kind":"page","localName":"page"}],"route":"/gallery/components/separator"}, function page() {
+      return <DocsRoutePage page={page73.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/sheet", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page74.meta,
     ...(page74.modulepreloads ? { modulepreloads: page74.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page74.body","name":"page","propertyAccesses":["page74.body"]}],"propsExpression":"{ clients: clientHrefs, page: page74.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page74.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/sheet","kind":"page","localName":"page"}],"route":"/gallery/components/sheet"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page74.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page74.body","name":"page","propertyAccesses":["page74.body"]}],"propsExpression":"{ page: page74.body }","serializedPropsExpression":"JSON.stringify({ page: page74.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/sheet","kind":"page","localName":"page"}],"route":"/gallery/components/sheet"}, function page() {
+      return <DocsRoutePage page={page74.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/skeleton", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page75.meta,
     ...(page75.modulepreloads ? { modulepreloads: page75.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page75.body","name":"page","propertyAccesses":["page75.body"]}],"propsExpression":"{ clients: clientHrefs, page: page75.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page75.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/skeleton","kind":"page","localName":"page"}],"route":"/gallery/components/skeleton"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page75.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page75.body","name":"page","propertyAccesses":["page75.body"]}],"propsExpression":"{ page: page75.body }","serializedPropsExpression":"JSON.stringify({ page: page75.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/skeleton","kind":"page","localName":"page"}],"route":"/gallery/components/skeleton"}, function page() {
+      return <DocsRoutePage page={page75.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/slider", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page76.meta,
     ...(page76.modulepreloads ? { modulepreloads: page76.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page76.body","name":"page","propertyAccesses":["page76.body"]}],"propsExpression":"{ clients: clientHrefs, page: page76.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page76.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/slider","kind":"page","localName":"page"}],"route":"/gallery/components/slider"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page76.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page76.body","name":"page","propertyAccesses":["page76.body"]}],"propsExpression":"{ page: page76.body }","serializedPropsExpression":"JSON.stringify({ page: page76.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/slider","kind":"page","localName":"page"}],"route":"/gallery/components/slider"}, function page() {
+      return <DocsRoutePage page={page76.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/switch", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page77.meta,
     ...(page77.modulepreloads ? { modulepreloads: page77.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page77.body","name":"page","propertyAccesses":["page77.body"]}],"propsExpression":"{ clients: clientHrefs, page: page77.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page77.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/switch","kind":"page","localName":"page"}],"route":"/gallery/components/switch"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page77.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page77.body","name":"page","propertyAccesses":["page77.body"]}],"propsExpression":"{ page: page77.body }","serializedPropsExpression":"JSON.stringify({ page: page77.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/switch","kind":"page","localName":"page"}],"route":"/gallery/components/switch"}, function page() {
+      return <DocsRoutePage page={page77.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/table", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page78.meta,
     ...(page78.modulepreloads ? { modulepreloads: page78.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page78.body","name":"page","propertyAccesses":["page78.body"]}],"propsExpression":"{ clients: clientHrefs, page: page78.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page78.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/table","kind":"page","localName":"page"}],"route":"/gallery/components/table"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page78.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page78.body","name":"page","propertyAccesses":["page78.body"]}],"propsExpression":"{ page: page78.body }","serializedPropsExpression":"JSON.stringify({ page: page78.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/table","kind":"page","localName":"page"}],"route":"/gallery/components/table"}, function page() {
+      return <DocsRoutePage page={page78.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/tabs", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page79.meta,
     ...(page79.modulepreloads ? { modulepreloads: page79.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page79.body","name":"page","propertyAccesses":["page79.body"]}],"propsExpression":"{ clients: clientHrefs, page: page79.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page79.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/tabs","kind":"page","localName":"page"}],"route":"/gallery/components/tabs"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page79.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page79.body","name":"page","propertyAccesses":["page79.body"]}],"propsExpression":"{ page: page79.body }","serializedPropsExpression":"JSON.stringify({ page: page79.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/tabs","kind":"page","localName":"page"}],"route":"/gallery/components/tabs"}, function page() {
+      return <DocsRoutePage page={page79.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/toast", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page80.meta,
     ...(page80.modulepreloads ? { modulepreloads: page80.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page80.body","name":"page","propertyAccesses":["page80.body"]}],"propsExpression":"{ clients: clientHrefs, page: page80.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page80.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/toast","kind":"page","localName":"page"}],"route":"/gallery/components/toast"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page80.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page80.body","name":"page","propertyAccesses":["page80.body"]}],"propsExpression":"{ page: page80.body }","serializedPropsExpression":"JSON.stringify({ page: page80.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/toast","kind":"page","localName":"page"}],"route":"/gallery/components/toast"}, function page() {
+      return <DocsRoutePage page={page80.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/toggle", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page81.meta,
     ...(page81.modulepreloads ? { modulepreloads: page81.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page81.body","name":"page","propertyAccesses":["page81.body"]}],"propsExpression":"{ clients: clientHrefs, page: page81.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page81.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/toggle","kind":"page","localName":"page"}],"route":"/gallery/components/toggle"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page81.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page81.body","name":"page","propertyAccesses":["page81.body"]}],"propsExpression":"{ page: page81.body }","serializedPropsExpression":"JSON.stringify({ page: page81.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/toggle","kind":"page","localName":"page"}],"route":"/gallery/components/toggle"}, function page() {
+      return <DocsRoutePage page={page81.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/toggle-group", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page82.meta,
     ...(page82.modulepreloads ? { modulepreloads: page82.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page82.body","name":"page","propertyAccesses":["page82.body"]}],"propsExpression":"{ clients: clientHrefs, page: page82.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page82.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/toggle-group","kind":"page","localName":"page"}],"route":"/gallery/components/toggle-group"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page82.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page82.body","name":"page","propertyAccesses":["page82.body"]}],"propsExpression":"{ page: page82.body }","serializedPropsExpression":"JSON.stringify({ page: page82.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/toggle-group","kind":"page","localName":"page"}],"route":"/gallery/components/toggle-group"}, function page() {
+      return <DocsRoutePage page={page82.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/toolbar", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page83.meta,
     ...(page83.modulepreloads ? { modulepreloads: page83.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page83.body","name":"page","propertyAccesses":["page83.body"]}],"propsExpression":"{ clients: clientHrefs, page: page83.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page83.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/toolbar","kind":"page","localName":"page"}],"route":"/gallery/components/toolbar"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page83.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page83.body","name":"page","propertyAccesses":["page83.body"]}],"propsExpression":"{ page: page83.body }","serializedPropsExpression":"JSON.stringify({ page: page83.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/toolbar","kind":"page","localName":"page"}],"route":"/gallery/components/toolbar"}, function page() {
+      return <DocsRoutePage page={page83.body} />;
     }),
   }) as SiteRoute,
   route("/gallery/components/tooltip", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page84.meta,
     ...(page84.modulepreloads ? { modulepreloads: page84.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page84.body","name":"page","propertyAccesses":["page84.body"]}],"propsExpression":"{ clients: clientHrefs, page: page84.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page84.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/tooltip","kind":"page","localName":"page"}],"route":"/gallery/components/tooltip"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page84.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page84.body","name":"page","propertyAccesses":["page84.body"]}],"propsExpression":"{ page: page84.body }","serializedPropsExpression":"JSON.stringify({ page: page84.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/gallery/components/tooltip","kind":"page","localName":"page"}],"route":"/gallery/components/tooltip"}, function page() {
+      return <DocsRoutePage page={page84.body} />;
     }),
   }) as SiteRoute,
   route("/examples", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page85.meta,
     ...(page85.modulepreloads ? { modulepreloads: page85.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page85.body","name":"page","propertyAccesses":["page85.body"]}],"propsExpression":"{ clients: clientHrefs, page: page85.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page85.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/examples","kind":"page","localName":"page"}],"route":"/examples"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page85.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page85.body","name":"page","propertyAccesses":["page85.body"]}],"propsExpression":"{ page: page85.body }","serializedPropsExpression":"JSON.stringify({ page: page85.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/examples","kind":"page","localName":"page"}],"route":"/examples"}, function page() {
+      return <DocsRoutePage page={page85.body} />;
     }),
   }) as SiteRoute,
   route("/examples/commerce", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page86.meta,
     ...(page86.modulepreloads ? { modulepreloads: page86.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page86.body","name":"page","propertyAccesses":["page86.body"]}],"propsExpression":"{ clients: clientHrefs, page: page86.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page86.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/examples/commerce","kind":"page","localName":"page"}],"route":"/examples/commerce"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page86.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page86.body","name":"page","propertyAccesses":["page86.body"]}],"propsExpression":"{ page: page86.body }","serializedPropsExpression":"JSON.stringify({ page: page86.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/examples/commerce","kind":"page","localName":"page"}],"route":"/examples/commerce"}, function page() {
+      return <DocsRoutePage page={page86.body} />;
     }),
   }) as SiteRoute,
   route("/examples/crm", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page87.meta,
     ...(page87.modulepreloads ? { modulepreloads: page87.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page87.body","name":"page","propertyAccesses":["page87.body"]}],"propsExpression":"{ clients: clientHrefs, page: page87.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page87.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/examples/crm","kind":"page","localName":"page"}],"route":"/examples/crm"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page87.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page87.body","name":"page","propertyAccesses":["page87.body"]}],"propsExpression":"{ page: page87.body }","serializedPropsExpression":"JSON.stringify({ page: page87.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/examples/crm","kind":"page","localName":"page"}],"route":"/examples/crm"}, function page() {
+      return <DocsRoutePage page={page87.body} />;
     }),
   }) as SiteRoute,
   route("/examples/stackoverflow", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page88.meta,
     ...(page88.modulepreloads ? { modulepreloads: page88.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page88.body","name":"page","propertyAccesses":["page88.body"]}],"propsExpression":"{ clients: clientHrefs, page: page88.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page88.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/examples/stackoverflow","kind":"page","localName":"page"}],"route":"/examples/stackoverflow"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page88.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page88.body","name":"page","propertyAccesses":["page88.body"]}],"propsExpression":"{ page: page88.body }","serializedPropsExpression":"JSON.stringify({ page: page88.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/examples/stackoverflow","kind":"page","localName":"page"}],"route":"/examples/stackoverflow"}, function page() {
+      return <DocsRoutePage page={page88.body} />;
     }),
   }) as SiteRoute,
   route("/spec", {
-    layout: SiteRouteLayout,
+    layout: DocsRouteLayout,
     meta: page89.meta,
     ...(page89.modulepreloads ? { modulepreloads: page89.modulepreloads } : {}),
     stylesheets: siteStylesheets,
-    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"clientHrefs","name":"clients"},{"expression":"page89.body","name":"page","propertyAccesses":["page89.body"]}],"propsExpression":"{ clients: clientHrefs, page: page89.body }","serializedPropsExpression":"JSON.stringify({ clients: clientHrefs, page: page89.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"SiteRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:SiteRouteLayout","kind":"layout","localName":"SiteRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/spec","kind":"page","localName":"page"}],"route":"/spec"}, function page() {
-      return <DocsRoutePage clients={clientHrefs} page={page89.body} />;
+    page: __kovoDefineCompiledRoutePage({"components":[{"localName":"DocsRoutePage","props":[{"expression":"page89.body","name":"page","propertyAccesses":["page89.body"]}],"propsExpression":"{ page: page89.body }","serializedPropsExpression":"JSON.stringify({ page: page89.body })"}],"fileName":"site/src/generated/app.routes.tsx","layouts":[{"localName":"DocsRouteLayout","queries":[]}],"navigationSegments":[{"id":"layout:DocsRouteLayout","kind":"layout","localName":"DocsRouteLayout","queries":[]},{"components":["DocsRoutePage"],"id":"page:/spec","kind":"page","localName":"page"}],"route":"/spec"}, function page() {
+      return <DocsRoutePage page={page89.body} />;
     }),
   }) as SiteRoute,
 ];

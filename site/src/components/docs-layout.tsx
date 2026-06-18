@@ -15,23 +15,33 @@ import {
 import { ExampleSplit } from './example-split.js';
 import { GalleryPage } from './gallery.js';
 
-// The docs page shell: header + sidebar + article + on-this-page rail + footer,
-// composed at render time (SPEC §4.5). The mobile sidebar is an L0 disclosure —
-// zero JavaScript. Markdown prose arrives as a pre-rendered HTML string and is
-// spliced in as a verbatim child (the server JSX runtime inserts child strings
-// as written), keeping prose at the route boundary while chrome stays TSX.
+// The docs page shell is split across a persistent layout segment and a route
+// page segment (SPEC §8). The stable header/footer live in DocsRouteLayoutShell;
+// route-dependent sidebar/article/rail content stays in DocsRoutePage. Markdown
+// prose arrives as a pre-rendered HTML string and is spliced in as a verbatim
+// child (the server JSX runtime inserts child strings as written).
 
 export type { DocsRouteContent, DocsRoutePageData, SectionIndexInput };
 
 /** TSX route page for docs-chrome pages. Markdown/API prose remains the single
  * route-boundary HTML input; all surrounding route composition is authored TSX. */
-export function DocsRoutePage({
+export function DocsRouteLayoutShell({
+  children,
   clients,
-  page,
 }: {
+  children?: unknown;
   clients: ClientHrefs;
-  page: DocsRoutePageData;
 }): string {
+  return (
+    <div data-docs-route-layout>
+      {SiteHeader.definition.render({ clients })}
+      {children}
+      {SiteFooter.definition.render()}
+    </div>
+  );
+}
+
+export function DocsRoutePage({ page }: { page: DocsRoutePageData }): string {
   const {
     activePath,
     apiSidebar,
@@ -47,7 +57,6 @@ export function DocsRoutePage({
 
   return (
     <div data-docs-route-page>
-      {SiteHeader.definition.render({ activePath, clients })}
       <div class="docs-shell">
         <aside class="docs-sidebar-rail">{sidebar}</aside>
         <main class="docs-main">
@@ -61,7 +70,6 @@ export function DocsRoutePage({
         </main>
         <aside class="docs-toc-rail">{toc}</aside>
       </div>
-      {SiteFooter.definition.render()}
     </div>
   );
 }

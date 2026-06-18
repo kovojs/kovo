@@ -10,6 +10,7 @@ export function toggle(event) {
   const root = document.documentElement;
   const dark = !root.classList.contains('dark');
   root.classList.toggle('dark', dark);
+  root.dataset.theme = dark ? 'dark' : 'light';
   try {
     localStorage.setItem('theme', dark ? 'dark' : 'light');
   } catch {
