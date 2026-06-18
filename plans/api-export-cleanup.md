@@ -759,6 +759,39 @@ tsconfig.json --noEmit --pretty false`.
     `tempId`, optimistic authoring helpers/types, and `trustedHtml`/`TrustedHtml`
     if their public use case is documented.
   - Evidence:
+    - Audit 2026-06-18: implementation is broader than a low-conflict
+      runtime-only slice. `packages/runtime/package.json` already exports
+      `./generated`, and compiler emitters already target
+      `@kovojs/runtime/generated`, but `packages/runtime/src/index.ts` still
+      root-exports loader/query/morph/mutation machinery that app-facing starter
+      and fixture clients import from `@kovojs/runtime`.
+    - Proposed root allow-list: `derive`, `DeriveDefinition`, `handler`,
+      `ClientHandler`, `HandlerContext`, `ElementParamValue`, `trustedHtml`,
+      `TrustedHtml`, `BrowserTrustedHTML`, `tempId`, `OptimisticFor`,
+      `OptimisticPlan`, `OptimisticEntry`, `OptimisticTransform`,
+      `OptimisticQueryKey`, `OptimisticChange`, and `MutationChangeRecord`.
+      `OptimisticPlan` needs the listed optimistic helper types to keep the
+      transitive public type closure valid under `rules/api-surface.md`.
+    - Consumer blockers to resolve in the implementation slice:
+      `packages/create-kovo/templates/src/client.ts` imports
+      `applyDeferredStreamResponseToRuntime`, `createQueryStore`,
+      `DomMorphTarget`, `installKovoLoader`, `EnhancedMutationFetch`,
+      `MorphRoot`, and `TargetCollectorRoot` from the root; integration fixtures
+      under `tests/integration/fixtures/*/client.ts` import loader/query/binding
+      runtime helpers from the root; `packages/conformance-fixtures` tests embed
+      root imports for generated-module and starter-template fixtures;
+      `packages/server/src/document-core.ts` imports `kovoLoaderSource` from the
+      root; `packages/server/src/jsx-runtime.ts` imports `kovoStyleProperty` and
+      `kovoTrustedHtmlContent` from the root; docs currently show root imports
+      for loader internals in `site/content/guides/streaming.md`,
+      `site/content/guides/optimistic.md`, and `docs/integration-testing.md`.
+    - Risk: moving starter/template imports to `@kovojs/runtime/generated` may
+      conflict with `SPEC.md` §1.1 public import expectations and
+      `scripts/import-boundary.mjs`, which treats generated subpaths as
+      non-public in app-facing source. The next slice should first choose
+      whether starter client setup remains an app-authored public runtime
+      surface, becomes compiler-emitted, or gets a narrowly documented public
+      loader subpath distinct from the generated ABI.
 - [ ] **Shrink `@kovojs/core` to app declaration primitives.**
   - Review and likely internalize diagnostics metadata, registry types, query
     delta helpers/types, and fragment-target helpers if they are compiler/server
