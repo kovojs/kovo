@@ -206,14 +206,25 @@ base, sys: { color: { outline: base.sys.color.primary } } });` for apps that wan
 
 ## Part E — SPEC, docs, and plan closure
 
-- [ ] **E1. Update `SPEC.md` §13.1.** Record that StyleX-authored component styles may reference
+- [x] **E1. Update `SPEC.md` §13.1.** Record that StyleX-authored component styles may reference
       compiler-known CSS custom-property tokens, and that theme tokens are document CSS.
-- [ ] **E2. Update styling docs.** Expand `site/content/guides/styling.md` with Material reference
+  - Evidence: `SPEC.md` §13.1 now defines extracted StyleX/theme-token CSS as
+    ordinary document CSS custom properties and names `--kovo-theme-ref-*` /
+    `--kovo-theme-sys-*` variables; `git diff --check` passes.
+- [x] **E2. Update styling docs.** Expand `site/content/guides/styling.md` with Material reference
       tokens, system tokens, seed generation, and the copy-in story.
+  - Evidence: `site/content/guides/styling.md` documents `defineTheme`,
+    generated reference/system variables, custom colors, `tokens`, and `base`
+    composition. Verification: `node site/scripts/api-examples-check.mjs`;
+    `corepack pnpm --filter @kovojs/site run build`.
 - [ ] **E3. Update component docs.** Explain that `@kovojs/ui` components use system tokens by
       default and remain overrideable through `style`/`styles`.
-- [ ] **E4. API reference coverage.** Add public JSDoc for the new root `@kovojs/style` theme
+- [x] **E4. API reference coverage.** Add public JSDoc for the new root `@kovojs/style` theme
       symbols and keep api-surface gates clean.
+  - Evidence: public theme exports in `packages/style/src/theme.ts` have JSDoc
+    and Kovo-owned public types; `node scripts/api-surface-gate.mjs && node
+    site/scripts/api-ref.mjs && node site/scripts/api-examples-check.mjs` passes
+    with `api-ref/v1 packages=8 exports=641 documented=465`.
 - [ ] **E5. Accessibility proof.** Add a focused conformance note/test for important `on-*` role
       foreground/background pairs using the generated contrast level, following
       `rules/accessibility-conformance.md`. Do not claim WCAG coverage without the cited evidence.

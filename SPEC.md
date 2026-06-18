@@ -1206,6 +1206,25 @@ Handlers unit-test as `(event, ctx)` functions; transforms as pure `(data, input
 carry standing conformance rules, release gates, implementation roadmaps, and
 explanatory examples:
 
+### 13.1 StyleX and Theme Tokens
+
+Kovo component styles are authored as TSX/JSX source with `@kovojs/style`
+objects. The compiler may extract static `style.create(...)`, `style.defineVars(...)`,
+`style.createTheme(...)`, and compiler-known imported token references into
+ordinary CSS assets, but it may not turn lowered style IR into a second
+app-authoring surface (§5.2). Extracted rules are global atomic CSS with stable
+provenance, not shadow-DOM scoped rules; components remain light DOM so form
+participation, IDREFs, and accessibility relationships cross component
+boundaries.
+
+Theme tokens are document CSS custom properties. A seed-generated Kovo theme
+emits reference palette variables such as `--kovo-theme-ref-palette-primary-40`
+and Material system role variables such as `--kovo-theme-sys-color-primary` on
+`:root` and dark-theme selectors. Component styles may reference typed public
+tokens from `@kovojs/style`, but the runtime value is still a CSS custom property
+resolved by the document. No core runtime theme store, hydration graph, or shadow
+boundary is introduced for theme selection.
+
 - Accessibility conformance: `rules/accessibility-conformance.md`
 - Data-layer policy: `rules/data-layer-policy.md`
 - v1 acceptance gates: `rules/v1-acceptance.md`

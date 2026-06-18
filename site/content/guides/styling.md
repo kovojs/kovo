@@ -14,6 +14,53 @@ Use plain document CSS for global page chrome, resets, fonts, and document-level
 Because Kovo renders light DOM, tokens are ordinary CSS custom properties and theming does not cross
 shadow boundaries.
 
+## Seed themes
+
+Use `defineTheme` when an app wants one seed color to drive the UI token system. The generated theme
+returns concrete light/dark values plus deterministic CSS custom properties:
+
+```ts
+import { defineTheme } from '@kovojs/style';
+
+export const theme = defineTheme({
+  seed: '#6750A4',
+  colors: {
+    success: '#16a34a',
+    warning: '#f59e0b',
+  },
+  shape: {
+    cornerMedium: '0.625rem',
+  },
+});
+
+export const themeCss = theme.css;
+```
+
+The CSS defines Material reference palette variables such as
+`--kovo-theme-ref-palette-primary-40`, system role variables such as
+`--kovo-theme-sys-color-primary`, and dark overrides under `:root[data-theme="dark"]`. Apps can
+select a theme by setting document attributes or classes; Kovo does not add a runtime theme store.
+
+When a theme needs precise overrides, compose from the generated base rather than using callbacks:
+
+```ts
+import { defineTheme } from '@kovojs/style';
+
+const base = defineTheme({ seed: '#6750A4' });
+
+export const theme = defineTheme({
+  base,
+  sys: {
+    color: {
+      outline: base.sys.color.primary,
+    },
+  },
+  shape: {
+    cornerSmall: '2px',
+  },
+});
+```
+
 ## Component styles
 
 Import the style package as `style`, define style groups near the component, and compose them through
@@ -22,19 +69,21 @@ Import the style package as `style`, define style groups near the component, and
 ```tsx
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 const cardStyles = style.create({
   root: {
-    backgroundColor: 'var(--surface)',
-    borderColor: 'var(--edge)',
+    backgroundColor: tokens.sys.color.surface,
+    borderColor: tokens.sys.color.outlineVariant,
     borderStyle: 'solid',
     borderWidth: 1,
+    color: tokens.sys.color.onSurface,
     padding: 16,
   },
   lowStock: {
-    borderColor: 'var(--warning)',
-    color: 'var(--warning)',
+    borderColor: tokens.customColor('warning').color,
+    color: tokens.customColor('warning').color,
   },
 });
 
@@ -54,9 +103,9 @@ export const ProductCard = component({
 ```
 
 Style objects can be selected with normal TypeScript conditionals. The compiler sees every referenced
-object, extracts the CSS at build time, and routes state/query-driven style toggles through the same
-attribute update plan as other Kovo bindings. That means late mutation fragments and deferred chunks
-can only reference classes already present in the app stylesheet.
+object and compiler-known token, extracts the CSS at build time, and routes state/query-driven style
+toggles through the same attribute update plan as other Kovo bindings. That means late mutation
+fragments and deferred chunks can only reference classes already present in the app stylesheet.
 
 ## Overrides
 
@@ -164,8 +213,9 @@ rather than shadow DOM, because shadow boundaries break IDREF wiring, form parti
 
 Practical summary:
 
-- Component styling: typed `@kovojs/style` objects compiled to readable atomic CSS.
-- Document styling: plain CSS for resets, fonts, page chrome, and CSS custom-property themes.
+- Component styling: typed `@kovojs/style` objects and theme tokens compiled to readable atomic CSS.
+- Document styling: plain CSS for resets, fonts, page chrome, and generated CSS custom-property
+  themes.
 - Every render path — page, fragment, deferred chunk — declares its stylesheets; the framework
   dedupes and delivers.
 
