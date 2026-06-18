@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component, FieldError, form, FormError } from '@kovojs/core';
+import { component, ErrorBoundary, FieldError, form, FormError } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { csrfToken } from './csrf.js';
@@ -12,6 +12,26 @@ import { layout, notFound, renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
 
 describe('route JSX pages', () => {
+  it('renders the nearest ErrorBoundary fallback for unexpected component render failures', async () => {
+    const ProductGrid = component({
+      render: () => {
+        throw new Error('product query renderer failed');
+      },
+    });
+    const productRoute = route('/products', {
+      page: () => (
+        <ErrorBoundary fallback={<section role="alert">Products are unavailable.</section>}>
+          <ProductGrid />
+        </ErrorBoundary>
+      ),
+    });
+
+    await expect(renderRoutePageResponse(productRoute, {}, {})).resolves.toMatchObject({
+      body: '<section role="alert">Products are unavailable.</section>',
+      status: 200,
+    });
+  });
+
   it('loads direct component queries from the route request context', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {

@@ -5,6 +5,7 @@ import {
   type CsrfValidationOptions,
   type ServerErrorHandler,
 } from '@kovojs/server';
+import { ErrorBoundary } from '@kovojs/core';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 import {
   createApp,
@@ -30,7 +31,7 @@ import {
 } from './app.js';
 import { CartBadge } from './components/cart-badge.js';
 import { OrderHistory } from './components/order-history.js';
-import { ProductGrid } from './components/product-grid.js';
+import { ProductGrid, ProductGridError } from './components/product-grid.js';
 
 export type CommerceShellRequest = Request & CommerceAuthRequest;
 
@@ -80,7 +81,9 @@ function CommerceCartPage({ request }: { request: CommerceShellRequest }): strin
   return (
     <>
       <CartBadge />
-      <ProductGrid />
+      <ErrorBoundary fallback={<ProductGridError />}>
+        <ProductGrid />
+      </ErrorBoundary>
       {request.session?.user?.id ? (
         <OrderHistory />
       ) : (

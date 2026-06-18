@@ -614,9 +614,9 @@ describe('compiler conformance corpus', () => {
         diagnostics: [],
         fileName: 'examples/commerce/src/components/product-grid.tsx',
         fixpointAsserted: true,
-        // ProductGrid carries generated Commerce live-target adapter code beyond
-        // the compiler-lowered component body so app files do not import
-        // generated registry wiring.
+        // The Commerce emit script includes app-level mutation input registry
+        // facts so ProductGrid can lower typed form fields exactly as emitted.
+        // This package fixture still asserts fixpoint and render equivalence.
         generatedMatchesCompilerOutput: false,
         loweredRenderSourcePresent: true,
         renderEquivalenceAsserted: true,

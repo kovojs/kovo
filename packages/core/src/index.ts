@@ -75,6 +75,19 @@ export type JsonValue =
 /** Opaque result of a component's `render` — the compiler lowers it to HTML/IR. */
 export type ComponentRenderResult = unknown;
 
+/** Props accepted by the server-bound `<ErrorBoundary />` render fallback helper. */
+export interface ErrorBoundaryProps {
+  children?: ComponentRenderResult;
+  fallback: ComponentRenderResult | ((error: unknown) => ComponentRenderResult);
+  target?: string;
+}
+
+/** Component-local fallback used by generated live-target renderers for unexpected errors. */
+export interface ComponentErrorBoundary {
+  fallback: ComponentRenderResult | ((error: unknown) => ComponentRenderResult);
+  target?: string;
+}
+
 type ComponentMutationDefinitions = Record<
   string,
   Form<string, Record<string, JsonValue>, unknown>
@@ -122,6 +135,8 @@ export interface ComponentDefinition<
   disableServerRefresh?: boolean;
   /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
   fragmentTarget?: never;
+  /** Unexpected render-error fallback for full-page and live-target renders (SPEC §9.2). */
+  errorBoundary?: ComponentErrorBoundary;
   mutations?: Mutations;
   queries?: QueryBindings;
   state?: () => State;
@@ -138,6 +153,8 @@ export interface ComponentDefinitionInput {
   disableServerRefresh?: boolean;
   /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
   fragmentTarget?: never;
+  /** Unexpected render-error fallback for full-page and live-target renders (SPEC §9.2). */
+  errorBoundary?: ComponentErrorBoundary;
   mutations?: Record<string, unknown>;
   queries?: unknown;
   state?: () => JsonValue;
@@ -188,6 +205,15 @@ export function component<const Definition extends ComponentDefinitionShape>(
   },
 ): Component<Definition> {
   return { definition };
+}
+
+/**
+ * Declare a tree-local unexpected-error boundary. Server JSX catches descendant
+ * render failures and renders `fallback`; typed mutation failures remain normal
+ * `<FieldError>` / `<FormError>` state (SPEC §9.2).
+ */
+export function ErrorBoundary(props: ErrorBoundaryProps): ComponentRenderResult {
+  return props.children;
 }
 
 /** A typed component query binding with args derived from serializable component props. */

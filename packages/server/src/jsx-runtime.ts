@@ -2,11 +2,12 @@ import type {
   Component,
   ComponentDefinitionInput,
   ComponentRenderSlots,
+  ErrorBoundaryProps,
   FieldErrorProps,
   FormErrorProps,
   JsonValue,
 } from '@kovojs/core';
-import { FieldError, FormError } from '@kovojs/core';
+import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
 import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/runtime';
 
 import { componentMutationFailureSlots } from './component-render.js';
@@ -82,6 +83,9 @@ export function jsx(
   props: JsxProps,
   key?: unknown,
 ): MaybePromise<string> {
+  if (isErrorBoundaryComponent(type)) {
+    return renderErrorBoundary(props as unknown as ErrorBoundaryProps);
+  }
   if (isMutationFormHelperComponent(type, FieldError, 'FieldError')) {
     return renderMutationFormHelper('field', props);
   }
@@ -102,6 +106,32 @@ export function jsx(
           `<${type}${attributes}>${renderFormChildrenContent(type, props, key, html)}${afterChildren}</${type}>`,
       )
     : `<${type}${attributes}>${renderFormChildrenContent(type, props, key, children)}${afterChildren}</${type}>`;
+}
+
+function isErrorBoundaryComponent(type: JsxComponent | KovoJsxComponent | string): boolean {
+  return (
+    (type as unknown) === ErrorBoundary ||
+    (typeof type === 'function' && type.name === 'ErrorBoundary')
+  );
+}
+
+function renderErrorBoundary(props: ErrorBoundaryProps): MaybePromise<string> {
+  try {
+    const rendered = renderJsxChildren(props.children as JsxNode);
+    return isPromiseLike(rendered)
+      ? rendered.catch((error) => renderErrorBoundaryFallback(props, error))
+      : rendered;
+  } catch (error) {
+    return renderErrorBoundaryFallback(props, error);
+  }
+}
+
+function renderErrorBoundaryFallback(
+  props: ErrorBoundaryProps,
+  error: unknown,
+): MaybePromise<string> {
+  const fallback = typeof props.fallback === 'function' ? props.fallback(error) : props.fallback;
+  return renderJsxChildren(fallback as JsxNode);
 }
 
 function isMutationFormHelperComponent(

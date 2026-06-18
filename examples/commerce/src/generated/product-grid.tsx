@@ -22,6 +22,10 @@ const addToCartForm = form('cart/add');
 export type AddToCartFailure = FormFailure<typeof addToCartForm>;
 
 export const ProductGrid = component({
+  errorBoundary: {
+    fallback: renderProductGridError,
+    target: 'product-grid',
+  },
   mutations: { addToCart: addToCartForm },
   queries: { productGrid: productGridQuery },
   render: ({ productGrid }: { productGrid: ProductGridResult }) => {
@@ -34,6 +38,18 @@ export const ProductGrid = component({
   },
 });
 ProductGrid.name = "components/product-grid/product-grid";
+
+export function ProductGridError(): string {
+  return renderProductGridError();
+}
+
+function renderProductGridError(): string {
+  return (
+    <section class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+      Products are temporarily unavailable.
+    </section>
+  );
+}
 
 export function renderProductGridItems(
   result: ProductGridResult,
