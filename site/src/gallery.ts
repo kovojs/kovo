@@ -3,37 +3,38 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { respond, route } from '@kovojs/server';
 import ts from 'typescript';
 import { createServer } from 'vite-plus';
 
-import { renderSectionIndex } from './components/docs-layout.js';
-import { renderGalleryPage, type GalleryRouteView } from './components/gallery.js';
-import type { NavGroup } from './content.js';
-import { docRoute, routePath, type AnyRoute } from './route-kit.js';
+import type { GalleryRouteView } from './components/gallery.js';
+import type { DocsRouteContent } from './route-data.js';
 
 // Gallery section: rendered component fixtures + compiled interactive demos.
 //
-// CONTRACT (owned by this module): build the gallery routes — the /gallery/
-// index, the retired /gallery/interactive/ redirect, and one
-// /gallery/components/<name>/ page per fixture — by SSR-loading
-// examples/gallery/src fixtures, folding the compiled interactive demo into each
-// component page, and registering the interactive demos' client modules into the
-// passed registry (so the export replay serves them; SPEC §4.4 — no load-bearing
-// import maps, rewrite bare specifiers to versioned /c/ URLs). Ports the previous
-// build: scripts/build.mjs (loadGalleryData, renderGalleryPage) and
-// scripts/app-shell.mjs (gallery client-module registration).
+// CONTRACT (owned by this module): build route-page data for the /gallery/
+// index, the retired /gallery/interactive/ page, and one /gallery/components/<name>/
+// page per fixture by SSR-loading examples/gallery/src fixtures, folding the
+// compiled interactive demo into each component page, and registering the
+// interactive demos' client modules into the passed registry (so the export
+// replay serves them; SPEC §4.4 — no load-bearing import maps, rewrite bare
+// specifiers to versioned /c/ URLs). The route declarations themselves are
+// emitted as literal TSX in src/generated/app.routes.tsx.
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const headlessUiSourceRoot = path.join(repoRoot, 'packages/headless-ui/src');
 const galleryGeneratedDir = path.join(repoRoot, 'examples/gallery/src/generated/interactive');
 
-const textEncoder = new TextEncoder();
-
 export interface GalleryDeps {
   // The same registry passed to createApp(); register interactive demo modules here.
   clientModules: { put(input: { path: string; source: string; version: string }): string };
-  groups: NavGroup[];
+}
+
+export interface GalleryRoutePageData {
+  activePath: string;
+  content: DocsRouteContent;
+  meta: { description: string; title: string };
+  modulepreloads?: readonly string[];
+  url: string;
 }
 
 interface GalleryRoute {
@@ -251,32 +252,9 @@ function rewriteGalleryDemoHrefs(html: string, galleryRoute: GalleryRoute): stri
   );
 }
 
-/** Static redirect for the retired /gallery/interactive/ URL → gallery index.
- * Meta-refresh + canonical works on any static host and with JS disabled; the
- * visible link keeps check-links happy and gives a manual fallback. Ports
- * scripts/build.mjs renderGalleryInteractiveRedirect. */
-function renderGalleryInteractiveRedirect(): string {
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gallery · Kovo</title>
-    <meta name="description" content="The interactive gallery has moved into the component gallery." />
-    <link rel="canonical" href="/gallery/" />
-    <meta http-equiv="refresh" content="0; url=/gallery/" />
-  </head>
-  <body>
-    <p>The interactive gallery is now part of the <a href="/gallery/">component gallery</a>.</p>
-  </body>
-</html>
-`;
-}
-
-export async function buildGalleryRoutes({
+export async function buildGalleryRoutePages({
   clientModules,
-  groups,
-}: GalleryDeps): Promise<AnyRoute[]> {
+}: GalleryDeps): Promise<GalleryRoutePageData[]> {
   const { clientHrefs, galleryRoutes, interactiveDemos, supportClientHrefs } =
     await loadGalleryData();
 
@@ -306,50 +284,53 @@ export async function buildGalleryRoutes({
     title: galleryRoute.title,
   }));
 
-  const routes: AnyRoute[] = [];
+  const pages: GalleryRoutePageData[] = [];
 
   // 1. The /gallery/ index route.
-  routes.push(
-    docRoute(
-      '/gallery/',
-      {
-        description: 'Kovo component gallery — rendered headless and styled component fixtures.',
-        title: 'Gallery · Kovo',
-      },
-      {
-        activePath: '/gallery/',
-        contentHtml: renderSectionIndex({
+  pages.push({
+    activePath: '/gallery/',
+    content: {
+      kind: 'section-index',
+      section: {
           key: 'gallery',
           pages: galleryRoutes.map((galleryRoute) => ({
             title: galleryRoute.title,
             url: galleryUrl(galleryRoute.path),
           })),
           title: 'Gallery',
-        }),
-        groups,
-        prose: false,
       },
-    ),
-  );
+    },
+    meta: {
+      description: 'Kovo component gallery — rendered headless and styled component fixtures.',
+      title: 'Gallery · Kovo',
+    },
+    url: '/gallery/',
+  });
 
-  // 2. The retired /gallery/interactive/ redirect — a standalone HTML document,
-  // returned as raw bytes (disposition inline) so the app-shell document template
-  // does not wrap it. Static export writes any 200 text/html route document.
-  const redirectHtml = renderGalleryInteractiveRedirect();
-  routes.push(
-    route(routePath('/gallery/interactive/'), {
-      meta: {
-        description: 'The interactive gallery has moved into the component gallery.',
-        title: 'Gallery · Kovo',
+  // 2. The retired /gallery/interactive/ URL remains a normal TSX docs route so
+  // enhanced navigation has route/page metadata on every docs-site document.
+  pages.push({
+    activePath: '/gallery/',
+    content: {
+      kind: 'section-index',
+      section: {
+        key: 'gallery',
+        pages: [
+          {
+            description: 'The interactive gallery now lives inside each component fixture.',
+            title: 'Component Gallery',
+            url: '/gallery/',
+          },
+        ],
+        title: 'Gallery moved',
       },
-      page() {
-        return respond.stream(textEncoder.encode(redirectHtml), {
-          contentType: 'text/html; charset=utf-8',
-          disposition: 'inline',
-        });
-      },
-    }) as AnyRoute,
-  );
+    },
+    meta: {
+      description: 'The interactive gallery has moved into the component gallery.',
+      title: 'Gallery · Kovo',
+    },
+    url: '/gallery/interactive/',
+  });
 
   // 3. One /gallery/components/<path>/ route per fixture: render the compiled
   // interactive demo when one exists (with the behavior-contract table lifted from
@@ -370,28 +351,25 @@ export async function buildGalleryRoutes({
     const demoHtml = rewriteGalleryDemoHrefs(demoSource, galleryRoute);
     const url = galleryUrl(galleryRoute.path);
 
-    routes.push(
-      docRoute(
-        url,
-        {
-          description: `${galleryRoute.title} component gallery fixture.`,
-          title: `${galleryRoute.title} · Gallery · Kovo`,
-        },
-        {
-          activePath: url,
-          contentHtml: renderGalleryPage({
+    pages.push({
+      activePath: url,
+      content: {
+        gallery: {
             demoHtml,
             interactive: Boolean(interactive),
             route: { path: galleryRoute.path, title: galleryRoute.title },
             routes: routeViews,
-          }),
-          groups,
-          prose: false,
         },
-        interactive ? { modulepreloads: interactive.modulepreloads } : {},
-      ),
-    );
+        kind: 'gallery',
+      },
+      meta: {
+        description: `${galleryRoute.title} component gallery fixture.`,
+        title: `${galleryRoute.title} · Gallery · Kovo`,
+      },
+      ...(interactive ? { modulepreloads: interactive.modulepreloads } : {}),
+      url,
+    });
   }
 
-  return routes;
+  return pages;
 }

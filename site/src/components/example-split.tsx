@@ -27,15 +27,9 @@ export interface ExampleSplitInput {
   title: string;
 }
 
-/** Render the example split view as a render-time composition. Returns the page
- * body string consumed by docRoute(..., { prose: false }). */
-export function renderExampleSplit({
-  appHref,
-  blurb,
-  files,
-  idBase,
-  title,
-}: ExampleSplitInput): string {
+/** Example split route page content. */
+export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
+  const { appHref, blurb, files, idBase, title } = input;
   // CSS-only tab activation: the checked radio reveals its matching panel and
   // highlights its label. We emit the per-index selector rules in a <style> block
   // because they reference dynamic ids.

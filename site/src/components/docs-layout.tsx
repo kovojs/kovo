@@ -1,14 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { escapeHtml } from '@kovojs/server/internal/html';
 
-import type {
-  ApiSidebar as ApiSidebarData,
-  DocSection,
-  Heading,
-  NavGroup,
-  NavLink,
-} from '../content.js';
 import { SECTION_INTROS } from '../content.js';
+import type { DocsRouteContent, DocsRoutePageData, SectionIndexInput } from '../route-data.js';
 import {
   ApiSidebar,
   DocsSidebar,
@@ -18,6 +12,8 @@ import {
   renderToc,
   type ClientHrefs,
 } from './chrome.js';
+import { ExampleSplit } from './example-split.js';
+import { GalleryPage } from './gallery.js';
 
 // The docs page shell: header + sidebar + article + on-this-page rail + footer,
 // composed at render time (SPEC §4.5). The mobile sidebar is an L0 disclosure —
@@ -25,41 +21,32 @@ import {
 // spliced in as a verbatim child (the server JSX runtime inserts child strings
 // as written), keeping prose at the route boundary while chrome stays TSX.
 
-export interface PageOptions {
-  activePath: string;
-  /** When set (API reference pages), the right rail renders the category-grouped
-   * API navigation instead of the flat heading TOC. */
-  apiSidebar?: ApiSidebarData | undefined;
-  clients: ClientHrefs;
-  contentHtml: string;
-  eyebrow?: string | undefined;
-  groups: NavGroup[];
-  headings?: Heading[] | undefined;
-  next?: NavLink | undefined;
-  prev?: NavLink | undefined;
-  prose?: boolean;
-}
+export type { DocsRouteContent, DocsRoutePageData, SectionIndexInput };
 
-/** Render a full docs page body (everything inside <body> except the document
- * shell's search dialog, which the DocumentTemplate owns). */
-export function renderDocsBody(options: PageOptions): string {
+/** TSX route page for docs-chrome pages. Markdown/API prose remains the single
+ * route-boundary HTML input; all surrounding route composition is authored TSX. */
+export function DocsRoutePage({
+  clients,
+  page,
+}: {
+  clients: ClientHrefs;
+  page: DocsRoutePageData;
+}): string {
   const {
     activePath,
     apiSidebar,
-    clients,
-    contentHtml,
+    content,
     eyebrow,
     groups,
     headings = [],
     next,
     prev,
-    prose = true,
-  } = options;
+  } = page;
   const sidebar = DocsSidebar.definition.render({ activePath, groups });
   const toc = apiSidebar ? ApiSidebar.definition.render({ apiSidebar }) : renderToc(headings);
 
   return (
-    <>
+    <div data-docs-route-page>
       {SiteHeader.definition.render({ activePath, clients })}
       <div class="docs-shell">
         <aside class="docs-sidebar-rail">{sidebar}</aside>
@@ -69,27 +56,30 @@ export function renderDocsBody(options: PageOptions): string {
             <div>{sidebar}</div>
           </details>
           {eyebrow ? <p class="eyebrow">{escapeHtml(eyebrow)}</p> : ''}
-          {prose ? <article class="prose">{contentHtml}</article> : contentHtml}
+          <DocsRouteContentView content={content} />
           {prev || next ? PrevNext.definition.render({ prev, next }) : ''}
         </main>
         <aside class="docs-toc-rail">{toc}</aside>
       </div>
       {SiteFooter.definition.render()}
-    </>
+    </div>
   );
 }
 
-export interface SectionIndexInput {
-  key: string;
-  pages: { description?: string; title: string; url: string }[];
-  title: string;
+function DocsRouteContentView({ content }: { content: DocsRouteContent }): string {
+  if (content.kind === 'html') {
+    return content.prose === false ? content.html : <article class="prose">{content.html}</article>;
+  }
+  if (content.kind === 'gallery') return <GalleryPage input={content.gallery} />;
+  if (content.kind === 'example') return <ExampleSplit input={content.example} />;
+  return <SectionIndex section={content.section} />;
 }
 
 /** Section landing pages: a card grid in the ledger style. */
-export function renderSectionIndex(section: SectionIndexInput): string {
+export function SectionIndex({ section }: { section: SectionIndexInput }): string {
   const numbered = section.key === 'tutorial';
   return (
-    <>
+    <div data-section-index>
       <div class="index-head">
         <h1>{escapeHtml(section.title)}</h1>
         {SECTION_INTROS[section.key] ? <p>{escapeHtml(SECTION_INTROS[section.key]!)}</p> : ''}
@@ -109,19 +99,6 @@ export function renderSectionIndex(section: SectionIndexInput): string {
           );
         })}
       </ul>
-    </>
+    </div>
   );
-}
-
-/** Convenience: the section-index input for a content DocSection. */
-export function sectionIndexInput(section: DocSection): SectionIndexInput {
-  return {
-    key: section.key,
-    pages: section.pages.map((page) => ({
-      description: page.description,
-      title: page.title,
-      url: page.url,
-    })),
-    title: section.title,
-  };
 }

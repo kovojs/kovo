@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite-plus';
 
 import { runContentPipeline } from './content-pipeline.mjs';
+import { emitSiteRoutes } from './emit-routes.mjs';
 
 // SPEC §9.5: the docs site's public static-export bridge. The site is now a real
 // Kovo app (src/app.ts); this replays its declared route documents, copies the
@@ -23,6 +24,7 @@ export async function exportSiteStaticApp({
   skipPipeline = false,
 } = {}) {
   if (!skipPipeline) await runContentPipeline();
+  await emitSiteRoutes({ skipPipeline: true });
   // The export owns the whole static-host directory; clear stale routes/assets
   // so removed pages cannot linger (the W9 link gate would otherwise pass on
   // orphaned files). dist-css holds the Vite manifest and is left untouched.
@@ -39,7 +41,7 @@ export async function exportSiteStaticApp({
 
   try {
     const [appModule, auxModule, examplesModule, coreModule, viteModule] = await Promise.all([
-      viteServer.ssrLoadModule('/src/app.ts'),
+      viteServer.ssrLoadModule('/src/generated/app.kovo-route.tsx'),
       viteServer.ssrLoadModule('/src/aux.ts'),
       viteServer.ssrLoadModule('/src/examples.ts'),
       viteServer.ssrLoadModule('@kovojs/server'),
@@ -53,7 +55,7 @@ export async function exportSiteStaticApp({
 
     const app = appModule.siteStaticExportApp;
     if (!isKovoApp(app)) {
-      throw new Error('src/app.ts must export siteStaticExportApp for public export.');
+      throw new Error('src/generated/app.kovo-route.tsx must export siteStaticExportApp for public export.');
     }
 
     await kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile);

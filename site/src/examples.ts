@@ -1,10 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 import { clientHrefs } from './client/modules.js';
-import { renderSectionIndex } from './components/docs-layout.js';
-import { renderExampleSplit } from './components/example-split.js';
-import type { NavGroup } from './content.js';
-import { docRoute, type AnyRoute } from './route-kit.js';
+import type { DocsRouteContent } from './route-data.js';
 
 // Site-local example-embed build tooling (no type declarations); reused so the
 // heavy build/re-root logic lives in one place and the docs app only authors the
@@ -21,10 +18,11 @@ import { renderMarkdown } from '../scripts/md.mjs';
 // Examples section: runnable Kovo apps embedded beside their authored source.
 //
 // CONTRACT (owned by this module):
-//  - buildExampleRoutes: the /examples/ index plus one /examples/<name>/ split
-//    page per example (a sandboxed iframe when the app is static-exportable or a
-//    live service URL is configured + a CSS-only tabbed source viewer of the
-//    authored TSX). See scripts/examples.mjs for the manifest contract.
+//  - buildExampleRoutePages: the route-page data for /examples/ plus one
+//    /examples/<name>/ split page per example (a sandboxed iframe when the app
+//    is static-exportable or a live service URL is configured + a CSS-only
+//    tabbed source viewer of the authored TSX). The route declarations
+//    themselves are emitted as literal TSX in src/generated/app.routes.tsx.
 //  - exportExampleApps: a build-time hook (called by scripts/export-static.mjs
 //    after the main replay) that statically exports only L0/L1-safe examples
 //    into <outDir>/examples/<name>/app/ with refs re-rooted (SPEC §9.5). Dynamic
@@ -54,24 +52,21 @@ const repoRootPath = fileURLToPath(new URL('../../', import.meta.url));
 
 const copyHref = `${clientHrefs.code}#copy`;
 
-export interface ExampleDeps {
-  groups: NavGroup[];
+export interface ExampleRoutePageData {
+  activePath: string;
+  content: DocsRouteContent;
+  meta: { description: string; title: string };
+  url: string;
 }
 
-export async function buildExampleRoutes({ groups }: ExampleDeps): Promise<AnyRoute[]> {
-  const routes: AnyRoute[] = [];
-
+export async function buildExampleRoutePages(): Promise<ExampleRoutePageData[]> {
+  const pages: ExampleRoutePageData[] = [];
   // /examples/ index: a card grid of every example with its blurb.
-  routes.push(
-    docRoute(
-      '/examples/',
-      {
-        description: 'Runnable Kovo example apps, embedded beside their source.',
-        title: 'Examples · Kovo',
-      },
-      {
-        activePath: '/examples/',
-        contentHtml: renderSectionIndex({
+  pages.push({
+    activePath: '/examples/',
+    content: {
+      kind: 'section-index',
+      section: {
           key: 'examples',
           pages: examples.map((example) => ({
             description: example.blurb,
@@ -79,12 +74,14 @@ export async function buildExampleRoutes({ groups }: ExampleDeps): Promise<AnyRo
             url: examplePagePath(example.name),
           })),
           title: 'Examples',
-        }),
-        groups,
-        prose: false,
       },
-    ),
-  );
+    },
+    meta: {
+      description: 'Runnable Kovo example apps, embedded beside their source.',
+      title: 'Examples · Kovo',
+    },
+    url: '/examples/',
+  });
 
   // One split page per example. Source files are highlighted through the shared
   // markdown/Shiki pipeline (matching the previous build), with copy buttons
@@ -103,32 +100,27 @@ export async function buildExampleRoutes({ groups }: ExampleDeps): Promise<AnyRo
       files.push({ html, name: file.name });
     }
 
-    const contentHtml = renderExampleSplit({
-      appHref: exampleLiveAppHref(example),
-      blurb: example.blurb,
-      files,
-      idBase: `${example.name}-src`,
-      title: example.title,
+    pages.push({
+      activePath: pagePath,
+      content: {
+        example: {
+          appHref: exampleLiveAppHref(example),
+          blurb: example.blurb,
+          files,
+          idBase: `${example.name}-src`,
+          title: example.title,
+        },
+        kind: 'example',
+      },
+      meta: {
+        description: example.blurb,
+        title: `${example.title} · Examples · Kovo`,
+      },
+      url: pagePath,
     });
-
-    routes.push(
-      docRoute(
-        pagePath,
-        {
-          description: example.blurb,
-          title: `${example.title} · Examples · Kovo`,
-        },
-        {
-          activePath: pagePath,
-          contentHtml,
-          groups,
-          prose: false,
-        },
-      ),
-    );
   }
 
-  return routes;
+  return pages;
 }
 
 /** Build-time hook: statically export each L0/L1-safe example app under
