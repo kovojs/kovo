@@ -6,7 +6,7 @@ import {
   toggleGroupRootAttributes,
   type ToggleGroupItem as HeadlessToggleGroupItem,
   type ToggleGroupType,
-  type ToggleGroupValue,,
+  type ToggleGroupValue,
 } from '@kovojs/headless-ui/toggle-group';
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';

@@ -5,7 +5,7 @@ import {
   toolbarItemAttributes,
   toolbarRootAttributes,
   type ToolbarItem as HeadlessToolbarItem,
-  type ToolbarOrientation,,
+  type ToolbarOrientation,
 } from '@kovojs/headless-ui/toolbar';
 import type { TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
