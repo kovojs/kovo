@@ -534,6 +534,53 @@ describe('browser inline loader enhanced navigation', () => {
     }
   });
 
+  it('preserves requested hash fragments when fetch response URLs omit them', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-symbol" href="/api/core/#symbols%2Ffragment">Symbol</a>',
+      '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+      '</main>',
+    ].join('');
+    const scrolledIds: string[] = [];
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>API Core</title>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+          '<section kovo-nav-segment="page:/api/core" kovo-nav-kind="page" kovo-nav-name="page">',
+          '<h2 id="symbols/fragment">Fragment target</h2>',
+          '</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/api/core/', location.href).href,
+    }));
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView() {
+      scrolledIds.push((this as Element).id);
+    };
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+
+    try {
+      installNavigationLoader();
+      dispatchAnchorLikeClick('/api/core/#symbols%2Ffragment');
+
+      await vi.waitFor(() => expect(document.title).toBe('API Core'));
+
+      expect(location.href).toBe(new URL('/api/core/#symbols%2Ffragment', initialUrl).href);
+      expect(scrolledIds).toEqual(['symbols/fragment']);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
+
   it('scrolls to decoded API rail symbol hash anchors after enhanced navigation', async () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
     document.body.innerHTML = [

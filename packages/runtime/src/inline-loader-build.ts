@@ -347,9 +347,11 @@ function installInlineKovoLoader(im) {
   const an = async (href, pop = false) => {
     const navId = (ni += 1);
     try {
+      const requestedUrl = new URL(href, location.href);
       const response = await fetch(href, { headers: { Accept: 'text/html' } });
       if (navId !== ni) return;
       const finalUrl = new URL(response.url || href, location.href);
+      if (!finalUrl.hash && requestedUrl.hash) finalUrl.hash = requestedUrl.hash;
       const contentType = response.headers?.get('content-type') || '';
       if (finalUrl.origin !== location.origin || !contentType.toLowerCase().includes('text/html')) {
         throw Error();
