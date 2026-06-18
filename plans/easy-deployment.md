@@ -114,9 +114,15 @@ build.ts` exposes `KovoPreset`, `PresetContext`, `PresetDiagnostic`,
       reads `kovo.config.ts`, `KOVO_PRESET`, and host env before selecting a
       preset. Evidence: `packages/server/src/build.test.ts` and
       `packages/cli/src/index.kovo-build.test.ts`.
-- [ ] **Serverless platform bundling remains unaddressed.** Client asset bundling
-      and the Node server bundle are solved; bundling/placing the server entry
-      into Vercel functions or Cloudflare Workers/Containers is still Phase 2/3.
+- [x] **Serverless platform bundling is addressed for the v1 Node-first targets.**
+      Client assets and the Node server bundle are solved, and the server entry is
+      placed into Vercel Functions and Cloudflare Workers output.
+  - Evidence: `packages/server/src/build.ts` emits `.vercel/output` with
+    `functions/kovo.func/handler.mjs`, `index.cjs`, `.vc-config.json`, and static
+    assets, and emits Cloudflare `worker.mjs`, `server/handler.mjs`, `client/`,
+    and `wrangler.toml`. `packages/server/src/build.test.ts` and
+    `packages/cli/src/index.kovo-build.test.ts` verify Vercel and Cloudflare
+    preset output shape and runtime wrappers.
 
 ---
 
@@ -207,19 +213,38 @@ Design decisions to lock in code review:
 
 ### 3. The three v1 presets
 
-- [ ] **`node`** → `dist/server/` standalone: a Node entry that
+- [x] **`node`** → `dist/server/` standalone: a Node entry that
       `toNodeHandler(handler)` behind `node:http`, serves `client/assets` + `client/c`
       with correct cache headers, honors `PORT`/`HOST`, plus a generated `Dockerfile`
       (prod deps only — the key improvement over today's dev-dep image) and an
       optional `systemd` unit. Covers VPS, Fly, Railway, Render.
-- [ ] **`vercel`** → Vercel **Build Output API v3** (`.vercel/output/`): a Node
+  - Evidence: `packages/server/src/build.ts` implements `node().emit()` with
+    generated `server.mjs`, immutable static serving, `PORT`/`HOST`, and a default
+    Dockerfile. `packages/server/src/build.test.ts` verifies route fallback,
+    `/c/`, `/assets/`, immutable headers, forwarded proto, and Dockerfile output.
+    `packages/cli/src/index.kovo-build.test.ts` verifies the generated node output
+    boots without Vite at request time.
+- [x] **`vercel`** → Vercel **Build Output API v3** (`.vercel/output/`): a Node
       serverless function wrapping `handler.mjs`, static assets as `output/static/*`
       with immutable cache config, `config.json` routing. `vercel deploy --prebuilt`.
       (`runtime: 'nodejs'` only in v1; `edge` reserved.)
-- [ ] **`cloudflare`** → a Worker entry (`export default { fetch }`) delegating to
+  - Evidence: `packages/server/src/build.ts` implements `vercel().emit()` with
+    Build Output API v3 `static`, `functions/kovo.func`, `config.json`, and
+    immutable `/assets|/c` routing. `packages/server/src/build.test.ts` verifies
+    the golden output and function wrapper, and
+    `packages/cli/src/index.kovo-build.test.ts` verifies Vercel auto-detection and
+    static-only Vercel output.
+- [x] **`cloudflare`** → a Worker entry (`export default { fetch }`) delegating to
       `handler.mjs` under `compatibility_flags = ["nodejs_compat"]`, static assets via
       Workers Assets/`[site]`, generated `wrangler.toml`. `inspect()` warns when the
       data plane needs TCP (recommend Hyperdrive/Containers). `wrangler deploy`.
+  - Evidence: `packages/server/src/build.ts` implements `cloudflare().emit()` with
+    `worker.mjs`, `server/handler.mjs`, `client/`, `wrangler.toml`,
+    `compatibility_flags = ["nodejs_compat"]`, and Workers Assets. The same file
+    implements `cloudflare().inspect()` warnings/errors for `DATABASE_URL` and
+    unsupported Node APIs. `packages/server/src/build.test.ts`,
+    `packages/cli/src/index.kovo-build.test.ts`, and the recorded
+    `wrangler deploy --dry-run` evidence in Phase 3 verify the preset.
 
 ### 4. Cross-cutting contracts
 
@@ -245,17 +270,61 @@ Design decisions to lock in code review:
       serves a retained `c/` dir; Vercel/CF rely on content-hash immutability +
       guidance to not purge old versions. This is a real correctness constraint, not a
       nicety — surfaced in preset docs and `inspect()` warnings.
+  - Partial evidence: `packages/create-kovo/templates/docs/deployment.md` documents that
+    `/c/*?v=...` client handler modules are immutable and that old versioned
+    artifacts must stay published until referencing documents age out.
+    `packages/server/src/build.ts` emits a `client-module-retention` warning from
+    `node().inspect()`, `vercel().inspect()`, and `cloudflare().inspect()` whenever
+    the neutral build contains `/c/` client modules. `packages/server/src/build.test.ts`
+    verifies all three built-in presets emit that warning, and the existing node,
+    Vercel, and Cloudflare preset tests verify emitted `/c/` files keep
+    `public, max-age=31536000, immutable` cache behavior.
+  - Gap: generated client-module URLs still use a stable path plus version query
+    (`/c/name.js?v=...`). A new deploy can overwrite `client/c/name.js`, so old
+    documents may fetch new module bytes for an old query version. Actual
+    retained versioned artifact paths or query-aware retained serving remain open.
 - [ ] **Env & origin.** Convention: `PORT`, `HOST`, `NODE_ENV`, and `DATABASE_URL`
       (only env Kovo names for the data plane). Origin/proto already handled via
       `Host`/`x-forwarded-proto` in `node.ts`; presets set `origin` appropriately for
       proxied platforms. Secrets beyond `DATABASE_URL` are pass-through env, undocumented
       by Kovo per the locked DB decision.
-- [ ] **Edge-readiness audit (deferred, tracked).** Catalogue every `node:`
+  - Partial evidence: `packages/server/src/build.ts` emits a node preset `server.mjs`
+    that reads `process.env.PORT ?? "3000"` and `process.env.HOST ?? "0.0.0.0"`,
+    uses `Host` plus `x-forwarded-proto` to construct the Web `Request` URL, and
+    emits a Dockerfile with `ENV NODE_ENV=production`.
+    `packages/server/src/build.test.ts` verifies the generated node server passes
+    `x-forwarded-proto` through to the bundled handler's request origin.
+    `packages/server/src/node.ts` keeps the shared Node adapter origin logic for
+    host/proto and explicit `origin` overrides. `packages/server/src/build.ts`
+    emits a Vercel function wrapper that uses `x-forwarded-proto` plus `host`,
+    and a Cloudflare Worker that forwards the platform `Request` directly.
+    `packages/server/src/build.test.ts` and
+    `packages/cli/src/index.kovo-build.test.ts` verify `DATABASE_URL` inspection
+    warnings for Cloudflare TCP database deployments.
+  - Gap: `kovo build` still passes `declaredEnv: []` and only catches
+    `DATABASE_URL` when it appears in bundle source or a test supplies
+    `declaredEnv`; the general data-plane env convention is not inferred or
+    documented across presets yet.
+- [x] **Edge-readiness audit (deferred, tracked).** Catalogue every `node:`
       import on the request path (`node:crypto` in `csrf.ts`/`csp.ts`, `node:stream`
       in `node.ts`) so the Phase 5 isolate-edge work has a scoped worklist. The likely
       mechanism is **`unenv`** (Nitro's approach: swap Node built-ins for
       runtime-appropriate implementations at build time) rather than a hand WebCrypto
       rewrite. Audit only in this plan; no refactor.
+  - Evidence: `rg -n "from 'node:|from \"node:|import\\('node:" packages/server/src
+packages/runtime/src packages/core/src -g '*.ts'` was run in this session. The
+    request-path audit is: `packages/server/src/csrf.ts` imports `node:crypto`
+    for HMAC CSRF tokens and timing-safe equality; `packages/server/src/csp.ts`
+    imports `node:crypto` for CSP hashes; `packages/server/src/client-modules.ts`
+    and `packages/server/src/vite-build.ts` import `node:crypto` for build/client
+    module version hashes; `packages/server/src/jsx-context.ts` imports
+    `node:async_hooks` for request-scoped JSX context; `packages/server/src/node.ts`
+    imports `node:stream`, `node:http`, and `node:stream/web` for the Node adapter;
+    the generated node preset in `packages/server/src/build.ts` imports
+    `node:fs`, `node:fs/promises`, `node:http`, `node:path`, `node:stream`, and
+    `node:url`. The remaining `node:` hits are build/dev/test/static-export paths,
+    not true isolate request-path support. Phase 5 keeps the `unenv`/WebCrypto/HTTP
+    DB implementation work open.
 
 ---
 
@@ -263,9 +332,10 @@ Design decisions to lock in code review:
 
 ### Phase 0 — Neutral build + `kovo build` skeleton
 
-- [ ] Promote `createKovoAppShellViteBuild*` from `@internal` to a supported
-      build entry; define `NeutralBuild` shape and write `dist/.kovo/` layout.
-  - Partial evidence: `packages/server/src/build.ts` adds the public build-time
+- [x] Expose a supported build-time neutral artifact API while keeping low-level
+      Vite helpers internal; define `NeutralBuild` shape and write `dist/.kovo/`
+      layout.
+  - Evidence: `packages/server/src/build.ts` adds the public build-time
     `@kovojs/server/build` subpath with `KovoNeutralBuild`,
     `writeKovoNeutralBuild()`, `KovoPreset`, `PresetContext`, `PresetDiagnostic`,
     and `node()`. The neutral writer reuses
@@ -273,9 +343,11 @@ Design decisions to lock in code review:
     to emit `client/c/*`, Vite manifest assets under `client/assets/*`,
     `manifest.json`, `routes.json`, `meta.json`, and an optional
     `server/handler.mjs`. `packages/server/src/build.test.ts` verifies the layout
-    against a small app + Vite manifest fixture. The full item remains open because
-    `kovo build` and the production server bundler do not yet own the app-shell
-    build end to end.
+    against a small app + Vite manifest fixture, including static-only neutral
+    output. `packages/server/package.json` exports `./build`, and
+    `public-packages.json` classifies it as a public API reference surface. The
+    lower-level `createKovoAppShellViteBuild*` helpers remain internal by design;
+    app authors use `kovo build` or `@kovojs/server/build`.
 - [x] Add server-bundle step: `src/app-shell.ts` → `server/handler.mjs`
       (`Request → Response`), no Vite at runtime. Verify a bundled handler serves a
       route + a `/_m/` mutation + a `/c/` module with **zero dev deps installed**.
@@ -356,10 +428,10 @@ vitest --run packages/cli/src/index.kovo-build.test.ts packages/server/src/build
     `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
     `corepack pnpm run check:api-surface`; `corepack pnpm run check:exports`;
     `corepack pnpm run check:publish`; `corepack pnpm exec vp check --fix`.
-- [ ] `node` preset: standalone server + asset serving + cache headers + prod-only
+- [x] `node` preset: standalone server + asset serving + cache headers + prod-only
       `Dockerfile`. Replace the example/demo Vite-from-source serve story with this as
       the recommended prod path (keep Vite serve for dev only).
-  - Partial evidence: `packages/server/src/build.ts` implements `node().emit()`
+  - Evidence: `packages/server/src/build.ts` implements `node().emit()`
     for a neutral build with `server/handler.mjs`, copying `client/` and
     `server/`, writing `server.mjs`, serving immutable `/c/*` and `/assets/*`
     before falling back to the Web `Request → Response` handler, honoring
@@ -368,8 +440,9 @@ vitest --run packages/cli/src/index.kovo-build.test.ts packages/server/src/build
     directly and verifies route fallback, client-module serving, asset serving,
     content types, and `public, max-age=31536000, immutable` cache headers without
     Vite in the request path. The Docker evidence target below proves the generated
-    Dockerfile. The full item remains open because examples/docs have not been
-    switched to this path.
+    Dockerfile. `examples/commerce/package.json` uses `kovo build` for production
+    `build`/`serve:prod`, and `packages/create-kovo/templates/docs/deployment.md`
+    documents `kovo build` as the production path while keeping Vite serve dev-only.
 - [x] Evidence: container builds with pruned prod deps; `curl` of a route, a
       `/assets/*` (immutable cache header), and a `/_m/` mutation succeed.
   - Evidence: `packages/cli/src/index.ts` now bundles `@kovojs/*` into
@@ -526,6 +599,6 @@ packages/cli/src/index.kovo-build.test.ts packages/cli/src/commands-manifest.tes
 - `kovo build` + node preset container, pruned deps: _(Phase 1, still open)_
 - `vercel build --prebuilt` dry-run + golden config: golden config/function/static
   coverage is in `corepack pnpm exec vitest --run packages/server/src/build.test.ts
-  packages/cli/src/index.kovo-build.test.ts`; Vercel CLI dry-run remains open.
+packages/cli/src/index.kovo-build.test.ts`; Vercel CLI dry-run remains open.
 - `wrangler deploy --dry-run` + `inspect()` diagnostics: _(Phase 3)_
 - Example commerce served via the node preset (no Vite at runtime): _(Phase 4)_

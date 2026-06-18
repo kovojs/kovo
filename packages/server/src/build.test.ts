@@ -148,6 +148,44 @@ describe('server build-time deployment API', () => {
     }
   });
 
+  it('warns presets to retain immutable client modules across deploys', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-client-retention-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                return '<main>Home</main>';
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/app.client.js',
+            source: 'export const app = true;',
+            version: 'app-v1',
+          },
+        ],
+        outDir: join(root, '.kovo'),
+      });
+
+      expect(node().inspect(build, { declaredEnv: [] })).toEqual([
+        clientModuleRetentionWarning('node'),
+      ]);
+      expect(vercel().inspect(build, { declaredEnv: [] })).toEqual([
+        clientModuleRetentionWarning('vercel'),
+      ]);
+      await expect(cloudflare().inspect(build, { declaredEnv: [] })).resolves.toEqual([
+        clientModuleRetentionWarning('cloudflare'),
+      ]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('emits app-registered client modules by default in neutral builds', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-default-modules-'));
     const clientModules = createMemoryVersionedClientModuleRegistry();
@@ -248,9 +286,12 @@ describe('server build-time deployment API', () => {
         serverHandlerSource: `
 export default async function handler(request) {
   const url = new URL(request.url);
-  return new Response('route:' + url.pathname + ':' + request.headers.get('x-from-test'), {
+  return new Response(
+    'route:' + url.pathname + ':' + url.origin + ':' + request.headers.get('x-from-test'),
+    {
     headers: { 'content-type': 'text/plain; charset=utf-8' },
-  });
+    },
+  );
 }
 `,
       });
@@ -279,9 +320,14 @@ export default async function handler(request) {
 
       try {
         const routeResponse = await fetch(`${baseUrl}/hello?cart=1`, {
-          headers: { 'x-from-test': 'route-header' },
+          headers: {
+            'x-forwarded-proto': 'https',
+            'x-from-test': 'route-header',
+          },
         });
-        await expect(routeResponse.text()).resolves.toBe('route:/hello:route-header');
+        await expect(routeResponse.text()).resolves.toBe(
+          `route:/hello:https://${new URL(baseUrl).host}:route-header`,
+        );
         expect(routeResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
 
         const clientModuleResponse = await fetch(`${baseUrl}/c/cart.client.js?v=cart-v1`);
@@ -706,6 +752,14 @@ export default async function handler() {
 
 async function readJson(filePath: string): Promise<unknown> {
   return JSON.parse(await readFile(filePath, 'utf8'));
+}
+
+function clientModuleRetentionWarning(presetName: string) {
+  return {
+    code: 'client-module-retention',
+    message: `The ${presetName} preset emits immutable /c/* client modules. Keep old versioned /c/ artifacts published until documents that reference them expire; never purge or rewrite them during deploys.`,
+    severity: 'warning',
+  };
 }
 
 async function listen(server: Server): Promise<string> {

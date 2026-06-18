@@ -140,15 +140,15 @@ export function node(options: NodePresetOptions = {}): NodePreset {
       return emitNodePreset(build, context, options);
     },
     inspect(build, _context) {
-      return build.serverHandlerPath === undefined && build.staticOutput === undefined
-        ? [
-            {
-              code: 'node-missing-handler',
-              message: 'The node preset requires a neutral build with server/handler.mjs.',
-              severity: 'error',
-            },
-          ]
-        : [];
+      const diagnostics = clientModuleRetentionDiagnostics(build, 'node');
+      if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
+        diagnostics.push({
+          code: 'node-missing-handler',
+          message: 'The node preset requires a neutral build with server/handler.mjs.',
+          severity: 'error',
+        });
+      }
+      return diagnostics;
     },
     name: 'node',
     options,
@@ -168,15 +168,15 @@ export function vercel(options: VercelPresetOptions = {}): VercelPreset {
       return emitVercelPreset(build, context, options);
     },
     inspect(build, _context) {
-      return build.serverHandlerPath === undefined && build.staticOutput === undefined
-        ? [
-            {
-              code: 'vercel-missing-handler',
-              message: 'The vercel preset requires a neutral build with server/handler.mjs.',
-              severity: 'error',
-            },
-          ]
-        : [];
+      const diagnostics = clientModuleRetentionDiagnostics(build, 'vercel');
+      if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
+        diagnostics.push({
+          code: 'vercel-missing-handler',
+          message: 'The vercel preset requires a neutral build with server/handler.mjs.',
+          severity: 'error',
+        });
+      }
+      return diagnostics;
     },
     name: 'vercel',
     options,
@@ -195,16 +195,14 @@ export function cloudflare(options: CloudflarePresetOptions = {}): CloudflarePre
       return emitCloudflarePreset(build, context, options);
     },
     async inspect(build, context) {
-      const diagnostics: PresetDiagnostic[] =
-        build.serverHandlerPath === undefined && build.staticOutput === undefined
-          ? [
-              {
-                code: 'cloudflare-missing-handler',
-                message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
-                severity: 'error',
-              },
-            ]
-          : [];
+      const diagnostics = clientModuleRetentionDiagnostics(build, 'cloudflare');
+      if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
+        diagnostics.push({
+          code: 'cloudflare-missing-handler',
+          message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
+          severity: 'error',
+        });
+      }
       if (build.serverHandlerPath === undefined) return diagnostics;
 
       diagnostics.push(...(await cloudflareRuntimeDiagnostics(build, context)));
@@ -513,6 +511,21 @@ function neutralStaticExportAssets(
 
 async function rmNeutralStaticOutput(staticDir: string): Promise<void> {
   await rm(staticDir, { force: true, recursive: true });
+}
+
+function clientModuleRetentionDiagnostics(
+  build: KovoNeutralBuild,
+  presetName: string,
+): PresetDiagnostic[] {
+  if (build.clientModules.length === 0) return [];
+
+  return [
+    {
+      code: 'client-module-retention',
+      message: `The ${presetName} preset emits immutable /c/* client modules. Keep old versioned /c/ artifacts published until documents that reference them expire; never purge or rewrite them during deploys.`,
+      severity: 'warning',
+    },
+  ];
 }
 
 async function copyNeutralStaticAssets(
