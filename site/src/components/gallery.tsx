@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { escapeHtml } from '@kovojs/server/internal/html';
+import * as style from '@kovojs/style';
 
 // Gallery page chrome (SPEC §4.5): the eyebrow header, the component switcher
 // nav, and the demo body. Composed at render time as TSX; the demo markup
@@ -7,6 +8,67 @@ import { escapeHtml } from '@kovojs/server/internal/html';
 // pre-rendered HTML string and is spliced in verbatim, the same way the docs
 // layout splices markdown prose. See scripts/build.mjs renderGalleryPage for
 // the reference rendering this ports.
+
+const galleryStyles = style.create(
+  {
+    demo: {
+      background: 'var(--bg)',
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      padding: '1.25rem',
+    },
+    head: {
+      marginBottom: '1.6rem',
+    },
+    headBlurb: {
+      color: 'var(--dim)',
+      lineHeight: 1.65,
+      marginTop: '0.8rem',
+    },
+    headTitle: {
+      fontSize: '2.2rem',
+      fontWeight: 750,
+      letterSpacing: '-0.025em',
+      lineHeight: 1.12,
+      margin: 0,
+    },
+    nav: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '0.45rem',
+      marginBottom: '1.5rem',
+    },
+    navLink: {
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: 'var(--dim)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.68rem',
+      letterSpacing: '0.08em',
+      padding: '0.36rem 0.55rem',
+      textDecoration: 'none',
+      textTransform: 'uppercase',
+      ':hover': {
+        borderColor: 'var(--faint)',
+        color: 'var(--ink)',
+      },
+    },
+    navLinkCurrent: {
+      borderColor: 'var(--teal)',
+      color: 'var(--teal)',
+    },
+    page: {
+      maxWidth: '54rem',
+    },
+  },
+  { namespace: 'site-gallery', source: 'site/src/components/gallery.tsx' },
+);
+
+export const galleryStyleCss = style.emitAtomicCss(
+  Object.values(galleryStyles).flatMap((entry) => entry.__rules ?? []),
+);
 
 export interface GalleryRouteView {
   /** Route path under /gallery, e.g. `/components/button`. */
@@ -37,23 +99,29 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
     : `Static fixture output for the ${escapeHtml(route.title)} component contract.`;
 
   return (
-    <div class="gallery-page">
-      <header class="gallery-head">
+    <div style={galleryStyles.page}>
+      <header style={galleryStyles.head}>
         <p class="eyebrow">Gallery</p>
-        <h1>{escapeHtml(route.title)}</h1>
-        <p>{blurb}</p>
+        <h1 style={galleryStyles.headTitle}>{escapeHtml(route.title)}</h1>
+        <p style={galleryStyles.headBlurb}>{blurb}</p>
       </header>
-      <nav class="gallery-nav" aria-label="Gallery components">
+      <nav style={galleryStyles.nav} aria-label="Gallery components">
         {routes.map((candidate) => (
           <a
             href={galleryUrl(candidate.path)}
             aria-current={candidate.path === route.path ? 'page' : undefined}
+            style={[
+              galleryStyles.navLink,
+              candidate.path === route.path ? galleryStyles.navLinkCurrent : null,
+            ]}
           >
             {escapeHtml(candidate.title)}
           </a>
         ))}
       </nav>
-      <div class="gallery-demo">{demoHtml}</div>
+      <div class="gallery-demo" style={galleryStyles.demo}>
+        {demoHtml}
+      </div>
     </div>
   );
 }

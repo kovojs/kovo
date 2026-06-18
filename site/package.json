@@ -20,7 +20,8 @@
   "dependencies": {
     "@kovojs/core": "workspace:*",
     "@kovojs/runtime": "workspace:*",
-    "@kovojs/server": "workspace:*"
+    "@kovojs/server": "workspace:*",
+    "@kovojs/style": "workspace:*"
   },
   "devDependencies": {
     "@kovojs/cli": "workspace:*",

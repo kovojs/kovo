@@ -592,6 +592,9 @@ importers:
       '@kovojs/server':
         specifier: workspace:*
         version: link:../packages/server
+      '@kovojs/style':
+        specifier: workspace:*
+        version: link:../packages/style
     devDependencies:
       '@kovojs/cli':
         specifier: workspace:*

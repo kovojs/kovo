@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { escapeHtml } from '@kovojs/server/internal/html';
+import * as style from '@kovojs/style';
 
 // Two-pane example page (ported from scripts/examples.mjs renderExampleSplit): a
 // sandboxed <iframe> running the example's static export on the left, and a
@@ -9,6 +10,128 @@ import { escapeHtml } from '@kovojs/server/internal/html';
 // (rendered through the shared markdown/Shiki pipeline by the caller); their
 // `html` is spliced in as a verbatim child string (the server JSX runtime inserts
 // child strings as written).
+
+const exampleSplitStyles = style.create(
+  {
+    bar: {
+      alignItems: 'center',
+      background: 'var(--panel)',
+      borderBottomColor: 'var(--edge)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      display: 'flex',
+      justifyContent: 'space-between',
+      padding: '0.5rem 0.75rem',
+    },
+    barTitle: {
+      color: 'var(--dim)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.68rem',
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+    },
+    frame: {
+      background: '#fff',
+      border: 0,
+      display: 'block',
+      height: '100%',
+      minHeight: '30rem',
+      width: '100%',
+    },
+    frameEmpty: {
+      alignItems: 'center',
+      background: 'var(--panel)',
+      color: 'var(--dim)',
+      display: 'flex',
+      fontSize: '0.9rem',
+      justifyContent: 'center',
+      padding: '2rem',
+      textAlign: 'center',
+    },
+    head: {
+      marginBottom: '1.6rem',
+    },
+    headBlurb: {
+      color: 'var(--dim)',
+      lineHeight: 1.65,
+      marginTop: '0.8rem',
+      maxWidth: '48rem',
+    },
+    headTitle: {
+      fontSize: '2.2rem',
+      fontWeight: 750,
+      letterSpacing: '-0.025em',
+      lineHeight: 1.12,
+      margin: 0,
+    },
+    openLink: {
+      color: 'var(--teal)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.68rem',
+      textDecoration: 'none',
+      ':hover': {
+        textDecoration: 'underline',
+      },
+    },
+    page: {
+      maxWidth: '72rem',
+    },
+    panel: {
+      display: 'none',
+      maxHeight: '34rem',
+      overflow: 'auto',
+    },
+    shell: {
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      minWidth: 0,
+    },
+    split: {
+      display: 'grid',
+      gap: '1.25rem',
+      gridTemplateColumns: '1fr',
+      '@media (min-width: 64rem)': {
+        gridTemplateColumns: '1fr 1fr',
+      },
+    },
+    tab: {
+      borderBottomColor: 'transparent',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 2,
+      color: 'var(--dim)',
+      cursor: 'pointer',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.68rem',
+      padding: '0.5rem 0.7rem',
+      ':hover': {
+        color: 'var(--ink)',
+      },
+    },
+    tabInput: {
+      height: 0,
+      opacity: 0,
+      pointerEvents: 'none',
+      position: 'absolute',
+      width: 0,
+    },
+    tablist: {
+      background: 'var(--panel)',
+      borderBottomColor: 'var(--edge)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      display: 'flex',
+      flexWrap: 'wrap',
+    },
+  },
+  { namespace: 'site-example-split', source: 'site/src/components/example-split.tsx' },
+);
+
+export const exampleSplitStyleCss = style.emitAtomicCss(
+  Object.values(exampleSplitStyles).flatMap((entry) => entry.__rules ?? []),
+);
 
 export interface ExampleSourceFile {
   /** Pre-rendered code-window HTML for this source file. */
@@ -34,27 +157,27 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
   // highlights its label. We emit the per-index selector rules in a <style> block
   // because they reference dynamic ids.
   const tabRules = files
-    .map((_, index) => `#${idBase}-${index}:checked~.example-panels>[data-index="${index}"]`)
+    .map((_, index) => `#${idBase}-${index}:checked~[data-example-panels]>[data-index="${index}"]`)
     .join(',');
   const labelRules = files
-    .map((_, index) => `#${idBase}-${index}:checked~.example-tablist>[for="${idBase}-${index}"]`)
+    .map((_, index) => `#${idBase}-${index}:checked~[data-example-tablist]>[for="${idBase}-${index}"]`)
     .join(',');
   const tabStyle = `${tabRules}{display:block}${labelRules}{color:var(--ink);border-bottom-color:var(--teal)}`;
 
   return (
-    <div class="example-page">
-      <header class="example-head">
+    <div style={exampleSplitStyles.page}>
+      <header style={exampleSplitStyles.head}>
         <p class="eyebrow">Examples</p>
-        <h1>{escapeHtml(title)}</h1>
-        <p>{escapeHtml(blurb)}</p>
+        <h1 style={exampleSplitStyles.headTitle}>{escapeHtml(title)}</h1>
+        <p style={exampleSplitStyles.headBlurb}>{escapeHtml(blurb)}</p>
       </header>
       <style>{tabStyle}</style>
-      <div class="example-split">
-        <section class="example-live" aria-label={`${title} running app`}>
-          <div class="example-bar">
-            <span class="example-bar-title">Live app</span>
+      <div style={exampleSplitStyles.split}>
+        <section style={exampleSplitStyles.shell} aria-label={`${title} running app`}>
+          <div style={exampleSplitStyles.bar}>
+            <span style={exampleSplitStyles.barTitle}>Live app</span>
             {appHref ? (
-              <a class="example-open" href={appHref} target="_blank" rel="noopener">
+              <a style={exampleSplitStyles.openLink} href={appHref} target="_blank" rel="noopener">
                 Open in new tab &#8599;
               </a>
             ) : (
@@ -63,38 +186,43 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
           </div>
           {appHref ? (
             <iframe
-              class="example-frame"
+              style={exampleSplitStyles.frame}
               src={appHref}
               title={`${title} running app`}
               loading="lazy"
               sandbox="allow-scripts allow-same-origin"
             ></iframe>
           ) : (
-            <div class="example-frame example-frame-empty">
+            <div style={[exampleSplitStyles.frame, exampleSplitStyles.frameEmpty]}>
               <p>Dynamic demo service not configured for this static build.</p>
             </div>
           )}
         </section>
-        <section class="example-source" aria-label={`${title} source code`}>
+        <section style={exampleSplitStyles.shell} aria-label={`${title} source code`}>
           {files.map((_, index) => (
             <input
               type="radio"
               name={idBase}
               id={`${idBase}-${index}`}
-              class="example-tab-input"
+              style={exampleSplitStyles.tabInput}
               checked={index === 0 ? true : undefined}
             />
           ))}
-          <div class="example-tablist" role="tablist">
+          <div style={exampleSplitStyles.tablist} data-example-tablist role="tablist">
             {files.map((file, index) => (
-              <label for={`${idBase}-${index}`} class="example-tab" title={file.name}>
+              <label
+                for={`${idBase}-${index}`}
+                style={exampleSplitStyles.tab}
+                data-example-tab
+                title={file.name}
+              >
                 {escapeHtml(file.name.split('/').pop()!)}
               </label>
             ))}
           </div>
-          <div class="example-panels">
+          <div data-example-panels>
             {files.map((file, index) => (
-              <div class="example-panel" data-index={index}>
+              <div style={exampleSplitStyles.panel} data-index={index} data-example-panel>
                 {file.html}
               </div>
             ))}
