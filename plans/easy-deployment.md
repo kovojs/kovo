@@ -242,6 +242,16 @@ Design decisions to lock in code review:
 
 - [ ] Promote `createKovoAppShellViteBuild*` from `@internal` to a supported
       build entry; define `NeutralBuild` shape and write `dist/.kovo/` layout.
+  - Partial evidence: `packages/server/src/build.ts` adds the public build-time
+    `@kovojs/server/build` subpath with `KovoNeutralBuild`,
+    `writeKovoNeutralBuild()`, `KovoPreset`, `PresetContext`, `PresetDiagnostic`,
+    and `node()`. The neutral writer reuses
+    `createKovoAppShellViteBuildFromManifestFile()` / `writeKovoAppShellViteBuildOutput()`
+    to emit `client/c/*`, `manifest.json`, `routes.json`, `meta.json`, and an
+    optional `server/handler.mjs`. `packages/server/src/build.test.ts` verifies
+    the layout against a small app + Vite manifest fixture. The full item remains
+    open because `kovo build` and the production server bundler do not yet own
+    the app-shell build end to end.
 - [ ] Add server-bundle step: `src/app-shell.ts` → `server/handler.mjs`
       (`Request → Response`), no Vite at runtime. Verify a bundled handler serves a
       route + a `/_m/` mutation + a `/c/` module with **zero dev deps installed**.
@@ -256,6 +266,11 @@ Design decisions to lock in code review:
 - [ ] `KovoPreset` / `PresetContext` types + the build-time subpath export on
       `@kovojs/server`; preset **selection** (host auto-detect → `KOVO_PRESET` →
       `kovo.config` `preset:`). No separate package.
+  - Partial evidence: `packages/server/package.json` now exports `./build`;
+    `public-packages.json` classifies it as a public API reference surface; and
+    `packages/server/src/build.ts` exposes the typed preset descriptor plus the
+    built-in `node()` preset value. Preset selection remains open for the
+    `kovo build` CLI phase.
 - [ ] `node` preset: standalone server + asset serving + cache headers + prod-only
       `Dockerfile`. Replace the example/demo Vite-from-source serve story with this as
       the recommended prod path (keep Vite serve for dev only).
@@ -314,6 +329,13 @@ Design decisions to lock in code review:
 
 ## Proving commands (fill as phases land)
 
+- Neutral build layout smoke: `corepack pnpm exec vitest --run
+  packages/server/src/build.test.ts packages/server/src/api/app.test.ts
+  scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs
+  site/scripts/api-ref.test.mjs`; `corepack pnpm exec tsc -p tsconfig.json
+  --noEmit --pretty false`; `corepack pnpm run check:exports`; `corepack pnpm
+  run check:imports`; `corepack pnpm run check:api-surface`; `corepack pnpm run
+  check:publish`; `git diff --check`.
 - Neutral build prod-dep boot test: _(Phase 0)_
 - `kovo build` + node preset container, pruned deps: _(Phase 1)_
 - `vercel build --prebuilt` dry-run + golden config: _(Phase 2)_

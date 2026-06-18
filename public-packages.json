@@ -37,6 +37,7 @@
           "./app-shell/node",
           "./app-shell/static-export",
           "./app-shell/vite",
+          "./build",
           "./jsx-runtime",
           "./jsx-dev-runtime"
         ],
@@ -65,6 +66,11 @@
             "path": "./app-shell/vite",
             "slug": "server-app-shell-vite",
             "description": "Public Vite dev/build/static-export bridge for app-shell based apps."
+          },
+          {
+            "path": "./build",
+            "slug": "server-build",
+            "description": "Build-time deployment presets and neutral artifact helpers for kovo build."
           }
         ]
       }
