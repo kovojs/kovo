@@ -3,7 +3,7 @@ import {
   mergePrimitiveAndAuthorAttributes,
   type MergeableAttribute,
   type MergeableAttributeValue,
-} from '@kovojs/compiler';
+} from './index.js';
 import * as primitiveExports from '@kovojs/headless-ui';
 
 export { primitiveExports };
@@ -609,7 +609,7 @@ export function mergeCompilerPrimitiveAttrs(
   const merge = mergePrimitiveAndAuthorAttributes(
     attributeRecordEntries(primitive, 'primitive'),
     attributeRecordEntries(author, 'author'),
-    { fileName: 'examples/gallery/src/merge-fixtures-oracle.tsx', source: '' },
+    { fileName: 'packages/compiler/src/gallery-merge-fixtures-oracle.tsx', source: '' },
   );
 
   return {

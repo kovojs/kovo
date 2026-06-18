@@ -3,8 +3,71 @@ import { resolve } from 'node:path';
 import vm from 'node:vm';
 
 import * as headlessPrimitives from '@kovojs/headless-ui';
+import * as accordionPrimitives from '@kovojs/headless-ui/accordion';
+import * as alertDialogPrimitives from '@kovojs/headless-ui/alert-dialog';
+import * as autocompletePrimitives from '@kovojs/headless-ui/autocomplete';
+import * as checkboxPrimitives from '@kovojs/headless-ui/checkbox';
+import * as checkboxGroupPrimitives from '@kovojs/headless-ui/checkbox-group';
+import * as collapsiblePrimitives from '@kovojs/headless-ui/collapsible';
+import * as comboboxPrimitives from '@kovojs/headless-ui/combobox';
+import * as commandPrimitives from '@kovojs/headless-ui/command';
+import * as contextMenuPrimitives from '@kovojs/headless-ui/context-menu';
+import * as dialogPrimitives from '@kovojs/headless-ui/dialog';
+import * as disclosurePrimitives from '@kovojs/headless-ui/disclosure';
+import * as dropdownMenuPrimitives from '@kovojs/headless-ui/dropdown-menu';
+import * as hoverCardPrimitives from '@kovojs/headless-ui/hover-card';
+import * as menubarPrimitives from '@kovojs/headless-ui/menubar';
+import * as meterPrimitives from '@kovojs/headless-ui/meter';
+import * as navigationMenuPrimitives from '@kovojs/headless-ui/navigation-menu';
+import * as numberFieldPrimitives from '@kovojs/headless-ui/number-field';
+import * as otpFieldPrimitives from '@kovojs/headless-ui/otp-field';
+import * as popoverPrimitives from '@kovojs/headless-ui/popover';
+import * as radioGroupPrimitives from '@kovojs/headless-ui/radio-group';
+import * as scrollAreaPrimitives from '@kovojs/headless-ui/scroll-area';
+import * as selectPrimitives from '@kovojs/headless-ui/select';
+import * as sliderPrimitives from '@kovojs/headless-ui/slider';
+import * as switchPrimitives from '@kovojs/headless-ui/switch';
+import * as tabsPrimitives from '@kovojs/headless-ui/tabs';
+import * as toastPrimitives from '@kovojs/headless-ui/toast';
+import * as togglePrimitives from '@kovojs/headless-ui/toggle';
+import * as toggleGroupPrimitives from '@kovojs/headless-ui/toggle-group';
+import * as toolbarPrimitives from '@kovojs/headless-ui/toolbar';
+import * as tooltipPrimitives from '@kovojs/headless-ui/tooltip';
 
 export const galleryRoot = resolve(import.meta.dirname, '..');
+const primitiveActions = {
+  ...headlessPrimitives,
+  ...accordionPrimitives,
+  ...alertDialogPrimitives,
+  ...autocompletePrimitives,
+  ...checkboxPrimitives,
+  ...checkboxGroupPrimitives,
+  ...collapsiblePrimitives,
+  ...comboboxPrimitives,
+  ...commandPrimitives,
+  ...contextMenuPrimitives,
+  ...dialogPrimitives,
+  ...disclosurePrimitives,
+  ...dropdownMenuPrimitives,
+  ...hoverCardPrimitives,
+  ...menubarPrimitives,
+  ...meterPrimitives,
+  ...navigationMenuPrimitives,
+  ...numberFieldPrimitives,
+  ...otpFieldPrimitives,
+  ...popoverPrimitives,
+  ...radioGroupPrimitives,
+  ...scrollAreaPrimitives,
+  ...selectPrimitives,
+  ...sliderPrimitives,
+  ...switchPrimitives,
+  ...tabsPrimitives,
+  ...toastPrimitives,
+  ...togglePrimitives,
+  ...toggleGroupPrimitives,
+  ...toolbarPrimitives,
+  ...tooltipPrimitives,
+};
 
 export type ClientExports = Record<
   string,
@@ -82,13 +145,24 @@ export function compareStrings(left: string, right: string): number {
   return left.localeCompare(right);
 }
 
+export function readCompiledDemo(fileName: string): string {
+  const server = readGenerated(fileName);
+  const clientFileName = fileName.replace(/\.tsx$/, '.client.js');
+  try {
+    return `${server}\n${readGenerated(clientFileName)}`;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return server;
+    throw error;
+  }
+}
+
 export function evaluateClientModule(
   fileName: string,
   globals: Record<string, unknown> = {},
 ): ClientExports {
   const source = readGenerated(fileName)
-    .replace(/import \{[\s\S]*?\} from '@kovojs\/runtime';\n\n?/, '')
-    .replace(/import \{[\s\S]*?\} from '@kovojs\/headless-ui\/primitives';\n\n?/, '')
+    .replace(/import \{[\s\S]*?\} from '@kovojs\/runtime(?:\/generated)?';\n\n?/, '')
+    .replace(/import \{[\s\S]*?\} from '@kovojs\/headless-ui\/[^']+';\n\n?/g, '')
     .replaceAll('export const ', 'exports.');
   const exports: ClientExports = {};
   vm.runInNewContext(source, {
@@ -99,114 +173,114 @@ export function evaluateClientModule(
     exports,
     handler: (fn: ClientExports[string]) => fn,
     setTimeout,
-    ...headlessPrimitives,
-    _accordionKeyDown: headlessPrimitives.accordionKeyDown,
-    _accordionTriggerClick: headlessPrimitives.accordionTriggerClick,
-    _alertDialogActionClick: headlessPrimitives.alertDialogActionClick,
-    _alertDialogCancel: headlessPrimitives.alertDialogCancel,
-    _alertDialogCancelClick: headlessPrimitives.alertDialogCancelClick,
-    _alertDialogTriggerClick: headlessPrimitives.alertDialogTriggerClick,
-    _autocompleteInput: headlessPrimitives.autocompleteInput,
-    _autocompleteKeyDown: headlessPrimitives.autocompleteKeyDown,
-    _autocompleteOptionClick: headlessPrimitives.autocompleteOptionClick,
-    _autocompleteSuggestions: headlessPrimitives.autocompleteSuggestions,
-    _checkboxGroupItemClick: headlessPrimitives.checkboxGroupItemClick,
-    _checkboxTriggerClick: headlessPrimitives.checkboxTriggerClick,
-    _collapsibleTriggerClick: headlessPrimitives.collapsibleTriggerClick,
-    _comboboxFilteredItems: headlessPrimitives.comboboxFilteredItems,
-    _comboboxInput: headlessPrimitives.comboboxInput,
-    _comboboxKeyDown: headlessPrimitives.comboboxKeyDown,
-    _comboboxOptionClick: headlessPrimitives.comboboxOptionClick,
-    _commandCloseClick: headlessPrimitives.commandCloseClick,
-    _commandFilteredItems: headlessPrimitives.commandFilteredItems,
-    _commandInput: headlessPrimitives.commandInput,
-    _commandItemClick: headlessPrimitives.commandItemClick,
-    _commandKeyDown: headlessPrimitives.commandKeyDown,
-    _commandTriggerClick: headlessPrimitives.commandTriggerClick,
-    _contextMenuFocusElement: headlessPrimitives.contextMenuFocusElement,
-    _contextMenuItemClick: headlessPrimitives.contextMenuItemClick,
-    _contextMenuItemKeyDown: headlessPrimitives.contextMenuItemKeyDown,
-    _contextMenuKeyDown: headlessPrimitives.contextMenuKeyDown,
-    _contextMenuMove: headlessPrimitives.contextMenuMove,
-    _contextMenuTriggerContextMenu: headlessPrimitives.contextMenuTriggerContextMenu,
-    _contextMenuTriggerKeyDown: headlessPrimitives.contextMenuTriggerKeyDown,
-    _contextMenuTypeahead: headlessPrimitives.contextMenuTypeahead,
-    _disclosureTriggerClick: headlessPrimitives.disclosureTriggerClick,
-    _dialogCancel: headlessPrimitives.dialogCancel,
-    _dialogCloseClick: headlessPrimitives.dialogCloseClick,
-    _dialogTriggerClick: headlessPrimitives.dialogTriggerClick,
-    _dropdownMenuFocusElement: headlessPrimitives.dropdownMenuFocusElement,
-    _dropdownMenuItemClick: headlessPrimitives.dropdownMenuItemClick,
-    _dropdownMenuItemKeyDown: headlessPrimitives.dropdownMenuItemKeyDown,
-    _dropdownMenuKeyDown: headlessPrimitives.dropdownMenuKeyDown,
-    _dropdownMenuMove: headlessPrimitives.dropdownMenuMove,
-    _dropdownMenuTriggerClick: headlessPrimitives.dropdownMenuTriggerClick,
-    _dropdownMenuTriggerKeyDown: headlessPrimitives.dropdownMenuTriggerKeyDown,
-    _dropdownMenuTypeahead: headlessPrimitives.dropdownMenuTypeahead,
-    _hoverCardContentPointerEnter: headlessPrimitives.hoverCardContentPointerEnter,
-    _hoverCardContentPointerLeave: headlessPrimitives.hoverCardContentPointerLeave,
-    _hoverCardEscapeKeyDown: headlessPrimitives.hoverCardEscapeKeyDown,
-    _hoverCardTriggerBlur: headlessPrimitives.hoverCardTriggerBlur,
-    _hoverCardTriggerFocus: headlessPrimitives.hoverCardTriggerFocus,
-    _hoverCardTriggerPointerEnter: headlessPrimitives.hoverCardTriggerPointerEnter,
-    _hoverCardTriggerPointerLeave: headlessPrimitives.hoverCardTriggerPointerLeave,
-    _menubarFocusElement: headlessPrimitives.menubarFocusElement,
-    _menubarItemClick: headlessPrimitives.menubarItemClick,
-    _menubarItemKeyDown: headlessPrimitives.menubarItemKeyDown,
-    _menubarKeyDown: headlessPrimitives.menubarKeyDown,
-    _menubarMove: headlessPrimitives.menubarMove,
-    _menubarSubmenuTriggerClick: headlessPrimitives.menubarSubmenuTriggerClick,
-    _menubarTypeahead: headlessPrimitives.menubarTypeahead,
-    _meterValueState: headlessPrimitives.meterValueState,
-    _navigationMenuFocusElement: headlessPrimitives.navigationMenuFocusElement,
-    _navigationMenuKeyDown: headlessPrimitives.navigationMenuKeyDown,
-    _navigationMenuLinkClick: headlessPrimitives.navigationMenuLinkClick,
-    _navigationMenuMove: headlessPrimitives.navigationMenuMove,
-    _navigationMenuTriggerClick: headlessPrimitives.navigationMenuTriggerClick,
-    _navigationMenuTriggerFocus: headlessPrimitives.navigationMenuTriggerFocus,
-    _navigationMenuTriggerPointerEnter: headlessPrimitives.navigationMenuTriggerPointerEnter,
-    _navigationMenuTypeahead: headlessPrimitives.navigationMenuTypeahead,
-    _numberFieldDecrementClick: headlessPrimitives.numberFieldDecrementClick,
-    _numberFieldIncrementClick: headlessPrimitives.numberFieldIncrementClick,
-    _numberFieldInput: headlessPrimitives.numberFieldInput,
-    _numberFieldKeyDown: headlessPrimitives.numberFieldKeyDown,
-    _otpFieldInput: headlessPrimitives.otpFieldInput,
-    _otpFieldKeyDown: headlessPrimitives.otpFieldKeyDown,
-    _otpFieldPaste: headlessPrimitives.otpFieldPaste,
-    _popoverBeforeToggle: headlessPrimitives.popoverBeforeToggle,
-    _radioGroupItemClick: headlessPrimitives.radioGroupItemClick,
-    _radioGroupKeyDown: headlessPrimitives.radioGroupKeyDown,
-    _scrollAreaThumbGeometry: headlessPrimitives.scrollAreaThumbGeometry,
-    _scrollAreaThumbDrag: headlessPrimitives.scrollAreaThumbDrag,
-    _scrollAreaThumbDragStart: headlessPrimitives.scrollAreaThumbDragStart,
-    _scrollAreaTrackPointerDown: headlessPrimitives.scrollAreaTrackPointerDown,
-    _scrollAreaViewportScroll: headlessPrimitives.scrollAreaViewportScroll,
-    _selectItemClick: headlessPrimitives.selectItemClick,
-    _selectKeyDown: headlessPrimitives.selectKeyDown,
-    _selectMove: headlessPrimitives.selectMove,
-    _selectTriggerClick: headlessPrimitives.selectTriggerClick,
-    _sliderKeyDown: headlessPrimitives.sliderKeyDown,
-    _sliderThumbDrag: headlessPrimitives.sliderThumbDrag,
-    _sliderThumbDragStart: headlessPrimitives.sliderThumbDragStart,
-    _sliderTrackPointerDown: headlessPrimitives.sliderTrackPointerDown,
-    _switchTriggerClick: headlessPrimitives.switchTriggerClick,
-    _tabsKeyDown: headlessPrimitives.tabsKeyDown,
-    _tabsTriggerClick: headlessPrimitives.tabsTriggerClick,
-    _toggleGroupItemClick: headlessPrimitives.toggleGroupItemClick,
-    _toggleGroupKeyDown: headlessPrimitives.toggleGroupKeyDown,
-    _toggleTriggerClick: headlessPrimitives.toggleTriggerClick,
-    _toolbarKeyDown: headlessPrimitives.toolbarKeyDown,
-    _tooltipEscapeKeyDown: headlessPrimitives.tooltipEscapeKeyDown,
-    _tooltipTriggerBlur: headlessPrimitives.tooltipTriggerBlur,
-    _tooltipTriggerFocus: headlessPrimitives.tooltipTriggerFocus,
-    _tooltipTriggerPointerEnter: headlessPrimitives.tooltipTriggerPointerEnter,
-    _tooltipTriggerPointerLeave: headlessPrimitives.tooltipTriggerPointerLeave,
-    _dismissToast: headlessPrimitives.dismissToast,
-    _toastActionClick: headlessPrimitives.toastActionClick,
-    _toastAnimationEnd: headlessPrimitives.toastAnimationEnd,
-    _toastCloseClick: headlessPrimitives.toastCloseClick,
-    _toastEscapeKeyDown: headlessPrimitives.toastEscapeKeyDown,
-    _toastViewportKeyDown: headlessPrimitives.toastViewportKeyDown,
+    ...primitiveActions,
+    _accordionKeyDown: primitiveActions.accordionKeyDown,
+    _accordionTriggerClick: primitiveActions.accordionTriggerClick,
+    _alertDialogActionClick: primitiveActions.alertDialogActionClick,
+    _alertDialogCancel: primitiveActions.alertDialogCancel,
+    _alertDialogCancelClick: primitiveActions.alertDialogCancelClick,
+    _alertDialogTriggerClick: primitiveActions.alertDialogTriggerClick,
+    _autocompleteInput: primitiveActions.autocompleteInput,
+    _autocompleteKeyDown: primitiveActions.autocompleteKeyDown,
+    _autocompleteOptionClick: primitiveActions.autocompleteOptionClick,
+    _autocompleteSuggestions: primitiveActions.autocompleteSuggestions,
+    _checkboxGroupItemClick: primitiveActions.checkboxGroupItemClick,
+    _checkboxTriggerClick: primitiveActions.checkboxTriggerClick,
+    _collapsibleTriggerClick: primitiveActions.collapsibleTriggerClick,
+    _comboboxFilteredItems: primitiveActions.comboboxFilteredItems,
+    _comboboxInput: primitiveActions.comboboxInput,
+    _comboboxKeyDown: primitiveActions.comboboxKeyDown,
+    _comboboxOptionClick: primitiveActions.comboboxOptionClick,
+    _commandCloseClick: primitiveActions.commandCloseClick,
+    _commandFilteredItems: primitiveActions.commandFilteredItems,
+    _commandInput: primitiveActions.commandInput,
+    _commandItemClick: primitiveActions.commandItemClick,
+    _commandKeyDown: primitiveActions.commandKeyDown,
+    _commandTriggerClick: primitiveActions.commandTriggerClick,
+    _contextMenuFocusElement: primitiveActions.contextMenuFocusElement,
+    _contextMenuItemClick: primitiveActions.contextMenuItemClick,
+    _contextMenuItemKeyDown: primitiveActions.contextMenuItemKeyDown,
+    _contextMenuKeyDown: primitiveActions.contextMenuKeyDown,
+    _contextMenuMove: primitiveActions.contextMenuMove,
+    _contextMenuTriggerContextMenu: primitiveActions.contextMenuTriggerContextMenu,
+    _contextMenuTriggerKeyDown: primitiveActions.contextMenuTriggerKeyDown,
+    _contextMenuTypeahead: primitiveActions.contextMenuTypeahead,
+    _disclosureTriggerClick: primitiveActions.disclosureTriggerClick,
+    _dialogCancel: primitiveActions.dialogCancel,
+    _dialogCloseClick: primitiveActions.dialogCloseClick,
+    _dialogTriggerClick: primitiveActions.dialogTriggerClick,
+    _dropdownMenuFocusElement: primitiveActions.dropdownMenuFocusElement,
+    _dropdownMenuItemClick: primitiveActions.dropdownMenuItemClick,
+    _dropdownMenuItemKeyDown: primitiveActions.dropdownMenuItemKeyDown,
+    _dropdownMenuKeyDown: primitiveActions.dropdownMenuKeyDown,
+    _dropdownMenuMove: primitiveActions.dropdownMenuMove,
+    _dropdownMenuTriggerClick: primitiveActions.dropdownMenuTriggerClick,
+    _dropdownMenuTriggerKeyDown: primitiveActions.dropdownMenuTriggerKeyDown,
+    _dropdownMenuTypeahead: primitiveActions.dropdownMenuTypeahead,
+    _hoverCardContentPointerEnter: primitiveActions.hoverCardContentPointerEnter,
+    _hoverCardContentPointerLeave: primitiveActions.hoverCardContentPointerLeave,
+    _hoverCardEscapeKeyDown: primitiveActions.hoverCardEscapeKeyDown,
+    _hoverCardTriggerBlur: primitiveActions.hoverCardTriggerBlur,
+    _hoverCardTriggerFocus: primitiveActions.hoverCardTriggerFocus,
+    _hoverCardTriggerPointerEnter: primitiveActions.hoverCardTriggerPointerEnter,
+    _hoverCardTriggerPointerLeave: primitiveActions.hoverCardTriggerPointerLeave,
+    _menubarFocusElement: primitiveActions.menubarFocusElement,
+    _menubarItemClick: primitiveActions.menubarItemClick,
+    _menubarItemKeyDown: primitiveActions.menubarItemKeyDown,
+    _menubarKeyDown: primitiveActions.menubarKeyDown,
+    _menubarMove: primitiveActions.menubarMove,
+    _menubarSubmenuTriggerClick: primitiveActions.menubarSubmenuTriggerClick,
+    _menubarTypeahead: primitiveActions.menubarTypeahead,
+    _meterValueState: primitiveActions.meterValueState,
+    _navigationMenuFocusElement: primitiveActions.navigationMenuFocusElement,
+    _navigationMenuKeyDown: primitiveActions.navigationMenuKeyDown,
+    _navigationMenuLinkClick: primitiveActions.navigationMenuLinkClick,
+    _navigationMenuMove: primitiveActions.navigationMenuMove,
+    _navigationMenuTriggerClick: primitiveActions.navigationMenuTriggerClick,
+    _navigationMenuTriggerFocus: primitiveActions.navigationMenuTriggerFocus,
+    _navigationMenuTriggerPointerEnter: primitiveActions.navigationMenuTriggerPointerEnter,
+    _navigationMenuTypeahead: primitiveActions.navigationMenuTypeahead,
+    _numberFieldDecrementClick: primitiveActions.numberFieldDecrementClick,
+    _numberFieldIncrementClick: primitiveActions.numberFieldIncrementClick,
+    _numberFieldInput: primitiveActions.numberFieldInput,
+    _numberFieldKeyDown: primitiveActions.numberFieldKeyDown,
+    _otpFieldInput: primitiveActions.otpFieldInput,
+    _otpFieldKeyDown: primitiveActions.otpFieldKeyDown,
+    _otpFieldPaste: primitiveActions.otpFieldPaste,
+    _popoverBeforeToggle: primitiveActions.popoverBeforeToggle,
+    _radioGroupItemClick: primitiveActions.radioGroupItemClick,
+    _radioGroupKeyDown: primitiveActions.radioGroupKeyDown,
+    _scrollAreaThumbGeometry: primitiveActions.scrollAreaThumbGeometry,
+    _scrollAreaThumbDrag: primitiveActions.scrollAreaThumbDrag,
+    _scrollAreaThumbDragStart: primitiveActions.scrollAreaThumbDragStart,
+    _scrollAreaTrackPointerDown: primitiveActions.scrollAreaTrackPointerDown,
+    _scrollAreaViewportScroll: primitiveActions.scrollAreaViewportScroll,
+    _selectItemClick: primitiveActions.selectItemClick,
+    _selectKeyDown: primitiveActions.selectKeyDown,
+    _selectMove: primitiveActions.selectMove,
+    _selectTriggerClick: primitiveActions.selectTriggerClick,
+    _sliderKeyDown: primitiveActions.sliderKeyDown,
+    _sliderThumbDrag: primitiveActions.sliderThumbDrag,
+    _sliderThumbDragStart: primitiveActions.sliderThumbDragStart,
+    _sliderTrackPointerDown: primitiveActions.sliderTrackPointerDown,
+    _switchTriggerClick: primitiveActions.switchTriggerClick,
+    _tabsKeyDown: primitiveActions.tabsKeyDown,
+    _tabsTriggerClick: primitiveActions.tabsTriggerClick,
+    _toggleGroupItemClick: primitiveActions.toggleGroupItemClick,
+    _toggleGroupKeyDown: primitiveActions.toggleGroupKeyDown,
+    _toggleTriggerClick: primitiveActions.toggleTriggerClick,
+    _toolbarKeyDown: primitiveActions.toolbarKeyDown,
+    _tooltipEscapeKeyDown: primitiveActions.tooltipEscapeKeyDown,
+    _tooltipTriggerBlur: primitiveActions.tooltipTriggerBlur,
+    _tooltipTriggerFocus: primitiveActions.tooltipTriggerFocus,
+    _tooltipTriggerPointerEnter: primitiveActions.tooltipTriggerPointerEnter,
+    _tooltipTriggerPointerLeave: primitiveActions.tooltipTriggerPointerLeave,
+    _dismissToast: primitiveActions.dismissToast,
+    _toastActionClick: primitiveActions.toastActionClick,
+    _toastAnimationEnd: primitiveActions.toastAnimationEnd,
+    _toastCloseClick: primitiveActions.toastCloseClick,
+    _toastEscapeKeyDown: primitiveActions.toastEscapeKeyDown,
+    _toastViewportKeyDown: primitiveActions.toastViewportKeyDown,
     ...globals,
   });
 

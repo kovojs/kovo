@@ -20,7 +20,7 @@ import {
   renderMergedBuilder,
   rewriteIdrefs,
   samplePrimitiveAttributes,
-} from './merge-fixtures-oracle.js';
+} from './gallery-merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('rewires dialog trigger IDREFs when an authored dialog content id wins', () => {
@@ -173,6 +173,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   it('covers every exported primitive attrs builder with the merge oracle', () => {
     const exportedAttributeBuilders = Object.keys(primitiveExports)
       .filter((name) => /^[a-z]/.test(name) && name.endsWith('Attributes'))
+      .filter((name) => name !== 'mergeDataAttributes')
       .sort();
 
     expect([...primitiveAttributeBuilderNames].sort()).toEqual(exportedAttributeBuilders);

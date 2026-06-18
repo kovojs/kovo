@@ -221,9 +221,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
-      '@kovojs/compiler':
-        specifier: workspace:*
-        version: link:../../packages/compiler
       '@kovojs/conformance-fixtures':
         specifier: workspace:*
         version: link:../../packages/conformance-fixtures
@@ -355,9 +352,15 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
     devDependencies:
+      '@kovojs/headless-ui':
+        specifier: workspace:*
+        version: link:../headless-ui
       '@kovojs/runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@kovojs/server':
+        specifier: workspace:*
+        version: link:../server
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))

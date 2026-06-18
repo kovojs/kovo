@@ -42,7 +42,7 @@ import {
   toolbarItemAttributes,
   toolbarRootAttributes,
 } from '@kovojs/headless-ui';
-import { mergeCompilerPrimitiveAttrs, rewriteIdrefs } from './merge-fixtures-oracle.js';
+import { mergeCompilerPrimitiveAttrs, rewriteIdrefs } from './gallery-merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden combobox merge with active descendant and option conflicts', () => {

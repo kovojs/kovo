@@ -22,7 +22,7 @@ import {
   scrollAreaViewportAttributes,
   separatorRootAttributes,
 } from '@kovojs/headless-ui';
-import { mergeCompilerPrimitiveAttrs } from './merge-fixtures-oracle.js';
+import { mergeCompilerPrimitiveAttrs } from './gallery-merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden accordion merge with primitive-owned state and authored ARIA overrides', () => {

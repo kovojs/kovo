@@ -104,7 +104,9 @@ describe('compiled interactive gallery demos', () => {
         join(distDir, 'c/examples/gallery/src/generated/interactive/tabs-demo.client.js'),
         'utf8',
       );
-      expect(tabsClient).toContain("from '/c/packages/headless-ui/src/primitives/index.js?v=");
+      expect(tabsClient).toContain(
+        "from '/c/packages/headless-ui/src/primitives/tabs.js?v=",
+      );
     } finally {
       rmSync(distDir, { force: true, recursive: true });
     }

@@ -34,7 +34,7 @@ import {
   navigationMenuTriggerAttributes,
   navigationMenuViewportAttributes,
 } from '@kovojs/headless-ui';
-import { mergeCompilerPrimitiveAttrs } from './merge-fixtures-oracle.js';
+import { mergeCompilerPrimitiveAttrs } from './gallery-merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden command merge with combobox IDREFs and option semantics', () => {

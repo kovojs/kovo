@@ -693,12 +693,24 @@ tsconfig.json --noEmit --pretty false`.
     `node scripts/api-surface-gate.mjs`, `corepack pnpm run check:imports`,
     `corepack pnpm run check:exports`, and
     `corepack pnpm exec vitest --run scripts/public-packages.test.mjs`.
+  - Progress evidence: gallery merge fixture oracle coverage moved from the
+    app-owned example package into compiler-owned tests at
+    `packages/compiler/src/gallery-merge-fixtures*.test.tsx` and
+    `packages/compiler/src/gallery-merge-fixtures-oracle.tsx`, so
+    `examples/gallery/package.json` no longer depends directly on
+    `@kovojs/compiler`. The gallery runtime harness now reads generated server
+    and client artifacts through the example's emitted files instead of using
+    compiler APIs directly. Verified with
+    `corepack pnpm exec vitest --run packages/compiler/src/gallery-merge-fixtures*.test.tsx`,
+    `corepack pnpm --filter @kovojs/example-gallery test`,
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
+    `node scripts/api-surface-gate.mjs`, `corepack pnpm run check:imports`,
+    `corepack pnpm run check:exports`, and
+    `corepack pnpm exec vitest --run scripts/public-packages.test.mjs`.
   - Remaining gap: `site/tutorial/steps/02-islands/src/app.test.ts` still
-    imports `@kovojs/compiler` as framework-owned tutorial/compiler coverage,
-    and `examples/gallery/src/merge-fixtures-oracle.tsx` still imports
-    `@kovojs/compiler`; `examples/gallery/package.json` must keep its compiler
-    dependency until that oracle is reclassified or moved behind a framework
-    helper.
+    imports `@kovojs/compiler` as framework-owned tutorial/compiler coverage.
+    Generated artifact banners in example/tutorial scripts may mention
+    `@kovojs/compiler`, but app-owned source no longer imports it.
 
 ## Package-Wide Internalization Candidates
 
