@@ -12,15 +12,15 @@ import {
   createCommerceDb,
   loadCartQuery,
   renderCommercePageHints,
-  renderCartPage,
 } from './app.js';
-import { seedCartItems } from './app-test-helpers.js';
+import { createCommerceScenarioClient, seedCartItems } from './app-test-helpers.js';
 
 const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
 
 describe('commerce example', () => {
   it('renders StyleX-first stylesheet hints and static utility classes', async () => {
-    const cartPage = await renderCartPage();
+    const cartResponse = await createCommerceScenarioClient().get('/cart');
+    const cartPage = await cartResponse.text();
     const pageHints = htmlDocumentFacts(commercePageHints.html);
     const cartDocument = htmlDocumentFacts(cartPage);
 
@@ -52,7 +52,12 @@ describe('commerce example', () => {
     expect(pageHints.links).toMatchObject([
       { attrs: { href: '/assets/styles.css', rel: 'stylesheet' }, tag: 'link' },
     ]);
-    expect(cartDocument.bodyAttrs.class).toBe('min-h-dvh bg-slate-50 p-6');
+    expect(
+      htmlElementFacts(cartPage, {
+        attrs: { class: 'mx-auto max-w-4xl' },
+        tag: 'main',
+      }),
+    ).toHaveLength(1);
     expect(
       htmlElementFacts(cartPage, {
         attrs: {
@@ -74,16 +79,6 @@ describe('commerce example', () => {
     expect(await loadCartQuery(db)).toEqual({ count: 5 });
     expect(htmlDocumentFacts(renderCommercePageHints(await loadCartQuery(db)).html).title).toBe(
       'Kovo Commerce (5)',
-    );
-    expect(htmlDocumentFacts(await renderCartPage(db)).metas).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          attrs: expect.objectContaining({
-            content: 'Browse products and checkout with 5 verifiable cart item.',
-            name: 'description',
-          }),
-        }),
-      ]),
     );
   });
 

@@ -4,15 +4,11 @@ import {
   i18n,
   metaFromQuery,
   mutation,
-  renderComponent,
-  renderDeferredStream,
   renderPageHints,
-  renderRoutePageResponse,
-  route,
   s,
   session,
 } from '@kovojs/server';
-import { Fragment, jsx, jsxs } from '@kovojs/server/jsx-runtime';
+import { jsx, jsxs } from '@kovojs/server/jsx-runtime';
 import {
   authed as betterAuthAuthed,
   betterAuthSession,
@@ -27,23 +23,14 @@ import { count, eq, sql } from 'drizzle-orm';
 
 import { createCommerceDb, type CommerceDb } from './db.js';
 import { commerceCartPageMeta, commerceStylesheets } from './graph.js';
-import { CartBadge } from './components/cart-badge.js';
-import { OrderHistory } from './components/order-history.js';
-import * as productGridComponent from './components/product-grid.js';
 import {
   cart,
   cartQuery,
-  loadCartQuery,
-  loadOrderHistory,
-  loadProductGrid,
   order,
   orderHistoryQuery,
   product,
   productGridQuery,
   type CartQueryResult,
-  type OrderHistoryResult,
-  type ProductGridInput,
-  type ProductGridResult,
 } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 
@@ -310,62 +297,6 @@ export const commerceMessages = i18n('en-US', commerceMessageCatalog);
 
 export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
 
-export const {
-  ProductGrid,
-  renderAddToCartForm,
-  renderProductGridItems,
-} = productGridComponent;
-export type AddToCartFailure = productGridComponent.AddToCartFailure;
-
-export function renderProductGrid(result: ProductGridResult): string {
-  return renderComponent(ProductGrid, { productGrid: result });
-}
-
-export function renderProductGridAppend(result: ProductGridResult): string {
-  return renderProductGridItems(result);
-}
-
-export async function renderProductGridPageFragment(
-  db: CommerceDb,
-  input: ProductGridInput = {},
-): Promise<string> {
-  return `<kovo-fragment target="product-grid" mode="append">${renderProductGridAppend(await loadProductGrid(db, input))}</kovo-fragment>`;
-}
-
-export async function renderProductGridDeferredStream(
-  db: CommerceDb,
-  input: ProductGridInput = {},
-) {
-  const productGrid = await loadProductGrid(db, input);
-
-  return renderDeferredStream({
-    closeHtml: '</main></body></html>',
-    chunks: [
-      {
-        fragments: [
-          {
-            html: renderProductGrid(productGrid),
-            stylesheets: commerceStylesheets,
-            target: 'product-grid',
-          },
-        ],
-        queries: [{ name: 'productGrid', value: productGrid }],
-      },
-    ],
-    shell:
-      '<!doctype html><html><body><main class="min-h-dvh bg-slate-50 p-6"><kovo-defer target="product-grid" state="pending"></kovo-defer>',
-  });
-}
-
-export async function renderOrderHistory(db: CommerceDb, userId?: string): Promise<string> {
-  // Order history is per-user. With no authenticated user we default-deny and
-  // render an empty history rather than leaking another user's orders.
-  const history: OrderHistoryResult = userId ? await loadOrderHistory(db, userId) : { items: [] };
-  return OrderHistory.definition.render({ orderHistory: history });
-}
-
-export { CartBadge, OrderHistory };
-
 export function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
   return renderPageHints(
     {
@@ -378,49 +309,6 @@ export function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
 }
 
 export const commercePageHints = renderCommercePageHints();
-
-export async function renderCartPage(
-  db = createCommerceDb(),
-  request?: CommerceRequest,
-): Promise<string> {
-  const pageHints = renderCommercePageHints(await loadCartQuery(db));
-  const pageRequest = commerceCartPageRequest(db, request);
-  const pageRoute = route('/cart', {
-    page(_context, routeRequest: CommerceRequest) {
-      return commerceCartMain(
-        jsxs(Fragment, {
-          children: [
-            jsx(CartBadge, {}),
-            jsx(ProductGrid, {}),
-            routeRequest.session?.user?.id
-              ? jsx(OrderHistory, {})
-              : OrderHistory.definition.render({ orderHistory: { items: [] } }),
-          ],
-        }),
-      );
-    },
-  });
-  const response = await renderRoutePageResponse(
-    pageRoute,
-    {},
-    pageRequest,
-    async (body) =>
-      `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6">${await body}</body></html>`,
-  );
-  return response.body;
-}
-
-function commerceCartMain(children: unknown): Promise<string> | string {
-  return children instanceof Promise
-    ? children.then((html) => `<main class="mx-auto max-w-4xl">${html}</main>`)
-    : `<main class="mx-auto max-w-4xl">${children}</main>`;
-}
-
-function commerceCartPageRequest(db: CommerceDb, request?: CommerceRequest): CommerceRequest {
-  const pageRequest = request ?? ({ db } as CommerceRequest);
-  Object.defineProperty(pageRequest, 'db', { configurable: true, value: db });
-  return pageRequest;
-}
 
 export function renderCommerceLoginForm(
   _request: CommerceAuthRequest,

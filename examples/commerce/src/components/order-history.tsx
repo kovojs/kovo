@@ -6,14 +6,6 @@ import type { OrderHistoryResult } from '../app.js';
 import { orderHistoryQuery } from '../queries.js';
 import { priceLabel } from './product-grid.js';
 
-// SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native <ol>
-// host keeps the HTML content model valid for its <li> children (KV225), so
-// the compiler emits the order-history kovo-c identity stamp explicitly
-// (section 4.2) along with the kovo-deps stamp from the queries declaration.
-// The lowered IR is committed at src/generated/order-history.tsx and is what
-// the app imports at runtime. The per-row markup (@kovojs/ui Badge + the price
-// formatter) lives in the plain `renderOrderHistoryItems` helper so the
-// component render stays a simple keyed-list host, exactly like ProductGrid.
 export const OrderHistory = component({
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (

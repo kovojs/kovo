@@ -13,16 +13,6 @@ import { Card } from '@kovojs/ui/card';
 import { addToCart, type ProductGridResult } from '../app.js';
 import { productGridQuery } from '../queries.js';
 
-// SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native
-// <section> host gets its product-grid kovo-c identity stamp and the
-// kovo-deps stamp (from the queries declaration) from the compiler (section
-// 4.8); grid updates flow as server fragments (the section 4.8 ceiling:
-// keyed per-item markup with request-scoped forms is beyond paths, derives,
-// and keyed lists), so product grid refresh remains a server fragment.
-//
-// The lowered IR is committed at src/generated/product-grid.tsx for the
-// generated route/runtime artifacts.
-
 const addToCartForm = form('cart/add');
 
 export type AddToCartFailure = FormFailure<typeof addToCartForm>;
@@ -40,8 +30,6 @@ export const ProductGrid = component({
   },
 });
 
-// Card list without the component host, shared by the grid render and the
-// mode="append" pagination fragment (which morphs into the existing host).
 export function renderProductGridItems(
   result: ProductGridResult,
 ): string {
@@ -61,7 +49,6 @@ export function renderProductGridItems(
   );
 }
 
-// The product catalog row the grid renders (the productGrid query select shape).
 export interface ProductItem {
   id: string;
   name: string;
@@ -105,14 +92,9 @@ function renderProductCard(
       {renderAddToCartForm(item)}
     </div>
   );
-  // `kovo-key` stays on the keyed child of the grid fragment host (§9.1 morph);
-  // the @kovojs/ui Card provides the surface inside it.
   return <article kovo-key={item.id}>{Card.definition.render({ children: body })}</article>;
 }
 
-// SPEC.md section 6.3: the no-JS add-to-cart form posts to the mutation
-// endpoint; `enhance` upgrades it to the section 9.1 fragment wire. Rendered
-// standalone as the failure-rerender fragment (kovo-fragment-target).
 export function renderAddToCartForm(
   item: { id: string; stock: number },
 ): string {

@@ -10,10 +10,9 @@ import {
 } from '@kovojs/test/html-fragment';
 
 import {
-  renderAddToCartForm,
-  renderCartPage,
   type AddToCartInput,
 } from './app.js';
+import { renderAddToCartForm } from './components/product-grid.js';
 import {
   applyCommerceAddToCartEffect,
   commerceAddToCartPropertyCases,
@@ -49,8 +48,10 @@ describe('commerce example', () => {
   });
 
   it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', async () => {
+    const client = createCommerceScenarioClient();
     const form = renderAddToCartForm({ id: 'p1', stock: 5 });
-    const html = await renderCartPage();
+    const response = await client.get('/cart');
+    const html = await response.text();
     const [addForm] = htmlFormFacts(form);
     const fieldsByName = htmlFormFieldsByName(addForm);
 
