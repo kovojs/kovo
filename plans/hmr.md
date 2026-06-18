@@ -169,7 +169,7 @@ render-plan version skew checks.
     query-plan, style, diagnostics, missing-fact fallback, and source-string trap
     classification; `pnpm exec vitest --run packages/compiler/src/hmr-impact.test.ts`,
     `pnpm exec tsc --noEmit`, and `pnpm run check:exports` pass.
-- [ ] **3. Vite plugin HMR transport.**
+- [x] **3. Vite plugin HMR transport.**
   - Extend `packages/compiler/src/vite.ts` with `handleHotUpdate` support and a
     typed dev-server websocket surface.
   - On successful component transform, record old/new module hrefs and send the
@@ -178,6 +178,17 @@ render-plan version skew checks.
   - On error diagnostics, record the dev diagnostic ledger and send
     `kovo:diagnostics` so the current page can fetch/render the teaching
     diagnostic without waiting for the next navigation.
+  - Evidence: `packages/compiler/src/vite.ts` now records previous
+    `hmrImpact` facts per component source, implements `handleHotUpdate()`,
+    sends `kovo:component-render`, `kovo:route-shell`, `kovo:diagnostics`, or
+    `kovo:full-reload` over the Vite websocket, and delegates unsafe updates to
+    Vite `{ type: "full-reload" }`. `packages/compiler/src/vite.test.ts`
+    covers component-refresh, diagnostic, and full-reload websocket events.
+    Verification: `corepack pnpm exec vitest --run
+    packages/compiler/src/vite.test.ts packages/compiler/src/hmr-impact.test.ts`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`; `node
+    scripts/exported-symbols.mjs --duplicates --check && node
+    scripts/api-surface-gate.mjs`; `git diff --check`.
 - [ ] **4. Shared app-shell dev integration.**
   - Add a public app-shell dev wrapper that wires compiler diagnostics into
     `createKovoAppShellDevDiagnosticLedger()` and keeps route/mutation diagnostic

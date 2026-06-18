@@ -3,8 +3,13 @@ import { isAbsolute, relative } from 'node:path';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
+import { classifyHmrImpact } from './hmr-impact.js';
 import { clientModuleUrl, clientModuleVersion } from './lower/handlers.js';
-import type { PackageComponentPrefixFact } from './types.js';
+import type {
+  HmrImpactClassification,
+  HmrImpactMetadata,
+  PackageComponentPrefixFact,
+} from './types.js';
 
 /**
  * The Vite plugin object produced by createKovoVitePlugin (and the `kovoVitePlugin` barrel
@@ -14,6 +19,7 @@ import type { PackageComponentPrefixFact } from './types.js';
  */
 export interface KovoVitePlugin {
   configureServer?: (server: KovoViteDevServer) => void;
+  handleHotUpdate?: (context: KovoViteHotUpdateContext) => Promise<readonly unknown[]>;
   name: 'kovo';
   transform: (
     source: string,
@@ -62,6 +68,7 @@ export interface KovoViteDevServer {
   middlewares: {
     use(handler: KovoViteMiddleware): void;
   };
+  ws?: KovoViteWebSocket;
 }
 
 /** @internal Connect-style middleware the plugin registers to serve emitted client islands. */
@@ -74,6 +81,51 @@ export type KovoViteMiddleware = (
   },
   next: () => void,
 ) => void;
+
+/** @internal Minimal Vite websocket surface used for Kovo HMR events (SPEC.md §9.5.1). */
+export interface KovoViteWebSocket {
+  send(payload: KovoViteWebSocketPayload): void;
+}
+
+/** Websocket payloads emitted by the Kovo Vite plugin during dev HMR. */
+export type KovoViteWebSocketPayload =
+  | {
+      data: KovoHmrEventPayload;
+      event: KovoHmrEventName;
+      type: 'custom';
+    }
+  | {
+      type: 'full-reload';
+    };
+
+/** @internal Minimal structural Vite handleHotUpdate context. */
+export interface KovoViteHotUpdateContext {
+  file: string;
+  modules?: readonly unknown[];
+  read(): Promise<string>;
+  server: KovoViteDevServer;
+}
+
+/** Stable Kovo custom HMR event names carried over Vite's websocket transport. */
+export type KovoHmrEventName =
+  | 'kovo:component-render'
+  | 'kovo:diagnostics'
+  | 'kovo:full-reload'
+  | 'kovo:route-shell';
+
+/** Payload shared by Kovo custom HMR events (SPEC.md §9.5.1). */
+export interface KovoHmrEventPayload {
+  component?: HmrImpactMetadata['component'];
+  diagnostics?: HmrImpactMetadata['diagnostics'];
+  impact: HmrImpactClassification['impact'];
+  liveTargets?: readonly string[];
+  newClientHref?: string;
+  newFactHash?: string;
+  oldClientHref?: string;
+  oldFactHash?: string;
+  reasons: readonly string[];
+  sourceFile: string;
+}
 
 interface ViteCompileOptions {
   fileName: string;
@@ -88,6 +140,7 @@ interface ViteCompileResult {
     kind: string;
     source: string;
   }[];
+  hmrImpact?: HmrImpactMetadata | null;
 }
 
 /**
@@ -102,6 +155,7 @@ export function createKovoVitePlugin(
   options: KovoVitePluginOptions = {},
 ): KovoVitePlugin {
   const clientModules = new Map<string, string>();
+  const hmrImpacts = new Map<string, HmrImpactMetadata>();
   let root = process.cwd();
 
   return {
@@ -122,46 +176,136 @@ export function createKovoVitePlugin(
     },
     name: 'kovo',
     transform(source: string, id: string) {
-      if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
+      if (!isViteComponentSource(id, source)) return null;
 
       const fileName = viteComponentFileName(id, root);
-      const result = compileComponentModule({
-        fileName,
-        ...(options.packageComponentPrefixes === undefined
-          ? {}
-          : { packageComponentPrefixes: options.packageComponentPrefixes }),
-        packagePrefixDiscoveryRoot: root,
-        source,
-      });
-      const diagnostics = result.diagnostics ?? [];
-      options.onModuleDiagnostics?.({ diagnostics, fileName, source });
-      const errorDiagnostics = diagnostics.filter(
-        (diagnostic) => diagnosticSeverity(diagnostic) === 'error',
-      );
-
-      for (const diagnostic of diagnostics) {
-        if (diagnosticSeverity(diagnostic) !== 'error') options.onDiagnostic?.(diagnostic);
-      }
-
-      if (errorDiagnostics.length > 0) {
-        throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
-      }
-
-      for (const file of result.files) {
-        if (file.kind === 'client') {
-          clientModules.set(
-            clientModuleUrl(fileName, clientModuleVersion(file.source)),
-            file.source,
-          );
-        }
-      }
+      const result = compileViteComponentModule(compileComponentModule, options, root, fileName, source);
+      const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
+      if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
+      recordViteCompileResult(clientModules, hmrImpacts, fileName, result);
 
       return {
         code: result.files.find((file) => file.kind === 'server')?.source ?? source,
         map: null,
       };
     },
+    async handleHotUpdate(context) {
+      const source = await context.read();
+      if (!isViteComponentSource(context.file, source)) return context.modules ?? [];
+
+      const fileName = viteComponentFileName(context.file, root);
+      const previous = hmrImpacts.get(fileName) ?? null;
+      const result = compileViteComponentModule(compileComponentModule, options, root, fileName, source);
+      const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
+      const next = result.hmrImpact ?? null;
+
+      if (errorDiagnostics.length > 0) {
+        if (next) hmrImpacts.set(fileName, next);
+        sendKovoHmrEvent(context.server, 'kovo:diagnostics', previous, next, {
+          impact: 'diagnosticError',
+          reasons: ['diagnostics'],
+        });
+        return [];
+      }
+
+      recordViteCompileResult(clientModules, hmrImpacts, fileName, result);
+      const classification = classifyHmrImpact(previous, next);
+      const event = eventForHmrClassification(classification);
+      sendKovoHmrEvent(context.server, event, previous, next, classification);
+      if (classification.impact === 'fullReload') context.server.ws?.send({ type: 'full-reload' });
+
+      return [];
+    },
   };
+}
+
+function isViteComponentSource(id: string, source: string): boolean {
+  return /\.[cm]?tsx?$/.test(id) && source.includes('component(');
+}
+
+function compileViteComponentModule(
+  compileComponentModule: (options: ViteCompileOptions) => ViteCompileResult,
+  options: KovoVitePluginOptions,
+  root: string,
+  fileName: string,
+  source: string,
+): ViteCompileResult {
+  return compileComponentModule({
+    fileName,
+    ...(options.packageComponentPrefixes === undefined
+      ? {}
+      : { packageComponentPrefixes: options.packageComponentPrefixes }),
+    packagePrefixDiscoveryRoot: root,
+    source,
+  });
+}
+
+function reportViteDiagnostics(
+  result: ViteCompileResult,
+  options: KovoVitePluginOptions,
+  fileName: string,
+  source: string,
+): CompilerDiagnostic[] {
+  const diagnostics = result.diagnostics ?? [];
+  options.onModuleDiagnostics?.({ diagnostics, fileName, source });
+  const errorDiagnostics = diagnostics.filter(
+    (diagnostic) => diagnosticSeverity(diagnostic) === 'error',
+  );
+
+  for (const diagnostic of diagnostics) {
+    if (diagnosticSeverity(diagnostic) !== 'error') options.onDiagnostic?.(diagnostic);
+  }
+
+  return errorDiagnostics;
+}
+
+function recordViteCompileResult(
+  clientModules: Map<string, string>,
+  hmrImpacts: Map<string, HmrImpactMetadata>,
+  fileName: string,
+  result: ViteCompileResult,
+): void {
+  for (const file of result.files) {
+    if (file.kind === 'client') {
+      clientModules.set(clientModuleUrl(fileName, clientModuleVersion(file.source)), file.source);
+    }
+  }
+
+  if (result.hmrImpact) hmrImpacts.set(fileName, result.hmrImpact);
+  else hmrImpacts.delete(fileName);
+}
+
+function eventForHmrClassification(classification: HmrImpactClassification): KovoHmrEventName {
+  if (classification.impact === 'componentRefresh') return 'kovo:component-render';
+  if (classification.impact === 'routeRefresh') return 'kovo:route-shell';
+  if (classification.impact === 'diagnosticError') return 'kovo:diagnostics';
+
+  return 'kovo:full-reload';
+}
+
+function sendKovoHmrEvent(
+  server: KovoViteDevServer,
+  event: KovoHmrEventName,
+  previous: HmrImpactMetadata | null,
+  next: HmrImpactMetadata | null,
+  classification: HmrImpactClassification,
+): void {
+  server.ws?.send({
+    data: {
+      ...(next?.component === undefined ? {} : { component: next.component }),
+      ...(next?.diagnostics === undefined ? {} : { diagnostics: next.diagnostics }),
+      impact: classification.impact,
+      liveTargets: (next?.liveTargetFacts ?? []).map((target) => target.target),
+      ...(next?.clientHref ? { newClientHref: next.clientHref } : {}),
+      ...(next?.factHash ? { newFactHash: next.factHash } : {}),
+      ...(previous?.clientHref ? { oldClientHref: previous.clientHref } : {}),
+      ...(previous?.factHash ? { oldFactHash: previous.factHash } : {}),
+      reasons: classification.reasons,
+      sourceFile: next?.sourceFileName ?? previous?.sourceFileName ?? '',
+    },
+    event,
+    type: 'custom',
+  });
 }
 
 function diagnosticSeverity(diagnostic: CompilerDiagnostic): CompilerDiagnostic['severity'] {

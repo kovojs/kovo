@@ -10,7 +10,15 @@ export type {
   MergeableAttributeValue,
 } from './lower/attribute-merge.js';
 export { mergePrimitiveAndAuthorAttributes } from './lower/attribute-merge.js';
-export type { KovoVitePlugin, KovoVitePluginOptions } from './vite.js';
+export type {
+  KovoHmrEventName,
+  KovoHmrEventPayload,
+  KovoViteHotUpdateContext,
+  KovoVitePlugin,
+  KovoVitePluginOptions,
+  KovoViteWebSocket,
+  KovoViteWebSocketPayload,
+} from './vite.js';
 export { deriveAppGraph } from './graph.js';
 export { composePageComponentArtifacts } from './page-composition.js';
 export { compileRouteModule } from './route-pages.js';

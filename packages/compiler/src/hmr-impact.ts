@@ -92,6 +92,11 @@ export function createComponentHmrImpactMetadata(
   };
 }
 
+/**
+ * Compare previous and next compiler HMR metadata and choose the smallest sound dev action.
+ * The classifier is deliberately conservative: missing or incompatible facts become a full reload
+ * instead of a stale client-side patch (SPEC.md §9.5.1).
+ */
 export function classifyHmrImpact(
   previous: HmrImpactMetadata | null | undefined,
   next: HmrImpactMetadata | null | undefined,

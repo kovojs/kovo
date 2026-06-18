@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { KovoViteMiddleware } from './internal.js';
 import { kovoVitePlugin } from './index.js';
 import { createKovoVitePlugin } from './vite.js';
+import type { HmrImpactMetadata } from './types.js';
 
 const cartBadgeSource = `
 import { component } from '@kovojs/core';
@@ -337,7 +338,189 @@ export const CartBadge = component({
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.end).not.toHaveBeenCalled();
   });
+
+  it('sends a Kovo component-render HMR event for classified component refreshes', async () => {
+    const ws = { send: vi.fn() };
+    const previous = hmrMetadata({
+      clientHref: '/c/src/counter.client.js?v=11111111',
+      factHash: 'previous',
+    });
+    const next = hmrMetadata({
+      clientHref: '/c/src/counter.client.js?v=22222222',
+      factHash: 'next',
+    });
+    const plugin = createKovoVitePlugin(
+      vi
+        .fn()
+        .mockReturnValueOnce(compileResult(previous, 'export const oldHandler = () => null;'))
+        .mockReturnValueOnce(compileResult(next, 'export const newHandler = () => null;')),
+    );
+    plugin.configureServer?.({
+      config: { root: '/workspace/app' },
+      middlewares: { use() {} },
+      ws,
+    });
+
+    plugin.transform('component(', '/workspace/app/src/counter.tsx');
+    const modules = await plugin.handleHotUpdate?.({
+      file: '/workspace/app/src/counter.tsx',
+      modules: ['vite-module'],
+      read: async () => 'component(',
+      server: {
+        config: { root: '/workspace/app' },
+        middlewares: { use() {} },
+        ws,
+      },
+    });
+
+    expect(modules).toEqual([]);
+    expect(ws.send).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        impact: 'componentRefresh',
+        liveTargets: ['counter'],
+        newClientHref: '/c/src/counter.client.js?v=22222222',
+        oldClientHref: '/c/src/counter.client.js?v=11111111',
+        reasons: ['handler-only'],
+        sourceFile: 'src/counter.tsx',
+      }),
+      event: 'kovo:component-render',
+      type: 'custom',
+    });
+  });
+
+  it('sends Kovo diagnostics HMR events for compiler errors without throwing', async () => {
+    const ws = { send: vi.fn() };
+    const diagnostic = {
+      code: 'KV201' as const,
+      fileName: 'src/counter.tsx',
+      message: kv201.message,
+      severity: kv201.severity,
+    };
+    const previous = hmrMetadata({ factHash: 'previous' });
+    const next = hmrMetadata({
+      diagnostics: [{ code: 'KV201', message: kv201.message, severity: kv201.severity }],
+      factHash: 'diagnostic',
+    });
+    const plugin = createKovoVitePlugin(
+      vi
+        .fn()
+        .mockReturnValueOnce(compileResult(previous, 'export const oldHandler = () => null;'))
+        .mockReturnValueOnce({
+          ...compileResult(next, 'export const brokenHandler = () => null;'),
+          diagnostics: [diagnostic],
+        }),
+    );
+    const server = {
+      config: { root: '/workspace/app' },
+      middlewares: { use() {} },
+      ws,
+    };
+    plugin.configureServer?.(server);
+
+    plugin.transform('component(', '/workspace/app/src/counter.tsx');
+    const modules = await plugin.handleHotUpdate?.({
+      file: '/workspace/app/src/counter.tsx',
+      modules: ['vite-module'],
+      read: async () => 'component(',
+      server,
+    });
+
+    expect(modules).toEqual([]);
+    expect(ws.send).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        diagnostics: [{ code: 'KV201', message: kv201.message, severity: kv201.severity }],
+        impact: 'diagnosticError',
+        reasons: ['diagnostics'],
+        sourceFile: 'src/counter.tsx',
+      }),
+      event: 'kovo:diagnostics',
+      type: 'custom',
+    });
+  });
+
+  it('delegates unsafe Kovo hot updates to Vite full reload', async () => {
+    const ws = { send: vi.fn() };
+    const next = hmrMetadata({ factHash: 'unsafe', liveTargetFacts: [] });
+    const plugin = createKovoVitePlugin(
+      vi.fn().mockReturnValueOnce(compileResult(next, 'export const handler = () => null;')),
+    );
+    const server = {
+      config: { root: '/workspace/app' },
+      middlewares: { use() {} },
+      ws,
+    };
+    plugin.configureServer?.(server);
+
+    const modules = await plugin.handleHotUpdate?.({
+      file: '/workspace/app/src/counter.tsx',
+      modules: ['vite-module'],
+      read: async () => 'component(',
+      server,
+    });
+
+    expect(modules).toEqual([]);
+    expect(ws.send).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        impact: 'fullReload',
+        reasons: ['missing-facts'],
+        sourceFile: 'src/counter.tsx',
+      }),
+      event: 'kovo:full-reload',
+      type: 'custom',
+    });
+    expect(ws.send).toHaveBeenCalledWith({ type: 'full-reload' });
+  });
 });
+
+function compileResult(hmrImpact: HmrImpactMetadata, clientSource: string) {
+  return {
+    diagnostics: [],
+    files: [
+      { kind: 'server', source: 'export function renderSource() {}' },
+      { kind: 'client', source: clientSource },
+    ],
+    hmrImpact,
+  };
+}
+
+function hmrMetadata({
+  clientHref = '/c/src/counter.client.js?v=11111111',
+  diagnostics = [],
+  factHash = 'fact',
+  liveTargetFacts = [
+    {
+      component: 'components/counter/counter',
+      coverage: [],
+      identityProps: [],
+      propsType: 'CounterProps',
+      queryBindings: [],
+      queries: [],
+      target: 'counter',
+      targetBase: 'counter',
+    },
+  ],
+}: {
+  clientHref?: string;
+  diagnostics?: HmrImpactMetadata['diagnostics'];
+  factHash?: string;
+  liveTargetFacts?: HmrImpactMetadata['liveTargetFacts'];
+} = {}): HmrImpactMetadata {
+  return {
+    clientHref,
+    component: { domLeaf: 'Counter', registryKey: 'Counter' },
+    diagnostics,
+    factHash,
+    liveTargetFacts,
+    liveTargetFactsHash: 'live-targets',
+    queryUpdatePlanHash: 'queries',
+    renderOutputHash: 'render',
+    routeShellHash: null,
+    sourceFileName: 'src/counter.tsx',
+    sourceKind: 'component',
+    stylesheetAssets: [],
+    stylesheetAssetsHash: 'styles',
+  };
+}
 
 function writePackageManifest(
   root: string,

@@ -291,17 +291,20 @@ export interface HmrImpactMetadata {
   renderOutputHash: string;
 }
 
+/** Component identity facts used to decide whether a hot edit can target the same DOM boundary. */
 export interface HmrImpactComponentFact {
   domLeaf: string;
   registryKey: string;
 }
 
+/** Diagnostic summary carried by compiler HMR metadata and `kovo:diagnostics` events. */
 export interface HmrImpactDiagnosticFact {
   code: CompilerDiagnostic['code'];
   message: string;
   severity: CompilerDiagnostic['severity'];
 }
 
+/** Stylesheet facts used to detect route-shell/style refresh requirements during dev HMR. */
 export interface HmrImpactStylesheetFact {
   contentHash?: string;
   cspHash?: string;
@@ -315,12 +318,14 @@ export interface HmrImpactStylesheetFact {
   }[];
 }
 
+/** Conservative hot-update action class selected from compiler-owned typed facts. */
 export type HmrImpactClass =
   | 'componentRefresh'
   | 'diagnosticError'
   | 'fullReload'
   | 'routeRefresh';
 
+/** Machine-readable reason explaining why an HMR action class was selected. */
 export type HmrImpactReason =
   | 'diagnostics'
   | 'handler-only'
@@ -332,6 +337,7 @@ export type HmrImpactReason =
   | 'style'
   | 'topology';
 
+/** Result of comparing previous and next HMR impact metadata for one source file. */
 export interface HmrImpactClassification {
   impact: HmrImpactClass;
   reasons: readonly HmrImpactReason[];

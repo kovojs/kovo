@@ -64,9 +64,14 @@ export {
 } from './types.js';
 export { collectMinifierReservedNames } from './compile.js';
 export type {
+  KovoHmrEventName,
+  KovoHmrEventPayload,
   KovoViteDevServer,
   KovoViteDiagnosticReporter,
+  KovoViteHotUpdateContext,
   KovoViteMiddleware,
   KovoViteModuleDiagnosticReport,
   KovoViteModuleDiagnosticReporter,
+  KovoViteWebSocket,
+  KovoViteWebSocketPayload,
 } from './vite.js';
