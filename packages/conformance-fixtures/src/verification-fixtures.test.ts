@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { csrfField, csrfToken, domain, mutation, query, s } from '@kovojs/server';
 
 import { createKovoTestHarness } from '@kovojs/test/harness';

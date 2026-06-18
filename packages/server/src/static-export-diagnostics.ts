@@ -1,4 +1,5 @@
-import { diagnosticDefinitions, type DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 /**
  * Route-level diagnostic emitted when a request-shell route cannot be represented

@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type { AppDiagnostic, KovoApp } from './app-types.js';
 import { findRouteAmbiguities, type RouteLike } from './match.js';
 

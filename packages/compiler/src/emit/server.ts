@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm';
 
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';

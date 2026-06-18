@@ -1,5 +1,5 @@
 import { dirname, relative, resolve } from 'node:path';
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';

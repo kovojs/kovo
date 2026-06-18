@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import type { PackageComponentPrefixFact } from '../types.js';

@@ -1,6 +1,6 @@
 import { isAbsolute, relative } from 'node:path';
 
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
 import { clientModuleUrl, clientModuleVersion } from './lower/handlers.js';

@@ -3,7 +3,7 @@ import {
   queryNameFromPath,
   queryPathUsesKnownQuery,
 } from '../analyze/query-shapes.js';
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import {

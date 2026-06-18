@@ -18,7 +18,7 @@ import {
   isDiagnosticCode,
   type DiagnosticCode,
   type DiagnosticSeverity,
-} from '@kovojs/core';
+} from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';

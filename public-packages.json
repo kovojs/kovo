@@ -11,6 +11,7 @@
         "generated": [],
         "internal": [
           "./internal/derivation",
+          "./internal/diagnostics",
           "./internal/graph",
           "./internal/package-prefix",
           "./internal/query-delta"

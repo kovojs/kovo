@@ -7,7 +7,7 @@ import {
   type CreateOptions,
   type StyleObject,
 } from '@kovojs/style';
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import ts from 'typescript';
 
 import { escapeAttribute, type SourceReplacement } from './shared.js';

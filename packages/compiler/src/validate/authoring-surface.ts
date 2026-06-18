@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { compilerIrHeader, cssIrHeader } from '../ir.js';

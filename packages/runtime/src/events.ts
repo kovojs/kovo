@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type { EventDefinition, JsonValue } from '@kovojs/core';
 import type {
   AttributeElementLike,

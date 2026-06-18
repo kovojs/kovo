@@ -1,4 +1,5 @@
-import { diagnosticDefinitions, type DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type { TouchGraph } from '@kovojs/core/internal/graph';
 
 import type { HarnessOperationVerifier } from './harness-operations.js';

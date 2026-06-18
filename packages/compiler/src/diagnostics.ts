@@ -1,4 +1,5 @@
-import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 /**
  * @internal A teaching diagnostic the compiler emits during lowering (KV### code, severity,

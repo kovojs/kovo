@@ -825,6 +825,26 @@ tsconfig.json --noEmit --pretty false`.
       `node site/scripts/api-examples-check.mjs`; `node scripts/build-publish.mjs`;
       `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs site/scripts/api-examples-check.test.mjs scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs`;
       `rg -n 'EndpointRegistry|EndpointMethod|EndpointMount|EndpointCsrfExemption|EndpointAuthDeclaration|#### \`Endpoint\`' site/gen/api/core.md site/gen/api/server.md -S`.
+  - [x] Move diagnostics registry values/helpers off the root.
+    - Evidence: `@kovojs/core` keeps `DiagnosticCode` and
+      `DiagnosticSeverity`, but no longer root-exports `DiagnosticDefinition`,
+      `DiagnosticTextOptions`, `diagnosticDefinitions`,
+      `diagnosticDefinitionText`, or `isDiagnosticCode`. Framework/tooling
+      consumers now import those registry values from
+      `@kovojs/core/internal/diagnostics`, and `public-packages.json` classifies
+      that subpath as internal. `site/gen/api/core.md` no longer documents the
+      removed root helpers. Verification:
+      `corepack pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/compiler/src/diagnostics.test.ts packages/server/src/app-diagnostics.test.ts packages/runtime/src/events.test.ts packages/test/src/verifier-diagnostics.test.ts`;
+      `corepack pnpm exec vitest --run scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs packages/conformance-fixtures/src/package-exports.test.ts packages/cli/src/index.compile-mcp.test.ts`;
+      `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+      `corepack pnpm run check:imports`; `corepack pnpm run check:exports`;
+      `node scripts/api-surface-gate.mjs`; `node site/scripts/diagnostics-ref.mjs`;
+      `node site/scripts/api-ref.mjs`; `node site/scripts/api-examples-check.mjs`;
+      `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs site/scripts/api-examples-check.test.mjs`;
+      `node scripts/build-publish.mjs`;
+      `rg -n "diagnosticDefinitions|diagnosticDefinitionText|isDiagnosticCode|DiagnosticDefinition|DiagnosticTextOptions" packages/core/src/index.ts site/gen/api/core.md`;
+      `rg -n "@kovojs/core.*(diagnosticDefinitions|diagnosticDefinitionText|isDiagnosticCode)|import \{[^}]*\b(diagnosticDefinitions|diagnosticDefinitionText|isDiagnosticCode)\b[^}]*\} from '@kovojs/core'|import \{[^}]*\b(diagnosticDefinitions|diagnosticDefinitionText|isDiagnosticCode)\b[^}]*\} from \"@kovojs/core\"" packages site examples docs --glob '!**/dist/**' --glob '!**/node_modules/**'`;
+      `git diff --check`.
   - Evidence:
 - [x] **Cull vendor-specific `@kovojs/core` symbols.**
   - Remove `stripeSignature` and `StripeSignatureOptions`; inline Stripe logic in

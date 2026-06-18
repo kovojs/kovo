@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { isKovoApp } from './app-guards.js';
 import { createRequestHandler } from './app.js';
 import type { KovoApp } from './app-types.js';

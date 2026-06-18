@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from './index.js';

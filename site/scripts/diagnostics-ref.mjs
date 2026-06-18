@@ -6,8 +6,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 /**
  * Generated diagnostics→fix catalog (plan: agent layer). One reference page
  * listing every framework diagnostic (KV###) with its severity, message, and
- * fix, sourced from `diagnosticDefinitions` exported by @kovojs/core (the same
- * registry the compiler/CLI emit and `vp run kovo-check` asserts against).
+ * fix, sourced from the framework's internal `diagnosticDefinitions` registry
+ * (the same registry the compiler/CLI emit and `vp run kovo-check` asserts
+ * against).
  *
  * This is the indexed KV### reference agents (and humans) pattern-match. It is
  * emitted as a content page so it appears in the site nav and in llms-full.txt.
@@ -26,20 +27,21 @@ const SEVERITY_BLURB = {
   warn: 'Non-blocking warning. The check passes, but the framework wants your attention.',
 };
 
-const CORE_DIST = new URL('dist/core/src/index.mjs', repoRoot);
+const CORE_DIAGNOSTICS_SOURCE = new URL('packages/core/src/diagnostics.ts', repoRoot);
 
-/** Read the diagnostics registry from the built core dist (mirrors
- * tests/kovo-check.node.mjs). The dist must be built first (`pnpm run check:build`). */
+/** Read the diagnostics registry from core's internal source so the catalog
+ * follows the same registry used by framework tooling without keeping that
+ * registry on the app-facing root API. */
 async function loadDiagnosticDefinitions() {
-  if (!existsSync(fileURLToPath(CORE_DIST))) {
+  if (!existsSync(fileURLToPath(CORE_DIAGNOSTICS_SOURCE))) {
     throw new Error(
-      'diagnostics-ref: dist/core/src/index.mjs is missing — run `pnpm run check:build` first',
+      'diagnostics-ref: packages/core/src/diagnostics.ts is missing',
     );
   }
-  const core = await import(CORE_DIST.href);
+  const core = await import(CORE_DIAGNOSTICS_SOURCE.href);
   const definitions = core.diagnosticDefinitions;
   if (!definitions || typeof definitions !== 'object') {
-    throw new Error('diagnostics-ref: @kovojs/core does not export diagnosticDefinitions');
+    throw new Error('diagnostics-ref: core internal diagnostics do not export diagnosticDefinitions');
   }
   return definitions;
 }

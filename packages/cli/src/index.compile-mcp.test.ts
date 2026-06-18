@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -92,7 +92,7 @@ describe('compile/v1 and kovo mcp', () => {
             "kind": "client",
           },
           {
-            "byteLength": 996,
+            "byteLength": 1077,
             "fileName": "generated/registries.d.ts",
             "kind": "registry",
           },

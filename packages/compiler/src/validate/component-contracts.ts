@@ -1,4 +1,4 @@
-import { diagnosticDefinitions } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';

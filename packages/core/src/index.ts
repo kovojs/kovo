@@ -1,13 +1,6 @@
 export type {
   DiagnosticCode,
-  DiagnosticDefinition,
   DiagnosticSeverity,
-  DiagnosticTextOptions,
-} from './diagnostics.js';
-export {
-  diagnosticDefinitions,
-  diagnosticDefinitionText,
-  isDiagnosticCode,
 } from './diagnostics.js';
 export type {
   FileSystemStorageOptions,

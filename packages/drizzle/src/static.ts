@@ -1,6 +1,10 @@
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { diagnosticDefinitionText, diagnosticDefinitions, type JsonValue } from '@kovojs/core';
+import type { JsonValue } from '@kovojs/core';
+import {
+  diagnosticDefinitionText,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import type {
   AlgebraicField,
   AlgebraicQueryShape,

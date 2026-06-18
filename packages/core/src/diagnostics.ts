@@ -82,7 +82,7 @@ export interface DiagnosticTextOptions {
  * @param options - Whether to include/prefer the help text.
  * @returns The diagnostic's message (and help, when requested).
  * @example
- * import { diagnosticDefinitionText } from '@kovojs/core';
+ * import { diagnosticDefinitionText } from '@kovojs/core/internal/diagnostics';
  *
  * const text: string = diagnosticDefinitionText('KV201', { includeHelp: true });
  */
@@ -104,7 +104,7 @@ export function diagnosticDefinitionText(
  * @param value - The value to test.
  * @returns `true` when `value` is a registered `DiagnosticCode`.
  * @example
- * import { isDiagnosticCode } from '@kovojs/core';
+ * import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
  *
  * const code: unknown = 'KV201';
  * if (isDiagnosticCode(code)) {

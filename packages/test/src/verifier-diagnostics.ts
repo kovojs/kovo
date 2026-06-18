@@ -1,4 +1,5 @@
-import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 
