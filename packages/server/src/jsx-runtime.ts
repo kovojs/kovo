@@ -506,7 +506,9 @@ function jsxPropsToSlots(props: JsxProps): ComponentRenderSlots {
 
 function isKovoComponent(value: unknown): value is KovoJsxComponent {
   return (
-    isRecord(value) && isRecord(value.definition) && typeof value.definition.render === 'function'
+    isObjectLike(value) &&
+    isRecord(value.definition) &&
+    typeof value.definition.render === 'function'
   );
 }
 
@@ -522,6 +524,10 @@ function isQueryArgsBinding(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isObjectLike(value: unknown): value is Record<string, unknown> {
+  return (typeof value === 'object' || typeof value === 'function') && value !== null;
 }
 
 function isPromiseLike<Value>(value: MaybePromise<Value>): value is Promise<Value> {

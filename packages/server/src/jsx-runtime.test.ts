@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { trustedHtml } from '@kovojs/runtime';
+import { component } from '@kovojs/core';
 
 import { Fragment, jsx, jsxDEV, jsxs } from './jsx-runtime.js';
 
@@ -11,6 +12,14 @@ describe('server jsx runtime', () => {
     expect(jsx('cart-badge', { class: 'badge', children: jsx('span', { children: 2 }) })).toBe(
       '<cart-badge class="badge"><span>2</span></cart-badge>',
     );
+  });
+
+  it('renders Kovo component descriptors instead of invoking their callable placeholder', async () => {
+    const Badge = component({
+      render: () => jsx('cart-badge', { children: '3' }),
+    });
+
+    await expect(jsx(Badge, {})).resolves.toBe('<cart-badge>3</cart-badge>');
   });
 
   it('renders boolean attributes bare and omits false, null, and undefined values', () => {
