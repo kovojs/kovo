@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
+import { UNITLESS_CSS_PROPERTIES } from '@kovojs/style/internal';
+
 import { dedupeCss } from './css.js';
 import { cssIrHeader } from './ir.js';
 import {
@@ -170,49 +172,18 @@ function normalizeLayerNames(css: string): string {
   return css.replace(/@layer\s+kovo-style\.(\d+)/g, '@layer kovo-style-$1');
 }
 
-// CSS properties that take a bare number (no length unit). Everything else that
-// `@kovojs/style` emits as a bare number (e.g. `padding:8`, `height:36`) is a
-// length and needs `px` to be valid CSS — StyleX applies the same rule. We do
-// this only on the SERVED text: the atomic class name still hashes the raw value
-// (see classNameFor in @kovojs/style), so the runtime `style.attrs` class and
-// this stylesheet stay in lockstep. (The engine emitting unitless values is a
-// latent gap; this keeps the served CSS browser-valid without churning snapshots.)
-const UNITLESS_CSS_PROPERTIES: ReadonlySet<string> = new Set([
-  'animation-iteration-count',
-  'aspect-ratio',
-  'columns',
-  'column-count',
-  'flex',
-  'flex-grow',
-  'flex-shrink',
-  'font-weight',
-  'grid-area',
-  'grid-column',
-  'grid-column-end',
-  'grid-column-start',
-  'grid-row',
-  'grid-row-end',
-  'grid-row-start',
-  'line-height',
-  'opacity',
-  'order',
-  'orphans',
-  'scale',
-  'tab-size',
-  'widows',
-  'z-index',
-  'fill-opacity',
-  'flood-opacity',
-  'stop-opacity',
-  'stroke-miterlimit',
-  'stroke-opacity',
-]);
-
 /**
  * Append `px` to single-value bare-number length declarations (`padding:8` →
  * `padding:8px`). Only matches a number that ends the declaration (`;`/`}`), so
  * multi-token values (`box-shadow:0 4px ...`) and already-unit'd values are left
- * untouched. Unitless properties (opacity, z-index, line-height, …) are skipped.
+ * untouched. Unitless properties (opacity, z-index, line-height, …) are skipped
+ * via the shared `UNITLESS_CSS_PROPERTIES` set from `@kovojs/style/internal`.
+ *
+ * `@kovojs/style`'s `emitAtomicCss` now appends the unit at the source (see
+ * `cssLengthValue`), so for engine-emitted CSS this pass is an idempotent no-op
+ * (`:12px}` no longer matches the bare-number pattern). It is kept as a
+ * defense-in-depth normalizer for any CSS text that reaches the served bundle by
+ * another path, and so the two stay provably in lockstep through the shared set.
  */
 function normalizeNumericLengths(css: string): string {
   return css.replace(

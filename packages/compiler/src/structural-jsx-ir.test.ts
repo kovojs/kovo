@@ -106,7 +106,7 @@ export const ProductPage = component({
         ]),
       }),
     ]);
-    expect(cssSource).toContain('@layer kovo-style.3000');
+    expect(cssSource).toContain('@layer kovo-style-3000');
     expect(cssSource).toContain('.kv-product-badge-bg-');
     expect(result.cssAssets[0]?.styleRuleUsages).toEqual(
       expect.arrayContaining([

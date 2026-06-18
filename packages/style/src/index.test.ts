@@ -74,13 +74,50 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     );
 
     expect(compiled.styles.root.__rules).toHaveLength(5);
-    expect(compiled.css).toContain('@layer kovo-style.1000');
-    expect(compiled.css).toContain('@layer kovo-style.2000');
-    expect(compiled.css).toContain('@layer kovo-style.4000');
+    expect(compiled.css).toContain('@layer kovo-style-1000');
+    expect(compiled.css).toContain('@layer kovo-style-2000');
+    expect(compiled.css).toContain('@layer kovo-style-4000');
     expect(compiled.css).toContain('.kv-button-pad-');
     expect(compiled.css).toContain('.kv-button-bg-');
     expect(compiled.css).toContain(':hover');
     expect(compiled.css).toContain('@media (min-width: 40rem)');
+  });
+
+  it('emits browser-valid lengths: bare-number lengths get px, unitless props and 0 do not', () => {
+    const compiled = createAtomicStyles(
+      {
+        root: {
+          maxWidth: 832,
+          gap: 8,
+          fontSize: 12,
+          margin: 0,
+          lineHeight: 1.5,
+          zIndex: 10,
+          opacity: 1,
+          flexShrink: 0,
+          height: '100vh',
+          flex: '1 1 0%',
+        },
+      },
+      { namespace: 'units', source: 'units.tsx' },
+    );
+
+    // Bare-number lengths gain `px` so the served declaration is valid CSS.
+    expect(compiled.css).toContain('max-width:832px');
+    expect(compiled.css).toContain('gap:8px');
+    expect(compiled.css).toContain('font-size:12px');
+    // `0` stays unitless and unitless properties are never px-suffixed.
+    expect(compiled.css).toContain('margin:0}');
+    expect(compiled.css).toContain('line-height:1.5}');
+    expect(compiled.css).toContain('z-index:10}');
+    expect(compiled.css).toContain('opacity:1}');
+    expect(compiled.css).toContain('flex-shrink:0}');
+    // Already-unit'd and multi-token values pass through untouched.
+    expect(compiled.css).toContain('height:100vh');
+    expect(compiled.css).toContain('flex:1 1 0%');
+    // The unit lives only in the served text; the atomic class hashes the raw
+    // value, so `attrs` class names stay in lockstep with the prior behavior.
+    expect(compiled.css).not.toContain(':832px}px');
   });
 
   it('emits data-attribute selector suffixes for headless component state', () => {
@@ -110,8 +147,8 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     ]);
 
     expect(getPriority('padding')).toBeLessThan(getPriority('paddingInline'));
-    expect(css.indexOf('@layer kovo-style.1000')).toBeLessThan(
-      css.indexOf('@layer kovo-style.2000'),
+    expect(css.indexOf('@layer kovo-style-1000')).toBeLessThan(
+      css.indexOf('@layer kovo-style-2000'),
     );
   });
 

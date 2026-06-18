@@ -1,4 +1,4 @@
-import { getPriority } from './internal.js';
+import { cssLengthValue, getPriority } from './internal.js';
 export { defineTheme, themeFromSeed, tokens } from './theme.js';
 export type {
   DefineThemeFromBaseOptions,
@@ -351,7 +351,12 @@ export function emitAtomicCss(rules: readonly AtomicRule[], options: CssEmitOpti
         .sort(compareRules)
         .map((rule) => rule.rule)
         .join('');
-      return `@layer ${layerName}.${priority}{${body}}`;
+      // `kovo-style-${priority}` (hyphen, not `.${priority}`): a CSS layer-name
+      // segment cannot start with a digit, so `@layer kovo-style.1000` is invalid
+      // and a browser drops the whole block. Separate top-level priority layers
+      // keep the same cascade order (they order by first declaration, ascending
+      // priority here), matching the compiler's served-CSS normalization.
+      return `@layer ${layerName}-${priority}{${body}}`;
     })
     .join('\n');
 }
@@ -449,7 +454,7 @@ function atomicRule(
   context: CompileContext,
 ): AtomicRule {
   const selector = `.${className}${context.selectorSuffix}`;
-  const declaration = `${cssProperty}:${String(value)}`;
+  const declaration = `${cssProperty}:${cssLengthValue(cssProperty, value)}`;
   let rule = `${selector}{${declaration}}`;
   for (let index = context.atRules.length - 1; index >= 0; index -= 1) {
     rule = `${context.atRules[index]}{${rule}}`;
