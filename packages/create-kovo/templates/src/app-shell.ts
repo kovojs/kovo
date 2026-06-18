@@ -1,10 +1,32 @@
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
-import { route } from '@kovojs/server';
+import { layout, route } from '@kovojs/server';
 import { App, starterAppStyleCss } from './app.js';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
 const starterStylesheetHref = process.env.KOVO_STARTER_STYLESHEET_HREF ?? '/src/styles.css';
+
+export interface StarterDb {
+  cartCount: number;
+}
+
+export interface StarterSession {
+  user: {
+    id: string;
+    roles: readonly string[];
+  };
+}
+
+export interface StarterRequest {
+  db: StarterDb;
+  session?: StarterSession | null;
+}
+
+export const starterDb: StarterDb = { cartCount: 0 };
+
+export function starterSessionProvider(): StarterSession {
+  return { user: { id: 'starter-user', roles: ['member'] } };
+}
 
 export const starterClientModuleHref = clientModules.put({
   path: '/c/starter.client.js',
@@ -24,22 +46,37 @@ export const starterClientModuleHref = clientModules.put({
   version: 'starter-r7',
 });
 
+export const starterLayout = layout<StarterRequest>({
+  render: (_queries, _state, { children, request }) =>
+    `<div data-session="${request.session?.user.id ?? 'guest'}">${children}</div>`,
+});
+
 export const homeRoute = route('/', {
+  layout: starterLayout,
   meta: {
     description: 'A routed Kovo starter served through the app shell.',
     title: 'Kovo Starter',
   },
   modulepreloads: [starterClientModuleHref],
-  page() {
-    return App.definition.render();
+  page(_context, request: StarterRequest) {
+    return App.definition.render({ cartCount: request.db.cartCount });
   },
   stylesheets: [{ href: starterStylesheetHref, criticalCss: starterAppStyleCss }],
 });
 
 export const app = createApp({
   clientModules,
+  db: () => starterDb,
   document: { lang: 'en' },
   routes: [homeRoute],
+});
+
+export const dynamicApp = createApp({
+  clientModules,
+  db: () => starterDb,
+  document: { lang: 'en' },
+  routes: [homeRoute],
+  sessionProvider: starterSessionProvider,
 });
 
 export const starterRequestHandler = createRequestHandler(app);

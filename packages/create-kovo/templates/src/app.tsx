@@ -66,8 +66,9 @@ export const starterAppStyleCss = style.emitAtomicCss(
 );
 
 export const App = component({
+  props: { cartCount: Number },
   state: () => ({ clicks: 0 }),
-  render: () => (
+  render: ({ cartCount }: { cartCount: number }) => (
     <main {...style.attrs(appStyles.root)} kovo-c="app-root" kovo-state='{"clicks":0}'>
       <section {...style.attrs(appStyles.section)}>
         <p {...style.attrs(appStyles.eyebrow)}>Routed by the app shell</p>
@@ -76,6 +77,7 @@ export const App = component({
           This page is declared as a Kovo route and served by the same request handler used for
           static export.
         </p>
+        <p {...style.attrs(appStyles.status)}>Starter cart count: {cartCount}</p>
         <div {...style.attrs(appStyles.toolbar)}>
           <button
             {...style.attrs(appStyles.action)}

@@ -204,6 +204,8 @@ describe('create-kovo starter', () => {
       expect(appSource).toContain('style.create(');
       expect(appSource).toContain('style.attrs(appStyles.root)');
       expect(appSource).toContain('starterAppStyleCss');
+      expect(appSource).toContain('props: { cartCount: Number }');
+      expect(appSource).toContain('Starter cart count: {cartCount}');
       expect(appSource).toContain('<main');
       expect(appSource).toContain('on:click="/c/starter.client.js?v=starter-r7#Starter$announce"');
       expect(appSource).not.toContain('mx-auto');
@@ -212,7 +214,12 @@ describe('create-kovo starter', () => {
       const appShellSource = readFileSync(join(root, 'src/app-shell.ts'), 'utf8');
       expect(appShellSource).toContain("from '@kovojs/server/app-shell/client-modules'");
       expect(appShellSource).toContain("from '@kovojs/server/app-shell/core'");
+      expect(appShellSource).toContain("import { layout, route } from '@kovojs/server';");
       expect(appShellSource).toContain('criticalCss: starterAppStyleCss');
+      expect(appShellSource).toContain('export const starterLayout = layout<StarterRequest>');
+      expect(appShellSource).toContain('data-session="${request.session?.user.id ?? \'guest\'}"');
+      expect(appShellSource).toContain('db: () => starterDb');
+      expect(appShellSource).toContain('sessionProvider: starterSessionProvider');
       expect(appShellSource).toContain("route('/',");
       expect(appShellSource).toContain('createRequestHandler(app)');
       expect(appShellSource).toContain("path: '/c/starter.client.js'");
@@ -239,6 +246,9 @@ describe('create-kovo starter', () => {
       expect(authSource).toContain('type StarterAuthBindings');
       expect(authSource).toContain('renderLoginForm(auth: StarterAuthBindings');
       expect(authSource).toContain('mutation={auth.signIn}');
+      expect(authSource).toContain("FieldError({ failure: null, name: 'email'");
+      expect(authSource).toContain("FieldError({ failure: null, name: 'password'");
+      expect(authSource).toContain('FormError({');
       expect(authSource).toContain('renderLogoutForm(auth: StarterAuthBindings');
       expect(authSource).toContain('mutation={auth.signOut}');
       expect(authSource).not.toContain('action="/_m/auth/sign-in"');

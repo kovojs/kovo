@@ -462,13 +462,29 @@ item inherits from rather than re-deciding it:
 
 ## Cross-cutting DX (new — not in the original plan)
 
-- [ ] **8. Teach the model in the starter template, not just examples.**
+- [x] **8. Teach the model in the starter template, not just examples.**
   - `packages/create-kovo` templates are the first surface real users hit. They
     must demonstrate `sessionProvider`/`db` providers (item 2), a nested layout
     (item 3), and `<FieldError>/<FormError>` (item 5) — not the retired seams.
   - Acceptance evidence: a generated starter type-checks and its smoke test renders
     a layout + a form with field errors; no template uses `Object.defineProperty`
     on `Request` or string shell helpers.
+  - Evidence:
+    - `packages/create-kovo/templates/src/app-shell.ts` declares `starterDb`,
+      `starterSessionProvider`, a first-class `starterLayout`, an exportable app
+      with `db: () => starterDb`, and a dynamic app variant with
+      `sessionProvider: starterSessionProvider`; `src/app.tsx` renders the
+      `cartCount` prop from the request db channel.
+    - `packages/create-kovo/templates/src/auth.tsx` renders the login mutation form
+      with `FieldError(...)` placeholders and `FormError(...)` for
+      `INVALID_CREDENTIALS` instead of a bespoke output switch.
+    - Verification: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts`
+      passes and asserts the generated starter source plus smoke-rendered layout
+      wrapper / db-backed count; `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`
+      passes.
+    - Verification: `rg -n "Object\.defineProperty\(request|render[A-Za-z]*Shell|mutationResponse|failure\?\.code" packages/create-kovo/templates`
+      exits 1 with no hits; `node scripts/api-surface-gate.mjs` and
+      `git diff --check` pass.
 
 - [ ] **9. Extend `kovo explain` to the new seams.**
   - Cover request provisioning (which `db`/session fields a query sees), layout

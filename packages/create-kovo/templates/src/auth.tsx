@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { FieldError, FormError } from '@kovojs/core';
 import { csrfField, guards, s, session, type CsrfValidationOptions } from '@kovojs/server';
 import * as style from '@kovojs/style';
 import {
@@ -209,6 +210,8 @@ export const starterAuthStyleCss = style.emitAtomicCss(
 // as ordinary mutation forms. Browsers without JS post directly to /_m/*; the
 // `enhance` attribute only upgrades the same form to the fragment wire.
 export function renderLoginForm(auth: StarterAuthBindings, options: LoginFormOptions = {}): string {
+  const failure = options.failure ? { code: options.failure } : null;
+
   return (
     <form enhance mutation={auth.signIn} {...style.attrs(authStyles.form)}>
       {options.request ? csrfField(options.request, starterAuthCsrf) : ''}
@@ -222,6 +225,7 @@ export function renderLoginForm(auth: StarterAuthBindings, options: LoginFormOpt
           autocomplete="email"
           required
         />
+        {FieldError({ failure: null, name: 'email', ...style.attrs(authStyles.error) })}
       </label>
       <label {...style.attrs(authStyles.field)}>
         <span>Password</span>
@@ -232,23 +236,19 @@ export function renderLoginForm(auth: StarterAuthBindings, options: LoginFormOpt
           autocomplete="current-password"
           required
         />
+        {FieldError({ failure: null, name: 'password', ...style.attrs(authStyles.error) })}
       </label>
-      {options.failure === 'INVALID_CREDENTIALS' ? (
-        <output
-          role="alert"
-          data-error-code="INVALID_CREDENTIALS"
-          {...style.attrs(authStyles.error)}
-        >
-          Invalid email or password.
-        </output>
-      ) : (
-        ''
-      )}
+      {FormError({
+        ...style.attrs(authStyles.error),
+        children: 'Invalid email or password.',
+        code: 'INVALID_CREDENTIALS',
+        failure,
+      })}
       <button {...style.attrs(authStyles.primaryAction)} type="submit">
         Sign in
       </button>
     </form>
-  );
+  ) as string;
 }
 
 export function renderLogoutForm(auth: StarterAuthBindings, request: StarterAuthRequest): string {
@@ -259,5 +259,5 @@ export function renderLogoutForm(auth: StarterAuthBindings, request: StarterAuth
         Sign out
       </button>
     </form>
-  );
+  ) as string;
 }

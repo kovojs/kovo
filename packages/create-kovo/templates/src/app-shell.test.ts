@@ -40,9 +40,10 @@ describe('starter app shell', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
-    await expect(response.text()).resolves.toContain(
-      `on:click="${starterClientModuleHref}#Starter$announce"`,
-    );
+    const documentBody = await response.text();
+    expect(documentBody).toContain(`on:click="${starterClientModuleHref}#Starter$announce"`);
+    expect(documentBody).toContain('data-session="guest"');
+    expect(documentBody).toContain('Starter cart count: 0');
 
     const moduleResponse = await starterRequestHandler(
       new Request(`https://starter.test${starterClientModuleHref}`),
@@ -72,6 +73,9 @@ describe('starter app shell', () => {
       ]);
       await expect(readFile(join(outDir, 'index.html'), 'utf8')).resolves.toContain(
         'Hello from Kovo',
+      );
+      await expect(readFile(join(outDir, 'index.html'), 'utf8')).resolves.toContain(
+        'data-session="guest"',
       );
       await expect(readFile(join(outDir, 'c/starter.client.js'), 'utf8')).resolves.toContain(
         'Starter$announce',
