@@ -35,12 +35,10 @@ import {
 import { count, eq, sql } from 'drizzle-orm';
 
 import { createCommerceDb, type CommerceDb } from './db.js';
-import { CartBadge } from './generated/cart-badge.js';
-import { cartAddDerivedOptimistic } from './generated/optimistic/cart-add.js';
-import { OrderHistory } from './generated/order-history.js';
-import * as productGridComponent from './generated/product-grid.js';
-import { commerceQueryDomains, commerceTouchGraph } from './generated/touch-graph.js';
-import { commerceCartPageMeta, commerceStylesheets, createCommerceGraph } from './graph.js';
+import { commerceCartPageMeta, commerceStylesheets } from './graph.js';
+import { CartBadge } from './components/cart-badge.js';
+import { OrderHistory } from './components/order-history.js';
+import * as productGridComponent from './components/product-grid.js';
 import {
   cart,
   cartQuery,
@@ -58,7 +56,6 @@ import {
 } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 
-export { commerceQueryDomains, commerceTouchGraph } from './generated/touch-graph.js';
 export { commerceCartPageMeta, commerceStylesheets } from './graph.js';
 export { createCommerceDb, type CommerceDb } from './db.js';
 export { loadCartQuery, loadProductGrid, loadOrderHistory } from './queries.js';
@@ -71,10 +68,6 @@ export type {
 
 export type CommerceRole = 'admin' | 'member';
 
-export interface CommerceRenderFaults {
-  productGrid?: () => Error;
-}
-
 export interface CommerceSession {
   id: string;
   user: {
@@ -85,7 +78,6 @@ export interface CommerceSession {
 
 export interface CommerceRequest {
   db: CommerceDb;
-  renderFaults?: CommerceRenderFaults;
   session?: CommerceSession | null;
 }
 
@@ -261,6 +253,12 @@ export interface AddToCartFailureState {
   productId?: string;
 }
 
+const addToCartInferredTouches = [
+  { domain: 'cart', keys: null },
+  { domain: 'order', keys: null },
+  { domain: 'product', keys: 'arg:productId' },
+] as const;
+
 export const addToCart = mutation('cart/add', {
   csrf: commerceCsrf,
   errors: {
@@ -275,7 +273,7 @@ export const addToCart = mutation('cart/add', {
     guards.rateLimit<CommerceRequest>({ max: 10, per: 'session' }),
   ),
   registry: {
-    inferredTouches: commerceTouchGraph['cart.addItem'].touches,
+    inferredTouches: addToCartInferredTouches,
   },
   transaction(request: CommerceRequest, run) {
     return request.db.transaction((tx) => run({ ...request, db: tx as unknown as CommerceDb }));
@@ -316,14 +314,6 @@ export const addToCart = mutation('cart/add', {
   },
 });
 
-// SPEC.md §10.4/§10.5: optimism for cart/add is now compiler-DERIVED. The
-// generated/optimistic/cart-add.ts transforms (count += quantity, push the new
-// order row with placeholders, decrement the matched product's stock) supersede
-// the previously hand-written `cart` transform and the `await-fragment` punts on
-// orderHistory/productGrid. Deleting a transform there lets you hand-write an
-// override; regenerating restores derivation (the §10.4 pair-by-pair contract).
-export const addToCartOptimistic = cartAddDerivedOptimistic;
-
 export const commerceMessageCatalog = {
   cartLabel: 'Cart',
   productStock: '{count} in stock',
@@ -333,12 +323,6 @@ export const commerceMessages = i18n('en-US', commerceMessageCatalog);
 
 export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
 
-// The product grid (cards, no-JS add-to-cart forms, failure output) is
-// authored as a TSX component in src/components/product-grid.tsx and compiled
-// through @kovojs/compiler (SPEC.md sections 3, 4.1, 5.2); the app imports its
-// committed lowered IR from src/generated/. Bound via a namespace import so
-// the import block stays one line: the committed touch graph pins the
-// mutation handlers' write-site line numbers in this file.
 export const {
   ProductGrid,
   renderAddToCartForm,
@@ -353,9 +337,6 @@ export function renderProductGrid(
   request?: CommerceRequest,
   addToCartFailure?: AddToCartFailureState,
 ): string {
-  // SPEC.md section 4.2: the markup comes from the compiled TSX component;
-  // kovo-c and kovo-deps are compiler-derived (section 4.8). SPEC.md §6.3/§9.2
-  // keeps mutation failures in forms.addToCart.failure, separate from query data.
   const slots = productGridRenderSlots(request, addToCartFailure?.productId);
 
   if (addToCartFailure) {
@@ -424,17 +405,12 @@ export async function renderProductGridDeferredStream(
 }
 
 export async function renderOrderHistory(db: CommerceDb, userId?: string): Promise<string> {
-  // SPEC.md section 4.2: the markup comes from the compiled TSX component
-  // (src/components/order-history.tsx); kovo-c and kovo-deps are compiler-derived.
   // Order history is per-user. With no authenticated user we default-deny and
   // render an empty history rather than leaking another user's orders.
   const history: OrderHistoryResult = userId ? await loadOrderHistory(db, userId) : { items: [] };
   return OrderHistory.definition.render({ orderHistory: history });
 }
 
-// CartBadge and OrderHistory are authored as TSX components under
-// src/components/ and compiled through @kovojs/compiler (SPEC.md sections 3,
-// 4.1, 5.2); the app imports their committed lowered IR from src/generated/.
 export { CartBadge, OrderHistory };
 
 export function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
@@ -626,17 +602,6 @@ function appendCommerceCsrf(rawInput: unknown, request: CommerceRequest): unknow
   };
 }
 
-async function loadProductGridForRequest(
-  db: CommerceDb,
-  input?: ProductGridInput,
-  request?: CommerceRequest,
-): Promise<ProductGridResult> {
-  const productGridError = request?.renderFaults?.productGrid?.();
-  if (productGridError) throw productGridError;
-
-  return loadProductGrid(db, input);
-}
-
 async function renderAddToCartFailureFragment(
   db: CommerceDb,
   rawInput: unknown,
@@ -688,11 +653,3 @@ function commerceAuthResponse(cookies: readonly string[], status = 204): BetterA
 
   return { headers, status };
 }
-
-// A fresh, unmodified database has an empty cart (count 0); the demo graph is a
-// module-load static, so it uses that starter value rather than awaiting a read.
-export const commerceGraph = createCommerceGraph(
-  { count: 0 },
-  commerceTouchGraph,
-  commerceQueryDomains,
-);

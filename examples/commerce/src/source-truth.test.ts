@@ -2,14 +2,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { KovoExplainInput } from '@kovojs/core/internal/graph';
+import type { KovoExplainInput, PageExplain } from '@kovojs/core/internal/graph';
 import { htmlDocumentFacts } from '@kovojs/test/html-fragment';
 import { kovoExplain } from 'kovo';
 import { describe, expect, it } from 'vitest';
 
 import {
   commerceCartPageMeta,
-  commerceGraph,
   createCommerceDb,
   loadCartQuery,
   productGridQuery,
@@ -46,8 +45,9 @@ describe('commerce graph', () => {
     const starterCart = await loadCartQuery(createCommerceDb());
     const cartMeta = commerceCartPageMeta(starterCart);
     const pageHints = htmlDocumentFacts(renderCommercePageHints(starterCart).html);
+    const commerceGraph = authoredGraphFacts(generatedGraph);
 
-    expect(commerceGraph.pages.find((page) => page.route === '/cart')?.meta).toEqual(cartMeta);
+    expect(commerceGraph.pages?.find((page) => page.route === '/cart')?.meta).toEqual(cartMeta);
     expect(pageHints.title).toBe(cartMeta.title);
     expect(pageHints.metas).toEqual(
       expect.arrayContaining([
@@ -95,8 +95,28 @@ describe('commerce graph', () => {
 
 function statusesFor(mutation: string): Record<string, string> {
   return Object.fromEntries(
-    (commerceGraph.optimistic ?? [])
+    (authoredGraphFacts(generatedGraph).optimistic ?? [])
       .filter((entry) => entry.mutation === mutation)
       .map((entry) => [entry.query, entry.status]),
   );
+}
+
+function authoredGraphFacts(graph: KovoExplainInput): KovoExplainInput {
+  const { components: _components, pages, packageComponentPrefixes: _prefixes, ...rest } = graph;
+
+  return {
+    ...rest,
+    pages: pages?.map(authoredPageFacts),
+  };
+}
+
+function authoredPageFacts(page: PageExplain): PageExplain {
+  const {
+    layouts: _layouts,
+    navigationSegments: _navigationSegments,
+    queries: _queries,
+    ...authoredFacts
+  } = page;
+
+  return authoredFacts;
 }

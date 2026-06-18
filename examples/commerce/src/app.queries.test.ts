@@ -8,6 +8,7 @@ import {
   htmlElementFacts,
   htmlKeyTextMap,
   htmlKeyValues,
+  htmlTextContent,
 } from '@kovojs/test/html-fragment';
 import type { QueryDefinition } from '@kovojs/server';
 
@@ -19,7 +20,6 @@ import {
   commerceCsrf,
   commerceCsrfInput,
   commerceAuthCsrf,
-  commerceTouchGraph,
   createCommerceDb,
   cartQuery,
   loadProductGrid,
@@ -81,7 +81,22 @@ describe('commerce example', () => {
       request: {
         session: { id: 's1', user: { id: 'u1' } },
       },
-      touchGraph: { 'cart.addItem': commerceTouchGraph['cart.addItem'] } as unknown as TouchGraph,
+      touchGraph: {
+        'cart.addItem': {
+          touches: [
+            { domain: 'cart', keys: null, site: 'examples/commerce/src/app.ts', via: 'cart_items' },
+            { domain: 'order', keys: null, site: 'examples/commerce/src/app.ts', via: 'orders' },
+            {
+              domain: 'product',
+              keys: 'arg:productId',
+              predicate: 'eq',
+              site: 'examples/commerce/src/app.ts',
+              via: 'products',
+            },
+          ],
+          unresolved: [],
+        },
+      } as unknown as TouchGraph,
       verification: {
         domainByTable: {
           cart_items: 'cart',
@@ -108,8 +123,7 @@ describe('commerce example', () => {
       ok: true,
       rerunQueries: [],
     });
-    const cartBadge = await harness.page('/cart').then((page) => page.fragment('cart-badge'));
-    expect(htmlElementFacts(cartBadge, { attrs: { 'data-bind': 'cart.count' } })).toHaveLength(1);
+    expect(htmlTextContent(await renderCartPage(harness.dbHandle()))).toContain('2');
   });
 
   it('loads declared commerce queries from the request database', async () => {

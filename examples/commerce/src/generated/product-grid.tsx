@@ -16,7 +16,7 @@ import { Card } from '@kovojs/ui/card';
 
 import { commerceCsrf, type CommerceRequest, type ProductGridResult } from '../app.js';
 import { productGridQuery } from '../queries.js';
-import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer, type LiveTargetRenderContext, type LiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native
@@ -24,11 +24,11 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer, type 
 // kovo-deps stamp (from the queries declaration) from the compiler (section
 // 4.8); grid updates flow as server fragments (the section 4.8 ceiling:
 // keyed per-item markup with request-scoped forms is beyond paths, derives,
-// and keyed lists), declared await-fragment in addToCartOptimistic.
+// and keyed lists), so product grid refresh remains a server fragment.
 //
 // Render slots carry request-only CSRF data and SPEC.md §6.3 mutation form
-// state. The lowered IR is committed at src/generated/product-grid.tsx and is
-// what the app imports at runtime.
+// state. The lowered IR is committed at src/generated/product-grid.tsx for the
+// generated route/runtime artifacts.
 
 const addToCartForm = form('cart/add');
 
@@ -242,19 +242,3 @@ export const ProductGrid$liveTargetRenderer = registerGeneratedLiveTargetRendere
   component: ProductGrid,
   componentId: "components/product-grid/product-grid",
 }));
-
-const ProductGrid$commerceLiveTargetRenderer: LiveTargetRenderer<CommerceRequest> = {
-  ...ProductGrid$liveTargetRenderer,
-  errorBoundary: {
-    render(error: unknown) {
-      return `<section role="alert" class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">Product grid failed: ${escapeText((error as Error).message)}</section>`;
-    },
-  },
-  render(context: LiveTargetRenderContext<CommerceRequest>) {
-    const productGridError = context.request.renderFaults?.productGrid?.();
-    if (productGridError) throw productGridError;
-    return ProductGrid$liveTargetRenderer.render(context);
-  },
-};
-
-registerGeneratedLiveTargetRenderer(ProductGrid$commerceLiveTargetRenderer);

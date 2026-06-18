@@ -20,11 +20,11 @@ import { productGridQuery } from '../queries.js';
 // kovo-deps stamp (from the queries declaration) from the compiler (section
 // 4.8); grid updates flow as server fragments (the section 4.8 ceiling:
 // keyed per-item markup with request-scoped forms is beyond paths, derives,
-// and keyed lists), declared await-fragment in addToCartOptimistic.
+// and keyed lists), so product grid refresh remains a server fragment.
 //
 // Render slots carry request-only CSRF data and SPEC.md §6.3 mutation form
-// state. The lowered IR is committed at src/generated/product-grid.tsx and is
-// what the app imports at runtime.
+// state. The lowered IR is committed at src/generated/product-grid.tsx for the
+// generated route/runtime artifacts.
 
 const addToCartForm = form('cart/add');
 

@@ -10,7 +10,6 @@ import {
 } from '@kovojs/test/html-fragment';
 
 import {
-  addToCartOptimistic,
   renderAddToCartForm,
   renderCartPage,
   type AddToCartInput,
@@ -22,12 +21,13 @@ import {
   shapeCommerceCartQuery,
   type CommerceAddToCartPropertyState,
 } from './app-test-helpers.js';
+import { cartAddDerivedOptimistic } from './generated/optimistic/cart-add.js';
 
 describe('commerce example', () => {
   it('predicts cart count with the compiler-derived addToCart optimistic transform', () => {
-    expect(addToCartOptimistic.queue).toBe('cart');
+    expect(cartAddDerivedOptimistic.queue).toBe('cart');
     expect(
-      addToCartOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 }),
+      cartAddDerivedOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 }),
     ).toEqual({
       count: 3,
     });
@@ -39,7 +39,7 @@ describe('commerce example', () => {
         },
         cases: commerceAddToCartPropertyCases(),
         predict(state, input) {
-          return addToCartOptimistic.transforms.cart(shapeCommerceCartQuery(state), input);
+          return cartAddDerivedOptimistic.transforms.cart(shapeCommerceCartQuery(state), input);
         },
         shape(state) {
           return shapeCommerceCartQuery(state);
@@ -113,24 +113,6 @@ describe('commerce example', () => {
     expect(htmlKeyValues(body)).toContain('order-2');
     expect(htmlTextContent(body)).toContain('Only 1 left');
     expect(transactions).toBe(2);
-  });
-
-  it('contains product-grid fragment failures with a per-island error boundary', async () => {
-    const client = createCommerceScenarioClient();
-    const login = await client.signIn({ remoteAddress: '203.0.113.72' });
-    expect(login.status).toBe(303);
-
-    const response = await client.addToCartEnhanced(
-      { productId: 'p1', quantity: 1 },
-      {
-        renderProductGridFault: new Error('catalog unavailable'),
-      },
-    );
-    const body = await response.text();
-
-    expect(response.status, body).toBe(200);
-    expect(response.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
-    expect(htmlTextContent(body)).toContain('Product grid failed: catalog unavailable');
   });
 
   it('handles no-JS addToCart failures as a full 422 page with the form rerendered', async () => {
