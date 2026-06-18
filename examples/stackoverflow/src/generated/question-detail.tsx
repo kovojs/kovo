@@ -176,16 +176,4 @@ QuestionDetailRegion.name = "components/question-detail/question-detail-region";
 export const QuestionDetailRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: QuestionDetailRegion,
   componentId: "components/question-detail/question-detail-region",
-  queries: [
-    {
-      name: "answers",
-      query: questionAnswers,
-      args: (props) => ({ questionId: props.questionId }),
-    },
-    {
-      name: "question",
-      query: questionDetail,
-      args: (props) => ({ id: props.questionId }),
-    },
-  ],
 }));

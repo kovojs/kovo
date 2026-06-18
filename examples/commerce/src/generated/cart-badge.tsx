@@ -34,10 +34,4 @@ CartBadge.name = "components/cart-badge/cart-badge";
 export const CartBadge$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: CartBadge,
   componentId: "components/cart-badge/cart-badge",
-  queries: [
-    {
-      name: "cart",
-      query: cartQuery,
-    },
-  ],
 }));

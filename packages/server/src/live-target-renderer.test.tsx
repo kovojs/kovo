@@ -37,17 +37,12 @@ describe('generated component live target renderers', () => {
     const renderer = componentLiveTargetRenderer({
       component: ProductDetail,
       componentId: 'components/product-detail/product-detail',
-      queries: [
-        {
-          args: (props) => ({ id: props.productId }),
-          name: 'product',
-          query: productQuery,
-        },
-      ],
     });
 
     expect(renderer.queries).toEqual(['product']);
-    expect(renderer.queryDefinitions).toEqual([productQuery]);
+    expect(renderer.queryDefinitions?.map((queryDefinition) => queryDefinition.key)).toEqual([
+      productQuery.key,
+    ]);
     await expect(
       renderer.render({
         input: {},
@@ -74,7 +69,6 @@ describe('generated component live target renderers', () => {
     const renderer = componentLiveTargetRenderer({
       component: ProductDetail,
       componentId: 'components/product-detail/product-detail',
-      queries: [{ name: 'product', query: productQuery }],
     });
 
     await expect(
@@ -106,7 +100,6 @@ describe('generated component live target renderers', () => {
     const renderer = componentLiveTargetRenderer({
       component: CartForm,
       componentId: 'components/cart-form/cart-form',
-      queries: [{ name: 'cart', query: cartQuery }],
     });
 
     await expect(

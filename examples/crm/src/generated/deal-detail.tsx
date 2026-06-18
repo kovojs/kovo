@@ -195,18 +195,4 @@ DealDetailRegion.name = "components/deal-detail/deal-detail-region";
 export const DealDetailRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: DealDetailRegion,
   componentId: "components/deal-detail/deal-detail-region",
-  queries: [
-    {
-      name: "activityList",
-      query: activityListQuery,
-    },
-    {
-      name: "contactList",
-      query: contactListQuery,
-    },
-    {
-      name: "dealList",
-      query: dealListQuery,
-    },
-  ],
 }));

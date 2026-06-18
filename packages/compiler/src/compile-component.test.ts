@@ -62,12 +62,6 @@ describe('compileComponentModule', () => {
       .toContain(`export const CartBadge$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: CartBadge,
   componentId: "components/cart/cart-badge/cart-badge",
-  queries: [
-    {
-      name: "cart",
-      query: {},
-    },
-  ],
 }));`);
     expect(registry?.source).toContain(
       "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",

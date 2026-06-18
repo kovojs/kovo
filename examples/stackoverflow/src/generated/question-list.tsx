@@ -148,14 +148,4 @@ QuestionListRegion.name = "components/question-list/question-list-region";
 export const QuestionListRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: QuestionListRegion,
   componentId: "components/question-list/question-list-region",
-  queries: [
-    {
-      name: "questionList",
-      query: questionList,
-    },
-    {
-      name: "questionScore",
-      query: questionScore,
-    },
-  ],
 }));

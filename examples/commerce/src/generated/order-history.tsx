@@ -58,10 +58,4 @@ export function renderOrderHistoryItems(result: OrderHistoryResult): string {
 export const OrderHistory$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: OrderHistory,
   componentId: "components/order-history/order-history",
-  queries: [
-    {
-      name: "orderHistory",
-      query: orderHistoryQuery,
-    },
-  ],
 }));

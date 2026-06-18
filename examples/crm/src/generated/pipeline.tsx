@@ -204,18 +204,4 @@ PipelineRegion.name = "components/pipeline/pipeline-region";
 export const PipelineRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: PipelineRegion,
   componentId: "components/pipeline/pipeline-region",
-  queries: [
-    {
-      name: "contactList",
-      query: contactListQuery,
-    },
-    {
-      name: "openDeals",
-      query: openDealsQuery,
-    },
-    {
-      name: "pipelineByStage",
-      query: pipelineByStageQuery,
-    },
-  ],
 }));

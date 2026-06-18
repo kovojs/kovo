@@ -23,7 +23,7 @@ export interface ComponentLiveTargetRendererOptions<
 > {
   component: Component<Definition>;
   componentId: string;
-  queries: readonly ComponentLiveTargetQueryBinding<Request>[];
+  queries?: readonly ComponentLiveTargetQueryBinding<Request>[];
   renderOptions?: (
     context: LiveTargetRenderContext<Request>,
   ) => ComponentRenderOptions<State> | Promise<ComponentRenderOptions<State>>;
@@ -47,16 +47,58 @@ export function componentLiveTargetRenderer<
 >(
   options: ComponentLiveTargetRendererOptions<Definition, Request, State>,
 ): LiveTargetRenderer<Request> {
+  const queryBindings =
+    options.queries ?? componentLiveTargetQueryBindings<Request>(options.component);
+
   return {
     component: options.componentId,
-    queries: options.queries.map((binding) => binding.query.key),
-    queryDefinitions: options.queries.map((binding) => binding.query),
+    queries: queryBindings.map((binding) => binding.query.key),
+    queryDefinitions: queryBindings.map((binding) => binding.query),
     async render(context) {
-      const queries = await loadLiveTargetQueries(options.queries, context);
+      const queries = await loadLiveTargetQueries(queryBindings, context);
       const renderOptions = await componentLiveTargetRenderOptions(options, context);
       return renderComponent(options.component, { ...context.props, ...queries }, renderOptions);
     },
   };
+}
+
+function componentLiveTargetQueryBindings<Request>(
+  component: Component<ComponentDefinitionInput>,
+): ComponentLiveTargetQueryBinding<Request>[] {
+  if (!isRecord(component.definition.queries)) return [];
+
+  return Object.entries(component.definition.queries).flatMap(([name, binding]) => {
+    const queryBinding = componentQueryBinding<Request>(name, binding);
+    return queryBinding === undefined ? [] : [queryBinding];
+  });
+}
+
+function componentQueryBinding<Request>(
+  name: string,
+  binding: unknown,
+): ComponentLiveTargetQueryBinding<Request> | undefined {
+  if (isQueryArgsBinding<Request>(binding)) {
+    return { args: binding.args, name, query: binding.query };
+  }
+  if (isQueryDefinition<Request>(binding)) {
+    return { name, query: binding };
+  }
+  return undefined;
+}
+
+function isQueryArgsBinding<Request>(
+  value: unknown,
+): value is {
+  args: (props: Record<string, unknown>) => unknown;
+  query: QueryDefinition<string, unknown, unknown, Request>;
+} {
+  return isRecord(value) && typeof value.args === 'function' && isQueryDefinition(value.query);
+}
+
+function isQueryDefinition<Request>(
+  value: unknown,
+): value is QueryDefinition<string, unknown, unknown, Request> {
+  return isRecord(value) && typeof value.key === 'string' && Array.isArray(value.reads);
 }
 
 async function loadLiveTargetQueries<Request>(

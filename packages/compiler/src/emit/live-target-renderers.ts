@@ -46,30 +46,13 @@ function insertLiveTargetRendererImport(source: string): string {
 
 function liveTargetRendererExport(componentExpression: string, fact: LiveTargetFact): string {
   const exportName = liveTargetRendererExportName(componentExpression);
-  const queries =
-    fact.queryBindings.length === 0
-      ? '[]'
-      : `[\n${fact.queryBindings.map((binding) => liveTargetQueryBindingSource(binding)).join(',\n')},\n  ]`;
 
   return `export const ${exportName} = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ${componentExpression},
   componentId: ${JSON.stringify(fact.component)},
-  queries: ${queries},
 }));`;
 }
 
 function liveTargetRendererExportName(componentExpression: string): string {
   return `${componentExpression.replaceAll(/[^A-Za-z0-9_$]/g, '_')}$liveTargetRenderer`;
-}
-
-function liveTargetQueryBindingSource(binding: LiveTargetFact['queryBindings'][number]): string {
-  const args =
-    binding.argsExpression === undefined
-      ? ''
-      : `,\n      args: (${binding.argsParam ?? 'props'}) => ${binding.argsExpression}`;
-
-  return `    {
-      name: ${JSON.stringify(binding.name)},
-      query: ${binding.queryExpression}${args},
-    }`;
 }

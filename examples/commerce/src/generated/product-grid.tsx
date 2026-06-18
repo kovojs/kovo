@@ -251,12 +251,6 @@ function productGridItemSlots(
 export const ProductGrid$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductGrid,
   componentId: "components/product-grid/product-grid",
-  queries: [
-    {
-      name: "productGrid",
-      query: productGridQuery,
-    },
-  ],
 }));
 
 const ProductGrid$commerceLiveTargetRenderer: LiveTargetRenderer<CommerceRequest> = {

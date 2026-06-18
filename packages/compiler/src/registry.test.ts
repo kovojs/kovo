@@ -121,13 +121,6 @@ export const ProductDetail = component({
     expect(result.loweredSource).toContain(`export const ProductDetail$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductDetail,
   componentId: "components/products/product-detail/product-detail",
-  queries: [
-    {
-      name: "product",
-      query: productQuery,
-      args: (props) => ({ id: props.productId }),
-    },
-  ],
 }));`);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -181,18 +174,6 @@ export const detail = route('/questions/:id', {
     expect(component.loweredSource).toContain(`export const QuestionDetail$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: QuestionDetail,
   componentId: "components/questions/question-detail/question-detail",
-  queries: [
-    {
-      name: "question",
-      query: questionQuery,
-      args: (props) => ({ id: props.questionId }),
-    },
-    {
-      name: "answers",
-      query: answerListQuery,
-      args: (props) => ({ questionId: props.questionId }),
-    },
-  ],
 }));`);
     expect(() => assertFixpoint(component)).not.toThrow();
   });
@@ -246,13 +227,6 @@ export const products = route('/products', {
     expect(component.loweredSource).toContain(`export const ProductCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ProductCard,
   componentId: "components/products/product-card/product-card",
-  queries: [
-    {
-      name: "product",
-      query: productQuery,
-      args: (props) => ({ id: props.productId }),
-    },
-  ],
 }));`);
     expect(() => assertFixpoint(component)).not.toThrow();
   });

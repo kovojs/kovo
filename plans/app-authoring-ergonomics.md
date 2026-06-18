@@ -394,10 +394,20 @@ item inherits from rather than re-deciding it:
       - Gap: runtime app-shell and mutation registry arrays are removed; `graph.ts`
         and emit-script query-domain maps still need a compiler-derived graph
         registry slice.
-    - [ ] Per-component generated live-target query key arrays are inferred from
+    - [x] Per-component generated live-target query key arrays are inferred from
       component declarations rather than emitted as explicit generated metadata.
-      - Gap: `componentLiveTargetRenderer()` now exposes query definitions, but
-        generated artifacts still pass explicit query bindings into the helper.
+      - Evidence: `componentLiveTargetRenderer()` now normalizes
+        `component.definition.queries` into live-target query bindings; compiler
+        live-target exports call the helper with only `component` and
+        `componentId`; `rg -n "queries:\s*\[" examples/commerce/src/generated examples/crm/src/generated examples/stackoverflow/src/generated --glob '*.ts' --glob '*.tsx'`
+        exits 1 with no hits.
+      - Verification: `pnpm exec vitest --run packages/server/src/live-target-renderer.test.tsx packages/server/src/app.test.ts packages/server/src/mutation-endpoint.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts`;
+        `pnpm --filter @kovojs/example-commerce run emit-components -- --check`;
+        `pnpm --filter @kovojs/example-crm run emit-components -- --check`;
+        `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`;
+        `pnpm --filter @kovojs/example-commerce test -- app-shell.test.ts app.add-to-cart.test.ts app.rendering.test.ts app.auth.test.ts`;
+        `pnpm --filter @kovojs/example-crm test -- interactive-app.test.ts`;
+        `pnpm --filter @kovojs/example-stackoverflow test -- interactive-app.test.ts`.
 
 - [ ] **7. Retire static export from interactive examples (+ keep a fixture).**
   - Remove static export scripts/tests/docs refs and static-only page helpers from

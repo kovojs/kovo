@@ -137,10 +137,4 @@ ContactsRegion.name = "components/contacts/contacts-region";
 export const ContactsRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
   component: ContactsRegion,
   componentId: "components/contacts/contacts-region",
-  queries: [
-    {
-      name: "contactList",
-      query: contactListQuery,
-    },
-  ],
 }));

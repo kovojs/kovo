@@ -126,7 +126,6 @@ import {
 import { escapeHtml } from '@kovojs/server/internal/html';
 
 import type { CommerceRequest } from '../app.js';
-import { productGridQuery } from '../queries.js';
 import * as cartBadgeModule from './cart-badge.js';
 import * as orderHistoryModule from './order-history.js';
 import { ProductGrid } from './product-grid.js';
@@ -134,12 +133,6 @@ import { ProductGrid } from './product-grid.js';
 const productGridRenderer = componentLiveTargetRenderer({
   component: ProductGrid,
   componentId: 'components/product-grid/product-grid',
-  queries: [
-    {
-      name: 'productGrid',
-      query: productGridQuery,
-    },
-  ],
   slots(context: LiveTargetRenderContext<CommerceRequest>) {
     return {
       forms: { addToCart: { failure: null } },
