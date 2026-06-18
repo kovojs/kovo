@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
 
-import { buildSoInteractiveApp } from './interactive-app.generated-fixtures.js';
+import { buildSoInteractiveApp } from './interactive-app.js';
 import { soCsrf } from './mutations.js';
 import { answers, questions } from './schema.js';
 
@@ -108,8 +108,8 @@ describe('stackoverflow interactive app', () => {
 
     expect(response.status).toBe(200);
     const html = await response.text();
-    // It is a fragment-wire response targeting the question region.
-    expect(html).toContain(`target="${questionListTarget}"`);
+    expect(html).toContain('<kovo-query name="questionList"');
+    expect(html).toContain('<kovo-query name="questionScore"');
 
     // The real row was updated.
     const [after] = await db.select().from(questions).where(eq(questions.id, first.id)).limit(1);
@@ -134,12 +134,13 @@ describe('stackoverflow interactive app', () => {
         body: 'A fresh demo answer.',
         authorId: 'demo-viewer',
       }),
-      `${questionDetailTarget}=answers question`,
+      `${questionDetailTarget}=questionAnswers questionDetail`,
       liveHeader(questionDetailTarget, questionDetailComponent, { questionId: question.id }),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${questionDetailTarget}"`);
+    expect(html).toContain('<kovo-query name="questionAnswers"');
+    expect(html).toContain('<kovo-query name="questionDetail"');
     expect(html).toContain('A fresh demo answer.');
 
     const inserted = await db.select().from(answers).where(eq(answers.id, 'a-test-1'));
@@ -166,7 +167,7 @@ describe('stackoverflow interactive app', () => {
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${questionListTarget}"`);
+    expect(html).toContain('<kovo-query name="questionList"');
     expect(html).toContain('How do I demo Kovo?');
 
     const rows = await db.select().from(questions);
@@ -195,6 +196,6 @@ describe('stackoverflow interactive app', () => {
     expect(status).toBe(422);
     expect(html).toContain(`target="${questionListTarget}"`);
     expect(html).toContain('data-error-code="DUPLICATE_TITLE"');
-    expect(html).toContain(`A question titled "${question.title}" already exists.`);
+    expect(html).toContain(`"title":"${question.title}"`);
   });
 });

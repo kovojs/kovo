@@ -122,16 +122,22 @@ internals, emit/check scripts, and narrowly named artifact tests.
 
 ## CRM And StackOverflow
 
-- [ ] Apply the same test/helper boundary to CRM and StackOverflow.
+- [x] Apply the same test/helper boundary to CRM and StackOverflow.
   - Scenario tests import authored entries or public helper factories, not
     `src/generated/*`.
-  - Current progress: `examples/crm/src/app-shell.ts`,
+  - Evidence: `examples/crm/src/app-shell.ts`,
     `examples/crm/src/interactive-app.test.ts`,
     `examples/stackoverflow/src/app-shell.ts`, and
-    `examples/stackoverflow/src/interactive-app.test.ts` no longer import
-    generated route modules directly; they use explicitly named generated
-    fixtures until authored app loading preserves compiled route metadata.
-    Focused CRM and StackOverflow interactive tests passed.
+    `examples/stackoverflow/src/interactive-app.test.ts` import authored app
+    factories. Generated live-target coverage moved to explicit
+    `interactive-app.generated-artifacts.test.ts` files in both examples, which
+    import the generated fixture wrappers. `pnpm --filter @kovojs/example-crm
+    exec vitest --run src/interactive-app.test.ts
+    src/interactive-app.generated-artifacts.test.ts`, `pnpm --filter
+    @kovojs/example-stackoverflow exec vitest --run src/interactive-app.test.ts
+    src/interactive-app.generated-artifacts.test.ts`, `pnpm exec vitest --run
+    scripts/import-boundary.test.mjs`, `node scripts/import-boundary.mjs`, and
+    `git diff --check` passed.
   - Current progress: `examples/crm/src/mutations.ts` no longer imports
     `src/generated/optimistic/*`; CRM keeps generated optimistic artifacts as
     review/check outputs while authored mutation exports own the runtime
@@ -309,12 +315,12 @@ internals, emit/check scripts, and narrowly named artifact tests.
     src/enhanced-navigation.test.ts src/app.rendering.test.ts` passed after
     ordinary Commerce helpers/tests switched to `./app.js` and generated
     live-target assertions moved to an explicit generated-artifacts test.
-- [ ] Run focused CRM and StackOverflow tests after applying the same boundary.
-  - Current progress: `pnpm --filter @kovojs/example-crm exec vitest --run
-    src/optimistic.test.ts src/interactive-app.test.ts src/graph.test.ts` and
-    `pnpm --filter @kovojs/example-stackoverflow exec vitest --run
-    src/interactive-app.test.ts` passed after direct generated route imports
-    moved behind generated fixtures.
+- [x] Run focused CRM and StackOverflow tests after applying the same boundary.
+  - Evidence: `pnpm --filter @kovojs/example-crm exec vitest --run
+    src/interactive-app.test.ts src/interactive-app.generated-artifacts.test.ts`
+    and `pnpm --filter @kovojs/example-stackoverflow exec vitest --run
+    src/interactive-app.test.ts src/interactive-app.generated-artifacts.test.ts`
+    passed after ordinary tests/app shells switched to authored app factories.
 - [x] Run `emit-components -- --check` and `emit-graph -- --check` for each
       migrated example.
   - Evidence: `pnpm --filter @kovojs/example-commerce run emit-components --
