@@ -30,6 +30,7 @@ describe('create-kovo starter', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-scaffold-'));
     const expectedFiles = [
       'package.json',
+      'kovo.config.ts',
       'vite.config.ts',
       '.github/workflows/ci.yml',
       'README.md',
@@ -99,12 +100,14 @@ describe('create-kovo starter', () => {
       expect(packageJson.devDependencies).not.toHaveProperty(legacyCssVitePlugin);
       expect(packageJson.devDependencies).not.toHaveProperty(legacyCssTool);
       expect(packageJson.scripts).toMatchObject({
+        build: 'kovo build ./src/app-shell.ts',
         check: 'vp check',
         dev: 'vp dev',
         'emit-graph': 'node scripts/emit-graph.mjs',
         'preview:static': 'node scripts/preview-static.mjs',
-        serve: 'node scripts/serve.mjs',
-        start: 'node scripts/serve.mjs',
+        serve: 'kovo build ./src/app-shell.ts --preset node && node dist/server/server.mjs',
+        'serve:dev': 'node scripts/serve.mjs',
+        start: 'node dist/server/server.mjs',
         static: 'vp run export',
         test: 'vp test',
       });
@@ -775,7 +778,7 @@ describe('create-kovo starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-kovo: wrote 24 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-kovo: wrote 25 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });

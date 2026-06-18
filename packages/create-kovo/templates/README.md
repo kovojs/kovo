@@ -1,20 +1,21 @@
 # Kovo Starter
 
-This starter uses Vite+ as the single project entrypoint:
+This starter uses Vite+ for local dev/test workflows and `kovo build` for production artifacts:
 
 ```sh
 vp check
 vp test
-vp run build
+kovo build ./src/app-shell.ts
 vp run export
 vp run preview-static
-vp run serve
+npm run serve
+npm run serve:dev
 vp run emit-graph
 vp run kovo-check
 vp run graph-assertions
 ```
 
-`src/app-shell.ts` exports the Kovo app used by `vp dev`, `vp run serve`, and static export. The Vite+ dev and serve paths load that app through the public app-shell dev plugin, so routed document requests for `/` and versioned `/c/` module requests are adapted from the same `Request -> Response` shell while Vite keeps serving source assets such as `/src/styles.css`. The root `index.html` is only a Vite asset-build entry; route documents come from the app shell per SPEC.md section 9.5. `vp run serve`, `npm run serve`, and `npm start` start the same Vite-backed middleware stack behind a Node HTTP server and print `starter-serve/v1` with the local origin. `vp run export` and `npm run static` first build the Vite assets, then call `kovo export --vite` so the command loads the app shell with the built CSS href, replays the route document, copies the `/c/` module, and copies manifest assets into `dist`; `vp run preview-static` serves only those exported `dist` files and prints `starter-static-preview/v1` for local static-host checks. If a route becomes non-exportable, the task prints stable `starter-export/v1` diagnostics and exits nonzero instead of writing a misleading static build.
+`src/app-shell.ts` exports the Kovo app used by `vp dev`, `kovo build`, and static export. The root `index.html` is only a Vite asset-build entry; route documents come from the app shell per SPEC.md section 9.5. `npm run build` emits the node preset into `dist/server`, and `npm start` runs the generated `dist/server/server.mjs` production server without Vite in the request path. `npm run serve` rebuilds first, then starts that generated server for a local production check. `npm run serve:dev` keeps the old Vite-backed middleware stack for local source-serving checks and prints `starter-serve/v1` with the local origin. `vp run export` and `npm run static` first build the Vite assets, then call `kovo export --vite` so the command loads the app shell with the built CSS href, replays the route document, copies the `/c/` module, and copies manifest assets into `dist`; `vp run preview-static` serves only those exported `dist` files and prints `starter-static-preview/v1` for local static-host checks. If a route becomes non-exportable, the task prints stable `starter-export/v1` diagnostics and exits nonzero instead of writing a misleading static build.
 
 `@kovojs/style` is the default app styling path. Define typed style objects with `style.create(...)`, apply them with `style.attrs(...)`, and keep raw global document defaults in `src/styles.css`. Change the seed and custom colors in `src/theme.ts` to retheme the starter; the app shell inlines the generated theme variables with the initial StyleX-compatible atomic CSS while preserving the linked stylesheet identity required by SPEC.md section 13.1.
 

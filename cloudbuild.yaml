@@ -1,4 +1,7 @@
-# Build the examples image once and deploy one Cloud Run service per example.
+# Build the demo examples image once and deploy one Cloud Run service per example.
+# This Cloud Run image is for hosted framework demos. App-author production
+# deploys should use `kovo build` and the generated native preset artifacts
+# instead of this Vite-from-source demo container.
 #
 #   gcloud builds submit --config cloudbuild.yaml .
 #

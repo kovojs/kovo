@@ -4,12 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp build",
+    "build": "kovo build ./src/app-shell.tsx --preset node",
+    "build:demo": "vp build",
     "dev": "vp dev",
     "emit-components": "node scripts/emit-components.mjs",
     "emit-graph": "node scripts/emit-graph.mjs",
-    "start": "node scripts/serve.mjs",
-    "serve:prod": "vp build && node scripts/serve.mjs",
+    "start": "node dist/server/server.mjs",
+    "serve:demo": "pnpm run build:demo && node scripts/demo-serve.mjs",
+    "serve:dev": "node scripts/serve.mjs",
+    "serve:prod": "pnpm run build && node dist/server/server.mjs",
     "test": "vp test"
   },
   "dependencies": {

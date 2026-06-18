@@ -1,8 +1,11 @@
 # Per-visitor demo image for the interactive Kovo examples (commerce / crm /
-# stackoverflow). Each example is served through its REAL server paths via Vite
-# SSR (the framework serves SSR at runtime — see examples/*/scripts/serve.mjs),
-# with a fresh, isolated PGlite-backed instance per browser session
-# (scripts/demo-session/, SPEC.md §9.5).
+# stackoverflow). This is intentionally a hosted demo/dev image: each example is
+# served through Vite SSR with a fresh, isolated PGlite-backed instance per
+# browser session (scripts/demo-session/, SPEC.md §9.5).
+#
+# App-author production deploys should use `kovo build` and the generated native
+# preset artifacts (`dist/server`, `.vercel/output`, or `dist/cloudflare`)
+# instead of this Vite-from-source demo container.
 #
 # One image serves any one example, chosen at runtime by the EXAMPLE env var, so
 # the same image backs three Cloud Run services. Because the runtime is Vite SSR,
@@ -38,7 +41,7 @@ RUN pnpm install --frozen-lockfile \
 # Build each example's client assets (CSS and manifests -> dist/assets/*). The
 # per-session demo serve streams SSR from source but serves built /assets/* from
 # dist, so the apps render fully styled.
-RUN pnpm -C examples/commerce run build \
+RUN pnpm -C examples/commerce run build:demo \
   && pnpm -C examples/crm run build \
   && pnpm -C examples/stackoverflow run build
 

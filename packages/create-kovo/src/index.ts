@@ -27,6 +27,7 @@ export interface WriteKovoProjectResult {
 const templateRoot = new URL('../templates/', import.meta.url);
 const templateFiles = [
   'package.json',
+  'kovo.config.ts',
   'vite.config.ts',
   '.github/workflows/ci.yml',
   'README.md',

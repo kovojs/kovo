@@ -19,11 +19,10 @@ const STATIC_MIME = {
   '.ico': 'image/x-icon',
 };
 
-// SPEC.md §9.5: the served app references built client assets at `/assets/*`
-// (the Vite build output, e.g. `<link href=/assets/styles.css>`). Serve those
-// from `dist/` (run `vp build` first) BEFORE the SSR middleware, so the app is
-// fully styled — the production-serve path (`vp build && node scripts/serve.mjs`),
-// not Vite's dev CSS-as-JS where the stylesheet `<link>` 404s.
+// SPEC.md §9.5: dev/demo source serve for the commerce example. Production uses
+// `kovo build ./src/app-shell.tsx` and the generated `dist/server/server.mjs`.
+// This helper keeps the Vite middleware path available for local source-serving
+// checks, serving built `/assets/*` from `dist/` when `vp build` has populated it.
 async function tryServeBuiltAsset(req, res) {
   const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (!pathname.startsWith('/assets/')) return false;

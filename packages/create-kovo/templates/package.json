@@ -3,12 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "kovo build ./src/app-shell.ts",
     "check": "vp check",
     "dev": "vp dev",
     "emit-graph": "node scripts/emit-graph.mjs",
     "preview:static": "node scripts/preview-static.mjs",
-    "serve": "node scripts/serve.mjs",
-    "start": "node scripts/serve.mjs",
+    "serve": "kovo build ./src/app-shell.ts --preset node && node dist/server/server.mjs",
+    "serve:dev": "node scripts/serve.mjs",
+    "start": "node dist/server/server.mjs",
     "static": "vp run export",
     "test": "vp test"
   },
