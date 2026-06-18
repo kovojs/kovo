@@ -280,9 +280,12 @@ render-plan version skew checks.
     HMR endpoint/client strings. `tests/integration/specs/hmr-dev-client.spec.ts`
     covers the browser dev client applying a server-rendered live-target fragment,
     sending current `Kovo-Live-Targets`/`Kovo-Targets` headers, preserving focused
-    input state, reloading declared query data from server state, and avoiding
-    full navigation. Source-edit, diagnostic, and route-table browser scenarios
-    remain open.
+    input state, reloading declared query data from server state, replacing the
+    document with server-rendered diagnostics from the dev ledger, and avoiding
+    full navigation for fragment-refresh cases. Source-edit and route-table
+    browser scenarios remain open. Verification: `corepack pnpm --filter
+    @kovojs/integration-tests exec playwright test specs/hmr-dev-client.spec.ts
+    --project=chromium`.
 
 ## First Milestone Slice
 

@@ -5,7 +5,10 @@ import type { AddressInfo } from 'node:net';
 import { expect, test } from '@playwright/test';
 
 import { createApp, domain, kovoAppShellViteDevPlugin, query, route, s } from '@kovojs/server';
-import type { KovoAppShellViteMiddleware } from '@kovojs/server/internal/app-shell-vite';
+import {
+  createKovoAppShellDevDiagnosticLedger,
+  type KovoAppShellViteMiddleware,
+} from '@kovojs/server/internal/app-shell-vite';
 import {
   componentLiveTargetRenderer,
   type LiveTargetRenderer,
@@ -189,12 +192,87 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
   }
 });
 
+test('dev HMR client replaces the document with server diagnostics', async ({ page }) => {
+  const failedModule = '/c/src/components/ProductCard.client.js?v=failed';
+  const diagnostics = createKovoAppShellDevDiagnosticLedger();
+  const app = createApp({
+    routes: [
+      route('/', {
+        modulepreloads: [failedModule],
+        page() {
+          return '<main><h1>Healthy route</h1></main>';
+        },
+      }),
+    ],
+  });
+  const server = await serveHmrFixture(app, { devDiagnostics: diagnostics });
+
+  try {
+    await page.goto(`${server.origin}/`);
+    await page.waitForFunction(
+      () =>
+        typeof (window as typeof window & { __kovoHot?: Record<string, unknown> }).__kovoHot?.[
+          'kovo:diagnostics'
+        ] === 'function',
+    );
+    await expect(page.locator('main')).toContainText('Healthy route');
+
+    diagnostics.recordModuleDiagnostics({
+      diagnostics: [
+        {
+          code: 'KV225',
+          fileName: 'src/components/ProductCard.tsx',
+          message: 'JSX nesting violates the HTML content model.',
+        },
+      ],
+      fileName: 'src/components/ProductCard.tsx',
+      moduleHrefs: [failedModule],
+      source: 'export const ProductCard = component({ render: () => <p><div /></p> });',
+    });
+    const refreshResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/@kovo/hmr/refresh/route') && response.status() === 500,
+    );
+    await page.evaluate(() => {
+      const hot = (window as typeof window & {
+        __kovoHot?: Record<string, (event?: unknown) => void>;
+      }).__kovoHot;
+      hot?.['kovo:diagnostics']?.();
+    });
+    await refreshResponse;
+
+    await expect(page.locator('.kovo-diagnostic-code')).toHaveText('KV225');
+    await expect(page.locator('body')).toContainText('JSX nesting violates the HTML content model.');
+    await expect(page.locator('main')).not.toContainText('Healthy route');
+    expect(page.url()).toBe(`${server.origin}/`);
+  } finally {
+    await server.close();
+  }
+});
+
 async function serveHmrFixture(app: ReturnType<typeof createApp>): Promise<{
+  close(): Promise<void>;
+  origin: string;
+}>;
+async function serveHmrFixture(
+  app: ReturnType<typeof createApp>,
+  pluginOptions: Parameters<typeof kovoAppShellViteDevPlugin>[0],
+): Promise<{
+  close(): Promise<void>;
+  origin: string;
+}>;
+async function serveHmrFixture(
+  app: ReturnType<typeof createApp>,
+  pluginOptions: Parameters<typeof kovoAppShellViteDevPlugin>[0] = {},
+): Promise<{
   close(): Promise<void>;
   origin: string;
 }> {
   let middleware: KovoAppShellViteMiddleware | undefined;
-  const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
+  const plugin = kovoAppShellViteDevPlugin({
+    ...pluginOptions,
+    moduleId: pluginOptions.moduleId ?? '/src/app-shell.ts',
+  });
   plugin.configureServer({
     middlewares: {
       use(handler) {
