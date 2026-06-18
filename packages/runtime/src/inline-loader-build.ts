@@ -105,6 +105,16 @@ function installInlineKovoLoader(im) {
       return value;
     }
   };
+  const ht = (hash) => {
+    const raw = hash.slice(1);
+    const decoded = hid(hash);
+    return (
+      doc.getElementById(decoded) ??
+      doc.getElementById(raw) ??
+      doc.getElementsByName?.(decoded)?.[0] ??
+      doc.getElementsByName?.(raw)?.[0]
+    );
+  };
   const vp = (val, path) =>
     path.split('.').reduce((cur, seg) => {
       const key = seg.endsWith('?') ? seg.slice(0, -1) : seg;
@@ -357,7 +367,7 @@ function installInlineKovoLoader(im) {
       focusTarget?.focus?.({ preventScroll: true });
       const saved = sc[finalUrl.href];
       if (saved) globalThis.scrollTo?.(saved[0], saved[1]);
-      else if (finalUrl.hash) doc.getElementById(hid(finalUrl.hash))?.scrollIntoView?.();
+      else if (finalUrl.hash) ht(finalUrl.hash)?.scrollIntoView?.();
       else globalThis.scrollTo?.(0, 0);
       if (triggerRoot) setTimeout(() => tr(triggerRoot));
       cu = finalUrl.href;
