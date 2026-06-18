@@ -389,6 +389,12 @@
       "dir": "conformance-fixtures",
       "visibility": "private",
       "kind": "fixtures"
+    },
+    {
+      "name": "@kovojs/devtool",
+      "dir": "devtool",
+      "visibility": "private",
+      "kind": "build-tool"
     }
   ]
 }

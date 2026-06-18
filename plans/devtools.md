@@ -188,6 +188,18 @@ Delivery order is **UI-first** (see Decisions). The shared graph model (Phases 0
 is still bedrock — the visual UI depends on it — so it leads regardless; the human
 surface ships before the MCP tools, which then drop onto the same model.
 
+> **Refactored to a real package 2026-06-18** (`packages/devtool/` = `@kovojs/devtool`,
+> branch `agent/devtool-package`): the logic moved out of the example into a
+> private, data-free library — `buildBundle`/`buildDataflowGraph`/`buildCard`/
+> `renderPage`/`createMcpServer` at the root (plain-Node safe), `createDevtoolApp`
+> at `./app` (pulls `@kovojs/server`), `devtoolMountPlugin` at `./vite`, and a
+> `kovo-devtool` MCP bin. A host hands it its own `graph.json` + src root. The
+> package is self-contained (stylesheet + both fonts inlined base64, island as a
+> `/c/` module). `examples/devtool/` is now a thin consumer wiring the three
+> example apps. Verified: `vp check` clean (pkg + example), conformance + stdio MCP
+> green, dev server + island screenshotted. Classified `private` in
+> `public-packages.json`. **This supersedes the example-only build below.**
+>
 > **Built 2026-06-17** (`examples/devtool/`, branch `agent/devtools`): a working
 > Kovo app — `createApp()` + URL-driven `route('/')`, server-rendered, JS-off
 > capable — that renders the swimlane dataflow graph with select-and-trace, a rich
