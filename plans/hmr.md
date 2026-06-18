@@ -262,7 +262,7 @@ packages/compiler/src/hmr-impact.test.ts`; `corepack pnpm --filter
     `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts`;
     `corepack pnpm --filter @kovojs/integration-tests exec playwright test
 specs/hmr-dev-client.spec.ts --project=chromium`.
-- [ ] **7. Verification matrix.**
+- [x] **7. Verification matrix.**
   - Unit test impact classification in the compiler package.
   - Unit test Vite websocket event emission with fake dev-server objects.
   - Unit test app-shell dev endpoints and diagnostic integration in
@@ -272,27 +272,32 @@ specs/hmr-dev-client.spec.ts --project=chromium`.
     verify focus/input survival or documented reload fallback.
   - Add a static export/build assertion that HMR modules and endpoints are absent
     outside dev.
-  - Partial evidence: endpoint and transport coverage is current as listed under
-    items 5 and 6, including a browser query-backed live-target refresh through
-    `componentLiveTargetRenderer()`. `corepack pnpm --filter @kovojs/site run build` passes
-    (with the pre-existing Vite websocket port warning), and `rg -n
-"@kovo/hmr|Kovo-HMR-Refresh" site/dist site/dist-css` finds no production
-    HMR endpoint/client strings. `tests/integration/specs/hmr-dev-client.spec.ts`
-    covers the browser dev client applying a server-rendered live-target fragment,
-    sending current `Kovo-Live-Targets`/`Kovo-Targets` headers, preserving focused
-    input state, reloading declared query data from server state, replacing the
-    document with server-rendered diagnostics from the dev ledger, and avoiding
-    full navigation for fragment-refresh cases. The same spec covers the
-    `kovo:route-shell` documented full-reload fallback and proves the reloaded
-    document uses fresh server output. A Vite-backed source-edit fixture in the
-    same spec now writes an actual component TSX file, runs the Kovo compiler
-    Vite plugin `handleHotUpdate()` path, observes a `kovo:component-render`
-    event with changed old/new client hrefs for a handler-body edit, refreshes
-    server-rendered text through the live-target endpoint, and verifies focused
-    input survival. It also writes an invalid component source, observes the real
-    `kovo:diagnostics` event with `KV225`, then writes a valid component and
-    verifies the conservative `kovo:full-reload` recovery path reaches fresh
-    server output. Actual route-table source edits remain open. Verification:
+  - Evidence: endpoint and transport coverage is current as listed under items 5
+    and 6, including browser query-backed live-target refresh through
+    `componentLiveTargetRenderer()`. `corepack pnpm --filter @kovojs/site run
+    build` passes (with the pre-existing Vite websocket port warning), and
+    `rg -n "@kovo/hmr|Kovo-HMR-Refresh" site/dist site/dist-css` exits 1 with no
+    production HMR endpoint/client strings. `tests/integration/specs/hmr-dev-client.spec.ts`
+    covers the browser dev client applying a server-rendered live-target
+    fragment, sending current `Kovo-Live-Targets`/`Kovo-Targets` headers,
+    preserving focused input state, reloading declared query data from server
+    state, replacing the document with server-rendered diagnostics from the dev
+    ledger, and avoiding full navigation for fragment-refresh cases. The same
+    spec covers the `kovo:route-shell` documented full-reload fallback and proves
+    the reloaded document uses fresh server output. A Vite-backed source-edit
+    fixture in the same spec now writes an actual component TSX file, runs the
+    Kovo compiler Vite plugin `handleHotUpdate()` path, observes a
+    `kovo:component-render` event with changed old/new client hrefs for a
+    handler-body edit, refreshes server-rendered text through the live-target
+    endpoint, and verifies focused input survival. It also writes an invalid
+    component source, observes the real `kovo:diagnostics` event with `KV225`,
+    then writes a valid component and verifies the conservative
+    `kovo:full-reload` recovery path reaches fresh server output. The
+    Vite-backed app-shell source-edit fixture now invokes
+    `createKovoAppShellViteDevIntegration().plugin.handleHotUpdate()`, observes a
+    `kovo:route-shell` event with `sourceFile: src/app-shell.ts`, lets Vite full
+    reload the browser, and proves the reloaded document uses fresh route output.
+    Verification:
     `corepack pnpm --filter
 @kovojs/integration-tests exec playwright test specs/hmr-dev-client.spec.ts
 --project=chromium`; `corepack pnpm exec vitest --run
@@ -303,39 +308,70 @@ diff --check`.
 
 ## First Milestone Slice
 
-- [ ] **Ship conservative full-reload HMR with precise diagnostics.**
+- [x] **Ship conservative full-reload HMR with precise diagnostics.**
   - Wire the public dev wrapper and diagnostic ledger.
   - Classify compiler errors and unsafe edits explicitly.
   - Send Kovo diagnostics immediately on error and Vite full reload for all
     successful component/app-shell edits.
-  - Prove no production/static-export output changes.
-- [ ] **Then add server-fragment refresh for live targets.**
+  - Evidence: `packages/compiler/src/vite.test.ts` proves `kovo:diagnostics` and
+    unsafe `kovo:full-reload` websocket events; `packages/server/src/vite-dev.test.ts`
+    proves the app-shell dev integration shares the compiler diagnostic ledger
+    and now emits `kovo:route-shell` plus Vite full reload for app-shell source
+    edits; `tests/integration/specs/hmr-dev-client.spec.ts` proves the browser
+    replaces the current document with server diagnostics and reloads to fresh
+    app-shell output. Production absence is proven by `corepack pnpm --filter
+@kovojs/site run build` and `rg -n "@kovo/hmr|Kovo-HMR-Refresh" site/dist
+site/dist-css` exiting 1.
+- [x] **Then add server-fragment refresh for live targets.**
   - Use generated live-target renderers and existing morph/query application for
     edits that keep component identity, live-target identity, props, and query
     plans compatible.
   - Route handler-only edits through this same refresh path when the edited
     component has a proven live target; otherwise full reload.
-- [ ] **Optionally add a handler-ref attribute patch later.**
-  - Consider only if fragment refresh is too broad in practice. The patch must
-    be compiler-produced and limited to replacing stale `on:*` refs with new
-    versioned refs where the rendered output is otherwise unchanged.
+  - Evidence: `packages/compiler/src/vite.test.ts` proves handler-only
+    component edits emit `kovo:component-render` without Vite full reload when a
+    live target is present; `tests/integration/specs/hmr-dev-client.spec.ts`
+    proves browser fragment refresh applies server-rendered text, query-backed
+    state, and handler-body source edits while preserving focused input.
+- [x] **Defer the optional handler-ref attribute patch.**
+  - Decision: fragment refresh is the v1 hot path; no separate handler-ref patch
+    is needed for this plan. A future patch must be compiler-produced and limited
+    to replacing stale `on:*` refs with new versioned refs where the rendered
+    output is otherwise unchanged.
+  - Evidence: the handler-only source-edit browser coverage passes through
+    server-fragment refresh, so this optimization is unnecessary for current HMR
+    correctness or DX.
 
 ## Risks
 
-- [ ] **Stale immutable module URLs.**
+- [x] **Stale immutable module URLs.**
   - Because old `/c/...?...` URLs intentionally stay valid, HMR must refresh
     eligible DOM from the server or full reload. Silent mixed behavior where
     existing DOM keeps old handlers after a claimed hot update is not acceptable.
-- [ ] **Route/app-shell module cache skew.**
+  - Evidence: compiler/Vite tests assert old/new client hrefs on handler-only
+    edits, and the browser source-edit test refreshes the server-owned live
+    target after the event instead of relying on stale DOM handlers.
+- [x] **Route/app-shell module cache skew.**
   - `ssrLoadModule()` reloads modules through Vite, but generated registry side
     effects and `createApp()` defaults must be audited so old live-target
     renderers, query declarations, and client module registries do not coexist
     invisibly.
-- [ ] **Over-refreshing loses the DX goal.**
+  - Evidence: the Vite-backed app-shell source-edit test invalidates the Vite
+    module graph, runs the app-shell plugin hot-update hook, emits
+    `kovo:route-shell`, and verifies the full reload reaches fresh route output;
+    source component refresh tests prove live-target renderers serve fresh server
+    output after component module reloads.
+- [x] **Over-refreshing loses the DX goal.**
   - The conservative fallback is full reload, but the plan should avoid becoming
     only full reload. The second milestone must prove a tangible win:
     server-fragment refresh for eligible component edits, including handler-only
     edits inside proven live targets.
-- [ ] **Dev/prod divergence.**
+  - Evidence: `tests/integration/specs/hmr-dev-client.spec.ts` proves no-reload
+    fragment refresh for rendered text, query-backed live targets, and
+    handler-body source edits inside a proven live target.
+- [x] **Dev/prod divergence.**
   - Every HMR endpoint, event, and client module must be dev-only, and the
     existing build/export tests should assert absence in production artifacts.
+  - Evidence: `corepack pnpm --filter @kovojs/site run build` passes, and
+    `rg -n "@kovo/hmr|Kovo-HMR-Refresh" site/dist site/dist-css` exits 1 with no
+    production HMR strings.

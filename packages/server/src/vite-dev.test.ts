@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
@@ -159,6 +159,41 @@ describe('server app shell Vite dev seam', () => {
         server.close((error) => (error ? reject(error) : resolve()));
       });
     }
+  });
+
+  it('emits route-shell HMR events for app-shell module edits', async () => {
+    const ws = { send: vi.fn() };
+    const plugin = kovoAppShellViteDevPlugin({
+      moduleId: '/src/app-shell.ts',
+    });
+    const server = {
+      config: { root: '/workspace/app' },
+      middlewares: { use() {} },
+      async ssrLoadModule() {
+        return { default: createApp() };
+      },
+      ws,
+    };
+    plugin.configureServer(server);
+
+    const modules = await plugin.handleHotUpdate?.({
+      file: '/workspace/app/src/app-shell.ts',
+      modules: ['vite-module'],
+      read: async () => 'export default createApp({ routes: [] });',
+      server,
+    });
+
+    expect(modules).toEqual([]);
+    expect(ws.send).toHaveBeenCalledWith({
+      data: {
+        impact: 'routeRefresh',
+        reasons: ['route-shell'],
+        sourceFile: 'src/app-shell.ts',
+      },
+      event: 'kovo:route-shell',
+      type: 'custom',
+    });
+    expect(ws.send).toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
   it('keeps non-error module diagnostics observable without making them blocking', () => {

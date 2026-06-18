@@ -41,8 +41,32 @@ export interface KovoAppShellViteDevServer {
  * Exported only for in-repo build/host config, not app authors.
  */
 export interface KovoAppShellViteDevModuleServer extends KovoAppShellViteDevServer {
+  config?: {
+    root?: string;
+  };
   ssrLoadModule(id: string): Promise<Record<string, unknown>>;
+  ws?: KovoAppShellViteWebSocket;
 }
+
+/** @internal Minimal Vite websocket surface used for app-shell route HMR events. */
+export interface KovoAppShellViteWebSocket {
+  send(payload: KovoAppShellViteWebSocketPayload): void;
+}
+
+/** Websocket payloads emitted by the app-shell dev plugin during dev HMR. */
+export type KovoAppShellViteWebSocketPayload =
+  | {
+      data: {
+        impact: 'routeRefresh';
+        reasons: readonly ['route-shell'];
+        sourceFile: string;
+      };
+      event: 'kovo:route-shell';
+      type: 'custom';
+    }
+  | {
+      type: 'full-reload';
+    };
 
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Node connect-style
@@ -62,7 +86,16 @@ export type KovoAppShellViteMiddleware = (
  */
 export interface KovoAppShellViteDevPlugin {
   configureServer(server: KovoAppShellViteDevModuleServer): void | (() => void);
+  handleHotUpdate?(context: KovoAppShellViteHotUpdateContext): Promise<readonly unknown[]>;
   name: string;
+}
+
+/** @internal Minimal structural Vite handleHotUpdate context for app-shell dev HMR. */
+export interface KovoAppShellViteHotUpdateContext {
+  file: string;
+  modules?: readonly unknown[];
+  read(): Promise<string>;
+  server: KovoAppShellViteDevModuleServer;
 }
 
 /**
@@ -232,8 +265,10 @@ export function kovoAppShellViteDevPlugin(
 ): KovoAppShellViteDevPlugin {
   const moduleId = options.moduleId ?? '/src/app-shell.ts';
   const appExportName = options.appExportName ?? 'default';
+  let root = process.cwd();
 
   const install = (server: KovoAppShellViteDevModuleServer) => {
+    root = server.config?.root ?? root;
     server.middlewares.use((request, response, next) => {
       Promise.resolve(server.ssrLoadModule(moduleId))
         .then((module) => {
@@ -289,11 +324,35 @@ export function kovoAppShellViteDevPlugin(
 
   return {
     configureServer(server) {
+      root = server.config?.root ?? root;
       if (options.order === 'post') return () => install(server);
       install(server);
     },
+    async handleHotUpdate(context) {
+      const sourceFile = viteDevSourceFileName(context.file, root);
+      if (sourceFile !== viteDevSourceFileName(moduleId, '')) return context.modules ?? [];
+      context.server.ws?.send({
+        data: {
+          impact: 'routeRefresh',
+          reasons: ['route-shell'],
+          sourceFile,
+        },
+        event: 'kovo:route-shell',
+        type: 'custom',
+      });
+      context.server.ws?.send({ type: 'full-reload' });
+      return [];
+    },
     name: options.name ?? 'kovo-app-shell-dev',
   };
+}
+
+function viteDevSourceFileName(file: string, root: string): string {
+  const normalizedFile = file.split('?')[0]!.replaceAll('\\', '/').replace(/^\//, '');
+  const normalizedRoot = root.replaceAll('\\', '/').replace(/\/$/, '').replace(/^\//, '');
+  return normalizedRoot.length > 0 && normalizedFile.startsWith(`${normalizedRoot}/`)
+    ? normalizedFile.slice(normalizedRoot.length + 1)
+    : normalizedFile;
 }
 
 async function writeKovoAppShellViteDevRouteResponse(

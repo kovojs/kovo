@@ -433,8 +433,20 @@ test('Vite route-shell source edits use full reload fallback with fresh server o
     await page.goto(`${fixture.origin}/`);
     await expect(page.locator('#hmr-route-version')).toHaveText('before');
 
-    await fixture.writeAppShell(hmrSourceAppShell({ routeVersion: 'after' }));
-    await page.reload();
+    const routeReload = page.waitForResponse(
+      (response) =>
+        response.url() === `${fixture.origin}/` &&
+        response.request().resourceType() === 'document' &&
+        response.status() === 200,
+    );
+    const events = await fixture.writeAppShell(hmrSourceAppShell({ routeVersion: 'after' }));
+    const event = expectKovoSourceEditEvent(events, 'kovo:route-shell');
+    expect(event).toMatchObject({
+      impact: 'routeRefresh',
+      reasons: ['route-shell'],
+      sourceFile: 'src/app-shell.ts',
+    });
+    await routeReload;
 
     await expect(page.locator('#hmr-route-version')).toHaveText('after');
     await expect(page.locator('#hmr-source-input')).toHaveValue('server route-shell');
@@ -566,7 +578,9 @@ async function serveHmrFixture(
 interface ViteSourceEditFixture {
   close(): Promise<void>;
   origin: string;
-  writeAppShell(source: string): Promise<void>;
+  writeAppShell(
+    source: string,
+  ): Promise<readonly { data: Record<string, unknown>; event: string }[]>;
   writeCard(source: string): Promise<readonly { data: Record<string, unknown>; event: string }[]>;
 }
 
@@ -664,6 +678,24 @@ async function serveViteSourceEditFixture(options: {
       async writeAppShell(source) {
         await writeFile(appShellPath, source, 'utf8');
         vite?.moduleGraph?.invalidateAll();
+        const startIndex = hmrEvents.length;
+        await Promise.race([
+          integration.plugin.handleHotUpdate?.({
+            file: appShellPath,
+            modules: [],
+            read: () => readFile(appShellPath, 'utf8'),
+            server: vite as unknown as Parameters<
+              NonNullable<typeof integration.plugin.handleHotUpdate>
+            >[0]['server'],
+          }),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Timed out waiting for Kovo app-shell handleHotUpdate.')),
+              5_000,
+            ),
+          ),
+        ]);
+        return hmrEvents.slice(startIndex);
       },
       async writeCard(source) {
         await writeFile(cardPath, source, 'utf8');
