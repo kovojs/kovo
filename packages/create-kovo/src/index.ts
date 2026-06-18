@@ -46,7 +46,6 @@ const templateFiles = [
   'src/app-shell.ts',
   'src/app-shell.test.ts',
   'src/auth.tsx',
-  'src/app.fixpoint.test.ts',
 ] as const;
 
 // SECURITY (SECURITY_FINDINGS.md M5): every scaffolded app must start with its own

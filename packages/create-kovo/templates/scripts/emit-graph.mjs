@@ -1,7 +1,6 @@
 import { writeFileSync } from 'node:fs';
-import { deriveAppGraph } from '@kovojs/compiler';
 
-const graphDeclarations = {
+const graph = {
   components: [
     {
       fragments: ['cart-badge'],
@@ -64,6 +63,5 @@ const graphDeclarations = {
   },
 };
 
-const { graph } = deriveAppGraph({ graph: graphDeclarations });
 writeFileSync(new URL('../graph.json', import.meta.url), `${JSON.stringify(graph, null, 2)}\n`);
 process.stdout.write('emit-graph/v1\nOK\n');

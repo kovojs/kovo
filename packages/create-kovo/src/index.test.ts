@@ -49,7 +49,6 @@ describe('create-kovo starter', () => {
       'src/app-shell.ts',
       'src/app-shell.test.ts',
       'src/auth.tsx',
-      'src/app.fixpoint.test.ts',
     ];
     // SECURITY_FINDINGS.md M5: create-kovo also emits generated (non-template) files —
     // a gitignored .env carrying a per-project random CSRF secret, a committed
@@ -91,11 +90,11 @@ describe('create-kovo starter', () => {
         '@kovojs/style': 'workspace:*',
       });
       expect(packageJson.devDependencies).toMatchObject({
-        '@kovojs/compiler': 'workspace:*',
         '@types/node': '^25.0.0',
         kovo: 'workspace:*',
         vite: '^8.0.16',
       });
+      expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
       expect(packageJson.devDependencies).not.toHaveProperty(legacyCssVitePlugin);
       expect(packageJson.devDependencies).not.toHaveProperty(legacyCssTool);
       expect(packageJson.scripts).toMatchObject({
@@ -186,6 +185,9 @@ describe('create-kovo starter', () => {
       expect(readFileSync(join(root, 'docs/graph-assertions.md'), 'utf8')).toContain(
         'SPEC.md section 11.4.3',
       );
+      expect(readFileSync(join(root, 'docs/graph-assertions.md'), 'utf8')).toContain(
+        'not direct compiler API ownership',
+      );
       const readme = readFileSync(join(root, 'README.md'), 'utf8');
       expect(readme).toContain('starter-export/v1');
       expect(readme).toContain('starter-static-preview/v1');
@@ -194,10 +196,12 @@ describe('create-kovo starter', () => {
       expect(readFileSync(join(root, 'docs/deployment.md'), 'utf8')).toContain(
         'SPEC.md section 9.3',
       );
-      expect(readFileSync(join(root, 'docs/framework-rules.md'), 'utf8')).toContain('SPEC.md');
-      expect(readFileSync(join(root, 'src/app.fixpoint.test.ts'), 'utf8')).toContain(
-        'SPEC.md section 5.2',
+      const frameworkRules = readFileSync(join(root, 'docs/framework-rules.md'), 'utf8');
+      expect(frameworkRules).toContain('SPEC.md');
+      expect(frameworkRules).toContain(
+        'Compiler fixpoint and render-equivalence coverage belongs to Kovo framework CI',
       );
+      expect(existsSync(join(root, 'src/app.fixpoint.test.ts'))).toBe(false);
       const appSource = readFileSync(join(root, 'src/app.tsx'), 'utf8');
       expect(appSource).toContain('@jsxImportSource @kovojs/server');
       expect(appSource).toContain("import * as style from '@kovojs/style';");
@@ -318,6 +322,10 @@ describe('create-kovo starter', () => {
       expect(exportStaticScript).not.toContain('function isKovoApp');
       expect(exportStaticScript).not.toContain('appModule.default ?? appModule.app');
       expect(exportStaticScript).not.toContain('htmlPathStyle');
+      const emitGraphScript = readFileSync(join(root, 'scripts/emit-graph.mjs'), 'utf8');
+      expect(emitGraphScript).toContain('const graph = {');
+      expect(emitGraphScript).not.toContain('@kovojs/compiler');
+      expect(emitGraphScript).not.toContain('deriveAppGraph');
       const previewStaticScript = readFileSync(join(root, 'scripts/preview-static.mjs'), 'utf8');
       expect(previewStaticScript).toContain('createStarterStaticPreviewServer');
       expect(previewStaticScript).toContain('starter-static-preview/v1');
@@ -454,7 +462,7 @@ describe('create-kovo starter', () => {
     }
   });
 
-  it('runs the generated starter app-shell request, export, and fixpoint proof', () => {
+  it('runs the generated starter app-shell request, export, and graph proof', () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-app-shell-'));
@@ -463,14 +471,27 @@ describe('create-kovo starter', () => {
       writeKovoProject(root, { name: 'App Shell Proof' });
       linkStarterBuildDependencies(root);
 
-      execFileSync(
-        resolveBin('vitest'),
-        ['--run', 'src/app-shell.test.ts', 'src/app.fixpoint.test.ts'],
-        {
+      execFileSync(resolveBin('vitest'), ['--run', 'src/app-shell.test.ts'], {
+        cwd: root,
+        stdio: 'pipe',
+      });
+      expect(
+        execFileSync(process.execPath, ['scripts/emit-graph.mjs'], {
           cwd: root,
+          encoding: 'utf8',
           stdio: 'pipe',
-        },
-      );
+        }),
+      ).toBe('emit-graph/v1\nOK\n');
+      const emittedGraph = JSON.parse(readFileSync(join(root, 'graph.json'), 'utf8'));
+      expect(kovoCheck(emittedGraph)).toEqual({
+        exitCode: 0,
+        output: 'kovo-check/v1\nOK\n',
+      });
+      expect(kovoExplain(emittedGraph, { kind: 'mutation', optimistic: true, target: 'cart/add' }))
+        .toMatchObject({
+          exitCode: 0,
+          output: expect.stringContaining('OPTIMISTIC cart await-fragment\n'),
+        });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -727,11 +748,11 @@ describe('create-kovo starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-kovo: wrote 24 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-kovo: wrote 23 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });
-      expect(existsSync(join(root, 'src/app.fixpoint.test.ts'))).toBe(true);
+      expect(existsSync(join(root, 'src/app.fixpoint.test.ts'))).toBe(false);
     } finally {
       stdout.mockRestore();
       rmSync(parent, { force: true, recursive: true });
@@ -810,7 +831,6 @@ function linkStarterBuildDependencies(root: string): void {
     resolveDependencyRoot('@kovojs/better-auth'),
     join(nodeModules, '@kovojs/better-auth'),
   );
-  symlinkSync(resolveDependencyRoot('@kovojs/compiler'), join(nodeModules, '@kovojs/compiler'));
   symlinkSync(resolveDependencyRoot('@kovojs/core'), join(nodeModules, '@kovojs/core'));
   symlinkSync(resolveDependencyRoot('@kovojs/runtime'), join(nodeModules, '@kovojs/runtime'));
   symlinkSync(resolveDependencyRoot('@kovojs/server'), join(nodeModules, '@kovojs/server'));

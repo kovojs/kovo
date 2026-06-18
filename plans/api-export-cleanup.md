@@ -463,26 +463,37 @@ integration. Framework packages should expose only generic webhook primitives.
 
 ## Compiler App-Author Import Cleanup
 
-- [ ] **Remove `@kovojs/compiler` from the create-kovo starter template.**
+- [x] **Remove `@kovojs/compiler` from the create-kovo starter template.**
   - Delete `packages/create-kovo/templates/src/app.fixpoint.test.ts` from the
     template and generated file list.
   - Remove `@kovojs/compiler` from
     `packages/create-kovo/templates/package.json` devDependencies.
   - Update `packages/create-kovo/src/index.test.ts` expectations for file count,
     generated file list, dependency assertions, and the starter proof test.
-  - Evidence:
-- [ ] **Replace the starter `emit-graph.mjs` compiler import.**
+  - Evidence: `packages/create-kovo/templates/package.json` has no
+    `@kovojs/compiler` devDependency, `packages/create-kovo/src/index.ts` no
+    longer lists `src/app.fixpoint.test.ts`, and `corepack pnpm exec vitest --run
+    packages/create-kovo/src/index.test.ts` passes with file-count and dependency
+    assertions.
+- [x] **Replace the starter `emit-graph.mjs` compiler import.**
   - The current starter graph is a literal static graph. Write that graph directly
     instead of importing `deriveAppGraph` from `@kovojs/compiler`.
   - Keep `kovo check graph.json` and `scripts/graph-assertions.mjs` as the starter
     verification path.
-  - Evidence:
-- [ ] **Adjust starter docs away from compiler API ownership.**
+  - Evidence: `packages/create-kovo/templates/scripts/emit-graph.mjs` writes the
+    literal starter graph without importing `deriveAppGraph`; `corepack pnpm exec
+    vitest --run packages/create-kovo/src/index.test.ts` passes and validates the
+    emitted `graph.json` with `kovoCheck`/`kovoExplain`.
+- [x] **Adjust starter docs away from compiler API ownership.**
   - Update `docs/framework-rules.md` and any README/project-structure text that
     implies app authors should keep a compiler fixpoint test.
   - State that compiler fixpoint/render-equivalence is framework CI coverage;
     starter apps should rely on `kovo check` plus app-shell/export tests.
-  - Evidence:
+  - Evidence: `packages/create-kovo/templates/README.md` and
+    `packages/create-kovo/templates/docs/framework-rules.md` state that compiler
+    fixpoint/render-equivalence belongs to framework CI; `corepack pnpm exec
+    vitest --run packages/create-kovo/src/index.test.ts` passes and asserts the
+    generated docs text.
 - [ ] **Audit remaining app-owned compiler imports and classify them.**
   - Separate framework-owned tests/examples from app-template code.
   - For examples, decide whether direct compiler scripts remain acceptable as
