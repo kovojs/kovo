@@ -284,10 +284,22 @@ render-plan version skew checks.
     document with server-rendered diagnostics from the dev ledger, and avoiding
     full navigation for fragment-refresh cases. The same spec covers the
     `kovo:route-shell` documented full-reload fallback and proves the reloaded
-    document uses fresh server output. Source-edit fixtures and an actual
-    route-table edit scenario remain open. Verification: `corepack pnpm --filter
+    document uses fresh server output. A Vite-backed source-edit fixture in the
+    same spec now writes an actual component TSX file, runs the Kovo compiler
+    Vite plugin `handleHotUpdate()` path, observes a `kovo:component-render`
+    event with changed old/new client hrefs for a handler-body edit, refreshes
+    server-rendered text through the live-target endpoint, and verifies focused
+    input survival. It also writes an invalid component source, observes the real
+    `kovo:diagnostics` event with `KV225`, then writes a valid component and
+    verifies the conservative `kovo:full-reload` recovery path reaches fresh
+    server output. Actual route-table source edits remain open. Verification:
+    `corepack pnpm --filter
     @kovojs/integration-tests exec playwright test specs/hmr-dev-client.spec.ts
-    --project=chromium`.
+    --project=chromium`; `corepack pnpm exec vitest --run
+    packages/server/src/vite-dev.test.ts packages/server/src/vite-dev-middleware.test.ts
+    packages/compiler/src/vite.test.ts packages/compiler/src/hmr-impact.test.ts`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`; `git
+    diff --check`.
 
 ## First Milestone Slice
 

@@ -1,10 +1,23 @@
 // SPEC.md §9.5.1: dev HMR asks the app shell for server-owned fragment output.
 import { component } from '@kovojs/core';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { compileComponentModule, kovoVitePlugin } from '@kovojs/compiler';
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
-import { createApp, domain, kovoAppShellViteDevPlugin, query, route, s } from '@kovojs/server';
+import {
+  createApp,
+  createKovoAppShellViteDevIntegration,
+  domain,
+  kovoAppShellViteDevPlugin,
+  query,
+  route,
+  s,
+} from '@kovojs/server';
 import {
   createKovoAppShellDevDiagnosticLedger,
   type KovoAppShellViteMiddleware,
@@ -295,6 +308,133 @@ test('dev HMR client full reloads for route-shell changes', async ({ page }) => 
   }
 });
 
+test('Vite source edits refresh rendered text and handler bodies through Kovo HMR', async ({
+  page,
+}) => {
+  const fixture = await serveViteSourceEditFixture({
+    card: hmrSourceCard({
+      handlerText: 'handler before',
+      inputValue: 'server before',
+      outputText: 'Version before',
+      refreshable: true,
+    }),
+  });
+
+  try {
+    await page.goto(`${fixture.origin}/`);
+    await expect(page.locator('#hmr-source-output')).toHaveText('Version before');
+    await page.waitForTimeout(250);
+
+    await page.locator('#hmr-source-input').focus();
+    await page.locator('#hmr-source-input').fill('user draft');
+
+    const events = await fixture.writeCard(
+      hmrSourceCard({
+        handlerText: 'handler after',
+        inputValue: 'server after',
+        outputText: 'Version after',
+        refreshable: true,
+      }),
+    );
+    const event = expectKovoSourceEditEvent(events, 'kovo:component-render');
+    expect(event.oldClientHref).toBeTruthy();
+    expect(event.newClientHref).toBeTruthy();
+    expect(event.newClientHref).not.toBe(event.oldClientHref);
+    await refreshSourceEditLiveTarget(page);
+
+    await expect(page.locator('#hmr-source-output')).toHaveText('Version after');
+    await expect(page.locator('#hmr-source-input')).toHaveValue('user draft');
+    await expect(page.locator('#hmr-source-input')).toBeFocused();
+    expect(page.url()).toBe(`${fixture.origin}/`);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('Vite source edits surface and recover from compiler diagnostics', async ({ page }) => {
+  const fixture = await serveViteSourceEditFixture({
+    card: hmrSourceCard({
+      handlerText: 'handler healthy',
+      inputValue: 'server healthy',
+      outputText: 'Version healthy',
+      refreshable: true,
+    }),
+  });
+
+  try {
+    await page.goto(`${fixture.origin}/`);
+    await expect(page.locator('#hmr-source-output')).toHaveText('Version healthy');
+
+    const diagnosticEvent = expectKovoSourceEditEvent(
+      await fixture.writeCard(hmrInvalidSourceCard()),
+      'kovo:diagnostics',
+    );
+    expect(diagnosticEvent.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV225',
+          message: expect.stringContaining('JSX nesting violates the HTML content model'),
+        }),
+      ]),
+    );
+
+    const recoveryEvents = await fixture.writeCard(
+      hmrSourceCard({
+        handlerText: 'handler recovered',
+        inputValue: 'server recovered',
+        outputText: 'Version recovered',
+        refreshable: true,
+      }),
+    );
+    expectKovoSourceEditEvent(recoveryEvents, 'kovo:full-reload');
+
+    await expect(page.locator('#hmr-source-output')).toHaveText('Version recovered');
+  } finally {
+    await fixture.close();
+  }
+});
+
+async function refreshSourceEditLiveTarget(page: Page): Promise<void> {
+  const body = await page.evaluate(async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5_000);
+    const response = await fetch('/@kovo/hmr/refresh/live-targets?url=/', {
+      headers: {
+        'Kovo-Current-Url': location.href,
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': 'hmr-source-card#hmr/SourceCard:{}',
+        'Kovo-Targets': 'hmr-source-card=hmr',
+      },
+      method: 'POST',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error(`HMR refresh failed with ${response.status}`);
+    return response.text();
+  });
+  await page.evaluate((fragmentBody) => {
+    const apply = (window as typeof window & { __kovo_a?: (body: string) => void }).__kovo_a;
+    if (typeof apply !== 'function') throw new Error('Kovo fragment apply hook is missing.');
+    apply(fragmentBody);
+  }, body);
+}
+
+function expectKovoSourceEditEvent(
+  events: readonly { data: Record<string, unknown>; event: string }[],
+  eventName: string,
+): Record<string, unknown> {
+  const event = events.find((entry) => entry.event === eventName);
+  expect(
+    events.map((entry) => ({
+      diagnostics: entry.data.diagnostics,
+      event: entry.event,
+      impact: entry.data.impact,
+      reasons: entry.data.reasons,
+    })),
+  ).toContainEqual(expect.objectContaining({ event: eventName }));
+  return event!.data;
+}
+
 async function serveHmrFixture(app: ReturnType<typeof createApp>): Promise<{
   close(): Promise<void>;
   origin: string;
@@ -372,4 +512,255 @@ async function serveHmrFixture(
     },
     origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
   };
+}
+
+interface ViteSourceEditFixture {
+  close(): Promise<void>;
+  origin: string;
+  writeCard(source: string): Promise<readonly { data: Record<string, unknown>; event: string }[]>;
+}
+
+async function serveViteSourceEditFixture(options: { card: string }): Promise<ViteSourceEditFixture> {
+  const root = await mkdtemp(fileURLToPath(new URL('../.hmr-source-edit-', import.meta.url)));
+  const srcDir = join(root, 'src');
+  const cardPath = join(srcDir, 'hmr-card.tsx');
+  await mkdir(srcDir, { recursive: true });
+  await writeFile(cardPath, options.card, 'utf8');
+  await writeFile(join(srcDir, 'app-shell.ts'), hmrSourceAppShell(), 'utf8');
+  await writeFile(join(srcDir, 'hmr-handler.ts'), 'export function track(value: string) { return value; }\n', 'utf8');
+
+  type ViteDevServer = {
+    close(): Promise<void>;
+    moduleGraph?: { invalidateAll(): void };
+    middlewares: Parameters<typeof createServer>[0];
+    ws: { send(payload: unknown): void };
+  };
+  const { createServer: createViteServer } = (await import('vite-plus')) as {
+    createServer(options: Record<string, unknown>): Promise<ViteDevServer>;
+  };
+  const integration = createKovoAppShellViteDevIntegration({ moduleId: '/src/app-shell.ts' });
+  const hmrPlugin = kovoSourceEditFixturePlugin({
+    onModuleDiagnostics: integration.onModuleDiagnostics,
+  });
+  const hmrEvents: { event: string; data: Record<string, unknown> }[] = [];
+  let vite: ViteDevServer | undefined;
+  const server = createServer((request, response) => {
+    vite?.middlewares(request, response, (error?: unknown) => {
+      if (error) {
+        response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : JSON.stringify(error));
+        return;
+      }
+      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      response.end('not found');
+    });
+  });
+
+  try {
+    vite = await createViteServer({
+      appType: 'custom',
+      configFile: false,
+      logLevel: 'error',
+      plugins: [hmrPlugin, integration.plugin],
+      root,
+      server: {
+        hmr: { server },
+        middlewareMode: true,
+      },
+      ssr: { noExternal: [/^@kovojs\//] },
+    });
+    const send = vite.ws.send.bind(vite.ws);
+    vite.ws.send = (payload: unknown) => {
+      if (isKovoCustomHmrPayload(payload)) {
+        const event = { data: payload.data, event: payload.event };
+        hmrEvents.push(event);
+      }
+      send(payload);
+    };
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+
+    return {
+      async close() {
+        await vite?.close();
+        server.closeAllConnections();
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()));
+        });
+        await rm(root, { force: true, recursive: true });
+      },
+      origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+      async writeCard(source) {
+        await writeFile(cardPath, source, 'utf8');
+        vite?.moduleGraph?.invalidateAll();
+        const startIndex = hmrEvents.length;
+        await Promise.race([
+          hmrPlugin.handleHotUpdate?.({
+            file: cardPath,
+            modules: [],
+            read: () => readFile(cardPath, 'utf8'),
+            server: vite as Parameters<NonNullable<typeof hmrPlugin.handleHotUpdate>>[0]['server'],
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timed out waiting for Kovo handleHotUpdate.')), 5_000),
+          ),
+        ]);
+        return hmrEvents.slice(startIndex);
+      },
+    };
+  } catch (error) {
+    await vite?.close();
+    await rm(root, { force: true, recursive: true });
+    throw error;
+  }
+}
+
+function isKovoCustomHmrPayload(
+  payload: unknown,
+): payload is { data: Record<string, unknown>; event: string; type: 'custom' } {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    (payload as { type?: unknown }).type === 'custom' &&
+    typeof (payload as { event?: unknown }).event === 'string' &&
+    typeof (payload as { event?: string }).event?.startsWith === 'function' &&
+    (payload as { event: string }).event.startsWith('kovo:')
+  );
+}
+
+function hmrSourceAppShell(): string {
+  return `
+import { createApp, route } from '@kovojs/server';
+
+import { HmrSourceCard } from './hmr-card';
+
+function renderCard() {
+  return HmrSourceCard.definition.render();
+}
+
+const renderer = {
+  component: 'hmr/SourceCard',
+  render() {
+    return renderCard();
+  },
+};
+
+export default createApp({
+  liveTargetRenderers: [renderer],
+  routes: [
+    route('/', {
+      page() {
+        return \`<main>\${renderCard()}</main>\`;
+      },
+    }),
+  ],
+});
+`;
+}
+
+function kovoSourceEditFixturePlugin(options: {
+  onModuleDiagnostics: Parameters<typeof kovoVitePlugin>[0]['onModuleDiagnostics'];
+}): {
+  configResolved(config: { root: string }): void;
+  configureServer?: ReturnType<typeof kovoVitePlugin>['configureServer'];
+  handleHotUpdate?: ReturnType<typeof kovoVitePlugin>['handleHotUpdate'];
+  name: string;
+  transform(source: string, id: string): null | { code: string; map: null };
+} {
+  const hmrTransport = kovoVitePlugin(options);
+  let root = process.cwd();
+
+  return {
+    configureServer: hmrTransport.configureServer,
+    handleHotUpdate: hmrTransport.handleHotUpdate,
+    name: 'kovo-source-edit-fixture',
+    transform(source, id) {
+      if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
+
+      hmrTransport.transform(source, id);
+      const result = compileComponentModule({
+        fileName: fixtureComponentFileName(id, root),
+        packagePrefixDiscoveryRoot: root,
+        source,
+      });
+      const errors = (result.diagnostics ?? []).filter((diagnostic) => diagnostic.severity === 'error');
+      if (errors.length > 0) {
+        throw new Error(
+          errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`).join('\n'),
+        );
+      }
+      return typeof result.loweredSource === 'string'
+        ? { code: result.loweredSource, map: null }
+        : null;
+    },
+    configResolved(config: { root: string }) {
+      root = config.root;
+    },
+  };
+}
+
+function fixtureComponentFileName(id: string, root: string): string {
+  const path = id.split('?')[0]!.replaceAll('\\', '/');
+  const normalizedRoot = root.replaceAll('\\', '/').replace(/\/$/, '');
+  return path.startsWith(`${normalizedRoot}/`) ? path.slice(normalizedRoot.length + 1) : path;
+}
+
+function hmrSourceCard(options: {
+  css?: string;
+  handlerText: string;
+  inputValue: string;
+  outputText: string;
+  refreshable: boolean;
+}): string {
+  const refreshAttributes = options.refreshable
+    ? `
+      kovo-deps="hmr"
+      kovo-live-component="hmr/SourceCard"
+      kovo-props="{}"`
+    : '';
+
+return `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { track } from './hmr-handler';
+
+export const HmrSourceCard = component({
+  queries: { hmr: {} },
+  ${options.css ? `css: ${JSON.stringify(options.css)},` : ''}
+  render: () => (
+    <section
+      kovo-fragment-target="hmr-source-card"
+      kovo-c="hmr-source-card"${refreshAttributes}>
+      <label for="hmr-source-input">Draft</label>
+      <input id="hmr-source-input" kovo-key="input" value=${JSON.stringify(options.inputValue)} />
+      <output id="hmr-source-output" kovo-key="output">${options.outputText}</output>
+      <button
+        id="hmr-source-button"
+        kovo-key="button"
+        type="button"
+        onClick={() => track(${JSON.stringify(options.handlerText)})}>
+        Run
+      </button>
+    </section>
+  ),
+});
+`;
+}
+
+function hmrInvalidSourceCard(): string {
+  return `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+
+export const HmrSourceCard = component({
+  render: () => (
+    <p>
+      <div>Invalid nesting</div>
+    </p>
+  ),
+});
+`;
 }

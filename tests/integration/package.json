@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@kovojs/compiler": "workspace:*",
-    "@playwright/test": "1.60.0"
+    "@playwright/test": "1.60.0",
+    "vite-plus": "0.1.24"
   }
 }
