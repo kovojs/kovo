@@ -1,5 +1,6 @@
 import type {
   Component,
+  ComponentErrorBoundary,
   ComponentDefinitionInput,
   ComponentRenderSlots,
   JsonValue,
@@ -12,6 +13,7 @@ import {
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
 import type { LiveTargetRenderContext, LiveTargetRenderer } from './mutation-wire.js';
+import type { ErrorBoundaryRenderer } from './mutation-wire.js';
 
 /** @internal Generated component query binding used by live-target renderers (SPEC §9.1). */
 export interface ComponentLiveTargetQueryBinding<Request = unknown> {
@@ -35,6 +37,7 @@ export interface ComponentLiveTargetRendererOptions<
   slots?: (
     context: LiveTargetRenderContext<Request>,
   ) => ComponentRenderSlots | Promise<ComponentRenderSlots>;
+  errorBoundary?: ComponentErrorBoundary;
 }
 
 /**
@@ -57,6 +60,7 @@ export function componentLiveTargetRenderer<
 
   return {
     component: options.componentId,
+    ...componentLiveTargetErrorBoundary(options),
     queries: queryBindings.map((binding) => binding.query.key),
     queryDefinitions: queryBindings.map((binding) => binding.query),
     async render(context) {
@@ -79,6 +83,28 @@ export function componentLiveTargetRenderer<
         },
         () => renderComponent(options.component, { ...context.props, ...queries }, renderOptions),
       );
+    },
+  };
+}
+
+function componentLiveTargetErrorBoundary<
+  const Definition extends ComponentDefinitionInput,
+  Request,
+  State extends JsonValue,
+>(
+  options: ComponentLiveTargetRendererOptions<Definition, Request, State>,
+): { errorBoundary?: ErrorBoundaryRenderer } {
+  const boundary = options.errorBoundary ?? options.component.definition.errorBoundary;
+  if (!boundary) return {};
+
+  return {
+    errorBoundary: {
+      ...(boundary.target === undefined ? {} : { target: boundary.target }),
+      render(error) {
+        const fallback =
+          typeof boundary.fallback === 'function' ? boundary.fallback(error) : boundary.fallback;
+        return String(fallback ?? '');
+      },
     },
   };
 }

@@ -16,6 +16,7 @@ import {
   createCartMutationFixture,
   testMutation as mutation,
 } from './test-fixtures.js';
+import { componentLiveTargetRenderer } from './live-target-renderer.js';
 
 describe('server mutation primitives', () => {
   it('selects enhanced success chunks from committed changes intersected with live target deps', async () => {
@@ -197,6 +198,62 @@ describe('server mutation primitives', () => {
       status: 200,
     });
     expect(renderCartPanel).toHaveBeenCalledOnce();
+  });
+
+  it('uses component-local error boundaries for generated live-target fragment failures', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: () => ({ count: 2 }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+    const CartPanel = component({
+      errorBoundary: {
+        fallback: '<section role="alert">Cart panel unavailable.</section>',
+        target: 'cart-panel',
+      },
+      queries: { cart: cartQuery },
+      render: () => {
+        throw new Error('cart panel failed');
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(addToCart, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{}',
+          'Kovo-Targets': 'cart-panel=cart',
+        },
+        liveTargetRenderers: [
+          componentLiveTargetRenderer({
+            component: CartPanel,
+            componentId: 'components/cart/panel',
+          }),
+        ],
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: [
+        '<kovo-query name="cart">{"count":2}</kovo-query>',
+        '<kovo-fragment target="cart-panel" error-boundary="cart-panel"><section role="alert">Cart panel unavailable.</section></kovo-fragment>',
+      ].join('\n'),
+      headers: {
+        'Kovo-Changes': '[{"domain":"cart"}]',
+      },
+      status: 200,
+    });
   });
 
   it('bypasses success selection on failures and rerenders the submitted form target', async () => {

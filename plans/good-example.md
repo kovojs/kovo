@@ -134,7 +134,7 @@ that still make the simplified Commerce example feel like a test fixture.
 | Query-delta internals from `examples/commerce/src/queries-delta.test.ts` | `packages/server/src/mutation-delta.test.ts` and `packages/runtime/src/apply-mutation-response-delta.test.ts` | `corepack pnpm exec vitest run packages/runtime/src/apply-mutation-response-delta.test.ts packages/server/src/mutation-delta.test.ts` | `SPEC.md` §9.1.1 delta selection, merge, and build-token fallback are protocol/runtime behavior, not Commerce scenario behavior. |
 | App-shell command matrix and Vite delegation in `examples/commerce/src/app-shell.test.ts` | `packages/server/src/vite-dev-middleware.test.ts`, `packages/server/src/node.test.ts`, and server app dispatch tests | Pending | `SPEC.md` §9.5 makes request-shell dispatch and dev middleware package behavior; Commerce should keep HTTP user-flow smokes only. |
 | Fragment header grammar and live-target internals in Commerce shell/add-to-cart tests | `packages/runtime/src/mutation-targets.test.ts`, `packages/runtime/src/fragment-targets.test.ts`, `packages/server/src/live-target-registry.test.ts`, and server mutation wire tests | Pending | `SPEC.md` §9.1 owns `Kovo-Targets` / `Kovo-Live-Targets`; app examples should assert visible cart, stock, order, and validation behavior. |
-| Expected vs unexpected fragment error-boundary proof using `renderFaults` | `packages/server/src/live-target-renderer.test.tsx`, `packages/server/src/component-render.test.tsx`, and server mutation response tests | Pending | `SPEC.md` §9.2 makes expected failure forms typed and unexpected render failures server/component behavior; Commerce request types should not carry test-only fault hooks. |
+| Expected vs unexpected fragment error-boundary proof using `renderFaults` | `packages/server/src/live-target-renderer.test.tsx`, `packages/server/src/component-render.test.tsx`, `packages/server/src/route-jsx.test.tsx`, and `packages/server/src/mutation-response.test.ts` | `corepack pnpm exec vitest run packages/server/src/live-target-renderer.test.tsx packages/server/src/component-render.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/mutation-response.test.ts` | `SPEC.md` §9.2 makes expected failure forms typed and unexpected render failures server/component behavior; Commerce request types no longer carry test-only fault hooks. |
 
 - [x] Move generated component/route IR freshness checks out of Commerce tests.
   - SPEC link: `SPEC.md` §5.2 requires lowered IR to stay authorable and
@@ -176,14 +176,13 @@ that still make the simplified Commerce example feel like a test fixture.
     `corepack pnpm exec vitest run packages/runtime/src/apply-mutation-response-delta.test.ts packages/server/src/mutation-delta.test.ts`.
     Header-grammar cleanup in Commerce shell tests remains tracked by the
     pending inventory rows above.
-- [ ] Move unexpected-error boundary proof to component/server tests.
+- [x] Move unexpected-error boundary proof to component/server tests.
   - SPEC link: `SPEC.md` §9.2 separates expected mutation failures from
     unexpected errors.
   - Remedy: define first-class component/live-target error-boundary authoring,
     test it in server/component rendering, and keep Commerce free of
     test-only `renderFaults` request fields.
-  - Evidence to add: Commerce request types no longer include `renderFaults`;
-    package tests cover per-island fragment error rendering.
+  - Evidence: `corepack pnpm exec vitest run packages/server/src/live-target-renderer.test.tsx packages/server/src/component-render.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/mutation-response.test.ts` passes, covering full-page `<ErrorBoundary>` fallback and component-local generated live-target fragment fallback. `rg -n "withCommerceProductGridLiveTargetAdapter|renderFaults|ProductGrid\\$commerceLiveTargetRenderer" examples/commerce packages scripts` exits 1.
 
 ## Framework Deficiencies And Remedies
 
@@ -290,7 +289,7 @@ that still make the simplified Commerce example feel like a test fixture.
     renderers carry submitted failure input and CSRF context. Verified with
     `pnpm exec vitest --run packages/server/src/route-jsx.test.tsx packages/server/src/mutation-endpoint.test.ts packages/server/src/live-target-renderer.test.tsx`,
     the focused Commerce scenario suite, and the no-match ProductGrid scan above.
-- [ ] **Deficiency 4: component/live-target error boundaries are not first-class
+- [x] **Deficiency 4: component/live-target error boundaries are not first-class
   authoring.**
   - Current symptom: `scripts/emit-components.mjs` splices a Commerce-specific
     ProductGrid live-target adapter with an error boundary and a test fault hook.
@@ -320,9 +319,7 @@ that still make the simplified Commerce example feel like a test fixture.
     tree.
   - Acceptance: no Commerce script mutates generated ProductGrid output; package
     tests prove per-island fragment error boundaries.
-  - Evidence to add:
-    `rg -n "withCommerceProductGridLiveTargetAdapter|renderFaults|ProductGrid\\$commerceLiveTargetRenderer" examples/commerce`
-    exits 1 with no matches.
+  - Evidence: `examples/commerce/src/app-shell.tsx` authors `<ErrorBoundary fallback={<ProductGridError />}>`; `examples/commerce/src/components/product-grid.tsx` declares the same fallback for generated live-target rendering. `corepack pnpm exec vitest run packages/server/src/live-target-renderer.test.tsx packages/server/src/component-render.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/mutation-response.test.ts` passes, including per-island generated live-target fragment fallback. `corepack pnpm --filter @kovojs/example-commerce run emit-components -- --check` passes. `rg -n "withCommerceProductGridLiveTargetAdapter|renderFaults|ProductGrid\\$commerceLiveTargetRenderer" examples/commerce packages scripts` exits 1.
 - [x] **Deficiency 5: direct endpoint helper APIs invite app-level wire
   reconstruction.**
   - Current symptom: Commerce exports `submitAddToCart`,
