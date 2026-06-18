@@ -254,7 +254,7 @@ describe('api-ref generator', () => {
       '@kovojs/drizzle': 4,
       '@kovojs/runtime': 15,
       '@kovojs/server': 70,
-      '@kovojs/server/app-shell/vite': 8,
+      '@kovojs/server/app-shell/vite': 5,
       '@kovojs/style': 20,
       '@kovojs/test': 12,
       '@kovojs/better-auth': 30,

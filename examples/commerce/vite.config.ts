@@ -65,10 +65,10 @@ interface CommerceDevPlugin {
 export function commerceSharedAppShellDevPlugin(): CommerceDevPlugin {
   return {
     async configureServer(server) {
-      const serverModule = await server.ssrLoadModule('@kovojs/server/app-shell/vite');
+      const serverModule = await server.ssrLoadModule('@kovojs/server');
       const sharedPluginFactory = serverModule.kovoAppShellViteDevPlugin;
       if (typeof sharedPluginFactory !== 'function') {
-        throw new Error('@kovojs/server/app-shell/vite must export kovoAppShellViteDevPlugin.');
+        throw new Error('@kovojs/server must export kovoAppShellViteDevPlugin.');
       }
 
       const sharedPlugin = sharedPluginFactory({

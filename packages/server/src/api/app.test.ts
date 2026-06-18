@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import * as packageRootApi from '@kovojs/server';
 import * as packageClientModulesApi from '@kovojs/server/app-shell/client-modules';
 import * as packageCoreApi from '@kovojs/server/app-shell/core';
 import * as packageNodeApi from '@kovojs/server/app-shell/node';
@@ -27,6 +28,7 @@ import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
 import * as viteStaticExportManifestFileApi from '../vite-static-export-manifest-file.js';
+import * as viteDevApi from '../vite-dev.js';
 import * as wireHtmlApi from '../wire-html.js';
 
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
@@ -63,6 +65,14 @@ type RootStaticExportResult = import('../index.js').StaticExportResult;
 type RootStaticExportDiagnostic = import('../index.js').StaticExportDiagnostic;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootStaticExportDiagnosticSeverity = import('../index.js').StaticExportDiagnosticSeverity;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootKovoAppShellViteDevPluginFactory =
+  typeof import('@kovojs/server').kovoAppShellViteDevPlugin;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootKovoAppShellViteDevPlugin = import('@kovojs/server').KovoAppShellViteDevPlugin;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootKovoAppShellViteDevPluginOptions =
+  import('@kovojs/server').KovoAppShellViteDevPluginOptions;
 
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedAppDocumentOptions =
@@ -229,6 +239,22 @@ type RemovedViteBuildStaticExportAssetOptions =
   // bridge instead of the focused public app-shell/Vite subpath.
   vt.KovoAppShellViteBuildStaticExportAssetOptions;
 
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteDevPluginFactory =
+  // @ts-expect-error SPEC.md §9.5: the app-shell Vite dev setup API now has the root
+  // @kovojs/server canonical home, not the app-shell/vite subpath.
+  typeof import('@kovojs/server/app-shell/vite').kovoAppShellViteDevPlugin;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteDevPlugin =
+  // @ts-expect-error SPEC.md §9.5: the app-shell Vite dev setup API now has the root
+  // @kovojs/server canonical home, not the app-shell/vite subpath.
+  import('@kovojs/server/app-shell/vite').KovoAppShellViteDevPlugin;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteDevPluginOptions =
+  // @ts-expect-error SPEC.md §9.5: the app-shell Vite dev setup API now has the root
+  // @kovojs/server canonical home, not the app-shell/vite subpath.
+  import('@kovojs/server/app-shell/vite').KovoAppShellViteDevPluginOptions;
+
 function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): string[] {
   return [...new Set(modules.flatMap((module) => Object.keys(module)))].sort();
 }
@@ -240,6 +266,7 @@ function moduleValueKeys(module: Record<string, unknown>): string[] {
 describe('server app-shell public API barrels', () => {
   it('keeps app-shell helpers on subpaths while root preserves SPEC §9.5 built-harness entries', () => {
     const publicValues = publicApi as Record<string, unknown>;
+    const packageRootValues = packageRootApi as Record<string, unknown>;
     const rootAppShellEntrypoints = new Set([
       'createApp',
       'createMemoryVersionedClientModuleRegistry',
@@ -267,11 +294,13 @@ describe('server app-shell public API barrels', () => {
         clientModulesApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: coreApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
+      kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       toNodeHandler: nodeApi.toNodeHandler,
     });
 
     expect(Object.keys(publicValues).sort()).toEqual(rootValues);
+    expect(Object.keys(packageRootValues).sort()).toEqual(rootValues);
     expect(Object.keys(staticExportOrchestratorApi).sort()).toEqual(['exportStaticApp']);
 
     const splitAppShellValues = aggregateValueKeys(
@@ -311,6 +340,8 @@ describe('server app-shell public API barrels', () => {
     );
     expect(publicApi.createRequestHandler).toBe(coreApi.createRequestHandler);
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
+    expect(publicApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
+    expect(packageRootApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
     expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
     expect(publicApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
 
@@ -351,7 +382,6 @@ describe('server app-shell public API barrels', () => {
     ]);
     expect(moduleValueKeys(packageViteApi)).toEqual([
       'exportKovoAppShellViteBuildWithManifestFromManifestFile',
-      'kovoAppShellViteDevPlugin',
       'kovoAppShellViteManifestStylesheetHrefFromFile',
     ]);
 
@@ -394,7 +424,6 @@ describe('server app-shell public API barrels', () => {
     expect(packageStaticExportApi.isStaticExportDiagnosticError).toBe(
       staticExportDiagnosticsApi.isStaticExportDiagnosticError,
     );
-    expect(packageViteApi.kovoAppShellViteDevPlugin).toBe(viteApi.kovoAppShellViteDevPlugin);
     expect(packageViteApi.exportKovoAppShellViteBuildWithManifestFromManifestFile).toBe(
       viteStaticExportManifestFileApi.exportKovoAppShellViteBuildWithManifestFromManifestFile,
     );
@@ -426,6 +455,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteRouteEntries');
     expect(packageViteApi).not.toHaveProperty('renderKovoAppShellViteDevDiagnosticResponse');
     expect(packageViteApi).not.toHaveProperty('shouldHandleKovoAppShellViteRequest');
+    expect(packageViteApi).not.toHaveProperty('kovoAppShellViteDevPlugin');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteStaticExportAssets');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteStaticExportAssetsFromManifestFile');
     expect(packageViteApi).not.toHaveProperty('kovoAppShellViteSsrDevPlugin');

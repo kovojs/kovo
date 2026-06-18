@@ -307,12 +307,20 @@ integration. Framework packages should expose only generic webhook primitives.
     `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
     `node scripts/api-surface-gate.mjs`; `node scripts/build-publish.mjs`;
     `git diff --check`.
-- [ ] **Move Vite dev-plugin app setup API to `@kovojs/server` root.**
+- [x] **Move Vite dev-plugin app setup API to `@kovojs/server` root.**
   - Add root exports for `kovoAppShellViteDevPlugin`, `KovoAppShellViteDevPlugin`,
     and `KovoAppShellViteDevPluginOptions`.
   - Remove those symbols from `@kovojs/server/app-shell/vite`; do not keep
     compatibility re-exports.
-  - Evidence:
+  - Evidence: `packages/server/src/index.ts` exports the dev-plugin value/types;
+    `packages/server/src/api/app-shell/vite.ts` no longer exports them. Verification:
+    `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+    `corepack pnpm exec vitest --run packages/create-kovo/src/index.test.ts packages/server/src/vite-dev-middleware.test.ts`;
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `node scripts/api-surface-gate.mjs`;
+    `corepack pnpm exec vitest --run site/scripts/api-ref.test.mjs`;
+    `node scripts/build-publish.mjs`;
+    `git diff --check`.
 - [ ] **Remove existing root/subpath duplicates from app-shell subpaths.**
   - Remove duplicate subpath exports for root-owned symbols such as `createApp`,
     `createRequestHandler`, `route`, `layout`, `respond`, `toNodeHandler`,
