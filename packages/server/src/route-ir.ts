@@ -15,10 +15,27 @@ export interface CompiledRoutePageComponentProp {
   staticValue?: unknown;
 }
 
+/** @internal Metadata for one compiler-derived route layout segment. */
+export interface CompiledRoutePageLayout {
+  localName: string;
+  queries: readonly string[];
+}
+
+/** @internal Metadata for one compiler-derived enhanced-navigation segment. */
+export interface CompiledRouteNavigationSegment {
+  components?: readonly string[];
+  id: string;
+  kind: 'layout' | 'page';
+  localName: string;
+  queries?: readonly string[];
+}
+
 /** @internal Metadata attached to compiler-lowered route page handlers. */
 export interface CompiledRoutePageMetadata {
   components: readonly CompiledRoutePageComponent[];
   fileName: string;
+  layouts?: readonly CompiledRoutePageLayout[];
+  navigationSegments?: readonly CompiledRouteNavigationSegment[];
   route: string;
 }
 

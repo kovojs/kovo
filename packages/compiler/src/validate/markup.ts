@@ -29,6 +29,14 @@ interface ResidualStampValidationOptions {
   registryFacts?: RegistryFacts;
 }
 
+const navigationSegmentStampAttributes = new Set([
+  'kovo-nav-components',
+  'kovo-nav-kind',
+  'kovo-nav-name',
+  'kovo-nav-queries',
+  'kovo-nav-segment',
+]);
+
 export function validateIdrefs(
   source: string,
   model: ComponentModuleModel,
@@ -58,6 +66,32 @@ export function validateStaticIds(
 
   for (const id of repeatableLiteralIds(model)) {
     diagnostics.push(kv224Diagnostic(fileName, source, `repeatable id="${id.value}"`, id));
+  }
+
+  return dedupeBy(diagnostics, diagnosticKey);
+}
+
+export function validateHandAuthoredNavigationSegmentStamps(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+
+  for (const element of jsxElements(model)) {
+    for (const attribute of element.attributes) {
+      if (!navigationSegmentStampAttributes.has(attribute.name)) continue;
+      diagnostics.push({
+        ...diagnosticFor(fileName, 'KV235', source, attribute.start, attribute.end - attribute.start),
+        help: [
+          diagnosticDefinitions.KV235.help,
+          'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
+          'Fix: remove the kovo-nav-* attribute and keep the route/layout/component source as authored JSX.',
+          'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
+        ].join('\n'),
+        message: `${diagnosticDefinitions.KV235.message} hand-authored navigation segment stamp ${attribute.name}.`,
+      });
+    }
   }
 
   return dedupeBy(diagnostics, diagnosticKey);

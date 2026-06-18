@@ -100,11 +100,19 @@ through client navigation.
 
 ## Segment Identity And Morph Contract
 
-- [ ] **Segment stamps are derived from layout/route lowering.**
+- [x] **Segment stamps are derived from layout/route lowering.**
   - Each layout segment and leaf gets a compiler-derived navigation segment stamp
     plus enough metadata to compare the current document with the target
     document. App TSX does not write these stamps.
-  - Evidence: pending compiler fixture and `kovo explain page --layouts` output.
+  - Evidence: `packages/compiler/src/route-pages.test.ts` proves derived page
+    and layout segment facts for component-backed pages, native-JSX leaf pages,
+    and `KV303` spread-prop rejection; `packages/server/src/route-jsx.test.tsx`
+    proves rendered `kovo-nav-*` page/layout stamps from generated route
+    metadata; `packages/compiler/src/compile-component.test.ts` and
+    `packages/compiler/src/route-pages.test.ts` prove `KV235` rejection for
+    app-authored `kovo-nav-*`; `packages/cli/src/index.kovo-explain.test.ts`
+    proves `kovo explain page --layouts` lists navigation segment ids and
+    metadata.
 - [ ] **Segment preservation is based on target-document equivalence.**
   - The runtime compares the current and target layout chains. Shared unchanged
     prefixes can persist; divergent or changed suffixes morph from the target
@@ -156,12 +164,17 @@ through client navigation.
     persistence, history/scroll/focus/announcement ownership, concurrency,
     bfcache, and loader-budget constraints. Browser evidence remains open under
     the phase-specific verification targets below.
-- [ ] **1. Compiler: derived segment metadata only.**
+- [x] **1. Compiler: derived segment metadata only.**
   - After `plans/app-authoring-ergonomics.md` item 3 lands, extend layout/route
     lowering so each segment has derived navigation identity, dependency
     metadata, and explain output. Reject unscannable dynamic composition with a
     teaching diagnostic rather than silently disabling proof.
-  - Evidence: pending.
+  - Evidence: `packages/compiler/src/route-pages.test.ts` covers route/layout
+    navigation segment derivation, native-JSX leaf pages, and `KV303` for
+    unscannable spread props; `packages/server/src/route-ir.test.ts` proves
+    generated page metadata carries navigation segments; `packages/server/src/route-jsx.test.tsx`
+    proves the server stamps page and nested layout roots from that metadata;
+    `packages/cli/src/index.kovo-explain.test.ts` covers explain output.
 - [ ] **2. Runtime MVP: full-document enhanced navigation.**
   - Intercept eligible anchors, fetch the canonical full HTML document, parse it,
     validate build token and segment metadata, update document-shell fields, and

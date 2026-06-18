@@ -52,6 +52,39 @@ export const home = route('/', {
     );
   });
 
+  it('extracts page segments from JSX-authored route pages without component calls', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+
+export const home = route('/', {
+  page: () => <main>Home</main>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.routePageFacts).toEqual([
+      {
+        components: [],
+        fileName: 'src/routes.tsx',
+        navigationSegments: [
+          {
+            components: [],
+            id: 'page:/',
+            kind: 'page',
+            localName: 'page',
+          },
+        ],
+        route: '/',
+      },
+    ]);
+    expect(result.files[0]?.source).toContain(
+      `page: __kovoDefineCompiledRoutePage({"components":[],"fileName":"src/routes.tsx","navigationSegments":[{"components":[],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, () => <main>Home</main>)`,
+    );
+  });
+
   it('records compiler-derived layout chains for JSX-authored route pages', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',
@@ -245,6 +278,59 @@ export const home = route('/', {
           'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. app-local generated component import \'./generated/question-list.js\' in route/layout source.',
         help: expect.stringContaining('Route/layout source should import the authored component'),
       }),
+    ]);
+  });
+
+  it('reports KV235 for hand-authored navigation segment stamps in route JSX', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `/** @jsxImportSource @kovojs/server */
+import { route } from '@kovojs/server';
+
+export const home = route('/', {
+  page: () => <main kovo-nav-segment="page:/">Home</main>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV235',
+        help: expect.stringContaining('Navigation segment stamps are compiler-derived'),
+        message:
+          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-segment.',
+      }),
+    ]);
+  });
+
+  it('reports KV303 for spread props in route component calls', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+
+export const detail = route('/questions/:id', {
+  page: ({ params }) => <QuestionDetail {...params} />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV303',
+        help: expect.stringContaining('Route component props must be statically reconstructible'),
+        message: expect.stringContaining(
+          "Route component 'QuestionDetail' uses spread props that cannot be represented in generated route metadata.",
+        ),
+      }),
+    ]);
+    expect(result.routePageFacts[0]?.components).toEqual([
+      {
+        localName: 'QuestionDetail',
+        props: [],
+        propsExpression: '{}',
+        serializedPropsExpression: 'JSON.stringify({})',
+      },
     ]);
   });
 

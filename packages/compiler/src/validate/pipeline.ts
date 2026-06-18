@@ -22,6 +22,7 @@ import {
 import { validateEventTriggerNames } from './event-triggers.js';
 import {
   validateAttributeMergeConflicts,
+  validateHandAuthoredNavigationSegmentStamps,
   validateHtmlContentModel,
   validateIdrefs,
   validateResidualStamps,
@@ -78,6 +79,8 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateOutputContexts(options.source, originalModel, options, styleOwnedSpans),
   ({ model, options, source }) => validateHtmlContentModel(source, model, options.fileName),
   ({ model, options, source }) => validateEventTriggerNames(source, model, options.fileName),
+  ({ model, options, source }) =>
+    validateHandAuthoredNavigationSegmentStamps(source, model, options.fileName),
   ({ model, options, source }) => validateResidualStamps(source, model, options),
   ({ model, options, source }) => validateAttributeMergeConflicts(source, model, options.fileName),
   ({ diagnosticSource, options, sourceOffsetMap, updateCoverage }) =>

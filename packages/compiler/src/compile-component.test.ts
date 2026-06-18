@@ -702,6 +702,28 @@ export const CartBadge = component({
     ]);
   });
 
+  it('reports KV235 for hand-authored navigation segment stamps in component TSX', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+export const CartBadge = component({
+  render: () => <cart-badge kovo-nav-segment="layout:AppLayout">2</cart-badge>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV235',
+        help: expect.stringContaining('Navigation segment stamps are compiler-derived'),
+        message:
+          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-segment.',
+      }),
+    ]);
+  });
+
   it('reports KV235 for app-authored renderSource modules from the parser model', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.server.ts',

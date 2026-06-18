@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { domain } from './domain.js';
 import { query } from './query.js';
+import { defineCompiledRoutePage } from './route-ir.js';
 import { layout, notFound, renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
 
@@ -95,6 +96,39 @@ describe('route JSX pages', () => {
     });
   });
 
+  it('stamps compiler-derived page navigation segment metadata on route JSX roots', async () => {
+    const productRoute = route('/products', {
+      page: defineCompiledRoutePage(
+        {
+          components: [
+            {
+              localName: 'ProductGrid',
+              props: [],
+              propsExpression: '{}',
+              serializedPropsExpression: 'JSON.stringify({})',
+            },
+          ],
+          fileName: 'src/routes.tsx',
+          navigationSegments: [
+            {
+              components: ['ProductGrid'],
+              id: 'page:/products',
+              kind: 'page',
+              localName: 'page',
+            },
+          ],
+          route: '/products',
+        },
+        () => <main>Products</main>,
+      ),
+    });
+
+    await expect(renderRoutePageResponse(productRoute, {}, {})).resolves.toMatchObject({
+      body: '<main kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page" kovo-nav-components="ProductGrid">Products</main>',
+      status: 200,
+    });
+  });
+
   it('wraps route JSX with nested layouts and loads layout queries from the request', async () => {
     const viewer = domain('viewer');
     const viewerQuery = query('viewer', {
@@ -125,6 +159,85 @@ describe('route JSX pages', () => {
     expect(response.body).toContain('kovo-deps="viewer"');
     expect(response.body).toContain('kovo-fragment-target="kovo-layout-');
     expect(response.body).toContain('<section data-admin><h1>Admin</h1></section>');
+  });
+
+  it('stamps compiler-derived layout navigation segment metadata on nested layout roots', async () => {
+    const viewer = domain('viewer');
+    const viewerQuery = query('viewer', {
+      load(_input: unknown, { request }: { request: { userId: string } }) {
+        return { id: request.userId };
+      },
+      reads: [viewer],
+    });
+    const AppLayout = layout({
+      queries: { viewer: viewerQuery },
+      render: ({ viewer }, _state, { children }) => (
+        <main data-viewer={viewer.id}>{children}</main>
+      ),
+    });
+    const AdminLayout = layout({
+      parent: AppLayout,
+      render: (_queries, _state, { children }) => <section data-admin>{children}</section>,
+    });
+    const adminRoute = route('/admin', {
+      layout: AdminLayout,
+      page: defineCompiledRoutePage(
+        {
+          components: [
+            {
+              localName: 'AdminPanel',
+              props: [],
+              propsExpression: '{}',
+              serializedPropsExpression: 'JSON.stringify({})',
+            },
+          ],
+          fileName: 'src/routes.tsx',
+          layouts: [
+            { localName: 'AppLayout', queries: ['viewer'] },
+            { localName: 'AdminLayout', queries: [] },
+          ],
+          navigationSegments: [
+            {
+              id: 'layout:AppLayout',
+              kind: 'layout',
+              localName: 'AppLayout',
+              queries: ['viewer'],
+            },
+            {
+              id: 'layout:AdminLayout',
+              kind: 'layout',
+              localName: 'AdminLayout',
+              queries: [],
+            },
+            {
+              components: ['AdminPanel'],
+              id: 'page:/admin',
+              kind: 'page',
+              localName: 'page',
+            },
+          ],
+          route: '/admin',
+        },
+        () => <h1>Admin</h1>,
+      ),
+    });
+
+    const response = await renderRoutePageResponse(adminRoute, {}, { userId: 'u1' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain(
+      '<main data-viewer="u1" kovo-deps="viewer" kovo-fragment-target="kovo-layout-',
+    );
+    expect(response.body).toContain('kovo-nav-segment="layout:AppLayout"');
+    expect(response.body).toContain('kovo-nav-kind="layout"');
+    expect(response.body).toContain('kovo-nav-name="AppLayout"');
+    expect(response.body).toContain('kovo-nav-queries="viewer"');
+    expect(response.body).toContain(
+      '<section data-admin kovo-nav-segment="layout:AdminLayout" kovo-nav-kind="layout" kovo-nav-name="AdminLayout">',
+    );
+    expect(response.body).toContain(
+      '<h1 kovo-nav-segment="page:/admin" kovo-nav-kind="page" kovo-nav-name="page" kovo-nav-components="AdminPanel">Admin</h1>',
+    );
   });
 
   it('runs layout guards before rendering the route page', async () => {

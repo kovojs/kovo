@@ -23,6 +23,14 @@ describe('compiled route page metadata', () => {
           },
         ],
         fileName: 'src/routes.tsx',
+        navigationSegments: [
+          {
+            components: ['QuestionDetail'],
+            id: 'page:/questions/:id',
+            kind: 'page',
+            localName: 'page',
+          },
+        ],
         route: '/questions/:id',
       },
       page,
@@ -31,6 +39,14 @@ describe('compiled route page metadata', () => {
     expect(compiled).toBe(page);
     expect(compiled.kovoRoutePage).toMatchObject({
       fileName: 'src/routes.tsx',
+      navigationSegments: [
+        {
+          components: ['QuestionDetail'],
+          id: 'page:/questions/:id',
+          kind: 'page',
+          localName: 'page',
+        },
+      ],
       route: '/questions/:id',
     });
     expect(Object.keys(compiled)).not.toContain('kovoRoutePage');

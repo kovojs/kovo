@@ -24,6 +24,11 @@ import {
 } from './response.js';
 import type { Schema } from './schema.js';
 import { escapeAttribute } from './html.js';
+import type {
+  CompiledRouteNavigationSegment,
+  CompiledRoutePageFunction,
+  CompiledRoutePageMetadata,
+} from './route-ir.js';
 
 type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}`
   ? Rest extends `${infer Param}/${infer Tail}`
@@ -52,6 +57,7 @@ interface LayoutLiveTargetMetadata {
 }
 
 const layoutLiveTargetMetadata = new WeakMap<object, LayoutLiveTargetMetadata>();
+const routePageMetadata = new WeakMap<object, CompiledRoutePageMetadata>();
 let nextLayoutLiveTargetId = 0;
 
 /** Resolved layout query values passed to a `layout().render` function (SPEC §4.5/§9.5). */
@@ -246,7 +252,10 @@ export function route<
   path: Path,
   definition: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> = {},
 ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
-  return { ...definition, path };
+  const declaration = { ...definition, path };
+  const metadata = (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage;
+  if (metadata) routePageMetadata.set(declaration, metadata);
+  return declaration;
 }
 
 export function parseRouteRequest<
@@ -353,7 +362,13 @@ async function runRoutePageInternal<
         throw new RouteBoundaryRenderError(error, routeBoundaryFor('error', definition, layouts));
       }
       if (isNotFound(pageValue) || isRouteResponseOutcome(pageValue)) return pageValue;
-      return renderLayoutChain(layouts, pageValue, lifecycleRequest);
+      const metadata = routePageMetadata.get(definition);
+      return renderLayoutChain(
+        layouts,
+        stampRoutePageSegment(metadata, pageValue),
+        lifecycleRequest,
+        metadata,
+      );
     });
   } catch (error) {
     if (error instanceof RouteBoundaryRenderError && error.boundary) {
@@ -411,7 +426,9 @@ async function renderLayoutChain<Request>(
   layouts: readonly LayoutDeclaration<any, any, any>[],
   pageValue: unknown,
   request: Request,
+  metadata: CompiledRoutePageMetadata | undefined,
 ): Promise<unknown> {
+  const layoutSegments = routeLayoutSegments(metadata);
   let value = pageValue;
   for (let index = layouts.length - 1; index >= 0; index -= 1) {
     const layoutDeclaration = layouts[index];
@@ -424,6 +441,7 @@ async function renderLayoutChain<Request>(
         request,
       });
       value = stampLayoutLiveTarget(layoutDeclaration, value);
+      value = stampRouteNavigationSegment(layoutSegments[index], value);
     } catch (error) {
       throw new RouteBoundaryRenderError(
         error,
@@ -453,6 +471,60 @@ async function loadLayoutQueries<Request>(
   }
 
   return values as LayoutQueryResults<LayoutQueryMap<any>>;
+}
+
+function stampRoutePageSegment(
+  metadata: CompiledRoutePageMetadata | undefined,
+  value: unknown,
+): unknown {
+  return stampRouteNavigationSegment(
+    metadata?.navigationSegments?.find((segment) => segment.kind === 'page'),
+    value,
+  );
+}
+
+function routeLayoutSegments(
+  metadata: CompiledRoutePageMetadata | undefined,
+): readonly (CompiledRouteNavigationSegment | undefined)[] {
+  return (metadata?.navigationSegments ?? []).filter((segment) => segment.kind === 'layout');
+}
+
+function stampRouteNavigationSegment(
+  segment: CompiledRouteNavigationSegment | undefined,
+  value: unknown,
+): unknown {
+  if (!segment || typeof value !== 'string') return value;
+
+  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(value);
+  if (!opening) return value;
+
+  const tagName = opening[1];
+  const attrs = opening[2] ?? '';
+  const stampedAttrs = stampRouteNavigationAttributes(attrs, segment);
+  const stampedOpening = `<${tagName}${stampedAttrs}>`;
+  return `${stampedOpening}${value.slice(opening[0].length)}`;
+}
+
+function stampRouteNavigationAttributes(
+  attrs: string,
+  segment: CompiledRouteNavigationSegment,
+): string {
+  let nextAttrs = setOrAppendAttribute(attrs, 'kovo-nav-segment', segment.id);
+  nextAttrs = setOrAppendAttribute(nextAttrs, 'kovo-nav-kind', segment.kind);
+  nextAttrs = setOrAppendAttribute(nextAttrs, 'kovo-nav-name', segment.localName);
+
+  if (segment.queries && segment.queries.length > 0) {
+    nextAttrs = setOrAppendAttribute(nextAttrs, 'kovo-nav-queries', segment.queries.join(' '));
+  }
+  if (segment.components && segment.components.length > 0) {
+    nextAttrs = setOrAppendAttribute(
+      nextAttrs,
+      'kovo-nav-components',
+      segment.components.join(' '),
+    );
+  }
+
+  return nextAttrs;
 }
 
 function stampLayoutLiveTarget(

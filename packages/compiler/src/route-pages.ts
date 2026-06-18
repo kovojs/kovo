@@ -37,6 +37,14 @@ interface RouteLayoutModel {
   start: number;
 }
 
+const navigationSegmentStampAttributes = new Set([
+  'kovo-nav-components',
+  'kovo-nav-kind',
+  'kovo-nav-name',
+  'kovo-nav-queries',
+  'kovo-nav-segment',
+]);
+
 /** Compile route-page JSX composition facts (SPEC.md §4.5/§9.1). */
 export function compileRouteModule(options: CompileRouteModuleOptions): CompileRouteModuleResult {
   const sourceFile = ts.createSourceFile(
@@ -109,8 +117,14 @@ function routePageFromCall(
   const pageHandler = objectPageHandler(definitionArg, 'page', sourceFile);
   if (!pageHandler) return null;
 
-  const components = routePageComponentFacts(sourceFile, pageHandler.node);
-  if (components.length === 0) return null;
+  const components = routePageComponentFacts(
+    fileName,
+    source,
+    sourceFile,
+    pageHandler.node,
+    diagnostics,
+  );
+  if (components.length === 0 && !containsJsx(pageHandler.node)) return null;
   const routeLayouts = routeLayoutFacts(fileName, source, sourceFile, definitionArg, layouts, diagnostics);
   const navigationSegments = routeNavigationSegments(pathArg.text, components, routeLayouts);
   const fact = {
@@ -344,9 +358,28 @@ function methodDeclarationFunctionExpression(
   return `${asyncKeyword}function ${propertyNameText(method.name) ?? 'page'}${typeParameters}(${parameters})${returnType} ${body}`;
 }
 
+function containsJsx(root: ts.Node): boolean {
+  let found = false;
+
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(root);
+  return found;
+}
+
 function routePageComponentFacts(
+  fileName: string,
+  source: string,
   sourceFile: ts.SourceFile,
   root: ts.Node,
+  diagnostics: CompilerDiagnostic[],
 ): RoutePageComponentFact[] {
   const facts: RoutePageComponentFact[] = [];
 
@@ -354,11 +387,29 @@ function routePageComponentFacts(
     if (ts.isJsxElement(node)) {
       const tag = jsxTagName(node.openingElement.tagName);
       if (tag && componentTagName(tag)) {
+        diagnostics.push(
+          ...routePageComponentSpreadDiagnostics(
+            fileName,
+            source,
+            sourceFile,
+            tag,
+            node.openingElement.attributes,
+          ),
+        );
         facts.push(routePageComponentFact(sourceFile, tag, node.openingElement.attributes));
       }
     } else if (ts.isJsxSelfClosingElement(node)) {
       const tag = jsxTagName(node.tagName);
       if (tag && componentTagName(tag)) {
+        diagnostics.push(
+          ...routePageComponentSpreadDiagnostics(
+            fileName,
+            source,
+            sourceFile,
+            tag,
+            node.attributes,
+          ),
+        );
         facts.push(routePageComponentFact(sourceFile, tag, node.attributes));
       }
     }
@@ -368,6 +419,32 @@ function routePageComponentFacts(
 
   visit(root);
   return facts;
+}
+
+function routePageComponentSpreadDiagnostics(
+  fileName: string,
+  source: string,
+  sourceFile: ts.SourceFile,
+  localName: string,
+  attributes: ts.JsxAttributes,
+): CompilerDiagnostic[] {
+  return attributes.properties
+    .filter(ts.isJsxSpreadAttribute)
+    .map((attribute) => ({
+      ...diagnosticFor(
+        fileName,
+        'KV303',
+        source,
+        attribute.getStart(sourceFile),
+        attribute.getWidth(sourceFile),
+      ),
+      help: [
+        diagnosticDefinitions.KV303.help,
+        'Route component props must be statically reconstructible so route query, live target, and navigation segment metadata can be derived.',
+        'Fix: pass named props directly, for example `<QuestionDetail questionId={params.id} />`, instead of spreading an object.',
+      ].join('\n'),
+      message: `${diagnosticDefinitions.KV303.message} Route component '${localName}' uses spread props that cannot be represented in generated route metadata.`,
+    }));
 }
 
 function routePageComponentFact(
@@ -564,6 +641,28 @@ function routeAuthoringSurfaceDiagnostics(
           'Route/layout source should import the authored component, for example `../components/question-list.js`; the route compiler rewrites the generated route artifact to the lowered component module.',
         ].join('\n'),
         message: `${diagnosticDefinitions.KV235.message} app-local generated component import ${node.moduleSpecifier.getText(sourceFile)} in route/layout source.`,
+      });
+    }
+    if (
+      ts.isJsxAttribute(node) &&
+      ts.isIdentifier(node.name) &&
+      navigationSegmentStampAttributes.has(node.name.text)
+    ) {
+      diagnostics.push({
+        ...diagnosticFor(
+          fileName,
+          'KV235',
+          source,
+          node.name.getStart(sourceFile),
+          node.name.getWidth(sourceFile),
+        ),
+        help: [
+          diagnosticDefinitions.KV235.help,
+          'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
+          'Fix: remove the kovo-nav-* attribute and keep the route/layout/component source as authored JSX.',
+          'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
+        ].join('\n'),
+        message: `${diagnosticDefinitions.KV235.message} hand-authored navigation segment stamp ${node.name.text}.`,
       });
     }
     ts.forEachChild(node, visit);
