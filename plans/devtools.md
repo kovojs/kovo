@@ -2,7 +2,7 @@
 
 Created 2026-06-17. Behavioral source of truth is `SPEC.md`. This ledger plans a
 Kovo devtool whose **primary user is an agent (via MCP)** and whose **secondary
-user is a human (via a visual graph UI)**. Both surfaces project the _same_
+user is a human (via a visual graph UI)**. Both surfaces project the *same*
 static dataflow graph the compiler already emits — the devtool builds no second
 model.
 
@@ -20,8 +20,8 @@ runtime signal graph; Kovo can hand an agent the proven graph directly.
 The devtool's job is therefore narrow and high-leverage: **make that graph
 navigable and source-anchored, for an agent first and a human second.** The user
 story — "select a component, trace the queries that go into it and the mutations
-that go out, with syntax-highlighted code previews" — is a _traversal_ over edges
-that are already in the model, plus a _source slice_ for each node/edge.
+that go out, with syntax-highlighted code previews" — is a *traversal* over edges
+that are already in the model, plus a *source slice* for each node/edge.
 
 ## The load-bearing invariant: one graph, two renderers
 
@@ -34,7 +34,7 @@ generalizes it. So:
 - A conformance test asserts the visual UI's node/edge set ≡ the MCP graph ≡ the
   `kovo explain` text facts for the same app. Divergence is a CI failure, the
   same way fixpoint/render-equivalence gates work (§5.2).
-- This is why the devtool is agent-first _without_ being agent-only: a single
+- This is why the devtool is agent-first *without* being agent-only: a single
   legible artifact serves both. An agent that traces a bug and a human watching
   the same trace are looking at identical edges.
 
@@ -65,7 +65,7 @@ generalizes it. So:
    reverse indices (component → mutations-that-affect-it) over the existing facts.
 2. **Source anchoring**: richer spans (start/end line:col) per node and edge, and
    a source-slice service that returns file + relevant lines + language + span.
-3. **MCP navigation tools** designed for bounded _tracing_, not graph dumps.
+3. **MCP navigation tools** designed for bounded *tracing*, not graph dumps.
 4. A **visual graph UI** (select-and-trace, code-preview panels).
 5. (Phase 2) a **live runtime overlay** that lights the static graph with real
    wire frames from a running dev server.
@@ -77,7 +77,7 @@ generalizes it. So:
 ### Layer 1 — `DataflowGraph`: the traversable model (`@kovojs/devtool-graph`)
 
 A thin, pure derivation over `KovoExplainInput` + `TouchGraph` + coverage facts.
-No new source analysis — it _indexes_ existing facts into a navigable shape.
+No new source analysis — it *indexes* existing facts into a navigable shape.
 
 - **Nodes** (each with a stable `id`, `kind`, `label`, and a `SourceAnchor`):
   `component`, `query`, `mutation`, `domain`, `page`, `endpoint`, plus optional
@@ -103,7 +103,7 @@ No new source analysis — it _indexes_ existing facts into a navigable shape.
     write→domain→query→binding chain and per-edge optimistic/update status.
   - `queryConsumers(query)` / `queryInvalidators(query)`.
 - **Provenance modes**: build the graph from committed `generated/graph.json`
-  (static, zero-running-app) _or_ from a live `deriveAppGraph()` call in the dev
+  (static, zero-running-app) *or* from a live `deriveAppGraph()` call in the dev
   server (fresh on edit). Same shape either way.
 
 > Edge soundness rides on facts the SPEC already proves: the `invalidates` join is
@@ -134,13 +134,13 @@ question and gets the relevant slice of the graph already assembled and ranked.
   error code). It returns the top-`k` graph **cards** (default small), each as the
   same stable text a human reads (§5.3) plus structured facts.
 - **The corpus = the graph, as retrievable cards.** Each node is rendered to one
-  card that _already bundles its traced neighborhood_: a component card carries its
+  card that *already bundles its traced neighborhood*: a component card carries its
   queries-in (read-sets + source), mutations-out (the write→domain→query→binding
   chain with optimistic/update-coverage status), handlers, and a Layer-2 source
   slice; a mutation card carries writes-out and every query/component it reaches; a
   query card carries consumers + invalidators. So one retrieval returns the whole
   "select a component, see queries-in and mutations-out" answer — no follow-up call.
-- **Why BM25**: lexical terms from a card's edges index _into_ that card, so a query
+- **Why BM25**: lexical terms from a card's edges index *into* that card, so a query
   for `cart` or `addToCart` or `KV310` surfaces the cards that touch it. BM25 is
   **deterministic and explainable** (return the matched terms / score), which fits
   Kovo's stable-diffable-legible ethos far better than an embedding model — no model
@@ -171,7 +171,7 @@ conformance test, and §11.4 says app wiring is proof-carrying so it stays small
 
 ### Layer 4 — Live runtime overlay (Phase 2+)
 
-Bridges "what _can_ flow" (static graph) with "what _did_ flow" (runtime). The
+Bridges "what *can* flow" (static graph) with "what *did* flow" (runtime). The
 SPEC makes this unusually cheap because the wire is already self-describing
 (§9.1): a dev-only debug SSE endpoint streams each enhanced round-trip's
 `Kovo-Changes`, `Kovo-Targets`, and `<kovo-query>` frames. The UI replays them by
@@ -188,34 +188,43 @@ Delivery order is **UI-first** (see Decisions). The shared graph model (Phases 0
 is still bedrock — the visual UI depends on it — so it leads regardless; the human
 surface ships before the MCP tools, which then drop onto the same model.
 
-### Phase 0 — Graph model foundation (shared bedrock)
+> **Built 2026-06-17** (`examples/devtool/`, branch `agent/devtools`): a working
+> Kovo app — `createApp()` + URL-driven `route('/')`, server-rendered, JS-off
+> capable — that renders the swimlane dataflow graph with select-and-trace, a rich
+> inspector (queries-in / mutations-out / refresh coverage / touch sites), code
+> previews, and BM25 search. Verified by `vp dev` (HTTP 200 for commerce/crm/
+> stackoverflow) and Playwright screenshots in `examples/devtool/screenshots/`.
+> Two intentional deviations from the original plan, both confirmed during the
+> build: (a) selection state lives in the **URL** and renders **server-side**
+> rather than via a client store — this is the Kovo MPA thesis (§8), works JS-off,
+> and was far more robust than a client island; (b) it runs as its **own Kovo dev
+> server** rather than mounted at `/__kovo` (mount deferred — see below).
 
-- [ ] Add `@kovojs/devtool-graph`: `DataflowGraph` types + `buildGraph(KovoExplainInput, TouchGraph, coverage)` pure derivation with stable node IDs and typed edges.
-- [ ] Implement the `invalidates` edge join (mutation writes/touch-domains × query read-sets, §11.1) and the `componentInflow`/`componentOutflow` reverse indices.
-- [ ] Unit tests over the commerce example fixtures (`examples/commerce/src/generated/graph.json`): assert known component → queries-in / mutations-out traces.
+### Phase 0 — Graph model foundation (shared bedrock)
+- [x] `DataflowGraph` pure derivation with stable node IDs + typed edges (`examples/devtool/src/graph-model.mjs`: `buildDataflowGraph`). Host-agnostic (node bundle script + browserless server both import it).
+- [x] `invalidates` join (mutation writes/touch-domains × query read-sets, §11.1) + `componentInflow`/`componentOutflow` reverse indices. Verified: commerce ProductGrid → queries-in `productGrid`, mutations-out `cart/add`; cart/add → invalidates cart/productGrid/orderHistory (screenshots 02/03).
+- [ ] Automated unit tests over example fixtures (currently verified visually via the running app, not by a committed test).
 
 ### Phase 1 — Source anchoring & previews (shared bedrock)
+- [x] Per-node source slices (`file`, line range, code, lang) resolved at build time (`examples/devtool/scripts/build-bundle.mjs`) + mutation touch-site `file:line` carried through. Rendered as gutter-numbered, syntax-highlighted previews (`src/highlight.ts`).
+- [ ] Promote slice resolution from the bundle script's symbol heuristic to compiler-emitted `SourceAnchor` (start/end line:col) for exact spans; consider shiki for the highlighter.
 
-- [ ] Add `SourceAnchor` (start/end line:col) to component handler/derive/binding and edge facts during graph emission (`packages/compiler`); backfill where only `site:line` exists today.
-- [ ] Implement `SourceSlice.sliceSource(anchor)` (raw) + a shiki renderer (human-facing) reusing `site/`'s shiki setup.
+### Phase 2 — Visual graph UI (the lead surface) — shipped
+- [x] Devtool stood up as a Kovo app (`examples/devtool/`); runs on its own `vp dev`.
+- [x] Mountable at `/__kovo`: base-path-aware app-shell (`KOVO_DEVTOOL_BASE`) + a prefix-stripping `devtoolMountPlugin` (`vite.config.ts`) dispatching to an exported `nodeHandler`. `dev:mounted` serves under the prefix; copy the plugin into a host app's config to embed. Verified in-browser (page + island + selection all work under `/__kovo`; styles via inlined criticalCss).
+- [x] Layered swimlane render (barycenter ordering, SVG edges + HTML node cards) over the static graph (`src/render.ts`).
+- [x] Select-and-trace + inspector with code previews. Refresh coverage shows optimistic §10.6 status (`derived`/`hand-written`/`await-fragment`/`punted`). **Open:** KV311 update-coverage gaps inline (those facts are absent from current `graph.json` exports).
+- [x] Pan / zoom / hover enhancement island (`src/devtool-pz.client.js`), registered as a versioned `/c/` client module and bootstrapped via `on:visible` (SPEC §4.7), cleanup on `ctx.signal`. Pure progressive enhancement — selection stays real `<a href>` navigation with the island absent. Verified in-browser (fit-on-load, wheel-zoom-to-cursor, drag-pan, 1-hop hover highlight; no console errors).
+- [ ] Browser suite for render/interaction (Playwright drives `scratch/devtool-interact.mjs` green; no committed assertion suite yet).
 
-### Phase 2 — Visual graph UI (the lead surface)
-
-- [ ] Stand up the devtool as a **Kovo app mounted at `/__kovo`** via dev-server middleware (`packages/server` Vite mount), reading the Phase-0 graph; dogfoods the framework on its own tooling and reuses `@kovojs/ui`.
-- [ ] Spike the layered-graph render (layout lib choice — elk/dagre-class; SVG) over the static graph.
-- [ ] Build select-and-trace + inspector with shiki code previews; show KV310/KV311 coverage gaps inline.
-- [ ] Browser suite for the render/interaction (the only browser-bound part, §11.4).
-
-### Phase 3 — MCP: BM25 retrieval over graph cards (agent parity over the same model)
-
-- [ ] Render each Phase-0 node to a self-contained "card" (traced neighborhood + source slice) as stable text + structured facts.
-- [ ] Build a deterministic BM25 index over the cards; extend `kovo_explain` to accept a free-text query returning top-`k` cards (exact node-id lookup still precise).
-- [ ] Return matched terms / scores so the ranking is auditable (legibility ethos).
-- [ ] Conformance test: UI node/edge set ≡ MCP card facts ≡ `kovo explain` text facts for the same app (the same-artifact invariant, three ways).
-- [ ] Document the single tool + an agent-usage example tracing one mutation→UI chain.
+### Phase 3 — MCP: BM25 retrieval over graph cards (agent parity over the same model) — shipped
+- [x] `buildCard(node, bundle)` renders each node to a self-contained card (traced neighborhood + source slice) — the shared fact source (`src/cards.mjs`); `cardToText` is the stable `kovo-explain/v1` text.
+- [x] Deterministic BM25 index over the cards; `kovo_explain({query, app?, limit?})` MCP tool returns top-`k` cards (exact node name/id resolves precisely first), as text + `structuredContent` (`scripts/mcp-server.mjs`). Verified via stdio round-trip (`scripts/test-mcp.mjs`).
+- [x] Returns matched terms + scores (auditable ranking).
+- [x] Same-artifact conformance: `scripts/conformance.mjs` asserts MCP card facts ≡ the graph edges the UI renders, across all apps (green). **Open:** also diff against the CLI's `kovo explain` text for the third leg.
+- [x] Documented the single tool + connection in the README.
 
 ### Phase 4 — Live runtime overlay
-
 - [ ] Dev-only SSE debug endpoint streaming `Kovo-Changes`/`Kovo-Targets`/`<kovo-query>` frames (§9.1); never present in prod/export.
 - [ ] UI replay (light edges, show live values + `kovo-pending`); MCP `kovo_graph_recent_frames`.
 
@@ -224,7 +233,7 @@ surface ships before the MCP tools, which then drop onto the same model.
 ## Decisions (confirmed 2026-06-17)
 
 - **UI-first delivery**: the visual graph (Phase 2) ships before the MCP tools
-  (Phase 3). Agent-primacy is a _long-term_ property, not a delivery order — the
+  (Phase 3). Agent-primacy is a *long-term* property, not a delivery order — the
   same-artifact invariant means both surfaces read one model, so leading with the
   human surface costs no architectural debt and yields the soonest-validating
   artifact. The shared graph model (Phases 0–1) still leads, since the UI needs it.
@@ -234,7 +243,6 @@ surface ships before the MCP tools, which then drop onto the same model.
   a later additive transport, mirroring how SSE is additive in §9.3.
 
 ## Risks / open questions
-
 - **Span backfill cost**: some binding/handler positions may not be retained
   through emission; Phase 1 must confirm they're recoverable without re-analysis.
 - **Edge explosion on large apps**: the visual layout needs collapse/focus modes;
@@ -243,7 +251,6 @@ surface ships before the MCP tools, which then drop onto the same model.
   (§5.1); the overlay must show skew rather than mislabel edges.
 
 ## Verification surface
-
 Per §11.4, the whole devtool is checkable without a browser: the graph derivation,
 source slices, and MCP tools are pure functions over committed facts, tested over
 the example fixtures; only the Phase 4 live overlay and Phase 3 render are

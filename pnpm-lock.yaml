@@ -200,6 +200,43 @@ importers:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
 
+  examples/devtool:
+    dependencies:
+      '@kovojs/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@kovojs/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@kovojs/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kovojs/style':
+        specifier: workspace:*
+        version: link:../../packages/style
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^25.0.0
+        version: 25.9.2
+      kovo:
+        specifier: workspace:*
+        version: link:../../packages/cli
+      typescript:
+        specifier: ^6.0.0
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.16
+        version: 8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)
+      vite-plus:
+        specifier: ^0.1.24
+        version: 0.1.24(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
+
   examples/gallery:
     dependencies:
       '@kovojs/core':

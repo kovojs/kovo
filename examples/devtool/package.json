@@ -1,0 +1,30 @@
+{
+  "name": "@kovojs/example-devtool",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:bundle": "node scripts/build-bundle.mjs",
+    "check": "vp check",
+    "conformance": "node scripts/conformance.mjs",
+    "dev": "node scripts/build-bundle.mjs && vp dev",
+    "dev:mounted": "node scripts/build-bundle.mjs && KOVO_DEVTOOL_BASE=/__kovo vp dev",
+    "mcp": "node scripts/build-bundle.mjs && node scripts/mcp-server.mjs",
+    "test": "vp test",
+    "test:mcp": "node scripts/test-mcp.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@kovojs/core": "workspace:*",
+    "@kovojs/runtime": "workspace:*",
+    "@kovojs/server": "workspace:*",
+    "@kovojs/style": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "kovo": "workspace:*",
+    "typescript": "^6.0.0",
+    "vite": "^8.0.16",
+    "vite-plus": "^0.1.24",
+    "vitest": "^4.1.8"
+  }
+}
