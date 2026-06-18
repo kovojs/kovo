@@ -42,6 +42,18 @@ export const EXPLAIN_USAGE_LINE =
 /** @internal Usage line emitted for `kovo add` (see `addUsage`). */
 export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
 
+/** @internal Usage forms emitted for `kovo compile` (see `compileUsage`). */
+export const COMPILE_USAGE = [
+  'usage: kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>]',
+  '       kovo compile route <source.tsx> --out <artifact.tsx> [--file-name <name>] [--artifact-file-name <name>] [--rewrite <Local=specifier>] [--check]',
+  '       kovo compile graph <input.json> --out <graph.json> [--check]',
+  '       kovo compile package-css <package> --out <file.css> [--entry <source.ts>] [--check]',
+] as const;
+
+/** @internal Single-line `kovo compile` usage as emitted by the bin's error path. */
+export const COMPILE_USAGE_LINE =
+  'kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>] | kovo compile route <source.tsx> --out <artifact.tsx> [--file-name <name>] [--artifact-file-name <name>] [--rewrite <Local=specifier>] [--check] | kovo compile graph <input.json> --out <graph.json> [--check] | kovo compile package-css <package> --out <file.css> [--entry <source.ts>] [--check]';
+
 /** @internal Usage line emitted for `kovo export` (see `exportUsage`). */
 export const EXPORT_USAGE =
   'usage: kovo export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]';
@@ -75,7 +87,8 @@ export interface CommandManifestEntry {
 
 /**
  * @internal The full `kovo` command surface, in display order. Covers every
- * command `main`/`mainAsync` dispatches: check, explain, add, audit, export, mcp.
+ * command `main`/`mainAsync` dispatches: check, explain, add, audit, compile,
+ * export, mcp.
  */
 export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   {
@@ -128,6 +141,50 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
       },
     ],
     examples: ['kovo add button', 'kovo add button card --out src/components/ui'],
+  },
+  {
+    name: 'compile',
+    summary:
+      'Emit compiler-backed app artifacts without importing @kovojs/compiler from app scripts.',
+    usage: COMPILE_USAGE,
+    async: true,
+    flags: [
+      { flag: '--out <path>', description: 'Artifact path to write or verify.' },
+      {
+        flag: '--check',
+        description: 'Verify the existing artifact is current instead of writing it.',
+      },
+      {
+        flag: '--file-name <name>',
+        description: 'Logical source file name embedded in diagnostics and emitted IR.',
+      },
+      {
+        flag: '--artifact-file-name <name>',
+        description: 'Logical generated route artifact name embedded in route IR.',
+      },
+      {
+        flag: '--rewrite <Local=specifier>',
+        description: 'Route component import rewrite for generated component artifacts.',
+      },
+      {
+        flag: '--registry-facts <json>',
+        description: 'JSON registry facts passed to component lowering.',
+      },
+      {
+        flag: '--entry <source.ts>',
+        description: 'Source entry used for package component-prefix discovery.',
+      },
+      { flag: '--fixpoint', description: 'Assert lowered component IR is already a fixpoint.' },
+      {
+        flag: '--render-equivalence',
+        description: 'Assert authored and lowered component render output stays equivalent.',
+      },
+    ],
+    examples: [
+      'kovo compile component src/components/cart.tsx --out src/generated/cart.tsx --check',
+      'kovo compile route src/app-shell.tsx --out src/generated/app-shell.kovo-route.tsx --rewrite Cart=./cart.js',
+      'kovo compile package-css @kovojs/ui --entry src/app.ts --out src/generated/kovo-ui.css',
+    ],
   },
   {
     name: 'audit',

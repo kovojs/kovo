@@ -612,11 +612,21 @@ tsconfig.json --noEmit --pretty false`.
     `scripts/import-boundary.mjs` now explicitly classifies the internal
     compiler/server imports in those artifact generators so app-authored runtime
     source stays covered by `pnpm run check:imports`.
-- [ ] **Define the future public facade for compiler-backed app tasks.**
+- [x] **Define the future public facade for compiler-backed app tasks.**
   - Track the required `kovo` command surface for component emit, graph emit, UI
     CSS extraction, and optional fixpoint checks so app authors do not import
     `@kovojs/compiler` directly.
-  - Evidence:
+  - Evidence: `packages/cli/src/commands-manifest.ts` now defines the
+    app-facing `kovo compile` command family:
+    `kovo compile component`, `kovo compile route`, `kovo compile graph`, and
+    `kovo compile package-css`, with `--check`, component `--fixpoint`, and
+    component `--render-equivalence` flags where applicable. The dispatcher in
+    `packages/cli/src/index.ts` implements those commands by importing
+    `@kovojs/compiler`, `@kovojs/compiler/graph`, and
+    `@kovojs/compiler/package-styles` internally, so app scripts can call the
+    `kovo` bin instead of importing compiler APIs. Verified with
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts --testNamePattern "compile|commands manifest|reports usage"`
+    and `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 - [ ] **Reclassify `@kovojs/compiler` only after app-facing imports are gone.**
   - Once starters and app-owned scripts use `kovo` or static artifacts instead,
     update `public-packages.json`, API docs, and publish/build assumptions so

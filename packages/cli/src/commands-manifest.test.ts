@@ -7,6 +7,8 @@ import {
   ADD_USAGE,
   AUDIT_USAGE,
   CHECK_USAGE,
+  COMPILE_USAGE,
+  COMPILE_USAGE_LINE,
   COMMANDS_MANIFEST,
   EXPLAIN_USAGE,
   EXPLAIN_USAGE_LINE,
@@ -42,13 +44,13 @@ describe('commands manifest', () => {
     }
     // Explicit belt-and-suspenders: the full known command surface.
     expect([...manifestNames].sort()).toEqual(
-      ['add', 'audit', 'check', 'explain', 'export', 'mcp'].sort(),
+      ['add', 'audit', 'check', 'compile', 'explain', 'export', 'mcp'].sort(),
     );
   });
 
-  it('marks the async-dispatched commands (export, mcp) as async', () => {
+  it('marks the async-dispatched commands (compile, export, mcp) as async', () => {
     const asyncNames = COMMANDS_MANIFEST.filter((entry) => entry.async).map((entry) => entry.name);
-    expect(asyncNames.sort()).toEqual(['export', 'mcp'].sort());
+    expect(asyncNames.sort()).toEqual(['compile', 'export', 'mcp'].sort());
   });
 
   it('exposes every usage constant the bin references', () => {
@@ -57,6 +59,10 @@ describe('commands manifest', () => {
     expect(CHECK_USAGE).toBe('usage: kovo check [optimistic|coverage] [graph.json]');
     expect(AUDIT_USAGE).toBe('usage: kovo audit [--fail-on-findings] [graph.json]');
     expect(ADD_USAGE).toBe('usage: kovo add <component...> [--out <dir>]');
+    expect(COMPILE_USAGE[0]).toBe(
+      'usage: kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>]',
+    );
+    expect(COMPILE_USAGE_LINE).toContain('kovo compile component <source.tsx>');
     expect(EXPORT_USAGE).toBe(
       'usage: kovo export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]',
     );
@@ -71,6 +77,7 @@ describe('commands manifest', () => {
     expect(byName.check?.usage).toBe(CHECK_USAGE);
     expect(byName.audit?.usage).toBe(AUDIT_USAGE);
     expect(byName.add?.usage).toBe(ADD_USAGE);
+    expect(byName.compile?.usage).toBe(COMPILE_USAGE);
     expect(byName.export?.usage).toBe(EXPORT_USAGE);
     expect(byName.mcp?.usage).toBe(MCP_USAGE);
     expect(byName.explain?.usage).toBe(EXPLAIN_USAGE);
@@ -80,7 +87,14 @@ describe('commands manifest', () => {
     // The bin must import the usage constants from the manifest rather than
     // hard-coding the usage literals, so they cannot diverge.
     expect(indexSource).toMatch(/from '\.\/commands-manifest\.js'/);
-    for (const constant of ['CHECK_USAGE', 'AUDIT_USAGE', 'ADD_USAGE', 'EXPORT_USAGE', 'MCP_USAGE']) {
+    for (const constant of [
+      'CHECK_USAGE',
+      'AUDIT_USAGE',
+      'ADD_USAGE',
+      'COMPILE_USAGE',
+      'EXPORT_USAGE',
+      'MCP_USAGE',
+    ]) {
       expect(indexSource, `index.ts should reference ${constant}`).toContain(constant);
     }
   });

@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 export type { DiagnosticCode } from '@kovojs/core';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import type { CompileComponentOptions } from '@kovojs/compiler';
+import type {
+  CompileComponentOptions,
+  CompileRouteModuleOptions,
+  RouteComponentImportRewrite,
+} from '@kovojs/compiler';
 import type * as CompilerInternal from '@kovojs/compiler/internal';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -33,6 +37,8 @@ import {
   ADD_USAGE,
   AUDIT_USAGE,
   CHECK_USAGE,
+  COMPILE_USAGE,
+  COMPILE_USAGE_LINE,
   EXPLAIN_USAGE_LINE,
   EXPORT_USAGE,
   MCP_USAGE,
@@ -68,17 +74,19 @@ const outputVersion = 'kovo-check/v1';
 const explainOutputVersion = 'kovo-explain/v1';
 const auditOutputVersion = 'kovo-audit/v1';
 const compileOutputVersion = 'compile/v1';
+const compileCommandOutputVersion = 'kovo-compile/v1';
 const addOutputVersion = 'kovo-add/v1';
 const mcpOutputVersion = 'kovo-mcp/v1';
 
 /** @internal Synchronous argv dispatcher for the `kovo` bin; not a public API. */
 export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args.length === 0) {
-    process.stdout.write('kovo: explain, check, audit, export, mcp\n');
+    process.stdout.write('kovo: add, audit, check, compile, explain, export, mcp\n');
     return 0;
   }
 
-  if (args[0] === 'export' || args[0] === 'mcp') {
+  if (args[0] === 'compile' && args.length === 1) return writeUsageError(compileUsage());
+  if (args[0] === 'compile' || args[0] === 'export' || args[0] === 'mcp') {
     throw new Error(`kovo ${args[0]} is asynchronous; call mainAsync() instead.`);
   }
 
@@ -114,7 +122,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   process.stderr.write(
-    `kovo: unknown command ${stableValue(args[0])}. expected add, explain, check, audit, export, or mcp.\n`,
+    `kovo: unknown command ${stableValue(args[0])}. expected add, compile, explain, check, audit, export, or mcp.\n`,
   );
   return 1;
 }
@@ -122,6 +130,11 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 /** @internal Async argv dispatcher (export/mcp) for the `kovo` bin; not a public API. */
 export async function mainAsync(args: readonly string[] = process.argv.slice(2)): Promise<number> {
   if (args[0] === 'mcp') return runMcpCommand(args.slice(1));
+  if (args[0] === 'compile') {
+    const parsed = parseCompileArgs(args.slice(1));
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(await runCompileCommand(parsed.options));
+  }
   if (args[0] !== 'export') return main(args);
 
   const parsed = parseExportArgs(args.slice(1));
@@ -714,6 +727,52 @@ type AddArgParseResult =
   | { ok: true; options: AddComponentOptions }
   | { message: string; ok: false };
 
+type CompileTarget = 'component' | 'graph' | 'package-css' | 'route';
+
+interface CompileBaseOptions {
+  check: boolean;
+  outPath: string;
+  target: CompileTarget;
+}
+
+interface CompileComponentCommandOptions extends CompileBaseOptions {
+  fixpoint: boolean;
+  fileName?: string;
+  registryFactsPath?: string;
+  renderEquivalence: boolean;
+  sourcePath: string;
+  target: 'component';
+}
+
+interface CompileRouteCommandOptions extends CompileBaseOptions {
+  artifactFileName?: string;
+  componentImportRewrites: CompileRouteModuleOptions['componentImportRewrites'];
+  fileName?: string;
+  sourcePath: string;
+  target: 'route';
+}
+
+interface CompileGraphCommandOptions extends CompileBaseOptions {
+  inputPath: string;
+  target: 'graph';
+}
+
+interface CompilePackageCssCommandOptions extends CompileBaseOptions {
+  entryPath?: string;
+  packageName: string;
+  target: 'package-css';
+}
+
+type CompileCommandOptions =
+  | CompileComponentCommandOptions
+  | CompileGraphCommandOptions
+  | CompilePackageCssCommandOptions
+  | CompileRouteCommandOptions;
+
+type CompileArgParseResult =
+  | { ok: true; options: CompileCommandOptions }
+  | { message: string; ok: false };
+
 function parseAddArgs(args: readonly string[]): AddArgParseResult {
   let outDir = 'src/components/ui';
   const components: AddComponentName[] = [];
@@ -804,6 +863,518 @@ function runAddCommand(options: AddComponentOptions): CliCommandResult {
     `SUMMARY total=${options.components.length} outDir=${JSON.stringify(resolve(options.outDir))}`,
   );
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
+}
+
+function parseCompileArgs(args: readonly string[]): CompileArgParseResult {
+  const target = args[0];
+  if (!target || target === '--help' || target === '-h') {
+    return { message: compileUsage(), ok: false };
+  }
+
+  if (!isCompileTarget(target)) {
+    return {
+      message: `kovo: unknown compile target ${stableValue(target)}.\n${compileUsage()}`,
+      ok: false,
+    };
+  }
+
+  if (target === 'component') return parseCompileComponentArgs(args.slice(1));
+  if (target === 'route') return parseCompileRouteArgs(args.slice(1));
+  if (target === 'graph') return parseCompileGraphArgs(args.slice(1));
+  return parseCompilePackageCssArgs(args.slice(1));
+}
+
+function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResult {
+  let sourcePath: string | undefined;
+  let outPath: string | undefined;
+  let fileName: string | undefined;
+  let registryFactsPath: string | undefined;
+  let check = false;
+  let fixpoint = false;
+  let renderEquivalence = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+    if (arg === '--help' || arg === '-h') return { message: compileUsage(), ok: false };
+    if (arg === '--check') {
+      check = true;
+      continue;
+    }
+    if (arg === '--fixpoint') {
+      fixpoint = true;
+      continue;
+    }
+    if (arg === '--render-equivalence') {
+      renderEquivalence = true;
+      continue;
+    }
+    if (arg === '--out') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: compile component --out requires a path.\n', ok: false };
+      outPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--out=')) {
+      outPath = arg.slice('--out='.length);
+      if (!outPath) return { message: 'kovo: compile component --out requires a path.\n', ok: false };
+      continue;
+    }
+    if (arg === '--file-name') {
+      const value = args[index + 1];
+      if (!value)
+        return { message: 'kovo: compile component --file-name requires a name.\n', ok: false };
+      fileName = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--file-name=')) {
+      fileName = arg.slice('--file-name='.length);
+      if (!fileName)
+        return { message: 'kovo: compile component --file-name requires a name.\n', ok: false };
+      continue;
+    }
+    if (arg === '--registry-facts') {
+      const value = args[index + 1];
+      if (!value)
+        return {
+          message: 'kovo: compile component --registry-facts requires a JSON path.\n',
+          ok: false,
+        };
+      registryFactsPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--registry-facts=')) {
+      registryFactsPath = arg.slice('--registry-facts='.length);
+      if (!registryFactsPath)
+        return {
+          message: 'kovo: compile component --registry-facts requires a JSON path.\n',
+          ok: false,
+        };
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      return {
+        message: `kovo: unknown compile component option ${stableValue(arg)}.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    if (sourcePath) {
+      return {
+        message: `kovo: compile component accepts one source path.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    sourcePath = arg;
+  }
+
+  if (!sourcePath)
+    return { message: `kovo: compile component requires a source path.\n${compileUsage()}`, ok: false };
+  if (!outPath)
+    return { message: `kovo: compile component requires --out.\n${compileUsage()}`, ok: false };
+
+  return {
+    ok: true,
+    options: {
+      check,
+      fixpoint,
+      ...(fileName === undefined ? {} : { fileName }),
+      outPath,
+      ...(registryFactsPath === undefined ? {} : { registryFactsPath }),
+      renderEquivalence,
+      sourcePath,
+      target: 'component',
+    },
+  };
+}
+
+function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
+  let sourcePath: string | undefined;
+  let outPath: string | undefined;
+  let fileName: string | undefined;
+  let artifactFileName: string | undefined;
+  let check = false;
+  const componentImportRewrites: RouteComponentImportRewrite[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+    if (arg === '--help' || arg === '-h') return { message: compileUsage(), ok: false };
+    if (arg === '--check') {
+      check = true;
+      continue;
+    }
+    if (arg === '--out') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: compile route --out requires a path.\n', ok: false };
+      outPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--out=')) {
+      outPath = arg.slice('--out='.length);
+      if (!outPath) return { message: 'kovo: compile route --out requires a path.\n', ok: false };
+      continue;
+    }
+    if (arg === '--file-name') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: compile route --file-name requires a name.\n', ok: false };
+      fileName = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--file-name=')) {
+      fileName = arg.slice('--file-name='.length);
+      if (!fileName) return { message: 'kovo: compile route --file-name requires a name.\n', ok: false };
+      continue;
+    }
+    if (arg === '--artifact-file-name') {
+      const value = args[index + 1];
+      if (!value)
+        return { message: 'kovo: compile route --artifact-file-name requires a name.\n', ok: false };
+      artifactFileName = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--artifact-file-name=')) {
+      artifactFileName = arg.slice('--artifact-file-name='.length);
+      if (!artifactFileName)
+        return { message: 'kovo: compile route --artifact-file-name requires a name.\n', ok: false };
+      continue;
+    }
+    if (arg === '--rewrite') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: compile route --rewrite requires Local=specifier.\n', ok: false };
+      const rewrite = parseRouteRewrite(value);
+      if (!rewrite.ok) return rewrite;
+      componentImportRewrites.push(rewrite.value);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--rewrite=')) {
+      const rewrite = parseRouteRewrite(arg.slice('--rewrite='.length));
+      if (!rewrite.ok) return rewrite;
+      componentImportRewrites.push(rewrite.value);
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      return {
+        message: `kovo: unknown compile route option ${stableValue(arg)}.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    if (sourcePath) {
+      return { message: `kovo: compile route accepts one source path.\n${compileUsage()}`, ok: false };
+    }
+    sourcePath = arg;
+  }
+
+  if (!sourcePath)
+    return { message: `kovo: compile route requires a source path.\n${compileUsage()}`, ok: false };
+  if (!outPath) return { message: `kovo: compile route requires --out.\n${compileUsage()}`, ok: false };
+
+  return {
+    ok: true,
+    options: {
+      ...(artifactFileName === undefined ? {} : { artifactFileName }),
+      check,
+      componentImportRewrites,
+      ...(fileName === undefined ? {} : { fileName }),
+      outPath,
+      sourcePath,
+      target: 'route',
+    },
+  };
+}
+
+function parseCompileGraphArgs(args: readonly string[]): CompileArgParseResult {
+  let inputPath: string | undefined;
+  let outPath: string | undefined;
+  let check = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+    if (arg === '--help' || arg === '-h') return { message: compileUsage(), ok: false };
+    if (arg === '--check') {
+      check = true;
+      continue;
+    }
+    if (arg === '--out') {
+      const value = args[index + 1];
+      if (!value) return { message: 'kovo: compile graph --out requires a path.\n', ok: false };
+      outPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--out=')) {
+      outPath = arg.slice('--out='.length);
+      if (!outPath) return { message: 'kovo: compile graph --out requires a path.\n', ok: false };
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      return {
+        message: `kovo: unknown compile graph option ${stableValue(arg)}.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    if (inputPath) {
+      return { message: `kovo: compile graph accepts one input path.\n${compileUsage()}`, ok: false };
+    }
+    inputPath = arg;
+  }
+
+  if (!inputPath)
+    return { message: `kovo: compile graph requires an input path.\n${compileUsage()}`, ok: false };
+  if (!outPath) return { message: `kovo: compile graph requires --out.\n${compileUsage()}`, ok: false };
+
+  return { ok: true, options: { check, inputPath, outPath, target: 'graph' } };
+}
+
+function parseCompilePackageCssArgs(args: readonly string[]): CompileArgParseResult {
+  let packageName: string | undefined;
+  let outPath: string | undefined;
+  let entryPath: string | undefined;
+  let check = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+    if (arg === '--help' || arg === '-h') return { message: compileUsage(), ok: false };
+    if (arg === '--check') {
+      check = true;
+      continue;
+    }
+    if (arg === '--out') {
+      const value = args[index + 1];
+      if (!value)
+        return { message: 'kovo: compile package-css --out requires a path.\n', ok: false };
+      outPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--out=')) {
+      outPath = arg.slice('--out='.length);
+      if (!outPath)
+        return { message: 'kovo: compile package-css --out requires a path.\n', ok: false };
+      continue;
+    }
+    if (arg === '--entry') {
+      const value = args[index + 1];
+      if (!value)
+        return { message: 'kovo: compile package-css --entry requires a source path.\n', ok: false };
+      entryPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--entry=')) {
+      entryPath = arg.slice('--entry='.length);
+      if (!entryPath)
+        return { message: 'kovo: compile package-css --entry requires a source path.\n', ok: false };
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      return {
+        message: `kovo: unknown compile package-css option ${stableValue(arg)}.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    if (packageName) {
+      return {
+        message: `kovo: compile package-css accepts one package name.\n${compileUsage()}`,
+        ok: false,
+      };
+    }
+    packageName = arg;
+  }
+
+  if (!packageName)
+    return {
+      message: `kovo: compile package-css requires a package name.\n${compileUsage()}`,
+      ok: false,
+    };
+  if (!outPath)
+    return { message: `kovo: compile package-css requires --out.\n${compileUsage()}`, ok: false };
+
+  return {
+    ok: true,
+    options: {
+      check,
+      ...(entryPath === undefined ? {} : { entryPath }),
+      outPath,
+      packageName,
+      target: 'package-css',
+    },
+  };
+}
+
+function parseRouteRewrite(
+  value: string,
+):
+  | { ok: true; value: NonNullable<CompileRouteModuleOptions['componentImportRewrites']>[number] }
+  | { message: string; ok: false } {
+  const separator = value.indexOf('=');
+  if (separator <= 0 || separator === value.length - 1) {
+    return { message: 'kovo: compile route --rewrite requires Local=specifier.\n', ok: false };
+  }
+
+  return {
+    ok: true,
+    value: { localName: value.slice(0, separator), specifier: value.slice(separator + 1) },
+  };
+}
+
+function isCompileTarget(value: string): value is CompileTarget {
+  return value === 'component' || value === 'route' || value === 'graph' || value === 'package-css';
+}
+
+function compileUsage(): string {
+  return [COMPILE_USAGE_LINE, ...COMPILE_USAGE, ''].join('\n');
+}
+
+async function runCompileCommand(options: CompileCommandOptions): Promise<CliCommandResult> {
+  try {
+    if (options.target === 'component') return await runCompileComponentCommand(options);
+    if (options.target === 'route') return await runCompileRouteCommand(options);
+    if (options.target === 'graph') return await runCompileGraphCommand(options);
+    return await runCompilePackageCssCommand(options);
+  } catch (error) {
+    return {
+      error: `kovo: compile failed: ${error instanceof Error ? error.message : String(error)}`,
+      exitCode: 1,
+    };
+  }
+}
+
+async function runCompileComponentCommand(
+  options: CompileComponentCommandOptions,
+): Promise<CliCommandResult> {
+  const { assertFixpoint, assertRenderEquivalence, compileComponentModule } = await import(
+    '@kovojs/compiler'
+  );
+  const compileOptions: CompileComponentOptions = {
+    fileName: options.fileName ?? options.sourcePath,
+    source: readFileSync(options.sourcePath, 'utf8'),
+  };
+  if (options.registryFactsPath !== undefined) {
+    compileOptions.registryFacts = readJsonFile(
+      options.registryFactsPath,
+    ) as NonNullable<CompileComponentOptions['registryFacts']>;
+  }
+  const result = compileComponentModule(compileOptions);
+  if (result.diagnostics.length > 0) return compileDiagnosticResult(result.diagnostics);
+  if (options.fixpoint) assertFixpoint(result);
+  if (options.renderEquivalence) assertRenderEquivalence(result);
+  if (!result.loweredSource) throw new Error(`${options.sourcePath} produced no lowered source`);
+
+  return compileArtifactResult(options, result.loweredSource, 'component');
+}
+
+async function runCompileRouteCommand(
+  options: CompileRouteCommandOptions,
+): Promise<CliCommandResult> {
+  const { compileRouteModule } = await import('@kovojs/compiler');
+  const result = compileRouteModule({
+    ...(options.artifactFileName === undefined ? {} : { artifactFileName: options.artifactFileName }),
+    ...(options.componentImportRewrites === undefined ||
+    options.componentImportRewrites.length === 0
+      ? {}
+      : { componentImportRewrites: options.componentImportRewrites }),
+    fileName: options.fileName ?? options.sourcePath,
+    source: readFileSync(options.sourcePath, 'utf8'),
+  });
+  if (result.diagnostics.length > 0) return compileDiagnosticResult(result.diagnostics);
+  const source = result.files[0]?.source;
+  if (!source) throw new Error(`${options.sourcePath} produced no route artifact`);
+
+  return compileArtifactResult(options, source, 'route');
+}
+
+async function runCompileGraphCommand(options: CompileGraphCommandOptions): Promise<CliCommandResult> {
+  const { deriveAppGraph } = await import('@kovojs/compiler/graph');
+  const result = deriveAppGraph(readJsonFile(options.inputPath) as Parameters<typeof deriveAppGraph>[0]);
+  if (result.diagnostics.length > 0) return compileDiagnosticResult(result.diagnostics);
+  return compileArtifactResult(options, `${JSON.stringify(result.graph, null, 2)}\n`, 'graph');
+}
+
+async function runCompilePackageCssCommand(
+  options: CompilePackageCssCommandOptions,
+): Promise<CliCommandResult> {
+  const { extractPackageComponentCss } = await import('@kovojs/compiler/package-styles');
+  const entryPath = options.entryPath ?? 'src/app.ts';
+  const result = extractPackageComponentCss(options.packageName, {
+    fileName: entryPath,
+    packagePrefixDiscoveryRoot: dirname(resolve(entryPath)),
+    source: existsSync(entryPath) ? readFileSync(entryPath, 'utf8') : '',
+  });
+  if (!result.css) throw new Error(`no CSS extracted for ${options.packageName}`);
+
+  const lines = compileArtifactLines(options, result.css, 'package-css');
+  for (const diagnostic of result.diagnostics) {
+    lines.splice(
+      -1,
+      0,
+      `WARN package-css file=${JSON.stringify(diagnostic.fileName)} ${stableText(diagnostic.message)}`,
+    );
+  }
+  return { exitCode: 0, output: `${lines.join('\n')}\n` };
+}
+
+function compileArtifactResult(
+  options: CompileBaseOptions,
+  source: string,
+  kind: CompileTarget,
+): CliCommandResult {
+  return { exitCode: 0, output: `${compileArtifactLines(options, source, kind).join('\n')}\n` };
+}
+
+function compileArtifactLines(
+  options: CompileBaseOptions,
+  source: string,
+  kind: CompileTarget,
+): string[] {
+  const target = resolve(options.outPath);
+  if (options.check) {
+    const current = readFileSync(target, 'utf8');
+    if (current !== source) {
+      throw new Error(`${kind} artifact ${target} is stale; rerun without --check`);
+    }
+    return [
+      compileCommandOutputVersion,
+      `CHECK ${kind} path=${JSON.stringify(target)} status=current bytes=${byteLength(source)}`,
+      `SUMMARY artifacts=1 diagnostics=0`,
+    ];
+  }
+
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, source, 'utf8');
+  return [
+    compileCommandOutputVersion,
+    `WRITE ${kind} path=${JSON.stringify(target)} bytes=${byteLength(source)}`,
+    `SUMMARY artifacts=1 diagnostics=0`,
+  ];
+}
+
+function compileDiagnosticResult(
+  diagnostics: readonly { code: DiagnosticCode; fileName: string; message: string }[],
+): CliCommandResult {
+  return {
+    error: [
+      compileCommandOutputVersion,
+      ...diagnostics.map(
+        (diagnostic) =>
+          `ERROR ${diagnostic.code} file=${JSON.stringify(diagnostic.fileName)} ${stableText(diagnostic.message)}`,
+      ),
+      `SUMMARY artifacts=0 diagnostics=${diagnostics.length}`,
+    ].join('\n'),
+    exitCode: 1,
+  };
+}
+
+function readJsonFile(path: string): unknown {
+  return JSON.parse(readFileSync(path, 'utf8')) as unknown;
 }
 
 function parseExportArgs(args: readonly string[]): ExportArgParseResult {

@@ -950,7 +950,7 @@ describe('kovo check', () => {
     expect(output).toBe('kovo: unknown flag "--json"\n');
   });
 
-  it('reports unknown commands without implying missing implementation', () => {
+  it('reports compile usage through the synchronous dispatcher', () => {
     let output = '';
     const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
       output += chunk.toString();
@@ -963,9 +963,8 @@ describe('kovo check', () => {
       stderrWrite.mockRestore();
     }
 
-    expect(output).toBe(
-      'kovo: unknown command "compile". expected add, explain, check, audit, export, or mcp.\n',
-    );
+    expect(output).toContain('kovo compile component <source.tsx>');
+    expect(output).toContain('kovo compile graph <input.json> --out <graph.json>');
   });
 
   it('runs as a CLI entrypoint when the script path contains spaces', () => {
@@ -1022,7 +1021,7 @@ describe('kovo check', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      expect(output).toBe('kovo: explain, check, audit, export, mcp\n');
+      expect(output).toBe('kovo: add, audit, check, compile, explain, export, mcp\n');
     } finally {
       rmSync(parent, { force: true, recursive: true });
     }
