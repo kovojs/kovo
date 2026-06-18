@@ -247,11 +247,12 @@ Design decisions to lock in code review:
     `writeKovoNeutralBuild()`, `KovoPreset`, `PresetContext`, `PresetDiagnostic`,
     and `node()`. The neutral writer reuses
     `createKovoAppShellViteBuildFromManifestFile()` / `writeKovoAppShellViteBuildOutput()`
-    to emit `client/c/*`, `manifest.json`, `routes.json`, `meta.json`, and an
-    optional `server/handler.mjs`. `packages/server/src/build.test.ts` verifies
-    the layout against a small app + Vite manifest fixture. The full item remains
-    open because `kovo build` and the production server bundler do not yet own
-    the app-shell build end to end.
+    to emit `client/c/*`, Vite manifest assets under `client/assets/*`,
+    `manifest.json`, `routes.json`, `meta.json`, and an optional
+    `server/handler.mjs`. `packages/server/src/build.test.ts` verifies the layout
+    against a small app + Vite manifest fixture. The full item remains open because
+    `kovo build` and the production server bundler do not yet own the app-shell
+    build end to end.
 - [ ] Add server-bundle step: `src/app-shell.ts` → `server/handler.mjs`
       (`Request → Response`), no Vite at runtime. Verify a bundled handler serves a
       route + a `/_m/` mutation + a `/c/` module with **zero dev deps installed**.
@@ -274,6 +275,17 @@ Design decisions to lock in code review:
 - [ ] `node` preset: standalone server + asset serving + cache headers + prod-only
       `Dockerfile`. Replace the example/demo Vite-from-source serve story with this as
       the recommended prod path (keep Vite serve for dev only).
+  - Partial evidence: `packages/server/src/build.ts` implements `node().emit()`
+    for a neutral build with `server/handler.mjs`, copying `client/` and
+    `server/`, writing `server.mjs`, serving immutable `/c/*` and `/assets/*`
+    before falling back to the Web `Request → Response` handler, honoring
+    `PORT`/`HOST`, and emitting a minimal Dockerfile by default. The focused
+    `packages/server/src/build.test.ts` test imports the emitted `server.mjs`
+    directly and verifies route fallback, client-module serving, asset serving,
+    content types, and `public, max-age=31536000, immutable` cache headers without
+    Vite in the request path. The full item remains open because the Dockerfile has
+    not been container-built with pruned production dependencies and examples/docs
+    have not been switched to this path.
 - [ ] Evidence: container builds with pruned prod deps; `curl` of a route, a
       `/assets/*` (immutable cache header), and a `/_m/` mutation succeed.
 
@@ -337,7 +349,14 @@ Design decisions to lock in code review:
   run check:imports`; `corepack pnpm run check:api-surface`; `corepack pnpm run
   check:publish`; `git diff --check`.
 - Neutral build prod-dep boot test: _(Phase 0)_
-- `kovo build` + node preset container, pruned deps: _(Phase 1)_
+- Node preset emitted-server smoke: `corepack pnpm exec vitest --run
+  packages/server/src/build.test.ts`; `corepack pnpm exec tsc -p tsconfig.json
+  --noEmit --pretty false`; `corepack pnpm run check:exports`; `corepack pnpm run
+  check:api-surface`; `corepack pnpm exec vitest --run
+  scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs
+  site/scripts/api-ref.test.mjs`; `corepack pnpm run check:publish`;
+  `git diff --check`.
+- `kovo build` + node preset container, pruned deps: _(Phase 1, still open)_
 - `vercel build --prebuilt` dry-run + golden config: _(Phase 2)_
 - `wrangler deploy --dry-run` + `inspect()` diagnostics: _(Phase 3)_
 - Example commerce served via the node preset (no Vite at runtime): _(Phase 4)_
