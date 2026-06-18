@@ -264,12 +264,23 @@ internals, emit/check scripts, and narrowly named artifact tests.
       `source-truth.test.ts`.
   - Current progress: `pnpm --filter @kovojs/example-commerce exec vitest --run
     src/app.test.ts src/enhanced-navigation.test.ts` passed after route-module
-    imports moved behind generated fixtures.
+    imports moved behind generated fixtures and generated route artifacts were
+    refreshed for `stylesheet(...)` declarations.
 - [ ] Run focused CRM and StackOverflow tests after applying the same boundary.
   - Current progress: `pnpm --filter @kovojs/example-crm exec vitest --run
-    src/interactive-app.test.ts` and `pnpm --filter @kovojs/example-stackoverflow
-    exec vitest --run src/interactive-app.test.ts` passed after direct generated
-    route imports moved behind generated fixtures.
-- [ ] Run `emit-components -- --check` and `emit-graph -- --check` for each
+    src/optimistic.test.ts src/interactive-app.test.ts src/graph.test.ts` and
+    `pnpm --filter @kovojs/example-stackoverflow exec vitest --run
+    src/interactive-app.test.ts` passed after direct generated route imports
+    moved behind generated fixtures.
+- [x] Run `emit-components -- --check` and `emit-graph -- --check` for each
       migrated example.
+  - Evidence: `pnpm --filter @kovojs/example-commerce run emit-components --
+    --check`, `pnpm --filter @kovojs/example-commerce run emit-graph --
+    --check`, `pnpm --filter @kovojs/example-crm run emit-components --
+    --check`, `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+    `pnpm --filter @kovojs/example-stackoverflow run emit-components --
+    --check`, and `pnpm --filter @kovojs/example-stackoverflow run emit-graph
+    -- --check` passed after refreshing generated route artifacts. Gallery's
+    equivalent `pnpm --filter @kovojs/example-gallery run
+    emit:interactive-gallery -- --check` also passed.
 - [ ] Run `pnpm run check` and `git diff --check` before closing the plan.
