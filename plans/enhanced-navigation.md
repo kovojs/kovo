@@ -158,7 +158,7 @@ through client navigation.
     SPEC must deliberately change that budget with acceptance evidence.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
     `node --experimental-strip-types - <<'NODE' ...` reported
-    `inline-loader-gzip=4946/8192`.
+    `inline-loader-gzip=5219/8192`.
 
 ## Implementation Plan
 
@@ -199,7 +199,12 @@ through client navigation.
 - [ ] **3. History/focus/scroll/concurrency hardening.**
   - Add `pushState`/`popstate`, scroll/hash restoration, focus movement,
     route-change announcement, in-flight cancellation, and bfcache-safe teardown.
-  - Evidence: pending.
+  - Evidence so far: `packages/runtime/src/inline-loader.test.ts` proves the
+    inline loader registers `popstate`; `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves successful enhanced navigation focuses the preserved layout root,
+    sets manual scroll restoration, scrolls to top, and emits the full-document
+    navigation path. Remaining gap: dedicated back/forward, hash restoration,
+    stale-navigation cancellation, route announcement, and bfcache evidence.
 - [ ] **4. Mutation/live composition after enhanced navigation.**
   - Prove `Kovo-Targets`/`Kovo-Live-Targets` snapshots include preserved layout
     targets after navigation, inserted leaf targets are discoverable, and stale
@@ -251,4 +256,4 @@ through client navigation.
 - [x] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
       budget change is explicitly accepted.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
-    the measured shipped source was `inline-loader-gzip=4946/8192`.
+    the measured shipped source was `inline-loader-gzip=5219/8192`.

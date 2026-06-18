@@ -25,6 +25,7 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const layout = document.querySelector('main');
+    const scrollTo = vi.fn();
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
       async text() {
@@ -43,6 +44,7 @@ describe('browser inline loader enhanced navigation', () => {
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', scrollTo);
 
     installInlineKovoLoader(async () => ({}));
 
@@ -56,6 +58,10 @@ describe('browser inline loader enhanced navigation', () => {
       headers: { Accept: 'text/html' },
     });
     expect(document.querySelector('main')).toBe(layout);
+    expect(document.activeElement).toBe(layout);
+    expect(layout?.getAttribute('tabindex')).toBe('-1');
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
+    expect(history.scrollRestoration).toBe('manual');
     expect(document.querySelector('[kovo-nav-segment="page:/cart"]')?.textContent).toBe(
       'Cart ready',
     );

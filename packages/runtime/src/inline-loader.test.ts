@@ -47,6 +47,7 @@ describe('inline loader source', () => {
         'pointerup',
         'pointerover',
         'pointerout',
+        'popstate',
       ]);
       expect(importModule).not.toHaveBeenCalled();
     } finally {

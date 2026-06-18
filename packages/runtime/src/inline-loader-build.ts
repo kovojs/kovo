@@ -80,6 +80,11 @@ function installInlineKovoLoader(im) {
   };
   const qa = (root, selector) =>
     root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
+  const sf = (href) => {
+    const x = globalThis.scrollX || globalThis.pageXOffset || 0;
+    const y = globalThis.scrollY || globalThis.pageYOffset || 0;
+    if (href) sc[href] = [x, y];
+  };
   const vp = (val, path) =>
     path.split('.').reduce((cur, seg) => {
       const key = seg.endsWith('?') ? seg.slice(0, -1) : seg;
@@ -244,15 +249,18 @@ function installInlineKovoLoader(im) {
     if (location.assign) location.assign(href);
     else location.href = href;
   };
-  const an = async (href) => {
+  const an = async (href, pop = false) => {
+    const navId = (ni += 1);
     try {
       const response = await fetch(href, { headers: { Accept: 'text/html' } });
+      if (navId !== ni) return;
       const finalUrl = new URL(response.url || href, location.href);
       const contentType = response.headers?.get('content-type') || '';
       if (finalUrl.origin !== location.origin || !contentType.toLowerCase().includes('text/html')) {
         throw Error();
       }
       const nextDoc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      if (navId !== ni) return;
       if (!nextDoc?.body || kb() !== kb(nextDoc)) throw Error();
       const currentSegments = ns(doc.body);
       const nextSegments = ns(nextDoc.body);
@@ -277,10 +285,17 @@ function installInlineKovoLoader(im) {
       }
 
       doc.head.innerHTML = nextDoc.head.innerHTML;
-      history.pushState?.({}, '', finalUrl.href);
+      if (!pop) globalThis.history?.pushState?.({}, '', finalUrl.href);
+      const focusTarget = doc.querySelector('main,[kovo-nav-segment],h1');
+      focusTarget?.setAttribute?.('tabindex', '-1');
+      focusTarget?.focus?.({ preventScroll: true });
+      const saved = sc[finalUrl.href];
+      if (saved) globalThis.scrollTo?.(saved[0], saved[1]);
+      else if (finalUrl.hash) doc.getElementById(finalUrl.hash.slice(1))?.scrollIntoView?.();
+      else globalThis.scrollTo?.(0, 0);
       dispatchEvent(new CustomEvent('kovo:navigate', { detail: { url: finalUrl.href } }));
     } catch {
-      ng(href);
+      if (navId === ni) ng(href);
     }
   };
   const inav = (event) => {
@@ -309,9 +324,15 @@ function installInlineKovoLoader(im) {
       return false;
     }
     event.preventDefault();
+    sf(location.href);
     void an(url.href);
     return true;
   };
+  const sc = {};
+  let ni = 0;
+  if (globalThis.history?.scrollRestoration !== undefined) {
+    globalThis.history.scrollRestoration = 'manual';
+  }
   for (const el of qa(
     doc,
     'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
@@ -430,6 +451,10 @@ function installInlineKovoLoader(im) {
     );
   crossing('pointerover', 'pointerenter');
   crossing('pointerout', 'pointerleave');
+  addEventListener('popstate', () => {
+    sf();
+    void an(location.href, true);
+  });
   // SPEC.md §4.7: declared triggers are legible in body markup, while the default
   // document emits the loader in <head>. Defer the scan one task so the parser can
   // continue into the body; event delegation above is installed immediately.
