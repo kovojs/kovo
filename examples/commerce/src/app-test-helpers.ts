@@ -1,4 +1,4 @@
-import { headerValues, setCookieValues } from '@kovojs/test/headers';
+import { enhancedMutationHeaders, headerValues, setCookieValues } from '@kovojs/test/headers';
 import { type StructuralMorphNode } from '@kovojs/runtime';
 import { csrfToken } from '@kovojs/server';
 import { htmlFormFacts, htmlFormFieldsByName } from '@kovojs/test/html-fragment';
@@ -16,10 +16,6 @@ import {
   type CommerceAppShell,
 } from './app-shell.js';
 import { cartItems, orders, products } from './schema.js';
-
-// SPEC.md §14: the test DB is real Drizzle/PGlite, so tests seed and read rows
-// with Drizzle statements (the old in-memory array/Map accessors are gone).
-// These helpers keep the per-test seeding/assertion churn small.
 
 export type ProductRow = { id: string; stock: number; unitPrice: number };
 export type CartItemRow = { productId: string; qty: number; unitPrice: number };
@@ -237,12 +233,12 @@ export interface CommerceScenarioEnhancedOptions extends CommerceScenarioRequest
 }
 
 const commerceOrigin = 'https://commerce.test';
-const cartPageTargets = 'cart-badge=cart; product-grid=productGrid; order-history=orderHistory';
+const cartPageTargets = ['cart-badge=cart', 'product-grid=productGrid', 'order-history=orderHistory'];
 const cartPageLiveTargets = [
   'cart-badge#components/cart-badge/cart-badge:{}',
   'product-grid#components/product-grid/product-grid:{}',
   'order-history#components/order-history/order-history:{}',
-].join('; ');
+];
 
 export function createCommerceScenarioClient(
   shell = createCommerceAppShell(),
@@ -347,20 +343,19 @@ export function createCommerceScenarioClient(
   ): Promise<Response> {
     const targetHeaders =
       options.target === 'form'
-        ? {
-            'Kovo-Form-Target': 'product-grid',
-            'Kovo-Live-Targets': cartPageLiveTargets,
-            'Kovo-Targets': 'product-grid=productGrid',
-          }
-        : {
-            'Kovo-Live-Targets': cartPageLiveTargets,
-            'Kovo-Targets': cartPageTargets,
-          };
+        ? enhancedMutationHeaders({
+            formTarget: 'product-grid',
+            liveTargets: cartPageLiveTargets,
+            targets: ['product-grid=productGrid'],
+          })
+        : enhancedMutationHeaders({
+            liveTargets: cartPageLiveTargets,
+            targets: cartPageTargets,
+          });
     return postForm('/_m/cart/add', await addToCartFields(input), {
       ...options,
       headers: {
         ...headersRecord(options.headers),
-        'Kovo-Fragment': 'true',
         referer: `${commerceOrigin}/cart`,
         ...targetHeaders,
       },

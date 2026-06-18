@@ -170,6 +170,8 @@ export interface MutationDefinition<
   ) => Promise<Value | MutationFail> | Value | MutationFail;
   input: InputSchema;
   key: Key;
+  /** Mutation-local success redirect policy for dynamic POST-redirect-GET targets. */
+  redirectTo?: string | ((result: MutationSuccess<Value, InferSchema<InputSchema>>) => string);
   registry?: MutationRegistry;
   transaction?: <Result>(
     request: Request,

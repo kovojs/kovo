@@ -33,6 +33,30 @@ export function firstSetCookiePair(source: HeaderSource): string {
   return cookiePair(setCookieValues(source)[0]);
 }
 
+/** Options for {@link enhancedMutationHeaders}; targets follow the mutation wire protocol in SPEC.md §9.1. */
+export interface EnhancedMutationHeaderOptions {
+  formTarget?: string;
+  liveTargets?: readonly string[] | string;
+  targets?: readonly string[] | string;
+}
+
+/** Build the enhanced-mutation request headers used by app scenario tests (SPEC.md §9.1). */
+export function enhancedMutationHeaders(
+  options: EnhancedMutationHeaderOptions = {},
+): Record<string, string> {
+  return {
+    'Kovo-Fragment': 'true',
+    ...(options.formTarget === undefined ? {} : { 'Kovo-Form-Target': options.formTarget }),
+    'Kovo-Live-Targets': headerList(options.liveTargets),
+    'Kovo-Targets': headerList(options.targets),
+  };
+}
+
 function isHeaders(source: HeaderSource): source is Headers {
   return typeof (source as Headers | undefined)?.get === 'function';
+}
+
+function headerList(value: readonly string[] | string | undefined): string {
+  if (value === undefined) return '';
+  return typeof value === 'string' ? value : value.join('; ');
 }

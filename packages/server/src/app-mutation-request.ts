@@ -91,6 +91,7 @@ export async function handleAppMutationRequest(
     rawInput,
     redirectTo:
       mutationResponseOptions?.redirectTo ??
+      mutation.redirectTo ??
       mutation.defaultRedirectTo ??
       defaultMutationRedirectTo(mutationRequest, appRequestUrl(sourceUrl)),
     ...(mutationResponseOptions?.renderFailureFragment === undefined

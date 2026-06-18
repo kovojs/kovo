@@ -19,10 +19,7 @@ import {
   commerceCsrf,
   commerceSignIn,
 } from './app.js';
-import {
-  commerceClientModuleHref,
-  createCommerceAppShell,
-} from './generated/app-shell.kovo-route.js';
+import { createCommerceAppShell } from './generated/app-shell.kovo-route.js';
 
 let server: Server | undefined;
 
@@ -48,7 +45,7 @@ afterEach(async () => {
 });
 
 describe('commerce app shell HTTP entry', () => {
-  it('serves the commerce cart document, query endpoint, and client module over node:http', async () => {
+  it('serves the commerce cart document and query endpoint over node:http', async () => {
     const errors: unknown[] = [];
     const shell = createCommerceAppShell({
       onError(error) {
@@ -73,11 +70,6 @@ describe('commerce app shell HTTP entry', () => {
     const query = await fetch(`${origin}/_q/cart`);
     expect(query.status).toBe(200);
     expect(kovoQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 0 }]);
-
-    const clientModule = await fetch(`${origin}${commerceClientModuleHref}`);
-    expect(clientModule.status).toBe(200);
-    expect(clientModule.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
-    await expect(clientModule.text()).resolves.toContain('Commerce$markReady');
   });
 
   it('serves every commerce route as no-JS full HTML documents', async () => {

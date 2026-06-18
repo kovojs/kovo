@@ -5,12 +5,6 @@ import { domain } from '@kovojs/server';
 import type { CommerceDb } from './db.js';
 import { cartItems, orders, products } from './schema.js';
 
-// SPEC.md §10.2 / §11.1: typed reads declared once. Each loader INLINES its
-// Drizzle select inside the `query(...)` body so the static extractor reads the
-// real query shape (rowset, keys, aggregates, cursor) straight from this source
-// — the derived-optimism transforms in generated/optimistic/ are produced from
-// these shapes paired with the mutation handlers, never hand-authored.
-
 export interface CartQueryResult {
   count: number;
 }
@@ -44,8 +38,6 @@ export interface CommerceQueryRequest {
   session?: { id?: string; user?: { id?: string } | null } | null;
 }
 
-// SPEC.md §10.1: the example keeps its query domains next to the queries and
-// mutations that use them, instead of splitting them into a separate helper.
 export const cart = domain('cart');
 export const order = domain('order');
 export const product = domain('product');
@@ -82,9 +74,6 @@ export const productGridQuery = query('productGrid', {
       .where(after ? gt(products.id, after) : undefined)
       .orderBy(products.id)
       .limit(pageSize);
-    // `items` is the directly-returned select (the extractor reads it as the
-    // page rowset). The cursor is a separate existence probe so an exact-fit
-    // last page reports no next page (rather than a dangling cursor).
     const last = items.at(-1);
     const more = last
       ? await db.select({ id: products.id }).from(products).where(gt(products.id, last.id)).limit(1)
@@ -104,12 +93,8 @@ export const orderHistoryQuery = query('orderHistory', {
   async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<OrderHistoryResult> {
     const db = requireCommerceQueryDb(context);
     const userId = requireCommerceQueryUserId(context);
-    // No ORDER BY: orders are an append-only log, so the derived optimism can
-    // push the newly-inserted order onto the end (a sort key with a placeholder
-    // id would make the insert position ambiguous → a §10.5 punt instead). The
-    // WHERE user_id = $userId clause keeps the rowset scoped to the session user
-    // (the static extractor reads this filtered shape directly — same pattern as
-    // productGrid's conditional WHERE).
+    // Orders are an append-only log. The user filter keeps the rowset scoped to
+    // the authenticated session.
     const items = await db
       .select({
         id: orders.id,

@@ -2,11 +2,9 @@
 import {
   layout,
   route,
-  type CsrfValidationOptions,
   type ServerErrorHandler,
 } from '@kovojs/server';
 import { ErrorBoundary } from '@kovojs/core';
-import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 import {
   createApp,
   createRequestHandler,
@@ -17,7 +15,6 @@ import { toNodeHandler, type NodeRequestHandler } from '@kovojs/server/app-shell
 
 import {
   addToCart,
-  commerceAuthCsrf,
   commerceMessages,
   commerceSessionProvider,
   commerceSignIn,
@@ -46,28 +43,6 @@ export interface CommerceAppShell {
   nodeHandler: NodeRequestHandler;
   requestHandler: RequestHandler;
 }
-
-const clientModules = createMemoryVersionedClientModuleRegistry();
-const shellCommerceAuthCsrf: CsrfValidationOptions<Request> = {
-  field: commerceAuthCsrf.field,
-  secret: commerceAuthCsrf.secret,
-  sessionId(request) {
-    return commerceAuthCsrf.sessionId(request as CommerceShellRequest);
-  },
-};
-
-export const commerceClientModuleHref = clientModules.put({
-  path: '/c/commerce.client.js',
-  source: [
-    'export function Commerce$markReady(event) {',
-    '  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : event.target;',
-    '  const root = target instanceof HTMLElement ? target.closest("[data-commerce-shell]") : null;',
-    '  if (root) root.setAttribute("data-commerce-ready", "true");',
-    '}',
-    '',
-  ].join('\n'),
-  version: 'commerce-r7',
-});
 
 function CommerceCartShell({ children }: { children?: unknown }): string {
   return (
@@ -138,23 +113,8 @@ export const commerceLoginRoute = route('/login', {
 export function createCommerceAppShell(options: CommerceAppShellOptions = {}): CommerceAppShell {
   const db = options.db ?? createCommerceDb();
   const app: KovoApp<CommerceSession> = createApp<CommerceSession, CommerceDb>({
-    clientModules,
     db: () => db,
     document: { lang: 'en-US' },
-    mutationResponses: {
-      [commerceSignIn.key]: () => {
-        return {
-          csrf: shellCommerceAuthCsrf,
-          redirectTo: (result) => authRedirectTo(result.value),
-        };
-      },
-      [commerceSignOut.key]: () => {
-        return {
-          csrf: shellCommerceAuthCsrf,
-          redirectTo: (result) => authRedirectTo(result.value),
-        };
-      },
-    },
     mutations: [addToCart, commerceSignIn, commerceSignOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     renderRoute(value) {
@@ -177,15 +137,6 @@ function routeValueToHtml(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === undefined || value === null) return '';
   return JSON.stringify(value);
-}
-
-function authRedirectTo(value: unknown): string {
-  if (typeof value === 'object' && value !== null && 'redirectTo' in value) {
-    const redirectTo = value.redirectTo;
-    if (typeof redirectTo === 'string') return redirectTo;
-  }
-
-  return '/cart';
 }
 
 export const commerceAppShell = createCommerceAppShell();

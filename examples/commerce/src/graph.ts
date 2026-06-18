@@ -14,9 +14,6 @@ export function commerceCartPageMeta(cart: CommerceGraphCartSummary) {
   };
 }
 
-// SPEC.md §10.2/§11.2: commerce graph facts are declared once and consumed by
-// both the runtime example and generated acceptance artifacts. Component and
-// page query facts are joined in scripts/emit-graph.mjs from compiler output.
 export function commerceGraphDeclarations(
   cart: CommerceGraphCartSummary,
   queries: readonly InvalidationQueryInput[],
@@ -40,9 +37,6 @@ export function commerceGraphDeclarations(
         writes: ['auth'],
       },
     ],
-    // SPEC.md §10.5: cart/add is fully compiler-derived (see generated/optimistic/
-    // cart-add.ts). All three invalidated queries are `derived` with derivation
-    // metadata; zero unhandled KV310, zero punts.
     optimistic: [
       { derivation: { status: 'derived' }, mutation: 'cart/add', query: 'cart', status: 'derived' },
       {

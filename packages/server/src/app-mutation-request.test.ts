@@ -63,6 +63,34 @@ describe('server app mutation request boundary', () => {
     expect(response.headers.get('location')).toBe('/cart');
   });
 
+  it('uses mutation-level dynamic redirectTo without an app-authored response switch', async () => {
+    const signIn = mutation('auth/sign-in', {
+      csrf: false,
+      input: s.object({ next: s.string() }),
+      redirectTo: (result) => (result.value as { redirectTo: string }).redirectTo,
+      handler(input) {
+        return { redirectTo: input.next, status: 'signed-in' };
+      },
+    });
+    const app = createApp({ mutations: [signIn] });
+    const form = new FormData();
+    form.set('next', '/account');
+    const request = new Request('https://shop.example.test/_m/auth/sign-in', {
+      body: form,
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(
+      app,
+      request,
+      new URL(request.url),
+      'auth/sign-in',
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/account');
+  });
+
   it('resolves the app session once before mutation response options and guarded handlers', async () => {
     const seen: string[] = [];
     let sessionReads = 0;

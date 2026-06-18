@@ -252,11 +252,6 @@ export const addToCart = mutation('cart/add', {
   transaction(request: CommerceRequest, run) {
     return request.db.transaction((tx) => run({ ...request, db: tx as unknown as CommerceDb }));
   },
-  // SPEC.md §10.5 Stage 1: the static extractor lowers these real Drizzle writes
-  // into the symbolic effect IR (insert cart_items{qty}, insert orders{…}, update
-  // products SET stock = stock - quantity WHERE id = productId). Destructuring the
-  // input binds `productId`/`quantity` to `$input` paths; `const db = request.db`
-  // is the proven Drizzle receiver the write extractor follows.
   async handler({ productId, quantity }, request: CommerceRequest, context) {
     const currentSession = commerceSession.parse(request);
     const db = request.db;

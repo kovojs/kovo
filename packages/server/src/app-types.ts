@@ -166,6 +166,7 @@ export interface AppMutationDeclaration<AppRequest = unknown> {
   ) => unknown;
   input?: Schema<unknown>;
   key: string;
+  redirectTo?: string | ((result: MutationSuccess<any, any>) => string);
   registry?: unknown;
   transaction?: <Result>(
     request: any,

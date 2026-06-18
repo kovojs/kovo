@@ -28,31 +28,34 @@ that still make the simplified Commerce example feel like a test fixture.
     exits 1; `examples/commerce/src/app-test-helpers.ts` imports the authored
     `./app-shell.js` helper instead of generated route IR. `packages/compiler/src/compile-component.test.ts`
     covers KV235 for app-authored app-local generated imports.
-- [ ] Commerce app code keeps direct framework/wire helpers out of the happy
+- [x] Commerce app code keeps direct framework/wire helpers out of the happy
   path: no app-authored `renderMutationEndpointResponse`,
   `renderComponentMutationFailure`, `componentMutationFailureSlots`,
   `MutationWireHeaderSource`, or direct `Kovo-*` header construction outside
   tests or package-level fixtures.
-  - Evidence to add: no-match checks over `examples/commerce/src` excluding
-    tests and generated artifacts, plus focused app-shell tests for browse,
-    login/logout, add-to-cart success, and add-to-cart failure.
-- [ ] Commerce tests are scenario tests, not proof matrices: keep route rendering,
+  - Evidence: `rg -n "Kovo-|renderMutationEndpointResponse|renderComponentMutationFailure|componentMutationFailureSlots|MutationWireHeaderSource|mutationResponses" examples/commerce/src --glob '!**/*.test.ts' --glob '!**/generated/**'`
+    exits 1. Enhanced scenario header construction now lives in
+    `packages/test/src/headers.ts`, verified with
+    `corepack pnpm exec vitest run packages/test/src/headers.test.ts examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.auth.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/app.rendering.test.ts`.
+- [x] Commerce tests are scenario tests, not proof matrices: keep route rendering,
   auth/session, no-JS add-to-cart, enhanced add-to-cart, and one graph/explain
   smoke; move generated-IR freshness, derived-optimism commuting diagrams,
   app-shell middleware command matrices, delta-wire internals, and broad graph
   source-truth assertions to package/conformance tests.
-  - Evidence to add: an inventory table mapping each removed Commerce test file
-    or assertion group to its new package/conformance test.
-- [ ] Commerce remains an end-to-end demo of `SPEC.md` §6.3 typed mutation
+  - Evidence: the inventory table maps each removed assertion group to package
+    owners. Focused Commerce scenario tests pass as
+    `corepack pnpm exec vitest run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.auth.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/app.rendering.test.ts examples/commerce/src/enhanced-navigation.test.ts`.
+- [x] Commerce remains an end-to-end demo of `SPEC.md` §6.3 typed mutation
   forms, §9.1 enhanced mutation round-trips, §9.2 expected failures vs
   unexpected errors, §9.5 request shell provisioning, and §10.5 derived
   optimism, but package tests own the exhaustive proof for each contract.
-  - Evidence to add: focused Commerce tests plus package-level tests named under
-    each moved contract.
+  - Evidence: Commerce scenario tests above cover typed forms, no-JS/enhanced
+    add-to-cart, auth/session shell dispatch, and visible failures. Package
+    owners pass as `corepack pnpm exec vitest run packages/server/src/live-target-renderer.test.tsx packages/server/src/component-render.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/mutation-response.test.ts packages/test/src/headers.test.ts packages/runtime/src/mutation-targets.test.ts packages/runtime/src/fragment-targets.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts`.
 
 ## Track A: Readable Commerce
 
-- [ ] Remove legacy direct-render entry points from Commerce app source or move
+- [x] Remove legacy direct-render entry points from Commerce app source or move
   them behind package/conformance fixtures.
   - Current friction: `examples/commerce/src/app.ts` still exports direct helpers
     such as `renderCartPage`, `renderProductGrid`, `submitAddToCart`, and
@@ -60,9 +63,10 @@ that still make the simplified Commerce example feel like a test fixture.
   - Remedy: make `createCommerceAppShell()` the normal execution path for the
     example. Keep tiny testing helpers only when they model user-visible flows;
     move low-level endpoint-helper tests to server package tests.
-  - Evidence to add: Commerce scenario tests use `createCommerceAppShell()` or
-    HTTP-style request handlers for app behavior; low-level helper tests have
-    package-level replacements.
+  - Evidence: `rg -n "renderCartPage|renderProductGrid\\(|renderProductGridPageFragment|renderProductGridDeferredStream|renderOrderHistory\\(|submitAddToCart|submitCommerceSignInNoJs|submitCommerceSignOutNoJs" examples/commerce/src --glob '!**/generated/**'`
+    exits 1. Commerce rendering and mutation behavior run through
+    `createCommerceScenarioClient()` / `createCommerceAppShell()` in the focused
+    Commerce scenario test command above.
 - [x] Make `ProductGrid` authoring local and ordinary.
   - Current friction: `ProductGridRenderSlots`, request threading, explicit
     `componentMutationFailureSlots`, and `renderAddToCartMutationFailure*`
@@ -109,13 +113,14 @@ that still make the simplified Commerce example feel like a test fixture.
     passing. Generated `optimistic/cart-add.ts` imports generated
     `live-targets.ts`, keeping enhanced live-target registration inside generated
     runtime artifacts.
-- [ ] Reduce Commerce-local commentary that explains framework internals.
+- [x] Reduce Commerce-local commentary that explains framework internals.
   - Current friction: many source comments are conformance notes about generated
     stamps, static extraction, and graph behavior rather than app intent.
   - Remedy: keep comments that clarify app domain behavior; move framework
     explanations to `SPEC.md`, docs, package tests, or conformance fixture names.
-  - Evidence to add: source comments in `examples/commerce/src` mostly describe
-    commerce behavior, not why the compiler/runtime works.
+  - Evidence: framework-internal commentary was removed from Commerce app,
+    query, schema, graph, and component source. `rg -n "static extractor|lowered|compiler derives|generated/optimistic|SPEC.md section|kovo-fragment-target" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts'`
+    exits 1.
 
 ## Track B: Move Proof Burden
 
@@ -139,7 +144,7 @@ that still make the simplified Commerce example feel like a test fixture.
 | Derived optimism commuting diagrams from `examples/commerce/src/derivation-commuting.test.ts` | `packages/conformance-fixtures/src/derivation-fixtures.test.ts`, `packages/drizzle/src/derive.test.ts`, and `packages/test/src/derivation-pglite.test.ts` | `corepack pnpm exec vitest run packages/conformance-fixtures/src/derivation-fixtures.test.ts packages/drizzle/src/derive.test.ts packages/test/src/derivation-pglite.test.ts` | `SPEC.md` §10.5 assigns algebra soundness to the deriver; Commerce only needs the explain summary `total=3 derived=3`. |
 | Query-delta internals from `examples/commerce/src/queries-delta.test.ts` | `packages/server/src/mutation-delta.test.ts` and `packages/runtime/src/apply-mutation-response-delta.test.ts` | `corepack pnpm exec vitest run packages/runtime/src/apply-mutation-response-delta.test.ts packages/server/src/mutation-delta.test.ts` | `SPEC.md` §9.1.1 delta selection, merge, and build-token fallback are protocol/runtime behavior, not Commerce scenario behavior. |
 | App-shell command matrix and Vite delegation in `examples/commerce/src/app-shell.test.ts` | `packages/server/src/vite-dev-middleware.test.ts`, `packages/server/src/node.test.ts`, and server app dispatch tests | `corepack pnpm exec vitest run packages/server/src/vite-dev-middleware.test.ts packages/server/src/node.test.ts examples/commerce/src/app-shell.test.ts` | `SPEC.md` §9.5 makes request-shell dispatch and dev middleware package behavior; Commerce now keeps HTTP user-flow smokes only. |
-| Fragment header grammar and live-target internals in Commerce shell/add-to-cart tests | `packages/runtime/src/mutation-targets.test.ts`, `packages/runtime/src/fragment-targets.test.ts`, `packages/server/src/live-target-registry.test.ts`, and server mutation wire tests | Pending | `SPEC.md` §9.1 owns `Kovo-Targets` / `Kovo-Live-Targets`; app examples should assert visible cart, stock, order, and validation behavior. |
+| Fragment header grammar and live-target internals in Commerce shell/add-to-cart tests | `packages/test/src/headers.test.ts`, `packages/runtime/src/mutation-targets.test.ts`, `packages/runtime/src/fragment-targets.test.ts`, `packages/server/src/live-target-registry.test.ts`, `packages/server/src/mutation-wire.test.ts`, and `packages/server/src/mutation-response.test.ts` | `corepack pnpm exec vitest run packages/test/src/headers.test.ts packages/runtime/src/mutation-targets.test.ts packages/runtime/src/fragment-targets.test.ts packages/server/src/live-target-registry.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts` | `SPEC.md` §9.1 owns `Kovo-Targets` / `Kovo-Live-Targets`; app examples assert visible cart, stock, order, and validation behavior while `@kovojs/test` owns scenario header construction. |
 | Expected vs unexpected fragment error-boundary proof using `renderFaults` | `packages/server/src/live-target-renderer.test.tsx`, `packages/server/src/component-render.test.tsx`, `packages/server/src/route-jsx.test.tsx`, and `packages/server/src/mutation-response.test.ts` | `corepack pnpm exec vitest run packages/server/src/live-target-renderer.test.tsx packages/server/src/component-render.test.tsx packages/server/src/route-jsx.test.tsx packages/server/src/mutation-response.test.ts` | `SPEC.md` §9.2 makes expected failure forms typed and unexpected render failures server/component behavior; Commerce request types no longer carry test-only fault hooks. |
 
 - [x] Move generated component/route IR freshness checks out of Commerce tests.
@@ -183,8 +188,8 @@ that still make the simplified Commerce example feel like a test fixture.
   - Evidence: deleted `examples/commerce/src/queries-delta.test.ts`; verified
     query-delta package ownership with
     `corepack pnpm exec vitest run packages/runtime/src/apply-mutation-response-delta.test.ts packages/server/src/mutation-delta.test.ts`.
-    Header-grammar cleanup in Commerce shell tests remains tracked by the
-    pending inventory rows above.
+    Header-grammar and live-target internals are covered by the package-owner
+    command in the inventory table above.
 - [x] Move unexpected-error boundary proof to component/server tests.
   - SPEC link: `SPEC.md` §9.2 separates expected mutation failures from
     unexpected errors.
@@ -223,7 +228,7 @@ that still make the simplified Commerce example feel like a test fixture.
     `rg -n "from './generated/|from \"\\./generated/" examples/commerce/src --glob '!**/generated/**' --glob '!**/*.test.ts'`
     exits 1 with no matches. `corepack pnpm exec vitest run packages/compiler/src/compile-component.test.ts --testNamePattern "app-local generated|non-public Kovo|dynamic imports"`
     passes, covering KV235 for app-authored app-local generated imports.
-- [ ] **Deficiency 2: mutation failure response policy is too broad and too
+- [x] **Deficiency 2: mutation failure response policy is too broad and too
   manual.**
   - Current symptom: `createCommerceAppShell()` has a key switch for sign-in,
     sign-out, and add-to-cart response policy; direct helpers repeat
@@ -259,6 +264,15 @@ that still make the simplified Commerce example feel like a test fixture.
     callbacks. Commerce has no broad app-authored mutation response dispatcher
     for ordinary success/failure behavior; any remaining app-level mutation
     response hook is documented as an escape hatch and covered by package tests.
+  - Evidence: `packages/server/src/mutation.ts` and
+    `packages/server/src/app-mutation-request.ts` now support mutation-local
+    dynamic `redirectTo`, and `@kovojs/better-auth` credential mutations declare
+    `redirectTo: (result) => result.value.redirectTo`. Commerce
+    `createCommerceAppShell()` no longer has `mutationResponses`. Verified with
+    `corepack pnpm exec vitest run packages/server/src/app-mutation-request.test.ts packages/server/src/app.test.ts packages/better-auth/src/index.credential-mutations.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.auth.test.ts examples/commerce/src/app.add-to-cart.test.ts`,
+    `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`, and
+    `rg -n "mutationResponses|commerceClientModuleHref|createMemoryVersionedClientModuleRegistry|CsrfValidationOptions|authRedirectTo|clientModules," examples/commerce/src/app-shell.tsx examples/commerce/src/generated/app-shell.kovo-route.tsx`
+    exiting 1.
 - [x] **Deficiency 3: request-scoped form data and CSRF are exposed as component
   slots.**
   - Current symptom: `ProductGridRenderSlots` carries `request` and
@@ -369,9 +383,9 @@ that still make the simplified Commerce example feel like a test fixture.
     `submitCommerceSignOutNoJs`, or calls `renderMutationEndpointResponse`.
     Verified with
     `rg -n "renderMutationEndpointResponse|MutationWireHeaderSource|submitAddToCart|submitCommerceSignInNoJs|submitCommerceSignOutNoJs|componentMutationFailureSlots|renderComponentMutationFailure|ProductGridRenderSlots|renderAddToCartMutationFailure" examples/commerce/src --glob '!**/*.test.ts' --glob '!**/generated/**'`
-    exiting 1. Remaining `Kovo-*` header construction is confined to the
-    Commerce scenario helper until a framework test client owns enhanced
-    request simulation.
+    exiting 1. Commerce scenario tests now use
+    `enhancedMutationHeaders()` from `@kovojs/test/headers`, so generated
+    enhanced request header names are package-owned.
 - [x] **Deficiency 6: graph and derivation facts still require example-local
   generated plumbing.**
   - Current symptom: Commerce app exports `commerceTouchGraph`,
@@ -400,7 +414,7 @@ that still make the simplified Commerce example feel like a test fixture.
     exits 1 with no matches; Commerce graph smoke reads generated graph JSON
     from the test, and app runtime modules no longer re-export generated
     graph/touch/optimism facts.
-- [ ] **Deficiency 7: app-shell setup still teaches integration internals.**
+- [x] **Deficiency 7: app-shell setup still teaches integration internals.**
   - Current symptom: Commerce app-shell source constructs a memory client module
     registry, exposes a manual client module, casts request types for CSRF, and
     tests Vite plugin delegation details.
@@ -428,6 +442,13 @@ that still make the simplified Commerce example feel like a test fixture.
     server/app-shell tests.
   - Acceptance: Commerce app-shell source reads like app setup; package tests
     cover client-module registry and Vite integration.
+  - Evidence: `examples/commerce/src/app-shell.tsx` no longer constructs a
+    memory client-module registry, exports a manual client module, or declares
+    app-authored `mutationResponses`; package-level app-shell tests own Node,
+    client-module, and Vite behavior. Verified with
+    `corepack pnpm exec vitest run packages/server/src/vite-dev-middleware.test.ts packages/server/src/node.test.ts examples/commerce/src/app-shell.test.ts`,
+    `corepack pnpm exec vitest run packages/server/src/app-mutation-request.test.ts packages/server/src/app.test.ts packages/better-auth/src/index.credential-mutations.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/app.auth.test.ts examples/commerce/src/app.add-to-cart.test.ts`,
+    and the no-match app-shell scan in Deficiency 2.
 
 ## Verification Gate
 
@@ -445,9 +466,7 @@ that still make the simplified Commerce example feel like a test fixture.
 - [x] Run root gates before marking this plan complete:
   `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`,
   `node scripts/api-surface-gate.mjs`, and `git diff --check`.
-  - Evidence: latest verification below records all three commands passing for
-    this Track B slice; the plan remains open for pending error-boundary proof
-    relocation.
+  - Evidence: latest verification below records all three commands passing.
 
 Latest verification:
 

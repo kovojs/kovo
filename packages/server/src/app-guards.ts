@@ -146,6 +146,11 @@ function isMutationDeclarations(value: unknown): value is KovoApp['mutations'] {
           isOptionalCsrfOptions(mutation.csrf)) &&
         (mutation.errors === undefined || isRecord(mutation.errors)) &&
         isOptionalFunction(mutation.guard) &&
+        (mutation.defaultRedirectTo === undefined ||
+          typeof mutation.defaultRedirectTo === 'string') &&
+        (mutation.redirectTo === undefined ||
+          typeof mutation.redirectTo === 'string' ||
+          typeof mutation.redirectTo === 'function') &&
         (mutation.registry === undefined || isRecord(mutation.registry)) &&
         isOptionalFunction(mutation.transaction),
     )

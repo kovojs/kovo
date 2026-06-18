@@ -1138,6 +1138,7 @@ export function betterAuthSignInEmailMutation<
     ),
     errors: betterAuthCredentialMutationErrors,
     input: betterAuthSignInEmailInput,
+    redirectTo: (result) => result.value.redirectTo,
     async handler(input, request, context) {
       try {
         const response = await auth.api.signInEmail({
@@ -1199,6 +1200,7 @@ export function betterAuthSignUpEmailMutation<
     ),
     errors: betterAuthCredentialMutationErrors,
     input: betterAuthSignUpEmailInput,
+    redirectTo: (result) => result.value.redirectTo,
     async handler(input, request, context) {
       try {
         const response = await auth.api.signUpEmail({
@@ -1257,6 +1259,7 @@ export function betterAuthSignOutMutation<
   return mutation(options.key ?? ('auth/sign-out' as Key), {
     ...credentialMutationDefinitionOptions(options, betterAuthCredentialMutationTouches.signOut),
     input: betterAuthSignOutInput,
+    redirectTo: (result) => result.value.redirectTo,
     async handler(_input, request, context) {
       const response = await auth.api.signOut({
         asResponse: true,
