@@ -234,6 +234,38 @@ export const uiTheme = Object.freeze({
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('diagnoses unresolved token-like style values instead of dropping CSS silently', () => {
+    const source = `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+import { theme } from './theme.js';
+
+const base = style.create({
+  root: {
+    backgroundColor: theme.color.primary,
+  },
+}, { namespace: 'broken', source: 'broken-token.tsx' });
+
+export const Button = component({
+  render: () => <button style={base.root}>Buy</button>,
+});
+`;
+    const model = parseComponentModule('components/broken-token.tsx', source);
+    const result = extractKovoStyles('components/broken-token.tsx', source, model, 'Button');
+
+    expect(result.css).toBeNull();
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV236',
+        fileName: 'components/broken-token.tsx',
+        help: expect.stringContaining(
+          'the style extractor only accepts literals, same-file defineVars/createTheme values, and public @kovojs/style theme token references',
+        ),
+        message: 'Static style extraction could not prove style.create values.',
+      }),
+    ]);
+  });
+
   it('composes generated StyleX classes with authored static class writers', () => {
     const result = compileComponentModule({
       fileName: 'components/button.tsx',

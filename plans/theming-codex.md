@@ -184,16 +184,22 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
     `style.tokens.sys.color.onPrimary` imported from root `@kovojs/style` lower
     into atomic CSS. It also proves a bounded same-package static adapter import
     (`./theme.js`) can resolve public token aliases for package component CSS.
-- [ ] **B4. Add diagnostics for unresolved token expressions.** If a component style references a
+- [x] **B4. Add diagnostics for unresolved token expressions.** If a component style references a
       token-like expression the extractor cannot prove static, emit a clear diagnostic rather than
       silently dropping CSS.
-- [ ] **B5. Tests for cross-file and package extraction.** Cover app-local tokens, imported public
+  - Evidence: `packages/compiler/src/style.test.ts` asserts unresolved
+    `theme.color.primary` in a `style.create(...)` object yields the static style
+    extraction teaching diagnostic instead of a silent missing CSS asset.
+    Verification: `corepack pnpm exec vitest --run packages/compiler/src/style.test.ts
+    packages/compiler/src/package-styles.test.ts`.
+- [x] **B5. Tests for cross-file and package extraction.** Cover app-local tokens, imported public
       Material tokens, package component CSS extraction, theme class CSS, and failure diagnostics.
-  - Partial evidence: `packages/compiler/src/style.test.ts` covers same-file
-    vars/themes, root public token imports, and one-level same-package static
-    token adapters; `packages/compiler/src/package-styles.test.ts` proves
-    `@kovojs/ui` package CSS extraction still emits migrated component CSS. Gap:
-    leave open until B4 has a dedicated unresolved token diagnostic test.
+  - Evidence: `packages/compiler/src/style.test.ts` covers same-file
+    vars/themes, root public token imports, one-level same-package static token
+    adapters, and unresolved token diagnostics; `packages/compiler/src/package-styles.test.ts`
+    proves `@kovojs/ui` package CSS extraction still emits migrated component
+    CSS. Verification: `corepack pnpm exec vitest --run
+    packages/compiler/src/style.test.ts packages/compiler/src/package-styles.test.ts`.
 
 ## Part C — UI component migration
 

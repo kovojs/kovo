@@ -108,15 +108,27 @@ export function extractKovoStyles(
   }
 
   const environment = collectStyleEnvironment(fileName, source, styleImports, importedStaticValues);
-  if (environment.bindings.size === 0 && environment.rules.length === 0) {
+  if (
+    environment.bindings.size === 0 &&
+    environment.rules.length === 0 &&
+    environment.diagnostics.length === 0
+  ) {
     return emptyStyleExtraction();
   }
 
-  const lowered = styleAttributeReplacements(model, environment.bindings, componentName, {
-    ...options,
-    fileName,
-    source,
-  });
+  const lowered =
+    environment.bindings.size > 0
+      ? styleAttributeReplacements(model, environment.bindings, componentName, {
+          ...options,
+          fileName,
+          source,
+        })
+      : {
+          diagnostics: [],
+          dynamic: [],
+          handledSpans: [],
+          replacements: [],
+        };
   const css = environment.rules.length > 0 ? emitAtomicCss(environment.rules) : null;
 
   return {
