@@ -151,12 +151,20 @@ through client navigation.
     covers unchanged-prefix preservation and changed leaf morphing; `packages/runtime/src/inline-loader-navigation.test.ts`
     covers divergent layout chrome body replacement from the parsed target
     document across all inline installer artifacts.
-- [ ] **Island lifecycle follows the existing morph rules.**
+- [x] **Island lifecycle follows the existing morph rules.**
   - Islands inside preserved segments keep DOM identity and client state. Islands
     removed by a morphed segment have `ctx.signal` aborted. Islands inserted by a
     morph remain inert until their declared trigger fires and are observed for
     `on:visible`, `on:idle`, and `on:load` exactly like mutation fragments.
-  - Evidence: pending island survival/removal/insert tests.
+  - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run
+    packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63354`
+    passed and proves preserved layout island signals survive, removed page
+    island signals abort, and inserted page `on:load`/`on:idle`/`on:visible`
+    triggers start once after enhanced navigation. `pnpm exec vitest --run
+    packages/runtime/src/inline-loader-delegated.test.ts
+    packages/runtime/src/delegated-loader-lifecycle.test.ts` is included in the
+    106-test runtime gate and proves the underlying ctx.signal reuse/disposal
+    contract.
 - [ ] **Duplicate IDREF and parser-stability guarantees remain intact.**
   - The enhanced path must not create duplicate ids between a persisted segment
     and a morphed segment, and it must preserve the KV225 parser-stability
@@ -187,7 +195,7 @@ through client navigation.
     SPEC must deliberately change that budget with acceptance evidence.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
     `node --experimental-strip-types - <<'NODE' ...` reported
-    `inline-loader-gzip=5340/8192`.
+    `inline-loader-gzip=5427/8192`.
 
 ## Implementation Plan
 
@@ -280,12 +288,13 @@ through client navigation.
     proves full-document fetch, compatible leaf morphing, and document shell
     updates; `packages/runtime/src/inline-loader-navigation.test.ts` proves
     build-token and non-HTML fallback. Remaining gap: unsupported shell drift.
-- [ ] **Segment persistence:** unchanged layout island/media state survives;
+- [x] **Segment persistence:** unchanged layout island/media state survives;
       changed layout or leaf segments morph from server-rendered target HTML.
-  - Evidence so far: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    proves unchanged layout persistence and changed leaf morphing; `packages/runtime/src/inline-loader-navigation.test.ts`
-    proves divergent layout body replacement. Remaining gap: island/media state
-    survival.
+  - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
+    proves unchanged layout persistence, changed leaf morphing, preserved layout
+    island signal survival, removed page island abort, and inserted page trigger
+    startup; `packages/runtime/src/inline-loader-navigation.test.ts` proves
+    divergent layout body replacement.
 - [ ] **Render-equivalence:** enhanced navigation DOM matches fresh full-load DOM
       after allowed browser-state normalization.
   - Evidence: pending.
@@ -307,4 +316,4 @@ through client navigation.
 - [x] **Loader budget:** inline loader remains within the SPEC budget or the SPEC
       budget change is explicitly accepted.
   - Evidence: `pnpm --filter @kovojs/runtime run check:inline-loader` passed and
-    the measured shipped source was `inline-loader-gzip=5340/8192`.
+    the measured shipped source was `inline-loader-gzip=5427/8192`.

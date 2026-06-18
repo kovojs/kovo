@@ -277,6 +277,7 @@ function installInlineKovoLoader(im) {
       const currentSegments = ns(doc.body);
       const nextSegments = ns(nextDoc.body);
       if (!nextSegments.length) throw Error();
+      let triggerRoot;
 
       let index = 0;
       for (
@@ -289,10 +290,13 @@ function installInlineKovoLoader(im) {
       );
 
       if (!currentSegments.length || index === 0) {
+        for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
         doc.body.replaceWith(nextDoc.body);
+        triggerRoot = doc.body;
       } else if (index < currentSegments.length && index < nextSegments.length) {
         for (const el of qa(currentSegments[index], '[kovo-c]')) el.a?.abort();
         m(currentSegments[index], nextSegments[index]);
+        triggerRoot = currentSegments[index];
       } else if (currentSegments.length !== nextSegments.length) {
         throw Error();
       }
@@ -308,6 +312,7 @@ function installInlineKovoLoader(im) {
       if (saved) globalThis.scrollTo?.(saved[0], saved[1]);
       else if (finalUrl.hash) doc.getElementById(finalUrl.hash.slice(1))?.scrollIntoView?.();
       else globalThis.scrollTo?.(0, 0);
+      if (triggerRoot) setTimeout(() => tr(triggerRoot));
       dispatchEvent(new CustomEvent('kovo:navigate', { detail: { url: finalUrl.href } }));
     } catch {
       if (navId === ni) ng(href);
@@ -450,6 +455,30 @@ function installInlineKovoLoader(im) {
   const trigger = (type, target) => {
     void dispatch({ target, type });
   };
+  const to = (el, type) => {
+    const key = '__kovo_' + type;
+    if (el[key]) return false;
+    el[key] = 1;
+    return true;
+  };
+  const tr = (root = doc) => {
+    root.querySelectorAll('[on\\:load]').forEach((el) => to(el, 'load') && trigger('load', el));
+    root
+      .querySelectorAll('[on\\:idle]')
+      .forEach((el) =>
+        to(el, 'idle') && (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el)),
+      );
+    if (globalThis.IntersectionObserver) {
+      const observer = new IntersectionObserver((entries) =>
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          observer.unobserve(entry.target);
+          trigger('visible', entry.target);
+        }),
+      );
+      root.querySelectorAll('[on\\:visible]').forEach((el) => to(el, 'visible') && observer.observe(el));
+    }
+  };
   for (const event of events) addEventListener(event, dispatch, { capture: true });
   // SPEC.md §4.4: synthesize delegated pointerenter/pointerleave from the bubbling
   // pointerover/pointerout pair, firing only when the pointer crosses the on:* element's
@@ -473,22 +502,7 @@ function installInlineKovoLoader(im) {
   // SPEC.md §4.7: declared triggers are legible in body markup, while the default
   // document emits the loader in <head>. Defer the scan one task so the parser can
   // continue into the body; event delegation above is installed immediately.
-  setTimeout(() => {
-    doc.querySelectorAll('[on\\:load]').forEach((el) => trigger('load', el));
-    doc
-      .querySelectorAll('[on\\:idle]')
-      .forEach((el) => (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el)),);
-    if (globalThis.IntersectionObserver) {
-      const observer = new IntersectionObserver((entries) =>
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          observer.unobserve(entry.target);
-          trigger('visible', entry.target);
-        }),
-      );
-      doc.querySelectorAll('[on\\:visible]').forEach((el) => observer.observe(el));
-    }
-  });
+  setTimeout(() => tr(doc));
 }
 `;
 }

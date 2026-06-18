@@ -4,10 +4,11 @@ import { installInlineKovoLoader } from './inline-loader.js';
 
 const initialUrl = location.href;
 let inlineLoaderInstalled = false;
+let inlineImportModule: (url: string) => Promise<Record<string, unknown>> = async () => ({});
 
 function installNavigationLoader(): void {
   if (inlineLoaderInstalled) return;
-  installInlineKovoLoader(async () => ({}));
+  installInlineKovoLoader((url) => inlineImportModule(url));
   inlineLoaderInstalled = true;
 }
 
@@ -30,6 +31,7 @@ function dispatchAnchorLikeClick(href: string): MouseEvent {
 afterEach(() => {
   document.head.innerHTML = '';
   document.body.replaceChildren();
+  inlineImportModule = async () => ({});
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   history.replaceState({}, '', initialUrl);
@@ -163,6 +165,89 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.querySelector('script[type="speculationrules"]')?.textContent).toContain(
       '/checkout',
     );
+  });
+
+  it('preserves layout island signals and starts inserted page triggers', async () => {
+    const layoutController = new AbortController();
+    const oldPageController = new AbortController();
+    const load = vi.fn();
+    const idle = vi.fn();
+    const visible = vi.fn();
+    inlineImportModule = async (url) => {
+      if (url === '/c/page.js') return { idle, load, visible };
+      return {};
+    };
+    vi.stubGlobal('requestIdleCallback', (callback: IdleRequestCallback) => {
+      callback({ didTimeout: false, timeRemaining: () => 0 });
+      return 1;
+    });
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class TestIntersectionObserver {
+        constructor(
+          private readonly callback: (
+            entries: Array<{ isIntersecting: boolean; target: Element }>,
+          ) => void,
+        ) {}
+
+        observe(target: Element): void {
+          this.callback([{ isIntersecting: true, target }]);
+        }
+
+        unobserve(): void {}
+      },
+    );
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Products</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<section id="layout-island" kovo-c="layout-shell">Layout</section>',
+      '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">',
+      '<article id="old-page-island" kovo-c="product-grid">Products</article>',
+      '</section>',
+      '</main>',
+    ].join('');
+    (
+      document.querySelector('#layout-island') as (Element & { a?: AbortController }) | null
+    )!.a = layoutController;
+    (
+      document.querySelector('#old-page-island') as (Element & { a?: AbortController }) | null
+    )!.a = oldPageController;
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>Cart</title>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+          '<section id="layout-island" kovo-c="layout-shell">Layout</section>',
+          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
+          '<article id="new-page-island" on:load="/c/page.js#load" on:idle="/c/page.js#idle" on:visible="/c/page.js#visible">Cart</article>',
+          '</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/cart', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    dispatchAnchorLikeClick('/cart');
+
+    await vi.waitFor(() => expect(document.title).toBe('Cart'));
+    await vi.waitFor(() => expect(visible).toHaveBeenCalledTimes(1));
+
+    expect(document.querySelector('#layout-island')).not.toBeNull();
+    expect(document.querySelector('#old-page-island')).toBeNull();
+    expect(document.querySelector('#new-page-island')).not.toBeNull();
+    expect(layoutController.signal.aborted).toBe(false);
+    expect(oldPageController.signal.aborted).toBe(true);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(idle).toHaveBeenCalledTimes(1);
   });
 
   it('collects mutation live targets from the post-navigation DOM', async () => {
