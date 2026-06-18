@@ -10,6 +10,8 @@ import {
 } from '@kovojs/headless-ui/slider';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface SliderStyleOverrides {
   input?: style.StyleInput;
   range?: style.StyleInput;
@@ -64,7 +66,7 @@ export interface SliderThumbProps extends SliderPartProps {
 export const sliderStyles = style.create(
   {
     input: {
-      accentColor: '#0a0a0a',
+      accentColor: uiTheme.color.accent,
       height: 8,
       width: '100%',
       '[data-orientation=vertical]': {
@@ -77,8 +79,8 @@ export const sliderStyles = style.create(
       },
     },
     range: {
-      backgroundColor: '#0a0a0a',
-      borderRadius: 9999,
+      backgroundColor: uiTheme.color.accent,
+      borderRadius: uiTheme.radius.full,
       display: 'block',
       height: '100%',
       '[data-orientation=vertical]': {
@@ -86,7 +88,7 @@ export const sliderStyles = style.create(
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
       rowGap: 8,
@@ -94,16 +96,16 @@ export const sliderStyles = style.create(
         opacity: 0.5,
       },
       '[data-invalid]': {
-        color: '#450a0a',
+        color: uiTheme.color.danger.foreground,
       },
       '[data-orientation=vertical]': {
         display: 'inline-grid',
       },
     },
     thumb: {
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
-      borderRadius: 9999,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.full,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
@@ -115,8 +117,8 @@ export const sliderStyles = style.create(
       },
     },
     track: {
-      backgroundColor: '#e5e5e5',
-      borderRadius: 9999,
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      borderRadius: uiTheme.radius.full,
       height: 8,
       overflow: 'hidden',
       position: 'relative',

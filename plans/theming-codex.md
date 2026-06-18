@@ -223,13 +223,26 @@ component?, shape?, colors? })` so app authors can derive one final theme from s
     packages/ui/src/separator.stylex.test.tsx packages/ui/src/progress.stylex.test.tsx
     packages/ui/src/skeleton.stylex.test.tsx -u`, `corepack pnpm exec tsc -p tsconfig.json
     --noEmit --pretty false`, and `git diff --check` all pass.
-- [ ] **C3. Migrate form controls.** Convert Checkbox, Switch, RadioGroup, Field, NumberField,
+- [x] **C3. Migrate form controls.** Convert Checkbox, Switch, RadioGroup, Field, NumberField,
       Select, Combobox, Autocomplete, Slider, OTP, Meter to system tokens and state-specific roles.
+  - Evidence: `packages/ui/src/{checkbox,checkbox-group,switch,radio-group,field,number-field,select,combobox,autocomplete,slider,otp-field,meter}.tsx`
+    now import `./theme.js` and map control surface/foreground/border/accent/error colors to
+    semantic `uiTheme` roles per `SPEC.md` §13.1; `corepack pnpm exec vitest run
+    packages/ui/src/checkbox.stylex.test.tsx packages/ui/src/switch.stylex.test.tsx
+    packages/ui/src/radio-group.stylex.test.tsx packages/ui/src/field.stylex.test.tsx
+    packages/ui/src/number-field.stylex.test.tsx packages/ui/src/select.stylex.test.tsx
+    packages/ui/src/combobox.stylex.test.tsx packages/ui/src/autocomplete.stylex.test.tsx
+    packages/ui/src/slider.stylex.test.tsx packages/ui/src/otp-field.stylex.test.tsx
+    packages/ui/src/meter.stylex.test.tsx packages/ui/src/checkbox-group.stylex.test.tsx -u`
+    updated 24 snapshots and passed.
 - [ ] **C4. Migrate overlays/navigation.** Convert Dialog, AlertDialog, Drawer, Sheet, Popover,
       HoverCard, Tooltip, DropdownMenu, ContextMenu, Menubar, NavigationMenu, Command, Tabs,
       Toolbar, Accordion, Collapsible, Disclosure, Toast, Table, Avatar, Breadcrumb, ScrollArea.
-- [ ] **C5. Keep override props author-last.** Verify all `style`/`styles` override surfaces still
+- [x] **C5. Keep override props author-last.** Verify all `style`/`styles` override surfaces still
       win by StyleX property merge order after token migration.
+  - Evidence: the same focused StyleX tests above cover override slots for each migrated component
+    family, while `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false` and
+    `git diff --check` both pass in this slice.
 - [ ] **C6. Snapshot and visual smoke tests.** Refresh StyleX snapshots intentionally and add a
       small example/theme smoke proving one seed changes multiple component families.
 - [ ] **C7. Add a hex-literal migration gate.** After the UI migration, add or document a grep/lint

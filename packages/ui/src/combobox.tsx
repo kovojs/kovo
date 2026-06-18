@@ -11,6 +11,8 @@ import {
 } from '@kovojs/headless-ui/combobox';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface ComboboxStyleOverrides {
   input?: style.StyleInput;
   listbox?: style.StyleInput;
@@ -75,13 +77,13 @@ function escapeHtml(value: string): string {
 export const comboboxStyles = style.create(
   {
     input: {
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       fontSize: 14,
       height: 36,
       outlineStyle: 'none',
@@ -89,27 +91,27 @@ export const comboboxStyles = style.create(
       transitionProperty: 'background-color, border-color, color, box-shadow',
       width: '100%',
       '[data-placeholder]': {
-        color: '#737373',
+        color: uiTheme.color.foregroundMuted,
       },
       '[aria-invalid=true]': {
-        borderColor: '#f87171',
+        borderColor: uiTheme.color.danger.border,
       },
       ':disabled': {
-        backgroundColor: '#f5f5f5',
-        color: '#737373',
+        backgroundColor: uiTheme.color.backgroundSubtle,
+        color: uiTheme.color.foregroundMuted,
         cursor: 'not-allowed',
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
     },
     listbox: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
@@ -122,7 +124,7 @@ export const comboboxStyles = style.create(
     },
     option: {
       borderRadius: 4,
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
       paddingBlock: 6,
       paddingInline: 8,
@@ -131,15 +133,15 @@ export const comboboxStyles = style.create(
         pointerEvents: 'none',
       },
       '[data-highlighted]': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtle,
       },
       '[data-state=checked]': {
-        color: '#0a0a0a',
+        color: uiTheme.color.foreground,
         fontWeight: 500,
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
       rowGap: 8,
@@ -147,14 +149,14 @@ export const comboboxStyles = style.create(
         opacity: 0.5,
       },
       '[data-invalid]': {
-        color: '#450a0a',
+        color: uiTheme.color.danger.foreground,
       },
     },
     value: {
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
       '[data-placeholder]': {
-        color: '#737373',
+        color: uiTheme.color.foregroundMuted,
       },
     },
   },

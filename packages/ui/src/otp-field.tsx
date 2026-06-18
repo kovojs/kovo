@@ -8,6 +8,8 @@ import {
 } from '@kovojs/headless-ui/otp-field';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface OtpFieldStyleOverrides {
   group?: style.StyleInput;
   hiddenInput?: style.StyleInput;
@@ -68,13 +70,13 @@ export const otpFieldStyles = style.create(
       width: 1,
     },
     input: {
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       fontSize: 16,
       fontWeight: 500,
       height: 40,
@@ -82,28 +84,28 @@ export const otpFieldStyles = style.create(
       transitionProperty: 'border-color, color, box-shadow',
       width: 36,
       '[data-filled]': {
-        borderColor: '#737373',
+        borderColor: uiTheme.color.borderStrong,
       },
       '[data-invalid]': {
-        borderColor: '#ef4444',
+        borderColor: uiTheme.color.danger.border,
       },
       ':disabled': {
-        backgroundColor: '#f5f5f5',
-        color: '#737373',
+        backgroundColor: uiTheme.color.backgroundSubtle,
+        color: uiTheme.color.foregroundMuted,
         cursor: 'not-allowed',
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       '[data-invalid]:focus-visible': {
-        outlineColor: '#ef4444',
+        outlineColor: uiTheme.color.danger.border,
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
       rowGap: 8,
@@ -111,7 +113,7 @@ export const otpFieldStyles = style.create(
         opacity: 0.5,
       },
       '[data-invalid]': {
-        color: '#450a0a',
+        color: uiTheme.color.danger.foreground,
       },
     },
   },

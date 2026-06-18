@@ -9,14 +9,14 @@ exports[`@kovojs/ui Meter StyleX styles > exports a StyleX style group 1`] = `
 }
 `;
 
-exports[`@kovojs/ui Meter StyleX styles > matches author-last override output 1`] = `"<meter class="kv-meter-w-xoythx kv-meter-accent-1ozva5 kv-meter-accent-10ovaq kv-app-meter-accent-1sl90w kv-app-meter-h-5tlkqb" data-style-src="meter.tsx#root; app-meter.tsx#root" data-high="100" data-low="0" data-max="100" data-min="0" data-optimum="50" data-state="optimum" data-value="72" high="100" low="0" max="100" min="0" optimum="50" value="72">72%</meter>"`;
+exports[`@kovojs/ui Meter StyleX styles > matches author-last override output 1`] = `"<meter class="kv-meter-w-xoythx kv-meter-accent-43mlij kv-meter-accent-1my4f1 kv-app-meter-accent-1sl90w kv-app-meter-h-5tlkqb" data-style-src="meter.tsx#root; app-meter.tsx#root" data-high="100" data-low="0" data-max="100" data-min="0" data-optimum="50" data-state="optimum" data-value="72" high="100" low="0" max="100" min="0" optimum="50" value="72">72%</meter>"`;
 
 exports[`@kovojs/ui Meter StyleX styles > matches native meter states with StyleX output 1`] = `
 {
   "classes": [
-    "kv-meter-accent-wt1oj kv-meter-h-dojw10 kv-meter-w-xoythx kv-meter-accent-1ozva5 kv-meter-accent-10ovaq",
+    "kv-meter-accent-1qya15 kv-meter-h-dojw10 kv-meter-w-xoythx kv-meter-accent-43mlij kv-meter-accent-1my4f1",
   ],
-  "optimum": "<meter class="kv-meter-accent-wt1oj kv-meter-h-dojw10 kv-meter-w-xoythx kv-meter-accent-1ozva5 kv-meter-accent-10ovaq" data-style-src="meter.tsx#root" aria-valuetext="84 percent quality score" data-high="90" data-low="50" data-max="100" data-min="0" data-optimum="80" data-state="optimum" data-value="84" high="90" low="50" max="100" min="0" optimum="80" value="84">84%</meter>",
-  "suboptimum": "<meter class="kv-meter-accent-wt1oj kv-meter-h-dojw10 kv-meter-w-xoythx kv-meter-accent-1ozva5 kv-meter-accent-10ovaq" data-style-src="meter.tsx#root" data-high="90" data-low="50" data-max="100" data-min="0" data-optimum="80" data-state="suboptimum" data-value="42" high="90" low="50" max="100" min="0" optimum="80" value="42">42%</meter>",
+  "optimum": "<meter class="kv-meter-accent-1qya15 kv-meter-h-dojw10 kv-meter-w-xoythx kv-meter-accent-43mlij kv-meter-accent-1my4f1" data-style-src="meter.tsx#root" aria-valuetext="84 percent quality score" data-high="90" data-low="50" data-max="100" data-min="0" data-optimum="80" data-state="optimum" data-value="84" high="90" low="50" max="100" min="0" optimum="80" value="84">84%</meter>",
+  "suboptimum": "<meter class="kv-meter-accent-1qya15 kv-meter-h-dojw10 kv-meter-w-xoythx kv-meter-accent-43mlij kv-meter-accent-1my4f1" data-style-src="meter.tsx#root" data-high="90" data-low="50" data-max="100" data-min="0" data-optimum="80" data-state="suboptimum" data-value="42" high="90" low="50" max="100" min="0" optimum="80" value="42">42%</meter>",
 }
 `;

@@ -9,6 +9,8 @@ import {
 } from '@kovojs/headless-ui/number-field';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface NumberFieldStyleOverrides {
   button?: style.StyleInput;
   control?: style.StyleInput;
@@ -55,10 +57,10 @@ export const numberFieldStyles = style.create(
   {
     button: {
       alignItems: 'center',
-      backgroundColor: '#fafafa',
-      borderColor: '#e5e5e5',
+      backgroundColor: uiTheme.color.backgroundRaised,
+      borderColor: uiTheme.color.border,
       borderStyle: 'solid',
-      color: '#404040',
+      color: uiTheme.color.foregroundMuted,
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
@@ -76,25 +78,25 @@ export const numberFieldStyles = style.create(
         opacity: 0.7,
       },
       ':disabled': {
-        backgroundColor: '#f5f5f5',
-        color: '#a3a3a3',
+        backgroundColor: uiTheme.color.backgroundSubtle,
+        color: uiTheme.color.foregroundMuted,
         cursor: 'not-allowed',
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: -2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
       ':hover': {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: uiTheme.color.backgroundSubtle,
       },
     },
     control: {
       alignItems: 'center',
-      backgroundColor: '#ffffff',
-      borderColor: '#d4d4d4',
-      borderRadius: 6,
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
@@ -106,13 +108,13 @@ export const numberFieldStyles = style.create(
         opacity: 0.6,
       },
       '[data-invalid]': {
-        borderColor: '#f87171',
+        borderColor: uiTheme.color.danger.border,
       },
     },
     input: {
       backgroundColor: 'transparent',
       borderWidth: 0,
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       fontSize: 14,
       height: 36,
       outlineStyle: 'none',
@@ -120,21 +122,21 @@ export const numberFieldStyles = style.create(
       textAlign: 'center',
       width: 80,
       '[aria-invalid=true]': {
-        color: '#450a0a',
+        color: uiTheme.color.danger.foreground,
       },
       ':disabled': {
-        backgroundColor: '#f5f5f5',
-        color: '#737373',
+        backgroundColor: uiTheme.color.backgroundSubtle,
+        color: uiTheme.color.foregroundMuted,
         cursor: 'not-allowed',
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
       rowGap: 8,
@@ -142,7 +144,7 @@ export const numberFieldStyles = style.create(
         opacity: 0.5,
       },
       '[data-invalid]': {
-        color: '#450a0a',
+        color: uiTheme.color.danger.foreground,
       },
     },
   },

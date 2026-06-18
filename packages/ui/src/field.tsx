@@ -11,6 +11,8 @@ import {
 } from '@kovojs/headless-ui/field';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface FieldStyleOverrides {
   control?: style.StyleInput;
   description?: style.StyleInput;
@@ -119,35 +121,35 @@ export interface FieldsetLegendProps extends FieldStateProps {
 }
 
 const nativeControlStyle = {
-  backgroundColor: '#ffffff',
-  borderColor: '#d4d4d4',
-  borderRadius: 6,
+  backgroundColor: uiTheme.color.background,
+  borderColor: uiTheme.color.border,
+  borderRadius: uiTheme.radius.md,
   borderStyle: 'solid',
   borderWidth: 1,
   boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-  color: '#0a0a0a',
+  color: uiTheme.color.foreground,
   fontSize: 14,
   transitionProperty: 'border-color, background-color, color, box-shadow',
   width: '100%',
   '::placeholder': {
-    color: '#a3a3a3',
+    color: uiTheme.color.foregroundMuted,
   },
   '[aria-invalid=true]': {
-    borderColor: '#ef4444',
+    borderColor: uiTheme.color.danger.border,
   },
   ':disabled': {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: uiTheme.color.backgroundSubtle,
     cursor: 'not-allowed',
     opacity: 0.7,
   },
   ':focus-visible': {
-    outlineColor: '#0a0a0a',
+    outlineColor: uiTheme.color.borderStrong,
     outlineOffset: 2,
     outlineStyle: 'solid',
     outlineWidth: 2,
   },
   '[aria-invalid=true]:focus-visible': {
-    outlineColor: '#ef4444',
+    outlineColor: uiTheme.color.danger.border,
   },
 } as const;
 
@@ -160,20 +162,20 @@ export const fieldStyles = style.create(
       paddingInline: 12,
     },
     description: {
-      color: '#737373',
+      color: uiTheme.color.foregroundMuted,
       fontSize: 14,
     },
     error: {
-      color: '#dc2626',
+      color: uiTheme.color.danger.border,
       fontSize: 14,
       fontWeight: 500,
     },
     fieldset: {
-      borderColor: '#e5e5e5',
-      borderRadius: 6,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
       padding: 16,
@@ -182,17 +184,17 @@ export const fieldStyles = style.create(
         opacity: 0.5,
       },
       '[data-invalid]': {
-        borderColor: '#fca5a5',
+        borderColor: uiTheme.color.danger.border,
       },
     },
     fieldsetLegend: {
-      color: '#171717',
+      color: uiTheme.color.foreground,
       fontSize: 14,
       fontWeight: 500,
       paddingInline: 4,
     },
     label: {
-      color: '#171717',
+      color: uiTheme.color.foreground,
       fontSize: 14,
       fontWeight: 500,
       lineHeight: 1,
@@ -202,7 +204,7 @@ export const fieldStyles = style.create(
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
       rowGap: 8,
@@ -210,7 +212,7 @@ export const fieldStyles = style.create(
         opacity: 0.5,
       },
       '[data-invalid]': {
-        color: '#450a0a',
+        color: uiTheme.color.danger.foreground,
       },
       '[data-required]': {
         fontWeight: 500,
@@ -223,9 +225,9 @@ export const fieldStyles = style.create(
       paddingInline: 12,
     },
     selectOption: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       ':disabled': {
-        color: '#a3a3a3',
+        color: uiTheme.color.foregroundMuted,
       },
     },
     textarea: {

@@ -3,6 +3,8 @@ import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 import { meterRootAttributes } from '@kovojs/headless-ui/meter';
 
+import { uiTheme } from './theme.js';
+
 export interface MeterProps {
   children?: string;
   high?: number;
@@ -18,14 +20,14 @@ export interface MeterProps {
 export const meterStyles = style.create(
   {
     root: {
-      accentColor: '#059669',
+      accentColor: uiTheme.color.success.border,
       height: 8,
       width: '100%',
       '[data-state=suboptimum]': {
-        accentColor: '#f59e0b',
+        accentColor: uiTheme.color.warning.border,
       },
       '[data-state=even-less-good]': {
-        accentColor: '#dc2626',
+        accentColor: uiTheme.color.danger.border,
       },
     },
   },

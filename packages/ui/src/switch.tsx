@@ -3,6 +3,8 @@ import { component } from '@kovojs/core';
 import { switchRootAttributes } from '@kovojs/headless-ui/switch';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface SwitchStyleOverrides {
   input?: style.StyleInput;
   root?: style.StyleInput;
@@ -25,24 +27,24 @@ export interface SwitchProps {
 export const switchStyles = style.create(
   {
     input: {
-      accentColor: '#0a0a0a',
-      backgroundColor: '#e5e5e5',
-      borderColor: '#d4d4d4',
-      borderRadius: 9999,
+      accentColor: uiTheme.color.accent,
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.full,
       borderStyle: 'solid',
       borderWidth: 1,
       height: 20,
       transitionProperty: 'background-color, border-color, color, box-shadow',
       width: 36,
       ':checked': {
-        backgroundColor: '#0a0a0a',
+        backgroundColor: uiTheme.color.accent,
       },
       ':disabled': {
         cursor: 'not-allowed',
         opacity: 0.5,
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
@@ -50,7 +52,7 @@ export const switchStyles = style.create(
     },
     root: {
       alignItems: 'center',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       columnGap: 8,
       display: 'inline-flex',
       fontSize: 14,

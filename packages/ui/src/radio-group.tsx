@@ -10,6 +10,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface RadioGroupStyleOverrides {
   item?: style.StyleInput;
   label?: style.StyleInput;
@@ -82,11 +84,11 @@ export const radioGroupStyles = style.create(
       },
     },
     radio: {
-      accentColor: '#0a0a0a',
-      borderColor: '#d4d4d4',
+      accentColor: uiTheme.color.accent,
+      borderColor: uiTheme.color.border,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       height: 16,
       width: 16,
       ':disabled': {
@@ -94,14 +96,14 @@ export const radioGroupStyles = style.create(
         opacity: 0.5,
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
       rowGap: 8,
@@ -109,7 +111,7 @@ export const radioGroupStyles = style.create(
         opacity: 0.5,
       },
       '[data-invalid]': {
-        color: '#450a0a',
+        color: uiTheme.color.danger.foreground,
       },
       '[data-orientation=horizontal]': {
         alignItems: 'center',

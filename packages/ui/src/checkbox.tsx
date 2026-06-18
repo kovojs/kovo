@@ -6,6 +6,8 @@ import {
 } from '@kovojs/headless-ui/checkbox';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface CheckboxStyleOverrides {
   input?: style.StyleInput;
   root?: style.StyleInput;
@@ -28,12 +30,12 @@ export interface CheckboxProps {
 export const checkboxStyles = style.create(
   {
     input: {
-      accentColor: '#0a0a0a',
-      borderColor: '#d4d4d4',
+      accentColor: uiTheme.color.accent,
+      borderColor: uiTheme.color.border,
       borderRadius: 4,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       height: 16,
       width: 16,
       ':disabled': {
@@ -41,7 +43,7 @@ export const checkboxStyles = style.create(
         opacity: 0.5,
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
@@ -49,7 +51,7 @@ export const checkboxStyles = style.create(
     },
     root: {
       alignItems: 'center',
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       columnGap: 8,
       display: 'inline-flex',
       fontSize: 14,

@@ -10,6 +10,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { uiTheme } from './theme.js';
+
 export interface CheckboxGroupStyleOverrides {
   control?: style.StyleInput;
   item?: style.StyleInput;
@@ -67,12 +69,12 @@ export interface CheckboxGroupLabelProps extends CheckboxGroupStateProps {
 export const checkboxGroupStyles = style.create(
   {
     control: {
-      accentColor: '#0a0a0a',
-      borderColor: '#d4d4d4',
+      accentColor: uiTheme.color.accent,
+      borderColor: uiTheme.color.border,
       borderRadius: 4,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       height: 16,
       width: 16,
       ':disabled': {
@@ -80,7 +82,7 @@ export const checkboxGroupStyles = style.create(
         opacity: 0.5,
       },
       ':focus-visible': {
-        outlineColor: '#0a0a0a',
+        outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
         outlineWidth: 2,
@@ -103,7 +105,7 @@ export const checkboxGroupStyles = style.create(
       },
     },
     root: {
-      color: '#0a0a0a',
+      color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
       rowGap: 8,
@@ -111,7 +113,7 @@ export const checkboxGroupStyles = style.create(
         opacity: 0.5,
       },
       '[data-invalid]': {
-        color: '#450a0a',
+        color: uiTheme.color.danger.foreground,
       },
       '[data-orientation=horizontal]': {
         alignItems: 'center',
