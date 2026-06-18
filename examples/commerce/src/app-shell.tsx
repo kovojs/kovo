@@ -20,11 +20,11 @@ import {
   commerceSignOut,
   commerceStylesheets,
   createCommerceDb,
-  renderCommerceLoginForm,
   type CommerceAuthRequest,
   type CommerceDb,
   type CommerceSession,
 } from './app.js';
+import { LoginForm } from './components/auth-forms.js';
 import { CartBadge } from './components/cart-badge.js';
 import { OrderHistory } from './components/order-history.js';
 import { ProductGrid, ProductGridError } from './components/product-grid.js';
@@ -102,9 +102,13 @@ export const commerceLoginRoute = route('/login', {
     description: 'Sign in to the Kovo commerce reference app.',
     title: 'Kovo Commerce Sign In',
   },
-  page(context, request: CommerceShellRequest) {
+  page(context, _request: CommerceShellRequest) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/cart';
-    return `<main class="mx-auto max-w-md p-6">${renderCommerceLoginForm(request, { next })}</main>`;
+    return (
+      <main class="mx-auto max-w-md p-6">
+        <LoginForm next={next} />
+      </main>
+    );
   },
   stylesheets: commerceStylesheets,
 });

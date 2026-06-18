@@ -1,4 +1,4 @@
-import { form, FormError, type FormInput } from '@kovojs/core';
+import { form, type FormInput } from '@kovojs/core';
 import {
   guards,
   i18n,
@@ -8,7 +8,6 @@ import {
   s,
   session,
 } from '@kovojs/server';
-import { jsx, jsxs } from '@kovojs/server/jsx-runtime';
 import {
   authed as betterAuthAuthed,
   betterAuthSession,
@@ -76,10 +75,6 @@ interface CommerceBetterAuthResponse {
 }
 
 export type CommerceBetterAuth = ReturnType<typeof createCommerceBetterAuth>;
-
-export interface CommerceLoginFailureState {
-  code: 'INVALID_CREDENTIALS';
-}
 
 export const commerceSession = session(
   s.object({
@@ -307,70 +302,6 @@ export function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
 }
 
 export const commercePageHints = renderCommercePageHints();
-
-export function renderCommerceLoginForm(
-  _request: CommerceAuthRequest,
-  options: { failure?: CommerceLoginFailureState; next?: string } = {},
-): string {
-  return jsxs('form', {
-    class: 'grid gap-4 rounded border border-slate-200 bg-white p-6',
-    mutation: commerceSignIn,
-    children: [
-      jsx('input', { type: 'hidden', name: 'next', value: options.next ?? '/cart' }),
-      jsxs('label', {
-        class: 'grid gap-1 text-sm font-medium text-slate-700',
-        children: [
-          jsx('span', { children: 'Email' }),
-          jsx('input', {
-            autocomplete: 'email',
-            class: 'rounded border border-slate-300 px-3 py-2',
-            name: 'email',
-            required: true,
-            type: 'email',
-          }),
-        ],
-      }),
-      jsxs('label', {
-        class: 'grid gap-1 text-sm font-medium text-slate-700',
-        children: [
-          jsx('span', { children: 'Password' }),
-          jsx('input', {
-            autocomplete: 'current-password',
-            class: 'rounded border border-slate-300 px-3 py-2',
-            name: 'password',
-            required: true,
-            type: 'password',
-          }),
-        ],
-      }),
-      jsx(FormError, {
-        class: 'text-sm text-red-700',
-        code: 'INVALID_CREDENTIALS',
-        failure: options.failure,
-        message: 'Invalid email or password.',
-      }),
-      jsx('button', {
-        class: 'rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white',
-        type: 'submit',
-        children: 'Sign in',
-      }),
-    ],
-  });
-}
-
-export function renderCommerceLogoutForm(_request: CommerceAuthRequest): string {
-  return jsxs('form', {
-    class: 'inline',
-    mutation: commerceSignOut,
-    children: [
-      jsx('button', {
-        class: 'text-sm font-medium text-slate-900',
-        type: 'submit',
-        children: 'Sign out',
-      }),
-    ],
-  });
-}
 
 function readCookie(headers: Headers, name: string): string | undefined {
   const cookie = headers.get('cookie');

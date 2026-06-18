@@ -9,8 +9,14 @@ import {
 } from '@kovojs/runtime/generated';
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
+import {
+  assertFixpoint,
+  assertRenderEquivalence,
+  compileComponentModule,
+  compileRouteModule,
+} from './index.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
+import { mutationInputFactsFromSource } from './internal.js';
 import type { CompileResult, EmittedFile } from './types.js';
 
 const commerceComponentNames = ['cart-badge', 'order-history', 'product-grid'] as const;
@@ -210,6 +216,27 @@ describe('compiler conformance corpus', () => {
               "exportName": "ProductGrid",
               "fragments": [
                 "components/product-grid/product-grid",
+              ],
+              "mutationForms": [
+                {
+                  "fieldErrors": [
+                    {
+                      "id": "{\`add-to-cart-quantity-error-\${item.id}\`}",
+                      "name": "quantity",
+                    },
+                  ],
+                  "fields": [
+                    "productId",
+                    "quantity",
+                  ],
+                  "formErrors": [
+                    {
+                      "code": "OUT_OF_STOCK",
+                    },
+                  ],
+                  "mutation": "cart/add",
+                  "slot": "addToCart",
+                },
               ],
               "name": "components/product-grid/product-grid",
               "queries": [
@@ -614,14 +641,49 @@ describe('compiler conformance corpus', () => {
         diagnostics: [],
         fileName: 'examples/commerce/src/components/product-grid.tsx',
         fixpointAsserted: true,
-        // The Commerce emit script includes app-level mutation input registry
-        // facts so ProductGrid can lower typed form fields exactly as emitted.
-        // This package fixture still asserts fixpoint and render equivalence.
-        generatedMatchesCompilerOutput: false,
+        generatedMatchesCompilerOutput: true,
         loweredRenderSourcePresent: true,
         renderEquivalenceAsserted: true,
       },
     ]);
+  });
+
+  it('checks committed Commerce route IR freshness through the package §5.2 gate', () => {
+    const routeResult = compileRouteModule({
+      artifactFileName: 'examples/commerce/src/generated/app-shell.kovo-route.tsx',
+      componentImportRewrites: [
+        { localName: 'CartBadge', specifier: './cart-badge.js' },
+        { localName: 'OrderHistory', specifier: './order-history.js' },
+        { localName: 'ProductGrid', specifier: './product-grid.js' },
+      ],
+      fileName: 'examples/commerce/src/app-shell.tsx',
+      source: readFileSync(
+        new URL('../../../examples/commerce/src/app-shell.tsx', import.meta.url),
+        'utf8',
+      ),
+    });
+    const generatedSource = readFileSync(
+      new URL('../../../examples/commerce/src/generated/app-shell.kovo-route.tsx', import.meta.url),
+      'utf8',
+    );
+
+    expect(routeResult.diagnostics).toEqual([]);
+    expect(routeResult.files.map((file) => file.fileName)).toEqual([
+      'examples/commerce/src/generated/app-shell.kovo-route.tsx',
+    ]);
+    expect(routeResult.files[0]?.source).toBe(generatedSource);
+    expect(generatedSource).not.toContain('renderCommerceLoginForm');
+  });
+
+  it('checks Commerce generated registry augmentation through the package §6.3 gate', () => {
+    const generatedSource = readFileSync(
+      new URL('../../../examples/commerce/src/generated/touch-graph.ts', import.meta.url),
+      'utf8',
+    );
+
+    expect(generatedSource).toContain("interface MutationRegistry {\n    'cart/add':");
+    expect(generatedSource).toContain("typeof import('../app.js').addToCart;");
+    expect(generatedSource).toContain('interface InvalidationSets extends CommerceInvalidationSets');
   });
 });
 
@@ -659,8 +721,27 @@ function commerceComponentFixture(name: (typeof commerceComponentNames)[number])
   );
   return compileComponentModule({
     fileName: `examples/commerce/src/components/${name}.tsx`,
+    registryFacts: commerceRegistryFacts(),
     source,
   });
+}
+
+function commerceRegistryFacts() {
+  const fileName = 'examples/commerce/src/app.ts';
+  const source = readFileSync(
+    new URL('../../../examples/commerce/src/app.ts', import.meta.url),
+    'utf8',
+  );
+
+  return {
+    mutationInputs: Object.fromEntries(
+      [...mutationInputFactsFromSource(fileName, source).values()].map((fact) => [
+        fact.key,
+        fact.fields.map((field) => ({ ...field, provenance: 'registry' as const })),
+      ]),
+    ),
+    mutations: { 'cart/add': 'typeof addToCart' },
+  };
 }
 
 function focusedGeneratedFixture(): CompileResult {

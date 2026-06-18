@@ -18,6 +18,7 @@ registerHooks({
 const { compileComponentModule, compileRouteModule } = await import('@kovojs/compiler');
 const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 const { mutationInputFactsFromSource } = await import('@kovojs/compiler/internal');
+const { commerceCartPageMeta, commerceStylesheets } = await import('../src/graph.js');
 const {
   deriveInvalidationRegistry,
   serializeInvalidationRegistry,
@@ -27,7 +28,6 @@ const {
 } = await import('@kovojs/drizzle/static');
 const { deriveOptimistic, serializeDerivedOptimistic } = await import('@kovojs/drizzle/derive');
 const ts = await import('typescript');
-const { createCommerceGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
@@ -214,7 +214,63 @@ const commerceTouchGraph = {
   },
 };
 
-const commerceGraph = createCommerceGraph(starterCart, commerceTouchGraph, commerceQueryDomains);
+const commerceGraph = {
+  endpoints: [],
+  mutations: [
+    {
+      guards: ['authed', 'rateLimit:session'],
+      invalidates: ['cart', 'product', 'order'],
+      inputFields: ['productId', 'quantity'],
+      key: 'cart/add',
+      session: 'commerceSession',
+      writes: ['cart', 'product', 'order'],
+    },
+    {
+      guards: ['authed'],
+      inputFields: [],
+      key: 'auth/sign-out',
+      session: 'commerceSession',
+      writes: ['auth'],
+    },
+  ],
+  optimistic: [
+    { derivation: { status: 'derived' }, mutation: 'cart/add', query: 'cart', status: 'derived' },
+    {
+      derivation: { status: 'derived' },
+      mutation: 'cart/add',
+      query: 'productGrid',
+      status: 'derived',
+    },
+    {
+      derivation: { status: 'derived' },
+      mutation: 'cart/add',
+      query: 'orderHistory',
+      status: 'derived',
+    },
+  ],
+  ownerDomains: [],
+  pages: [
+    {
+      i18n: ['en-US:cartLabel,productStock'],
+      meta: commerceCartPageMeta(starterCart),
+      modulepreloads: [],
+      prefetch: false,
+      route: '/',
+      stylesheets: [...commerceStylesheets],
+    },
+    {
+      i18n: ['en-US:cartLabel,productStock'],
+      meta: commerceCartPageMeta(starterCart),
+      modulepreloads: [],
+      prefetch: false,
+      route: '/cart',
+      stylesheets: [...commerceStylesheets],
+    },
+  ],
+  queries: commerceQueryDomains,
+  scopeAudits: [],
+  touchGraph: commerceTouchGraph,
+};
 
 const { graph } = deriveAppGraph({
   components: componentResults,
