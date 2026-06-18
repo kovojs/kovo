@@ -1183,10 +1183,20 @@ scripts/exported-symbols.mjs --duplicates --check` passes against the
     proves `@kovojs/ui/button` and `@kovojs/ui/select` own component symbols,
     and `node scripts/exported-symbols.mjs --duplicates --json` reports zero
     duplicates for both `@kovojs/ui` and `@kovojs/headless-ui`.
-- [ ] **Update API docs to reflect canonical import paths.**
+- [x] **Update API docs to reflect canonical import paths.**
   - Generated or hand-authored docs should show the canonical home for each symbol
     and avoid listing duplicate aliases as equal public entry points.
-  - Evidence:
+  - Evidence: generated API examples no longer include internal
+    `applyQueryDelta` / `buildQueryDelta` examples after query-delta helpers
+    moved to `@kovojs/core/internal/query-delta`, and gallery fixture sources use
+    direct `@kovojs/ui/<component>` imports instead of the empty root. Verification:
+    `node site/scripts/api-ref.mjs`; `node site/scripts/api-examples-check.mjs`;
+    `rg -n "from '@kovojs/ui'|from \"@kovojs/ui\"|@kovojs/headless-ui/primitives|applyQueryDelta|buildQueryDelta" examples packages/create-kovo/templates site/content docs site/gen/api --glob '!**/dist/**' --glob '!**/generated/**'`
+    exits 1; `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`;
+    `corepack pnpm exec vitest --run packages/core/src/index.test.ts packages/core/src/query-delta.test.ts site/scripts/api-examples-check.test.mjs`.
+    Residual unrelated gap: `corepack pnpm --filter @kovojs/example-gallery test`
+    currently fails in `src/kovo-explain-contracts.test.ts` because
+    `@kovojs/cli/internal` is not resolvable from the example package.
 
 ## Open Risks
 

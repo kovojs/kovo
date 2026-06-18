@@ -2,45 +2,53 @@
 import { tabsRootAttributes } from '@kovojs/headless-ui/tabs';
 import * as style from '@kovojs/style';
 import {
-  Alert,
   Accordion,
   AccordionContent,
   AccordionHeader,
   AccordionItem,
   AccordionTrigger,
+} from '@kovojs/ui/accordion';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogTrigger,
+} from '@kovojs/ui/alert-dialog';
+import { Alert } from '@kovojs/ui/alert';
+import {
   Autocomplete,
   AutocompleteInput,
   AutocompleteList,
   AutocompleteOption,
   AutocompleteValue,
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-  Badge,
+} from '@kovojs/ui/autocomplete';
+import { Avatar, AvatarFallback, AvatarImage } from '@kovojs/ui/avatar';
+import { Badge } from '@kovojs/ui/badge';
+import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbSeparator,
-  Button,
-  Card,
-  Checkbox,
+} from '@kovojs/ui/breadcrumb';
+import { Button } from '@kovojs/ui/button';
+import { Card } from '@kovojs/ui/card';
+import {
   CheckboxGroup,
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
+} from '@kovojs/ui/checkbox-group';
+import { Checkbox } from '@kovojs/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@kovojs/ui/collapsible';
+import {
   Combobox,
   ComboboxInput,
   ComboboxListbox,
   ComboboxOption,
   ComboboxValue,
+} from '@kovojs/ui/combobox';
+import {
   Command,
   CommandClose,
   CommandDialog,
@@ -50,22 +58,23 @@ import {
   CommandListbox,
   CommandTrigger,
   CommandValue,
+} from '@kovojs/ui/command';
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  Drawer,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
+} from '@kovojs/ui/context-menu';
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@kovojs/ui/dialog';
+import { Disclosure, DisclosureContent, DisclosureTrigger } from '@kovojs/ui/disclosure';
+import { Drawer } from '@kovojs/ui/drawer';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Disclosure,
-  DisclosureContent,
-  DisclosureTrigger,
+} from '@kovojs/ui/dropdown-menu';
+import {
   Field,
   FieldControl,
   FieldDescription,
@@ -76,14 +85,12 @@ import {
   FieldTextarea,
   Fieldset,
   FieldsetLegend,
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-  Kbd,
-  Menubar,
-  MenubarItem,
-  MenubarSubmenu,
-  Meter,
+} from '@kovojs/ui/field';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@kovojs/ui/hover-card';
+import { Kbd } from '@kovojs/ui/kbd';
+import { Menubar, MenubarItem, MenubarSubmenu } from '@kovojs/ui/menubar';
+import { Meter } from '@kovojs/ui/meter';
+import {
   NavigationMenu,
   NavigationMenuContent,
   NavigationMenuItem,
@@ -91,70 +98,69 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
   NavigationMenuViewport,
+} from '@kovojs/ui/navigation-menu';
+import {
   NumberField,
   NumberFieldControl,
   NumberFieldDecrement,
   NumberFieldIncrement,
   NumberFieldInput,
+} from '@kovojs/ui/number-field';
+import {
   OtpField,
   OtpFieldGroup,
   OtpFieldHiddenInput,
   OtpFieldInput,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Progress,
+} from '@kovojs/ui/otp-field';
+import { Popover, PopoverContent, PopoverTrigger } from '@kovojs/ui/popover';
+import { Progress } from '@kovojs/ui/progress';
+import {
   RadioGroup,
   RadioGroupItem,
   RadioGroupLabel,
   RadioGroupRadio,
+} from '@kovojs/ui/radio-group';
+import {
   ScrollArea,
   ScrollAreaCorner,
   ScrollAreaScrollbar,
   ScrollAreaThumb,
   ScrollAreaViewport,
+} from '@kovojs/ui/scroll-area';
+import {
   Select,
   SelectContent,
   SelectHiddenInput,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Separator,
-  Sheet,
-  Skeleton,
-  Slider,
-  SliderInput,
-  SliderRange,
-  SliderThumb,
-  SliderTrack,
-  Switch,
+} from '@kovojs/ui/select';
+import { Separator } from '@kovojs/ui/separator';
+import { Sheet } from '@kovojs/ui/sheet';
+import { Skeleton } from '@kovojs/ui/skeleton';
+import { Slider, SliderInput, SliderRange, SliderThumb, SliderTrack } from '@kovojs/ui/slider';
+import { Switch } from '@kovojs/ui/switch';
+import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeaderCell,
   TableRow,
-  Tabs,
-  TabsList,
-  TabsPanel,
-  TabsTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  Toggle,
-  ToggleGroup,
-  ToggleGroupButton,
-  ToggleGroupItem,
+} from '@kovojs/ui/table';
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from '@kovojs/ui/tabs';
+import {
   Toast,
   ToastAction,
   ToastClose,
   ToastDescription,
   ToastTitle,
   ToastViewport,
-  Toolbar,
-  ToolbarButton,
-  ToolbarItem,
-} from '@kovojs/ui';
+} from '@kovojs/ui/toast';
+import { ToggleGroup, ToggleGroupButton, ToggleGroupItem } from '@kovojs/ui/toggle-group';
+import { Toggle } from '@kovojs/ui/toggle';
+import { Toolbar, ToolbarButton, ToolbarItem } from '@kovojs/ui/toolbar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@kovojs/ui/tooltip';
 
 export type GalleryComponent =
   | 'accordion'
