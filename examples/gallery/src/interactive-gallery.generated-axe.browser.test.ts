@@ -21,7 +21,7 @@ afterEach(() => {
 describe('compiled interactive gallery demos in the browser', () => {
   it('has no axe violations across the compiled interactive gallery route', async () => {
     const host = document.createElement('div');
-    host.innerHTML = renderInteractiveGalleryRoute();
+    host.innerHTML = await renderInteractiveGalleryRoute();
     document.body.append(host);
 
     await expectNoAxeViolations(host);

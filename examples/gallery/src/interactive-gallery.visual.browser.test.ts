@@ -19,7 +19,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await page.viewport(900, 700);
 
     const host = document.createElement('div');
-    host.innerHTML = renderInteractiveGalleryRoute();
+    host.innerHTML = await renderInteractiveGalleryRoute();
     installVisualBaselineStyles();
     document.body.append(host);
 

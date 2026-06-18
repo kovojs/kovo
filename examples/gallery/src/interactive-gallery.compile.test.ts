@@ -39,6 +39,7 @@ describe('compiled interactive gallery demos', () => {
     const popover = readCompiledDemo('popover-demo.tsx');
     const popoverClient = readGenerated('popover-demo.client.js');
     const progress = readCompiledDemo('progress-demo.tsx');
+    const pureMarkup = readCompiledDemo('pure-markup-demo.tsx');
     const radioGroup = readCompiledDemo('radio-group-demo.tsx');
     const scrollArea = readCompiledDemo('scroll-area-demo.tsx');
     const select = readCompiledDemo('select-demo.tsx');
@@ -581,6 +582,13 @@ describe('compiled interactive gallery demos', () => {
     expect(progress).toMatch(
       /on:click="\/c\/__v\/[0-9a-f]{8}\/examples\/gallery\/src\/generated\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$button_click_2"/,
     );
+
+    expect(pureMarkup).toContain('data-gallery-interactive="pure-markup"');
+    expect(pureMarkup).toContain("import { Badge } from '@kovojs/ui/badge';");
+    expect(pureMarkup).toContain("import { Card } from '@kovojs/ui/card';");
+    expect(pureMarkup).toContain("import { Kbd } from '@kovojs/ui/kbd';");
+    expect(pureMarkup).toContain("import { Table } from '@kovojs/ui/table';");
+    expect(pureMarkup).not.toContain('@kovojs/headless-ui');
 
     expect(radioGroup).toContain('data-gallery-interactive="radio-group"');
     expect(radioGroup).toContain('id="gallery-radio-form" data-gallery-form="radio-group"');

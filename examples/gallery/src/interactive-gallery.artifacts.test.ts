@@ -26,7 +26,7 @@ describe('compiled interactive gallery demos', () => {
     });
   }, 180_000);
 
-  it('wires every compiled interactive demo into the docs gallery route', () => {
+  it('wires every compiled interactive demo into the docs gallery route', async () => {
     const packageJson = JSON.parse(readFileSync(resolve(galleryRoot, 'package.json'), 'utf8')) as {
       kovo?: { interactiveGallery?: { compiledDemos?: unknown } };
     };
@@ -42,9 +42,10 @@ describe('compiled interactive gallery demos', () => {
     ).toEqual(generatedDemos);
     expect(docsDemos).toEqual(generatedDemos);
 
-    const html = renderInteractiveGalleryRoute();
+    const html = await renderInteractiveGalleryRoute();
     expect(html).toContain('data-gallery-route="/gallery/interactive"');
     expect(html).toContain('data-demo-summary="compiled"');
+    expect(html).not.toContain('[object Promise]');
 
     for (const demo of generatedDemos) {
       const componentName = demo.replace(/-demo$/, '');
@@ -56,6 +57,18 @@ describe('compiled interactive gallery demos', () => {
         ),
       );
     }
+  });
+
+  it('resolves nested styled UI descriptors in the interactive route render path', async () => {
+    const html = await renderInteractiveGalleryRoute();
+
+    expect(html).toContain('data-gallery-interactive="pure-markup"');
+    expect(html).toContain('data-style-src="card.tsx#root"');
+    expect(html).toContain('data-style-src="badge.tsx#root; badge.tsx#success"');
+    expect(html).toContain('data-style-src="breadcrumb.tsx#root"');
+    expect(html).toContain('data-style-src="kbd.tsx#root"');
+    expect(html).toContain('data-style-src="table.tsx#wrapper"');
+    expect(html).not.toContain('[object Promise]');
   });
 
   it('exports the compiled interactive docs route and client modules for static deployment', () => {
@@ -129,7 +142,7 @@ describe('compiled interactive gallery demos', () => {
     }
   }, 180_000);
 
-  it('keeps rendered generated-client DOM refs in lockstep with client exports', () => {
+  it('keeps rendered generated-client DOM refs in lockstep with client exports', async () => {
     for (const demo of generatedInteractiveDemoNames()) {
       const componentName = demo.replace(/-demo$/, '');
       const expectedModulePath = `/c/examples/gallery/src/generated/interactive/${demo}.client.js`;
@@ -138,7 +151,7 @@ describe('compiled interactive gallery demos', () => {
       const renderedDemo = interactiveGalleryDemos.find((entry) => entry.name === demo);
       if (renderedDemo === undefined) throw new Error(`Missing docs route demo: ${demo}`);
 
-      const renderedRefs = extractGeneratedClientRefs(renderedDemo.render());
+      const renderedRefs = extractGeneratedClientRefs(await renderedDemo.render());
 
       expect(clientExports, `${demo} client exports`).not.toEqual([]);
       expect(renderedRefs, `${demo} rendered refs`).toEqual(loweredRefs);

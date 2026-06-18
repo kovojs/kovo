@@ -7,7 +7,14 @@ export {
   type InteractiveGalleryDemoName,
 } from './interactive-docs.generated-fixtures.js';
 
-export function renderInteractiveGalleryRoute(): string {
+export async function renderInteractiveGalleryRoute(): Promise<string> {
+  const renderedDemos = await Promise.all(
+    interactiveGalleryDemos.map(async (demo) => ({
+      demo,
+      rendered: await demo.render(),
+    })),
+  );
+
   return (
     <main data-gallery-route="/gallery/interactive">
       <h1>Interactive Gallery</h1>
@@ -20,10 +27,10 @@ export function renderInteractiveGalleryRoute(): string {
           <a href={`#${demo.name}`}>{demo.title}</a>
         ))}
       </nav>
-      {interactiveGalleryDemos.map((demo) => (
+      {renderedDemos.map(({ demo, rendered }) => (
         <section data-gallery-interactive-route={demo.name} id={demo.name}>
           <h2>{demo.title}</h2>
-          {demo.render()}
+          {rendered}
         </section>
       ))}
     </main>

@@ -37,7 +37,7 @@ import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
 
 export interface InteractiveGalleryDemo {
   name: string;
-  render: () => string;
+  render: () => Promise<string>;
   title: string;
 }
 
@@ -221,15 +221,15 @@ export const interactiveGalleryDemos = Object.freeze([
 
 export type InteractiveGalleryDemoName = (typeof interactiveGalleryDemos)[number]['name'];
 
-function renderInteractiveDemo(component: unknown): () => string {
+function renderInteractiveDemo(component: unknown): () => Promise<string> {
   const definition = (
     component as {
       definition: {
-        render: (queries: Record<string, never>, state: unknown) => string;
+        render: (queries: Record<string, never>, state: unknown) => Promise<string> | string;
         state: () => unknown;
       };
     }
   ).definition;
 
-  return () => definition.render({}, definition.state());
+  return async () => String(await definition.render({}, definition.state()));
 }

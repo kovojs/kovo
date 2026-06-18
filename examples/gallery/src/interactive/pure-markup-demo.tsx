@@ -1,5 +1,15 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { Badge } from '@kovojs/ui/badge';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbSeparator,
+} from '@kovojs/ui/breadcrumb';
+import { Card } from '@kovojs/ui/card';
+import { Kbd } from '@kovojs/ui/kbd';
+import { Table } from '@kovojs/ui/table';
 
 export interface GalleryPureMarkupDemoState {
   submitted: boolean;
@@ -11,51 +21,23 @@ export const GalleryPureMarkupDemo = component({
   state: () => ({ submitted: false }),
   render: (_queries: Record<string, never>, state: GalleryPureMarkupDemoState) => (
     <section class="grid gap-4" data-gallery-interactive="pure-markup">
-      <section
-        class="rounded-lg border border-neutral-200 bg-white p-4 text-neutral-950 shadow-sm"
-        data-card="summary"
-      >
+      <Card>
         <h3>Release readiness</h3>
         <p>
-          <span class="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
-            Stable
-          </span>{' '}
-          compiled from semantic TSX using the styled route class contract.
+          <Badge variant="success">Stable</Badge> compiled from semantic TSX using the styled route
+          class contract.
         </p>
-        <nav
-          aria-label="Release trail"
-          class="flex flex-wrap items-center gap-1.5 text-sm text-neutral-500"
-        >
-          <ol class="flex flex-wrap items-center gap-1.5">
-            <li class="inline-flex items-center gap-1.5">
-              <a
-                class="font-medium text-neutral-600 transition-colors hover:text-neutral-950"
-                href="/gallery/components/button/"
-              >
-                Button
-              </a>
-            </li>
-            <li
-              aria-hidden="true"
-              class="text-neutral-400"
-              data-orientation="horizontal"
-              role="separator"
-            >
-              /
-            </li>
-            <li class="inline-flex items-center gap-1.5">
-              <a aria-current="page" class="font-medium text-neutral-950">
-                Table
-              </a>
-            </li>
-          </ol>
-        </nav>
+        <Breadcrumb label="Release trail">
+          <BreadcrumbItem>
+            <BreadcrumbLink href="/gallery/components/button/">Button</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink current>Table</BreadcrumbLink>
+          </BreadcrumbItem>
+        </Breadcrumb>
         <p>
-          Press{' '}
-          <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-neutral-300 bg-neutral-50 px-1 font-mono text-[11px] font-medium leading-none text-neutral-700 shadow-sm">
-            Enter
-          </kbd>{' '}
-          to confirm the generated handler path.
+          Press <Kbd>Enter</Kbd> to confirm the generated handler path.
         </p>
         <form id="gallery-pure-markup-form">
           <button
@@ -72,34 +54,29 @@ export const GalleryPureMarkupDemo = component({
         <output data-demo-state="pure-markup-submit">
           {state.submitted ? 'confirmed' : 'pending'}
         </output>
-      </section>
-      <div class="w-full overflow-x-auto">
-        <table
-          aria-label="Styled route coverage"
-          class="w-full caption-bottom border-collapse text-sm"
-        >
-          <thead class="border-b border-neutral-200 bg-neutral-50">
-            <tr class="border-b border-neutral-200 transition-colors hover:bg-neutral-50">
-              <th class="h-10 px-3 text-left align-middle font-medium text-neutral-700" scope="col">
-                Surface
-              </th>
-              <th class="h-10 px-3 text-left align-middle font-medium text-neutral-700" scope="col">
-                Status
-              </th>
-            </tr>
-          </thead>
-          <tbody class="[&_tr:last-child]:border-0">
-            <tr class="border-b border-neutral-200 transition-colors hover:bg-neutral-50">
-              <td class="p-3 align-middle text-neutral-950">Card and badge</td>
-              <td class="p-3 align-middle text-neutral-950">compiled</td>
-            </tr>
-            <tr class="border-b border-neutral-200 transition-colors hover:bg-neutral-50">
-              <td class="p-3 align-middle text-neutral-950">Breadcrumb and keyboard hint</td>
-              <td class="p-3 align-middle text-neutral-950">compiled</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      </Card>
+      <Table>
+        <thead class="border-b border-neutral-200 bg-neutral-50">
+          <tr class="border-b border-neutral-200 transition-colors hover:bg-neutral-50">
+            <th class="h-10 px-3 text-left align-middle font-medium text-neutral-700" scope="col">
+              Surface
+            </th>
+            <th class="h-10 px-3 text-left align-middle font-medium text-neutral-700" scope="col">
+              Status
+            </th>
+          </tr>
+        </thead>
+        <tbody class="[&_tr:last-child]:border-0">
+          <tr class="border-b border-neutral-200 transition-colors hover:bg-neutral-50">
+            <td class="p-3 align-middle text-neutral-950">Card and badge</td>
+            <td class="p-3 align-middle text-neutral-950">compiled</td>
+          </tr>
+          <tr class="border-b border-neutral-200 transition-colors hover:bg-neutral-50">
+            <td class="p-3 align-middle text-neutral-950">Breadcrumb and keyboard hint</td>
+            <td class="p-3 align-middle text-neutral-950">compiled</td>
+          </tr>
+        </tbody>
+      </Table>
       <div aria-hidden="true" class="h-6 w-full animate-pulse rounded-md bg-neutral-200" />
     </section>
   ),
