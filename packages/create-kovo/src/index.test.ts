@@ -100,12 +100,12 @@ describe('create-kovo starter', () => {
       expect(packageJson.devDependencies).not.toHaveProperty(legacyCssVitePlugin);
       expect(packageJson.devDependencies).not.toHaveProperty(legacyCssTool);
       expect(packageJson.scripts).toMatchObject({
-        build: 'kovo build ./src/app-shell.ts',
+        'build:prod': 'kovo build ./src/app-shell.ts',
         check: 'vp check',
         dev: 'vp dev',
         'emit-graph': 'node scripts/emit-graph.mjs',
         'preview:static': 'node scripts/preview-static.mjs',
-        serve: 'kovo build ./src/app-shell.ts --preset node && node dist/server/server.mjs',
+        serve: 'npm run build:prod -- --preset node && node dist/server/server.mjs',
         'serve:dev': 'node scripts/serve.mjs',
         start: 'node dist/server/server.mjs',
         static: 'vp run export',
@@ -580,13 +580,13 @@ describe('create-kovo starter', () => {
         serveServer = spawn(serveCommand.command, serveCommand.args(port), {
           cwd: root,
           detached: process.platform !== 'win32',
-          env: withGeneratedBinOnPath(root),
+          env: { ...withGeneratedBinOnPath(root), HOST: '127.0.0.1', PORT: String(port) },
         });
         const output = collectOutput(serveServer);
         const origin = `http://127.0.0.1:${port}`;
 
         const documentBody = await fetchTextWhenReady(`${origin}/`, output);
-        expect(output()).toContain('starter-serve/v1');
+        expect(output()).toContain(`Kovo node server listening on ${origin}`);
         expect(documentBody).toContain('--kovo-theme-sys-color-primary');
         expect(documentBody).toContain(
           'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
@@ -598,10 +598,14 @@ describe('create-kovo starter', () => {
         );
         expect(moduleBody).toContain('export function Starter$announce');
 
-        const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
-        expect(sourceCss).toContain('@layer kovo-starter-base');
-        expect(sourceCss).toContain('var(--kovo-theme-sys-color-surface)');
-        expect(sourceCss).not.toContain(legacyCssTool);
+        const cssFile = readdirSync(join(root, 'dist/server/client/assets')).find((file) =>
+          file.endsWith('.css'),
+        );
+        expect(cssFile).toBeTypeOf('string');
+        const builtCss = await fetchTextWhenReady(`${origin}/assets/${cssFile}`, output);
+        expect(builtCss).toContain('@layer kovo-starter-base');
+        expect(builtCss).toContain('var(--kovo-theme-sys-color-surface)');
+        expect(builtCss).not.toContain(legacyCssTool);
       } finally {
         await stopProcess(serveServer);
         rmSync(root, { force: true, recursive: true });
@@ -855,6 +859,7 @@ function linkStarterBuildDependencies(root: string): void {
   mkdirSync(join(nodeModules, '@types'), { recursive: true });
   mkdirSync(nodeModulesBin, { recursive: true });
 
+  symlinkSync(join(resolveDependencyRoot('kovo'), 'src/bin.ts'), join(nodeModulesBin, 'kovo'));
   symlinkSync(join(resolveDependencyRoot('vite-plus'), 'bin/vp'), join(nodeModulesBin, 'vp'));
   symlinkSync(resolveDependencyRoot('@types/node'), join(nodeModules, '@types/node'));
   symlinkSync(
@@ -899,29 +904,11 @@ function generatedStarterServeCommands(): Array<{
   command: string;
   label: string;
 }> {
-  const serveArgs = (port: number) => [
-    '--host',
-    '127.0.0.1',
-    '--port',
-    String(port),
-    '--strictPort',
-  ];
-
   return [
     {
-      args: (port) => ['run', '--no-cache', 'serve', ...serveArgs(port)],
-      command: vpCommand(),
-      label: 'vp run serve',
-    },
-    {
-      args: (port) => ['run', 'serve', '--', ...serveArgs(port)],
+      args: (_port) => ['run', 'serve'],
       command: npmCommand(),
       label: 'npm run serve',
-    },
-    {
-      args: (port) => ['start', '--', ...serveArgs(port)],
-      command: npmCommand(),
-      label: 'npm start',
     },
   ];
 }

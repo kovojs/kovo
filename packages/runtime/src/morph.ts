@@ -21,7 +21,11 @@ export type MorphFragment = (target: MorphTarget, html: string) => void;
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export class DomMorphTarget implements MorphTarget {
-  constructor(public element: Element) {}
+  element: Element;
+
+  constructor(element: Element) {
+    this.element = element;
+  }
 
   readHtml(): string {
     return this.element.innerHTML;
@@ -53,7 +57,11 @@ export class DomMorphTarget implements MorphTarget {
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export class DomMorphRoot implements MorphRoot {
-  constructor(private readonly root: FragmentTargetRoot) {}
+  private readonly root: FragmentTargetRoot;
+
+  constructor(root: FragmentTargetRoot) {
+    this.root = root;
+  }
 
   findFragmentTarget(target: string): MorphTarget | null {
     const element = findFragmentTargetElement(this.root, target);

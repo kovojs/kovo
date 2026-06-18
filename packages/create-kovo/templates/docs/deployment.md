@@ -16,7 +16,7 @@ The generated `src/app-shell.ts` module exports the same `app` for `vp dev`, `ko
 Production starts with the app-author build command:
 
 ```sh
-kovo build ./src/app-shell.ts
+npm run build:prod
 ```
 
 The template `kovo.config.ts` selects `node()` by default, so the command emits a self-contained Node preset under `dist/server/`. Run it locally with:

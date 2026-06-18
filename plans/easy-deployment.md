@@ -427,13 +427,32 @@ build.test.ts` and `packages/cli/src/index.kovo-build.test.ts` for
 
 ### Phase 4 — Templates, docs, examples
 
-- [ ] `create-kovo` template ships a `kovo.config.ts` with a default `node` preset
+- [x] `create-kovo` template ships a `kovo.config.ts` with a default `node` preset
   - commented Vercel/CF alternatives (and a note that those auto-detect); rewrite
     `templates/docs/deployment.md` around `kovo build` + native deploy.
-- [ ] Port one example (commerce) to `kovo build` for its real prod serve; keep
+  - Evidence: `packages/create-kovo/templates/kovo.config.ts` defaults to
+    `node()` and comments `vercel()` / `cloudflare()` alternatives; `packages/
+create-kovo/templates/docs/deployment.md` documents `npm run build:prod`,
+    generated `dist/server`, Vercel Build Output API, and Cloudflare Wrangler
+    flows. `corepack pnpm exec vitest --run packages/create-kovo/src/index.test.ts`
+    verifies the scaffolded file list, package scripts, production serve path,
+    static export path, and export diagnostics.
+- [x] Port one example (commerce) to `kovo build` for its real prod serve; keep
       the per-session demo path (`SPEC.md` §9.5) as a separate concern.
-- [ ] Update root `Dockerfile`/`cloudbuild.yaml` notes to point at preset output
+  - Evidence: `examples/commerce/package.json` uses `kovo build ./src/app-shell.tsx
+--preset node` for `build` / `serve:prod`, keeps `build:demo` and
+    `serve:demo` for the hosted per-session demo path, and leaves
+    `scripts/serve.mjs` as `serve:dev`. Verification: `corepack pnpm -C
+examples/commerce run build`, then `HOST=127.0.0.1 PORT=64721 node
+examples/commerce/dist/server/server.mjs`, followed by fetches of `/cart`
+    (HTTP 200) and `/assets/<css>` (HTTP 200 with `public, max-age=31536000,
+immutable`).
+- [x] Update root `Dockerfile`/`cloudbuild.yaml` notes to point at preset output
       where appropriate (or scope them explicitly to the multi-tenant demo).
+  - Evidence: `Dockerfile` and `cloudbuild.yaml` now scope the root Cloud Run image
+    to hosted framework demos and direct app-author production deploys to
+    `kovo build` preset artifacts (`dist/server`, `.vercel/output`, or
+    `dist/cloudflare`).
 
 ### Phase 5 (deferred, not built here) — Isolate-edge
 

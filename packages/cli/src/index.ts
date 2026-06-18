@@ -2494,6 +2494,7 @@ async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig>
     logLevel: 'error',
     root,
     server: { middlewareMode: true },
+    ssr: { noExternal: true },
   });
   try {
     const configModule = await server.ssrLoadModule(`/${basename(configPath)}`);
@@ -2625,9 +2626,17 @@ async function bundleKovoServerHandler(appModulePath: string): Promise<string> {
       configFile: false,
       logLevel: 'silent',
       resolve: {
-        alias: {
-          '@kovojs/server': requireFromCli.resolve('@kovojs/server'),
-        },
+        alias: [
+          { find: /^@kovojs\/server$/, replacement: requireFromCli.resolve('@kovojs/server') },
+          {
+            find: /^@kovojs\/server\/jsx-dev-runtime$/,
+            replacement: requireFromCli.resolve('@kovojs/server/jsx-dev-runtime'),
+          },
+          {
+            find: /^@kovojs\/server\/jsx-runtime$/,
+            replacement: requireFromCli.resolve('@kovojs/server/jsx-runtime'),
+          },
+        ],
       },
       root: process.cwd(),
       ssr: { noExternal: [/^@kovojs\//] },
