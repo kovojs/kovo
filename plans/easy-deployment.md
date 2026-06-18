@@ -248,23 +248,36 @@ Design decisions to lock in code review:
 
 ### 4. Cross-cutting contracts
 
-- [ ] **Static-or-dynamic auto-detection.** `routes.json` carries each route's
+- [x] **Static-or-dynamic auto-detection.** `routes.json` carries each route's
       export policy (already computed for static export, `SPEC.md` §9.5/KV229). If
       _all_ routes are L0/L1-exportable, the neutral build also emits a fully static
       tree and presets prefer static output (Vercel static, CF Pages/Assets, plain
       Nginx) — no server function needed. Mixed apps get both: static where provable,
       the function for the rest.
-  - Partial evidence: `packages/server/src/build.ts` now attempts a neutral static
-    export only when the app has no endpoints, mutations, or queries; if export
-    diagnostics are empty, `KovoNeutralBuild.staticOutput` points at the static tree
-    and `node()`, `vercel()`, and `cloudflare()` prefer it over a server handler.
-    `packages/server/src/build.test.ts` verifies the neutral static tree includes
-    HTML, `/c/` client modules, and `/assets/` files, verifies `node()` still emits
-    a runnable server for explicitly selected Node deployments, and verifies the
-    edge/static-host presets omit their function/worker entry for a proven static-only app.
-    `packages/cli/src/index.kovo-build.test.ts` verifies `VERCEL=1` static-only
-    apps emit `.vercel/output/static` with no function. Gap: mixed apps still emit
-    dynamic preset output only; per-route static plus function routing remains open.
+  - Evidence: `packages/server/src/build.ts` writes per-route export policy into
+    `routes.json`, records `KovoNeutralBuild.staticOnly` separately from the
+    existence of a static subtree, and attempts `exportStaticApp(...,
+{ onNonExportable: "skip" })` for apps without query/mutation state. This
+    keeps query/mutation apps dynamic until route-level dependency proof exists,
+    while still allowing static route documents beside dynamic endpoints or
+    guarded/dynamic routes.
+  - Evidence: `node()`, `vercel()`, and `cloudflare()` now copy proven static
+    route documents into their static/asset layer while keeping the server
+    handler/function/worker fallback for the rest of a mixed app. The generated
+    Node server serves copied static route documents before dynamic fallback;
+    the generated Cloudflare Worker asks the Assets binding for bodyless
+    requests before falling through to the bundled handler; Vercel relies on
+    filesystem routing before the catch-all function.
+  - Evidence: `corepack pnpm exec vitest --run packages/server/src/build.test.ts
+packages/cli/src/index.kovo-build.test.ts` passed with 22 tests and 1
+    skipped Docker test. It verifies fully static Vercel output has no function,
+    mixed Node output serves `/static` from static HTML while `/dynamic` reaches
+    the handler, mixed Vercel output contains both
+    `.vercel/output/static/static/index.html` and `functions/kovo.func`, and
+    mixed Cloudflare output contains both `client/static/index.html` and
+    `worker.mjs`.
+  - Evidence: `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`
+    passed.
 - [x] **Immutable `/c/` retention across deploys (`SPEC.md` §6.6).** Versioned
       client-module URLs must survive deploys until referencing documents age out.
       Each preset documents/implements "don't overwrite, accrete": e.g. the node preset

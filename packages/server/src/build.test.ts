@@ -124,7 +124,15 @@ describe('server build-time deployment API', () => {
         version: 'kovo-neutral-build/v1',
       });
       await expect(readJson(join(outDir, 'routes.json'))).resolves.toEqual({
-        routes: [{ path: '/cart' }],
+        routes: [
+          {
+            export: {
+              paths: ['/cart'],
+              policy: 'static',
+            },
+            path: '/cart',
+          },
+        ],
         version: 'kovo-neutral-build/v1',
       });
       await expect(readJson(join(outDir, 'meta.json'))).resolves.toEqual({
@@ -138,9 +146,12 @@ describe('server build-time deployment API', () => {
         routeHints: [{ routePath: '/cart' }],
         serverHandlerPath: join(outDir, 'server/handler.mjs'),
         staticOutput: {
+          complete: true,
           dir: join(outDir, 'static'),
           manifestPath: join(outDir, 'static/kovo-static-manifest.json'),
+          routeDocuments: [{ path: '/cart', routePath: '/cart' }],
         },
+        staticOnly: true,
         version: 'kovo-neutral-build/v1',
       });
     } finally {
@@ -589,6 +600,184 @@ export default async function handler(request) {
       await expect(readFile(join(cloudflareOutDir, 'wrangler.toml'), 'utf8')).resolves.toContain(
         'directory = "./client"',
       );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('emits static route documents alongside dynamic preset fallbacks for mixed apps', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-mixed-static-preset-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/static', {
+              page() {
+                return '<main>Static Route</main>';
+              },
+            }),
+            route('/dynamic', {
+              guard: () => true,
+              page() {
+                return '<main>Dynamic Route</main>';
+              },
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+export default async function handler(request) {
+  const url = new URL(request.url);
+  return new Response('dynamic:' + url.pathname, {
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  });
+}
+`,
+      });
+
+      expect(build.staticOnly).toBe(false);
+      expect(build.staticOutput).toMatchObject({
+        complete: false,
+        dir: join(root, '.kovo/static'),
+        routeDocuments: [{ path: '/static', routePath: '/static' }],
+      });
+      await expect(readJson(join(root, '.kovo/routes.json'))).resolves.toEqual({
+        routes: [
+          {
+            export: {
+              paths: ['/static'],
+              policy: 'static',
+            },
+            path: '/static',
+          },
+          {
+            export: {
+              diagnostics: [
+                {
+                  code: 'KV229',
+                  message:
+                    "KV229 static export cannot export guarded route '/dynamic'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.",
+                  routePath: '/dynamic',
+                },
+              ],
+              policy: 'dynamic',
+            },
+            path: '/dynamic',
+          },
+        ],
+        version: 'kovo-neutral-build/v1',
+      });
+
+      const nodeOutDir = join(root, 'node-mixed');
+      await node({ dockerfile: false }).emit(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      await expect(
+        readFile(join(nodeOutDir, 'static/static/index.html'), 'utf8'),
+      ).resolves.toContain('Static Route');
+      const serverModule = (await import(
+        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+      try {
+        const staticResponse = await fetch(`${baseUrl}/static`);
+        await expect(staticResponse.text()).resolves.toContain('Static Route');
+        expect(staticResponse.headers.get('content-type')).toBe('text/html; charset=utf-8');
+
+        const dynamicResponse = await fetch(`${baseUrl}/dynamic`);
+        await expect(dynamicResponse.text()).resolves.toBe('dynamic:/dynamic');
+        expect(dynamicResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+      } finally {
+        await close(server);
+      }
+
+      const vercelOutDir = join(root, '.vercel/output');
+      await vercel().emit(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: vercelOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      await expect(
+        readFile(join(vercelOutDir, 'static/static/index.html'), 'utf8'),
+      ).resolves.toContain('Static Route');
+      await expect(
+        readFile(join(vercelOutDir, 'functions/kovo.func/index.cjs'), 'utf8'),
+      ).resolves.toContain('kovoVercelFunction');
+      await expect(readJson(join(vercelOutDir, 'config.json'))).resolves.toEqual({
+        routes: [
+          {
+            continue: true,
+            headers: { 'cache-control': 'public, max-age=31536000, immutable' },
+            src: '/(?:assets|c)/(.*)',
+          },
+          { handle: 'filesystem' },
+          { dest: '/kovo', src: '/(.*)' },
+        ],
+        version: 3,
+      });
+
+      const cloudflareOutDir = join(root, 'cloudflare-mixed');
+      await cloudflare().emit(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: cloudflareOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      await expect(
+        readFile(join(cloudflareOutDir, 'client/static/index.html'), 'utf8'),
+      ).resolves.toContain('Static Route');
+      await expect(readFile(join(cloudflareOutDir, 'worker.mjs'), 'utf8')).resolves.toContain(
+        'env.ASSETS',
+      );
+
+      const workerModule = (await import(
+        `${pathToFileURL(join(cloudflareOutDir, 'worker.mjs')).href}?t=${Date.now()}`
+      )) as {
+        default: {
+          fetch(
+            request: Request,
+            env: { ASSETS?: { fetch(request: Request): Promise<Response> } },
+          ): Promise<Response> | Response;
+        };
+      };
+
+      const staticWorkerResponse = await workerModule.default.fetch(
+        new Request('https://worker.test/static'),
+        {
+          ASSETS: {
+            fetch: async () =>
+              new Response('<main>Static Route</main>', {
+                headers: { 'content-type': 'text/html; charset=utf-8' },
+              }),
+          },
+        },
+      );
+      await expect(staticWorkerResponse.text()).resolves.toContain('Static Route');
+      expect(staticWorkerResponse.headers.get('cache-control')).toBeNull();
+
+      const dynamicWorkerResponse = await workerModule.default.fetch(
+        new Request('https://worker.test/dynamic'),
+        {
+          ASSETS: {
+            fetch: async () => new Response('Not Found', { status: 404 }),
+          },
+        },
+      );
+      await expect(dynamicWorkerResponse.text()).resolves.toBe('dynamic:/dynamic');
     } finally {
       await rm(root, { force: true, recursive: true });
     }

@@ -4,6 +4,8 @@ import * as path from 'node:path';
 import type { KovoApp } from './app-types.js';
 import { exportStaticApp } from './static-export.js';
 import type { StaticExportAssetInput } from './static-export-types.js';
+import type { StaticExportDiagnostic } from './static-export-diagnostics.js';
+import { staticExportRoutePlan, type StaticExportRouteTarget } from './static-export-route-plan.js';
 import { resolvedFileSystemPath, viteDistSourcePath } from './vite-build-assets.js';
 import {
   createKovoAppShellViteBuild,
@@ -261,9 +263,17 @@ export interface KovoNeutralBuild {
   staticOutput?: {
     /** Absolute path to the neutral static export directory. */
     dir: string;
+    /** Whether every route was exported without route-level diagnostics. */
+    complete: boolean;
+    /** Route-level diagnostics produced while exporting the static subtree. */
+    diagnostics: readonly StaticExportDiagnostic[];
     /** Absolute path to the static export manifest JSON file. */
     manifestPath: string;
+    /** Concrete route documents written into the static subtree. */
+    routeDocuments: readonly StaticExportRouteTarget[];
   };
+  /** Whether this build can be deployed without a server/function fallback. */
+  staticOnly: boolean;
   /** Neutral artifact schema version. */
   version: typeof neutralBuildVersion;
 }
@@ -337,6 +347,7 @@ export async function writeKovoNeutralBuild(
     ...(serverHandlerPath === undefined ? {} : { serverHandlerPath }),
     staticAssets: appShellBuild.assets,
     ...(staticOutput === undefined ? {} : { staticOutput }),
+    staticOnly: neutralBuildIsStaticOnly(appShellBuild.app, staticOutput),
     version: neutralBuildVersion,
   };
 
@@ -347,12 +358,12 @@ export async function writeKovoNeutralBuild(
     version: neutralBuildVersion,
   });
   await writeJson(routesPath, {
-    routes: appShellBuild.app.routes.map((route) => ({ path: route.path })),
+    routes: neutralBuildRouteEntries(appShellBuild.app, staticOutput),
     version: neutralBuildVersion,
   });
   await writeJson(metaPath, {
     hasServerHandler: serverHandlerPath !== undefined,
-    staticOnly: staticOutput !== undefined,
+    staticOnly: neutral.staticOnly,
     version: neutralBuildVersion,
   });
 
@@ -371,6 +382,9 @@ async function emitNodePreset(
   const outDir = resolvedFileSystemPath(context.outDir);
   await mkdir(outDir, { recursive: true });
   await cp(build.clientDir, path.join(outDir, 'client'), { recursive: true });
+  if (build.staticOutput !== undefined) {
+    await cp(build.staticOutput.dir, path.join(outDir, 'static'), { recursive: true });
+  }
   await cp(build.serverDir, path.join(outDir, 'server'), { recursive: true });
   await writeFile(path.join(outDir, 'server.mjs'), nodeServerSource(), 'utf8');
 
@@ -386,7 +400,7 @@ async function emitVercelPreset(
   context: PresetContext,
   options: VercelPresetOptions,
 ): Promise<void> {
-  if (build.staticOutput !== undefined) {
+  if (build.staticOnly && build.staticOutput !== undefined) {
     const outDir = resolvedFileSystemPath(context.outDir);
     await mkdir(outDir, { recursive: true });
     await cp(build.staticOutput.dir, path.join(outDir, 'static'), { recursive: true });
@@ -402,7 +416,7 @@ async function emitVercelPreset(
   const outDir = resolvedFileSystemPath(context.outDir);
   const functionDir = path.join(outDir, 'functions/kovo.func');
   await mkdir(outDir, { recursive: true });
-  await cp(build.clientDir, path.join(outDir, 'static'), { recursive: true });
+  await copyPresetStaticFiles(build, path.join(outDir, 'static'));
   await mkdir(functionDir, { recursive: true });
   await copyFile(build.serverHandlerPath, path.join(functionDir, 'handler.mjs'));
   await writeFile(path.join(functionDir, 'index.cjs'), vercelFunctionSource(), 'utf8');
@@ -425,7 +439,7 @@ async function emitCloudflarePreset(
   context: PresetContext,
   options: CloudflarePresetOptions,
 ): Promise<void> {
-  if (build.staticOutput !== undefined) {
+  if (build.staticOnly && build.staticOutput !== undefined) {
     const outDir = resolvedFileSystemPath(context.outDir);
     await mkdir(outDir, { recursive: true });
     await cp(build.staticOutput.dir, path.join(outDir, 'client'), { recursive: true });
@@ -440,7 +454,7 @@ async function emitCloudflarePreset(
 
   const outDir = resolvedFileSystemPath(context.outDir);
   await mkdir(outDir, { recursive: true });
-  await cp(build.clientDir, path.join(outDir, 'client'), { recursive: true });
+  await copyPresetStaticFiles(build, path.join(outDir, 'client'));
   await mkdir(path.join(outDir, 'server'), { recursive: true });
   await copyFile(build.serverHandlerPath, path.join(outDir, 'server/handler.mjs'));
   await writeFile(path.join(outDir, 'worker.mjs'), cloudflareWorkerSource(), 'utf8');
@@ -462,33 +476,90 @@ async function writeNeutralStaticOutput({
   manifestDistDir,
   outDir,
 }: NeutralStaticOutputOptions): Promise<KovoNeutralBuild['staticOutput'] | undefined> {
-  if (app.endpoints.length > 0 || app.mutations.length > 0 || app.queries.length > 0) {
+  if (app.mutations.length > 0 || app.queries.length > 0) {
     return undefined;
   }
 
   const staticDir = path.join(outDir, 'static');
+  const routePlan = staticExportRoutePlan(app);
 
   try {
     const result = await exportStaticApp(app, {
       ...(manifestDistDir === undefined
         ? {}
         : { assets: neutralStaticExportAssets(assets, manifestDistDir) }),
+      onNonExportable: 'skip',
       outDir: staticDir,
     });
-    if (result.diagnostics.length > 0) {
+    if (result.artifacts.length === 0) {
       await rmNeutralStaticOutput(staticDir);
       return undefined;
     }
+
+    const diagnosticRoutePaths = new Set(
+      result.diagnostics.map((diagnostic) => diagnostic.routePath),
+    );
+    const manifestPath = path.join(staticDir, 'kovo-static-manifest.json');
+    await writeJson(manifestPath, {
+      version: neutralBuildVersion,
+    });
+    return {
+      complete: result.diagnostics.length === 0,
+      diagnostics: result.diagnostics,
+      dir: staticDir,
+      manifestPath,
+      routeDocuments: routePlan.targets.filter(
+        (target) => !diagnosticRoutePaths.has(target.routePath),
+      ),
+    };
   } catch {
     await rmNeutralStaticOutput(staticDir);
     return undefined;
   }
+}
 
-  const manifestPath = path.join(staticDir, 'kovo-static-manifest.json');
-  await writeJson(manifestPath, {
-    version: neutralBuildVersion,
+function neutralBuildIsStaticOnly(
+  app: KovoApp,
+  staticOutput: KovoNeutralBuild['staticOutput'] | undefined,
+): boolean {
+  return (
+    staticOutput?.complete === true &&
+    app.endpoints.length === 0 &&
+    app.mutations.length === 0 &&
+    app.queries.length === 0
+  );
+}
+
+function neutralBuildRouteEntries(
+  app: KovoApp,
+  staticOutput: KovoNeutralBuild['staticOutput'] | undefined,
+): unknown[] {
+  return app.routes.map((route) => {
+    const diagnostics =
+      staticOutput?.diagnostics.filter((diagnostic) => diagnostic.routePath === route.path) ?? [];
+    const staticPaths =
+      staticOutput?.routeDocuments
+        .filter((document) => document.routePath === route.path)
+        .map((document) => document.path) ?? [];
+    const policy =
+      staticPaths.length === 0 ? 'dynamic' : diagnostics.length === 0 ? 'static' : 'mixed';
+
+    return {
+      export: {
+        ...(diagnostics.length === 0 ? {} : { diagnostics }),
+        policy,
+        ...(staticPaths.length === 0 ? {} : { paths: staticPaths }),
+      },
+      path: route.path,
+    };
   });
-  return { dir: staticDir, manifestPath };
+}
+
+async function copyPresetStaticFiles(build: KovoNeutralBuild, outDir: string): Promise<void> {
+  if (build.staticOutput !== undefined) {
+    await cp(build.staticOutput.dir, outDir, { recursive: true });
+  }
+  await cp(build.clientDir, outDir, { recursive: true });
 }
 
 function neutralStaticExportAssets(
@@ -663,15 +734,18 @@ function cloudflareWorkerSource(): string {
   return `import handler from './server/handler.mjs';
 
 const immutableCacheControl = ${JSON.stringify(immutableCacheControl)};
+const bodylessMethods = new Set(['GET', 'HEAD']);
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if ((url.pathname.startsWith('/assets/') || url.pathname.startsWith('/c/')) && env.ASSETS) {
+    if (bodylessMethods.has(request.method) && env.ASSETS) {
       const assetResponse = await env.ASSETS.fetch(request);
       if (assetResponse.status !== 404) {
         const headers = new Headers(assetResponse.headers);
-        headers.set('cache-control', immutableCacheControl);
+        if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/c/')) {
+          headers.set('cache-control', immutableCacheControl);
+        }
         return new Response(assetResponse.body, {
           headers,
           status: assetResponse.status,
@@ -779,6 +853,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import handler from './server/handler.mjs';
 
 const clientRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'client');
+const staticRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'static');
 const immutableCacheControl = 'public, max-age=31536000, immutable';
 const bodylessMethods = new Set(['GET', 'HEAD']);
 
@@ -805,10 +880,11 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
 
   const pathname = staticPathname(nodeRequest);
   if (pathname === undefined) return false;
-  if (!pathname.startsWith('/c/') && !pathname.startsWith('/assets/')) return false;
+  const immutableAsset = pathname.startsWith('/c/') || pathname.startsWith('/assets/');
+  const filePath = immutableAsset ? staticFilePath(clientRoot, pathname) : routeDocumentPath(pathname);
 
-  const filePath = staticFilePath(pathname);
   if (filePath === undefined) {
+    if (!immutableAsset) return false;
     nodeResponse.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
     nodeResponse.end('Forbidden');
     return true;
@@ -816,13 +892,14 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
 
   const fileStat = await stat(filePath).catch(() => undefined);
   if (fileStat === undefined || !fileStat.isFile()) {
+    if (!immutableAsset) return false;
     nodeResponse.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
     nodeResponse.end('Not Found');
     return true;
   }
 
   nodeResponse.writeHead(200, {
-    'cache-control': immutableCacheControl,
+    ...(immutableAsset ? { 'cache-control': immutableCacheControl } : {}),
     'content-length': String(fileStat.size),
     'content-type': contentType(filePath),
   });
@@ -849,7 +926,12 @@ function staticPathname(nodeRequest) {
   }
 }
 
-function staticFilePath(pathname) {
+function routeDocumentPath(pathname) {
+  const cleanPathname = pathname.endsWith('/') ? pathname : pathname + '/';
+  return staticFilePath(staticRoot, cleanPathname + 'index.html');
+}
+
+function staticFilePath(root, pathname) {
   let relativePath;
   try {
     relativePath = decodeURIComponent(pathname.slice(1));
@@ -858,8 +940,8 @@ function staticFilePath(pathname) {
   }
   if (relativePath.includes('\\0')) return undefined;
 
-  const filePath = resolve(clientRoot, relativePath);
-  const relativePathFromRoot = relative(clientRoot, filePath);
+  const filePath = resolve(root, relativePath);
+  const relativePathFromRoot = relative(root, filePath);
   if (
     relativePathFromRoot === '' ||
     relativePathFromRoot.startsWith('..') ||
@@ -951,6 +1033,8 @@ function contentType(filePath) {
       return 'text/javascript; charset=utf-8';
     case '.json':
       return 'application/json; charset=utf-8';
+    case '.html':
+      return 'text/html; charset=utf-8';
     case '.svg':
       return 'image/svg+xml';
     case '.wasm':
