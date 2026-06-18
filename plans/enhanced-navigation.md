@@ -206,18 +206,22 @@ through client navigation.
     hash anchors to native browser navigation. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
     packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63382`
-    passed with 57 browser tests and proves target-document API hashes scroll
+    passed with 60 browser tests and proves target-document API hashes scroll
     after morphing, preserve request fragments when real `fetch()` response URLs
     omit hashes, offset below sticky document chrome, update `location.href`, and
-    restore saved scroll/hash URL state through browser `popstate`.
+    restore saved scroll/hash URL state through browser `popstate`. It also
+    proves fresh clicks to previously visited API symbol hashes ignore stale
+    saved scroll and land on the requested symbol.
     `pnpm --filter @kovojs/site run smoke:navigation` passed
     `site-navigation-smoke/v1 OK` after `pnpm --filter @kovojs/site run build`
     and proves dark/light docs theme choices, same-page API symbol-rail hashes,
-    and cross-page enhanced API symbol hashes land below the sticky docs header
-    in the exported site.
-    `packages/runtime/src/inline-loader-navigation.test.ts` proves `popstate`
-    restores saved scroll without pushing another history entry across all
-    inline installer artifacts.
+    cross-page enhanced API symbol hashes, and fresh API symbol clicks after
+    leaving a previously visited symbol page land below the sticky docs header in
+    the exported site.
+    `pnpm exec vitest --run packages/runtime/src/inline-loader-navigation.test.ts`
+    passed with 52 tests and proves `popstate` restores saved scroll without
+    pushing another history entry while fresh clicks ignore saved scroll across
+    all inline installer artifacts.
 - [x] **Navigation concurrency is deterministic.**
   - A newer navigation cancels stale fetch/morph work. In-flight mutations keep
     the existing §8/§10.4 pagehide/keepalive semantics. Pending optimistic state
@@ -403,7 +407,8 @@ through client navigation.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves focus, top scroll, decoded/encoded/named hash scroll, route-change
     announcement, delegated docs theme persistence, real-fetch request-fragment
-    preservation, sticky-chrome hash offset, and newest-hash concurrency;
+    preservation, sticky-chrome hash offset, fresh API symbol clicks ignoring
+    stale saved scroll, and newest-hash concurrency;
     `packages/runtime/src/inline-loader-navigation.test.ts` proves popstate
     scroll restoration; bfcache hygiene is covered by the runtime visible-return,
     pagehide, and conformance fixtures; `examples/commerce/src/enhanced-navigation.test.ts`

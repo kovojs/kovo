@@ -126,6 +126,27 @@ try {
       hash,
     );
     await assertHashBelowHeader(page, hash, 'cross-page API rail hash lands below sticky header');
+
+    await page.click('.site-nav a[href="/docs/why-kovo/"]');
+    await page.waitForFunction(() => location.pathname === '/docs/why-kovo/');
+    await page.evaluate((targetHash) => {
+      document.querySelector('#synthetic-api-symbol-link')?.remove();
+      const link = document.createElement('a');
+      link.id = 'synthetic-api-symbol-link';
+      link.href = `/api/core/${targetHash}`;
+      link.textContent = 'API symbol';
+      document.body.append(link);
+    }, hash);
+    await page.click('#synthetic-api-symbol-link');
+    await page.waitForFunction(
+      (expectedHash) => location.pathname === '/api/core/' && location.hash === expectedHash,
+      hash,
+    );
+    await assertHashBelowHeader(
+      page,
+      hash,
+      'fresh API symbol click ignores stale saved scroll',
+    );
   }
 } finally {
   await browser.close();

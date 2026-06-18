@@ -740,6 +740,78 @@ describe('browser inline loader enhanced navigation', () => {
     }
   });
 
+  it('prefers requested API symbol hashes over stale saved scroll on fresh clicks', async () => {
+    history.replaceState({}, '', new URL('/api#symbols%2Fproperty%20value', initialUrl).href);
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>API</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-docs" href="/docs">Docs</a>',
+      '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+      '<article><h2 id="symbols/property value">property value</h2></article>',
+      '</section>',
+      '</main>',
+    ].join('');
+    const scrolledIds: string[] = [];
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), location.href);
+      const isApi = url.pathname === '/api';
+      return {
+        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        async text() {
+          return [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            `<title>${isApi ? 'API' : 'Docs'}</title>`,
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<a id="to-docs" href="/docs">Docs</a>',
+            isApi
+              ? [
+                  '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
+                  '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+                  '<nav class="api-nav"><a href="#symbols%2Fproperty%20value">property value</a></nav>',
+                  '<article><h2 id="symbols/property value">property value</h2></article>',
+                  '</section>',
+                ].join('')
+              : [
+                  '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
+                  '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+                ].join(''),
+            '</main>',
+            '</body></html>',
+          ].join('');
+        },
+        url: url.href,
+      };
+    });
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView() {
+      scrolledIds.push((this as Element).id);
+    };
+    const scrollTo = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', scrollTo);
+
+    try {
+      installNavigationLoader();
+      vi.stubGlobal('scrollX', 56);
+      vi.stubGlobal('scrollY', 78);
+      dispatchAnchorLikeClick('/docs');
+      await vi.waitFor(() => expect(document.title).toBe('Docs'));
+
+      vi.stubGlobal('scrollX', 12);
+      vi.stubGlobal('scrollY', 34);
+      dispatchAnchorLikeClick('/api#symbols%2Fproperty%20value');
+      await vi.waitFor(() => expect(document.title).toBe('API'));
+
+      expect(location.href).toBe(new URL('/api#symbols%2Fproperty%20value', initialUrl).href);
+      expect(scrolledIds).toEqual(['symbols/property value']);
+      expect(scrollTo).not.toHaveBeenCalledWith(56, 78);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
+
   it('offsets target-document hash scrolling below sticky document chrome', async () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
     document.body.innerHTML = [

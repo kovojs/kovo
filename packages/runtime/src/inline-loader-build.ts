@@ -399,7 +399,7 @@ function installInlineKovoLoader(im) {
       focusTarget?.setAttribute?.('tabindex', '-1');
       focusTarget?.focus?.({ preventScroll: true });
       const saved = sc[finalUrl.href];
-      if (saved) globalThis.scrollTo?.(saved[0], saved[1]);
+      if (pop && saved) globalThis.scrollTo?.(saved[0], saved[1]);
       else if (finalUrl.hash) hscl(finalUrl.hash);
       else globalThis.scrollTo?.(0, 0);
       if (triggerRoot) setTimeout(() => tr(triggerRoot));

@@ -868,6 +868,113 @@ describe('inline loader enhanced navigation fallback', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'ignores saved scroll on fresh enhanced clicks through %s',
+    async (_name, installSource) => {
+      const replaceWith = vi.fn();
+      const productsLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Products',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Products',
+        },
+        '<main><section>Products</section></main>',
+      );
+      const cartLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Cart',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Cart',
+        },
+        '<main><section>Cart</section></main>',
+      );
+      let currentDocument: ReturnType<typeof createTestShell>;
+      currentDocument = createTestShell({
+        replaceWith: (nextBody) => {
+          replaceWith(nextBody);
+          currentDocument.body = nextBody as typeof currentDocument.body;
+        },
+        segments: [productsLayout],
+      });
+      const cartDocument = createTestShell({
+        replaceWith: (nextBody) => {
+          replaceWith(nextBody);
+          currentDocument.body = nextBody as typeof currentDocument.body;
+        },
+        segments: [cartLayout],
+      });
+      const secondProductsDocument = createTestShell({ segments: [productsLayout] });
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument,
+        documents: [cartDocument, secondProductsDocument],
+        fetch: vi.fn(async (href: string) => ({
+          headers: { get: () => 'text/html' },
+          text: async () => '<!doctype html><html></html>',
+          url: href,
+        })),
+        locationHref: 'http://app.test/products',
+        async act({ listeners, location, preventDefault }) {
+          Object.assign(globalThis, { scrollX: 10, scrollY: 20 });
+          await listeners.get('click')?.({
+            button: 0,
+            defaultPrevented: false,
+            preventDefault,
+            target: {
+              closest(selector: string) {
+                if (selector === 'a[href]') {
+                  return { hasAttribute: () => false, href: 'http://app.test/cart', target: '' };
+                }
+                return null;
+              },
+            },
+            type: 'click',
+          });
+          await vi.waitFor(() => {
+            expect(replaceWith).toHaveBeenCalledWith(cartDocument.body);
+          });
+
+          Object.assign(globalThis, { scrollX: 30, scrollY: 40 });
+          location.href = 'http://app.test/cart';
+          location.pathname = '/cart';
+          await listeners.get('click')?.({
+            button: 0,
+            defaultPrevented: false,
+            preventDefault,
+            target: {
+              closest(selector: string) {
+                if (selector === 'a[href]') {
+                  return {
+                    hasAttribute: () => false,
+                    href: 'http://app.test/products',
+                    target: '',
+                  };
+                }
+                return null;
+              },
+            },
+            type: 'click',
+          });
+        },
+        async assert({ preventDefault, pushState, scrollTo }) {
+          await vi.waitFor(() => {
+            expect(replaceWith).toHaveBeenCalledWith(secondProductsDocument.body);
+          });
+          expect(preventDefault).toHaveBeenCalledTimes(2);
+          expect(pushState).toHaveBeenNthCalledWith(1, {}, '', 'http://app.test/cart');
+          expect(pushState).toHaveBeenNthCalledWith(2, {}, '', 'http://app.test/products');
+          expect(scrollTo).toHaveBeenCalledTimes(2);
+          expect(scrollTo).toHaveBeenNthCalledWith(1, 0, 0);
+          expect(scrollTo).toHaveBeenNthCalledWith(2, 0, 0);
+        },
+      });
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'replaces the document body from target-document layout divergence through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
