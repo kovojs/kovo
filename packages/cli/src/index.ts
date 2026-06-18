@@ -747,6 +747,7 @@ interface CompileComponentCommandOptions extends CompileBaseOptions {
   factsOutPath?: string;
   fixpoint: boolean;
   fileName?: string;
+  queryShapeFactsPath?: string;
   registryFactsPath?: string;
   renderEquivalence: boolean;
   sourcePath: string;
@@ -915,6 +916,7 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
   let outPath: string | undefined;
   let fileName: string | undefined;
   let factsOutPath: string | undefined;
+  let queryShapeFactsPath: string | undefined;
   let registryFactsPath: string | undefined;
   let check = false;
   let emitClientFiles = false;
@@ -1029,6 +1031,26 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
         };
       continue;
     }
+    if (arg === '--query-shape-facts') {
+      const value = args[index + 1];
+      if (!value)
+        return {
+          message: 'kovo: compile component --query-shape-facts requires a JSON path.\n',
+          ok: false,
+        };
+      queryShapeFactsPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--query-shape-facts=')) {
+      queryShapeFactsPath = arg.slice('--query-shape-facts='.length);
+      if (!queryShapeFactsPath)
+        return {
+          message: 'kovo: compile component --query-shape-facts requires a JSON path.\n',
+          ok: false,
+        };
+      continue;
+    }
     if (arg.startsWith('-')) {
       return {
         message: `kovo: unknown compile component option ${stableValue(arg)}.\n${compileUsage()}`,
@@ -1059,6 +1081,7 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
       fixpoint,
       ...(fileName === undefined ? {} : { fileName }),
       outPath,
+      ...(queryShapeFactsPath === undefined ? {} : { queryShapeFactsPath }),
       ...(registryFactsPath === undefined ? {} : { registryFactsPath }),
       renderEquivalence,
       sourcePath,
@@ -1527,6 +1550,11 @@ async function runCompileComponentCommand(
     compileOptions.registryFacts = readJsonFile(
       options.registryFactsPath,
     ) as NonNullable<CompileComponentOptions['registryFacts']>;
+  }
+  if (options.queryShapeFactsPath !== undefined) {
+    compileOptions.queryShapeFacts = readJsonFile(
+      options.queryShapeFactsPath,
+    ) as NonNullable<CompileComponentOptions['queryShapeFacts']>;
   }
   const result = compileComponentModule(compileOptions);
   const allowedDiagnosticCodes = new Set(options.allowedDiagnosticCodes);

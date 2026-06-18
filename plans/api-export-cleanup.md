@@ -733,7 +733,7 @@ tsconfig.json --noEmit --pretty false`.
 
 ## Package-Wide Internalization Candidates
 
-- [ ] **Make `@kovojs/compiler` non-app-facing.**
+- [x] **Make `@kovojs/compiler` non-app-facing.**
   - Internalize the root build/codegen symbols once `@kovojs/cli` owns the public
     facade: `compileComponentModule`, `compileRouteModule`, `assertFixpoint`,
     `assertRenderEquivalence`, `composePageComponentArtifacts`,
@@ -747,6 +747,23 @@ tsconfig.json --noEmit --pretty false`.
     `packages/cli/src/index.ts` still imports compiler internals. The remaining
     work is to bundle or otherwise internalize the CLI/compiler relationship
     before the package itself can become fully private.
+  - Evidence: `site/scripts/emit-routes.mjs` now shells through
+    `kovo compile route --facts-out` instead of importing
+    `@kovojs/compiler`; `site/scripts/capture.mjs` now shells through
+    `kovo compile component` for docs lowering/diagnostic captures, and
+    `site/package.json` no longer depends on `@kovojs/compiler`.
+    `packages/cli/src/index.ts` added `kovo compile component
+    --query-shape-facts <json>` so query-shape-backed diagnostics are reachable
+    through the CLI facade instead of the compiler API. `scripts/import-boundary.mjs`
+    now treats `@kovojs/compiler`, `@kovojs/compiler/graph`, and
+    `@kovojs/compiler/package-styles` as non-public for app-facing roots and
+    scans `site/scripts`.
+  - Verified with `corepack pnpm --filter @kovojs/site run emit-routes -- --check`,
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts
+    packages/cli/src/commands-manifest.test.ts scripts/import-boundary.test.mjs
+    scripts/public-packages.test.mjs`, `node scripts/import-boundary.mjs`, and
+    `rg -n "from ['\"]@kovojs/compiler|import\([^)]*['\"]@kovojs/compiler|import .*@kovojs/compiler" examples packages/create-kovo/templates site/tutorial site/content site/src site/scripts --glob '!**/generated/**' --glob '!**/dist/**' --glob '!**/node_modules/**' --glob '!**/*.test.*'`
+    returning no matches.
 - [x] **Shrink `@kovojs/runtime` root to hand-authored app APIs.**
   - Move generated/runtime machinery behind `@kovojs/runtime/generated` or an
     internal subpath: deferred stream apply, compiled query update plan apply,

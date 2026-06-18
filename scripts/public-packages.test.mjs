@@ -66,6 +66,24 @@ describe('public-packages manifest', () => {
     expect(cliPackage.publishConfig?.bin).toEqual({ kovo: './dist/bin.mjs' });
   });
 
+  it('keeps compiler exports internal and exposes compile flows through the CLI facade', () => {
+    const compiler = manifest.find((pkg) => pkg.name === '@kovojs/compiler');
+    expect(compiler?.kind).toBe('build-tool');
+    expect(publicEntrySubpaths(compiler)).toEqual([]);
+    expect(generatedEntrySubpaths(compiler)).toEqual([]);
+    expect(internalEntrySubpaths(compiler)).toEqual([
+      '.',
+      './graph',
+      './internal',
+      './internal/graph',
+      './package-styles',
+    ]);
+
+    const cli = manifest.find((pkg) => pkg.name === '@kovojs/cli');
+    expect(cli?.kind).toBe('cli');
+    expect(publicEntrySubpaths(cli)).toEqual(['.']);
+  });
+
   it('requires every private package to set "private": true', () => {
     for (const pkg of privatePackages()) {
       expect(packageJson(pkg.dir).private, `${pkg.name} must set private:true`).toBe(true);

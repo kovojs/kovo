@@ -549,9 +549,6 @@ importers:
       '@kovojs/cli':
         specifier: workspace:*
         version: link:../packages/cli
-      '@kovojs/compiler':
-        specifier: workspace:*
-        version: link:../packages/compiler
       '@kovojs/test':
         specifier: workspace:*
         version: link:../packages/test

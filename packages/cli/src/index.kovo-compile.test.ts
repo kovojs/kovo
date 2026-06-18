@@ -210,6 +210,68 @@ export const CartBadge = component({
     }
   });
 
+  it('passes query-shape facts through the component compile facade', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-component-query-shapes-'));
+    const sourcePath = join(root, 'product-card.tsx');
+    const outPath = join(root, 'generated/product-card.tsx');
+    const queryShapeFactsPath = join(root, 'query-shape-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        sourcePath,
+        `
+import { component } from '@kovojs/core';
+
+export const ProductCard = component({
+  render: () => <span data-bind="product.details.name">Coffee</span>,
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        queryShapeFactsPath,
+        `${JSON.stringify(
+          [
+            {
+              query: 'product',
+              shape: { details: { kind: 'nullable', shape: { name: 'string' } } },
+              source: 'generated/queries/product.shape.ts',
+            },
+          ],
+          null,
+          2,
+        )}\n`,
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'component',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          'src/product-card.tsx',
+          '--query-shape-facts',
+          queryShapeFactsPath,
+          '--allow-diagnostic',
+          'KV227',
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('WARN KV227 file="src/product-card.tsx"');
+      expect(output).toContain('SUMMARY artifacts=1 diagnostics=1');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('writes route page facts through the CLI facade', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-route-facts-'));
     const sourcePath = join(root, 'app-shell.tsx');

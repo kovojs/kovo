@@ -7,6 +7,7 @@ const appFacingRoots = [
   'examples',
   'packages/create-kovo/templates',
   'site/content',
+  'site/scripts',
   'site/src',
   'site/tutorial',
 ];
@@ -16,19 +17,16 @@ const checkedExtensions = new Set(['.js', '.jsx', '.mjs', '.md', '.ts', '.tsx'])
 const explicitlyAllowedInternalImports = new Set([
   'examples/commerce/src/app.ts -> @kovojs/server/internal/html',
   'examples/commerce/src/app.ts -> @kovojs/server/internal/wire',
-  'examples/commerce/scripts/emit-components.mjs -> @kovojs/compiler/internal',
   'examples/commerce/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
-  'examples/commerce/scripts/emit-graph.mjs -> @kovojs/compiler/internal',
   'examples/commerce/src/graph.ts -> @kovojs/core/internal/graph',
-  'examples/crm/scripts/emit-components.mjs -> @kovojs/compiler/internal',
   'examples/crm/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
   'examples/crm/scripts/emit-graph.mjs -> @kovojs/core/internal/derivation',
   'examples/crm/src/graph.ts -> @kovojs/core/internal/graph',
-  'examples/stackoverflow/scripts/emit-components.mjs -> @kovojs/compiler/internal',
   'examples/stackoverflow/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
   'examples/reference/src/app.ts -> @kovojs/core/internal/graph',
   'examples/stackoverflow/src/graph.ts -> @kovojs/core/internal/graph',
   'site/content/guides/components.md -> @kovojs/server/internal/html',
+  'site/scripts/capture.mjs -> @kovojs/runtime/internal/inline-loader',
   'site/src/components/chrome.tsx -> @kovojs/server/internal/html',
   'site/src/components/docs-layout.tsx -> @kovojs/server/internal/html',
   'site/src/components/example-split.tsx -> @kovojs/server/internal/html',
@@ -38,7 +36,6 @@ const explicitlyAllowedInternalImports = new Set([
   'site/tutorial/steps/05-optimistic/src/app.ts -> @kovojs/server/internal/wire',
   'site/tutorial/steps/06-streaming/src/app.ts -> @kovojs/server/internal/wire',
   'site/tutorial/steps/07-verification/src/app.ts -> @kovojs/server/internal/wire',
-  'site/tutorial/run-steps.mjs -> @kovojs/compiler/internal',
 ]);
 
 const explicitlyAllowedGeneratedImports = new Set([
@@ -86,6 +83,9 @@ export async function collectImportBoundaryViolations({
 }
 
 export function nonPublicKovoImportTier(specifier) {
+  if (specifier === '@kovojs/compiler' || specifier.startsWith('@kovojs/compiler/')) {
+    return 'internal';
+  }
   if (/^@kovojs\/[^/]+\/internal(?:\/|$)/.test(specifier)) return 'internal';
   if (/^@kovojs\/[^/]+\/generated(?:\/|$)/.test(specifier)) return 'generated';
   return null;

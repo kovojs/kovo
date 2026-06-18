@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,10 +29,9 @@ registerHooks({
   },
 });
 
-const { compileRouteModule } = await import('@kovojs/compiler');
-
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const siteRoot = resolve(scriptDir, '..');
+const kovoBin = resolve(siteRoot, 'node_modules/.bin/kovo');
 const sourcePath = resolve(siteRoot, 'src/generated/app.routes.tsx');
 const artifactPath = resolve(siteRoot, 'src/generated/app.kovo-route.tsx');
 const sourceFileName = 'site/src/generated/app.routes.tsx';
@@ -34,25 +42,13 @@ export async function emitSiteRoutes({ check = false, skipPipeline = false } = {
 
   const routeData = await loadRouteData();
   const source = renderRouteSource(routeData);
-  const result = compileRouteModule({
-    artifactFileName,
-    fileName: sourceFileName,
-    source,
-  });
+  const compiled = compileSiteRouteSource(source);
 
-  assert.deepEqual(
-    result.diagnostics,
-    [],
-    `${sourceFileName} has compiler diagnostics: ${JSON.stringify(result.diagnostics, null, 2)}`,
-  );
-  assert.equal(result.files.length, 1, `${sourceFileName} produced no generated route artifact`);
   assert.equal(
-    result.routePageFacts.length,
+    compiled.routePageFacts.length,
     routeData.pages.length + 1,
     `${sourceFileName} did not compile every docs-site route page`,
   );
-
-  const artifact = result.files[0].source;
 
   if (check) {
     assert.equal(
@@ -62,13 +58,13 @@ export async function emitSiteRoutes({ check = false, skipPipeline = false } = {
     );
     assert.equal(
       readFileSync(artifactPath, 'utf8'),
-      artifact,
+      compiled.artifact,
       'generated app.kovo-route.tsx is stale; run `pnpm --filter @kovojs/site run emit-routes`',
     );
   } else {
     mkdirSync(dirname(sourcePath), { recursive: true });
     writeFileSync(sourcePath, source);
-    writeFileSync(artifactPath, artifact);
+    writeFileSync(artifactPath, compiled.artifact);
   }
 
   return {
@@ -76,6 +72,47 @@ export async function emitSiteRoutes({ check = false, skipPipeline = false } = {
     pages: routeData.pages.length + 1,
     sourcePath,
   };
+}
+
+function compileSiteRouteSource(source) {
+  const root = mkdtempSync(resolve(tmpdir(), 'kovo-site-routes-'));
+  try {
+    const tempSourcePath = resolve(root, 'app.routes.tsx');
+    const tempArtifactPath = resolve(root, 'app.kovo-route.tsx');
+    const factsPath = resolve(root, 'route-facts.json');
+    writeFileSync(tempSourcePath, source);
+
+    execFileSync(
+      kovoBin,
+      [
+        'compile',
+        'route',
+        tempSourcePath,
+        '--out',
+        tempArtifactPath,
+        '--file-name',
+        sourceFileName,
+        '--artifact-file-name',
+        artifactFileName,
+        '--facts-out',
+        factsPath,
+      ],
+      { cwd: siteRoot, stdio: ['ignore', 'pipe', 'inherit'] },
+    );
+
+    const facts = JSON.parse(readFileSync(factsPath, 'utf8'));
+    assert.ok(
+      Array.isArray(facts.routePageFacts),
+      `${sourceFileName} produced malformed route facts`,
+    );
+
+    return {
+      artifact: readFileSync(tempArtifactPath, 'utf8'),
+      routePageFacts: facts.routePageFacts,
+    };
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
 }
 
 async function loadRouteData() {
@@ -192,6 +229,7 @@ function renderDocsRouteEntry(routePath, index) {
 function parseCliOptions(args) {
   const options = {};
   for (const arg of args) {
+    if (arg === '--') continue;
     if (arg === '--check') {
       options.check = true;
       continue;

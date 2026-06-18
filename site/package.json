@@ -22,7 +22,6 @@
     "@kovojs/server": "workspace:*"
   },
   "devDependencies": {
-    "@kovojs/compiler": "workspace:*",
     "@kovojs/test": "workspace:*",
     "@kovojs/cli": "workspace:*",
     "marked": "^16.0.0",

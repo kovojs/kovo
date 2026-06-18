@@ -1,9 +1,11 @@
 import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { registerHooks } from 'node:module';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
-
-import { compileComponentModule } from '../../dist/compiler/src/index.mjs';
-import { kovoExplain } from '../../dist/cli/src/index.mjs';
-import { kovoLoaderSource } from '../../dist/runtime/src/internal/inline-loader.mjs';
 
 /**
  * Artifact-capture harness (plan W3). Every landing/docs visual is regenerated
@@ -15,6 +17,19 @@ import { kovoLoaderSource } from '../../dist/runtime/src/internal/inline-loader.
 // SPEC §4.4 / S2 gate: the always-loaded bootstrap stays ≤8KB gzipped — the
 // same measurement packages/runtime/src/index.test.ts pins.
 const LOADER_BUDGET_BYTES = 8192;
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const siteRoot = resolve(scriptDir, '..');
+const kovoBin = resolve(siteRoot, 'node_modules/.bin/kovo');
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const tsUrl = new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL);
+      if (existsFile(tsUrl)) return nextResolve(tsUrl.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
 
 function escapeHtml(value) {
   return String(value)
@@ -36,7 +51,14 @@ function artifactFrame(title, bodyHtml) {
  * against the same nullable-shape fixture the compiler test suite pins.
  */
 export function captureTeachingError() {
-  const result = compileComponentModule({
+  const source = `
+export const ProductCard = component({
+  render: () => <span data-bind="product.details.name">Coffee</span>,
+});
+`;
+
+  const compiled = compileComponentCapture({
+    allowedDiagnostics: ['KV227'],
     fileName: 'src/product-card.tsx',
     queryShapeFacts: [
       {
@@ -45,14 +67,9 @@ export function captureTeachingError() {
         source: 'generated/queries/product.shape.ts',
       },
     ],
-    source: `
-export const ProductCard = component({
-  render: () => <span data-bind="product.details.name">Coffee</span>,
-});
-`,
+    source,
   });
-
-  const diagnostic = result.diagnostics.find((entry) => entry.code === 'KV227');
+  const diagnostic = compiled.warnings.find((entry) => entry.code === 'KV227');
   if (!diagnostic) {
     throw new Error(
       'capture: the KV227 fixture no longer produces its teaching error — update the capture or the landing claim',
@@ -62,13 +79,9 @@ export const ProductCard = component({
   const lines = [
     `<span class="tok-dim">$ vp check</span>`,
     '',
-    `<span class="tok-dim">${escapeHtml(diagnostic.fileName)}:${diagnostic.start.line}:${diagnostic.start.column}</span> — <span class="tok-error">${escapeHtml(diagnostic.code)}</span> ${escapeHtml(diagnostic.severity)}`,
+    `<span class="tok-dim">${escapeHtml(diagnostic.fileName)}</span> — <span class="tok-error">${escapeHtml(diagnostic.code)}</span> warning`,
     '',
     `  ${escapeHtml(diagnostic.message)}`,
-    '',
-    ...diagnostic.help
-      .split('\n')
-      .map((line) => `  <span class="tok-dim">${escapeHtml(line)}</span>`),
   ];
 
   return artifactFrame('vp check — compiled against the real query shape', lines.join('\n'));
@@ -104,6 +117,7 @@ export async function captureWireTrace(repoRoot) {
 
 /** kovo explain against the commerce app graph — the queryable behavior surface. */
 export async function captureKovoExplain(repoRoot) {
+  const { kovoExplain } = await import('@kovojs/cli');
   const graph = JSON.parse(
     await readFile(new URL('examples/commerce/src/generated/graph.json', repoRoot), 'utf8'),
   );
@@ -130,7 +144,8 @@ export async function captureKovoExplain(repoRoot) {
 }
 
 /** The inline loader budget, measured from the artifact that actually ships. */
-export function captureLoaderBudget() {
+export async function captureLoaderBudget() {
+  const { kovoLoaderSource } = await import('@kovojs/runtime/internal/inline-loader');
   const rawBytes = Buffer.byteLength(kovoLoaderSource, 'utf8');
   const gzipBytes = gzipSync(kovoLoaderSource).byteLength;
   if (gzipBytes > LOADER_BUDGET_BYTES) {
@@ -160,30 +175,97 @@ export const CartBadge = component({
 });
 `;
 
-  const result = compileComponentModule({ fileName: 'src/cart-badge.tsx', source });
-  const errors = result.diagnostics.filter((entry) => entry.severity === 'error');
-  if (errors.length > 0) {
-    throw new Error(`capture: lowering example no longer compiles: ${JSON.stringify(errors)}`);
+  const compiled = compileComponentCapture({
+    allowedDiagnostics: ['KV210'],
+    fileName: 'src/cart-badge.tsx',
+    source,
+  });
+
+  if (!compiled.lowered || !compiled.client) {
+    throw new Error('capture: lowering example emitted no server/client IR');
   }
 
-  const server = result.files.find((file) => file.kind === 'server')?.source;
-  const client = result.files.find((file) => file.kind === 'client')?.source;
-  if (!server || !client) throw new Error('capture: lowering example emitted no server/client IR');
-
-  const lint = result.diagnostics.find((entry) => entry.code === 'KV210');
+  const lint = compiled.warnings.find((entry) => entry.code === 'KV210');
 
   return {
-    client: client.trim(),
+    client: compiled.client.trim(),
     input: source.trim(),
     lint: lint ? `${lint.code} ${lint.severity}: ${lint.message}` : '',
-    server: server.trim(),
+    server: compiled.lowered.trim(),
   };
+}
+
+function compileComponentCapture({ allowedDiagnostics = [], fileName, queryShapeFacts, source }) {
+  const root = mkdtempSync(resolve(tmpdir(), 'kovo-site-capture-'));
+  try {
+    const sourcePath = resolve(root, fileName);
+    const outPath = resolve(root, 'generated/component.tsx');
+    const queryShapeFactsPath = resolve(root, 'query-shape-facts.json');
+    mkdirp(dirname(sourcePath));
+    writeFileSync(sourcePath, source);
+    if (queryShapeFacts !== undefined) {
+      writeFileSync(queryShapeFactsPath, `${JSON.stringify(queryShapeFacts, null, 2)}\n`);
+    }
+
+    const output = execFileSync(
+      kovoBin,
+      [
+        'compile',
+        'component',
+        sourcePath,
+        '--out',
+        outPath,
+        '--file-name',
+        fileName,
+        '--emit-client-files',
+        ...(queryShapeFacts === undefined ? [] : ['--query-shape-facts', queryShapeFactsPath]),
+        ...allowedDiagnostics.flatMap((code) => ['--allow-diagnostic', code]),
+      ],
+      { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const clientPath = resolve(root, fileName.replace(/\.tsx$/, '.client.js'));
+
+    return {
+      client: existsFile(clientPath) ? readFileSync(clientPath, 'utf8') : '',
+      lowered: readFileSync(outPath, 'utf8'),
+      warnings: parseCompileWarnings(output),
+    };
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+}
+
+function parseCompileWarnings(output) {
+  return output
+    .split('\n')
+    .map((line) =>
+      line.match(/^WARN (KV\d+) file="([^"]+)" (.+)$/)?.slice(1),
+    )
+    .filter(Boolean)
+    .map(([code, fileName, message]) => ({
+      code,
+      fileName,
+      message,
+      severity: 'warning',
+    }));
+}
+
+function existsFile(filePath) {
+  try {
+    return readFileSync(filePath).byteLength >= 0;
+  } catch {
+    return false;
+  }
+}
+
+function mkdirp(dir) {
+  mkdirSync(dir, { recursive: true });
 }
 
 export async function captureAll(repoRoot) {
   return {
     kovoExplain: await captureKovoExplain(repoRoot),
-    loader: captureLoaderBudget(),
+    loader: await captureLoaderBudget(),
     lowering: captureLowering(),
     teachingError: captureTeachingError(),
     wireTrace: await captureWireTrace(repoRoot),

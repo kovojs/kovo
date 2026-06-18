@@ -28,6 +28,9 @@ const runtime = () => import('@kovojs/runtime/generated');
   });
 
   it('classifies non-public Kovo import tiers', () => {
+    expect(nonPublicKovoImportTier('@kovojs/compiler')).toBe('internal');
+    expect(nonPublicKovoImportTier('@kovojs/compiler/graph')).toBe('internal');
+    expect(nonPublicKovoImportTier('@kovojs/compiler/package-styles')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/core/internal/graph')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/runtime/generated')).toBe('generated');
     expect(nonPublicKovoImportTier('@kovojs/cli/internal')).toBe('internal');
@@ -56,11 +59,16 @@ const runtime = () => import('@kovojs/runtime/generated');
       'packages/create-kovo/templates/src/component.tsx',
       "const runtime = () => import('@kovojs/runtime/generated');\n",
     );
+    await writeFixture(
+      rootDir,
+      'site/scripts/emit-routes.mjs',
+      "const compiler = await import('@kovojs/compiler/graph');\n",
+    );
 
     await expect(
       collectImportBoundaryViolations({
         rootDir,
-        roots: ['examples', 'packages/create-kovo/templates', 'site/tutorial'],
+        roots: ['examples', 'packages/create-kovo/templates', 'site/scripts', 'site/tutorial'],
       }),
     ).resolves.toEqual([
       {
@@ -72,6 +80,11 @@ const runtime = () => import('@kovojs/runtime/generated');
         fileName: 'packages/create-kovo/templates/src/component.tsx',
         specifier: '@kovojs/runtime/generated',
         tier: 'generated',
+      },
+      {
+        fileName: 'site/scripts/emit-routes.mjs',
+        specifier: '@kovojs/compiler/graph',
+        tier: 'internal',
       },
     ]);
   });
