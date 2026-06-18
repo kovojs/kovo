@@ -17,17 +17,8 @@ import {
   voteButton,
 } from '../components/chrome.js';
 
-// Question list (route `/`). Reads the full `questionList` rowset used by this
-// UI and the `questionScore` scalar (SUM over votes).
-// SPEC.md §4.8: the query-backed component root derives its `kovo-fragment-target`
-// in the generated module, so generated enhanced refresh can re-render this
-// region with server-truth scores — no hand-authored target string.
-//
-// Restyled with @kovojs/ui (SPEC.md §6.1.1): each row is a Card, tags are Badges,
-// the composer uses a Button, and authors get an Avatar byline. The presentational
-// The presentational fields (authorName / tags / createdAt / body) are part of
-// the declared query shape, not a separate page loader, so generated enhanced
-// refresh can rerender the list from query data alone (SPEC.md §10.2).
+// Question list for `/`. It reads the question rowset and total vote score, then
+// renders the ask form and question cards.
 
 type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
 type QuestionScoreQueryResult = Awaited<ReturnType<typeof questionScore.load>>;
@@ -64,14 +55,11 @@ function renderQuestionRow(question: QuestionListItem, request?: SoRequest): str
       </div>
     </div>
   );
-  // `kovo-key` stays on the keyed child of the list fragment host (§9.1 morph);
-  // the @kovojs/ui Card provides the surface inside it.
+  // Keep the stable key on the repeated child that the fragment morphs.
   return <li kovo-key={question.id}>{Card.definition.render({ children: body })}</li>;
 }
 
-// The interactive region, rendered both inside the full page and as the voteUp /
-// postQuestion fragment payload. SPEC.md §4.8: the query-backed component root
-// derives its `kovo-fragment-target` in the generated module.
+// Interactive region rendered inside the full page and fragment responses.
 export const QuestionListRegion = component({
   mutations: { postQuestion: postQuestionForm },
   queries: { questionList, questionScore },
@@ -103,12 +91,7 @@ export const QuestionListRegion = component({
           {Badge.definition.render({ children: 'Newest', variant: 'success' })}
         </div>
 
-        {/* SPEC.md §6.3: a no-JS "ask question" form. POSTs to the postQuestion
-          mutation; the fragment re-renders this whole region so the new row
-          appears and the composer resets (with a fresh id). Authored directly in
-          the component render (not wrapped in Card.definition.render) so the
-          compiler lowers `mutation={...}` consistently; `so-composer` gives the
-          card surface. */}
+        {/* Native form; enhanced submissions refresh this whole region. */}
         <form enhance mutation={postQuestionMutation} class="so-composer">
           {slots.request ? csrfField(slots.request, soCsrf) : ''}
           <input type="hidden" name="id" value={freshId('q')} />

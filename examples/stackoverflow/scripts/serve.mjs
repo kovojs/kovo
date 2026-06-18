@@ -19,10 +19,8 @@ const STATIC_MIME = {
   '.ico': 'image/x-icon',
 };
 
-// SPEC.md §9.5: the app references built client assets at `/assets/*` (the Vite
-// build output). Serve those from `dist/` (run `vp build` first) before the SSR
-// middleware, so the served app is fully styled — the production-serve path
-// (`vp build && node scripts/serve.mjs`), not Vite's dev CSS-as-JS.
+// The app references built client assets at `/assets/*`. Serve them from
+// `dist/` when present, then fall through to Vite middleware for app routes.
 async function tryServeBuiltAsset(req, res) {
   const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (!pathname.startsWith('/assets/')) return false;

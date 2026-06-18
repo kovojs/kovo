@@ -5,17 +5,10 @@ import { answer, question, vote } from './domains.js';
 import type { SoRequest } from './runtime.js';
 import { answers, questions, votes } from './schema.js';
 
-// SPEC.md §10.5 Stage 1: every mutation's write effect is extracted from the
-// top-level handler functions below. The handlers destructure their input as the
-// first param (so write values map to $input fields), receive a real
-// PgliteDatabase via `request.db`, and INLINE the Drizzle writes (the extractor
-// does NOT trace into delegated helpers). Self-referential column arithmetic uses
-// a real sql template with BOTH operands interpolated — `sql`${col} + ${1}`` —
-// which extracts as arith(col, +, 1); a literal `+ 1` inside the template would
-// instead be Opaque and punt. The `mutation()` wrappers reference these handlers
-// by identifier so the runtime/graph story and the static extraction agree.
+// Top-level mutation handlers for the demo. Drizzle writes stay inline so the
+// generated StackOverflow artifacts can read the write effects.
 
-// ── postQuestion: insert a new question (score/answerCount start at 0) ─────────
+// Insert a new question; score and answer count start at zero.
 export async function postQuestion(
   { id, title, body, authorId }: { id: string; title: string; body: string; authorId: string },
   request: SoRequest,
@@ -41,7 +34,7 @@ export async function postQuestion(
   return { id };
 }
 
-// ── postAnswer: insert an answer + bump the question's answerCount ─────────────
+// Insert an answer and bump the question's answer count.
 export async function postAnswer(
   {
     id,
@@ -60,7 +53,7 @@ export async function postAnswer(
   return { id };
 }
 
-// ── voteUp: insert an upvote + bump the target question's score ────────────────
+// Insert an upvote and bump the target question's score.
 export async function voteUp(
   { id, targetId, userId }: { id: string; targetId: string; userId: string },
   request: SoRequest,
@@ -74,10 +67,7 @@ export async function voteUp(
   return { id };
 }
 
-// ── mutation() definitions (runtime + graph surface) ──────────────────────────
-// Each references its extracted handler by identifier; the registry pins the
-// invalidated queries (by key) and the inferred touches come from the extracted
-// touch graph (wired in app.ts).
+// mutation() definitions used by the app shell and generated graph.
 
 export interface SoCsrfRequest {
   session?: { id?: string } | null;

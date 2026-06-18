@@ -6,22 +6,13 @@ import type { SoDb, SoRequest } from './runtime.js';
 import { answers, questions, votes } from './schema.js';
 import type { QuestionAnswersResult, QuestionDetailResult } from './types.js';
 
-// SPEC.md §10.2 / §10.5 Stage 2: typed reads declared once. Each loader INLINES
-// its Drizzle select directly in the `query('key', { load })` body so the static
-// extractor (extractAlgebraicShapesFromProject) classifies the AlgebraicQueryShape
-// — the extractor does NOT trace into delegated helper functions. The db is taken
-// from the query lifecycle context (context.db / context.request.db), typed SoDb
-// (a real PgliteDatabase) so the receiver is a provable Drizzle surface.
+// Typed reads for the demo. The Drizzle selects stay inline so the generated
+// StackOverflow artifacts can inspect the query shapes.
 
 type SoQueryLoadContext = QueryLoadContext<SoRequest> & { db?: SoDb };
 
-// questionList — AGG over questions, ordered by the stable primary key. It
-// selects every field the list UI renders, so generated live-target refresh can
-// reconstruct the region from the declared query alone (SPEC.md §10.2).
-// (We deliberately order by `id`, not `score DESC`: an UPDATE of an orderBy
-// column moves the row, so voteUp×questionList would punt with `opaque-orderby`
-// per SPEC.md §10.5. Ordering by the key keeps every (mutation×query) pair
-// soundly derivable — the point of this focused showcase.)
+// The list is ordered by stable id so a vote changes the score without reshuffling
+// rows while a fragment response is being applied.
 export const questionList = query('questionList', {
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
@@ -39,14 +30,13 @@ export const questionList = query('questionList', {
       })
       .from(questions)
       .orderBy(questions.id);
-    // EXPLICIT `items: items` (NOT shorthand `{ items }`, which the extractor skips).
+    // Keep the explicit property for the artifact generator.
     return { items: items };
   },
   reads: [question],
 });
 
-// answerList — AGG over answers, ordered by the stable primary key. Ships all
-// answers (input-parameterized filters are out of scope for this example).
+// All answers, ordered by stable id.
 export const answerList = query('answerList', {
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
@@ -113,8 +103,7 @@ export const questionAnswers = query('questionAnswers', {
   reads: [answer],
 });
 
-// questionScore — SUM of all vote values. The scalar is projected out of the
-// `[{ value }]` aggregate result; the extractor classifies `score` as SUM.
+// Total score across all question votes.
 export const questionScore = query('questionScore', {
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);

@@ -17,15 +17,7 @@ import {
   voteButton,
 } from '../components/chrome.js';
 
-// Question detail (route `/questions/:id`). Shows the question and its answers
-// (filtered from `answerList` by questionId), with the accepted answer flagged.
-// SPEC.md §4.8: the query-backed component root derives its `kovo-fragment-target`
-// in the generated module, so generated enhanced refresh can re-render this
-// region from server truth — no hand-authored target string.
-//
-// Restyled with @kovojs/ui (SPEC.md §6.1.1): the question and each answer are
-// Cards, tags + the accepted state are Badges, and the composer uses a Button.
-// The accepted answer gets an accent left border via a token-driven class.
+// Question detail for `/questions/:id`: the question, answers, and answer form.
 
 function renderQuestionCard(question: QuestionDetailResult, request?: SoRequest): string {
   const tags = parseTags(question.tags);
@@ -72,7 +64,7 @@ function renderAnswerCard(answer: QuestionAnswersResult[number]): string {
     </div>
   );
   const surface = Card.definition.render({ children: body });
-  // Keyed child of the detail fragment host; accepted answers get the accent rail.
+  // Keep the stable key on the repeated child that the fragment morphs.
   return (
     <li
       kovo-key={answer.id}
@@ -83,9 +75,7 @@ function renderAnswerCard(answer: QuestionAnswersResult[number]): string {
   );
 }
 
-// The interactive region, rendered inside the page and as the voteUp / postAnswer
-// fragment payload. SPEC.md §4.8: the query-backed component root derives its
-// `kovo-fragment-target` in the generated module.
+// Interactive region rendered inside the full page and fragment responses.
 export const QuestionDetailRegion = component({
   props: { questionId: String },
   queries: {
@@ -134,12 +124,7 @@ export const QuestionDetailRegion = component({
           </h2>
           <ul class="so-answer-list">{answers.map(renderAnswerCard)}</ul>
 
-          {/* SPEC.md §6.3: a no-JS "post answer" form. POSTs to the postAnswer
-              mutation; the fragment re-renders this whole region so the new answer
-              and bumped count appear and the composer resets (fresh id). Authored
-              directly in the component render (not wrapped in Card.definition.render)
-              so the compiler lowers `mutation={...}` consistently; `so-composer`
-              gives the card surface. */}
+          {/* Native form; enhanced submissions refresh this whole region. */}
           <form enhance mutation={postAnswerMutation} class="so-composer">
             {slots.request ? csrfField(slots.request, soCsrf) : ''}
             <input type="hidden" name="id" value={freshId('a')} />

@@ -1,12 +1,9 @@
 import type { SoDb } from './db.js';
 import { answers, questions, votes } from './schema.js';
 
-// Realistic Q&A book layered on top of the minimal createSoDb() seed (which the
-// §10.5 commuting tests depend on, so it stays untouched). This enriches ONLY
-// the app-shell / serve surface so the UI reads like a real Q&A site rather than
-// a two-row fixture. Ids never collide with the base seed's q1/q2/a1. The
-// presentational columns (authorName / tags / createdAt) are purely cosmetic —
-// no query reads them, so derived optimism is unaffected.
+// Realistic Q&A data layered on top of the tiny createSoDb() seed. It makes the
+// served app read like a real Q&A site without changing the base rows used by the
+// focused tests.
 
 const DEMO_QUESTIONS = [
   {

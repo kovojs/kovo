@@ -1,8 +1,7 @@
 import { form, type FormInput } from '@kovojs/core';
 
-// SPEC.md §6.3 / §10.4: typed mutation input shapes come from generated
-// MutationRegistry facts, and InvalidationSets/QueryRegistry drive the per-query
-// optimistic transform shape.
+// Form helpers and result shapes shared by the demo components and generated
+// StackOverflow artifacts.
 
 export const postQuestionForm = form('postQuestion');
 export const postAnswerForm = form('postAnswer');

@@ -47,11 +47,6 @@ async function postForm(
   return { status: response.status, html: await response.text() };
 }
 
-// SPEC.md §9.1: the interactive app's voteUp endpoint runs the REAL Drizzle
-// mutation against PGlite and returns the fragment wire. This proves the server
-// half of the round-trip (no browser): a POST /_m/voteUp increments the persisted
-// score AND the re-rendered fragment carries the new value.
-
 describe('stackoverflow interactive app', () => {
   it('voteUp persists to PGlite and the fragment wire reflects the new score', async () => {
     const { db, handler } = await buildSoInteractiveApp();

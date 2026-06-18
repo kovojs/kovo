@@ -1,16 +1,8 @@
 import type { KovoExplainInput, TouchGraph } from '@kovojs/core/internal/graph';
 import type { InvalidationQueryInput } from '@kovojs/drizzle/static';
 
-// SPEC.md §10.2 / §11.2: the Stack Overflow graph facts consumed by `kovo check`
-// and `kovo explain`. The optimistic[] coverage is entirely compiler-DERIVED
-// (generated/optimistic/*.ts): every (mutation × invalidated-query) pair carries
-// status 'derived' with derivation metadata { status: 'derived' } — zero
-// UNHANDLED (KV310), zero punts. The touchGraph is EXTRACTED from src by
-// scripts/emit-graph.mjs (extractTouchGraphFromProject), not hand-authored.
-
-// SPEC.md §10.5: each pair is proven derivable by deriveOptimistic (see the
-// commuting-diagram suite) — postQuestion×questionList push-row, postAnswer
-// guarded update-row + push-row, voteUp guarded update-row + scalar inc.
+// Demo graph facts consumed by `kovo check`. Collection queries use generated
+// optimistic updates; detail queries wait for the refreshed server fragment.
 const DERIVED_OPTIMISTIC = [
   { mutation: 'postQuestion', query: 'questionList' },
   { mutation: 'postAnswer', query: 'answerList' },

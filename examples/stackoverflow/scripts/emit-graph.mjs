@@ -42,7 +42,7 @@ const touchGraphPath = resolve(soRoot, 'src/generated/touch-graph.ts');
 const optimisticDir = resolve(soRoot, 'src/generated/optimistic');
 
 // The source files the §10.5 extractors analyze. domains.ts/runtime.ts/db.ts are
-// included so ts-morph can prove the cross-module types (SoDb, the domain
+// included so ts-morph can resolve cross-module types (SoDb, the domain
 // registry), but they carry no Drizzle writes.
 const sourceFileNames = [
   'schema.ts',

@@ -2,11 +2,8 @@ import { fileURLToPath } from 'node:url';
 
 import { createDemoServeServer, runDemoServeCli } from '../../../scripts/demo-session/serve.mjs';
 
-// SPEC.md §9.5: per-visitor multi-tenant serve for the Stack Overflow example.
-// Each browser session drives its OWN seeded PGlite through the real node handler
-// (ranked question list with upvote + ask forms, per-question detail with upvote +
-// answer forms). See scripts/serve.mjs for the single-tenant variant; run
-// `vp build` first so built `/assets/*` stylesheets are present.
+// Per-visitor demo server for the Stack Overflow example. Each browser session
+// gets its own seeded PGlite instance.
 
 const soRoot = fileURLToPath(new URL('../', import.meta.url));
 
