@@ -153,7 +153,7 @@ A transform is a pure function, so you can unit-test it directly. You can also p
 the prediction is contained in eventual truth over generated states:
 
 ```ts
-import { propertyTest } from '@kovojs/test';
+import { propertyTest } from '@kovojs/test/assertions';
 
 expect(addToCartOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 })).toEqual(
   { count: 3 },

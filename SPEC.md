@@ -1171,7 +1171,7 @@ Browser tests are a first-class part of the **framework's** own suite: morph run
 ## 12. Testing API
 
 ```ts
-import { kovoTest } from '@kovojs/test';
+import { kovoTest } from '@kovojs/test/test-case';
 
 const cartMutations = kovoTest('cart mutations', async ({ exec, page, db }) => {
   await db.seed({ products: [{ id: 'p1', stock: 5 }] });

@@ -1,22 +1,14 @@
 // v1-cleanup item 1: kept whole intentionally. This is a single cohesive
 // public-API acceptance surface — its assertions all depend on one full-surface
-// import manifest of every @kovojs/test root + subpath export plus every
+// import manifest of every @kovojs/test subpath export plus every
 // @kovojs/conformance-fixtures fixture subpath, so splitting would only
-// duplicate that manifest and fragment a deliberately holistic "every subpath
-// resolves and type-matches the root barrel" check into pieces that
+// duplicate that manifest and fragment a deliberately holistic "every canonical
+// subpath resolves and type-matches" check into pieces that
 // individually assert nothing meaningful. The fixture subpaths moved to the
 // private @kovojs/conformance-fixtures package (api-cleanup R5); this suite
-// lives here because that package can import both the public @kovojs/test
+// lives here because that package can import both the public @kovojs/test subpath
 // surface and its own fixtures while keeping the dependency graph acyclic.
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import {
-  assertMutationError as rootAssertMutationError,
-  createDbVerifier as rootCreateDbVerifier,
-  createKovoTestHarness as rootCreateKovoTestHarness,
-  createPgliteTestDb as rootCreatePgliteTestDb,
-  kovoTest as rootKovoTest,
-  propertyTest as rootPropertyTest,
-} from '@kovojs/test';
 import {
   assertMutationError,
   propertyTest,
@@ -506,16 +498,9 @@ import {
   type WireTranscriptExchange,
   type WireTranscriptResponse,
 } from '@kovojs/conformance-fixtures/wire-fixtures';
-import type { DiagnosticCode as RootDiagnosticCode } from '@kovojs/test';
 
 describe('@kovojs/test package subpath exports', () => {
-  it('resolves seam-specific public modules alongside the root barrel', () => {
-    expect(createKovoTestHarness).toBe(rootCreateKovoTestHarness);
-    expect(assertMutationError).toBe(rootAssertMutationError);
-    expect(propertyTest).toBe(rootPropertyTest);
-    expect(createPgliteTestDb).toBe(rootCreatePgliteTestDb);
-    expect(kovoTest).toBe(rootKovoTest);
-    expect(createDbVerifier).toBe(rootCreateDbVerifier);
+  it('resolves seam-specific public modules from canonical subpaths', () => {
     expect(createVerificationFakeDb().read('cart_items')).toEqual([]);
     expect(verificationLayerBehaviorFact).toBeTypeOf('function');
     expect(verificationLayerKovoCheckDiagnosticsFact).toBeTypeOf('function');
@@ -1682,7 +1667,6 @@ describe('@kovojs/test package subpath exports', () => {
     expectTypeOf<KovoTestExecOptions<KovoTestRequest<{ cart: string[] }>>>().toEqualTypeOf<
       HarnessMutationOptions<KovoTestRequest<{ cart: string[] }>>
     >();
-    expectTypeOf<DiagnosticCode>().toEqualTypeOf<RootDiagnosticCode>();
   });
 });
 

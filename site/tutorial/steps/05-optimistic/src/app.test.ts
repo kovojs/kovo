@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
-import { propertyTest } from '@kovojs/test';
+import { propertyTest } from '@kovojs/test/assertions';
 
 import {
   addToCart,

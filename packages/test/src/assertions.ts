@@ -85,7 +85,7 @@ export function assertMutationError<
  * @param options - The `predict`, `apply`, `cases`, and optional `shape` projection.
  * @returns A `PropertyTestResult` with the number of cases run.
  * @example
- * import { propertyTest } from '@kovojs/test';
+ * import { propertyTest } from '@kovojs/test/assertions';
  *
  * type Cart = { count: number };
  *

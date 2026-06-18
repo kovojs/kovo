@@ -605,7 +605,7 @@ tsconfig.json --noEmit --pretty false`.
   - Keep only package-wide helpers/tokens that are intended public API, such as
     `cn` and token CSS exports if confirmed.
   - Evidence:
-- [ ] **Make `@kovojs/test` root curated or subpath-only.**
+- [x] **Make `@kovojs/test` root curated or subpath-only.**
   - Move duplicated root symbols to their canonical subpaths:
     assertions/property helpers to `@kovojs/test/assertions`, harness helpers to
     `@kovojs/test/harness`, PGlite helpers to `@kovojs/test/pglite`, DB verifier
@@ -614,7 +614,16 @@ tsconfig.json --noEmit --pretty false`.
   - Review `html-fragment`, verifier diagnostics, SQL observer, and diagnostic
     message helpers for internal-only status if they mainly support conformance
     or verifier internals.
-  - Evidence:
+  - Evidence: `packages/test/src/index.ts` is an empty root entry, while
+    docs/tutorials import canonical subpaths such as
+    `@kovojs/test/assertions`, `@kovojs/test/harness`,
+    `@kovojs/test/pglite`, and `@kovojs/test/test-case`. Verification:
+    `rg -n "@kovojs/test'|@kovojs/test\"" SPEC.md site/content site/tutorial packages/conformance-fixtures packages/test/src/assertions.ts`
+    finds no root import sites outside `package.json`, and
+    `corepack pnpm exec vitest run packages/conformance-fixtures/src/package-exports.test.ts packages/test/src/headers.test.ts packages/test/src/assertions.test.ts packages/test/src/harness.test.ts packages/test/src/test-case.test.ts packages/test/src/pglite.test.ts packages/test/src/verifier.test.ts`
+    passes. `corepack pnpm run check:exports` passes with the duplicate baseline
+    shrunk from 881 to 858; the remaining two `@kovojs/test` duplicates are
+    verifier/verifier-diagnostics overlap, not root aliases.
 - [ ] **Shrink `@kovojs/better-auth` to app-facing adapter APIs.**
   - Keep app-facing helpers such as `mount`, `betterAuthSession`, `authed`, and
     `role`/role types when their public use cases are documented and their type
@@ -821,7 +830,7 @@ scripts/exported-symbols.mjs --duplicates --check` passes against the
   - Do not allow new duplicate root+subpath exports without editing the baseline
     and plan evidence.
   - Evidence: `scripts/exported-symbol-duplicates.baseline.json` records the
-    current 932 duplicate public symbols with a migration reason and removal
+    current 858 duplicate public symbols with a migration reason and removal
     target; `node scripts/exported-symbols.mjs --duplicates --check` fails on
     added/removed duplicate homes unless the baseline is updated deliberately.
 - [ ] **Prefer subpath ownership for family/component symbols.**

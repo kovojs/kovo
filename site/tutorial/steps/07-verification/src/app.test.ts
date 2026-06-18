@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
-import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test';
+import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test/harness';
 import { kovoCheck, kovoExplain } from 'kovo';
 
 import {

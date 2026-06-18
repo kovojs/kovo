@@ -17,7 +17,7 @@ browser.
 `@kovojs/test` runs mutations as functions and pages as strings — no browser, no HTTP server:
 
 ```ts
-import { createKovoTestHarness } from '@kovojs/test';
+import { createKovoTestHarness } from '@kovojs/test/harness';
 import type { TouchGraph } from '@kovojs/core';
 
 const harness = createKovoTestHarness({
@@ -53,7 +53,7 @@ behavior is part of every mutation assertion, so you don't need a separate integ
 The `kovoTest` wrapper packages the same thing as named cases:
 
 ```ts
-import { kovoTest } from '@kovojs/test';
+import { kovoTest } from '@kovojs/test/test-case';
 import { it } from 'vitest';
 
 const cartMutations = kovoTest(
@@ -73,7 +73,7 @@ Declared error codes are part of the mutation's type, and `assertMutationError` 
 payload while narrowing the payload type:
 
 ```ts
-import { assertMutationError } from '@kovojs/test';
+import { assertMutationError } from '@kovojs/test/assertions';
 
 const fail = await harness.exec(addToCart, { productId: 'p1', quantity: 99 });
 const payload = assertMutationError(addToCart, fail, {
@@ -88,7 +88,7 @@ const payload = assertMutationError(addToCart, fail, {
 HTTP-level and data-layer tests run against pglite — actual Postgres, in-process, no container:
 
 ```ts
-import { createPgliteTestDb } from '@kovojs/test';
+import { createPgliteTestDb } from '@kovojs/test/pglite';
 
 const db = await createPgliteTestDb();
 await db.exec(`create table cart_items (product_id text, qty int, unit_price int)`);
@@ -157,7 +157,7 @@ For every hand-written transform, assert that the prediction is contained in eve
 generated states — the commuting diagram as a test:
 
 ```ts
-import { propertyTest } from '@kovojs/test';
+import { propertyTest } from '@kovojs/test/assertions';
 
 expect(
   propertyTest({

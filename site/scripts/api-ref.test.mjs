@@ -86,7 +86,18 @@ describe('api-ref generator', () => {
       'server.md',
       'server-app-shell-vite.md',
       'runtime.md',
-      'test.md',
+      'test-assertions.md',
+      'test-headers.md',
+      'test-harness.md',
+      'test-harness-operations.md',
+      'test-html-fragment.md',
+      'test-page.md',
+      'test-pglite.md',
+      'test-sql-observer.md',
+      'test-case.md',
+      'test-verifier.md',
+      'test-verifier-diagnostics.md',
+      'test-verifier-sql.md',
       'drizzle.md',
       'style.md',
       'better-auth.md',
@@ -256,13 +267,17 @@ describe('api-ref generator', () => {
       '@kovojs/server': 70,
       '@kovojs/server/app-shell/vite': 5,
       '@kovojs/style': 20,
-      '@kovojs/test': 12,
       '@kovojs/better-auth': 30,
       '@kovojs/compiler': 12,
       kovo: 8,
     };
     for (const pkg of result.packages) {
+      if (pkg.name.startsWith('@kovojs/test/')) continue;
       expect(pkg.documented, `${pkg.name} documented`).toBeGreaterThanOrEqual(expected[pkg.name]);
     }
+    const documentedTestExports = result.packages
+      .filter((pkg) => pkg.name.startsWith('@kovojs/test/'))
+      .reduce((sum, pkg) => sum + pkg.documented, 0);
+    expect(documentedTestExports, '@kovojs/test subpaths documented').toBeGreaterThanOrEqual(12);
   });
 });

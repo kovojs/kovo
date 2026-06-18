@@ -104,7 +104,69 @@
       "apiRef": {
         "order": 4,
         "slug": "test",
-        "description": "Test harness: PGlite-backed databases, db verification against the touch graph, and mutation/property testing."
+        "description": "Test harness: PGlite-backed databases, db verification against the touch graph, and mutation/property testing.",
+        "entries": [
+          {
+            "path": "./assertions",
+            "slug": "test-assertions",
+            "description": "Mutation failure assertions and optimistic property testing helpers."
+          },
+          {
+            "path": "./headers",
+            "slug": "test-headers",
+            "description": "Header helpers for app scenario tests."
+          },
+          {
+            "path": "./harness",
+            "slug": "test-harness",
+            "description": "Database-backed mutation, query, page, and verification harness."
+          },
+          {
+            "path": "./harness-operations",
+            "slug": "test-harness-operations",
+            "description": "Lower-level harness operations used by test harness adapters."
+          },
+          {
+            "path": "./html-fragment",
+            "slug": "test-html-fragment",
+            "description": "HTML and Kovo fragment fact extractors for scenario assertions."
+          },
+          {
+            "path": "./page",
+            "slug": "test-page",
+            "description": "Rendered page assertion helpers."
+          },
+          {
+            "path": "./pglite",
+            "slug": "test-pglite",
+            "description": "PGlite-backed test database helpers."
+          },
+          {
+            "path": "./sql-observer",
+            "slug": "test-sql-observer",
+            "description": "SQL observation helpers for database verification."
+          },
+          {
+            "path": "./test-case",
+            "slug": "test-case",
+            "description": "Named Kovo test case registration helpers."
+          },
+          {
+            "path": "./verifier",
+            "slug": "test-verifier",
+            "description": "Touch-graph database verifier."
+          },
+          {
+            "path": "./verifier-diagnostics",
+            "slug": "test-verifier-diagnostics",
+            "description": "Verifier diagnostic facts and messages."
+          },
+          {
+            "path": "./verifier-sql",
+            "slug": "test-verifier-sql",
+            "description": "SQL parser helpers used by verifier instrumentation."
+          }
+        ]
       }
     },
     {
